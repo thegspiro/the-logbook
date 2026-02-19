@@ -197,7 +197,7 @@ const ITTeamBackupAccess: React.FC = () => {
             </div>
           ) : (
             <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
+              <Mail aria-hidden="true" className="w-6 h-6 text-white" />
             </div>
           )}
           <div>
@@ -218,7 +218,7 @@ const ITTeamBackupAccess: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-cyan-600 rounded-full mb-4">
-              <Users className="w-8 h-8 text-white" />
+              <Users aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               IT Team & Backup Access
@@ -236,7 +236,7 @@ const ITTeamBackupAccess: React.FC = () => {
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
-                  <Users className="w-6 h-6 text-cyan-400" />
+                  <Users aria-hidden="true" className="w-6 h-6 text-theme-accent-cyan" />
                   <h3 className="text-xl font-bold text-theme-text-primary">IT Team Contacts</h3>
                 </div>
                 <button
@@ -244,7 +244,7 @@ const ITTeamBackupAccess: React.FC = () => {
                   onClick={addITMember}
                   className="flex items-center space-x-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors text-sm font-medium"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus aria-hidden="true" className="w-4 h-4" />
                   <span>Add Member</span>
                 </button>
               </div>
@@ -260,18 +260,18 @@ const ITTeamBackupAccess: React.FC = () => {
                 >
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-theme-text-primary font-semibold flex items-center">
-                      <User className="w-4 h-4 mr-2" />
+                      <User aria-hidden="true" className="w-4 h-4 mr-2" />
                       {index === 0 ? 'Primary IT Contact' : `IT Team Member ${index + 1}`}
-                      {index === 0 && <span className="ml-2 text-xs text-red-400">*Required</span>}
+                      {index === 0 && <span className="ml-2 text-xs text-theme-accent-red">*Required</span>}
                     </h4>
                     {index > 0 && (
                       <button
                         type="button"
                         onClick={() => removeITMember(member.id)}
-                        className="text-red-400 hover:text-red-300 transition-colors"
+                        className="text-theme-accent-red hover:text-theme-accent-red transition-colors"
                         aria-label="Remove team member"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 aria-hidden="true" className="w-4 h-4" />
                       </button>
                     )}
                   </div>
@@ -280,7 +280,7 @@ const ITTeamBackupAccess: React.FC = () => {
                     {/* Name */}
                     <div>
                       <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                        Full Name {index === 0 && <span className="text-red-400">*</span>}
+                        Full Name {index === 0 && <span className="text-theme-accent-red">*</span>}
                       </label>
                       <input
                         type="text"
@@ -288,13 +288,13 @@ const ITTeamBackupAccess: React.FC = () => {
                         onChange={(e) => updateITMember(member.id, 'name', e.target.value)}
                         className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                           errors[index === 0 ? 'primaryName' : `member${index}Name`]
-                            ? 'border-red-500 focus:ring-red-500/50'
-                            : 'border-theme-input-border focus:ring-cyan-600'
+                            ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                            : 'border-theme-input-border focus:ring-theme-focus-ring'
                         }`}
                         placeholder="John Doe"
                       />
                       {errors[index === 0 ? 'primaryName' : `member${index}Name`] && (
-                        <p className="mt-1 text-sm text-red-400">
+                        <p className="mt-1 text-sm text-theme-accent-red">
                           {errors[index === 0 ? 'primaryName' : `member${index}Name`]}
                         </p>
                       )}
@@ -309,7 +309,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         type="text"
                         value={member.role}
                         onChange={(e) => updateITMember(member.id, 'role', e.target.value)}
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-600 transition-all"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring transition-all"
                         placeholder="IT Manager"
                       />
                     </div>
@@ -317,7 +317,7 @@ const ITTeamBackupAccess: React.FC = () => {
                     {/* Email */}
                     <div>
                       <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                        Email {index === 0 && <span className="text-red-400">*</span>}
+                        Email {index === 0 && <span className="text-theme-accent-red">*</span>}
                       </label>
                       <input
                         type="email"
@@ -325,13 +325,13 @@ const ITTeamBackupAccess: React.FC = () => {
                         onChange={(e) => updateITMember(member.id, 'email', e.target.value)}
                         className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                           errors[index === 0 ? 'primaryEmail' : `member${index}Email`]
-                            ? 'border-red-500 focus:ring-red-500/50'
-                            : 'border-theme-input-border focus:ring-cyan-600'
+                            ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                            : 'border-theme-input-border focus:ring-theme-focus-ring'
                         }`}
                         placeholder="john@example.com"
                       />
                       {errors[index === 0 ? 'primaryEmail' : `member${index}Email`] && (
-                        <p className="mt-1 text-sm text-red-400">
+                        <p className="mt-1 text-sm text-theme-accent-red">
                           {errors[index === 0 ? 'primaryEmail' : `member${index}Email`]}
                         </p>
                       )}
@@ -340,7 +340,7 @@ const ITTeamBackupAccess: React.FC = () => {
                     {/* Phone */}
                     <div>
                       <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                        Phone {index === 0 && <span className="text-red-400">*</span>}
+                        Phone {index === 0 && <span className="text-theme-accent-red">*</span>}
                       </label>
                       <input
                         type="tel"
@@ -348,13 +348,13 @@ const ITTeamBackupAccess: React.FC = () => {
                         onChange={(e) => updateITMember(member.id, 'phone', e.target.value)}
                         className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                           errors[index === 0 ? 'primaryPhone' : `member${index}Phone`]
-                            ? 'border-red-500 focus:ring-red-500/50'
-                            : 'border-theme-input-border focus:ring-cyan-600'
+                            ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                            : 'border-theme-input-border focus:ring-theme-focus-ring'
                         }`}
                         placeholder="(555) 123-4567"
                       />
                       {errors[index === 0 ? 'primaryPhone' : `member${index}Phone`] && (
-                        <p className="mt-1 text-sm text-red-400">
+                        <p className="mt-1 text-sm text-theme-accent-red">
                           {errors[index === 0 ? 'primaryPhone' : `member${index}Phone`]}
                         </p>
                       )}
@@ -367,7 +367,7 @@ const ITTeamBackupAccess: React.FC = () => {
             {/* Backup Access Section */}
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
               <div className="flex items-center space-x-3 mb-4">
-                <Shield className="w-6 h-6 text-theme-alert-warning-icon" />
+                <Shield aria-hidden="true" className="w-6 h-6 text-theme-alert-warning-icon" />
                 <h3 className="text-xl font-bold text-theme-text-primary">Backup Access Methods</h3>
               </div>
 
@@ -390,24 +390,24 @@ const ITTeamBackupAccess: React.FC = () => {
                 {/* Backup Recovery Email */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                    Backup Recovery Email <span className="text-red-400">*</span>
+                    Backup Recovery Email <span className="text-theme-accent-red">*</span>
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
+                    <Mail aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
                     <input
                       type="email"
                       value={backupEmail}
                       onChange={(e) => setBackupEmail(e.target.value)}
                       className={`w-full pl-12 pr-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                         errors.backupEmail
-                          ? 'border-red-500 focus:ring-red-500/50'
-                          : 'border-theme-input-border focus:ring-cyan-600'
+                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                          : 'border-theme-input-border focus:ring-theme-focus-ring'
                       }`}
                       placeholder="backup-admin@example.com"
                     />
                   </div>
                   {errors.backupEmail && (
-                    <p className="mt-1 text-sm text-red-400">{errors.backupEmail}</p>
+                    <p className="mt-1 text-sm text-theme-accent-red">{errors.backupEmail}</p>
                   )}
                   <p className="mt-1 text-xs text-theme-text-muted">
                     Use a different email than the primary admin account
@@ -417,24 +417,24 @@ const ITTeamBackupAccess: React.FC = () => {
                 {/* Backup Phone */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                    Backup Phone Number <span className="text-red-400">*</span>
+                    Backup Phone Number <span className="text-theme-accent-red">*</span>
                   </label>
                   <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
+                    <Phone aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
                     <input
                       type="tel"
                       value={backupPhone}
                       onChange={(e) => setBackupPhone(e.target.value)}
                       className={`w-full pl-12 pr-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                         errors.backupPhone
-                          ? 'border-red-500 focus:ring-red-500/50'
-                          : 'border-theme-input-border focus:ring-cyan-600'
+                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                          : 'border-theme-input-border focus:ring-theme-focus-ring'
                       }`}
                       placeholder="(555) 987-6543"
                     />
                   </div>
                   {errors.backupPhone && (
-                    <p className="mt-1 text-sm text-red-400">{errors.backupPhone}</p>
+                    <p className="mt-1 text-sm text-theme-accent-red">{errors.backupPhone}</p>
                   )}
                   <p className="mt-1 text-xs text-theme-text-muted">
                     For SMS verification and account recovery
@@ -447,21 +447,21 @@ const ITTeamBackupAccess: React.FC = () => {
                     Secondary Admin Email <span className="text-theme-text-muted">(Optional)</span>
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
+                    <User aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
                     <input
                       type="email"
                       value={secondaryAdminEmail}
                       onChange={(e) => setSecondaryAdminEmail(e.target.value)}
                       className={`w-full pl-12 pr-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                         errors.secondaryAdminEmail
-                          ? 'border-red-500 focus:ring-red-500/50'
-                          : 'border-theme-input-border focus:ring-cyan-600'
+                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                          : 'border-theme-input-border focus:ring-theme-focus-ring'
                       }`}
                       placeholder="secondary-admin@example.com"
                     />
                   </div>
                   {errors.secondaryAdminEmail && (
-                    <p className="mt-1 text-sm text-red-400">{errors.secondaryAdminEmail}</p>
+                    <p className="mt-1 text-sm text-theme-accent-red">{errors.secondaryAdminEmail}</p>
                   )}
                   <p className="mt-1 text-xs text-theme-text-muted">
                     An additional admin who can help with account recovery

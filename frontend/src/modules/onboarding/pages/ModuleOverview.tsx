@@ -87,16 +87,16 @@ const ModuleOverview: React.FC = () => {
     switch (priority) {
       case 'essential': return 'text-theme-alert-danger-text bg-theme-alert-danger-bg border-theme-alert-danger-border';
       case 'recommended': return 'text-theme-alert-info-text bg-theme-alert-info-bg border-theme-alert-info-border';
-      case 'optional': return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
-      default: return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
+      case 'optional': return 'text-theme-text-muted bg-theme-surface-secondary border-theme-surface-border';
+      default: return 'text-theme-text-muted bg-theme-surface-secondary border-theme-surface-border';
     }
   };
 
   const getStatusIcon = (status?: string) => {
     switch (status) {
-      case 'enabled': return <CheckCircle className="w-4 h-4 text-green-400" />;
-      case 'skipped': return <Clock4 className="w-4 h-4 text-yellow-400" />;
-      case 'ignored': return <XCircle className="w-4 h-4 text-theme-text-muted" />;
+      case 'enabled': return <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green" />;
+      case 'skipped': return <Clock4 aria-hidden="true" className="w-4 h-4 text-theme-accent-yellow" />;
+      case 'ignored': return <XCircle aria-hidden="true" className="w-4 h-4 text-theme-text-muted" />;
       default: return null;
     }
   };
@@ -120,7 +120,7 @@ const ModuleOverview: React.FC = () => {
             </div>
           ) : (
             <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
+              <Mail aria-hidden="true" className="w-6 h-6 text-white" />
             </div>
           )}
           <div>
@@ -141,7 +141,7 @@ const ModuleOverview: React.FC = () => {
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-              <Package className="w-8 h-8 text-white" />
+              <Package aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Choose Your Modules
@@ -305,9 +305,9 @@ const ModuleOverview: React.FC = () => {
           {/* Optional Modules */}
           <div className="mb-8">
             <div className="flex items-center mb-4">
-              <div className="flex-1 h-px bg-slate-500/30"></div>
+              <div className="flex-1 h-px bg-theme-surface-border"></div>
               <h2 className="px-4 text-lg font-bold text-theme-text-muted">OPTIONAL MODULES</h2>
-              <div className="flex-1 h-px bg-slate-500/30"></div>
+              <div className="flex-1 h-px bg-theme-surface-border"></div>
             </div>
             <p className="text-center text-theme-text-muted text-sm mb-6">
               Advanced features you can enable when needed - completely optional

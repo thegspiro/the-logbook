@@ -187,7 +187,7 @@ const AuthenticationChoice: React.FC = () => {
             </div>
           ) : (
             <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
+              <Mail aria-hidden="true" className="w-6 h-6 text-white" />
             </div>
           )}
           <div>
@@ -208,7 +208,7 @@ const AuthenticationChoice: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
-              <Key className="w-8 h-8 text-white" />
+              <Key aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               User Authentication
@@ -225,7 +225,7 @@ const AuthenticationChoice: React.FC = () => {
           {emailPlatform && (emailPlatform === 'gmail' || emailPlatform === 'microsoft') && (
             <div className="alert-success mb-6 max-w-3xl mx-auto">
               <div className="flex items-start space-x-3">
-                <CheckCircle className="w-5 h-5 text-theme-alert-success-icon flex-shrink-0 mt-0.5" />
+                <CheckCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-success-icon flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-alert-success-title text-sm font-medium mb-1">
                     Smart Recommendation
@@ -243,7 +243,7 @@ const AuthenticationChoice: React.FC = () => {
           {/* Security Notice */}
           <div className="alert-info mb-6 max-w-3xl mx-auto">
             <div className="flex items-start space-x-3">
-              <Shield className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+              <Shield aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                   Enterprise Security
@@ -264,7 +264,7 @@ const AuthenticationChoice: React.FC = () => {
                 onClick={() => setAuthPlatform(platform.id)}
                 className={`relative bg-theme-surface backdrop-blur-sm rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
                   authPlatform === platform.id
-                    ? 'border-red-500 shadow-lg shadow-red-500/50'
+                    ? 'border-theme-accent-red shadow-lg'
                     : 'border-theme-surface-border hover:border-white/40'
                 }`}
                 aria-pressed={authPlatform === platform.id}
@@ -273,7 +273,7 @@ const AuthenticationChoice: React.FC = () => {
                 {platform.recommended && (
                   <div className="absolute -top-2 -right-2">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-500 text-white shadow-lg">
-                      <CheckCircle className="w-3 h-3 mr-1" />
+                      <CheckCircle aria-hidden="true" className="w-3 h-3 mr-1" />
                       Recommended
                     </span>
                   </div>
@@ -282,7 +282,7 @@ const AuthenticationChoice: React.FC = () => {
                 {/* Selected Indicator */}
                 {authPlatform === platform.id && (
                   <div className="absolute top-4 left-4">
-                    <CheckCircle className="w-6 h-6 text-red-500" />
+                    <CheckCircle aria-hidden="true" className="w-6 h-6 text-theme-accent-red" />
                   </div>
                 )}
 
@@ -305,7 +305,7 @@ const AuthenticationChoice: React.FC = () => {
                     <ul className="space-y-1.5 mb-4">
                       {platform.features.map((feature, index) => (
                         <li key={index} className="flex items-start text-xs text-theme-text-secondary">
-                          <CheckCircle className="w-3.5 h-3.5 text-green-400 mr-2 flex-shrink-0 mt-0.5" />
+                          <CheckCircle aria-hidden="true" className="w-3.5 h-3.5 text-theme-accent-green mr-2 flex-shrink-0 mt-0.5" />
                           <span>{feature}</span>
                         </li>
                       ))}
@@ -344,7 +344,7 @@ const AuthenticationChoice: React.FC = () => {
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 authPlatform && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -366,7 +366,7 @@ const AuthenticationChoice: React.FC = () => {
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-theme-text-muted text-xs mt-1">
             Powered by The Logbook
           </p>
         </div>

@@ -105,7 +105,7 @@ const FileStorageChoice: React.FC = () => {
       id: 's3',
       name: 'Amazon S3',
       description: 'AWS cloud storage',
-      icon: <Database className="w-10 h-10 text-orange-500" />,
+      icon: <Database aria-hidden="true" className="w-10 h-10 text-theme-accent-orange" />,
       color: 'from-orange-600 to-yellow-500',
       features: [
         'Pay-as-you-go pricing',
@@ -119,7 +119,7 @@ const FileStorageChoice: React.FC = () => {
       id: 'local',
       name: 'Local Storage',
       description: 'Store files on your server',
-      icon: <HardDrive className="w-10 h-10 text-theme-text-muted" />,
+      icon: <HardDrive aria-hidden="true" className="w-10 h-10 text-theme-text-muted" />,
       color: 'from-slate-600 to-slate-400',
       features: [
         'Complete control over your data',
@@ -134,7 +134,7 @@ const FileStorageChoice: React.FC = () => {
       id: 'other',
       name: 'Configure Later',
       description: 'Skip for now',
-      icon: <FolderOpen className="w-10 h-10 text-theme-text-muted" />,
+      icon: <FolderOpen aria-hidden="true" className="w-10 h-10 text-theme-text-muted" />,
       color: 'from-slate-700 to-slate-500',
       features: [
         'Set up file storage later',
@@ -199,7 +199,7 @@ const FileStorageChoice: React.FC = () => {
             </div>
           ) : (
             <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
+              <Mail aria-hidden="true" className="w-6 h-6 text-white" />
             </div>
           )}
           <div>
@@ -220,7 +220,7 @@ const FileStorageChoice: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-              <Cloud className="w-8 h-8 text-white" />
+              <Cloud aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               File Storage
@@ -237,7 +237,7 @@ const FileStorageChoice: React.FC = () => {
           {emailPlatform && (emailPlatform === 'gmail' || emailPlatform === 'microsoft') && (
             <div className="alert-success mb-6 max-w-3xl mx-auto">
               <div className="flex items-start space-x-3">
-                <CheckCircle className="w-5 h-5 text-theme-alert-success-icon flex-shrink-0 mt-0.5" />
+                <CheckCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-success-icon flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-alert-success-title text-sm font-medium mb-1">
                     Smart Recommendation
@@ -260,7 +260,7 @@ const FileStorageChoice: React.FC = () => {
                 onClick={() => setFileStoragePlatform(platform.id)}
                 className={`relative bg-theme-surface backdrop-blur-sm rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
                   fileStoragePlatform === platform.id
-                    ? 'border-red-500 shadow-lg shadow-red-500/50'
+                    ? 'border-theme-accent-red shadow-lg'
                     : 'border-theme-surface-border hover:border-theme-surface-hover'
                 }`}
                 aria-pressed={fileStoragePlatform === platform.id}
@@ -269,7 +269,7 @@ const FileStorageChoice: React.FC = () => {
                 {platform.recommended && (
                   <div className="absolute top-4 right-4">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-500 text-white">
-                      <CheckCircle className="w-3 h-3 mr-1" />
+                      <CheckCircle aria-hidden="true" className="w-3 h-3 mr-1" />
                       Recommended
                     </span>
                   </div>
@@ -278,7 +278,7 @@ const FileStorageChoice: React.FC = () => {
                 {/* Selected Indicator */}
                 {fileStoragePlatform === platform.id && (
                   <div className="absolute top-4 left-4">
-                    <CheckCircle className="w-6 h-6 text-red-500" />
+                    <CheckCircle aria-hidden="true" className="w-6 h-6 text-theme-accent-red" />
                   </div>
                 )}
 
@@ -301,7 +301,7 @@ const FileStorageChoice: React.FC = () => {
                     <ul className="space-y-1 mb-3">
                       {platform.features.map((feature, index) => (
                         <li key={index} className="flex items-start text-sm text-theme-text-secondary">
-                          <CheckCircle className="w-4 h-4 text-green-400 mr-2 flex-shrink-0 mt-0.5" />
+                          <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2 flex-shrink-0 mt-0.5" />
                           <span>{feature}</span>
                         </li>
                       ))}
@@ -310,7 +310,7 @@ const FileStorageChoice: React.FC = () => {
                     {/* Setup Info */}
                     <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded px-3 py-2">
                       <p className="text-theme-alert-info-text text-xs flex items-start">
-                        <Info className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" />
+                        <Info aria-hidden="true" className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" />
                         <span>{platform.setupInfo}</span>
                       </p>
                     </div>

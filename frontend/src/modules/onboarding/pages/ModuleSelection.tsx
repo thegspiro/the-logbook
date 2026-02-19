@@ -115,7 +115,7 @@ const ModuleSelection: React.FC = () => {
   const renderModuleCard = (module: Module) => {
     const isSelected = selectedModules.includes(module.id);
     const isExpanded = expandedModule === module.id;
-    const icon = iconMap[module.icon] || <Circle className="w-6 h-6" />;
+    const icon = iconMap[module.icon] || <Circle aria-hidden="true" className="w-6 h-6" />;
 
     const getCategoryColor = () => {
       switch (module.category) {
@@ -170,11 +170,11 @@ const ModuleSelection: React.FC = () => {
             {/* Selection Indicator */}
             <div className="flex-shrink-0 mt-1">
               {isSelected ? (
-                <CheckCircle className="w-6 h-6 text-green-400" />
+                <CheckCircle aria-hidden="true" className="w-6 h-6 text-theme-accent-green" />
               ) : module.canDisable ? (
-                <Circle className="w-6 h-6 text-theme-text-muted" />
+                <Circle aria-hidden="true" className="w-6 h-6 text-theme-text-muted" />
               ) : (
-                <CheckCircle className="w-6 h-6 text-blue-400" />
+                <CheckCircle aria-hidden="true" className="w-6 h-6 text-theme-accent-blue" />
               )}
             </div>
 
@@ -197,7 +197,7 @@ const ModuleSelection: React.FC = () => {
                 <ul className="space-y-1">
                   {module.features.slice(0, 3).map((feature, index) => (
                     <li key={index} className="text-theme-text-secondary text-sm flex items-start space-x-2">
-                      <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0 mt-0.5" />
+                      <CheckCircle aria-hidden="true" className="w-3.5 h-3.5 text-theme-accent-green flex-shrink-0 mt-0.5" />
                       <span>{feature}</span>
                     </li>
                   ))}
@@ -216,27 +216,27 @@ const ModuleSelection: React.FC = () => {
                     e.stopPropagation();
                     toggleExpanded(module.id);
                   }}
-                  className="text-cyan-400 text-sm font-medium hover:text-cyan-300 flex items-center space-x-1 mb-2"
+                  className="text-theme-accent-cyan text-sm font-medium hover:text-theme-accent-cyan flex items-center space-x-1 mb-2"
                 >
                   <span>{isExpanded ? 'Hide' : 'View'} full details</span>
                   {isExpanded ? (
-                    <ChevronUp className="w-4 h-4" />
+                    <ChevronUp aria-hidden="true" className="w-4 h-4" />
                   ) : (
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown aria-hidden="true" className="w-4 h-4" />
                   )}
                 </button>
               )}
 
               {!module.canDisable && (
                 <p className="text-theme-alert-info-icon text-xs mt-2 flex items-center space-x-1">
-                  <Info className="w-3 h-3" />
+                  <Info aria-hidden="true" className="w-3 h-3" />
                   <span>Always enabled</span>
                 </p>
               )}
 
               {module.requiresSetup && (
                 <p className="text-theme-alert-warning-icon text-xs mt-2 flex items-center space-x-1">
-                  <Info className="w-3 h-3" />
+                  <Info aria-hidden="true" className="w-3 h-3" />
                   <span>{module.setupDescription}</span>
                 </p>
               )}
@@ -256,7 +256,7 @@ const ModuleSelection: React.FC = () => {
                 <ul className="space-y-1">
                   {module.features.map((feature, index) => (
                     <li key={index} className="text-theme-text-secondary text-sm flex items-start space-x-2">
-                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                      <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green flex-shrink-0 mt-0.5" />
                       <span>{feature}</span>
                     </li>
                   ))}
@@ -282,7 +282,7 @@ const ModuleSelection: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
-              <Settings className="w-8 h-8 text-white" />
+              <Settings aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">Select Modules</h2>
             <p className="text-xl text-theme-text-secondary mb-2">
@@ -296,7 +296,7 @@ const ModuleSelection: React.FC = () => {
           {/* Info Banner */}
           <div className="alert-info mb-6">
             <div className="flex items-start space-x-3">
-              <Info className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+              <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-theme-alert-info-title text-sm font-medium mb-1">Module Categories</p>
                 <div className="text-theme-alert-info-text text-sm space-y-1">

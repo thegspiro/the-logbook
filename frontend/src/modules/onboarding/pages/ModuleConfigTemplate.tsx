@@ -85,7 +85,7 @@ const ModuleConfigTemplate: React.FC = () => {
             onClick={handleSkip}
             className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
           >
-            <ArrowLeft className="w-5 h-5 mr-2" />
+            <ArrowLeft aria-hidden="true" className="w-5 h-5 mr-2" />
             Back to Modules
           </button>
           <h1 className="text-4xl font-bold text-theme-text-primary mb-2">
@@ -99,7 +99,7 @@ const ModuleConfigTemplate: React.FC = () => {
         {/* Two-Tier Permission Model Explanation */}
         <div className="alert-info mb-6">
           <div className="flex items-start">
-            <Info className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 flex-shrink-0" />
+            <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 flex-shrink-0" />
             <div>
               <p className="text-theme-alert-info-title font-semibold mb-1">How Permissions Work</p>
               <p className="text-theme-text-secondary text-sm">
@@ -113,10 +113,10 @@ const ModuleConfigTemplate: React.FC = () => {
 
         <div className="grid md:grid-cols-2 gap-6 mb-6">
           {/* View Access Card */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-green-500/30">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-alert-success-border">
             <div className="flex items-center mb-4">
               <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center mr-4">
-                <Eye className="w-6 h-6 text-white" />
+                <Eye aria-hidden="true" className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h2 className="text-theme-text-primary font-bold text-lg">View Access</h2>
@@ -129,27 +129,27 @@ const ModuleConfigTemplate: React.FC = () => {
               <ul className="space-y-2">
                 {config?.permissions.view.map((perm, idx) => (
                   <li key={idx} className="flex items-center text-theme-text-secondary text-sm">
-                    <CheckCircle className="w-4 h-4 text-green-400 mr-2 flex-shrink-0" />
+                    <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2 flex-shrink-0" />
                     {perm}
                   </li>
                 ))}
               </ul>
             </div>
             <div className="mt-4 flex items-center text-theme-text-muted text-xs">
-              <Users className="w-4 h-4 mr-2" />
+              <Users aria-hidden="true" className="w-4 h-4 mr-2" />
               Applies to all active members automatically
             </div>
           </div>
 
           {/* Manage Access Card */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-orange-500/30">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-alert-warning-border">
             <div className="flex items-center mb-4">
               <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center mr-4">
-                <Edit3 className="w-6 h-6 text-white" />
+                <Edit3 aria-hidden="true" className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h2 className="text-theme-text-primary font-bold text-lg">Manage Access</h2>
-                <p className="text-orange-400 text-sm">Selected Roles Only</p>
+                <p className="text-theme-accent-orange text-sm">Selected Roles Only</p>
               </div>
             </div>
             <p className="text-theme-text-secondary text-sm mb-4">{config?.permissions.manageDescription}</p>
@@ -158,7 +158,7 @@ const ModuleConfigTemplate: React.FC = () => {
               <ul className="space-y-2">
                 {config?.permissions.manage.map((perm, idx) => (
                   <li key={idx} className="flex items-center text-theme-text-secondary text-sm">
-                    <Shield className="w-4 h-4 text-orange-400 mr-2 flex-shrink-0" />
+                    <Shield aria-hidden="true" className="w-4 h-4 text-theme-accent-orange mr-2 flex-shrink-0" />
                     {perm}
                   </li>
                 ))}
@@ -186,21 +186,21 @@ const ModuleConfigTemplate: React.FC = () => {
                   disabled={isAdmin}
                   className={`p-4 rounded-lg border-2 text-left transition-all ${
                     isSelected
-                      ? 'border-orange-500 bg-orange-500/10'
-                      : 'border-slate-600 bg-theme-surface-secondary hover:border-slate-500'
+                      ? 'border-theme-accent-orange bg-theme-accent-orange-muted'
+                      : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-hover'
                   } ${isAdmin ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className={`font-semibold ${isSelected ? 'text-orange-400' : 'text-theme-text-primary'}`}>
+                    <span className={`font-semibold ${isSelected ? 'text-theme-accent-orange' : 'text-theme-text-primary'}`}>
                       {role.name}
                     </span>
                     {isSelected && (
-                      <CheckCircle className="w-5 h-5 text-orange-400" />
+                      <CheckCircle aria-hidden="true" className="w-5 h-5 text-theme-accent-orange" />
                     )}
                   </div>
                   <p className="text-theme-text-muted text-xs">{role.description}</p>
                   {isAdmin && (
-                    <p className="text-orange-400 text-xs mt-1 italic">Always has access</p>
+                    <p className="text-theme-accent-orange text-xs mt-1 italic">Always has access</p>
                   )}
                 </button>
               );
@@ -220,15 +220,15 @@ const ModuleConfigTemplate: React.FC = () => {
           <h3 className="text-theme-text-primary font-semibold mb-2">Quick Tips</h3>
           <ul className="text-theme-text-secondary text-sm space-y-2">
             <li className="flex items-start">
-              <span className="text-green-400 mr-2">•</span>
+              <span className="text-theme-accent-green mr-2">•</span>
               <span>You can change these permissions anytime in Settings → Permissions</span>
             </li>
             <li className="flex items-start">
-              <span className="text-green-400 mr-2">•</span>
+              <span className="text-theme-accent-green mr-2">•</span>
               <span>Individual users can be granted additional permissions beyond their role</span>
             </li>
             <li className="flex items-start">
-              <span className="text-green-400 mr-2">•</span>
+              <span className="text-theme-accent-green mr-2">•</span>
               <span>Some modules have sub-permissions you can configure in detail later</span>
             </li>
           </ul>
@@ -245,7 +245,7 @@ const ModuleConfigTemplate: React.FC = () => {
           </button>
           <button
             onClick={handleSkip}
-            className="sm:w-auto px-6 py-3 bg-transparent border border-slate-500 hover:border-slate-400 text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all"
+            className="sm:w-auto px-6 py-3 bg-transparent border border-theme-surface-border hover:border-slate-400 text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all"
           >
             Use Defaults
           </button>

@@ -718,7 +718,7 @@ const RoleSetup: React.FC = () => {
                             key={role.id}
                             className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
                               isSelected
-                                ? 'border-green-500 bg-green-50'
+                                ? 'border-theme-accent-green bg-theme-accent-green-muted'
                                 : 'border-theme-surface-border hover:border-theme-surface-hover'
                             }`}
                             onClick={() => toggleRole(role)}
@@ -736,14 +736,14 @@ const RoleSetup: React.FC = () => {
                                   <Icon className="w-5 h-5 text-white" aria-hidden="true" />
                                 </div>
                                 <div>
-                                  <p className={`font-semibold ${isSelected ? 'text-green-400' : 'text-theme-text-primary'}`}>
+                                  <p className={`font-semibold ${isSelected ? 'text-theme-accent-green' : 'text-theme-text-primary'}`}>
                                     {role.name}
                                   </p>
                                   <p className="text-theme-text-muted text-xs">{role.description}</p>
                                 </div>
                               </div>
                               {isSelected && (
-                                <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" aria-hidden="true" />
+                                <CheckCircle className="w-5 h-5 text-theme-accent-green flex-shrink-0" aria-hidden="true" />
                               )}
                             </div>
                           </div>
@@ -771,7 +771,7 @@ const RoleSetup: React.FC = () => {
                       <div
                         key={role.id}
                         className={`bg-theme-surface rounded-lg border transition-all ${
-                          isEditing ? 'border-orange-500' : 'border-theme-surface-border'
+                          isEditing ? 'border-theme-accent-orange' : 'border-theme-surface-border'
                         }`}
                       >
                         <div
@@ -813,14 +813,14 @@ const RoleSetup: React.FC = () => {
                                   e.stopPropagation();
                                   toggleRole(role);
                                 }}
-                                className="p-1 hover:bg-red-500/20 rounded text-theme-text-muted hover:text-red-400 transition-colors"
+                                className="p-1 hover:bg-theme-accent-orange-muted rounded text-theme-text-muted hover:text-theme-accent-red transition-colors"
                                 aria-label={`Remove ${role.name} role`}
                               >
                                 <X className="w-4 h-4" aria-hidden="true" />
                               </button>
                             )}
                             {isEditing ? (
-                              <ChevronDown className="w-5 h-5 text-orange-400" aria-hidden="true" />
+                              <ChevronDown className="w-5 h-5 text-theme-accent-orange" aria-hidden="true" />
                             ) : (
                               <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                             )}
@@ -852,7 +852,7 @@ const RoleSetup: React.FC = () => {
                                         aria-label={`${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`}
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.view
-                                            ? 'bg-green-500/20 text-green-400'
+                                            ? 'bg-theme-accent-green-muted text-theme-accent-green'
                                             : 'bg-theme-surface text-theme-text-muted'
                                         } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
@@ -865,7 +865,7 @@ const RoleSetup: React.FC = () => {
                                         aria-label={`${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`}
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.manage
-                                            ? 'bg-orange-500/20 text-orange-400'
+                                            ? 'bg-theme-accent-orange-muted text-theme-accent-orange'
                                             : 'bg-theme-surface text-theme-text-muted'
                                         } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
@@ -919,7 +919,7 @@ const RoleSetup: React.FC = () => {
                   placeholder="e.g., Social Media Manager"
                   required
                   aria-required="true"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
 
@@ -933,7 +933,7 @@ const RoleSetup: React.FC = () => {
                   value={customRoleDescription}
                   onChange={(e) => setCustomRoleDescription(e.target.value)}
                   placeholder="Brief description of this role"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>

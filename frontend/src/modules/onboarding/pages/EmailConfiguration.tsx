@@ -238,7 +238,7 @@ const EmailConfiguration: React.FC = () => {
             {/* OAuth vs App Password Toggle */}
             <div className="alert-info mb-6">
               <div className="flex items-start space-x-3 mb-4">
-                <AlertCircle className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                     Choose Authentication Method
@@ -251,7 +251,7 @@ const EmailConfiguration: React.FC = () => {
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => setUseOAuth(true)}
+                  onClick={() => setUseOAuth(true)} aria-pressed={useOAuth}
                   className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
                     useOAuth
                       ? 'bg-blue-600 text-white'
@@ -261,7 +261,7 @@ const EmailConfiguration: React.FC = () => {
                   OAuth 2.0 (Recommended)
                 </button>
                 <button
-                  onClick={() => setUseOAuth(false)}
+                  onClick={() => setUseOAuth(false)} aria-pressed={!useOAuth}
                   className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
                     !useOAuth
                       ? 'bg-blue-600 text-white'
@@ -285,7 +285,7 @@ const EmailConfiguration: React.FC = () => {
                       value={config.googleClientId || ''}
                       onChange={(e) => handleInputChange('googleClientId', e.target.value)}
                       placeholder="123456789-abc.apps.googleusercontent.com"
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                     />
                   </div>
 
@@ -298,7 +298,7 @@ const EmailConfiguration: React.FC = () => {
                       value={config.googleClientSecret || ''}
                       onChange={(e) => handleInputChange('googleClientSecret', e.target.value)}
                       placeholder="GOCSPX-xxxxxxxxxxxxx"
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                     />
                   </div>
                 </div>
@@ -333,20 +333,20 @@ const EmailConfiguration: React.FC = () => {
                     value={config.fromEmail || ''}
                     onChange={(e) => handleInputChange('fromEmail', e.target.value)}
                     placeholder="notifications@yourdomain.com"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   />
                 </div>
 
                 <div className="mt-4">
                   <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                    Google App Password <span className="text-red-400">*</span>
+                    Google App Password <span className="text-theme-accent-red">*</span>
                   </label>
                   <input
                     type="password"
                     value={config.googleAppPassword || ''}
                     onChange={(e) => handleInputChange('googleAppPassword', e.target.value)}
                     placeholder="xxxx xxxx xxxx xxxx"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   />
                 </div>
 
@@ -378,7 +378,7 @@ const EmailConfiguration: React.FC = () => {
           <>
             <div className="alert-info mb-6">
               <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                     Microsoft 365 / Azure AD Setup
@@ -393,40 +393,40 @@ const EmailConfiguration: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                  Tenant ID <span className="text-red-400">*</span>
+                  Tenant ID <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
                   type="text"
                   value={config.microsoftTenantId || ''}
                   onChange={(e) => handleInputChange('microsoftTenantId', e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                  Client ID (Application ID) <span className="text-red-400">*</span>
+                  Client ID (Application ID) <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
                   type="text"
                   value={config.microsoftClientId || ''}
                   onChange={(e) => handleInputChange('microsoftClientId', e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                  Client Secret <span className="text-red-400">*</span>
+                  Client Secret <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
                   type="password"
                   value={config.microsoftClientSecret || ''}
                   onChange={(e) => handleInputChange('microsoftClientSecret', e.target.value)}
                   placeholder="Client secret value"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -458,39 +458,39 @@ const EmailConfiguration: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                  SMTP Host <span className="text-red-400">*</span>
+                  SMTP Host <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
                   type="text"
                   value={config.smtpHost || ''}
                   onChange={(e) => handleInputChange('smtpHost', e.target.value)}
                   placeholder="mail.yourdomain.com"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                    Port <span className="text-red-400">*</span>
+                    Port <span className="text-theme-accent-red">*</span>
                   </label>
                   <input
                     type="number"
                     value={config.smtpPort || ''}
                     onChange={(e) => handleInputChange('smtpPort', e.target.value)}
                     placeholder="587"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                    Encryption <span className="text-red-400">*</span>
+                    Encryption <span className="text-theme-accent-red">*</span>
                   </label>
                   <select
                     value={config.smtpEncryption || 'tls'}
                     onChange={(e) => handleInputChange('smtpEncryption', e.target.value as 'tls' | 'ssl' | 'none')}
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   >
                     <option value="tls">TLS (STARTTLS)</option>
                     <option value="ssl">SSL</option>
@@ -501,27 +501,27 @@ const EmailConfiguration: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                  Username <span className="text-red-400">*</span>
+                  Username <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
                   type="text"
                   value={config.smtpUsername || ''}
                   onChange={(e) => handleInputChange('smtpUsername', e.target.value)}
                   placeholder="notifications@yourdomain.com"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                  Password <span className="text-red-400">*</span>
+                  Password <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
                   type="password"
                   value={config.smtpPassword || ''}
                   onChange={(e) => handleInputChange('smtpPassword', e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -529,9 +529,9 @@ const EmailConfiguration: React.FC = () => {
             <div className="mt-4 bg-theme-surface-secondary rounded-lg p-4 text-sm text-theme-text-secondary">
               <p className="font-medium text-theme-text-primary mb-2">Common SMTP Ports:</p>
               <ul className="space-y-1">
-                <li>• <span className="text-green-600">587</span> - TLS/STARTTLS (recommended)</li>
-                <li>• <span className="text-blue-600">465</span> - SSL</li>
-                <li>• <span className="text-yellow-600">25</span> - Unencrypted (not recommended)</li>
+                <li>• <span className="text-theme-accent-green">587</span> - TLS/STARTTLS (recommended)</li>
+                <li>• <span className="text-theme-accent-blue">465</span> - SSL</li>
+                <li>• <span className="text-theme-accent-yellow">25</span> - Unencrypted (not recommended)</li>
               </ul>
             </div>
           </>
@@ -557,7 +557,7 @@ const EmailConfiguration: React.FC = () => {
             </div>
           ) : (
             <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
+              <Mail aria-hidden="true" className="w-6 h-6 text-white" />
             </div>
           )}
           <div>
@@ -579,7 +579,7 @@ const EmailConfiguration: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-              <Mail className="w-8 h-8 text-white" />
+              <Mail aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Configure {emailPlatform === 'gmail' ? 'Gmail' : emailPlatform === 'microsoft' ? 'Microsoft 365' : 'SMTP'} Email
@@ -594,14 +594,14 @@ const EmailConfiguration: React.FC = () => {
             {/* Common Fields */}
             <div>
               <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
-                From Email Address <span className="text-red-400">*</span>
+                From Email Address <span className="text-theme-accent-red">*</span>
               </label>
               <input
                 type="email"
                 value={config.fromEmail || ''}
                 onChange={(e) => handleInputChange('fromEmail', e.target.value)}
                 placeholder="notifications@yourdomain.com"
-                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Email address that notifications will be sent from
@@ -617,7 +617,7 @@ const EmailConfiguration: React.FC = () => {
                 value={config.fromName || ''}
                 onChange={(e) => handleInputChange('fromName', e.target.value)}
                 placeholder={departmentName}
-                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Display name for outgoing emails (defaults to department name)
@@ -640,7 +640,7 @@ const EmailConfiguration: React.FC = () => {
               >
                 {testingConnection ? (
                   <>
-                    <Loader className="w-5 h-5 mr-2 animate-spin" />
+                    <Loader aria-hidden="true" className="w-5 h-5 mr-2 animate-spin" />
                     Testing Connection...
                   </>
                 ) : connectionTested ? (

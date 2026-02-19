@@ -61,7 +61,7 @@ const Welcome: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500 mb-4"></div>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-theme-accent-red mb-4"></div>
         </div>
       </div>
     );

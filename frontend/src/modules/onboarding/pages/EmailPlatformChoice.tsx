@@ -75,7 +75,7 @@ const EmailPlatformChoice: React.FC = () => {
       id: 'selfhosted',
       name: 'Self-Hosted',
       description: 'Your own mail server (SMTP)',
-      icon: <Server className="w-10 h-10" />,
+      icon: <Server aria-hidden="true" className="w-10 h-10" />,
       color: 'from-green-500 to-emerald-500',
       features: [
         'Full control',
@@ -88,7 +88,7 @@ const EmailPlatformChoice: React.FC = () => {
       id: 'other',
       name: 'Other / Skip',
       description: 'Different provider or configure later',
-      icon: <Mail className="w-10 h-10" />,
+      icon: <Mail aria-hidden="true" className="w-10 h-10" />,
       color: 'from-slate-500 to-slate-600',
       features: [
         'Configure manually',
@@ -130,7 +130,7 @@ const EmailPlatformChoice: React.FC = () => {
             </div>
           ) : (
             <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
+              <Mail aria-hidden="true" className="w-6 h-6 text-white" />
             </div>
           )}
           <div>
@@ -152,7 +152,7 @@ const EmailPlatformChoice: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-              <Mail className="w-8 h-8 text-white" />
+              <Mail aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Email Platform
@@ -173,8 +173,8 @@ const EmailPlatformChoice: React.FC = () => {
                 onClick={() => setEmailPlatform(platform.id)}
                 className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 text-left ${
                   emailPlatform === platform.id
-                    ? 'border-red-500 shadow-lg shadow-red-500/50'
-                    : 'border-theme-surface-border hover:border-red-400/50'
+                    ? 'border-theme-accent-red shadow-lg'
+                    : 'border-theme-surface-border hover:border-theme-accent-red'
                 }`}
                 aria-pressed={emailPlatform === platform.id}
                 aria-label={`Select ${platform.name}`}
@@ -205,7 +205,7 @@ const EmailPlatformChoice: React.FC = () => {
                   <ul className="space-y-2 text-sm text-theme-text-secondary mb-4">
                     {platform.features.map((feature, index) => (
                       <li key={index} className="flex items-start">
-                        <span className="text-green-400 mr-2 flex-shrink-0">✓</span>
+                        <span className="text-theme-accent-green mr-2 flex-shrink-0">✓</span>
                         <span>{feature}</span>
                       </li>
                     ))}
@@ -215,7 +215,7 @@ const EmailPlatformChoice: React.FC = () => {
                   {platform.setupInfo && (
                     <div className="bg-theme-surface-secondary rounded-lg p-3 border border-theme-input-border">
                       <div className="flex items-start space-x-2">
-                        <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                        <Info aria-hidden="true" className="w-4 h-4 text-theme-accent-blue flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-theme-text-muted">
                           {platform.setupInfo}
                         </p>
@@ -250,7 +250,7 @@ const EmailPlatformChoice: React.FC = () => {
           {selectedPlatformData && selectedPlatformData.id !== 'other' && (
             <div className="alert-info mb-8">
               <div className="flex items-start space-x-3">
-                <Info className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                     Next Step

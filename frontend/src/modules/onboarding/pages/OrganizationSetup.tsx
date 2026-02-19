@@ -179,10 +179,10 @@ const SectionHeader: React.FC<{
     className="w-full flex items-center justify-between p-4 bg-theme-surface hover:bg-theme-surface-hover rounded-lg transition-colors"
   >
     <div className="flex items-center gap-3">
-      <span className="text-red-400">{icon}</span>
+      <span className="text-theme-accent-red">{icon}</span>
       <span className="text-theme-text-primary font-semibold">{title}</span>
-      {required && !isComplete && <span className="text-red-400 text-sm">*</span>}
-      {isComplete && <Check className="w-5 h-5 text-green-400 ml-2" />}
+      {required && !isComplete && <span className="text-theme-accent-red text-sm">*</span>}
+      {isComplete && <Check aria-hidden="true" className="w-5 h-5 text-theme-accent-green ml-2" />}
     </div>
     {expanded ? (
       <ChevronUp className="w-5 h-5 text-theme-text-muted" />
@@ -220,7 +220,7 @@ const InputField: React.FC<{
 }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-theme-text-secondary mb-1">
-      {label} {required && <span className="text-red-400">*</span>}
+      {label} {required && <span className="text-theme-accent-red">*</span>}
     </label>
     <input
       type={type}
@@ -230,14 +230,14 @@ const InputField: React.FC<{
       onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
-        error ? 'border-red-500' : 'border-theme-surface-border'
+      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
+        error ? 'border-theme-accent-red' : 'border-theme-surface-border'
       }`}
       aria-required={required}
       aria-invalid={!!error}
     />
     {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
-    {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+    {error && <p className="mt-1 text-xs text-theme-accent-red">{error}</p>}
   </div>
 );
 
@@ -254,14 +254,14 @@ const SelectField: React.FC<{
 }> = ({ label, id, value, onChange, options, required, helpText, error }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-theme-text-secondary mb-1">
-      {label} {required && <span className="text-red-400">*</span>}
+      {label} {required && <span className="text-theme-accent-red">*</span>}
     </label>
     <select
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
-        error ? 'border-red-500' : 'border-theme-surface-border'
+      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
+        error ? 'border-theme-accent-red' : 'border-theme-surface-border'
       }`}
       aria-required={required}
       aria-invalid={!!error}
@@ -273,7 +273,7 @@ const SelectField: React.FC<{
       ))}
     </select>
     {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
-    {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+    {error && <p className="mt-1 text-xs text-theme-accent-red">{error}</p>}
   </div>
 );
 
@@ -705,7 +705,7 @@ const OrganizationSetup: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-            <Building2 className="w-8 h-8 text-white" />
+            <Building2 aria-hidden="true" className="w-8 h-8 text-white" />
           </div>
           <div className="flex items-center justify-center space-x-3 mb-3">
             <h1 className="text-3xl md:text-4xl font-bold text-theme-text-primary">
@@ -729,7 +729,7 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Basic Information"
-              icon={<Building2 className="w-5 h-5" />}
+              icon={<Building2 aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.basic}
               onToggle={() => toggleSection('basic')}
               required
@@ -787,7 +787,7 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Contact Information"
-              icon={<Phone className="w-5 h-5" />}
+              icon={<Phone aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.contact}
               onToggle={() => toggleSection('contact')}
             />
@@ -848,7 +848,7 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Mailing Address"
-              icon={<Mail className="w-5 h-5" />}
+              icon={<Mail aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.mailing}
               onToggle={() => toggleSection('mailing')}
               required
@@ -859,7 +859,7 @@ const OrganizationSetup: React.FC = () => {
                 {/* Info banner explaining why mailing address is required */}
                 <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-3">
                   <div className="flex items-start space-x-2">
-                    <AlertCircle className="w-4 h-4 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                    <AlertCircle aria-hidden="true" className="w-4 h-4 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
                     <p className="text-sm text-theme-alert-info-text">
                       <strong>Why is this required?</strong> Your mailing address is used for official correspondence,
                       certifications, and legal documentation. If your physical location differs (e.g., PO Box vs. station address),
@@ -882,7 +882,7 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Physical Address"
-              icon={<MapPin className="w-5 h-5" />}
+              icon={<MapPin aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.physical}
               onToggle={() => toggleSection('physical')}
             />
@@ -893,7 +893,7 @@ const OrganizationSetup: React.FC = () => {
                     type="checkbox"
                     checked={formData.physicalAddressSame}
                     onChange={(e) => updateFormData('physicalAddressSame', e.target.checked)}
-                    className="w-5 h-5 rounded border-theme-surface-border bg-theme-surface-secondary text-red-500 focus:ring-red-500 focus:ring-offset-0"
+                    className="w-5 h-5 rounded border-theme-surface-border bg-theme-surface-secondary text-theme-accent-red focus:ring-theme-focus-ring focus:ring-offset-0"
                   />
                   <span className="text-theme-text-secondary">Same as mailing address</span>
                 </label>
@@ -915,7 +915,7 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Department Identifiers"
-              icon={<FileText className="w-5 h-5" />}
+              icon={<FileText aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.identifiers}
               onToggle={() => toggleSection('identifiers')}
             />
@@ -949,7 +949,7 @@ const OrganizationSetup: React.FC = () => {
                         key={option.value}
                         className={`flex flex-col p-4 rounded-lg border cursor-pointer transition-all ${
                           formData.identifierType === option.value
-                            ? 'border-red-500 bg-red-500/10'
+                            ? 'border-theme-accent-red bg-theme-accent-orange-muted'
                             : 'border-theme-surface-border hover:border-theme-surface-hover'
                         }`}
                       >
@@ -962,7 +962,7 @@ const OrganizationSetup: React.FC = () => {
                             onChange={(e) =>
                               updateFormData('identifierType', e.target.value as IdentifierType)
                             }
-                            className="text-red-500 focus:ring-red-500"
+                            className="text-theme-accent-red focus:ring-theme-focus-ring"
                           />
                           <span className="text-theme-text-primary font-medium">{option.label}</span>
                         </div>
@@ -1022,7 +1022,7 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Additional Information"
-              icon={<Clock className="w-5 h-5" />}
+              icon={<Clock aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.additional}
               onToggle={() => toggleSection('additional')}
             />
@@ -1055,7 +1055,7 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Organization Logo"
-              icon={<ImageIcon className="w-5 h-5" />}
+              icon={<ImageIcon aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.logo}
               onToggle={() => toggleSection('logo')}
             />
@@ -1072,8 +1072,8 @@ const OrganizationSetup: React.FC = () => {
                       onDrop={handleDrop}
                       className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer ${
                         dragActive
-                          ? 'border-red-500 bg-red-500/10'
-                          : 'border-theme-surface-border hover:border-red-500 hover:bg-theme-surface-hover'
+                          ? 'border-theme-accent-red bg-theme-accent-orange-muted'
+                          : 'border-theme-surface-border hover:border-theme-accent-red hover:bg-theme-surface-hover'
                       }`}
                       onClick={() => fileInputRef.current?.click()}
                       role="button"
@@ -1095,7 +1095,7 @@ const OrganizationSetup: React.FC = () => {
                       />
                       <div className="flex flex-col items-center space-y-3">
                         <div className="w-16 h-16 bg-theme-surface rounded-full flex items-center justify-center">
-                          <Upload className="w-8 h-8 text-theme-text-muted" />
+                          <Upload aria-hidden="true" className="w-8 h-8 text-theme-text-muted" />
                         </div>
                         <div>
                           <p className="text-theme-text-primary font-medium mb-1">
@@ -1132,16 +1132,16 @@ const OrganizationSetup: React.FC = () => {
                                   fileInputRef.current.value = '';
                                 }
                               }}
-                              className="flex-shrink-0 ml-4 p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                              className="flex-shrink-0 ml-4 p-2 hover:bg-theme-accent-orange-muted rounded-lg transition-colors"
                               aria-label="Remove logo"
                             >
-                              <X className="w-5 h-5 text-red-400" />
+                              <X aria-hidden="true" className="w-5 h-5 text-theme-accent-red" />
                             </button>
                           </div>
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="mt-3 text-sm text-red-400 hover:text-red-300 font-medium transition-colors"
+                            className="mt-3 text-sm text-theme-accent-red hover:text-theme-accent-red font-medium transition-colors"
                           >
                             Change logo
                           </button>
@@ -1151,7 +1151,7 @@ const OrganizationSetup: React.FC = () => {
                   )}
                 </div>
                 <p className="mt-2 text-xs text-theme-text-muted flex items-start">
-                  <ImageIcon className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
+                  <ImageIcon aria-hidden="true" className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
                   <span>
                     Your logo will be displayed in the header and on reports. You can change it
                     later in settings.
@@ -1173,12 +1173,12 @@ const OrganizationSetup: React.FC = () => {
 
           {/* Validation Errors Summary - Only show after first submit attempt */}
           {hasAttemptedSubmit && Object.keys(validationErrors).length > 0 && (
-            <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4">
+            <div className="bg-red-900/30 border border-theme-accent-red/50 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-accent-red flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-red-400 font-medium">Please fix the following errors:</p>
-                  <ul className="mt-2 text-sm text-red-300 list-disc list-inside">
+                  <p className="text-theme-accent-red font-medium">Please fix the following errors:</p>
+                  <ul className="mt-2 text-sm text-theme-accent-red list-disc list-inside">
                     {Object.entries(validationErrors).map(([key, msg]) => (
                       <li key={key}>{msg}</li>
                     ))}
@@ -1208,7 +1208,7 @@ const OrganizationSetup: React.FC = () => {
               ) : (
                 <span className="flex items-center justify-center gap-2">
                   Continue
-                  <Check className="w-5 h-5" />
+                  <Check aria-hidden="true" className="w-5 h-5" />
                 </span>
               )}
             </button>
@@ -1228,7 +1228,7 @@ const OrganizationSetup: React.FC = () => {
             Need help?{' '}
             <a
               href="/docs"
-              className="text-red-400 hover:text-red-300 underline"
+              className="text-theme-accent-red hover:text-theme-accent-red underline"
               target="_blank"
               rel="noopener noreferrer"
             >

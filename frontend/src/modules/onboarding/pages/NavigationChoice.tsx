@@ -87,7 +87,7 @@ const NavigationChoice: React.FC = () => {
             </div>
           ) : (
             <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <LayoutDashboard className="w-6 h-6 text-white" />
+              <LayoutDashboard aria-hidden="true" className="w-6 h-6 text-white" />
             </div>
           )}
           <div>
@@ -123,8 +123,8 @@ const NavigationChoice: React.FC = () => {
               onClick={() => setNavigationLayout('top')}
               className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'top'
-                  ? 'border-red-500 shadow-lg shadow-red-500/50'
-                  : 'border-theme-surface-border hover:border-red-400/50'
+                  ? 'border-theme-accent-red shadow-lg'
+                  : 'border-theme-surface-border hover:border-theme-accent-red'
               }`}
               aria-pressed={navigationLayout === 'top'}
               aria-label="Top navigation layout"
@@ -175,15 +175,15 @@ const NavigationChoice: React.FC = () => {
                 {/* Benefits */}
                 <ul className="mt-4 space-y-2 text-sm text-theme-text-secondary">
                   <li className="flex items-start">
-                    <span className="text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>More horizontal screen space</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>Familiar website layout</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>Better for wide screens</span>
                   </li>
                 </ul>
@@ -214,8 +214,8 @@ const NavigationChoice: React.FC = () => {
               onClick={() => setNavigationLayout('left')}
               className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'left'
-                  ? 'border-red-500 shadow-lg shadow-red-500/50'
-                  : 'border-theme-surface-border hover:border-red-400/50'
+                  ? 'border-theme-accent-red shadow-lg'
+                  : 'border-theme-surface-border hover:border-theme-accent-red'
               }`}
               aria-pressed={navigationLayout === 'left'}
               aria-label="Left sidebar navigation layout"
@@ -266,15 +266,15 @@ const NavigationChoice: React.FC = () => {
                 {/* Benefits */}
                 <ul className="mt-4 space-y-2 text-sm text-theme-text-secondary">
                   <li className="flex items-start">
-                    <span className="text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>More vertical navigation space</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>App-like experience</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>Better for many menu items</span>
                   </li>
                 </ul>

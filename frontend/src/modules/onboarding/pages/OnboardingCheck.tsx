@@ -423,11 +423,11 @@ const OnboardingCheck: React.FC = () => {
   const getStatusIcon = (status: ServiceStatus['status']) => {
     switch (status) {
       case 'connected':
-        return <span className="text-green-400 text-xl">✓</span>;
+        return <span className="text-theme-accent-green text-xl">✓</span>;
       case 'disconnected':
-        return <span className="text-yellow-400 text-xl animate-pulse">●</span>;
+        return <span className="text-theme-accent-yellow text-xl animate-pulse">●</span>;
       case 'error':
-        return <span className="text-red-400 text-xl">✗</span>;
+        return <span className="text-theme-accent-red text-xl">✗</span>;
       case 'checking':
       default:
         return (
@@ -439,11 +439,11 @@ const OnboardingCheck: React.FC = () => {
   const getStatusColor = (status: ServiceStatus['status']) => {
     switch (status) {
       case 'connected':
-        return 'text-green-400';
+        return 'text-theme-accent-green';
       case 'disconnected':
-        return 'text-yellow-400';
+        return 'text-theme-accent-yellow';
       case 'error':
-        return 'text-red-400';
+        return 'text-theme-accent-red';
       default:
         return 'text-theme-text-secondary';
     }
@@ -459,7 +459,7 @@ const OnboardingCheck: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-theme-surface backdrop-blur-sm rounded-lg p-8 text-center border border-theme-surface-border">
-          <div className="text-red-400 text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
+          <div className="text-theme-accent-red text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
           <h2 className="text-2xl font-bold text-theme-text-primary mb-4">
             {schemaError ? 'Database Reset Required' : 'Connection Error'}
           </h2>
@@ -778,7 +778,7 @@ const OnboardingCheck: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mb-2">
                   If startup is taking too long, check the logs:
                 </p>
-                <code className="block bg-theme-surface-secondary text-green-400 text-xs p-2 rounded font-mono">
+                <code className="block bg-theme-surface-secondary text-theme-accent-green text-xs p-2 rounded font-mono">
                   docker compose logs backend
                 </code>
               </div>

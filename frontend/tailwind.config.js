@@ -34,6 +34,17 @@ export default {
           'nav-border': 'var(--nav-border)',
           'input-bg': 'var(--input-bg)',
           'input-border': 'var(--input-border)',
+          // Accent colors (AA-compliant text/icons on surfaces)
+          'accent-red': 'var(--accent-red)',
+          'accent-green': 'var(--accent-green)',
+          'accent-blue': 'var(--accent-blue)',
+          'accent-orange': 'var(--accent-orange)',
+          'accent-yellow': 'var(--accent-yellow)',
+          'accent-cyan': 'var(--accent-cyan)',
+          'accent-purple': 'var(--accent-purple)',
+          'accent-green-muted': 'var(--accent-green-muted)',
+          'accent-orange-muted': 'var(--accent-orange-muted)',
+          'focus-ring': 'var(--focus-ring)',
           // Alert variants
           'alert-info-bg': 'var(--alert-info-bg)',
           'alert-info-border': 'var(--alert-info-border)',
