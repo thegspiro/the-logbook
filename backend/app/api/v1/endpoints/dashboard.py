@@ -5,6 +5,7 @@ Provides aggregated statistics for the main dashboard,
 including an admin-level summary for Chiefs and department leaders.
 """
 
+import logging
 from datetime import datetime, date, timedelta
 from typing import List, Optional
 
@@ -20,6 +21,8 @@ from app.models.user import User, UserStatus
 from app.models.meeting import MeetingActionItem, ActionItemStatus
 from app.models.minute import ActionItem, MinutesActionItemStatus
 from app.models.training import TrainingRecord, TrainingStatus
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -125,10 +128,14 @@ async def get_admin_summary(
     """
     Department-wide admin summary for Chiefs and leaders.
     Aggregates key metrics across all modules.
+
+    Each query section is isolated so a failure in one module
+    (e.g. training, events) does not prevent member counts from
+    being returned.
     """
     org_id = current_user.organization_id
 
-    # ── Member counts ──
+    # ── Member counts (core — always required) ──
     result = await db.execute(
         select(func.count(User.id)).where(
             User.organization_id == org_id,
@@ -148,85 +155,107 @@ async def get_admin_summary(
     inactive_members = total_members - active_members
 
     # ── Training completion % (last 12 months) ──
-    twelve_months_ago = datetime.utcnow() - timedelta(days=365)
-    result = await db.execute(
-        select(func.count(TrainingRecord.id)).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.created_at >= twelve_months_ago,
+    training_pct = 0.0
+    try:
+        twelve_months_ago = datetime.utcnow() - timedelta(days=365)
+        result = await db.execute(
+            select(func.count(TrainingRecord.id)).where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.created_at >= twelve_months_ago,
+            )
         )
-    )
-    total_records = result.scalar() or 0
+        total_records = result.scalar() or 0
 
-    result = await db.execute(
-        select(func.count(TrainingRecord.id)).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.created_at >= twelve_months_ago,
-            TrainingRecord.status == TrainingStatus.COMPLETED,
+        result = await db.execute(
+            select(func.count(TrainingRecord.id)).where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.created_at >= twelve_months_ago,
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+            )
         )
-    )
-    completed_records = result.scalar() or 0
-    training_pct = (completed_records / total_records * 100) if total_records > 0 else 0.0
+        completed_records = result.scalar() or 0
+        training_pct = (completed_records / total_records * 100) if total_records > 0 else 0.0
+    except Exception as exc:
+        logger.warning("admin-summary: training completion query failed: %s", exc)
 
     # ── Upcoming events ──
-    result = await db.execute(
-        select(func.count(Event.id)).where(
-            Event.organization_id == org_id,
-            Event.start_datetime >= datetime.utcnow(),
-            Event.is_cancelled == False,  # noqa: E712
+    upcoming_events = 0
+    try:
+        result = await db.execute(
+            select(func.count(Event.id)).where(
+                Event.organization_id == org_id,
+                Event.start_datetime >= datetime.utcnow(),
+                Event.is_cancelled == False,  # noqa: E712
+            )
         )
-    )
-    upcoming_events = result.scalar() or 0
+        upcoming_events = result.scalar() or 0
+    except Exception as exc:
+        logger.warning("admin-summary: upcoming events query failed: %s", exc)
 
     # ── Action items (overdue + open) from meetings ──
-    result = await db.execute(
-        select(func.count(MeetingActionItem.id)).where(
-            MeetingActionItem.organization_id == org_id,
-            MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
-            MeetingActionItem.due_date < date.today(),
+    overdue_meeting = 0
+    open_meeting = 0
+    try:
+        result = await db.execute(
+            select(func.count(MeetingActionItem.id)).where(
+                MeetingActionItem.organization_id == org_id,
+                MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
+                MeetingActionItem.due_date < date.today(),
+            )
         )
-    )
-    overdue_meeting = result.scalar() or 0
+        overdue_meeting = result.scalar() or 0
 
-    result = await db.execute(
-        select(func.count(MeetingActionItem.id)).where(
-            MeetingActionItem.organization_id == org_id,
-            MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
+        result = await db.execute(
+            select(func.count(MeetingActionItem.id)).where(
+                MeetingActionItem.organization_id == org_id,
+                MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
+            )
         )
-    )
-    open_meeting = result.scalar() or 0
+        open_meeting = result.scalar() or 0
+    except Exception as exc:
+        logger.warning("admin-summary: meeting action items query failed: %s", exc)
 
     # ── Action items from minutes ──
-    result = await db.execute(
-        select(func.count(ActionItem.id)).where(
-            ActionItem.status.in_([
-                MinutesActionItemStatus.PENDING.value,
-                MinutesActionItemStatus.IN_PROGRESS.value,
-            ]),
-            ActionItem.due_date < datetime.utcnow(),
+    overdue_minutes = 0
+    open_minutes = 0
+    try:
+        result = await db.execute(
+            select(func.count(ActionItem.id)).where(
+                ActionItem.status.in_([
+                    MinutesActionItemStatus.PENDING.value,
+                    MinutesActionItemStatus.IN_PROGRESS.value,
+                ]),
+                ActionItem.due_date < datetime.utcnow(),
+            )
         )
-    )
-    overdue_minutes = result.scalar() or 0
+        overdue_minutes = result.scalar() or 0
 
-    result = await db.execute(
-        select(func.count(ActionItem.id)).where(
-            ActionItem.status.in_([
-                MinutesActionItemStatus.PENDING.value,
-                MinutesActionItemStatus.IN_PROGRESS.value,
-            ]),
+        result = await db.execute(
+            select(func.count(ActionItem.id)).where(
+                ActionItem.status.in_([
+                    MinutesActionItemStatus.PENDING.value,
+                    MinutesActionItemStatus.IN_PROGRESS.value,
+                ]),
+            )
         )
-    )
-    open_minutes = result.scalar() or 0
+        open_minutes = result.scalar() or 0
+    except Exception as exc:
+        logger.warning("admin-summary: minutes action items query failed: %s", exc)
 
     # ── Recent training hours (last 30 days) ──
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-    result = await db.execute(
-        select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0)).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.status == TrainingStatus.COMPLETED,
-            TrainingRecord.completion_date >= thirty_days_ago.date(),
+    recent_hours = 0.0
+    try:
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        result = await db.execute(
+            select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0)).where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+                TrainingRecord.completion_date >= thirty_days_ago.date(),
+            )
         )
-    )
-    recent_hours = float(result.scalar() or 0)
+        recent_hours = float(result.scalar() or 0)
+    except Exception as exc:
+        logger.warning("admin-summary: recent training hours query failed: %s", exc)
 
     return AdminSummary(
         active_members=active_members,

@@ -122,8 +122,8 @@ const Dashboard: React.FC = () => {
     try {
       const response = await axios.get('/api/v1/dashboard/admin-summary');
       setAdminSummary(response.data);
-    } catch {
-      // Admin summary is non-critical
+    } catch (err) {
+      console.error('Failed to load admin summary:', err);
     } finally {
       setLoadingAdmin(false);
     }
