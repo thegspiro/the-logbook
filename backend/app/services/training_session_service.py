@@ -319,7 +319,7 @@ class TrainingSessionService:
             users_result = await self.db.execute(
                 select(User)
                 .join(user_roles, User.id == user_roles.c.user_id)
-                .where(user_roles.c.role_id == training_officer_role.id)
+                .where(user_roles.c.position_id == training_officer_role.id)
                 .where(User.organization_id == str(organization_id))
             )
             training_officers = list(users_result.scalars().all())
