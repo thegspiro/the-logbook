@@ -20,7 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.user import User, UserStatus, Organization
-from app.models.inventory import ItemAssignment, CheckOutRecord
+from app.models.inventory import (
+    ItemAssignment,
+    CheckOutRecord,
+    ItemIssuance,
+    DepartureClearance,
+    ClearanceStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +83,32 @@ async def check_and_auto_archive(
     if checkout_result.scalar_one_or_none() is not None:
         return None  # Still has unreturned checkouts
 
-    # All items returned — archive the member
+    # Check for any remaining unreturned pool issuances
+    issuance_result = await db.execute(
+        select(ItemIssuance.id).where(
+            ItemIssuance.organization_id == organization_id,
+            ItemIssuance.user_id == user_id,
+            ItemIssuance.is_returned == False,
+        ).limit(1)
+    )
+    if issuance_result.scalar_one_or_none() is not None:
+        return None  # Still has unreturned issuances
+
+    # Check for any open departure clearances
+    clearance_result = await db.execute(
+        select(DepartureClearance.id).where(
+            DepartureClearance.organization_id == organization_id,
+            DepartureClearance.user_id == user_id,
+            DepartureClearance.status.in_([
+                ClearanceStatus.INITIATED,
+                ClearanceStatus.IN_PROGRESS,
+            ]),
+        ).limit(1)
+    )
+    if clearance_result.scalar_one_or_none() is not None:
+        return None  # Still has an open departure clearance
+
+    # All items returned and clearances closed — archive the member
     now = datetime.utcnow()
     previous_status = member.status.value
     member.status = UserStatus.ARCHIVED

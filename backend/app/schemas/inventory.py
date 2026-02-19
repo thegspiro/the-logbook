@@ -443,3 +443,95 @@ class MaintenanceDueItem(BaseModel):
     days_until_due: int
     condition: str
     status: str
+
+
+# ============================================
+# Departure Clearance Schemas
+# ============================================
+
+class DepartureClearanceCreate(BaseModel):
+    """Schema for initiating a departure clearance"""
+    user_id: UUID
+    departure_type: Optional[str] = None  # "dropped_voluntary", "dropped_involuntary", "retired"
+    return_deadline_days: int = Field(default=14, ge=1, le=90)
+    notes: Optional[str] = None
+
+
+class ClearanceLineItemResponse(BaseModel):
+    """Schema for a single clearance line item"""
+    id: UUID
+    clearance_id: UUID
+    source_type: str  # "assignment", "checkout", "issuance"
+    source_id: UUID
+    item_id: Optional[UUID] = None
+    item_name: str
+    item_serial_number: Optional[str] = None
+    item_asset_tag: Optional[str] = None
+    item_value: Optional[float] = None
+    quantity: int
+    disposition: str  # "pending", "returned", "returned_damaged", "written_off", "waived"
+    return_condition: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[UUID] = None
+    resolution_notes: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DepartureClearanceResponse(BaseModel):
+    """Schema for departure clearance response"""
+    id: UUID
+    organization_id: UUID
+    user_id: UUID
+    status: str  # "initiated", "in_progress", "completed", "closed_incomplete"
+    total_items: int
+    items_cleared: int
+    items_outstanding: int
+    total_value: float
+    value_outstanding: float
+    initiated_at: datetime
+    completed_at: Optional[datetime] = None
+    return_deadline: Optional[datetime] = None
+    initiated_by: Optional[UUID] = None
+    completed_by: Optional[UUID] = None
+    departure_type: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    line_items: List[ClearanceLineItemResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DepartureClearanceSummaryResponse(BaseModel):
+    """Lightweight clearance summary (no line items)"""
+    id: UUID
+    user_id: UUID
+    member_name: Optional[str] = None
+    status: str
+    total_items: int
+    items_cleared: int
+    items_outstanding: int
+    total_value: float
+    value_outstanding: float
+    initiated_at: datetime
+    completed_at: Optional[datetime] = None
+    return_deadline: Optional[datetime] = None
+    departure_type: Optional[str] = None
+
+
+class ResolveClearanceItemRequest(BaseModel):
+    """Schema for resolving (returning/writing off) a clearance line item"""
+    disposition: str = Field(..., description="One of: returned, returned_damaged, written_off, waived")
+    return_condition: Optional[str] = None
+    resolution_notes: Optional[str] = None
+
+
+class CompleteClearanceRequest(BaseModel):
+    """Schema for completing/closing a clearance"""
+    force_close: bool = Field(
+        default=False,
+        description="If True, close with status 'closed_incomplete' even if items are outstanding",
+    )
+    notes: Optional[str] = None

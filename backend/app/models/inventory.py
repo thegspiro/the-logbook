@@ -451,6 +451,135 @@ class MaintenanceRecord(Base):
     )
 
 
+class ClearanceStatus(str, enum.Enum):
+    """Status of a departure clearance"""
+    INITIATED = "initiated"        # Clearance created, items being collected
+    IN_PROGRESS = "in_progress"    # Some items returned, some outstanding
+    COMPLETED = "completed"        # All items returned or accounted for
+    CLOSED_INCOMPLETE = "closed_incomplete"  # Closed with outstanding items (write-off)
+
+
+class ClearanceLineDisposition(str, enum.Enum):
+    """How an individual clearance line item was resolved"""
+    PENDING = "pending"            # Not yet returned
+    RETURNED = "returned"          # Physically returned in acceptable condition
+    RETURNED_DAMAGED = "returned_damaged"  # Returned but damaged
+    WRITTEN_OFF = "written_off"    # Lost/unreturnable, written off by leadership
+    WAIVED = "waived"              # Department chose not to require return
+
+
+class DepartureClearance(Base):
+    """
+    Departure Clearance model
+
+    Tracks the overall clearance process when a member leaves the department.
+    Created when a member is dropped; completed when all outstanding items
+    are returned or accounted for. Serves as the single record of the
+    member's departure property pipeline.
+    """
+
+    __tablename__ = "departure_clearances"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # Clearance status
+    status = Column(
+        Enum(ClearanceStatus, values_callable=lambda x: [e.value for e in x]),
+        default=ClearanceStatus.INITIATED,
+        nullable=False,
+    )
+
+    # Summary counts (denormalized for quick dashboard reads)
+    total_items = Column(Integer, nullable=False, default=0)
+    items_cleared = Column(Integer, nullable=False, default=0)
+    items_outstanding = Column(Integer, nullable=False, default=0)
+    total_value = Column(Numeric(10, 2), nullable=False, default=0)
+    value_outstanding = Column(Numeric(10, 2), nullable=False, default=0)
+
+    # Dates
+    initiated_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+    return_deadline = Column(DateTime(timezone=True))
+
+    # Who initiated and who signed off
+    initiated_by = Column(String(36), ForeignKey("users.id"))
+    completed_by = Column(String(36), ForeignKey("users.id"))
+
+    # Notes / context
+    departure_type = Column(String(30))  # "dropped_voluntary", "dropped_involuntary", "retired"
+    notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    initiated_by_user = relationship("User", foreign_keys=[initiated_by])
+    completed_by_user = relationship("User", foreign_keys=[completed_by])
+    line_items = relationship("DepartureClearanceItem", back_populates="clearance", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_departure_clearance_org_user", "organization_id", "user_id"),
+        Index("idx_departure_clearance_org_status", "organization_id", "status"),
+    )
+
+
+class DepartureClearanceItem(Base):
+    """
+    Departure Clearance Line Item
+
+    One row per outstanding item (assignment, checkout, or pool issuance)
+    that a departing member must return. Tracks the disposition of each
+    line — returned, damaged, written off, or waived.
+    """
+
+    __tablename__ = "departure_clearance_items"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    clearance_id = Column(String(36), ForeignKey("departure_clearances.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+
+    # What type of record this line refers to
+    source_type = Column(String(20), nullable=False)  # "assignment", "checkout", "issuance"
+    source_id = Column(String(36), nullable=False)     # ID of the ItemAssignment / CheckOutRecord / ItemIssuance
+
+    # Snapshot of item info at clearance creation (so it remains readable even if item is later retired)
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"))
+    item_name = Column(String(255), nullable=False)
+    item_serial_number = Column(String(255))
+    item_asset_tag = Column(String(255))
+    item_value = Column(Numeric(10, 2))
+    quantity = Column(Integer, nullable=False, default=1)
+
+    # Resolution
+    disposition = Column(
+        Enum(ClearanceLineDisposition, values_callable=lambda x: [e.value for e in x]),
+        default=ClearanceLineDisposition.PENDING,
+        nullable=False,
+    )
+    return_condition = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]))
+    resolved_at = Column(DateTime(timezone=True))
+    resolved_by = Column(String(36), ForeignKey("users.id"))
+    resolution_notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    clearance = relationship("DepartureClearance", back_populates="line_items", foreign_keys=[clearance_id])
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+    resolved_by_user = relationship("User", foreign_keys=[resolved_by])
+
+    __table_args__ = (
+        Index("idx_clearance_item_clearance", "clearance_id"),
+        Index("idx_clearance_item_disposition", "clearance_id", "disposition"),
+    )
+
+
 class PropertyReturnReminder(Base):
     """
     Tracks which property-return reminder notices have been sent to
