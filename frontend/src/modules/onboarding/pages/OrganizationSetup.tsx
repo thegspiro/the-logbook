@@ -25,6 +25,7 @@ import {
   LoadingOverlay,
   ErrorAlert,
   BackButton,
+  ThemeToggle,
 } from '../components';
 import { HelpLink } from '../../../components/HelpLink';
 import { useOnboardingStore } from '../store';
@@ -695,7 +696,8 @@ const OrganizationSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4 relative">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-3xl mx-auto">
         {/* Back Button */}
         <div className="mb-4">

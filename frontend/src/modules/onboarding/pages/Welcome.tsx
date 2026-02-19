@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ThemeToggle } from '../components';
 
 const Welcome: React.FC = () => {
   const [showTitle, setShowTitle] = useState(false);
@@ -68,7 +69,8 @@ const Welcome: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4 relative">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-3xl w-full text-center space-y-8">
         {/* Title */}
         <h1

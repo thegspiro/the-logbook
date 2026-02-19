@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Eye, Edit3, Shield, Users, CheckCircle, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getModuleById } from '../config';
+import { ThemeToggle } from '../components';
 import { useOnboardingStore } from '../store';
 
 /**
@@ -77,7 +78,8 @@ const ModuleConfigTemplate: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to p-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to p-4 py-8 relative">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-4xl w-full mx-auto">
         {/* Header */}
         <div className="mb-6">

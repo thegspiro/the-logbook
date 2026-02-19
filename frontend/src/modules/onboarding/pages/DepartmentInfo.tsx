@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
 import { useApiRequest } from '../hooks';
-import { ProgressIndicator, LoadingOverlay, ErrorAlert, AutoSaveNotification } from '../components';
+import { ProgressIndicator, LoadingOverlay, ErrorAlert, AutoSaveNotification, ThemeToggle } from '../components';
 import { useOnboardingStore } from '../store';
 
 const DepartmentInfo: React.FC = () => {
@@ -138,7 +138,8 @@ const DepartmentInfo: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4 relative">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-2xl w-full">
         {/* Header */}
         <div className="text-center mb-8">
