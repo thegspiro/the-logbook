@@ -343,7 +343,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
     positions: [
       {
         id: 'member',
-        name: 'Member',
+        name: 'Regular Member',
         description: 'Regular department member',
         icon: Users,
         priority: 10,
