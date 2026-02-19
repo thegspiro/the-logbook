@@ -22,6 +22,8 @@ import {
   X,
   AlertCircle,
   CheckCircle,
+  Users,
+  Minus,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
 
@@ -67,6 +69,18 @@ interface ShiftPattern {
   created_by?: string;
 }
 
+const POSITION_OPTIONS: { value: string; label: string }[] = [
+  { value: 'officer', label: 'Officer' },
+  { value: 'driver', label: 'Driver/Operator' },
+  { value: 'firefighter', label: 'Firefighter' },
+  { value: 'ems', label: 'EMS' },
+  { value: 'captain', label: 'Captain' },
+  { value: 'lieutenant', label: 'Lieutenant' },
+  { value: 'probationary', label: 'Probationary' },
+  { value: 'volunteer', label: 'Volunteer' },
+  { value: 'other', label: 'Other' },
+];
+
 interface TemplateFormData {
   name: string;
   description: string;
@@ -76,6 +90,7 @@ interface TemplateFormData {
   color: string;
   min_staffing: string;
   is_default: boolean;
+  positions: string[];
 }
 
 interface PatternFormData {
@@ -108,6 +123,7 @@ const emptyTemplateForm: TemplateFormData = {
   color: '#dc2626',
   min_staffing: '1',
   is_default: false,
+  positions: [],
 };
 
 const emptyPatternForm: PatternFormData = {
@@ -159,6 +175,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
         duration_hours: parseFloat(formData.duration_hours),
         min_staffing: parseInt(formData.min_staffing, 10),
         is_default: formData.is_default,
+        positions: formData.positions.length > 0 ? formData.positions : null,
       };
       if (formData.description) payload.description = formData.description;
       if (formData.color) payload.color = formData.color;
@@ -294,6 +311,55 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                 required
               />
             </div>
+          </div>
+
+          {/* Required Positions */}
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              <span className="flex items-center gap-1.5"><Users className="w-4 h-4" aria-hidden="true" /> Required Positions</span>
+            </label>
+            <p className="text-xs text-theme-text-muted mb-2">
+              Define the crew structure for shifts created from this template.
+            </p>
+            {formData.positions.length > 0 && (
+              <div className="space-y-2 mb-2">
+                {formData.positions.map((pos, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <select
+                      value={pos}
+                      onChange={(e) => {
+                        const updated = [...formData.positions];
+                        updated[i] = e.target.value;
+                        setFormData(prev => ({ ...prev, positions: updated }));
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500"
+                    >
+                      {POSITION_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = formData.positions.filter((_, idx) => idx !== i);
+                        setFormData(prev => ({ ...prev, positions: updated }));
+                      }}
+                      className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                      aria-label={`Remove position ${i + 1}`}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, positions: [...prev.positions, 'firefighter'] }))}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Position
+            </button>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
@@ -798,6 +864,7 @@ export const ShiftTemplatesPage: React.FC = () => {
     color: t.color || '#dc2626',
     min_staffing: String(t.min_staffing),
     is_default: t.is_default,
+    positions: Array.isArray(t.positions) ? t.positions as string[] : [],
   });
 
   const patternToForm = (p: ShiftPattern): PatternFormData => ({
@@ -920,7 +987,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                     <p className="text-sm text-theme-text-muted mb-3">{template.description}</p>
                   )}
 
-                  <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                     <div className="bg-theme-surface rounded-lg p-2">
                       <p className="text-xs text-theme-text-muted flex items-center gap-1">
                         <Clock className="w-3 h-3" aria-hidden="true" />
@@ -937,6 +1004,23 @@ export const ShiftTemplatesPage: React.FC = () => {
                       </p>
                     </div>
                   </div>
+
+                  {/* Positions */}
+                  {Array.isArray(template.positions) && (template.positions as string[]).length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs text-theme-text-muted flex items-center gap-1 mb-1.5">
+                        <Users className="w-3 h-3" aria-hidden="true" />
+                        Positions ({(template.positions as string[]).length})
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {(template.positions as string[]).map((pos, i) => (
+                          <span key={i} className="px-2 py-0.5 text-xs bg-red-500/10 text-red-700 dark:text-red-400 rounded capitalize">
+                            {POSITION_OPTIONS.find(o => o.value === pos)?.label || pos}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2 pt-3 border-t border-theme-surface-border">
                     <button

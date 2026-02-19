@@ -7,9 +7,6 @@ import {
   ChevronRight,
   AlertCircle,
   X,
-  Sun,
-  Moon,
-  Sunrise,
   Loader2,
   Users,
   UserPlus,
@@ -17,6 +14,7 @@ import {
   ClipboardList,
   BarChart3,
   Truck,
+  Settings,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
@@ -32,22 +30,27 @@ const ShiftTemplatesPage = lazy(() => import('./ShiftTemplatesPage'));
 const SchedulingReportsPage = lazy(() => import('./SchedulingReportsPage'));
 const ShiftDetailPanel = lazy(() => import('./scheduling/ShiftDetailPanel'));
 
-type TabId = 'schedule' | 'my-shifts' | 'open-shifts' | 'requests' | 'templates' | 'reports';
+type TabId = 'schedule' | 'my-shifts' | 'open-shifts' | 'requests' | 'templates' | 'reports' | 'settings';
 type ViewMode = 'week' | 'month';
 
-interface ShiftTemplate {
+interface BackendTemplate {
   id: string;
   name: string;
-  startTime: string;
-  endTime: string;
-  color: string;
-  icon: React.ReactNode;
+  start_time_of_day: string;
+  end_time_of_day: string;
+  duration_hours: number;
+  color?: string;
+  positions?: string[];
+  min_staffing: number;
+  is_default: boolean;
+  is_active: boolean;
 }
 
-const SHIFT_TEMPLATES: ShiftTemplate[] = [
-  { id: 'day', name: 'Day Shift', startTime: '07:00', endTime: '19:00', color: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30', icon: <Sun className="w-4 h-4" aria-hidden="true" /> },
-  { id: 'night', name: 'Night Shift', startTime: '19:00', endTime: '07:00', color: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30', icon: <Moon className="w-4 h-4" aria-hidden="true" /> },
-  { id: 'morning', name: 'Morning Shift', startTime: '06:00', endTime: '14:00', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30', icon: <Sunrise className="w-4 h-4" aria-hidden="true" /> },
+// Fallback templates when no backend templates are configured
+const FALLBACK_TEMPLATES: BackendTemplate[] = [
+  { id: '_day', name: 'Day Shift', start_time_of_day: '07:00', end_time_of_day: '19:00', duration_hours: 12, min_staffing: 4, is_default: true, is_active: true },
+  { id: '_night', name: 'Night Shift', start_time_of_day: '19:00', end_time_of_day: '07:00', duration_hours: 12, min_staffing: 4, is_default: false, is_active: true },
+  { id: '_morning', name: 'Morning Shift', start_time_of_day: '06:00', end_time_of_day: '14:00', duration_hours: 8, min_staffing: 3, is_default: false, is_active: true },
 ];
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -73,6 +76,7 @@ const TAB_CONFIG: { id: TabId; label: string; icon: React.ElementType; adminOnly
   { id: 'requests', label: 'Requests', icon: ArrowLeftRight },
   { id: 'templates', label: 'Templates', icon: ClipboardList, adminOnly: true },
   { id: 'reports', label: 'Reports', icon: BarChart3, adminOnly: true },
+  { id: 'settings', label: 'Settings', icon: Settings, adminOnly: true },
 ];
 
 const TabLoadingFallback = () => (
@@ -107,9 +111,25 @@ const SchedulingPage: React.FC = () => {
   // Apparatus list for shift creation
   const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>>([]);
 
+  // Backend shift templates
+  const [backendTemplates, setBackendTemplates] = useState<BackendTemplate[]>([]);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+
+  // Effective templates: backend if available, otherwise fallbacks
+  const effectiveTemplates = useMemo(() => {
+    const active = backendTemplates.filter(t => t.is_active);
+    return active.length > 0 ? active : FALLBACK_TEMPLATES;
+  }, [backendTemplates]);
+
+  const usingFallbackTemplates = backendTemplates.filter(t => t.is_active).length === 0 && templatesLoaded;
+
+  const defaultTemplate = useMemo(() => {
+    return effectiveTemplates.find(t => t.is_default) || effectiveTemplates[0];
+  }, [effectiveTemplates]);
+
   const [shiftForm, setShiftForm] = useState({
     name: '',
-    shiftTemplate: 'day',
+    shiftTemplate: '',
     startDate: '',
     endDate: '',
     minStaffing: 4,
@@ -117,17 +137,23 @@ const SchedulingPage: React.FC = () => {
     apparatus_id: '',
   });
 
-  // Load apparatus list for the create modal
+  // Load apparatus list and templates for the create modal
   useEffect(() => {
-    const loadApparatus = async () => {
+    const loadCreateData = async () => {
       try {
-        const data = await schedulingService.getBasicApparatus();
-        setApparatusList(data as Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>);
+        const [apparatusData, templateData] = await Promise.all([
+          schedulingService.getBasicApparatus(),
+          schedulingService.getTemplates({ active_only: true }),
+        ]);
+        setApparatusList(apparatusData as Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>);
+        setBackendTemplates(templateData as unknown as BackendTemplate[]);
       } catch {
-        // Not critical — apparatus may not be set up yet
+        // Not critical — may not be set up yet
+      } finally {
+        setTemplatesLoaded(true);
       }
     };
-    loadApparatus();
+    loadCreateData();
   }, []);
 
   const weekDates = useMemo(() => {
@@ -258,18 +284,20 @@ const SchedulingPage: React.FC = () => {
     setCreateError(null);
 
     try {
-      const template = SHIFT_TEMPLATES.find((t) => t.id === shiftForm.shiftTemplate) || SHIFT_TEMPLATES[0];
-      const startDateTime = `${shiftForm.startDate}T${template.startTime}:00`;
+      const template = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+      const startTime = template.start_time_of_day;
+      const endTime = template.end_time_of_day;
+      const startDateTime = `${shiftForm.startDate}T${startTime}:00`;
 
       let endDate = shiftForm.startDate;
-      const [startHour] = template.startTime.split(':').map(Number);
-      const [endHour] = template.endTime.split(':').map(Number);
+      const [startHour] = startTime.split(':').map(Number);
+      const [endHour] = endTime.split(':').map(Number);
       if (endHour < startHour) {
         const nextDay = new Date(shiftForm.startDate);
         nextDay.setDate(nextDay.getDate() + 1);
         endDate = formatDateISO(nextDay);
       }
-      const endDateTime = `${endDate}T${template.endTime}:00`;
+      const endDateTime = `${endDate}T${endTime}:00`;
 
       await schedulingService.createShift({
         shift_date: shiftForm.startDate,
@@ -288,10 +316,10 @@ const SchedulingPage: React.FC = () => {
 
       setShiftForm({
         name: '',
-        shiftTemplate: 'day',
+        shiftTemplate: defaultTemplate?.id || '',
         startDate: '',
         endDate: '',
-        minStaffing: 4,
+        minStaffing: defaultTemplate?.min_staffing || 4,
         notes: '',
         apparatus_id: '',
       });
@@ -777,7 +805,7 @@ const SchedulingPage: React.FC = () => {
         )}
 
         {/* Other Tabs */}
-        {activeTab !== 'schedule' && (
+        {activeTab !== 'schedule' && activeTab !== 'settings' && (
           <Suspense fallback={<TabLoadingFallback />}>
             {activeTab === 'my-shifts' && (
               <MyShiftsTab onViewShift={handleShiftClick} />
@@ -789,6 +817,15 @@ const SchedulingPage: React.FC = () => {
             {activeTab === 'templates' && <ShiftTemplatesPage />}
             {activeTab === 'reports' && <SchedulingReportsPage />}
           </Suspense>
+        )}
+
+        {/* Settings Tab (inline, not lazy) */}
+        {activeTab === 'settings' && (
+          <ShiftSettingsPanel
+            templates={backendTemplates}
+            apparatusList={apparatusList}
+            onNavigateToTemplates={() => setActiveTab('templates')}
+          />
         )}
 
         {/* Shift Detail Panel */}
@@ -835,13 +872,53 @@ const SchedulingPage: React.FC = () => {
                       <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Template</label>
                       <select
                         value={shiftForm.shiftTemplate}
-                        onChange={(e) => setShiftForm({ ...shiftForm, shiftTemplate: e.target.value })}
+                        onChange={(e) => {
+                          const tmpl = effectiveTemplates.find(t => t.id === e.target.value);
+                          setShiftForm({
+                            ...shiftForm,
+                            shiftTemplate: e.target.value,
+                            minStaffing: tmpl?.min_staffing || shiftForm.minStaffing,
+                          });
+                        }}
                         className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                       >
-                        {SHIFT_TEMPLATES.map(t => (
-                          <option key={t.id} value={t.id}>{t.name} ({t.startTime} - {t.endTime})</option>
+                        {effectiveTemplates.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                          </option>
                         ))}
                       </select>
+                      {/* Template info preview */}
+                      {(() => {
+                        const tmpl = effectiveTemplates.find(t => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                        if (!tmpl) return null;
+                        const hasPositions = tmpl.positions && tmpl.positions.length > 0;
+                        return (
+                          <div className="mt-2 p-2.5 bg-theme-surface-hover/50 rounded-lg space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-theme-text-muted">Duration: <span className="text-theme-text-primary font-medium">{tmpl.duration_hours}h</span></span>
+                              <span className="text-theme-text-muted">Min staffing: <span className="text-theme-text-primary font-medium">{tmpl.min_staffing}</span></span>
+                            </div>
+                            {hasPositions && (
+                              <div>
+                                <p className="text-xs text-theme-text-muted mb-1">Required positions:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {tmpl.positions!.map((pos, i) => (
+                                    <span key={i} className="px-2 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded capitalize font-medium">
+                                      {pos}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      {usingFallbackTemplates && (
+                        <p className="mt-1.5 text-xs text-theme-text-muted">
+                          Using default templates. <button type="button" onClick={() => { setShowCreateShift(false); setActiveTab('templates'); }} className="text-violet-600 dark:text-violet-400 hover:underline">Configure your own</button> in the Templates tab.
+                        </p>
+                      )}
                     </div>
 
                     {/* Apparatus Selection */}
@@ -964,6 +1041,265 @@ const SchedulingPage: React.FC = () => {
           </div>
         )}
       </main>
+    </div>
+  );
+};
+
+// ============================================
+// Shift Settings Panel
+// ============================================
+
+const SETTINGS_KEY = 'scheduling_settings';
+
+interface ShiftSettings {
+  defaultDurationHours: number;
+  defaultMinStaffing: number;
+  requireAssignmentConfirmation: boolean;
+  overtimeThresholdHoursPerWeek: number;
+  enabledPositions: string[];
+}
+
+const DEFAULT_SETTINGS: ShiftSettings = {
+  defaultDurationHours: 12,
+  defaultMinStaffing: 4,
+  requireAssignmentConfirmation: true,
+  overtimeThresholdHoursPerWeek: 48,
+  enabledPositions: ['officer', 'driver', 'firefighter', 'ems', 'captain', 'lieutenant'],
+};
+
+const ALL_POSITIONS = [
+  { value: 'officer', label: 'Officer' },
+  { value: 'driver', label: 'Driver/Operator' },
+  { value: 'firefighter', label: 'Firefighter' },
+  { value: 'ems', label: 'EMS' },
+  { value: 'captain', label: 'Captain' },
+  { value: 'lieutenant', label: 'Lieutenant' },
+  { value: 'probationary', label: 'Probationary' },
+  { value: 'volunteer', label: 'Volunteer' },
+  { value: 'other', label: 'Other' },
+];
+
+interface ShiftSettingsPanelProps {
+  templates: BackendTemplate[];
+  apparatusList: Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>;
+  onNavigateToTemplates: () => void;
+}
+
+const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
+  templates,
+  apparatusList,
+  onNavigateToTemplates,
+}) => {
+  const [settings, setSettings] = useState<ShiftSettings>(() => {
+    try {
+      const stored = localStorage.getItem(SETTINGS_KEY);
+      return stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS;
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  });
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleReset = () => {
+    setSettings(DEFAULT_SETTINGS);
+    localStorage.removeItem(SETTINGS_KEY);
+  };
+
+  const togglePosition = (pos: string) => {
+    setSettings(prev => ({
+      ...prev,
+      enabledPositions: prev.enabledPositions.includes(pos)
+        ? prev.enabledPositions.filter(p => p !== pos)
+        : [...prev.enabledPositions, pos],
+    }));
+  };
+
+  const activeTemplates = templates.filter(t => t.is_active);
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h2 className="text-xl font-bold text-theme-text-primary flex items-center gap-2">
+          <Settings className="w-5 h-5" /> Shift Settings
+        </h2>
+        <p className="text-sm text-theme-text-muted mt-1">
+          Configure department-wide defaults for shift scheduling.
+        </p>
+      </div>
+
+      {/* Templates Overview */}
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold text-theme-text-primary">Shift Templates</h3>
+          <button
+            onClick={onNavigateToTemplates}
+            className="text-sm text-violet-600 dark:text-violet-400 hover:underline"
+          >
+            Manage templates
+          </button>
+        </div>
+        {activeTemplates.length === 0 ? (
+          <div className="p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">No templates configured</p>
+                <p className="text-xs text-theme-text-muted mt-0.5">
+                  The system is using built-in defaults. Create custom templates to define your department's shift structure with specific times, positions, and staffing requirements.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {activeTemplates.map(t => (
+              <div key={t.id} className="flex items-center gap-3 p-3 bg-theme-surface-hover/50 rounded-lg">
+                {t.color && <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-theme-text-primary truncate">{t.name}</p>
+                  <p className="text-xs text-theme-text-muted">
+                    {t.start_time_of_day} - {t.end_time_of_day} / {t.duration_hours}h / min {t.min_staffing}
+                  </p>
+                  {t.positions && t.positions.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {t.positions.map((pos, i) => (
+                        <span key={i} className="px-1.5 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded capitalize">{pos}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {t.is_default && <span className="text-[10px] px-1.5 py-0.5 bg-green-500/10 text-green-700 dark:text-green-400 rounded flex-shrink-0">Default</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Apparatus Overview */}
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+        <h3 className="text-base font-semibold text-theme-text-primary mb-3">Apparatus</h3>
+        {apparatusList.length === 0 ? (
+          <p className="text-sm text-theme-text-muted">No apparatus configured. Shifts can be created without apparatus assignment.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {apparatusList.map(a => (
+              <div key={a.id} className="flex items-center gap-3 p-3 bg-theme-surface-hover/50 rounded-lg">
+                <Truck className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-theme-text-primary truncate">{a.unit_number} — {a.name}</p>
+                  <p className="text-xs text-theme-text-muted capitalize">{a.apparatus_type}</p>
+                  {a.positions && a.positions.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {a.positions.map((pos, i) => (
+                        <span key={i} className="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-700 dark:text-red-400 rounded capitalize">{pos}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Department Defaults */}
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 space-y-5">
+        <h3 className="text-base font-semibold text-theme-text-primary">Department Defaults</h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Default Shift Duration (hours)</label>
+            <input
+              type="number"
+              value={settings.defaultDurationHours}
+              onChange={(e) => setSettings(prev => ({ ...prev, defaultDurationHours: parseFloat(e.target.value) || 12 }))}
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+              min="1" max="48" step="0.5"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Default Min Staffing</label>
+            <input
+              type="number"
+              value={settings.defaultMinStaffing}
+              onChange={(e) => setSettings(prev => ({ ...prev, defaultMinStaffing: parseInt(e.target.value, 10) || 1 }))}
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+              min="1" max="50"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Overtime Threshold (hours/week)</label>
+            <input
+              type="number"
+              value={settings.overtimeThresholdHoursPerWeek}
+              onChange={(e) => setSettings(prev => ({ ...prev, overtimeThresholdHoursPerWeek: parseInt(e.target.value, 10) || 48 }))}
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+              min="1" max="168"
+            />
+          </div>
+          <div className="flex items-center">
+            <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.requireAssignmentConfirmation}
+                onChange={(e) => setSettings(prev => ({ ...prev, requireAssignmentConfirmation: e.target.checked }))}
+                className="rounded border-theme-input-border"
+              />
+              Require assignment confirmation
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Enabled Positions */}
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+        <h3 className="text-base font-semibold text-theme-text-primary mb-1">Available Positions</h3>
+        <p className="text-xs text-theme-text-muted mb-3">
+          Select which position types are available when creating shifts and assigning crew.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {ALL_POSITIONS.map(pos => (
+            <label key={pos.value} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+              settings.enabledPositions.includes(pos.value)
+                ? 'border-violet-500/30 bg-violet-500/5'
+                : 'border-theme-surface-border bg-theme-surface-hover/30'
+            }`}>
+              <input
+                type="checkbox"
+                checked={settings.enabledPositions.includes(pos.value)}
+                onChange={() => togglePosition(pos.value)}
+                className="rounded border-theme-input-border"
+              />
+              <span className="text-sm text-theme-text-primary">{pos.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Save Actions */}
+      <div className="flex items-center justify-between pt-2">
+        <button
+          onClick={handleReset}
+          className="text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+        >
+          Reset to defaults
+        </button>
+        <div className="flex items-center gap-3">
+          {saved && <span className="text-sm text-green-600 dark:text-green-400">Settings saved</span>}
+          <button
+            onClick={handleSave}
+            className="px-6 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            Save Settings
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
