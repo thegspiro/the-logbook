@@ -21,53 +21,53 @@ const ModuleConfigTemplate: React.FC = () => {
   const config = useMemo(() => (moduleId ? getModuleById(moduleId) : undefined), [moduleId]);
   const moduleName = config?.name || 'Module';
 
-  // Read roles from the onboarding store (set during RoleSetup step)
-  const rolesConfig = useOnboardingStore(state => state.rolesConfig);
+  // Read positions from the onboarding store (set during PositionSetup step)
+  const positionsConfig = useOnboardingStore(state => state.positionsConfig);
   const modulePermissionConfigs = useOnboardingStore(state => state.modulePermissionConfigs);
   const setModulePermissionConfig = useOnboardingStore(state => state.setModulePermissionConfig);
 
-  // Build available roles dynamically from what was configured in the Roles step
-  const availableRoles = useMemo(() => {
-    if (!rolesConfig || Object.keys(rolesConfig).length === 0) {
-      // Fallback if roles haven't been configured yet
+  // Build available positions dynamically from what was configured in the Positions step
+  const availablePositions = useMemo(() => {
+    if (!positionsConfig || Object.keys(positionsConfig).length === 0) {
+      // Fallback if positions haven't been configured yet
       return [
-        { id: 'admin', name: 'Administrator', description: 'Full system access' },
+        { id: 'it_manager', name: 'IT Manager', description: 'System Owner - full access' },
         { id: 'member', name: 'Member', description: 'Standard member access' },
       ];
     }
 
-    return Object.values(rolesConfig)
+    return Object.values(positionsConfig)
       .sort((a, b) => b.priority - a.priority)
-      .map(role => ({
-        id: role.id,
-        name: role.name,
-        description: role.description,
+      .map(pos => ({
+        id: pos.id,
+        name: pos.name,
+        description: pos.description,
       }));
-  }, [rolesConfig]);
+  }, [positionsConfig]);
 
-  // Restore previously saved manage roles for this module, or use defaults.
-  // Filter out any roles that were removed since the config was saved.
-  const availableRoleIds = useMemo(() => new Set(availableRoles.map(r => r.id)), [availableRoles]);
-  const [manageRoles, setManageRoles] = useState<string[]>(() => {
+  // Restore previously saved manage positions for this module, or use defaults.
+  // Filter out any positions that were removed since the config was saved.
+  const availablePositionIds = useMemo(() => new Set(availablePositions.map(p => p.id)), [availablePositions]);
+  const [managePositions, setManagePositions] = useState<string[]>(() => {
     if (moduleId && modulePermissionConfigs[moduleId]) {
-      return modulePermissionConfigs[moduleId].filter(id => availableRoleIds.has(id));
+      return modulePermissionConfigs[moduleId].filter(id => availablePositionIds.has(id));
     }
-    return config?.permissions.defaultManageRoles || ['admin'];
+    return config?.permissions.defaultManagePositions || ['it_manager'];
   });
 
-  const toggleRole = (roleId: string) => {
-    if (roleId === 'admin') return; // Admin always has manage access
-    setManageRoles(prev =>
-      prev.includes(roleId)
-        ? prev.filter(r => r !== roleId)
-        : [...prev, roleId]
+  const togglePosition = (positionId: string) => {
+    if (positionId === 'it_manager') return; // System Owner always has manage access
+    setManagePositions(prev =>
+      prev.includes(positionId)
+        ? prev.filter(p => p !== positionId)
+        : [...prev, positionId]
     );
   };
 
   const handleSave = () => {
     if (!moduleId) return;
     setSaving(true);
-    setModulePermissionConfig(moduleId, manageRoles);
+    setModulePermissionConfig(moduleId, managePositions);
     toast.success(`${moduleName} permissions configured!`);
     setSaving(false);
     navigate('/onboarding/modules');
@@ -151,7 +151,7 @@ const ModuleConfigTemplate: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-theme-text-primary font-bold text-lg">Manage Access</h2>
-                <p className="text-theme-accent-orange text-sm">Selected Roles Only</p>
+                <p className="text-theme-accent-orange text-sm">Selected Positions Only</p>
               </div>
             </div>
             <p className="text-theme-text-secondary text-sm mb-4">{config?.permissions.manageDescription}</p>
@@ -169,39 +169,39 @@ const ModuleConfigTemplate: React.FC = () => {
           </div>
         </div>
 
-        {/* Role Selection */}
+        {/* Position Selection */}
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-6">
           <h3 className="text-theme-text-primary font-bold text-lg mb-2">Who Can Manage {moduleName}?</h3>
           <p className="text-theme-text-muted text-sm mb-4">
-            Select which roles should have management permissions. Administrators always have full access.
+            Select which positions should have management permissions. The System Owner (IT Manager) always has full access.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {availableRoles.map(role => {
-              const isSelected = manageRoles.includes(role.id);
-              const isAdmin = role.id === 'admin';
+            {availablePositions.map(pos => {
+              const isSelected = managePositions.includes(pos.id);
+              const isSystemOwner = pos.id === 'it_manager';
 
               return (
                 <button
-                  key={role.id}
-                  onClick={() => toggleRole(role.id)}
-                  disabled={isAdmin}
+                  key={pos.id}
+                  onClick={() => togglePosition(pos.id)}
+                  disabled={isSystemOwner}
                   className={`p-4 rounded-lg border-2 text-left transition-all ${
                     isSelected
                       ? 'border-theme-accent-orange bg-theme-accent-orange-muted'
                       : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-hover'
-                  } ${isAdmin ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
+                  } ${isSystemOwner ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className={`font-semibold ${isSelected ? 'text-theme-accent-orange' : 'text-theme-text-primary'}`}>
-                      {role.name}
+                      {pos.name}
                     </span>
                     {isSelected && (
                       <CheckCircle aria-hidden="true" className="w-5 h-5 text-theme-accent-orange" />
                     )}
                   </div>
-                  <p className="text-theme-text-muted text-xs">{role.description}</p>
-                  {isAdmin && (
+                  <p className="text-theme-text-muted text-xs">{pos.description}</p>
+                  {isSystemOwner && (
                     <p className="text-theme-accent-orange text-xs mt-1 italic">Always has access</p>
                   )}
                 </button>
@@ -211,8 +211,8 @@ const ModuleConfigTemplate: React.FC = () => {
 
           <div className="mt-4 p-3 bg-theme-surface-secondary rounded-lg">
             <p className="text-theme-text-muted text-sm">
-              <strong className="text-theme-text-primary">Selected roles:</strong>{' '}
-              {manageRoles.map(r => availableRoles.find(ar => ar.id === r)?.name).filter(Boolean).join(', ')}
+              <strong className="text-theme-text-primary">Selected positions:</strong>{' '}
+              {managePositions.map(p => availablePositions.find(ap => ap.id === p)?.name).filter(Boolean).join(', ')}
             </p>
           </div>
         </div>
@@ -227,7 +227,7 @@ const ModuleConfigTemplate: React.FC = () => {
             </li>
             <li className="flex items-start">
               <span className="text-theme-accent-green mr-2">•</span>
-              <span>Individual users can be granted additional permissions beyond their role</span>
+              <span>Individual users can be granted additional permissions beyond their position</span>
             </li>
             <li className="flex items-start">
               <span className="text-theme-accent-green mr-2">•</span>

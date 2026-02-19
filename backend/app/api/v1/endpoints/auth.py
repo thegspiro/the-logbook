@@ -25,6 +25,7 @@ from app.api.dependencies import get_current_user, get_current_active_user
 from app.models.user import User, Organization
 from app.core.config import settings
 from app.core.security_middleware import check_rate_limit
+from app.core.permissions import get_rank_default_permissions
 
 
 router = APIRouter()
@@ -302,13 +303,17 @@ async def get_current_user_info(
     """
     from datetime import datetime
 
-    # Get all roles and permissions
-    role_names = [role.name for role in current_user.roles]
+    # Get all positions and permissions
+    position_names = [pos.name for pos in current_user.positions]
 
-    # Collect all unique permissions from all roles
+    # Collect all unique permissions from all positions
     all_permissions = set()
-    for role in current_user.roles:
-        all_permissions.update(role.permissions or [])
+    for pos in current_user.positions:
+        all_permissions.update(pos.permissions or [])
+
+    # Also include rank default permissions
+    if current_user.rank:
+        all_permissions.update(get_rank_default_permissions(current_user.rank))
 
     # Check HIPAA password age
     password_expired = False
@@ -334,7 +339,10 @@ async def get_current_user_info(
         full_name=current_user.full_name,
         organization_id=current_user.organization_id,
         timezone=timezone,
-        roles=role_names,
+        roles=position_names,
+        positions=position_names,
+        rank=current_user.rank,
+        membership_type=current_user.membership_type,
         permissions=list(all_permissions),
         is_active=current_user.is_active,
         email_verified=current_user.email_verified,

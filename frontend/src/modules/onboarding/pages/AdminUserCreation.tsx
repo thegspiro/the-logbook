@@ -8,7 +8,7 @@ import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail } from '../utils/validation';
 
-const AdminUserCreation: React.FC = () => {
+const SystemOwnerCreation: React.FC = () => {
   const navigate = useNavigate();
   const departmentName = useOnboardingStore(state => state.departmentName);
   const logoPreview = useOnboardingStore(state => state.logoData);
@@ -161,7 +161,7 @@ const AdminUserCreation: React.FC = () => {
       async () => {
         // SECURITY CRITICAL: Send password to server (NEVER sessionStorage!)
         // Password will be hashed with Argon2id server-side
-        const response = await apiClient.createAdminUser({
+        const response = await apiClient.createSystemOwner({
           username: formData.username,
           email: formData.email,
           password: formData.password,
@@ -198,7 +198,7 @@ const AdminUserCreation: React.FC = () => {
           confirmPassword: '',
         });
 
-        toast.success('Admin account created! Setting up your dashboard...');
+        toast.success('System Owner account created! Setting up your dashboard...');
 
         // Complete onboarding and finalize setup
         const completeResponse = await apiClient.completeOnboarding();
@@ -221,8 +221,8 @@ const AdminUserCreation: React.FC = () => {
         return response;
       },
       {
-        step: 'Admin User Creation',
-        action: 'Create admin user and complete onboarding',
+        step: 'System Owner Creation',
+        action: 'Create system owner and complete onboarding',
         userContext: `Username: ${formData.username}, Email: ${formData.email}`,
       }
     );
@@ -263,31 +263,31 @@ const AdminUserCreation: React.FC = () => {
               <Shield aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
-              Create IT Administrator Account
+              Create System Owner Account
             </h2>
             <p className="text-xl text-theme-text-secondary mb-2">
-              Set up the primary IT administrator account
+              Set up the IT Manager / System Owner account
             </p>
             <p className="text-sm text-theme-text-muted">
               This account will have full access to all system settings and configurations
             </p>
           </div>
 
-          {/* Administrator Type Clarification */}
+          {/* System Owner Clarification */}
           <div className="alert-purple mb-6">
             <div className="flex items-start space-x-3">
               <Info className="w-5 h-5 text-theme-alert-purple-icon flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-theme-alert-purple-title text-sm font-medium mb-1">
-                  IT Administrator vs. Administrative Member
+                  System Owner / IT Manager
                 </p>
                 <p className="text-theme-alert-purple-text text-sm mb-2">
-                  This creates an <strong>IT Administrator</strong> account for system and technical administration.
-                  This is different from members who have an "Administrative" membership type.
+                  This creates the <strong>System Owner</strong> account -- the IT Manager responsible for system and technical administration.
+                  This is different from members who hold organizational positions.
                 </p>
                 <ul className="text-theme-alert-purple-text text-sm space-y-1 list-disc list-inside ml-2">
-                  <li><strong>IT Administrator:</strong> System admin role with full technical access (what you're creating now)</li>
-                  <li><strong>Administrative Member:</strong> A member with administrative membership type (managed separately in the Members module)</li>
+                  <li><strong>System Owner (IT Manager):</strong> Full technical access to all system settings (what you're creating now)</li>
+                  <li><strong>Organizational Positions:</strong> President, Secretary, and other positions are managed separately in the Members module</li>
                 </ul>
               </div>
             </div>
@@ -315,7 +315,7 @@ const AdminUserCreation: React.FC = () => {
             {/* Personal Information */}
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
               <h3 className="text-xl font-bold text-theme-text-primary mb-4">
-                IT Administrator Information
+                System Owner Information
               </h3>
               <div className="grid md:grid-cols-2 gap-4">
                 {/* First Name */}
@@ -462,7 +462,7 @@ const AdminUserCreation: React.FC = () => {
                       ? 'border-theme-accent-red focus:ring-theme-focus-ring'
                       : 'border-theme-input-border focus:ring-theme-focus-ring'
                   }`}
-                  placeholder="admin@example.com"
+                  placeholder="itmanager@example.com"
                   autoComplete="email"
                   aria-invalid={errors.email && touched.email ? 'true' : 'false'}
                   aria-describedby={errors.email && touched.email ? 'email-error' : undefined}
@@ -678,9 +678,9 @@ const AdminUserCreation: React.FC = () => {
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
-                aria-label="Create IT administrator account and access dashboard"
+                aria-label="Create System Owner account and access dashboard"
               >
-                {isSaving ? 'Creating IT Admin Account & Finalizing Setup...' : 'Create IT Admin Account & Access Dashboard'}
+                {isSaving ? 'Creating System Owner Account & Finalizing Setup...' : 'Create System Owner Account & Access Dashboard'}
               </button>
 
               {/* Help Text */}
@@ -727,4 +727,7 @@ const AdminUserCreation: React.FC = () => {
   );
 };
 
-export default AdminUserCreation;
+// Backward-compatible alias
+export const AdminUserCreation = SystemOwnerCreation;
+
+export default SystemOwnerCreation;

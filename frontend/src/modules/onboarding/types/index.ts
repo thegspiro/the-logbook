@@ -142,7 +142,9 @@ export type OnboardingStep =
   | 'file-storage-config'
   | 'authentication-choice'
   | 'it-team-backup'
-  | 'admin-user'
+  | 'positions'
+  | 'system-owner'
+  | 'admin-user'  // Legacy alias
   | 'security-check'
   | 'complete';
 

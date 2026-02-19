@@ -69,7 +69,7 @@ const ModuleOverview: React.FC = () => {
         }
 
         toast.success('Module configuration saved!');
-        navigate('/onboarding/admin-user');
+        navigate('/onboarding/system-owner');
         return response;
       },
       {
@@ -118,7 +118,7 @@ const ModuleOverview: React.FC = () => {
         <div className="max-w-6xl w-full mx-auto">
           {/* Navigation Buttons */}
           <div className="flex justify-between items-center mb-6">
-            <BackButton to="/onboarding/roles" />
+            <BackButton to="/onboarding/positions" />
             <ResetProgressButton />
           </div>
 

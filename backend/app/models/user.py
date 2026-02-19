@@ -3,6 +3,27 @@ User Database Models
 
 SQLAlchemy models for user management, authentication, and authorization.
 Compatible with MySQL database.
+
+Taxonomy
+--------
+- **Operational Rank** (one per member, stored in ``User.rank``):
+  Fire Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant,
+  Engineer, Firefighter.  Ranks carry *default* permissions that are
+  combined with the member's position permissions at runtime.
+
+- **Corporate Position** (many per member, via ``user_positions``):
+  President, Vice President, Treasurer, Secretary, IT Manager, etc.
+  Positions are the *primary* source of permissions.
+
+- **Department Membership** (one per member, ``User.membership_type``):
+  Prospective, Probationary, Active, Life, Retired, Honorary,
+  Administrative.  Membership types carry **no** permissions; they are
+  purely organisational classification.
+
+- **Prospect** (separate lightweight table):
+  Individuals who have expressed interest in joining but have not yet
+  been converted into full members (no User record, no department
+  credentials).
 """
 
 from sqlalchemy import (
@@ -40,6 +61,39 @@ class UserStatus(str, enum.Enum):
     DROPPED_VOLUNTARY = "dropped_voluntary"
     DROPPED_INVOLUNTARY = "dropped_involuntary"
     ARCHIVED = "archived"
+
+
+class MembershipType(str, enum.Enum):
+    """
+    Department membership classification.
+
+    Membership types carry **no** system permissions – they are purely
+    organisational.  ``PROSPECTIVE`` members live in the separate
+    ``prospects`` table; the enum value is here only for reference.
+    """
+    PROSPECTIVE = "prospective"
+    PROBATIONARY = "probationary"
+    ACTIVE = "active"
+    LIFE = "life"
+    RETIRED = "retired"
+    HONORARY = "honorary"
+    ADMINISTRATIVE = "administrative"
+
+
+class OperationalRank(str, enum.Enum):
+    """
+    Operational ranks within the department.
+
+    Each rank may carry default permissions (defined in
+    ``app.core.permissions.OPERATIONAL_RANKS``).
+    """
+    FIRE_CHIEF = "fire_chief"
+    DEPUTY_CHIEF = "deputy_chief"
+    ASSISTANT_CHIEF = "assistant_chief"
+    CAPTAIN = "captain"
+    LIEUTENANT = "lieutenant"
+    ENGINEER = "engineer"
+    FIREFIGHTER = "firefighter"
 
 
 class OrganizationType(str, enum.Enum):
@@ -135,7 +189,8 @@ class Organization(Base):
 
     # Relationships
     users = relationship("User", back_populates="organization")
-    roles = relationship("Role", back_populates="organization")
+    positions = relationship("Position", back_populates="organization")
+    prospects = relationship("Prospect", back_populates="organization")
     public_portal_config = relationship(
         "PublicPortalConfig",
         back_populates="organization",
@@ -149,7 +204,10 @@ class Organization(Base):
 
 class User(Base):
     """
-    User model with comprehensive authentication and profile support
+    User model with comprehensive authentication and profile support.
+
+    Every converted member has a User record.  Prospective members do
+    **not** – they live in the ``prospects`` table until accepted.
     """
 
     __tablename__ = "users"
@@ -175,8 +233,8 @@ class User(Base):
     date_of_birth = Column(Date)
     hire_date = Column(Date)
 
-    # Department/Rank Info
-    rank = Column(String(100))  # e.g., "Captain", "Lieutenant", "Firefighter"
+    # Operational Rank (one per member, has default permissions)
+    rank = Column(String(100))  # e.g., "fire_chief", "captain", "firefighter"
     station = Column(String(100))  # e.g., "Station 1", "Headquarters"
 
     # Address
@@ -194,8 +252,8 @@ class User(Base):
     # Format: {"email": true, "sms": false, "push": true, "digest": "daily", ...}
     notification_preferences = Column(JSON, default=dict)
 
-    # Membership
-    membership_type = Column(String(50), default="active")  # Org-defined tier: probationary, active, senior, life, etc.
+    # Department Membership (one per member, no permissions – purely classification)
+    membership_type = Column(String(50), default="active")  # See MembershipType enum
     membership_type_changed_at = Column(DateTime(timezone=True))  # When membership tier last changed
 
     # Status
@@ -210,7 +268,7 @@ class User(Base):
     mfa_enabled = Column(Boolean, default=False)
     mfa_secret = Column(String(32))
     mfa_backup_codes = Column(JSON)
-    
+
     # Password Management
     password_changed_at = Column(DateTime(timezone=True))
     failed_login_attempts = Column(Integer, default=0)
@@ -223,51 +281,56 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime(timezone=True))
-    
+
     # Relationships
     organization = relationship("Organization", back_populates="users")
-    roles = relationship(
-        "Role",
-        secondary="user_roles",
+    positions = relationship(
+        "Position",
+        secondary="user_positions",
         back_populates="users",
-        primaryjoin="User.id == user_roles.c.user_id",
-        secondaryjoin="Role.id == user_roles.c.role_id",
+        primaryjoin="User.id == user_positions.c.user_id",
+        secondaryjoin="Position.id == user_positions.c.position_id",
     )
-    
+
     # Indexes and constraints
     __table_args__ = (
         Index('idx_user_org_username', 'organization_id', 'username', unique=True),
         Index('idx_user_org_email', 'organization_id', 'email', unique=True),
         Index('idx_user_org_membership_number', 'organization_id', 'membership_number', unique=True),
     )
-    
+
     @property
     def full_name(self) -> str:
         """Get user's full name"""
         return f"{self.first_name} {self.last_name}".strip()
-    
+
     @property
     def is_active(self) -> bool:
         """Check if user account is active"""
         return self.status == UserStatus.ACTIVE and not self.deleted_at
-    
+
     @property
     def is_locked(self) -> bool:
         """Check if account is locked"""
         if not self.locked_until:
             return False
         return datetime.utcnow() < self.locked_until
-    
+
     def __repr__(self):
         return f"<User(username={self.username}, email={self.email})>"
 
 
-class Role(Base):
+class Position(Base):
     """
-    Role model for RBAC (Role-Based Access Control)
+    Corporate Position model for permission-based access control.
+
+    Positions are the primary source of permissions.  Each member may
+    hold multiple positions (e.g., Treasurer + Safety Officer).
+    The ``it_manager`` position is the "System Owner" with wildcard
+    access.  Every member receives the ``member`` position by default.
     """
 
-    __tablename__ = "roles"
+    __tablename__ = "positions"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -276,40 +339,101 @@ class Role(Base):
     slug = Column(String(100), nullable=False)
     description = Column(Text)
     permissions = Column(JSON, default=list)
-    is_system = Column(Boolean, default=False)  # System roles can't be deleted
+    is_system = Column(Boolean, default=False)  # System positions can't be deleted
     priority = Column(Integer, default=0)  # Higher priority = more powerful
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
+
     # Relationships
-    organization = relationship("Organization", back_populates="roles")
+    organization = relationship("Organization", back_populates="positions")
     users = relationship(
         "User",
-        secondary="user_roles",
-        back_populates="roles",
-        primaryjoin="Role.id == user_roles.c.role_id",
-        secondaryjoin="User.id == user_roles.c.user_id",
+        secondary="user_positions",
+        back_populates="positions",
+        primaryjoin="Position.id == user_positions.c.position_id",
+        secondaryjoin="User.id == user_positions.c.user_id",
     )
-    
+
     __table_args__ = (
-        Index('idx_role_org_slug', 'organization_id', 'slug', unique=True),
+        Index('idx_position_org_slug', 'organization_id', 'slug', unique=True),
     )
-    
+
     def __repr__(self):
-        return f"<Role(name={self.name})>"
+        return f"<Position(name={self.name})>"
 
 
-# User-Role Association Table (Many-to-Many)
-# Uses composite primary key (user_id, role_id) as per standard many-to-many pattern
-user_roles = Table(
-    'user_roles',
+# User-Position Association Table (Many-to-Many)
+# Uses composite primary key (user_id, position_id)
+user_positions = Table(
+    'user_positions',
     Base.metadata,
     Column('user_id', String(36), ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
-    Column('role_id', String(36), ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
+    Column('position_id', String(36), ForeignKey('positions.id', ondelete='CASCADE'), primary_key=True),
     Column('assigned_at', DateTime(timezone=True), server_default=func.now(), index=True),
     Column('assigned_by', String(36), ForeignKey('users.id'), index=True),
 )
+
+
+# Backward-compatible aliases so existing imports don't break during migration
+Role = Position
+user_roles = user_positions
+
+
+class Prospect(Base):
+    """
+    Prospective member – someone who has expressed interest in joining
+    the department but has not yet been accepted.
+
+    Prospects are lightweight records without department credentials
+    (no department ID, no department email, no User record).  When a
+    prospect is accepted and converted to Probationary membership, a
+    full User record is created and this record is marked as converted.
+    """
+
+    __tablename__ = "prospects"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Contact Information
+    first_name = Column(String(100), nullable=False)
+    middle_name = Column(String(100))
+    last_name = Column(String(100), nullable=False)
+    email = Column(String(255))  # Personal email
+    phone = Column(String(20))
+    mobile = Column(String(20))
+
+    # Address
+    address_street = Column(String(255))
+    address_city = Column(String(100))
+    address_state = Column(String(50))
+    address_zip = Column(String(20))
+
+    # Application Details
+    application_date = Column(DateTime(timezone=True), server_default=func.now())
+    status = Column(String(50), default="applied")  # applied, interviewing, accepted, rejected, withdrawn
+    notes = Column(Text)
+    referred_by = Column(String(255))  # Who referred them
+
+    # Conversion tracking
+    converted_to_user_id = Column(String(36), ForeignKey("users.id"), index=True)
+    converted_at = Column(DateTime(timezone=True))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    organization = relationship("Organization", back_populates="prospects")
+
+    __table_args__ = (
+        Index('idx_prospect_org_email', 'organization_id', 'email'),
+        Index('idx_prospect_org_status', 'organization_id', 'status'),
+    )
+
+    def __repr__(self):
+        return f"<Prospect(name={self.first_name} {self.last_name}, status={self.status})>"
 
 
 class Session(Base):
@@ -328,11 +452,11 @@ class Session(Base):
     user_agent = Column(Text)
     device_info = Column(JSON)
     geo_location = Column(JSON)
-    
+
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_activity = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
+
     def __repr__(self):
         return f"<Session(user_id={self.user_id}, expires_at={self.expires_at})>"
 

@@ -367,9 +367,29 @@ class SecureApiClient {
   }
 
   /**
-   * Save role configuration
-   * Creates roles with their permissions for the organization
+   * Save position configuration
+   * Creates positions with their permissions for the organization
    */
+  async savePositionsConfig(data: {
+    positions: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      priority: number;
+      permissions: Record<string, { view: boolean; manage: boolean }>;
+      is_custom?: boolean;
+    }>;
+  }): Promise<ApiResponse<{
+    success: boolean;
+    message: string;
+    created: string[];
+    updated: string[];
+    total_positions: number;
+  }>> {
+    return this.request('POST', '/onboarding/session/positions', data, true);
+  }
+
+  /** @deprecated Use savePositionsConfig instead */
   async saveRolesConfig(data: {
     roles: Array<{
       id: string;
@@ -386,7 +406,7 @@ class SecureApiClient {
     updated: string[];
     total_roles: number;
   }>> {
-    return this.request('POST', '/onboarding/session/roles', data, true);
+    return this.request('POST', '/onboarding/session/positions', { positions: data.roles }, true);
   }
 
   /**
@@ -461,11 +481,11 @@ class SecureApiClient {
   }
 
   /**
-   * Create admin user
+   * Create system owner (IT Manager) account
    * SECURITY CRITICAL: Password sent once via HTTPS, never stored client-side
    * Returns authentication token to log user in automatically
    */
-  async createAdminUser(data: {
+  async createSystemOwner(data: {
     username: string;
     email: string;
     password: string;
@@ -474,7 +494,7 @@ class SecureApiClient {
     last_name: string;
     badge_number?: string;
   }): Promise<ApiResponse<{ access_token?: string; refresh_token?: string }>> {
-    const response = await this.request<{ access_token?: string; refresh_token?: string }>('POST', '/onboarding/admin-user', data, true);
+    const response = await this.request<{ access_token?: string; refresh_token?: string }>('POST', '/onboarding/system-owner', data, true);
 
     // SECURITY: Clear password from memory immediately
     data.password = '';
@@ -491,6 +511,19 @@ class SecureApiClient {
     }
 
     return response;
+  }
+
+  /** @deprecated Use createSystemOwner instead */
+  async createAdminUser(data: {
+    username: string;
+    email: string;
+    password: string;
+    password_confirm: string;
+    first_name: string;
+    last_name: string;
+    badge_number?: string;
+  }): Promise<ApiResponse<{ access_token?: string; refresh_token?: string }>> {
+    return this.createSystemOwner(data);
   }
 
   /**

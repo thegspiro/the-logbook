@@ -171,7 +171,7 @@ const ITTeamBackupAccess: React.FC = () => {
         }
 
         toast.success('IT team and backup access information saved securely');
-        navigate('/onboarding/roles');
+        navigate('/onboarding/positions');
         return response;
       },
       {

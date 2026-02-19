@@ -2,6 +2,10 @@
 API Dependencies
 
 FastAPI dependencies for authentication, authorization, and database access.
+
+Permission aggregation combines **position permissions** (from the
+``user_positions`` junction table) with **rank default permissions**
+(from the ``OPERATIONAL_RANKS`` config keyed by ``User.rank``).
 """
 
 from typing import Optional, List
@@ -11,8 +15,29 @@ from sqlalchemy import select
 from uuid import UUID
 
 from app.core.database import get_db
-from app.models.user import User, Organization, Role
+from app.models.user import User, Organization, Position
 from app.services.auth_service import AuthService
+from app.core.permissions import get_rank_default_permissions
+
+
+def _collect_user_permissions(user: User) -> set:
+    """
+    Aggregate all permissions for *user* by combining:
+    1. Permissions from every assigned **position**.
+    2. Default permissions from the user's operational **rank**.
+    """
+    perms: set = set()
+
+    # Positions (the relationship is named `positions` but the
+    # backward-compatible alias keeps `roles` working too)
+    for position in user.positions:
+        perms.update(position.permissions or [])
+
+    # Operational rank defaults
+    if user.rank:
+        perms.update(get_rank_default_permissions(user.rank))
+
+    return perms
 
 
 async def get_current_user(
@@ -83,13 +108,6 @@ class PermissionChecker:
 
     Grants access if the user has **any one** of the listed permissions.
     For AND logic (require ALL), use ``AllPermissionChecker`` instead.
-
-    Usage:
-        @app.get("/admin")
-        async def admin_route(
-            current_user: User = Depends(require_permission("admin.access"))
-        ):
-            ...
     """
 
     def __init__(self, required_permissions: List[str]):
@@ -100,9 +118,7 @@ class PermissionChecker:
         current_user: User = Depends(get_current_user),
     ) -> User:
         """Check if user has any of the required permissions (OR logic)"""
-        user_permissions = set()
-        for role in current_user.roles:
-            user_permissions.update(role.permissions or [])
+        user_permissions = _collect_user_permissions(current_user)
 
         for perm in self.required_permissions:
             if _has_permission(perm, user_permissions):
@@ -119,13 +135,6 @@ class AllPermissionChecker:
     Dependency class for checking user permissions using AND logic.
 
     Grants access only if the user has **all** of the listed permissions.
-
-    Usage:
-        @app.delete("/users/{id}")
-        async def delete_user(
-            current_user: User = Depends(require_all_permissions("users.delete", "audit.write"))
-        ):
-            ...
     """
 
     def __init__(self, required_permissions: List[str]):
@@ -136,9 +145,7 @@ class AllPermissionChecker:
         current_user: User = Depends(get_current_user),
     ) -> User:
         """Check if user has all of the required permissions (AND logic)"""
-        user_permissions = set()
-        for role in current_user.roles:
-            user_permissions.update(role.permissions or [])
+        user_permissions = _collect_user_permissions(current_user)
 
         missing = [p for p in self.required_permissions if not _has_permission(p, user_permissions)]
         if missing:
@@ -153,13 +160,6 @@ class AllPermissionChecker:
 def require_permission(*permissions: str):
     """
     Create a permission checker dependency (OR logic — any one permission suffices).
-
-    Usage:
-        @app.get("/settings")
-        async def update_settings(
-            user: User = Depends(require_permission("settings.edit"))
-        ):
-            ...
     """
     return PermissionChecker(list(permissions))
 
@@ -167,13 +167,6 @@ def require_permission(*permissions: str):
 def require_all_permissions(*permissions: str):
     """
     Create a permission checker dependency (AND logic — all permissions required).
-
-    Usage:
-        @app.delete("/critical-data")
-        async def delete_data(
-            user: User = Depends(require_all_permissions("data.delete", "admin.access"))
-        ):
-            ...
     """
     return AllPermissionChecker(list(permissions))
 
@@ -209,7 +202,7 @@ async def get_user_organization(
     return organization
 
 
-# Convenience function for checking secretary role
+# Convenience function for checking secretary position
 def require_secretary():
     """Require user to have secretary permissions"""
     return require_permission(

@@ -104,7 +104,7 @@ const ModuleSelection: React.FC = () => {
       toast.success('Module configuration saved');
 
       // Navigate to admin user creation
-      navigate('/onboarding/admin-user');
+      navigate('/onboarding/system-owner');
     } catch (err: unknown) {
       const errorMessage = getErrorMessage(err, 'Failed to save module configuration');
       toast.error(errorMessage);
