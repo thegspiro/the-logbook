@@ -98,7 +98,7 @@ services:
   # ============================================
   backend:
     build:
-      context: ../backend
+      context: ./backend
       dockerfile: Dockerfile
       target: production
     image: the-logbook-backend:local
@@ -207,7 +207,7 @@ services:
   # ============================================
   frontend:
     build:
-      context: ../frontend
+      context: ./frontend
       dockerfile: Dockerfile
       target: production
       args:
