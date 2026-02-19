@@ -627,25 +627,25 @@ const RoleSetup: React.FC = () => {
 
           {/* Info Banners */}
           <div className="space-y-4 mb-6">
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-start">
-                <Info className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
+                <Info className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
                 <div>
-                  <p className="text-blue-400 font-semibold mb-1">How Permissions Work</p>
+                  <p className="text-blue-800 font-semibold mb-1">How Permissions Work</p>
                   <p className="text-theme-text-secondary text-sm">
-                    Each role has <strong className="text-green-400">View</strong> (see content) and{' '}
-                    <strong className="text-orange-400">Manage</strong> (create/edit/delete) permissions per module.
+                    Each role has <strong className="text-green-700">View</strong> (see content) and{' '}
+                    <strong className="text-orange-600">Manage</strong> (create/edit/delete) permissions per module.
                     Click on a selected role to customize its permissions.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <div className="flex items-start">
-                <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
                 <div>
-                  <p className="text-green-400 font-semibold mb-1">Don't Worry - You Can Change These Later</p>
+                  <p className="text-green-800 font-semibold mb-1">Don't Worry - You Can Change These Later</p>
                   <p className="text-theme-text-secondary text-sm">
                     Roles and permissions can be updated anytime in <strong>Settings → Roles & Permissions</strong>.
                     You can add new roles, modify permissions, or remove roles as your organization's needs evolve.
@@ -718,7 +718,7 @@ const RoleSetup: React.FC = () => {
                             key={role.id}
                             className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
                               isSelected
-                                ? 'border-green-500 bg-green-500/10'
+                                ? 'border-green-500 bg-green-50'
                                 : 'border-theme-surface-border hover:border-theme-surface-hover'
                             }`}
                             onClick={() => toggleRole(role)}
@@ -793,12 +793,12 @@ const RoleSetup: React.FC = () => {
                               <div className="flex items-center gap-2">
                                 <p className="text-theme-text-primary font-semibold">{role.name}</p>
                                 {isAdmin && (
-                                  <span className="text-xs bg-purple-500/30 text-purple-300 px-2 py-0.5 rounded">
+                                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
                                     System
                                   </span>
                                 )}
                                 {role.isCustom && (
-                                  <span className="text-xs bg-blue-500/30 text-blue-300 px-2 py-0.5 rounded">
+                                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
                                     Custom
                                   </span>
                                 )}

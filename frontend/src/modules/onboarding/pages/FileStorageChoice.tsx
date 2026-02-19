@@ -235,14 +235,14 @@ const FileStorageChoice: React.FC = () => {
 
           {/* Smart Recommendation Notice */}
           {emailPlatform && (emailPlatform === 'gmail' || emailPlatform === 'microsoft') && (
-            <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4 mb-6 max-w-3xl mx-auto">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 max-w-3xl mx-auto">
               <div className="flex items-start space-x-3">
-                <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-green-300 text-sm font-medium mb-1">
+                  <p className="text-green-800 text-sm font-medium mb-1">
                     Smart Recommendation
                   </p>
-                  <p className="text-green-200 text-sm">
+                  <p className="text-green-700 text-sm">
                     Based on your {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} email selection,
                     we've pre-selected {emailPlatform === 'gmail' ? 'Google Drive' : 'OneDrive'} for seamless
                     integration with your existing platform.
@@ -308,8 +308,8 @@ const FileStorageChoice: React.FC = () => {
                     </ul>
 
                     {/* Setup Info */}
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded px-3 py-2">
-                      <p className="text-blue-200 text-xs flex items-start">
+                    <div className="bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                      <p className="text-blue-700 text-xs flex items-start">
                         <Info className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" />
                         <span>{platform.setupInfo}</span>
                       </p>

@@ -248,14 +248,14 @@ const EmailPlatformChoice: React.FC = () => {
 
           {/* Info Box */}
           {selectedPlatformData && selectedPlatformData.id !== 'other' && (
-            <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-4 mb-8">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
               <div className="flex items-start space-x-3">
-                <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-blue-300 text-sm font-medium mb-1">
+                  <p className="text-blue-800 text-sm font-medium mb-1">
                     Next Step
                   </p>
-                  <p className="text-blue-200 text-sm">
+                  <p className="text-blue-700 text-sm">
                     After clicking Continue, you'll enter your {selectedPlatformData.name} connection details.
                     Don't worry, we'll guide you through the process step by step.
                   </p>

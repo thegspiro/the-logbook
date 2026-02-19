@@ -85,8 +85,8 @@ const ModuleOverview: React.FC = () => {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'essential': return 'text-red-400 bg-red-500/10 border-red-500/30';
-      case 'recommended': return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
+      case 'essential': return 'text-red-700 bg-red-50 border-red-200';
+      case 'recommended': return 'text-blue-700 bg-blue-50 border-blue-200';
       case 'optional': return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
       default: return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
     }
@@ -186,7 +186,7 @@ const ModuleOverview: React.FC = () => {
           <div className="mb-8">
             <div className="flex items-center mb-4">
               <div className="flex-1 h-px bg-red-500/30"></div>
-              <h2 className="px-4 text-lg font-bold text-red-400">ESSENTIAL MODULES</h2>
+              <h2 className="px-4 text-lg font-bold text-red-700">ESSENTIAL MODULES</h2>
               <div className="flex-1 h-px bg-red-500/30"></div>
             </div>
             <p className="text-center text-theme-text-muted text-sm mb-6">
@@ -246,7 +246,7 @@ const ModuleOverview: React.FC = () => {
           <div className="mb-8">
             <div className="flex items-center mb-4">
               <div className="flex-1 h-px bg-blue-500/30"></div>
-              <h2 className="px-4 text-lg font-bold text-blue-400">RECOMMENDED MODULES</h2>
+              <h2 className="px-4 text-lg font-bold text-blue-700">RECOMMENDED MODULES</h2>
               <div className="flex-1 h-px bg-blue-500/30"></div>
             </div>
             <p className="text-center text-theme-text-muted text-sm mb-6">
