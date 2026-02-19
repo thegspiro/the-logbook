@@ -20,16 +20,31 @@ import {
   Repeat,
   Play,
   X,
-  AlertCircle,
   CheckCircle,
   Users,
   Minus,
+  Truck,
+  PartyPopper,
+  Filter,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
 
 // ============================================
 // Interfaces
 // ============================================
+
+type TemplateCategory = 'standard' | 'specialty' | 'event';
+
+const TEMPLATE_CATEGORIES: { value: TemplateCategory; label: string; icon: React.ElementType; description: string }[] = [
+  { value: 'standard', label: 'Standard', icon: Clock, description: 'Regular day, night, or rotating shifts' },
+  { value: 'specialty', label: 'Specialty Vehicle', icon: Truck, description: 'Templates for specialty apparatus (Hazmat, Tower, etc.)' },
+  { value: 'event', label: 'Event / Special', icon: PartyPopper, description: 'Parades, SantaMobile, community events, details' },
+];
+
+const APPARATUS_TYPES = [
+  'engine', 'ladder', 'ambulance', 'rescue', 'tanker', 'brush',
+  'tower', 'hazmat', 'boat', 'chief', 'utility',
+];
 
 interface ShiftTemplate {
   id: string;
@@ -42,6 +57,8 @@ interface ShiftTemplate {
   color?: string;
   positions?: unknown;
   min_staffing: number;
+  category?: string;
+  apparatus_type?: string;
   is_default: boolean;
   is_active: boolean;
   created_at: string;
@@ -69,7 +86,7 @@ interface ShiftPattern {
   created_by?: string;
 }
 
-const POSITION_OPTIONS: { value: string; label: string }[] = [
+const BUILTIN_POSITION_OPTIONS: { value: string; label: string }[] = [
   { value: 'officer', label: 'Officer' },
   { value: 'driver', label: 'Driver/Operator' },
   { value: 'firefighter', label: 'Firefighter' },
@@ -81,6 +98,25 @@ const POSITION_OPTIONS: { value: string; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
+// Load custom positions from settings (shared with ShiftSettingsPanel)
+const getPositionOptions = (): { value: string; label: string }[] => {
+  try {
+    const stored = localStorage.getItem('scheduling_settings');
+    if (stored) {
+      const settings = JSON.parse(stored);
+      const custom = (settings.customPositions || []) as { value: string; label: string }[];
+      const merged = [...BUILTIN_POSITION_OPTIONS];
+      for (const cp of custom) {
+        if (!merged.some(p => p.value === cp.value)) {
+          merged.push(cp);
+        }
+      }
+      return merged;
+    }
+  } catch { /* ignore */ }
+  return BUILTIN_POSITION_OPTIONS;
+};
+
 interface TemplateFormData {
   name: string;
   description: string;
@@ -91,6 +127,8 @@ interface TemplateFormData {
   min_staffing: string;
   is_default: boolean;
   positions: string[];
+  category: TemplateCategory;
+  apparatus_type: string;
 }
 
 interface PatternFormData {
@@ -124,6 +162,8 @@ const emptyTemplateForm: TemplateFormData = {
   min_staffing: '1',
   is_default: false,
   positions: [],
+  category: 'standard',
+  apparatus_type: '',
 };
 
 const emptyPatternForm: PatternFormData = {
@@ -159,10 +199,31 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<TemplateFormData>(initialData || emptyTemplateForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const positionOptions = getPositionOptions();
 
   useEffect(() => {
     setFormData(initialData || emptyTemplateForm);
   }, [initialData, isOpen]);
+
+  // Load apparatus-type defaults from settings when apparatus_type changes
+  const loadApparatusTypeDefaults = (type: string) => {
+    if (!type) return;
+    try {
+      const stored = localStorage.getItem('scheduling_settings');
+      if (stored) {
+        const settings = JSON.parse(stored);
+        const defaults = settings.apparatusTypeDefaults?.[type];
+        if (defaults) {
+          setFormData(prev => ({
+            ...prev,
+            positions: defaults.positions || prev.positions,
+            min_staffing: String(defaults.minStaffing || prev.min_staffing),
+          }));
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,9 +237,11 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
         min_staffing: parseInt(formData.min_staffing, 10),
         is_default: formData.is_default,
         positions: formData.positions.length > 0 ? formData.positions : null,
+        category: formData.category,
       };
       if (formData.description) payload.description = formData.description;
       if (formData.color) payload.color = formData.color;
+      if (formData.apparatus_type) payload.apparatus_type = formData.apparatus_type;
       await onSubmit(payload);
       onClose();
     } catch (err) {
@@ -236,6 +299,65 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               placeholder="Optional description"
             />
           </div>
+
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1.5">Category</label>
+            <div className="grid grid-cols-3 gap-2">
+              {TEMPLATE_CATEGORIES.map(cat => {
+                const CatIcon = cat.icon;
+                const isSelected = formData.category === cat.value;
+                return (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        category: cat.value,
+                        apparatus_type: cat.value !== 'specialty' ? '' : prev.apparatus_type,
+                      }));
+                    }}
+                    className={`p-2.5 rounded-lg border text-left transition-colors ${
+                      isSelected
+                        ? 'border-red-500/40 bg-red-500/5'
+                        : 'border-theme-surface-border bg-theme-surface-hover/30 hover:border-theme-surface-border/80'
+                    }`}
+                  >
+                    <CatIcon className={`w-4 h-4 mb-1 ${isSelected ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted'}`} />
+                    <p className={`text-xs font-medium ${isSelected ? 'text-red-700 dark:text-red-400' : 'text-theme-text-primary'}`}>{cat.label}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Apparatus Type (for specialty templates) */}
+          {formData.category === 'specialty' && (
+            <div>
+              <label htmlFor="template-apparatus-type" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                <span className="flex items-center gap-1.5"><Truck className="w-4 h-4" /> Vehicle Type</span>
+              </label>
+              <select
+                id="template-apparatus-type"
+                value={formData.apparatus_type}
+                onChange={(e) => {
+                  const newType = e.target.value;
+                  setFormData(prev => ({ ...prev, apparatus_type: newType }));
+                  loadApparatusTypeDefaults(newType);
+                }}
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              >
+                <option value="">Select vehicle type...</option>
+                {APPARATUS_TYPES.map(t => (
+                  <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                ))}
+              </select>
+              <p className="text-xs text-theme-text-muted mt-1">
+                Selecting a vehicle type will load default positions from your department settings.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-4">
             <div>
@@ -334,7 +456,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                       }}
                       className="flex-1 px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500"
                     >
-                      {POSITION_OPTIONS.map(opt => (
+                      {positionOptions.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
@@ -658,7 +780,7 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
         start_date: startDate,
         end_date: endDate,
       });
-      toast.success(`Generated ${result.shifts_created} shifts`);
+      toast.success(`Generated ${String(result.shifts_created)} shifts`);
       onClose();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to generate shifts'));
@@ -758,6 +880,7 @@ export const ShiftTemplatesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabView>('templates');
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [patterns, setPatterns] = useState<ShiftPattern[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | 'all'>('all');
   const [loading, setLoading] = useState(true);
 
   // Template modals
@@ -865,6 +988,8 @@ export const ShiftTemplatesPage: React.FC = () => {
     min_staffing: String(t.min_staffing),
     is_default: t.is_default,
     positions: Array.isArray(t.positions) ? t.positions as string[] : [],
+    category: (t.category as TemplateCategory) || 'standard',
+    apparatus_type: t.apparatus_type || '',
   });
 
   const patternToForm = (p: ShiftPattern): PatternFormData => ({
@@ -937,6 +1062,41 @@ export const ShiftTemplatesPage: React.FC = () => {
         </div>
       ) : activeTab === 'templates' ? (
         <div role="tabpanel">
+          {/* Category filter */}
+          {templates.length > 0 && (
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <Filter className="w-4 h-4 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+              <button
+                onClick={() => setCategoryFilter('all')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  categoryFilter === 'all'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                All ({templates.length})
+              </button>
+              {TEMPLATE_CATEGORIES.map(cat => {
+                const count = templates.filter(t => (t.category || 'standard') === cat.value).length;
+                if (count === 0) return null;
+                const CatIcon = cat.icon;
+                return (
+                  <button
+                    key={cat.value}
+                    onClick={() => setCategoryFilter(cat.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5 ${
+                      categoryFilter === cat.value
+                        ? 'bg-red-600 text-white'
+                        : 'bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary'
+                    }`}
+                  >
+                    <CatIcon className="w-3.5 h-3.5" aria-hidden="true" />
+                    {cat.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {templates.length === 0 ? (
             <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
               <LayoutTemplate className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
@@ -952,7 +1112,7 @@ export const ShiftTemplatesPage: React.FC = () => {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {templates.map(template => (
+              {templates.filter(t => categoryFilter === 'all' || (t.category || 'standard') === categoryFilter).map(template => (
                 <div
                   key={template.id}
                   className="bg-theme-surface-secondary rounded-lg p-5 border border-theme-surface-border"
@@ -968,7 +1128,24 @@ export const ShiftTemplatesPage: React.FC = () => {
                       )}
                       <h3 className="text-lg font-semibold text-theme-text-primary">{template.name}</h3>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                      {(() => {
+                        const cat = TEMPLATE_CATEGORIES.find(c => c.value === (template.category || 'standard'));
+                        if (cat && cat.value !== 'standard') {
+                          const CatIcon = cat.icon;
+                          return (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                              cat.value === 'specialty'
+                                ? 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400'
+                                : 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400'
+                            }`}>
+                              <CatIcon className="w-3 h-3 mr-1" aria-hidden="true" />
+                              {cat.label}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                       {template.is_default && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
                           <CheckCircle className="w-3 h-3 mr-1" aria-hidden="true" />
@@ -1005,6 +1182,14 @@ export const ShiftTemplatesPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Apparatus type (for specialty) */}
+                  {template.apparatus_type && (
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Truck className="w-3.5 h-3.5 text-orange-500" aria-hidden="true" />
+                      <span className="text-xs text-theme-text-secondary capitalize font-medium">{template.apparatus_type}</span>
+                    </div>
+                  )}
+
                   {/* Positions */}
                   {Array.isArray(template.positions) && (template.positions as string[]).length > 0 && (
                     <div className="mb-4">
@@ -1013,11 +1198,14 @@ export const ShiftTemplatesPage: React.FC = () => {
                         Positions ({(template.positions as string[]).length})
                       </p>
                       <div className="flex flex-wrap gap-1">
-                        {(template.positions as string[]).map((pos, i) => (
-                          <span key={i} className="px-2 py-0.5 text-xs bg-red-500/10 text-red-700 dark:text-red-400 rounded capitalize">
-                            {POSITION_OPTIONS.find(o => o.value === pos)?.label || pos}
-                          </span>
-                        ))}
+                        {(template.positions as string[]).map((pos, i) => {
+                          const allOpts = getPositionOptions();
+                          return (
+                            <span key={i} className="px-2 py-0.5 text-xs bg-red-500/10 text-red-700 dark:text-red-400 rounded capitalize">
+                              {allOpts.find(o => o.value === pos)?.label || pos}
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

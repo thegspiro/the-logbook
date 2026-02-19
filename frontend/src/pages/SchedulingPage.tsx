@@ -42,6 +42,8 @@ interface BackendTemplate {
   color?: string;
   positions?: string[];
   min_staffing: number;
+  category?: string;
+  apparatus_type?: string;
   is_default: boolean;
   is_active: boolean;
 }
@@ -882,23 +884,69 @@ const SchedulingPage: React.FC = () => {
                         }}
                         className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                       >
-                        {effectiveTemplates.map(t => (
-                          <option key={t.id} value={t.id}>
-                            {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
-                          </option>
-                        ))}
+                        {/* Group templates by category */}
+                        {(() => {
+                          const standard = effectiveTemplates.filter(t => !t.category || t.category === 'standard');
+                          const specialty = effectiveTemplates.filter(t => t.category === 'specialty');
+                          const event = effectiveTemplates.filter(t => t.category === 'event');
+                          return (
+                            <>
+                              {standard.length > 0 && (
+                                <optgroup label="Standard Shifts">
+                                  {standard.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name} ({t.start_time_of_day} - {t.end_time_of_day})</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {specialty.length > 0 && (
+                                <optgroup label="Specialty Vehicle">
+                                  {specialty.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name} ({t.start_time_of_day} - {t.end_time_of_day})</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {event.length > 0 && (
+                                <optgroup label="Event / Special">
+                                  {event.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name} ({t.start_time_of_day} - {t.end_time_of_day})</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {standard.length === 0 && specialty.length === 0 && event.length === 0 && (
+                                effectiveTemplates.map(t => (
+                                  <option key={t.id} value={t.id}>{t.name} ({t.start_time_of_day} - {t.end_time_of_day})</option>
+                                ))
+                              )}
+                            </>
+                          );
+                        })()}
                       </select>
                       {/* Template info preview */}
                       {(() => {
                         const tmpl = effectiveTemplates.find(t => t.id === shiftForm.shiftTemplate) || defaultTemplate;
                         if (!tmpl) return null;
                         const hasPositions = tmpl.positions && tmpl.positions.length > 0;
+                        const catLabel = tmpl.category === 'specialty' ? 'Specialty' : tmpl.category === 'event' ? 'Event' : null;
                         return (
                           <div className="mt-2 p-2.5 bg-theme-surface-hover/50 rounded-lg space-y-1.5">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-theme-text-muted">Duration: <span className="text-theme-text-primary font-medium">{tmpl.duration_hours}h</span></span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-theme-text-muted">Duration: <span className="text-theme-text-primary font-medium">{tmpl.duration_hours}h</span></span>
+                                {catLabel && (
+                                  <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                                    tmpl.category === 'specialty'
+                                      ? 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
+                                      : 'bg-purple-500/10 text-purple-700 dark:text-purple-400'
+                                  }`}>{catLabel}</span>
+                                )}
+                              </div>
                               <span className="text-theme-text-muted">Min staffing: <span className="text-theme-text-primary font-medium">{tmpl.min_staffing}</span></span>
                             </div>
+                            {tmpl.apparatus_type && (
+                              <p className="text-xs text-theme-text-muted flex items-center gap-1">
+                                <Truck className="w-3 h-3" /> Vehicle type: <span className="text-theme-text-primary capitalize font-medium">{tmpl.apparatus_type}</span>
+                              </p>
+                            )}
                             {hasPositions && (
                               <div>
                                 <p className="text-xs text-theme-text-muted mb-1">Required positions:</p>
@@ -1051,23 +1099,8 @@ const SchedulingPage: React.FC = () => {
 
 const SETTINGS_KEY = 'scheduling_settings';
 
-interface ShiftSettings {
-  defaultDurationHours: number;
-  defaultMinStaffing: number;
-  requireAssignmentConfirmation: boolean;
-  overtimeThresholdHoursPerWeek: number;
-  enabledPositions: string[];
-}
-
-const DEFAULT_SETTINGS: ShiftSettings = {
-  defaultDurationHours: 12,
-  defaultMinStaffing: 4,
-  requireAssignmentConfirmation: true,
-  overtimeThresholdHoursPerWeek: 48,
-  enabledPositions: ['officer', 'driver', 'firefighter', 'ems', 'captain', 'lieutenant'],
-};
-
-const ALL_POSITIONS = [
+// Built-in position options (departments can add custom ones)
+const BUILTIN_POSITIONS = [
   { value: 'officer', label: 'Officer' },
   { value: 'driver', label: 'Driver/Operator' },
   { value: 'firefighter', label: 'Firefighter' },
@@ -1076,8 +1109,52 @@ const ALL_POSITIONS = [
   { value: 'lieutenant', label: 'Lieutenant' },
   { value: 'probationary', label: 'Probationary' },
   { value: 'volunteer', label: 'Volunteer' },
-  { value: 'other', label: 'Other' },
 ];
+
+// Default positions per apparatus type
+const DEFAULT_APPARATUS_TYPE_POSITIONS: Record<string, { positions: string[]; minStaffing: number }> = {
+  engine: { positions: ['officer', 'driver', 'firefighter', 'firefighter'], minStaffing: 4 },
+  ladder: { positions: ['officer', 'driver', 'firefighter', 'firefighter'], minStaffing: 4 },
+  ambulance: { positions: ['driver', 'ems', 'ems'], minStaffing: 2 },
+  rescue: { positions: ['officer', 'driver', 'firefighter', 'firefighter'], minStaffing: 4 },
+  tanker: { positions: ['driver', 'firefighter'], minStaffing: 2 },
+  brush: { positions: ['driver', 'firefighter'], minStaffing: 2 },
+  tower: { positions: ['officer', 'driver', 'firefighter', 'firefighter'], minStaffing: 4 },
+  hazmat: { positions: ['officer', 'driver', 'firefighter', 'firefighter'], minStaffing: 4 },
+  boat: { positions: ['officer', 'driver'], minStaffing: 2 },
+  chief: { positions: ['officer'], minStaffing: 1 },
+  utility: { positions: ['driver'], minStaffing: 1 },
+};
+
+interface ApparatusTypeDefaults {
+  positions: string[];
+  minStaffing: number;
+}
+
+interface CustomPosition {
+  value: string;
+  label: string;
+}
+
+interface ShiftSettings {
+  defaultDurationHours: number;
+  defaultMinStaffing: number;
+  requireAssignmentConfirmation: boolean;
+  overtimeThresholdHoursPerWeek: number;
+  enabledPositions: string[];
+  customPositions: CustomPosition[];
+  apparatusTypeDefaults: Record<string, ApparatusTypeDefaults>;
+}
+
+const DEFAULT_SETTINGS: ShiftSettings = {
+  defaultDurationHours: 12,
+  defaultMinStaffing: 4,
+  requireAssignmentConfirmation: true,
+  overtimeThresholdHoursPerWeek: 48,
+  enabledPositions: ['officer', 'driver', 'firefighter', 'ems', 'captain', 'lieutenant'],
+  customPositions: [],
+  apparatusTypeDefaults: { ...DEFAULT_APPARATUS_TYPE_POSITIONS },
+};
 
 interface ShiftSettingsPanelProps {
   templates: BackendTemplate[];
@@ -1100,6 +1177,24 @@ const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   });
   const [saved, setSaved] = useState(false);
 
+  // Custom position form
+  const [newPositionValue, setNewPositionValue] = useState('');
+  const [newPositionLabel, setNewPositionLabel] = useState('');
+
+  // Editing apparatus type defaults
+  const [editingApparatusType, setEditingApparatusType] = useState<string | null>(null);
+  const [editPositions, setEditPositions] = useState<string[]>([]);
+  const [editMinStaffing, setEditMinStaffing] = useState(1);
+
+  // All position options (built-in + custom)
+  const allPositionOptions = useMemo(() => {
+    const builtIn = BUILTIN_POSITIONS.map(p => ({ ...p }));
+    const custom = settings.customPositions.filter(
+      cp => !builtIn.some(bp => bp.value === cp.value)
+    );
+    return [...builtIn, ...custom];
+  }, [settings.customPositions]);
+
   const handleSave = () => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     setSaved(true);
@@ -1120,7 +1215,56 @@ const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     }));
   };
 
+  const addCustomPosition = () => {
+    const val = newPositionValue.trim().toLowerCase().replace(/\s+/g, '_');
+    const lbl = newPositionLabel.trim();
+    if (!val || !lbl) return;
+    if (allPositionOptions.some(p => p.value === val)) return;
+    setSettings(prev => ({
+      ...prev,
+      customPositions: [...prev.customPositions, { value: val, label: lbl }],
+      enabledPositions: [...prev.enabledPositions, val],
+    }));
+    setNewPositionValue('');
+    setNewPositionLabel('');
+  };
+
+  const removeCustomPosition = (val: string) => {
+    setSettings(prev => ({
+      ...prev,
+      customPositions: prev.customPositions.filter(p => p.value !== val),
+      enabledPositions: prev.enabledPositions.filter(p => p !== val),
+    }));
+  };
+
+  const startEditApparatusType = (type: string) => {
+    const defaults = settings.apparatusTypeDefaults[type] || DEFAULT_APPARATUS_TYPE_POSITIONS[type] || { positions: [], minStaffing: 1 };
+    setEditingApparatusType(type);
+    setEditPositions([...defaults.positions]);
+    setEditMinStaffing(defaults.minStaffing);
+  };
+
+  const saveApparatusTypeDefaults = () => {
+    if (!editingApparatusType) return;
+    setSettings(prev => ({
+      ...prev,
+      apparatusTypeDefaults: {
+        ...prev.apparatusTypeDefaults,
+        [editingApparatusType]: { positions: editPositions, minStaffing: editMinStaffing },
+      },
+    }));
+    setEditingApparatusType(null);
+  };
+
   const activeTemplates = templates.filter(t => t.is_active);
+
+  // Collect all known apparatus types from both the defaults and current apparatus
+  const knownApparatusTypes = useMemo(() => {
+    const types = new Set(Object.keys(settings.apparatusTypeDefaults));
+    Object.keys(DEFAULT_APPARATUS_TYPE_POSITIONS).forEach(t => types.add(t));
+    apparatusList.forEach(a => types.add(a.apparatus_type));
+    return Array.from(types).sort();
+  }, [settings.apparatusTypeDefaults, apparatusList]);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -1181,9 +1325,116 @@ const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         )}
       </div>
 
-      {/* Apparatus Overview */}
+      {/* Apparatus Type Defaults */}
       <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-        <h3 className="text-base font-semibold text-theme-text-primary mb-3">Apparatus</h3>
+        <h3 className="text-base font-semibold text-theme-text-primary mb-1">Apparatus Type Defaults</h3>
+        <p className="text-xs text-theme-text-muted mb-4">
+          Define default crew positions and minimum staffing per vehicle type. These defaults are used when creating new apparatus or generating shift templates.
+        </p>
+        <div className="space-y-2">
+          {knownApparatusTypes.map(type => {
+            const defaults = settings.apparatusTypeDefaults[type] || DEFAULT_APPARATUS_TYPE_POSITIONS[type] || { positions: [], minStaffing: 1 };
+            const vehiclesOfType = apparatusList.filter(a => a.apparatus_type === type);
+            const isEditing = editingApparatusType === type;
+
+            return (
+              <div key={type} className="p-3 bg-theme-surface-hover/50 rounded-lg">
+                {isEditing ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-theme-text-primary capitalize">{type}</h4>
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditingApparatusType(null)} className="text-xs text-theme-text-muted hover:text-theme-text-primary">Cancel</button>
+                        <button onClick={saveApparatusTypeDefaults} className="text-xs text-violet-600 dark:text-violet-400 font-medium hover:underline">Save</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Min Staffing</label>
+                      <input
+                        type="number" value={editMinStaffing} min={1} max={20}
+                        onChange={(e) => setEditMinStaffing(parseInt(e.target.value, 10) || 1)}
+                        className="w-24 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Default Positions (in seat order)</label>
+                      <div className="space-y-1.5">
+                        {editPositions.map((pos, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-xs text-theme-text-muted w-5 text-right">{i + 1}.</span>
+                            <select
+                              value={pos}
+                              onChange={(e) => {
+                                const updated = [...editPositions];
+                                updated[i] = e.target.value;
+                                setEditPositions(updated);
+                              }}
+                              className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+                            >
+                              {allPositionOptions.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => setEditPositions(prev => prev.filter((_, idx) => idx !== i))}
+                              className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setEditPositions(prev => [...prev, 'firefighter'])}
+                        className="mt-1.5 text-xs text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> Add seat
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start sm:items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-red-500 flex-shrink-0" />
+                        <h4 className="text-sm font-semibold text-theme-text-primary capitalize">{type}</h4>
+                        <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded">
+                          min {defaults.minStaffing}
+                        </span>
+                        {vehiclesOfType.length > 0 && (
+                          <span className="text-[10px] text-theme-text-muted">
+                            ({vehiclesOfType.length} unit{vehiclesOfType.length !== 1 ? 's' : ''})
+                          </span>
+                        )}
+                      </div>
+                      {defaults.positions.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
+                          {defaults.positions.map((pos, i) => {
+                            const label = allPositionOptions.find(o => o.value === pos)?.label || pos;
+                            return (
+                              <span key={i} className="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-700 dark:text-red-400 rounded capitalize">{label}</span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => startEditApparatusType(type)}
+                      className="text-xs text-violet-600 dark:text-violet-400 hover:underline flex-shrink-0"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Apparatus Inventory */}
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+        <h3 className="text-base font-semibold text-theme-text-primary mb-3">Apparatus Inventory</h3>
         {apparatusList.length === 0 ? (
           <p className="text-sm text-theme-text-muted">No apparatus configured. Shifts can be created without apparatus assignment.</p>
         ) : (
@@ -1257,28 +1508,95 @@ const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         </div>
       </div>
 
-      {/* Enabled Positions */}
+      {/* Custom Positions */}
       <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-        <h3 className="text-base font-semibold text-theme-text-primary mb-1">Available Positions</h3>
-        <p className="text-xs text-theme-text-muted mb-3">
-          Select which position types are available when creating shifts and assigning crew.
+        <h3 className="text-base font-semibold text-theme-text-primary mb-1">Position Names</h3>
+        <p className="text-xs text-theme-text-muted mb-4">
+          Enable built-in position types or add custom ones unique to your department. Custom positions appear everywhere built-in ones do.
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {ALL_POSITIONS.map(pos => (
-            <label key={pos.value} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
-              settings.enabledPositions.includes(pos.value)
-                ? 'border-violet-500/30 bg-violet-500/5'
-                : 'border-theme-surface-border bg-theme-surface-hover/30'
-            }`}>
-              <input
-                type="checkbox"
-                checked={settings.enabledPositions.includes(pos.value)}
-                onChange={() => togglePosition(pos.value)}
-                className="rounded border-theme-input-border"
-              />
-              <span className="text-sm text-theme-text-primary">{pos.label}</span>
-            </label>
-          ))}
+
+        {/* Built-in positions toggle */}
+        <div className="mb-4">
+          <p className="text-xs font-medium text-theme-text-secondary mb-2">Built-in Positions</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {BUILTIN_POSITIONS.map(pos => (
+              <label key={pos.value} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                settings.enabledPositions.includes(pos.value)
+                  ? 'border-violet-500/30 bg-violet-500/5'
+                  : 'border-theme-surface-border bg-theme-surface-hover/30'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={settings.enabledPositions.includes(pos.value)}
+                  onChange={() => togglePosition(pos.value)}
+                  className="rounded border-theme-input-border"
+                />
+                <span className="text-sm text-theme-text-primary">{pos.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom positions */}
+        {settings.customPositions.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs font-medium text-theme-text-secondary mb-2">Custom Positions</p>
+            <div className="space-y-1.5">
+              {settings.customPositions.map(cp => (
+                <div key={cp.value} className="flex items-center justify-between p-2.5 bg-theme-surface-hover/50 rounded-lg border border-theme-surface-border">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settings.enabledPositions.includes(cp.value)}
+                      onChange={() => togglePosition(cp.value)}
+                      className="rounded border-theme-input-border"
+                    />
+                    <span className="text-sm text-theme-text-primary">{cp.label}</span>
+                    <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded">{cp.value}</span>
+                  </div>
+                  <button
+                    onClick={() => removeCustomPosition(cp.value)}
+                    className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+                    title="Remove custom position"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Add custom position */}
+        <div className="p-3 bg-theme-surface-hover/30 rounded-lg border border-dashed border-theme-surface-border">
+          <p className="text-xs font-medium text-theme-text-secondary mb-2">Add Custom Position</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={newPositionLabel}
+              onChange={(e) => {
+                setNewPositionLabel(e.target.value);
+                setNewPositionValue(e.target.value.trim().toLowerCase().replace(/\s+/g, '_'));
+              }}
+              placeholder="Display name (e.g., Tillerman)"
+              className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder-theme-text-muted"
+            />
+            <button
+              onClick={addCustomPosition}
+              disabled={!newPositionLabel.trim() || allPositionOptions.some(p => p.value === newPositionValue)}
+              className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            >
+              Add Position
+            </button>
+          </div>
+          {newPositionLabel.trim() && (
+            <p className="text-[10px] text-theme-text-muted mt-1">
+              Internal key: <code className="bg-theme-surface-hover px-1 py-0.5 rounded">{newPositionValue}</code>
+              {allPositionOptions.some(p => p.value === newPositionValue) && (
+                <span className="text-red-500 ml-1">— already exists</span>
+              )}
+            </p>
+          )}
         </div>
       </div>
 

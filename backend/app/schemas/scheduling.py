@@ -229,6 +229,13 @@ class PatternType(str, PyEnum):
 # Shift Template Schemas
 # ============================================
 
+class TemplateCategory(str, PyEnum):
+    """Enum for shift template categories"""
+    STANDARD = "standard"
+    SPECIALTY = "specialty"
+    EVENT = "event"
+
+
 class ShiftTemplateCreate(BaseModel):
     """Schema for creating a shift template"""
     name: str
@@ -239,6 +246,8 @@ class ShiftTemplateCreate(BaseModel):
     color: Optional[str] = None
     positions: Optional[Any] = None
     min_staffing: int = 1
+    category: Optional[str] = "standard"
+    apparatus_type: Optional[str] = None
     is_default: bool = False
 
 
@@ -252,6 +261,8 @@ class ShiftTemplateUpdate(BaseModel):
     color: Optional[str] = None
     positions: Optional[Any] = None
     min_staffing: Optional[int] = None
+    category: Optional[str] = None
+    apparatus_type: Optional[str] = None
     is_default: Optional[bool] = None
 
 
@@ -267,6 +278,8 @@ class ShiftTemplateResponse(BaseModel):
     color: Optional[str] = None
     positions: Optional[Any] = None
     min_staffing: int = 1
+    category: Optional[str] = "standard"
+    apparatus_type: Optional[str] = None
     is_default: bool = False
     is_active: bool = True
     created_at: datetime

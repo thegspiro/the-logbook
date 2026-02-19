@@ -1635,6 +1635,10 @@ class ShiftTemplate(Base):
     positions = Column(JSON)  # [{"position": "officer", "count": 1}, {"position": "firefighter", "count": 3}]
     min_staffing = Column(Integer, default=1)
 
+    # Categorization
+    category = Column(String(20), default="standard")  # "standard", "specialty", "event"
+    apparatus_type = Column(String(50))  # Links template to a vehicle type (e.g., "engine", "ambulance")
+
     # Defaults
     is_default = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
