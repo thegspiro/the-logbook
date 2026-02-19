@@ -465,8 +465,9 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
             logger.info(f"Dropped {len(tables_to_drop)} existing tables")
 
             # 3. Create ALL tables from current model definitions.
-            #    checkfirst=False skips 100+ existence-check round-trips since
-            #    we just dropped everything. FK_CHECKS=0 (set above) skips FK
+            #    checkfirst=True is used because multiple uvicorn workers may
+            #    run this concurrently, and another worker may have already
+            #    created some tables. FK_CHECKS=0 (set above) skips FK
             #    validation during CREATE TABLE.
             #    Iterates sorted_tables individually for progress logging so
             #    slow environments don't look hung during long create runs.
@@ -474,7 +475,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
             total_tables = len(sorted_tables)
             logger.info(f"Creating {total_tables} tables from model definitions...")
             for i, table in enumerate(sorted_tables, 1):
-                table.create(conn, checkfirst=False)
+                table.create(conn, checkfirst=True)
                 if i % 25 == 0 or i == total_tables:
                     logger.info(f"  Tables created: {i}/{total_tables}")
             logger.info(f"All {total_tables} model-based tables created")
