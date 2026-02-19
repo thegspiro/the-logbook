@@ -11,3 +11,18 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// BarcodeDetector API (Chrome/Edge 83+, Android)
+// https://developer.mozilla.org/en-US/docs/Web/API/BarcodeDetector
+interface DetectedBarcode {
+  rawValue: string;
+  format: string;
+  boundingBox: DOMRectReadOnly;
+  cornerPoints: { x: number; y: number }[];
+}
+
+declare class BarcodeDetector {
+  constructor(options?: { formats?: string[] });
+  detect(source: ImageBitmapSource): Promise<DetectedBarcode[]>;
+  static getSupportedFormats(): Promise<string[]>;
+}

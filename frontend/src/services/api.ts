@@ -1794,6 +1794,71 @@ export interface InventoryCategoryCreate {
   low_stock_threshold?: number;
 }
 
+// Scan / Quick-Action Types
+export interface ScanLookupResponse {
+  item: InventoryItem;
+  matched_field: string;
+  matched_value: string;
+}
+
+export interface BatchScanItem {
+  code: string;
+  quantity?: number;
+}
+
+export interface BatchCheckoutRequest {
+  user_id: string;
+  items: BatchScanItem[];
+  reason?: string;
+}
+
+export interface BatchCheckoutResultItem {
+  code: string;
+  item_name: string;
+  item_id: string;
+  action: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface BatchCheckoutResponse {
+  user_id: string;
+  total_scanned: number;
+  successful: number;
+  failed: number;
+  results: BatchCheckoutResultItem[];
+}
+
+export interface BatchReturnItem {
+  code: string;
+  return_condition?: string;
+  damage_notes?: string;
+  quantity?: number;
+}
+
+export interface BatchReturnRequest {
+  user_id: string;
+  items: BatchReturnItem[];
+  notes?: string;
+}
+
+export interface BatchReturnResultItem {
+  code: string;
+  item_name: string;
+  item_id: string;
+  action: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface BatchReturnResponse {
+  user_id: string;
+  total_scanned: number;
+  successful: number;
+  failed: number;
+  results: BatchReturnResultItem[];
+}
+
 export const inventoryService = {
   async getUserInventory(userId: string): Promise<UserInventoryResponse> {
     const response = await api.get<UserInventoryResponse>(`/inventory/users/${userId}/inventory`);
@@ -1920,6 +1985,24 @@ export const inventoryService = {
     const response = await api.get<ItemIssuance[]>(`/inventory/users/${userId}/issuances`, {
       params: { active_only: activeOnly },
     });
+    return response.data;
+  },
+
+  // Barcode scan / quick-action methods
+  async lookupByCode(code: string): Promise<ScanLookupResponse> {
+    const response = await api.get<ScanLookupResponse>('/inventory/lookup', {
+      params: { code },
+    });
+    return response.data;
+  },
+
+  async batchCheckout(data: BatchCheckoutRequest): Promise<BatchCheckoutResponse> {
+    const response = await api.post<BatchCheckoutResponse>('/inventory/batch-checkout', data);
+    return response.data;
+  },
+
+  async batchReturn(data: BatchReturnRequest): Promise<BatchReturnResponse> {
+    const response = await api.post<BatchReturnResponse>('/inventory/batch-return', data);
     return response.data;
   },
 };

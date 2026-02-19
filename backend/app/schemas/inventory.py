@@ -535,3 +535,80 @@ class CompleteClearanceRequest(BaseModel):
         description="If True, close with status 'closed_incomplete' even if items are outstanding",
     )
     notes: Optional[str] = None
+
+
+# ============================================
+# Barcode Scan & Quick-Action Schemas
+# ============================================
+
+class ScanLookupResponse(BaseModel):
+    """Response from scanning/looking up an item by barcode, serial, or asset tag"""
+    item: InventoryItemResponse
+    matched_field: str  # "barcode", "serial_number", or "asset_tag"
+    matched_value: str
+
+
+class BatchScanItem(BaseModel):
+    """A single scanned item in a batch operation"""
+    code: str = Field(..., description="Barcode, serial number, or asset tag that was scanned")
+    quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
+
+
+class BatchCheckoutRequest(BaseModel):
+    """Request to assign/checkout/issue multiple scanned items to a member at once"""
+    user_id: UUID
+    items: List[BatchScanItem] = Field(..., min_length=1)
+    reason: Optional[str] = None
+
+
+class BatchCheckoutResultItem(BaseModel):
+    """Result for a single item in a batch checkout"""
+    code: str
+    item_name: str
+    item_id: str
+    action: str  # "assigned", "checked_out", "issued"
+    success: bool
+    error: Optional[str] = None
+
+
+class BatchCheckoutResponse(BaseModel):
+    """Response from a batch checkout operation"""
+    user_id: UUID
+    total_scanned: int
+    successful: int
+    failed: int
+    results: List[BatchCheckoutResultItem]
+
+
+class BatchReturnItem(BaseModel):
+    """A single scanned item being returned"""
+    code: str = Field(..., description="Barcode, serial number, or asset tag")
+    return_condition: str = Field(default="good", description="Condition at return")
+    damage_notes: Optional[str] = None
+    quantity: int = Field(default=1, ge=1, description="Quantity returned (for pool items)")
+
+
+class BatchReturnRequest(BaseModel):
+    """Request to return multiple scanned items from a member at once"""
+    user_id: UUID
+    items: List[BatchReturnItem] = Field(..., min_length=1)
+    notes: Optional[str] = None
+
+
+class BatchReturnResultItem(BaseModel):
+    """Result for a single item in a batch return"""
+    code: str
+    item_name: str
+    item_id: str
+    action: str  # "unassigned", "checked_in", "returned_to_pool"
+    success: bool
+    error: Optional[str] = None
+
+
+class BatchReturnResponse(BaseModel):
+    """Response from a batch return operation"""
+    user_id: UUID
+    total_scanned: int
+    successful: int
+    failed: int
+    results: List[BatchReturnResultItem]

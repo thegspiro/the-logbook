@@ -55,6 +55,12 @@ from app.schemas.inventory import (
     ClearanceLineItemResponse,
     ResolveClearanceItemRequest,
     CompleteClearanceRequest,
+    # Scan / quick-action schemas
+    ScanLookupResponse,
+    BatchCheckoutRequest,
+    BatchCheckoutResponse,
+    BatchReturnRequest,
+    BatchReturnResponse,
 )
 from app.services.inventory_service import InventoryService
 from app.services.departure_clearance_service import DepartureClearanceService
@@ -841,6 +847,137 @@ async def get_user_inventory(
         organization_id=current_user.organization_id,
     )
     return inventory
+
+
+# ============================================
+# Barcode Scan & Quick-Action Endpoints
+# ============================================
+
+@router.get("/lookup", response_model=ScanLookupResponse)
+async def lookup_item_by_code(
+    code: str = Query(..., min_length=1, description="Barcode, serial number, or asset tag"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Look up an inventory item by barcode, serial number, or asset tag.
+
+    Designed for barcode scanner workflows — pass whatever the scanner
+    reads and this endpoint will find the matching item. Checks barcode
+    first, then serial number, then asset tag.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    result = await service.lookup_by_code(
+        code=code,
+        organization_id=current_user.organization_id,
+    )
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No item found matching '{code}'",
+        )
+
+    item, matched_field, matched_value = result
+    return ScanLookupResponse(
+        item=item,
+        matched_field=matched_field,
+        matched_value=matched_value,
+    )
+
+
+@router.post("/batch-checkout", response_model=BatchCheckoutResponse)
+async def batch_checkout_items(
+    request: BatchCheckoutRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Assign/checkout/issue multiple scanned items to a member in one operation.
+
+    The quartermaster scans multiple barcodes, building a list, then submits
+    the batch. Each item is processed based on its tracking type:
+    - **Individual + available** → permanently assigned
+    - **Pool item** → units issued from the pool
+    - Items that are already assigned or unavailable will fail individually
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    result = await service.batch_checkout(
+        user_id=request.user_id,
+        organization_id=current_user.organization_id,
+        performed_by=current_user.id,
+        items=[item.model_dump() for item in request.items],
+        reason=request.reason,
+    )
+
+    if result["successful"] > 0:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_batch_checkout",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "user_id": str(request.user_id),
+                "total_scanned": result["total_scanned"],
+                "successful": result["successful"],
+                "failed": result["failed"],
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return result
+
+
+@router.post("/batch-return", response_model=BatchReturnResponse)
+async def batch_return_items(
+    request: BatchReturnRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Return multiple scanned items from a member in one operation.
+
+    The quartermaster scans each item the member is turning in, building
+    a list, then submits the batch. Each item is matched to its current
+    assignment, checkout, or pool issuance and the appropriate return
+    operation is performed.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    result = await service.batch_return(
+        user_id=request.user_id,
+        organization_id=current_user.organization_id,
+        performed_by=current_user.id,
+        items=[item.model_dump() for item in request.items],
+        notes=request.notes,
+    )
+
+    if result["successful"] > 0:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_batch_return",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "user_id": str(request.user_id),
+                "total_scanned": result["total_scanned"],
+                "successful": result["successful"],
+                "failed": result["failed"],
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return result
 
 
 # ============================================

@@ -878,3 +878,360 @@ class InventoryService:
                 for i in issuances
             ],
         }
+
+    # ============================================
+    # Barcode / Serial / Asset Tag Lookup
+    # ============================================
+
+    async def lookup_by_code(
+        self, code: str, organization_id: UUID
+    ) -> Optional[Tuple[InventoryItem, str, str]]:
+        """
+        Look up an item by barcode, serial number, or asset tag.
+        Returns (item, matched_field, matched_value) or None.
+        Checks barcode first, then serial_number, then asset_tag.
+        """
+        code = code.strip()
+        if not code:
+            return None
+
+        org_id = str(organization_id)
+
+        # Try barcode
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.barcode == code,
+                InventoryItem.active == True,
+            )
+            .options(selectinload(InventoryItem.category))
+        )
+        item = result.scalar_one_or_none()
+        if item:
+            return item, "barcode", code
+
+        # Try serial number
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.serial_number == code,
+                InventoryItem.active == True,
+            )
+            .options(selectinload(InventoryItem.category))
+        )
+        item = result.scalar_one_or_none()
+        if item:
+            return item, "serial_number", code
+
+        # Try asset tag
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.asset_tag == code,
+                InventoryItem.active == True,
+            )
+            .options(selectinload(InventoryItem.category))
+        )
+        item = result.scalar_one_or_none()
+        if item:
+            return item, "asset_tag", code
+
+        return None
+
+    # ============================================
+    # Batch Checkout (scan-to-assign)
+    # ============================================
+
+    async def batch_checkout(
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+        performed_by: UUID,
+        items: List[Dict[str, Any]],
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Process a batch of scanned items: assign, checkout, or issue
+        each one to the specified user based on the item's tracking type
+        and current status.
+
+        Returns a summary with per-item results.
+        """
+        results = []
+        successful = 0
+        failed = 0
+
+        for scan in items:
+            code = scan["code"]
+            quantity = scan.get("quantity", 1)
+
+            lookup = await self.lookup_by_code(code, organization_id)
+            if not lookup:
+                results.append({
+                    "code": code,
+                    "item_name": "Unknown",
+                    "item_id": "",
+                    "action": "none",
+                    "success": False,
+                    "error": f"No item found for code '{code}'",
+                })
+                failed += 1
+                continue
+
+            item, matched_field, matched_value = lookup
+
+            try:
+                if item.tracking_type == TrackingType.POOL:
+                    # Pool item → issue
+                    issuance, err = await self.issue_from_pool(
+                        item_id=UUID(item.id),
+                        user_id=user_id,
+                        organization_id=organization_id,
+                        issued_by=performed_by,
+                        quantity=quantity,
+                        reason=reason,
+                    )
+                    if err:
+                        results.append({
+                            "code": code, "item_name": item.name,
+                            "item_id": item.id, "action": "issued",
+                            "success": False, "error": err,
+                        })
+                        failed += 1
+                    else:
+                        results.append({
+                            "code": code, "item_name": item.name,
+                            "item_id": item.id, "action": "issued",
+                            "success": True, "error": None,
+                        })
+                        successful += 1
+
+                elif item.status == ItemStatus.AVAILABLE:
+                    # Individual available item → permanent assign
+                    assignment, err = await self.assign_item_to_user(
+                        item_id=UUID(item.id),
+                        user_id=user_id,
+                        organization_id=organization_id,
+                        assigned_by=performed_by,
+                        assignment_type=AssignmentType.PERMANENT,
+                        reason=reason,
+                    )
+                    if err:
+                        results.append({
+                            "code": code, "item_name": item.name,
+                            "item_id": item.id, "action": "assigned",
+                            "success": False, "error": err,
+                        })
+                        failed += 1
+                    else:
+                        results.append({
+                            "code": code, "item_name": item.name,
+                            "item_id": item.id, "action": "assigned",
+                            "success": True, "error": None,
+                        })
+                        successful += 1
+
+                else:
+                    results.append({
+                        "code": code, "item_name": item.name,
+                        "item_id": item.id, "action": "none",
+                        "success": False,
+                        "error": f"Item is not available (status: {item.status.value})",
+                    })
+                    failed += 1
+
+            except Exception as e:
+                results.append({
+                    "code": code, "item_name": item.name if item else "Unknown",
+                    "item_id": item.id if item else "",
+                    "action": "none", "success": False, "error": str(e),
+                })
+                failed += 1
+
+        return {
+            "user_id": str(user_id),
+            "total_scanned": len(items),
+            "successful": successful,
+            "failed": failed,
+            "results": results,
+        }
+
+    # ============================================
+    # Batch Return (scan-to-return)
+    # ============================================
+
+    async def batch_return(
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+        performed_by: UUID,
+        items: List[Dict[str, Any]],
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Process a batch of scanned items being returned by a member.
+        Determines the correct return operation (unassign, check-in,
+        or pool return) based on how the item is currently held.
+        """
+        from app.models.inventory import ItemCondition as IC
+
+        results = []
+        successful = 0
+        failed = 0
+        user_id_str = str(user_id)
+
+        for scan in items:
+            code = scan["code"]
+            condition_str = scan.get("return_condition", "good")
+            damage_notes = scan.get("damage_notes")
+            quantity = scan.get("quantity", 1)
+
+            lookup = await self.lookup_by_code(code, organization_id)
+            if not lookup:
+                results.append({
+                    "code": code, "item_name": "Unknown", "item_id": "",
+                    "action": "none", "success": False,
+                    "error": f"No item found for code '{code}'",
+                })
+                failed += 1
+                continue
+
+            item, _, _ = lookup
+
+            try:
+                condition = IC(condition_str)
+            except ValueError:
+                condition = IC.GOOD
+
+            try:
+                # Check if this item is assigned to the user
+                if (
+                    item.tracking_type == TrackingType.INDIVIDUAL
+                    and item.assigned_to_user_id == user_id_str
+                ):
+                    success, err = await self.unassign_item(
+                        item_id=UUID(item.id),
+                        organization_id=organization_id,
+                        returned_by=performed_by,
+                        return_condition=condition,
+                        return_notes=damage_notes or notes,
+                    )
+                    if err:
+                        results.append({
+                            "code": code, "item_name": item.name,
+                            "item_id": item.id, "action": "unassigned",
+                            "success": False, "error": err,
+                        })
+                        failed += 1
+                    else:
+                        results.append({
+                            "code": code, "item_name": item.name,
+                            "item_id": item.id, "action": "unassigned",
+                            "success": True, "error": None,
+                        })
+                        successful += 1
+                    continue
+
+                # Check if checked out to this user
+                checkout_result = await self.db.execute(
+                    select(CheckOutRecord)
+                    .where(
+                        CheckOutRecord.organization_id == str(organization_id),
+                        CheckOutRecord.item_id == str(item.id),
+                        CheckOutRecord.user_id == user_id_str,
+                        CheckOutRecord.is_returned == False,
+                    )
+                    .order_by(CheckOutRecord.checked_out_at.desc())
+                    .limit(1)
+                )
+                checkout = checkout_result.scalar_one_or_none()
+                if checkout:
+                    success, err = await self.checkin_item(
+                        checkout_id=UUID(checkout.id),
+                        organization_id=organization_id,
+                        checked_in_by=performed_by,
+                        return_condition=condition,
+                        damage_notes=damage_notes,
+                    )
+                    if err:
+                        results.append({
+                            "code": code, "item_name": item.name,
+                            "item_id": item.id, "action": "checked_in",
+                            "success": False, "error": err,
+                        })
+                        failed += 1
+                    else:
+                        results.append({
+                            "code": code, "item_name": item.name,
+                            "item_id": item.id, "action": "checked_in",
+                            "success": True, "error": None,
+                        })
+                        successful += 1
+                    continue
+
+                # Check for pool issuance to this user
+                if item.tracking_type == TrackingType.POOL:
+                    issuance_result = await self.db.execute(
+                        select(ItemIssuance)
+                        .where(
+                            ItemIssuance.organization_id == str(organization_id),
+                            ItemIssuance.item_id == str(item.id),
+                            ItemIssuance.user_id == user_id_str,
+                            ItemIssuance.is_returned == False,
+                        )
+                        .order_by(ItemIssuance.issued_at.desc())
+                        .limit(1)
+                    )
+                    issuance = issuance_result.scalar_one_or_none()
+                    if issuance:
+                        success, err = await self.return_to_pool(
+                            issuance_id=UUID(issuance.id),
+                            organization_id=organization_id,
+                            returned_by=performed_by,
+                            return_condition=condition,
+                            return_notes=damage_notes or notes,
+                            quantity_returned=quantity,
+                        )
+                        if err:
+                            results.append({
+                                "code": code, "item_name": item.name,
+                                "item_id": item.id, "action": "returned_to_pool",
+                                "success": False, "error": err,
+                            })
+                            failed += 1
+                        else:
+                            results.append({
+                                "code": code, "item_name": item.name,
+                                "item_id": item.id, "action": "returned_to_pool",
+                                "success": True, "error": None,
+                            })
+                            successful += 1
+                        continue
+
+                # Item not held by this user
+                results.append({
+                    "code": code, "item_name": item.name,
+                    "item_id": item.id, "action": "none",
+                    "success": False,
+                    "error": "Item is not assigned to, checked out by, or issued to this member",
+                })
+                failed += 1
+
+            except Exception as e:
+                results.append({
+                    "code": code, "item_name": item.name if item else "Unknown",
+                    "item_id": item.id if item else "",
+                    "action": "none", "success": False, "error": str(e),
+                })
+                failed += 1
+
+        return {
+            "user_id": str(user_id),
+            "total_scanned": len(items),
+            "successful": successful,
+            "failed": failed,
+            "results": results,
+        }
