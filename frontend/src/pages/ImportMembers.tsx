@@ -48,6 +48,12 @@ const ImportMembers: React.FC = () => {
       const text = await file.text();
       const rows = text.split('\n').map((row) => row.split(','));
 
+      if (!rows[0] || rows[0].length === 0) {
+        setError('The file is empty or has no header row.');
+        setValidating(false);
+        return;
+      }
+
       // Check headers
       const headers = rows[0].map((h) => h.trim().toLowerCase());
       const requiredHeaders = [
@@ -129,6 +135,14 @@ const ImportMembers: React.FC = () => {
     try {
       const text = await file.text();
       const rows = text.split('\n').map((row) => row.split(','));
+
+      if (!rows[0] || rows[0].length === 0) {
+        result.errors.push('The file is empty or has no header row.');
+        setImportResult(result);
+        setImporting(false);
+        return;
+      }
+
       const headers = rows[0].map((h) => h.trim().toLowerCase());
 
       // Process each row (skip header)
