@@ -119,6 +119,20 @@ async def create_member(
             detail="Username already exists"
         )
 
+    # Check if badge number already exists in the organization
+    if user_data.badge_number:
+        result = await db.execute(
+            select(User)
+            .where(User.badge_number == user_data.badge_number)
+            .where(User.organization_id == str(current_user.organization_id))
+            .where(User.deleted_at.is_(None))
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member with this Department ID / badge number already exists"
+            )
+
     # Check if email already exists (including archived members)
     result = await db.execute(
         select(User)
@@ -745,6 +759,21 @@ async def update_user_profile(
 
     # Update only provided fields
     update_data = profile_update.model_dump(exclude_unset=True)
+
+    # Check badge_number uniqueness within the organization
+    if "badge_number" in update_data and update_data["badge_number"]:
+        existing = await db.execute(
+            select(User)
+            .where(User.badge_number == update_data["badge_number"])
+            .where(User.organization_id == str(current_user.organization_id))
+            .where(User.id != str(user_id))
+            .where(User.deleted_at.is_(None))
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member with this Department ID / badge number already exists"
+            )
 
     # Rank changes restricted to Chief / membership coordinator
     if "rank" in update_data:

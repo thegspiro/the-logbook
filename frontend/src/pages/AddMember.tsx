@@ -211,6 +211,12 @@ const AddMember: React.FC = () => {
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Failed to add member. Please try again.');
       toast.error(errorMessage);
+
+      // Highlight the specific field if it's a duplicate badge number error
+      if (errorMessage.toLowerCase().includes('badge number') || errorMessage.toLowerCase().includes('department id')) {
+        setErrors((prev) => ({ ...prev, departmentId: errorMessage }));
+      }
+
       setIsSaving(false);
     }
   };
