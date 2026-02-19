@@ -316,6 +316,24 @@ class RolesSetupResponse(BaseModel):
     total_roles: int
 
 
+class PositionsSetupRequest(BaseModel):
+    """Request model for position setup during onboarding (frontend uses 'positions' key)"""
+    positions: List[RoleSetupItem] = Field(
+        ...,
+        min_length=1,
+        description="List of positions to create for the organization"
+    )
+
+
+class PositionsSetupResponse(BaseModel):
+    """Response model for position setup"""
+    success: bool
+    message: str
+    created: List[str] = Field(default_factory=list)
+    updated: List[str] = Field(default_factory=list)
+    total_positions: int
+
+
 class SessionDataResponse(BaseModel):
     """Response model for session data operations"""
     success: bool
@@ -1562,6 +1580,32 @@ async def save_session_roles(
         created=created_roles,
         updated=updated_roles,
         total_roles=len(data.roles)
+    )
+
+
+@router.post("/session/positions", response_model=PositionsSetupResponse)
+async def save_session_positions(
+    request: Request,
+    data: PositionsSetupRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Save position configuration during onboarding.
+
+    This is the canonical endpoint used by the frontend PositionSetup page.
+    It accepts a ``positions`` key and delegates to the same role-creation
+    logic used by ``/session/roles``.
+    """
+    # Delegate to save_session_roles by converting positions -> roles
+    roles_request = RolesSetupRequest(roles=data.positions)
+    roles_response = await save_session_roles(request, roles_request, db)
+
+    return PositionsSetupResponse(
+        success=roles_response.success,
+        message=roles_response.message.replace("Roles", "Positions"),
+        created=roles_response.created,
+        updated=roles_response.updated,
+        total_positions=roles_response.total_roles,
     )
 
 
