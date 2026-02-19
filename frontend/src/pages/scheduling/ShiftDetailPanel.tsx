@@ -217,13 +217,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const statusColor = STATUS_COLORS[assignment.status || assignment.assignment_status || 'assigned'] || STATUS_COLORS.assigned;
     const isCurrentUser = assignment.user_id === user?.id;
     return (
-      <div key={assignment.id} className={`flex items-center justify-between p-3 rounded-lg border ${isCurrentUser ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30'}`}>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-medium text-theme-text-primary">
+      <div key={assignment.id} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${isCurrentUser ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30'}`}>
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-medium text-theme-text-primary flex-shrink-0">
             {(assignment.user_name || '?').charAt(0).toUpperCase()}
           </div>
-          <div>
-            <p className="text-sm font-medium text-theme-text-primary">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-theme-text-primary truncate">
               {assignment.user_name || 'Unknown'} {isCurrentUser && <span className="text-xs text-violet-500">(You)</span>}
             </p>
             <p className="text-xs text-theme-text-muted capitalize">
@@ -231,20 +231,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${statusColor}`}>
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${statusColor}`}>
             {assignment.status || assignment.assignment_status || 'assigned'}
           </span>
           {isCurrentUser && (assignment.status === 'assigned' || assignment.assignment_status === 'assigned') && (
             <button onClick={() => handleConfirm(assignment.id)}
-              className="p-1 text-green-600 hover:bg-green-500/10 rounded transition-colors" title="Confirm"
+              className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Confirm"
             >
               <Check className="w-4 h-4" />
             </button>
           )}
           {canManage && (
             <button onClick={() => handleRemove(assignment.id)}
-              className="p-1 text-theme-text-muted hover:text-red-500 rounded transition-colors" title="Remove"
+              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Remove"
             >
               <XCircle className="w-4 h-4" />
             </button>
@@ -260,25 +260,25 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
       {/* Panel */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-theme-surface border-l border-theme-surface-border z-50 overflow-y-auto shadow-2xl">
+      <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-theme-surface border-l border-theme-surface-border z-50 overflow-y-auto shadow-2xl overscroll-contain">
         {/* Header */}
-        <div className="sticky top-0 bg-theme-surface border-b border-theme-surface-border p-6 z-10">
+        <div className="sticky top-0 bg-theme-surface border-b border-theme-surface-border p-4 sm:p-6 z-10">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-theme-text-primary">Shift Details</h2>
-              <p className="text-sm text-theme-text-secondary mt-1">
+            <div className="min-w-0 pr-2">
+              <h2 className="text-lg sm:text-xl font-bold text-theme-text-primary">Shift Details</h2>
+              <p className="text-xs sm:text-sm text-theme-text-secondary mt-1 truncate">
                 {shiftDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
             </div>
-            <button onClick={onClose} className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors">
+            <button onClick={onClose} className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
           {/* Time & Info */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div className="flex items-center gap-3 p-3 bg-theme-surface-hover/50 rounded-lg">
               <Clock className="w-5 h-5 text-violet-500" />
               <div>
@@ -345,19 +345,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               </div>
               <div className="space-y-2">
                 {crewBoard!.map(({ position, assignment }, i) => (
-                  <div key={i} className={`flex items-center justify-between p-3 rounded-lg border ${
+                  <div key={i} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${
                     assignment
                       ? (assignment.user_id === user?.id ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30')
                       : 'border-dashed border-theme-surface-border bg-theme-surface-hover/10'
                   }`}>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                       {assignment ? (
                         <>
-                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-medium text-theme-text-primary">
+                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-medium text-theme-text-primary flex-shrink-0">
                             {(assignment.user_name || '?').charAt(0).toUpperCase()}
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-theme-text-primary">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-theme-text-primary truncate">
                               {assignment.user_name || 'Unknown'}
                               {assignment.user_id === user?.id && <span className="text-xs text-violet-500 ml-1">(You)</span>}
                             </p>
@@ -368,7 +368,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                         </>
                       ) : (
                         <>
-                          <div className="w-8 h-8 rounded-full border-2 border-dashed border-theme-surface-border flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-full border-2 border-dashed border-theme-surface-border flex items-center justify-center flex-shrink-0">
                             <UserPlus className="w-3.5 h-3.5 text-theme-text-muted" />
                           </div>
                           <div>
@@ -380,22 +380,22 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                         </>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                       {assignment ? (
                         <>
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${STATUS_COLORS[assignment.status || assignment.assignment_status || 'assigned'] || STATUS_COLORS.assigned}`}>
+                          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${STATUS_COLORS[assignment.status || assignment.assignment_status || 'assigned'] || STATUS_COLORS.assigned}`}>
                             {assignment.status || assignment.assignment_status || 'assigned'}
                           </span>
                           {assignment.user_id === user?.id && (assignment.status === 'assigned' || assignment.assignment_status === 'assigned') && (
                             <button onClick={() => handleConfirm(assignment.id)}
-                              className="p-1 text-green-600 hover:bg-green-500/10 rounded transition-colors" title="Confirm"
+                              className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Confirm"
                             >
                               <Check className="w-4 h-4" />
                             </button>
                           )}
                           {canManage && (
                             <button onClick={() => handleRemove(assignment.id)}
-                              className="p-1 text-theme-text-muted hover:text-red-500 rounded transition-colors" title="Remove"
+                              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Remove"
                             >
                               <XCircle className="w-4 h-4" />
                             </button>
@@ -406,10 +406,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           <button
                             onClick={() => handleSignup(position)}
                             disabled={signingUp}
-                            className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1"
+                            className="px-2.5 sm:px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1"
                           >
                             {signingUp ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
-                            Sign Up
+                            <span className="hidden sm:inline">Sign Up</span><span className="sm:hidden">Join</span>
                           </button>
                         )
                       )}

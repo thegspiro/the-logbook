@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense, useCallback } from 'react';
 import {
   Clock,
   CalendarDays,
@@ -130,7 +130,7 @@ const SchedulingPage: React.FC = () => {
     loadApparatus();
   }, []);
 
-  const getWeekDates = () => {
+  const weekDates = useMemo(() => {
     const start = new Date(currentDate);
     start.setDate(start.getDate() - start.getDay());
     return Array.from({ length: 7 }, (_, i) => {
@@ -138,9 +138,10 @@ const SchedulingPage: React.FC = () => {
       d.setDate(d.getDate() + i);
       return d;
     });
-  };
+  }, [currentDate]);
 
-  const getMonthDates = () => {
+  const monthDates = useMemo(() => {
+    if (viewMode !== 'month') return [];
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1);
@@ -155,10 +156,21 @@ const SchedulingPage: React.FC = () => {
       d.setDate(d.getDate() + i);
       return d;
     });
-  };
+  }, [currentDate, viewMode]);
 
-  const weekDates = getWeekDates();
-  const monthDates = viewMode === 'month' ? getMonthDates() : [];
+  // Pre-index shifts by date for O(1) lookups instead of filtering per cell
+  const shiftsByDate = useMemo(() => {
+    const map = new Map<string, ShiftRecord[]>();
+    for (const shift of shifts) {
+      const existing = map.get(shift.shift_date);
+      if (existing) {
+        existing.push(shift);
+      } else {
+        map.set(shift.shift_date, [shift]);
+      }
+    }
+    return map;
+  }, [shifts]);
 
   const navigate_ = (direction: number) => {
     const newDate = new Date(currentDate);
@@ -170,7 +182,7 @@ const SchedulingPage: React.FC = () => {
     setCurrentDate(newDate);
   };
 
-  const formatDateRange = () => {
+  const dateRangeLabel = useMemo(() => {
     if (viewMode === 'month') {
       return currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
     }
@@ -182,7 +194,7 @@ const SchedulingPage: React.FC = () => {
       return `${startMonth} ${start.getDate()} - ${end.getDate()}, ${start.getFullYear()}`;
     }
     return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
-  };
+  }, [currentDate, viewMode, weekDates, tz]);
 
   const isToday = (date: Date) => {
     const today = new Date();
@@ -232,10 +244,9 @@ const SchedulingPage: React.FC = () => {
     fetchSummary();
   }, []);
 
-  const getShiftsForDate = (date: Date): ShiftRecord[] => {
-    const dateStr = formatDateISO(date);
-    return shifts.filter((shift) => shift.shift_date === dateStr);
-  };
+  const getShiftsForDate = useCallback((date: Date): ShiftRecord[] => {
+    return shiftsByDate.get(formatDateISO(date)) || [];
+  }, [shiftsByDate]);
 
   const handleCreateShift = async () => {
     if (!shiftForm.startDate) {
@@ -299,7 +310,7 @@ const SchedulingPage: React.FC = () => {
 
   const hasShifts = shifts.length > 0;
 
-  const visibleTabs = TAB_CONFIG.filter(t => !t.adminOnly || canManage);
+  const visibleTabs = useMemo(() => TAB_CONFIG.filter(t => !t.adminOnly || canManage), [canManage]);
 
   return (
     <div className="min-h-screen">
@@ -329,8 +340,8 @@ const SchedulingPage: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="border-b border-theme-surface-border mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
-          <nav className="flex space-x-1 overflow-x-auto scrollbar-thin" aria-label="Scheduling tabs">
+        <div className="border-b border-theme-surface-border mb-6 -mx-4 px-4 sm:mx-0 sm:px-0 relative">
+          <nav className="flex space-x-1 overflow-x-auto scrollbar-thin scroll-smooth" aria-label="Scheduling tabs">
             {visibleTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -338,18 +349,21 @@ const SchedulingPage: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-3 sm:px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-h-[44px] ${
                     isActive
                       ? 'border-violet-600 text-violet-600 dark:text-violet-400'
                       : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
-                  {tab.label}
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="sm:hidden">{tab.label}</span>
                 </button>
               );
             })}
           </nav>
+          {/* Scroll fade hint on right edge (mobile) */}
+          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-theme-bg to-transparent pointer-events-none sm:hidden" aria-hidden="true" />
         </div>
 
         {/* Tab Content */}
@@ -357,22 +371,22 @@ const SchedulingPage: React.FC = () => {
           <>
             {/* Summary Stats */}
             {summary && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
-                  <p className="text-theme-text-muted text-sm">Total Shifts</p>
-                  <p className="text-theme-text-primary text-2xl font-bold">{summary.total_shifts}</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border">
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Total Shifts</p>
+                  <p className="text-theme-text-primary text-xl sm:text-2xl font-bold">{summary.total_shifts}</p>
                 </div>
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
-                  <p className="text-theme-text-muted text-sm">This Week</p>
-                  <p className="text-theme-text-primary text-2xl font-bold">{summary.shifts_this_week}</p>
+                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border">
+                  <p className="text-theme-text-muted text-xs sm:text-sm">This Week</p>
+                  <p className="text-theme-text-primary text-xl sm:text-2xl font-bold">{summary.shifts_this_week}</p>
                 </div>
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
-                  <p className="text-theme-text-muted text-sm">This Month</p>
-                  <p className="text-theme-text-primary text-2xl font-bold">{summary.shifts_this_month}</p>
+                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border">
+                  <p className="text-theme-text-muted text-xs sm:text-sm">This Month</p>
+                  <p className="text-theme-text-primary text-xl sm:text-2xl font-bold">{summary.shifts_this_month}</p>
                 </div>
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
-                  <p className="text-theme-text-muted text-sm">Hours This Month</p>
-                  <p className="text-theme-text-primary text-2xl font-bold">{summary.total_hours_this_month}</p>
+                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border">
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Hours This Month</p>
+                  <p className="text-theme-text-primary text-xl sm:text-2xl font-bold">{summary.total_hours_this_month}</p>
                 </div>
               </div>
             )}
@@ -388,7 +402,7 @@ const SchedulingPage: React.FC = () => {
                   >
                     <ChevronLeft className="w-5 h-5" aria-hidden="true" />
                   </button>
-                  <h2 className="text-theme-text-primary font-semibold text-base sm:text-lg whitespace-nowrap">{formatDateRange()}</h2>
+                  <h2 className="text-theme-text-primary font-semibold text-base sm:text-lg whitespace-nowrap">{dateRangeLabel}</h2>
                   <button
                     onClick={() => navigate_(1)}
                     className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -619,8 +633,47 @@ const SchedulingPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Mobile list view (shown on mobile only) — only days with shifts */}
-                <div className="md:hidden space-y-2 mb-8">
+                {/* Mobile: compact mini-calendar + shift list below */}
+                <div className="md:hidden mb-8 space-y-3">
+                  {/* Mini month calendar with dot indicators */}
+                  <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-3">
+                    <div className="grid grid-cols-7 gap-0.5 mb-1">
+                      {DAYS_OF_WEEK.map(d => (
+                        <div key={d} className="text-center text-[10px] font-medium text-theme-text-muted uppercase py-1">{d.charAt(0)}</div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7 gap-0.5">
+                      {monthDates.map((date, i) => {
+                        const isCurrentMonth = date.getMonth() === currentDate.getMonth();
+                        const dayShifts = getShiftsForDate(date);
+                        const hasShiftsOnDay = dayShifts.length > 0;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              if (hasShiftsOnDay && dayShifts.length > 0) {
+                                // Scroll to the day in the list below
+                                const el = document.getElementById(`month-mobile-day-${formatDateISO(date)}`);
+                                el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                              }
+                            }}
+                            className={`relative flex flex-col items-center py-1.5 rounded-md text-xs transition-colors ${
+                              !isCurrentMonth ? 'opacity-30' : ''
+                            } ${isToday(date) ? 'bg-violet-600 text-white font-bold' : 'text-theme-text-primary'} ${
+                              hasShiftsOnDay && !isToday(date) ? 'bg-violet-500/10 font-medium' : ''
+                            }`}
+                          >
+                            {date.getDate()}
+                            {hasShiftsOnDay && (
+                              <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${isToday(date) ? 'bg-white' : 'bg-violet-500'}`} />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Shift list for days with shifts */}
                   {(() => {
                     const daysWithShifts = monthDates
                       .filter(date => date.getMonth() === currentDate.getMonth())
@@ -635,59 +688,67 @@ const SchedulingPage: React.FC = () => {
                       );
                     }
 
-                    return daysWithShifts.map((date, i) => {
-                      const dayShifts = getShiftsForDate(date);
-                      return (
-                        <div
-                          key={i}
-                          className={`bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden ${
-                            isToday(date) ? 'ring-2 ring-violet-500/30' : ''
-                          }`}
-                        >
-                          <div className={`px-4 py-2 border-b border-theme-surface-border flex items-center justify-between ${
-                            isToday(date) ? 'bg-violet-600/10' : 'bg-theme-surface-secondary'
-                          }`}>
-                            <span className={`text-sm font-semibold ${
-                              isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
-                            }`}>
-                              {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                            </span>
-                            {isToday(date) && (
-                              <span className="text-xs px-2 py-0.5 bg-violet-600 text-white rounded-full">Today</span>
-                            )}
-                          </div>
-                          <div className="p-3 space-y-2">
-                            {dayShifts.map((shift) => (
-                              <button
-                                key={shift.id}
-                                onClick={() => handleShiftClick(shift)}
-                                className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
-                              >
-                                <p className="font-medium">
-                                  {formatTime(shift.start_time, tz)}
-                                  {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
-                                </p>
-                                {shift.notes && (
-                                  <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
-                                )}
-                                <div className="flex items-center gap-3 mt-1.5">
-                                  {shift.attendee_count > 0 && (
-                                    <span className="opacity-70 flex items-center gap-1 text-xs">
-                                      <Users className="w-3.5 h-3.5" /> {shift.attendee_count} staff
-                                    </span>
-                                  )}
-                                  {shift.apparatus_unit_number && (
-                                    <span className="opacity-70 flex items-center gap-1 text-xs">
-                                      <Truck className="w-3.5 h-3.5" /> {shift.apparatus_unit_number}
-                                    </span>
+                    return (
+                      <div className="space-y-2">
+                        {daysWithShifts.map((date, i) => {
+                          const dayShifts = getShiftsForDate(date);
+                          return (
+                            <div
+                              key={i}
+                              id={`month-mobile-day-${formatDateISO(date)}`}
+                              className={`bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden ${
+                                isToday(date) ? 'ring-2 ring-violet-500/30' : ''
+                              }`}
+                            >
+                              <div className={`px-4 py-2 border-b border-theme-surface-border flex items-center justify-between ${
+                                isToday(date) ? 'bg-violet-600/10' : 'bg-theme-surface-secondary'
+                              }`}>
+                                <span className={`text-sm font-semibold ${
+                                  isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
+                                }`}>
+                                  {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-theme-text-muted">{dayShifts.length} shift{dayShifts.length !== 1 ? 's' : ''}</span>
+                                  {isToday(date) && (
+                                    <span className="text-xs px-2 py-0.5 bg-violet-600 text-white rounded-full">Today</span>
                                   )}
                                 </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    });
+                              </div>
+                              <div className="p-3 space-y-2">
+                                {dayShifts.map((shift) => (
+                                  <button
+                                    key={shift.id}
+                                    onClick={() => handleShiftClick(shift)}
+                                    className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
+                                  >
+                                    <p className="font-medium">
+                                      {formatTime(shift.start_time, tz)}
+                                      {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                                    </p>
+                                    {shift.notes && (
+                                      <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
+                                    )}
+                                    <div className="flex items-center gap-3 mt-1.5">
+                                      {shift.attendee_count > 0 && (
+                                        <span className="opacity-70 flex items-center gap-1 text-xs">
+                                          <Users className="w-3.5 h-3.5" /> {shift.attendee_count} staff
+                                        </span>
+                                      )}
+                                      {shift.apparatus_unit_number && (
+                                        <span className="opacity-70 flex items-center gap-1 text-xs">
+                                          <Truck className="w-3.5 h-3.5" /> {shift.apparatus_unit_number}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
                   })()}
                 </div>
               </>
