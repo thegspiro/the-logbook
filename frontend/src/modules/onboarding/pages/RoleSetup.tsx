@@ -24,6 +24,7 @@ import {
   BadgeCheck,
   Megaphone,
   Building2,
+  Flame,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
@@ -143,6 +144,79 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         icon: Monitor,
         priority: 100,
         permissions: generateRolePermissions(modules, 'full_access'),
+      },
+    ],
+  },
+  operational_ranks: {
+    name: 'Operational Ranks',
+    description: 'Fire/EMS command and line positions',
+    positions: [
+      {
+        id: 'fire_chief',
+        name: 'Fire Chief',
+        description: 'Highest-ranking officer with full operational and administrative authority',
+        icon: Flame,
+        priority: 95,
+        permissions: generateRolePermissions(modules, 'full_access'),
+      },
+      {
+        id: 'deputy_chief',
+        name: 'Deputy Chief',
+        description: 'Second in command, oversees operations in the Chief\'s absence',
+        icon: Flame,
+        priority: 90,
+        permissions: generateRolePermissions(modules, 'leadership'),
+      },
+      {
+        id: 'assistant_chief',
+        name: 'Assistant Chief',
+        description: 'Assists the Chief and Deputy Chief with operational oversight',
+        icon: Flame,
+        priority: 85,
+        permissions: generateRolePermissions(modules, 'leadership'),
+      },
+      {
+        id: 'captain',
+        name: 'Captain',
+        description: 'Company officer responsible for crew management and operations',
+        icon: Star,
+        priority: 70,
+        permissions: generateRolePermissions(modules, 'officer', [
+          'members',
+          'training',
+          'scheduling',
+          'events',
+          'apparatus',
+        ]),
+      },
+      {
+        id: 'lieutenant',
+        name: 'Lieutenant',
+        description: 'Company officer assisting the Captain with crew supervision',
+        icon: Star,
+        priority: 60,
+        permissions: generateRolePermissions(modules, 'officer', [
+          'training',
+          'scheduling',
+          'events',
+          'apparatus',
+        ]),
+      },
+      {
+        id: 'engineer',
+        name: 'Engineer / Driver Operator',
+        description: 'Apparatus operator responsible for vehicle operations and maintenance',
+        icon: Wrench,
+        priority: 40,
+        permissions: generateRolePermissions(modules, 'specialist', ['apparatus']),
+      },
+      {
+        id: 'firefighter',
+        name: 'Firefighter',
+        description: 'Line firefighter with standard operational access',
+        icon: Shield,
+        priority: 15,
+        permissions: generateRolePermissions(modules, 'member'),
       },
     ],
   },
@@ -404,7 +478,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
 // Icon lookup map for serialization/deserialization
 const ICON_MAP: Record<string, React.ElementType> = {
   Shield, Crown, Star, Briefcase, GraduationCap, ClipboardList, Wrench, Users, UserCog,
-  Truck, Monitor, UserPlus, BadgeCheck, Megaphone, Building2,
+  Truck, Monitor, UserPlus, BadgeCheck, Megaphone, Building2, Flame,
 };
 
 const getIconName = (icon: React.ElementType): string => {
@@ -454,9 +528,9 @@ const PositionSetup: React.FC = () => {
     // Build templates for initial state
     const templates = buildPositionTemplates(MODULE_REGISTRY);
 
-    // Pre-select essential positions (it_manager, president, secretary, training_officer, member)
+    // Pre-select essential positions
     const initial: Record<string, RoleConfig> = {};
-    ['it_manager', 'president', 'secretary', 'training_officer', 'member'].forEach(posId => {
+    ['it_manager', 'fire_chief', 'president', 'secretary', 'training_officer', 'member'].forEach(posId => {
       Object.values(templates).forEach(category => {
         const position = category.positions.find(p => p.id === posId);
         if (position) {
@@ -468,7 +542,7 @@ const PositionSetup: React.FC = () => {
   });
 
   // Expanded categories
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(['system', 'leadership', 'officers']);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>(['system', 'operational_ranks', 'leadership', 'officers']);
 
   // Position being edited
   const [editingPosition, setEditingPosition] = useState<string | null>(null);
