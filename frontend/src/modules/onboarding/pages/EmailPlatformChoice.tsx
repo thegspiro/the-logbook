@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Server, Info } from 'lucide-react';
-import { ProgressIndicator, BackButton, ResetProgressButton, AutoSaveNotification } from '../components';
+import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
 
 // Email platform logos (using simple SVG icons)
@@ -75,7 +75,7 @@ const EmailPlatformChoice: React.FC = () => {
       id: 'selfhosted',
       name: 'Self-Hosted',
       description: 'Your own mail server (SMTP)',
-      icon: <Server className="w-10 h-10" />,
+      icon: <Server aria-hidden="true" className="w-10 h-10" />,
       color: 'from-green-500 to-emerald-500',
       features: [
         'Full control',
@@ -88,7 +88,7 @@ const EmailPlatformChoice: React.FC = () => {
       id: 'other',
       name: 'Other / Skip',
       description: 'Different provider or configure later',
-      icon: <Mail className="w-10 h-10" />,
+      icon: <Mail aria-hidden="true" className="w-10 h-10" />,
       color: 'from-slate-500 to-slate-600',
       features: [
         'Configure manually',
@@ -117,28 +117,7 @@ const EmailPlatformChoice: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
-      {/* Header with Logo */}
-      <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center">
-          {logoPreview ? (
-            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
-              <img
-                src={logoPreview}
-                alt={`${departmentName} logo`}
-                className="max-w-full max-h-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
-            </div>
-          )}
-          <div>
-            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
-            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
-          </div>
-        </div>
-      </header>
+      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 py-8">
@@ -152,7 +131,7 @@ const EmailPlatformChoice: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-              <Mail className="w-8 h-8 text-white" />
+              <Mail aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Email Platform
@@ -173,8 +152,8 @@ const EmailPlatformChoice: React.FC = () => {
                 onClick={() => setEmailPlatform(platform.id)}
                 className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 text-left ${
                   emailPlatform === platform.id
-                    ? 'border-red-500 shadow-lg shadow-red-500/50'
-                    : 'border-theme-surface-border hover:border-red-400/50'
+                    ? 'border-theme-accent-red shadow-lg'
+                    : 'border-theme-surface-border hover:border-theme-accent-red'
                 }`}
                 aria-pressed={emailPlatform === platform.id}
                 aria-label={`Select ${platform.name}`}
@@ -205,7 +184,7 @@ const EmailPlatformChoice: React.FC = () => {
                   <ul className="space-y-2 text-sm text-theme-text-secondary mb-4">
                     {platform.features.map((feature, index) => (
                       <li key={index} className="flex items-start">
-                        <span className="text-green-400 mr-2 flex-shrink-0">✓</span>
+                        <span className="text-theme-accent-green mr-2 flex-shrink-0">✓</span>
                         <span>{feature}</span>
                       </li>
                     ))}
@@ -215,7 +194,7 @@ const EmailPlatformChoice: React.FC = () => {
                   {platform.setupInfo && (
                     <div className="bg-theme-surface-secondary rounded-lg p-3 border border-theme-input-border">
                       <div className="flex items-start space-x-2">
-                        <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                        <Info aria-hidden="true" className="w-4 h-4 text-theme-accent-blue flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-theme-text-muted">
                           {platform.setupInfo}
                         </p>
@@ -248,14 +227,14 @@ const EmailPlatformChoice: React.FC = () => {
 
           {/* Info Box */}
           {selectedPlatformData && selectedPlatformData.id !== 'other' && (
-            <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-4 mb-8">
+            <div className="alert-info mb-8">
               <div className="flex items-start space-x-3">
-                <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-blue-300 text-sm font-medium mb-1">
+                  <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                     Next Step
                   </p>
-                  <p className="text-blue-200 text-sm">
+                  <p className="text-theme-alert-info-text text-sm">
                     After clicking Continue, you'll enter your {selectedPlatformData.name} connection details.
                     Don't worry, we'll guide you through the process step by step.
                   </p>
@@ -286,12 +265,13 @@ const EmailPlatformChoice: React.FC = () => {
                 : 'Your email credentials are encrypted and stored securely'}
             </p>
 
-            {/* Progress Indicator */}
-            <ProgressIndicator currentStep={3} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
-
-            {/* Auto-Save Notification */}
-            <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
+
+          {/* Progress Indicator */}
+          <ProgressIndicator currentStep={3} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
+
+          {/* Auto-Save Notification */}
+          <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
         </div>
       </main>
 

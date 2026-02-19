@@ -94,8 +94,8 @@ class OrganizationResponse(BaseModel):
         from_attributes = True
 
 
-class AdminUserCreate(BaseModel):
-    """Request model for creating admin user"""
+class SystemOwnerCreate(BaseModel):
+    """Request model for creating the System Owner (IT Manager) user"""
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=12)
@@ -131,8 +131,8 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-class AdminUserResponse(BaseModel):
-    """Response model for admin user creation with access token"""
+class SystemOwnerResponse(BaseModel):
+    """Response model for System Owner creation with access token"""
     id: str
     username: str
     email: str
@@ -709,16 +709,16 @@ async def create_organization(
         )
 
 
-@router.post("/admin-user", response_model=AdminUserResponse)
-async def create_admin_user(
+@router.post("/system-owner", response_model=SystemOwnerResponse)
+async def create_system_owner(
     request: Request,
-    user_data: AdminUserCreate,
+    user_data: SystemOwnerCreate,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Create the first administrator user
+    Create the System Owner (IT Manager) user
 
-    Creates admin user with IT Administrator role.
+    Creates the first user with the IT Manager position (full system access).
     Requires organization to be created first.
     Returns access token for automatic login.
     """
@@ -761,7 +761,7 @@ async def create_admin_user(
         )
 
     try:
-        user = await service.create_admin_user(
+        user = await service.create_system_owner(
             organization_id=str(org.id),
             username=user_data.username,
             email=user_data.email,
@@ -786,7 +786,7 @@ async def create_admin_user(
             user_agent=request.headers.get("user-agent"),
         )
 
-        return AdminUserResponse(
+        return SystemOwnerResponse(
             id=str(user.id),
             username=user.username,
             email=user.email,
@@ -1504,13 +1504,13 @@ async def save_session_roles(
 
             default_perms = DEFAULT_ROLES.get(role_data.id, {}).get("permissions", [])
 
-            # Preserve the wildcard permission for roles that have it in
-            # DEFAULT_ROLES (e.g. it_administrator). The frontend role editor
+            # Preserve the wildcard permission for positions that have it in
+            # DEFAULT_POSITIONS (e.g. it_manager). The frontend position editor
             # only knows about module-scoped view/manage permissions and cannot
             # represent the backend wildcard "*". Without this guard the
-            # it_administrator's ["*"] gets overwritten with a granular list
+            # it_manager's ["*"] gets overwritten with a granular list
             # that is missing action-specific permissions (users.create,
-            # audit.view, etc.), causing 403 errors on admin operations.
+            # audit.view, etc.), causing 403 errors on System Owner operations.
             if "*" in default_perms:
                 permission_list = ["*"]
             else:

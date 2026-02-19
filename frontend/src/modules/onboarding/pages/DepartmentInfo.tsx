@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
 import { useApiRequest } from '../hooks';
-import { ProgressIndicator, LoadingOverlay, ErrorAlert, AutoSaveNotification } from '../components';
+import { ProgressIndicator, LoadingOverlay, ErrorAlert, AutoSaveNotification, ThemeToggle } from '../components';
 import { useOnboardingStore } from '../store';
 
 const DepartmentInfo: React.FC = () => {
@@ -138,12 +138,13 @@ const DepartmentInfo: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4 relative">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-2xl w-full">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-            <Building2 className="w-8 h-8 text-white" />
+            <Building2 aria-hidden="true" className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
             Let's Get Started
@@ -161,7 +162,7 @@ const DepartmentInfo: React.FC = () => {
               htmlFor="departmentName"
               className="block text-sm font-semibold text-theme-text-secondary mb-2"
             >
-              Department Name <span className="text-red-400">*</span>
+              Department Name <span className="text-theme-accent-red">*</span>
             </label>
             <input
               type="text"
@@ -172,7 +173,7 @@ const DepartmentInfo: React.FC = () => {
                 clearError();
               }}
               placeholder="e.g., Springfield Volunteer Fire Department"
-              className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all"
               maxLength={100}
               autoFocus
               aria-required="true"
@@ -201,8 +202,8 @@ const DepartmentInfo: React.FC = () => {
                 onDrop={handleDrop}
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer ${
                   dragActive
-                    ? 'border-red-500 bg-red-500/10'
-                    : 'border-theme-input-border hover:border-red-500 hover:bg-theme-surface-hover'
+                    ? 'border-theme-accent-red bg-theme-accent-orange-muted'
+                    : 'border-theme-input-border hover:border-theme-accent-red hover:bg-theme-surface-hover'
                 }`}
                 onClick={() => fileInputRef.current?.click()}
                 role="button"
@@ -224,7 +225,7 @@ const DepartmentInfo: React.FC = () => {
                 />
                 <div className="flex flex-col items-center space-y-3">
                   <div className="w-16 h-16 bg-theme-surface rounded-full flex items-center justify-center">
-                    <Upload className="w-8 h-8 text-theme-text-muted" />
+                    <Upload aria-hidden="true" className="w-8 h-8 text-theme-text-muted" />
                   </div>
                   <div>
                     <p className="text-theme-text-primary font-medium mb-1">
@@ -261,17 +262,17 @@ const DepartmentInfo: React.FC = () => {
                       </div>
                       <button
                         onClick={handleRemoveLogo}
-                        className="flex-shrink-0 ml-4 p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                        className="flex-shrink-0 ml-4 p-2 hover:bg-theme-accent-orange-muted rounded-lg transition-colors"
                         aria-label="Remove logo"
                       >
-                        <X className="w-5 h-5 text-red-400" />
+                        <X aria-hidden="true" className="w-5 h-5 text-theme-accent-red" />
                       </button>
                     </div>
 
                     {/* Change button */}
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="mt-3 text-sm text-red-400 hover:text-red-300 font-medium transition-colors"
+                      className="mt-3 text-sm text-theme-accent-red hover:text-theme-accent-red font-medium transition-colors"
                     >
                       Change logo
                     </button>
@@ -282,7 +283,7 @@ const DepartmentInfo: React.FC = () => {
             </div>
 
             <p className="mt-2 text-xs text-theme-text-muted flex items-start">
-              <ImageIcon className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
+              <ImageIcon aria-hidden="true" className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
               <span>
                 Your logo will be displayed in the header and on reports. You can change it later in settings.
               </span>
@@ -339,7 +340,7 @@ const DepartmentInfo: React.FC = () => {
             Need help?{' '}
             <a
               href="/docs"
-              className="text-red-400 hover:text-red-300 underline"
+              className="text-theme-accent-red hover:text-theme-accent-red underline"
               target="_blank"
               rel="noopener noreferrer"
             >

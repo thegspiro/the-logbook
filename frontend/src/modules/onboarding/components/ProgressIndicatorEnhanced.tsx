@@ -30,7 +30,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
   const currentStepInfo = ONBOARDING_STEPS[currentStep - 1];
 
   return (
-    <div className={className}>
+    <div className={`max-w-2xl mx-auto w-full ${className}`}>
       {/* Current Step Label */}
       <div className="flex items-center justify-between text-sm mb-3">
         <span className="text-theme-text-muted">Setup Progress</span>
@@ -67,7 +67,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                     isCurrent
                       ? 'bg-red-600 text-white shadow-lg'
                       : isCompleted
-                      ? 'bg-green-600/20 text-green-700 dark:text-green-400'
+                      ? 'bg-theme-accent-green-muted text-theme-accent-green'
                       : 'bg-theme-input-bg text-theme-text-muted'
                   }`}
                 >
@@ -77,7 +77,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                       isCurrent
                         ? 'bg-white text-red-600'
                         : isCompleted
-                        ? 'bg-green-500 text-white'
+                        ? 'bg-green-600 text-white'
                         : 'bg-theme-surface-hover text-theme-text-muted'
                     }`}
                   >
@@ -103,7 +103,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                 {index < ONBOARDING_STEPS.length - 1 && (
                   <ChevronRight
                     className={`w-4 h-4 flex-shrink-0 ${
-                      isCompleted ? 'text-green-700 dark:text-green-400' : 'text-theme-text-muted'
+                      isCompleted ? 'text-theme-accent-green' : 'text-theme-text-muted'
                     }`}
                     aria-hidden="true"
                   />
@@ -117,7 +117,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
       {/* Completion Message */}
       {percentage === 100 && (
         <div className="mt-3 text-center">
-          <p className="text-green-700 dark:text-green-400 text-sm font-medium flex items-center justify-center space-x-2">
+          <p className="text-theme-accent-green text-sm font-medium flex items-center justify-center space-x-2">
             <Check className="w-4 h-4" aria-hidden="true" />
             <span>Setup Complete!</span>
           </p>

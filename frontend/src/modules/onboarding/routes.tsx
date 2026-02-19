@@ -10,10 +10,10 @@ import {
   FileStorageChoice,
   AuthenticationChoice,
   ITTeamBackupAccess,
-  RoleSetup,
+  PositionSetup,
   ModuleOverview,
   ModuleConfigTemplate,
-  AdminUserCreation,
+  SystemOwnerCreation,
 } from './pages';
 import { useOnboardingStore } from './store';
 
@@ -134,8 +134,10 @@ export const getOnboardingRoutes = () => {
     {/* Onboarding wizard - IT Team & Backup Access */}
     <Route path="/onboarding/it-team" element={<ITTeamBackupAccess />} />
 
-    {/* Onboarding wizard - Role Setup */}
-    <Route path="/onboarding/roles" element={<RoleSetup />} />
+    {/* Onboarding wizard - Position Setup */}
+    <Route path="/onboarding/positions" element={<PositionSetup />} />
+    {/* Legacy route redirect for roles */}
+    <Route path="/onboarding/roles" element={<Navigate to="/onboarding/positions" replace />} />
 
     {/* Onboarding wizard - Module Overview */}
     <Route path="/onboarding/modules" element={<ModuleOverview />} />
@@ -146,8 +148,10 @@ export const getOnboardingRoutes = () => {
     {/* Legacy route redirect */}
     <Route path="/onboarding/module-selection" element={<ModuleOverview />} />
 
-    {/* Onboarding wizard - Admin User Creation */}
-    <Route path="/onboarding/admin-user" element={<AdminUserCreation />} />
+    {/* Onboarding wizard - System Owner Creation */}
+    <Route path="/onboarding/system-owner" element={<SystemOwnerCreation />} />
+    {/* Legacy route redirect for admin-user */}
+    <Route path="/onboarding/admin-user" element={<Navigate to="/onboarding/system-owner" replace />} />
 
     {/* Security Check - Placeholder */}
     <Route path="/onboarding/security-check" element={<SecurityCheckPlaceholder />} />

@@ -1,16 +1,16 @@
 """
 Integration Tests for Onboarding Flow
 
-This module tests the critical onboarding process, especially the admin user
-creation with async role assignment that was causing the MissingGreenlet error.
+This module tests the critical onboarding process, especially the system owner
+creation with async position assignment that was causing the MissingGreenlet error.
 
 To run these tests:
     pytest tests/test_onboarding_integration.py -v -s
 
 Test Coverage:
-- Admin user creation with async role assignment (MissingGreenlet fix)
+- System owner creation with async position assignment (MissingGreenlet fix)
 - Organization creation
-- Default role creation
+- Default position creation
 - Onboarding status tracking
 """
 
@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.onboarding import OnboardingService
-from app.models.user import Organization, User, Role
+from app.models.user import Organization, User, Position
 from app.models.onboarding import OnboardingStatus
 
 
@@ -28,15 +28,15 @@ class TestOnboardingIntegration:
     """Integration tests for the onboarding flow"""
 
     @pytest.mark.asyncio
-    async def test_admin_user_creation_with_role_assignment(
+    async def test_system_owner_creation_with_position_assignment(
         self,
         db_session: AsyncSession,
     ):
         """
         CRITICAL TEST: Validates the fix for SQLAlchemy MissingGreenlet error.
 
-        This test ensures that admin user creation with role assignment works
-        correctly using async-compatible methods (await db.refresh(user, ['roles'])).
+        This test ensures that system owner creation with position assignment works
+        correctly using async-compatible methods (await db.refresh(user, ['positions'])).
         """
         service = OnboardingService(db_session)
 
@@ -62,19 +62,19 @@ class TestOnboardingIntegration:
         assert org is not None
         org_id = org.id
 
-        # Verify IT Administrator role exists (created automatically by create_organization)
+        # Verify IT Manager position exists (created automatically by create_organization)
         result = await db_session.execute(
-            select(Role).where(
-                Role.organization_id == org_id,
-                Role.slug == "it_administrator"
+            select(Position).where(
+                Position.organization_id == org_id,
+                Position.slug == "it_manager"
             )
         )
-        it_admin_role = result.scalar_one_or_none()
-        assert it_admin_role is not None, "IT Administrator role should be created"
+        it_manager_position = result.scalar_one_or_none()
+        assert it_manager_position is not None, "IT Manager position should be created"
 
-        # Create admin user - THIS IS THE CRITICAL TEST
+        # Create system owner - THIS IS THE CRITICAL TEST
         # This should NOT raise MissingGreenlet error
-        admin_data = {
+        owner_data = {
             "organization_id": org_id,
             "email": "admin@test.com",
             "username": "testadmin",
@@ -85,22 +85,22 @@ class TestOnboardingIntegration:
         }
 
         try:
-            user = await service.create_admin_user(**admin_data)
+            user = await service.create_system_owner(**owner_data)
         except Exception as e:
-            pytest.fail(f"Admin user creation raised exception: {type(e).__name__}: {e}")
+            pytest.fail(f"System owner creation raised exception: {type(e).__name__}: {e}")
 
         # Verify success
         assert user is not None
-        assert user.email == admin_data["email"]
-        assert user.username == admin_data["username"]
+        assert user.email == owner_data["email"]
+        assert user.username == owner_data["username"]
 
-        # CRITICAL: Verify the user has the IT Administrator role
-        # This tests that await db.refresh(user, ['roles']) worked correctly
-        await db_session.refresh(user, ['roles'])
-        assert len(user.roles) > 0, "User should have at least one role assigned"
+        # CRITICAL: Verify the user has the IT Manager position
+        # This tests that await db.refresh(user, ['positions']) worked correctly
+        await db_session.refresh(user, ['positions'])
+        assert len(user.positions) > 0, "User should have at least one position assigned"
 
-        role_slugs = [role.slug for role in user.roles]
-        assert "it_administrator" in role_slugs, "User should have IT Administrator role"
+        position_slugs = [pos.slug for pos in user.positions]
+        assert "it_manager" in position_slugs, "User should have IT Manager position"
 
     @pytest.mark.asyncio
     async def test_create_organization(
@@ -142,11 +142,11 @@ class TestOnboardingIntegration:
         assert db_org.name == org_data["name"]
 
     @pytest.mark.asyncio
-    async def test_default_roles_creation(
+    async def test_default_positions_creation(
         self,
         db_session: AsyncSession,
     ):
-        """Test that default roles are created correctly"""
+        """Test that default positions are created correctly"""
         service = OnboardingService(db_session)
 
         # Create organization
@@ -170,32 +170,32 @@ class TestOnboardingIntegration:
         org = await service.create_organization(**org_data)
         assert org is not None
 
-        # Verify roles were created (automatically by create_organization)
+        # Verify positions were created (automatically by create_organization)
         result = await db_session.execute(
-            select(Role).where(Role.organization_id == org.id)
+            select(Position).where(Position.organization_id == org.id)
         )
-        roles = result.scalars().all()
+        positions = result.scalars().all()
 
-        assert len(roles) > 0, "Default roles should be created"
+        assert len(positions) > 0, "Default positions should be created"
 
-        # Verify IT Administrator role exists (critical for admin user creation)
-        role_slugs = [r.slug for r in roles]
-        assert "it_administrator" in role_slugs, "IT Administrator role must exist"
+        # Verify IT Manager position exists (critical for system owner creation)
+        position_slugs = [p.slug for p in positions]
+        assert "it_manager" in position_slugs, "IT Manager position must exist"
 
-        # Find IT Administrator role and verify its properties
-        it_admin = next(r for r in roles if r.slug == "it_administrator")
-        assert it_admin.name == "IT Administrator"
-        assert it_admin.priority == 100
+        # Find IT Manager position and verify its properties
+        it_manager = next(p for p in positions if p.slug == "it_manager")
+        assert it_manager.name == "IT Manager"
+        assert it_manager.priority == 100
 
     @pytest.mark.asyncio
-    async def test_duplicate_admin_user_prevention(
+    async def test_duplicate_system_owner_prevention(
         self,
         db_session: AsyncSession,
     ):
-        """Test that duplicate admin users are prevented"""
+        """Test that duplicate system owners are prevented"""
         service = OnboardingService(db_session)
 
-        # Create organization and roles
+        # Create organization and positions
         unique_id = str(uuid.uuid4())[:8]
         org_data = {
             "name": "Test Fire Department 4",
@@ -215,8 +215,8 @@ class TestOnboardingIntegration:
 
         org = await service.create_organization(**org_data)
 
-        # Create first admin user (roles already created by create_organization)
-        admin_data = {
+        # Create first system owner (positions already created by create_organization)
+        owner_data = {
             "organization_id": org.id,
             "email": "admin4@test.com",
             "username": "testadmin4",
@@ -226,13 +226,13 @@ class TestOnboardingIntegration:
             "badge_number": "ADMIN-004",
         }
 
-        user1 = await service.create_admin_user(**admin_data)
+        user1 = await service.create_system_owner(**owner_data)
         assert user1 is not None
 
         # Try to create duplicate with same username
-        # Should raise ValueError since create_admin_user raises exceptions on error
+        # Should raise ValueError since create_system_owner raises exceptions on error
         with pytest.raises(ValueError):
-            user2 = await service.create_admin_user(**admin_data)
+            user2 = await service.create_system_owner(**owner_data)
 
     @pytest.mark.asyncio
     async def test_onboarding_status_tracking(
