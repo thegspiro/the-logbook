@@ -15,6 +15,7 @@ from app.models.location import Location
 from app.models.event import Event
 from app.models.user import User
 from app.schemas.location import LocationCreate, LocationUpdate
+from app.core.utils import generate_display_code
 
 
 class LocationService:
@@ -37,10 +38,14 @@ class LocationService:
         if existing:
             raise ValueError(f"Location with name '{location_data.name}' already exists")
 
+        # Generate a unique display code for public kiosk URLs
+        display_code = await self._generate_unique_display_code()
+
         # Create location
         location = Location(
             organization_id=organization_id,
             created_by=created_by,
+            display_code=display_code,
             **location_data.model_dump()
         )
 
@@ -249,3 +254,24 @@ class LocationService:
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    async def get_location_by_display_code(self, display_code: str) -> Optional[Location]:
+        """Look up a location by its public display code (for kiosk URLs)"""
+        result = await self.db.execute(
+            select(Location)
+            .where(Location.display_code == display_code)
+            .where(Location.is_active == True)
+        )
+        return result.scalar_one_or_none()
+
+    async def _generate_unique_display_code(self, max_attempts: int = 10) -> str:
+        """Generate a display code that doesn't collide with existing ones"""
+        for _ in range(max_attempts):
+            code = generate_display_code()
+            result = await self.db.execute(
+                select(Location.id).where(Location.display_code == code)
+            )
+            if result.scalar_one_or_none() is None:
+                return code
+        # Extremely unlikely — fall back to longer code
+        return generate_display_code(length=12)

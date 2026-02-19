@@ -55,11 +55,17 @@ async def list_locations(
         LocationListItem(
             id=UUID(loc.id),
             name=loc.name,
+            address=loc.address,
+            city=loc.city,
+            state=loc.state,
+            zip=loc.zip,
             building=loc.building,
             floor=loc.floor,
             room_number=loc.room_number,
             capacity=loc.capacity,
             is_active=loc.is_active,
+            facility_id=UUID(loc.facility_id) if loc.facility_id else None,
+            display_code=loc.display_code,
         )
         for loc in locations
     ]

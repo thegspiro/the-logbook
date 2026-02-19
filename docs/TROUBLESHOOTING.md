@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-18 (includes Training Admin compliance matrix fix — rewrote requirement matching to use type-aware evaluation with frequency-based date windows; My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-18 (includes security hardening — path traversal fix in event attachment downloads, AES-256 encryption for external training provider credentials, magic-byte MIME validation for document uploads, removal of insecure MinIO defaults; unified location architecture with facility bridge and training location dropdown; public kiosk display system for tablets with auto-refreshing QR codes; plus Training Admin compliance matrix fix — rewrote requirement matching to use type-aware evaluation with frequency-based date windows; My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -24,10 +24,11 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 12. [Documents Module Issues](#documents-module-issues)
 13. [Events Module Issues](#events-module-issues)
 14. [Facilities Module](#facilities-module)
-15. [Theme & Display Issues](#theme--display-issues)
-16. [Dashboard Issues](#dashboard-issues)
-17. [TypeScript Build Issues](#typescript-build-issues)
-18. [Error Message Reference](#error-message-reference)
+15. [Locations & Kiosk Display](#locations--kiosk-display)
+16. [Theme & Display Issues](#theme--display-issues)
+17. [Dashboard Issues](#dashboard-issues)
+18. [TypeScript Build Issues](#typescript-build-issues)
+19. [Error Message Reference](#error-message-reference)
 19. [Error Handling Patterns](#error-handling-patterns)
 20. [Getting Help](#getting-help)
 
@@ -1017,6 +1018,57 @@ All form submissions are automatically sanitized with DOMPurify to strip HTML/sc
 
 Login passwords must be at least **8 characters** (schema validation). New passwords during registration or reset must meet the full strength requirements (12+ characters, mixed case, numbers, special characters).
 
+#### Event Attachment Download: "Access denied"
+
+**Message**: `"Access denied"` (HTTP 403)
+
+**Cause**: The stored file path for the attachment resolved outside the allowed upload directory. This is a security safeguard against path traversal attacks.
+
+**Solutions**:
+- This error indicates data integrity issue — the `file_path` in the event's attachments JSON does not point to a file within `/app/uploads/event-attachments/`
+- Re-upload the attachment through the normal upload flow
+- If this occurs on previously uploaded files, check that the `ATTACHMENT_UPLOAD_DIR` path has not changed between deployments
+
+#### External Training Provider: Credentials Not Working After Update
+
+**Symptoms**: External training provider sync fails with authentication errors after upgrading to the latest version
+
+**Cause**: Provider API credentials (api_key, api_secret, client_secret) are now encrypted at rest using AES-256. Pre-existing plaintext credentials in the database should be handled transparently (the service falls back to plaintext if decryption fails), but if issues persist:
+
+**Solutions**:
+1. Re-save the provider credentials through the UI or API — this will encrypt them with the current key
+2. Verify `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables have not changed since the credentials were last saved
+3. Test the connection: `POST /api/v1/external-training/providers/{id}/test`
+
+#### Document Upload: "File type not allowed"
+
+**Message**: `"File type not allowed. Detected type: <mime-type>."`
+
+**Cause**: Document uploads are now validated using magic-byte detection (inspecting actual file content) rather than trusting the HTTP `Content-Type` header. The detected MIME type is not in the allowed list.
+
+**Allowed types**: PDF, Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), text, CSV, images (JPEG, PNG, GIF, WebP), ZIP archives.
+
+**Solutions**:
+- Verify the file is a genuinely supported format (not just renamed with a supported extension)
+- If the file is a valid format but being rejected, the file may be corrupted — try re-exporting or re-saving it
+- For uncommon but legitimate file types, contact your administrator to request the type be added to the allowlist
+
+#### MinIO: Container Fails to Start
+
+**Message**: `MINIO_ROOT_USER must be set in .env` or `MINIO_ROOT_PASSWORD must be set in .env`
+
+**Cause**: MinIO credentials are no longer provided as insecure defaults in docker-compose.yml. They must be explicitly set in your `.env` file.
+
+**Solutions**:
+```bash
+# Add to your .env file:
+MINIO_ROOT_USER=your_minio_admin_user
+MINIO_ROOT_PASSWORD=your_secure_minio_password
+
+# Generate a secure password:
+openssl rand -hex 24
+```
+
 ---
 
 ## Documents Module
@@ -1579,6 +1631,35 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Tip**: Use `GET /api/v1/users/{user_id}/property-return-report` to preview the report without changing the member's status. This is useful for reviewing assigned items and values before performing the actual drop.
 
 **For full configuration documentation, see [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md).**
+
+#### Pool Items vs. Individual Items
+
+**Understanding `tracking_type`**: Inventory items have two tracking modes:
+- **`individual`** (default): Each item is a unique, serialized record assigned 1:1 to a member (e.g., a specific radio with serial number). Use `POST /inventory/items/{id}/assign` and `/unassign`.
+- **`pool`**: A quantity-tracked pool (e.g., "Dept T-Shirt Medium, qty: 20"). Units are issued to members and the on-hand count decrements automatically. Use `POST /inventory/items/{id}/issue` and `POST /inventory/issuances/{id}/return`.
+
+**Common Scenario**: "I have 20 t-shirts and want to give one to a member"
+1. Create the item with `tracking_type: "pool"` and `quantity: 20`
+2. Issue to a member: `POST /inventory/items/{id}/issue` with `{ "user_id": "...", "quantity": 1 }`
+3. On-hand quantity becomes 19, `quantity_issued` becomes 1
+4. When the member returns it: `POST /inventory/issuances/{issuance_id}/return`
+
+#### Pool Issue: "Item is not a pool-tracked item"
+
+**Cause**: You tried to issue from an item with `tracking_type: "individual"`. The `/issue` endpoint only works for pool items.
+
+**Solutions**:
+- Change the item's tracking type: `PATCH /inventory/items/{id}` with `{ "tracking_type": "pool" }`
+- If the item has a serial number and should be tracked individually, use `POST /inventory/items/{id}/assign` instead
+
+#### Pool Issue: "Insufficient stock"
+
+**Cause**: The requested quantity exceeds the item's current on-hand `quantity`.
+
+**Solutions**:
+- Check current stock: `GET /inventory/items/{id}` — the `quantity` field shows available on-hand units
+- To see who has issued units: `GET /inventory/items/{id}/issuances`
+- Collect returns from members or increase the pool quantity via `PATCH /inventory/items/{id}` with `{ "quantity": <new_total> }`
 
 #### Membership Tier: Member Not Auto-Advancing
 
@@ -2971,6 +3052,109 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 2. **RSVP limit reached**: The event may have reached its maximum RSVP capacity. Admins can use RSVP override to bypass limits.
 
 3. **Missing `events.view` permission**: Users need at least view permission to RSVP.
+
+---
+
+## Locations & Kiosk Display
+
+### Overview
+
+The Locations system serves as the universal "place picker" across all modules (Events, Training, Meetings). Each location gets a unique display code for public kiosk/tablet URLs. When the Facilities module is enabled, locations can optionally link to Facility records via `facility_id` for deep building management data.
+
+**API Endpoints**: `/api/v1/locations/` (authenticated), `/api/public/v1/display/{code}` (public)
+**Permissions**: `locations.create`, `locations.edit`, `locations.delete`, `locations.manage`
+
+### Setting Up a Tablet Kiosk Display
+
+1. **Create locations** via the Locations page or the Setup Wizard (Settings > Locations).
+2. **Find the display code** — each room card shows its kiosk URL (e.g., `/display/x7k9m2p3`). Click it to copy.
+3. **Bookmark on the tablet** — open the URL in the tablet's browser and add to home screen. No login required.
+4. **Create events at that location** — when events are scheduled in that room, the QR code appears automatically within the check-in window (1 hour before start until event end).
+
+### Common Issues
+
+#### Kiosk Display Shows "Display Not Found"
+
+**Causes**:
+1. The display code in the URL is incorrect
+2. The location has been deactivated (`is_active = false`)
+3. Migration `20260218_0900` has not been applied (display codes not backfilled)
+
+**Solutions**:
+- Verify the display code on the Locations page — check the room card for the correct URL
+- Re-activate the location if it was deactivated
+- Run migrations: `docker exec the-logbook-backend-1 alembic upgrade head`
+
+---
+
+#### Kiosk Display Shows "No Active Events" When Event Is Scheduled
+
+**Causes**:
+1. The event is not assigned to this location (different `location_id` or uses free-text location)
+2. The event's check-in window hasn't opened yet (opens 1 hour before start)
+3. The event has been cancelled
+4. The event has ended (or was ended early by an admin)
+
+**Solutions**:
+- Verify the event's location is set to this room (not "Other Location" free-text)
+- Wait until 1 hour before the event start time
+- Check that the event is not cancelled in the Events list
+
+---
+
+#### Kiosk Display Shows "Unable to Connect"
+
+**Causes**:
+1. Tablet has lost Wi-Fi connectivity
+2. Backend server is down or unreachable
+
+**Solutions**:
+- Check the tablet's Wi-Fi connection
+- The display auto-retries every 30 seconds — it will reconnect when connectivity is restored
+- The red pulsing Wi-Fi icon in the header indicates a connection problem
+
+---
+
+#### Training Sessions Don't Show QR Codes on Kiosk
+
+**Causes**:
+1. Training session was created with "Other Location" (free-text) instead of selecting from the dropdown
+2. Training session location doesn't match the kiosk room
+
+**Solutions**:
+- When creating a training session, select the room from the location dropdown instead of typing manually
+- Edit the training event and update its location to the correct room
+
+---
+
+#### Display Code Missing for Existing Locations
+
+**Causes**:
+1. Location was created before migration `20260218_0900`
+2. Migration didn't run successfully
+
+**Solutions**:
+```bash
+# Run the migration to backfill display codes
+docker exec the-logbook-backend-1 alembic upgrade head
+
+# Verify display codes exist
+docker exec the-logbook-db-1 mysql -u root -p the_logbook \
+  -e "SELECT name, display_code FROM locations;"
+```
+
+---
+
+#### Locations Don't Appear in Training Session Dropdown
+
+**Causes**:
+1. No active locations exist (all deactivated)
+2. Locations haven't been set up yet
+
+**Solutions**:
+- Set up locations via the Setup Wizard (Settings > Locations)
+- Ensure locations are active (`is_active = true`)
+- The dropdown falls back to free-text input when no locations are available
 
 ---
 

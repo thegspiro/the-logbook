@@ -21,6 +21,9 @@ Recommended crontab (add to host or container cron):
 
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
+
+# Every 15 minutes — process delayed inventory change notifications
+*/15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_notifications
 -----------------------------------------------------
 """
 
@@ -64,6 +67,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:00",
         "cron": "0 7 * * *",
+    },
+    "inventory_notifications": {
+        "description": "Process delayed inventory change notifications — consolidate and send one email per member for changes older than 1 hour",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15 * * * *",
+        "cron": "*/15 * * * *",
     },
 }
 
@@ -257,6 +266,24 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "action_item_reminders", "total_reminders": total_reminders}
 
 
+async def run_inventory_notifications(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Process delayed inventory change notifications.
+
+    Finds queue records older than 1 hour, groups by member,
+    nets out offsetting actions, and sends consolidated emails.
+    """
+    from app.services.inventory_notification_service import InventoryNotificationService
+
+    try:
+        service = InventoryNotificationService(db)
+        result = await service.process_pending_notifications(delay_minutes=60)
+        return result
+    except Exception as e:
+        logger.error(f"Inventory notification processing failed: {e}")
+        return {"task": "inventory_notifications", "error": str(e)}
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -264,4 +291,5 @@ TASK_RUNNERS = {
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
     "membership_tier_advance": run_membership_tier_advance,
     "action_item_reminders": run_action_item_reminders,
+    "inventory_notifications": run_inventory_notifications,
 }

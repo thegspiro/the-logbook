@@ -249,7 +249,8 @@ class TrainingRecord(Base):
 
     # Instructor and Location
     instructor = Column(String(255))
-    location = Column(String(255))
+    location_id = Column(String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
+    location = Column(String(255))  # Free-text fallback for "Other Location" or legacy records
 
     # Cross-module link: which apparatus was used for this training
     apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
@@ -272,11 +273,13 @@ class TrainingRecord(Base):
 
     # Relationships
     course = relationship("TrainingCourse", back_populates="training_records")
+    location_obj = relationship("Location", foreign_keys=[location_id])
 
     __table_args__ = (
         Index('idx_record_user_status', 'user_id', 'status'),
         Index('idx_record_completion', 'completion_date'),
         Index('idx_record_expiration', 'expiration_date'),
+        Index('idx_record_location', 'location_id'),
     )
 
     def __repr__(self):

@@ -52,6 +52,31 @@ async def get_current_user(
     return user
 
 
+def _has_permission(required: str, user_permissions: set) -> bool:
+    """
+    Check if a single required permission is satisfied by the user's permissions.
+
+    Supports three levels of matching:
+    1. Global wildcard: ``"*"`` in user_permissions grants everything.
+    2. Module wildcard: ``"settings.*"`` in user_permissions matches any
+       ``"settings.<action>"`` requirement (e.g. ``"settings.manage_contact_visibility"``).
+    3. Exact match: ``"settings.edit"`` matches ``"settings.edit"``.
+    """
+    if "*" in user_permissions:
+        return True
+
+    if required in user_permissions:
+        return True
+
+    # Module-level wildcard: "settings.*" covers "settings.manage_contact_visibility"
+    if "." in required:
+        module = required.split(".")[0]
+        if f"{module}.*" in user_permissions:
+            return True
+
+    return False
+
+
 class PermissionChecker:
     """
     Dependency class for checking user permissions using OR logic.
@@ -79,12 +104,8 @@ class PermissionChecker:
         for role in current_user.roles:
             user_permissions.update(role.permissions or [])
 
-        # Wildcard "*" grants all permissions (IT Administrator)
-        if "*" in user_permissions:
-            return current_user
-
         for perm in self.required_permissions:
-            if perm in user_permissions:
+            if _has_permission(perm, user_permissions):
                 return current_user
 
         raise HTTPException(
@@ -119,11 +140,7 @@ class AllPermissionChecker:
         for role in current_user.roles:
             user_permissions.update(role.permissions or [])
 
-        # Wildcard "*" grants all permissions (IT Administrator)
-        if "*" in user_permissions:
-            return current_user
-
-        missing = [p for p in self.required_permissions if p not in user_permissions]
+        missing = [p for p in self.required_permissions if not _has_permission(p, user_permissions)]
         if missing:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -196,6 +213,7 @@ async def get_user_organization(
 def require_secretary():
     """Require user to have secretary permissions"""
     return require_permission(
+        "settings.manage",
         "settings.manage_contact_visibility",
         "organization.update_settings"
     )

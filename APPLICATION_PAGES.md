@@ -14,6 +14,7 @@ Complete reference of all pages in the application, organized by module.
 | `/reset-password` | Reset Password | Password reset form |
 | `/f/:slug` | Public Form | Public form submission (token-based) |
 | `/ballot` | Ballot Voting | Public ballot voting (token-based) |
+| `/display/:code` | Location Kiosk Display | QR code display for tablets in rooms (display-code-based) |
 
 ---
 
@@ -94,6 +95,26 @@ Complete reference of all pages in the application, organized by module.
 | `/events/:id/monitoring` | Check-In Monitoring | `events.manage` |
 | `/events/:id/analytics` | Event Analytics | `analytics.view` |
 | `/events/settings` | Events Module Settings | `events.manage` |
+
+---
+
+## Locations (when Facilities module is off)
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/locations` | Locations Management | Authenticated |
+
+> Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in.
+
+---
+
+## Facilities (when Facilities module is on)
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/facilities` | Facilities Management | `facilities.view` |
+
+> Full building management including maintenance scheduling, utility tracking, inspections, key management, compliance, and capital projects. Replaces the Locations page when enabled. Locations created through either module are linked via `facility_id` so all event/training location references remain consistent.
 
 ---
 

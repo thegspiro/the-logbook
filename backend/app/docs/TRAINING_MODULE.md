@@ -121,6 +121,9 @@ Individual member training history.
 - `status`: scheduled | in_progress | completed | cancelled | failed
 - `score`: Test score (optional)
 - `passed`: Pass/fail status
+- `location_id`: FK to `locations` table (optional) — references a wizard-created location. When set, provides consistent location data across the app. The existing `location` text field is preserved as a fallback for "Other Location" or legacy records.
+- `location`: Free-text location string (fallback for non-standard locations)
+- `apparatus_id`: FK to apparatus used for this training (optional)
 
 ### TrainingRequirement
 Requirements that members must complete.

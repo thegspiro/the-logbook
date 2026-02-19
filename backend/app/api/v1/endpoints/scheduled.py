@@ -17,12 +17,12 @@ router = APIRouter()
 
 @router.get("/tasks")
 async def list_scheduled_tasks(
-    current_user: User = Depends(require_permission("admin")),
+    current_user: User = Depends(require_permission("admin.access", "settings.manage")),
 ):
     """
     List all available scheduled tasks with their recommended cron schedule.
 
-    **Requires admin permission**
+    **Requires admin.access or settings.manage permission**
     """
     return {
         "tasks": [
@@ -36,7 +36,7 @@ async def list_scheduled_tasks(
 async def run_scheduled_task(
     task: str = Query(..., description="Task ID to run (e.g. cert_expiration_alerts)"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("admin")),
+    current_user: User = Depends(require_permission("admin.access", "settings.manage")),
 ):
     """
     Manually trigger a scheduled task.
@@ -46,6 +46,7 @@ async def run_scheduled_task(
     - `struggling_member_check` — Detect members falling behind (weekly)
     - `enrollment_deadline_warnings` — Warn approaching deadlines (weekly)
     - `membership_tier_advance` — Auto-advance membership tiers (monthly)
+    - `inventory_notifications` — Process delayed inventory change emails (every 15 min)
 
     **Requires admin permission**
     """

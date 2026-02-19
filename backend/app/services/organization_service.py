@@ -164,11 +164,21 @@ class OrganizationService:
             next_number=membership_id.get("next_number", 1),
         )
 
+        # Collect extra/custom settings (e.g. station_mode) that aren't
+        # covered by a dedicated sub-schema so they round-trip through the API.
+        known_keys = {
+            "contact_info_visibility", "email_service", "auth", "modules",
+            "it_team", "member_drop_notifications", "membership_tiers",
+            "membership_id",
+        }
+        extra_settings = {k: v for k, v in settings_dict.items() if k not in known_keys}
+
         return OrganizationSettings(
             contact_info_visibility=contact_settings,
             email_service=email_settings,
             modules=module_settings,
             membership_id=membership_id_settings,
+            **extra_settings,
         )
 
     async def update_organization_settings(

@@ -1661,9 +1661,19 @@ export interface UserCheckoutItem {
   is_overdue: boolean;
 }
 
+export interface UserIssuedItem {
+  issuance_id: string;
+  item_id: string;
+  item_name: string;
+  quantity_issued: number;
+  issued_at: string;
+  size?: string;
+}
+
 export interface UserInventoryResponse {
   permanent_assignments: UserInventoryItem[];
   active_checkouts: UserCheckoutItem[];
+  issued_items: UserIssuedItem[];
 }
 
 export interface InventoryCategory {
@@ -1702,7 +1712,9 @@ export interface InventoryItem {
   condition: string;
   status: string;
   status_notes?: string;
+  tracking_type: string;  // "individual" or "pool"
   quantity: number;
+  quantity_issued: number;
   unit_of_measure?: string;
   last_inspection_date?: string;
   next_inspection_due?: string;
@@ -1730,10 +1742,29 @@ export interface InventoryItemCreate {
   station?: string;
   condition?: string;
   status?: string;
+  tracking_type?: string;
   quantity?: number;
   unit_of_measure?: string;
   inspection_interval_days?: number;
   notes?: string;
+}
+
+export interface ItemIssuance {
+  id: string;
+  organization_id: string;
+  item_id: string;
+  user_id: string;
+  quantity_issued: number;
+  issued_at: string;
+  returned_at?: string;
+  issued_by?: string;
+  returned_by?: string;
+  issue_reason?: string;
+  return_condition?: string;
+  return_notes?: string;
+  is_returned: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface InventoryItemsListResponse {
@@ -1761,6 +1792,71 @@ export interface InventoryCategoryCreate {
   requires_serial_number?: boolean;
   requires_maintenance?: boolean;
   low_stock_threshold?: number;
+}
+
+// Scan / Quick-Action Types
+export interface ScanLookupResponse {
+  item: InventoryItem;
+  matched_field: string;
+  matched_value: string;
+}
+
+export interface BatchScanItem {
+  code: string;
+  quantity?: number;
+}
+
+export interface BatchCheckoutRequest {
+  user_id: string;
+  items: BatchScanItem[];
+  reason?: string;
+}
+
+export interface BatchCheckoutResultItem {
+  code: string;
+  item_name: string;
+  item_id: string;
+  action: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface BatchCheckoutResponse {
+  user_id: string;
+  total_scanned: number;
+  successful: number;
+  failed: number;
+  results: BatchCheckoutResultItem[];
+}
+
+export interface BatchReturnItem {
+  code: string;
+  return_condition?: string;
+  damage_notes?: string;
+  quantity?: number;
+}
+
+export interface BatchReturnRequest {
+  user_id: string;
+  items: BatchReturnItem[];
+  notes?: string;
+}
+
+export interface BatchReturnResultItem {
+  code: string;
+  item_name: string;
+  item_id: string;
+  action: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface BatchReturnResponse {
+  user_id: string;
+  total_scanned: number;
+  successful: number;
+  failed: number;
+  results: BatchReturnResultItem[];
 }
 
 export const inventoryService = {
@@ -1856,6 +1952,57 @@ export const inventoryService = {
 
   async getLowStockItems(): Promise<InventoryItem[]> {
     const response = await api.get<InventoryItem[]>('/inventory/low-stock');
+    return response.data;
+  },
+
+  // Pool item issuance
+  async issueFromPool(itemId: string, userId: string, quantity: number = 1, issueReason?: string): Promise<ItemIssuance> {
+    const response = await api.post<ItemIssuance>(`/inventory/items/${itemId}/issue`, {
+      user_id: userId,
+      quantity,
+      issue_reason: issueReason,
+    });
+    return response.data;
+  },
+
+  async returnToPool(issuanceId: string, options?: { return_condition?: string; return_notes?: string; quantity_returned?: number }): Promise<{ message: string }> {
+    const response = await api.post(`/inventory/issuances/${issuanceId}/return`, {
+      return_condition: options?.return_condition,
+      return_notes: options?.return_notes,
+      quantity_returned: options?.quantity_returned,
+    });
+    return response.data;
+  },
+
+  async getItemIssuances(itemId: string, activeOnly: boolean = true): Promise<ItemIssuance[]> {
+    const response = await api.get<ItemIssuance[]>(`/inventory/items/${itemId}/issuances`, {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  async getUserIssuances(userId: string, activeOnly: boolean = true): Promise<ItemIssuance[]> {
+    const response = await api.get<ItemIssuance[]>(`/inventory/users/${userId}/issuances`, {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  // Barcode scan / quick-action methods
+  async lookupByCode(code: string): Promise<ScanLookupResponse> {
+    const response = await api.get<ScanLookupResponse>('/inventory/lookup', {
+      params: { code },
+    });
+    return response.data;
+  },
+
+  async batchCheckout(data: BatchCheckoutRequest): Promise<BatchCheckoutResponse> {
+    const response = await api.post<BatchCheckoutResponse>('/inventory/batch-checkout', data);
+    return response.data;
+  },
+
+  async batchReturn(data: BatchReturnRequest): Promise<BatchReturnResponse> {
+    const response = await api.post<BatchReturnResponse>('/inventory/batch-return', data);
     return response.data;
   },
 };
@@ -3117,6 +3264,8 @@ export interface Location {
   floor?: string;
   room_number?: string;
   capacity?: number;
+  facility_id?: string;
+  display_code?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;

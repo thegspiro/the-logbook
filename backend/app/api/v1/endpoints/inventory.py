@@ -5,7 +5,7 @@ Endpoints for inventory management including categories, items, assignments,
 checkouts, maintenance, and reporting.
 """
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
@@ -31,6 +31,10 @@ from app.schemas.inventory import (
     ItemAssignmentCreate,
     ItemAssignmentResponse,
     UnassignItemRequest,
+    # Issuance schemas
+    ItemIssuanceCreate,
+    ItemIssuanceResponse,
+    ItemIssuanceReturnRequest,
     # Checkout schemas
     CheckOutCreate,
     CheckOutRecordResponse,
@@ -44,8 +48,22 @@ from app.schemas.inventory import (
     InventorySummary,
     LowStockItem,
     UserInventoryResponse,
+    # Departure clearance schemas
+    DepartureClearanceCreate,
+    DepartureClearanceResponse,
+    DepartureClearanceSummaryResponse,
+    ClearanceLineItemResponse,
+    ResolveClearanceItemRequest,
+    CompleteClearanceRequest,
+    # Scan / quick-action schemas
+    ScanLookupResponse,
+    BatchCheckoutRequest,
+    BatchCheckoutResponse,
+    BatchReturnRequest,
+    BatchReturnResponse,
 )
 from app.services.inventory_service import InventoryService
+from app.services.departure_clearance_service import DepartureClearanceService
 from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
@@ -440,6 +458,141 @@ async def get_user_assignments(
 
 
 # ============================================
+# Pool Item Issuance Endpoints
+# ============================================
+
+@router.post("/items/{item_id}/issue", response_model=ItemIssuanceResponse, status_code=status.HTTP_201_CREATED)
+async def issue_from_pool(
+    item_id: UUID,
+    issuance_data: ItemIssuanceCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Issue units from a pool-tracked item to a member.
+
+    Decrements the item's on-hand quantity and creates an issuance record.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    issuance, error = await service.issue_from_pool(
+        item_id=item_id,
+        user_id=issuance_data.user_id,
+        organization_id=current_user.organization_id,
+        issued_by=current_user.id,
+        quantity=issuance_data.quantity,
+        reason=issuance_data.issue_reason,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_pool_issued",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "user_id": str(issuance_data.user_id),
+            "quantity": issuance_data.quantity,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return issuance
+
+
+@router.post("/issuances/{issuance_id}/return", status_code=status.HTTP_200_OK)
+async def return_to_pool(
+    issuance_id: UUID,
+    return_data: ItemIssuanceReturnRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Return issued units back to the pool.
+
+    Increments the item's on-hand quantity and closes the issuance record.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    from app.models.inventory import ItemCondition
+    return_condition = None
+    if return_data.return_condition:
+        return_condition = ItemCondition(return_data.return_condition)
+
+    service = InventoryService(db)
+    success, error = await service.return_to_pool(
+        issuance_id=issuance_id,
+        organization_id=current_user.organization_id,
+        returned_by=current_user.id,
+        return_condition=return_condition,
+        return_notes=return_data.return_notes,
+        quantity_returned=return_data.quantity_returned,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return {"message": "Items returned to pool successfully"}
+
+
+@router.get("/items/{item_id}/issuances", response_model=List[ItemIssuanceResponse])
+async def get_item_issuances(
+    item_id: UUID,
+    active_only: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get issuance records for a pool item (who has been issued units).
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    issuances = await service.get_item_issuances(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+        active_only=active_only,
+    )
+    return issuances
+
+
+@router.get("/users/{user_id}/issuances", response_model=List[ItemIssuanceResponse])
+async def get_user_issuances(
+    user_id: UUID,
+    active_only: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get all pool items issued to a specific user.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    issuances = await service.get_user_issuances(
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+        active_only=active_only,
+    )
+    return issuances
+
+
+# ============================================
 # Check-Out/Check-In Endpoints
 # ============================================
 
@@ -694,3 +847,401 @@ async def get_user_inventory(
         organization_id=current_user.organization_id,
     )
     return inventory
+
+
+# ============================================
+# Barcode Scan & Quick-Action Endpoints
+# ============================================
+
+@router.get("/lookup", response_model=ScanLookupResponse)
+async def lookup_item_by_code(
+    code: str = Query(..., min_length=1, description="Barcode, serial number, or asset tag"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Look up an inventory item by barcode, serial number, or asset tag.
+
+    Designed for barcode scanner workflows — pass whatever the scanner
+    reads and this endpoint will find the matching item. Checks barcode
+    first, then serial number, then asset tag.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    result = await service.lookup_by_code(
+        code=code,
+        organization_id=current_user.organization_id,
+    )
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No item found matching '{code}'",
+        )
+
+    item, matched_field, matched_value = result
+    return ScanLookupResponse(
+        item=item,
+        matched_field=matched_field,
+        matched_value=matched_value,
+    )
+
+
+@router.post("/batch-checkout", response_model=BatchCheckoutResponse)
+async def batch_checkout_items(
+    request: BatchCheckoutRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Assign/checkout/issue multiple scanned items to a member in one operation.
+
+    The quartermaster scans multiple barcodes, building a list, then submits
+    the batch. Each item is processed based on its tracking type:
+    - **Individual + available** → permanently assigned
+    - **Pool item** → units issued from the pool
+    - Items that are already assigned or unavailable will fail individually
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    result = await service.batch_checkout(
+        user_id=request.user_id,
+        organization_id=current_user.organization_id,
+        performed_by=current_user.id,
+        items=[item.model_dump() for item in request.items],
+        reason=request.reason,
+    )
+
+    if result["successful"] > 0:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_batch_checkout",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "user_id": str(request.user_id),
+                "total_scanned": result["total_scanned"],
+                "successful": result["successful"],
+                "failed": result["failed"],
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return result
+
+
+@router.post("/batch-return", response_model=BatchReturnResponse)
+async def batch_return_items(
+    request: BatchReturnRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Return multiple scanned items from a member in one operation.
+
+    The quartermaster scans each item the member is turning in, building
+    a list, then submits the batch. Each item is matched to its current
+    assignment, checkout, or pool issuance and the appropriate return
+    operation is performed.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    result = await service.batch_return(
+        user_id=request.user_id,
+        organization_id=current_user.organization_id,
+        performed_by=current_user.id,
+        items=[item.model_dump() for item in request.items],
+        notes=request.notes,
+    )
+
+    if result["successful"] > 0:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_batch_return",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "user_id": str(request.user_id),
+                "total_scanned": result["total_scanned"],
+                "successful": result["successful"],
+                "failed": result["failed"],
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return result
+
+
+# ============================================
+# Departure Clearance Endpoints
+# ============================================
+
+@router.post("/clearances", response_model=DepartureClearanceResponse, status_code=status.HTTP_201_CREATED)
+async def initiate_departure_clearance(
+    clearance_data: DepartureClearanceCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Initiate a departure clearance for a member who is leaving.
+
+    Snapshots all outstanding items (permanent assignments, active checkouts,
+    unreturned pool issuances) into clearance line items that can be
+    individually resolved as the member turns in gear.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = DepartureClearanceService(db)
+    clearance, error = await service.initiate_clearance(
+        user_id=str(clearance_data.user_id),
+        organization_id=str(current_user.organization_id),
+        initiated_by=str(current_user.id),
+        departure_type=clearance_data.departure_type,
+        return_deadline_days=clearance_data.return_deadline_days,
+        notes=clearance_data.notes,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="departure_clearance_initiated",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "clearance_id": str(clearance.id),
+            "member_user_id": str(clearance_data.user_id),
+            "total_items": clearance.total_items,
+            "total_value": float(clearance.total_value),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return clearance
+
+
+@router.get("/clearances", response_model=Dict)
+async def list_departure_clearances(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    List all departure clearances for the organization.
+
+    Optionally filter by status: initiated, in_progress, completed, closed_incomplete.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = DepartureClearanceService(db)
+    summaries, total = await service.list_clearances(
+        organization_id=str(current_user.organization_id),
+        status_filter=status_filter,
+        skip=skip,
+        limit=limit,
+    )
+    return {
+        "clearances": summaries,
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/clearances/{clearance_id}", response_model=DepartureClearanceResponse)
+async def get_departure_clearance(
+    clearance_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get a departure clearance with all line items.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = DepartureClearanceService(db)
+    clearance = await service.get_clearance(
+        clearance_id=str(clearance_id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    if not clearance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clearance not found",
+        )
+
+    return clearance
+
+
+@router.get("/users/{user_id}/clearance", response_model=DepartureClearanceResponse)
+async def get_user_departure_clearance(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the active departure clearance for a specific member.
+
+    Members can view their own clearance. Staff with inventory.view
+    can view any member's clearance.
+
+    **Authentication required**
+    """
+    if str(user_id) != str(current_user.id):
+        has_permission = any(
+            "inventory.view" in [p.name for p in role.permissions]
+            for role in current_user.roles
+        )
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view this member's clearance",
+            )
+
+    service = DepartureClearanceService(db)
+    clearance = await service.get_clearance_for_user(
+        user_id=str(user_id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    if not clearance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active departure clearance found for this member",
+        )
+
+    return clearance
+
+
+@router.post(
+    "/clearances/{clearance_id}/items/{item_id}/resolve",
+    response_model=ClearanceLineItemResponse,
+)
+async def resolve_clearance_item(
+    clearance_id: UUID,
+    item_id: UUID,
+    resolve_data: ResolveClearanceItemRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Resolve a single clearance line item.
+
+    Dispositions:
+    - **returned** — item physically returned in acceptable condition
+    - **returned_damaged** — item returned but damaged
+    - **written_off** — item lost or unreturnable, written off
+    - **waived** — department chose not to require return
+
+    For 'returned' and 'returned_damaged', the underlying inventory
+    operation (unassign, check-in, or pool return) is performed
+    automatically.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = DepartureClearanceService(db)
+    line_item, error = await service.resolve_line_item(
+        clearance_item_id=str(item_id),
+        organization_id=str(current_user.organization_id),
+        resolved_by=str(current_user.id),
+        disposition=resolve_data.disposition,
+        return_condition=resolve_data.return_condition,
+        resolution_notes=resolve_data.resolution_notes,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="clearance_item_resolved",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "clearance_id": str(clearance_id),
+            "clearance_item_id": str(item_id),
+            "item_name": line_item.item_name,
+            "disposition": resolve_data.disposition,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return line_item
+
+
+@router.post("/clearances/{clearance_id}/complete", response_model=DepartureClearanceResponse)
+async def complete_departure_clearance(
+    clearance_id: UUID,
+    complete_data: CompleteClearanceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Complete (close) a departure clearance.
+
+    If all line items are resolved, the clearance is marked as 'completed'.
+    If items are still pending and force_close is True, the clearance is
+    marked as 'closed_incomplete' (e.g. items written off by leadership).
+
+    After completion, the auto-archive check runs — if the member has
+    dropped status and no remaining outstanding items, they are
+    automatically archived.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = DepartureClearanceService(db)
+    clearance, error = await service.complete_clearance(
+        clearance_id=str(clearance_id),
+        organization_id=str(current_user.organization_id),
+        completed_by=str(current_user.id),
+        force_close=complete_data.force_close,
+        notes=complete_data.notes,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="departure_clearance_completed",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "clearance_id": str(clearance_id),
+            "status": clearance.status.value,
+            "items_cleared": clearance.items_cleared,
+            "items_outstanding": clearance.items_outstanding,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return clearance
