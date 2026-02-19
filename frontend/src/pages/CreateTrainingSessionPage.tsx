@@ -32,7 +32,7 @@ const CreateTrainingSessionPage: React.FC = () => {
   const tz = useTimezone();
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [availableCourses] = useState<TrainingCourse[]>([]);
+  const [availableCourses, setAvailableCourses] = useState<TrainingCourse[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string }>>([]);
   const [instructorId, setInstructorId] = useState('');
@@ -90,7 +90,7 @@ const CreateTrainingSessionPage: React.FC = () => {
     setFormData({ ...formData, [field]: value });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validation
     if (!formData.title || !formData.start_datetime || !formData.end_datetime) {
       toast.error('Please fill in all required fields');

@@ -297,6 +297,7 @@ class User(Base):
         Index('idx_user_org_username', 'organization_id', 'username', unique=True),
         Index('idx_user_org_email', 'organization_id', 'email', unique=True),
         Index('idx_user_org_membership_number', 'organization_id', 'membership_number', unique=True),
+        Index('idx_user_org_badge_number', 'organization_id', 'badge_number', unique=True),
     )
 
     # Backward-compatible alias so ``selectinload(User.roles)`` and
