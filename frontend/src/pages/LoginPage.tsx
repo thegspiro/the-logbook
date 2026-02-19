@@ -204,7 +204,7 @@ export const LoginPage: React.FC = () => {
                 aria-describedby={formErrors.username ? 'username-error' : undefined}
                 className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
                   formErrors.username ? 'border-red-300' : 'border-theme-input-border'
-                } placeholder-theme-text-muted text-theme-text-primary rounded-t-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
+                } bg-theme-input-bg placeholder-theme-text-muted text-theme-text-primary rounded-t-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
                 placeholder="Username or Email"
                 value={formData.username}
                 onChange={handleChange}
@@ -228,7 +228,7 @@ export const LoginPage: React.FC = () => {
                 aria-describedby={formErrors.password ? 'password-error' : undefined}
                 className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
                   formErrors.password ? 'border-red-300' : 'border-theme-input-border'
-                } placeholder-theme-text-muted text-theme-text-primary rounded-b-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
+                } bg-theme-input-bg placeholder-theme-text-muted text-theme-text-primary rounded-b-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
                 placeholder="Password"
                 value={formData.password}
                 onChange={handleChange}
