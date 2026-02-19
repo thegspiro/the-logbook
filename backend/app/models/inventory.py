@@ -81,6 +81,12 @@ class AssignmentType(str, enum.Enum):
     TEMPORARY = "temporary"  # Temporary checkout
 
 
+class TrackingType(str, enum.Enum):
+    """How inventory items are tracked"""
+    INDIVIDUAL = "individual"  # Unique item with serial number, assigned 1:1 to a member
+    POOL = "pool"  # Quantity-tracked pool; units are issued to members and returned
+
+
 class InventoryCategory(Base):
     """
     Inventory Category model
@@ -178,8 +184,17 @@ class InventoryItem(Base):
     status = Column(Enum(ItemStatus, values_callable=lambda x: [e.value for e in x]), default=ItemStatus.AVAILABLE, nullable=False, index=True)
     status_notes = Column(Text)
 
-    # Quantity (for consumables or bulk items)
-    quantity = Column(Integer, default=1)
+    # Tracking mode: "individual" (serial-numbered, 1:1 assignment) or "pool" (quantity-tracked, issue/return)
+    tracking_type = Column(
+        Enum(TrackingType, values_callable=lambda x: [e.value for e in x]),
+        default=TrackingType.INDIVIDUAL,
+        nullable=False,
+        server_default="individual",
+    )
+
+    # Quantity (for pool items)
+    quantity = Column(Integer, default=1)  # On-hand / available count
+    quantity_issued = Column(Integer, default=0)  # Currently issued to members
     unit_of_measure = Column(String(50))  # "each", "pair", "box", etc.
 
     # Maintenance
@@ -210,6 +225,7 @@ class InventoryItem(Base):
     checkout_records = relationship("CheckOutRecord", back_populates="item", cascade="all, delete-orphan")
     maintenance_records = relationship("MaintenanceRecord", back_populates="item", cascade="all, delete-orphan")
     assignment_history = relationship("ItemAssignment", back_populates="item", cascade="all, delete-orphan")
+    issuance_records = relationship("ItemIssuance", back_populates="item", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_inventory_items_org_category", "organization_id", "category_id"),
@@ -217,6 +233,7 @@ class InventoryItem(Base):
         Index("idx_inventory_items_org_active", "organization_id", "active"),
         Index("idx_inventory_items_assigned_to", "assigned_to_user_id"),
         Index("idx_inventory_items_next_inspection", "next_inspection_due"),
+        Index("idx_inventory_items_tracking_type", "organization_id", "tracking_type"),
     )
 
 
@@ -264,6 +281,59 @@ class ItemAssignment(Base):
         Index("idx_item_assignments_org_item", "organization_id", "item_id"),
         Index("idx_item_assignments_org_user", "organization_id", "user_id"),
         Index("idx_item_assignments_org_active", "organization_id", "is_active"),
+    )
+
+
+class ItemIssuance(Base):
+    """
+    Item Issuance model
+
+    Tracks units issued from a pool-tracked inventory item.
+    For example: "Dept T-Shirt (Medium)" has quantity=20; issuing 1 to
+    a member creates an ItemIssuance, decrements the pool's quantity,
+    and increments quantity_issued.  Returning reverses the operation.
+    """
+
+    __tablename__ = "item_issuances"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Which pool item and who received the issuance
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # How many units were issued (usually 1)
+    quantity_issued = Column(Integer, nullable=False, default=1)
+
+    # Dates
+    issued_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    returned_at = Column(DateTime(timezone=True))
+
+    # Audit trail
+    issued_by = Column(String(36), ForeignKey("users.id"))
+    returned_by = Column(String(36), ForeignKey("users.id"))
+
+    # Context
+    issue_reason = Column(Text)
+    return_condition = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]))
+    return_notes = Column(Text)
+
+    # Status
+    is_returned = Column(Boolean, default=False, index=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    item = relationship("InventoryItem", back_populates="issuance_records", foreign_keys=[item_id])
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        Index("idx_item_issuances_org_item", "organization_id", "item_id"),
+        Index("idx_item_issuances_org_user", "organization_id", "user_id"),
+        Index("idx_item_issuances_org_returned", "organization_id", "is_returned"),
     )
 
 

@@ -17,6 +17,7 @@ from app.models.inventory import (
     InventoryCategory,
     InventoryItem,
     ItemAssignment,
+    ItemIssuance,
     CheckOutRecord,
     MaintenanceRecord,
     ItemType,
@@ -24,6 +25,7 @@ from app.models.inventory import (
     ItemStatus,
     MaintenanceType,
     AssignmentType,
+    TrackingType,
 )
 from app.models.user import User
 
@@ -358,6 +360,157 @@ class InventoryService:
         return result.scalars().all()
 
     # ============================================
+    # Pool Item Issuance Management
+    # ============================================
+
+    async def issue_from_pool(
+        self,
+        item_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        issued_by: UUID,
+        quantity: int = 1,
+        reason: Optional[str] = None,
+    ) -> Tuple[Optional["ItemIssuance"], Optional[str]]:
+        """Issue units from a pool-tracked item to a member."""
+        try:
+            item = await self.get_item_by_id(item_id, organization_id)
+            if not item:
+                return None, "Item not found"
+
+            if item.tracking_type != TrackingType.POOL:
+                return None, "Item is not a pool-tracked item. Use assign for individual items."
+
+            if not item.active:
+                return None, "Item is retired or inactive"
+
+            if item.quantity < quantity:
+                return None, f"Insufficient stock: {item.quantity} available, {quantity} requested"
+
+            # Decrement pool quantity, increment issued count
+            item.quantity -= quantity
+            item.quantity_issued = (item.quantity_issued or 0) + quantity
+
+            # Create issuance record
+            issuance = ItemIssuance(
+                organization_id=organization_id,
+                item_id=item_id,
+                user_id=user_id,
+                quantity_issued=quantity,
+                issued_by=issued_by,
+                issue_reason=reason,
+                is_returned=False,
+            )
+            self.db.add(issuance)
+
+            await self.db.commit()
+            await self.db.refresh(issuance)
+            return issuance, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def return_to_pool(
+        self,
+        issuance_id: UUID,
+        organization_id: UUID,
+        returned_by: UUID,
+        return_condition: Optional[ItemCondition] = None,
+        return_notes: Optional[str] = None,
+        quantity_returned: Optional[int] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """Return issued units back to the pool."""
+        try:
+            result = await self.db.execute(
+                select(ItemIssuance)
+                .where(ItemIssuance.id == str(issuance_id))
+                .where(ItemIssuance.organization_id == str(organization_id))
+                .options(selectinload(ItemIssuance.item))
+            )
+            issuance = result.scalar_one_or_none()
+
+            if not issuance:
+                return False, "Issuance record not found"
+
+            if issuance.is_returned:
+                return False, "These units have already been returned"
+
+            qty = quantity_returned or issuance.quantity_issued
+            if qty > issuance.quantity_issued:
+                return False, f"Cannot return {qty} units; only {issuance.quantity_issued} were issued"
+
+            # Capture user_id for auto-archive check
+            issuance_user_id = str(issuance.user_id)
+
+            # Update pool item counts
+            item = issuance.item
+            item.quantity += qty
+            item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
+
+            # Handle partial return: reduce issuance quantity_issued and leave open
+            if qty < issuance.quantity_issued:
+                issuance.quantity_issued -= qty
+                # issuance stays open (is_returned=False) for the remaining units
+            else:
+                # Full return
+                issuance.is_returned = True
+                issuance.returned_at = datetime.now()
+                issuance.returned_by = returned_by
+                issuance.return_condition = return_condition
+                issuance.return_notes = return_notes
+
+            await self.db.commit()
+
+            # Check if the dropped member should be auto-archived
+            from app.services.member_archive_service import check_and_auto_archive
+            await check_and_auto_archive(self.db, issuance_user_id, str(organization_id))
+
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            return False, str(e)
+
+    async def get_item_issuances(
+        self,
+        item_id: UUID,
+        organization_id: UUID,
+        active_only: bool = True,
+    ) -> List["ItemIssuance"]:
+        """Get all issuance records for a pool item."""
+        query = (
+            select(ItemIssuance)
+            .where(ItemIssuance.item_id == str(item_id))
+            .where(ItemIssuance.organization_id == str(organization_id))
+            .options(selectinload(ItemIssuance.user))
+        )
+        if active_only:
+            query = query.where(ItemIssuance.is_returned == False)
+        query = query.order_by(ItemIssuance.issued_at.desc())
+
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_user_issuances(
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+        active_only: bool = True,
+    ) -> List["ItemIssuance"]:
+        """Get all active issuances for a user."""
+        query = (
+            select(ItemIssuance)
+            .where(ItemIssuance.user_id == str(user_id))
+            .where(ItemIssuance.organization_id == str(organization_id))
+            .options(selectinload(ItemIssuance.item))
+        )
+        if active_only:
+            query = query.where(ItemIssuance.is_returned == False)
+        query = query.order_by(ItemIssuance.issued_at.desc())
+
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    # ============================================
     # Check-Out/Check-In Management
     # ============================================
 
@@ -686,6 +839,9 @@ class InventoryService:
         # Active checkouts
         checkouts = await self.get_active_checkouts(organization_id, user_id=user_id)
 
+        # Active pool issuances
+        issuances = await self.get_user_issuances(user_id, organization_id, active_only=True)
+
         return {
             "permanent_assignments": [
                 {
@@ -709,5 +865,16 @@ class InventoryService:
                     "is_overdue": c.is_overdue,
                 }
                 for c in checkouts
+            ],
+            "issued_items": [
+                {
+                    "issuance_id": i.id,
+                    "item_id": i.item.id,
+                    "item_name": i.item.name,
+                    "quantity_issued": i.quantity_issued,
+                    "issued_at": i.issued_at,
+                    "size": i.item.size,
+                }
+                for i in issuances
             ],
         }

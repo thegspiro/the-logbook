@@ -31,6 +31,10 @@ from app.schemas.inventory import (
     ItemAssignmentCreate,
     ItemAssignmentResponse,
     UnassignItemRequest,
+    # Issuance schemas
+    ItemIssuanceCreate,
+    ItemIssuanceResponse,
+    ItemIssuanceReturnRequest,
     # Checkout schemas
     CheckOutCreate,
     CheckOutRecordResponse,
@@ -437,6 +441,141 @@ async def get_user_assignments(
         active_only=active_only,
     )
     return assignments
+
+
+# ============================================
+# Pool Item Issuance Endpoints
+# ============================================
+
+@router.post("/items/{item_id}/issue", response_model=ItemIssuanceResponse, status_code=status.HTTP_201_CREATED)
+async def issue_from_pool(
+    item_id: UUID,
+    issuance_data: ItemIssuanceCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Issue units from a pool-tracked item to a member.
+
+    Decrements the item's on-hand quantity and creates an issuance record.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    issuance, error = await service.issue_from_pool(
+        item_id=item_id,
+        user_id=issuance_data.user_id,
+        organization_id=current_user.organization_id,
+        issued_by=current_user.id,
+        quantity=issuance_data.quantity,
+        reason=issuance_data.issue_reason,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_pool_issued",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "user_id": str(issuance_data.user_id),
+            "quantity": issuance_data.quantity,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return issuance
+
+
+@router.post("/issuances/{issuance_id}/return", status_code=status.HTTP_200_OK)
+async def return_to_pool(
+    issuance_id: UUID,
+    return_data: ItemIssuanceReturnRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Return issued units back to the pool.
+
+    Increments the item's on-hand quantity and closes the issuance record.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    from app.models.inventory import ItemCondition
+    return_condition = None
+    if return_data.return_condition:
+        return_condition = ItemCondition(return_data.return_condition)
+
+    service = InventoryService(db)
+    success, error = await service.return_to_pool(
+        issuance_id=issuance_id,
+        organization_id=current_user.organization_id,
+        returned_by=current_user.id,
+        return_condition=return_condition,
+        return_notes=return_data.return_notes,
+        quantity_returned=return_data.quantity_returned,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return {"message": "Items returned to pool successfully"}
+
+
+@router.get("/items/{item_id}/issuances", response_model=List[ItemIssuanceResponse])
+async def get_item_issuances(
+    item_id: UUID,
+    active_only: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get issuance records for a pool item (who has been issued units).
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    issuances = await service.get_item_issuances(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+        active_only=active_only,
+    )
+    return issuances
+
+
+@router.get("/users/{user_id}/issuances", response_model=List[ItemIssuanceResponse])
+async def get_user_issuances(
+    user_id: UUID,
+    active_only: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get all pool items issued to a specific user.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    issuances = await service.get_user_issuances(
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+        active_only=active_only,
+    )
+    return issuances
 
 
 # ============================================

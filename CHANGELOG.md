@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Pool Item Issuance for Inventory (2026-02-19)
+
+#### Two Tracking Modes
+- **New `tracking_type` field on inventory items**: Items can now be `"individual"` (serial-numbered, assigned 1:1 to a member — existing behavior) or `"pool"` (quantity-tracked, units issued/returned from a shared pool)
+- **New `quantity_issued` field**: Tracks how many units from a pool item are currently issued to members, separate from the on-hand `quantity`
+
+#### Pool Issuance Model & Endpoints
+- **New `item_issuances` table**: Tracks who received units from a pool item, when, how many, and whether they've been returned — parallel to `item_assignments` for individual items
+- **`POST /api/v1/inventory/items/{item_id}/issue`**: Issue units from a pool item to a member; decrements on-hand quantity, creates an issuance record
+- **`POST /api/v1/inventory/issuances/{issuance_id}/return`**: Return issued units; increments on-hand quantity, supports partial returns
+- **`GET /api/v1/inventory/items/{item_id}/issuances`**: List who currently has units from a pool item (or full history with `?active_only=false`)
+- **`GET /api/v1/inventory/users/{user_id}/issuances`**: List all pool items issued to a specific member
+
+#### User Dashboard Integration
+- The user inventory endpoint (`GET /api/v1/inventory/users/{user_id}/inventory`) now includes an `issued_items` array alongside existing `permanent_assignments` and `active_checkouts`
+
+#### Frontend API Support
+- Added `inventoryService.issueFromPool()`, `.returnToPool()`, `.getItemIssuances()`, `.getUserIssuances()` methods
+- Added `ItemIssuance`, `UserIssuedItem` TypeScript interfaces
+- Updated `InventoryItem` and `InventoryItemCreate` interfaces with `tracking_type` and `quantity_issued` fields
+
 ### Security Hardening (2026-02-18)
 
 #### Path Traversal Fix in Event Attachments (Critical)

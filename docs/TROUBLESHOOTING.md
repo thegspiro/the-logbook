@@ -1632,6 +1632,35 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 
 **For full configuration documentation, see [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md).**
 
+#### Pool Items vs. Individual Items
+
+**Understanding `tracking_type`**: Inventory items have two tracking modes:
+- **`individual`** (default): Each item is a unique, serialized record assigned 1:1 to a member (e.g., a specific radio with serial number). Use `POST /inventory/items/{id}/assign` and `/unassign`.
+- **`pool`**: A quantity-tracked pool (e.g., "Dept T-Shirt Medium, qty: 20"). Units are issued to members and the on-hand count decrements automatically. Use `POST /inventory/items/{id}/issue` and `POST /inventory/issuances/{id}/return`.
+
+**Common Scenario**: "I have 20 t-shirts and want to give one to a member"
+1. Create the item with `tracking_type: "pool"` and `quantity: 20`
+2. Issue to a member: `POST /inventory/items/{id}/issue` with `{ "user_id": "...", "quantity": 1 }`
+3. On-hand quantity becomes 19, `quantity_issued` becomes 1
+4. When the member returns it: `POST /inventory/issuances/{issuance_id}/return`
+
+#### Pool Issue: "Item is not a pool-tracked item"
+
+**Cause**: You tried to issue from an item with `tracking_type: "individual"`. The `/issue` endpoint only works for pool items.
+
+**Solutions**:
+- Change the item's tracking type: `PATCH /inventory/items/{id}` with `{ "tracking_type": "pool" }`
+- If the item has a serial number and should be tracked individually, use `POST /inventory/items/{id}/assign` instead
+
+#### Pool Issue: "Insufficient stock"
+
+**Cause**: The requested quantity exceeds the item's current on-hand `quantity`.
+
+**Solutions**:
+- Check current stock: `GET /inventory/items/{id}` — the `quantity` field shows available on-hand units
+- To see who has issued units: `GET /inventory/items/{id}/issuances`
+- Collect returns from members or increase the pool quantity via `PATCH /inventory/items/{id}` with `{ "quantity": <new_total> }`
+
 #### Membership Tier: Member Not Auto-Advancing
 
 **Symptoms**: A member has enough years of service but is still at a lower tier

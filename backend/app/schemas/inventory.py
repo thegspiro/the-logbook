@@ -90,6 +90,7 @@ class InventoryItemBase(BaseModel):
     condition: str = "good"
     status: str = "available"
     status_notes: Optional[str] = None
+    tracking_type: str = "individual"  # "individual" or "pool"
     quantity: int = Field(default=1, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     inspection_interval_days: Optional[int] = Field(None, ge=0)
@@ -128,6 +129,7 @@ class InventoryItemUpdate(BaseModel):
     condition: Optional[str] = None
     status: Optional[str] = None
     status_notes: Optional[str] = None
+    tracking_type: Optional[str] = None
     quantity: Optional[int] = Field(None, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     last_inspection_date: Optional[date] = None
@@ -145,6 +147,7 @@ class InventoryItemResponse(InventoryItemBase):
     organization_id: UUID
     assigned_to_user_id: Optional[UUID] = None
     assigned_date: Optional[datetime] = None
+    quantity_issued: int = 0
     last_inspection_date: Optional[date] = None
     next_inspection_due: Optional[date] = None
     active: bool
@@ -205,6 +208,45 @@ class UnassignItemRequest(BaseModel):
     """Schema for unassigning an item"""
     return_condition: Optional[str] = None
     return_notes: Optional[str] = None
+
+
+# ============================================
+# Pool Item Issuance Schemas
+# ============================================
+
+class ItemIssuanceCreate(BaseModel):
+    """Schema for issuing units from a pool item to a member"""
+    user_id: UUID
+    quantity: int = Field(default=1, ge=1, description="Number of units to issue")
+    issue_reason: Optional[str] = None
+
+
+class ItemIssuanceReturnRequest(BaseModel):
+    """Schema for returning issued units back to the pool"""
+    return_condition: Optional[str] = None
+    return_notes: Optional[str] = None
+    quantity_returned: Optional[int] = Field(None, ge=1, description="Partial return; defaults to full issuance quantity")
+
+
+class ItemIssuanceResponse(BaseModel):
+    """Schema for issuance record response"""
+    id: UUID
+    organization_id: UUID
+    item_id: UUID
+    user_id: UUID
+    quantity_issued: int
+    issued_at: datetime
+    returned_at: Optional[datetime] = None
+    issued_by: Optional[UUID] = None
+    returned_by: Optional[UUID] = None
+    issue_reason: Optional[str] = None
+    return_condition: Optional[str] = None
+    return_notes: Optional[str] = None
+    is_returned: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
@@ -360,10 +402,21 @@ class UserCheckoutItem(BaseModel):
     is_overdue: bool
 
 
+class UserIssuedItem(BaseModel):
+    """Schema for a pool item issued to a user"""
+    issuance_id: UUID
+    item_id: UUID
+    item_name: str
+    quantity_issued: int
+    issued_at: datetime
+    size: Optional[str] = None
+
+
 class UserInventoryResponse(BaseModel):
     """Schema for user's complete inventory view"""
     permanent_assignments: List[UserInventoryItem]
     active_checkouts: List[UserCheckoutItem]
+    issued_items: List[UserIssuedItem] = []
 
 
 class ItemRetireRequest(BaseModel):

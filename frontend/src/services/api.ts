@@ -1661,9 +1661,19 @@ export interface UserCheckoutItem {
   is_overdue: boolean;
 }
 
+export interface UserIssuedItem {
+  issuance_id: string;
+  item_id: string;
+  item_name: string;
+  quantity_issued: number;
+  issued_at: string;
+  size?: string;
+}
+
 export interface UserInventoryResponse {
   permanent_assignments: UserInventoryItem[];
   active_checkouts: UserCheckoutItem[];
+  issued_items: UserIssuedItem[];
 }
 
 export interface InventoryCategory {
@@ -1702,7 +1712,9 @@ export interface InventoryItem {
   condition: string;
   status: string;
   status_notes?: string;
+  tracking_type: string;  // "individual" or "pool"
   quantity: number;
+  quantity_issued: number;
   unit_of_measure?: string;
   last_inspection_date?: string;
   next_inspection_due?: string;
@@ -1730,10 +1742,29 @@ export interface InventoryItemCreate {
   station?: string;
   condition?: string;
   status?: string;
+  tracking_type?: string;
   quantity?: number;
   unit_of_measure?: string;
   inspection_interval_days?: number;
   notes?: string;
+}
+
+export interface ItemIssuance {
+  id: string;
+  organization_id: string;
+  item_id: string;
+  user_id: string;
+  quantity_issued: number;
+  issued_at: string;
+  returned_at?: string;
+  issued_by?: string;
+  returned_by?: string;
+  issue_reason?: string;
+  return_condition?: string;
+  return_notes?: string;
+  is_returned: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface InventoryItemsListResponse {
@@ -1856,6 +1887,39 @@ export const inventoryService = {
 
   async getLowStockItems(): Promise<InventoryItem[]> {
     const response = await api.get<InventoryItem[]>('/inventory/low-stock');
+    return response.data;
+  },
+
+  // Pool item issuance
+  async issueFromPool(itemId: string, userId: string, quantity: number = 1, issueReason?: string): Promise<ItemIssuance> {
+    const response = await api.post<ItemIssuance>(`/inventory/items/${itemId}/issue`, {
+      user_id: userId,
+      quantity,
+      issue_reason: issueReason,
+    });
+    return response.data;
+  },
+
+  async returnToPool(issuanceId: string, options?: { return_condition?: string; return_notes?: string; quantity_returned?: number }): Promise<{ message: string }> {
+    const response = await api.post(`/inventory/issuances/${issuanceId}/return`, {
+      return_condition: options?.return_condition,
+      return_notes: options?.return_notes,
+      quantity_returned: options?.quantity_returned,
+    });
+    return response.data;
+  },
+
+  async getItemIssuances(itemId: string, activeOnly: boolean = true): Promise<ItemIssuance[]> {
+    const response = await api.get<ItemIssuance[]>(`/inventory/items/${itemId}/issuances`, {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  async getUserIssuances(userId: string, activeOnly: boolean = true): Promise<ItemIssuance[]> {
+    const response = await api.get<ItemIssuance[]>(`/inventory/users/${userId}/issuances`, {
+      params: { active_only: activeOnly },
+    });
     return response.data;
   },
 };
