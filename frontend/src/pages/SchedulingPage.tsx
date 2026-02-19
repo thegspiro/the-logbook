@@ -303,15 +303,15 @@ const SchedulingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center space-x-3">
             <div className="bg-violet-600 rounded-lg p-2">
               <Clock className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Scheduling & Shifts</h1>
+              <h1 className="text-theme-text-primary text-xl sm:text-2xl font-bold">Scheduling & Shifts</h1>
               <p className="text-theme-text-muted text-sm">
                 Manage schedules, sign up for shifts, and handle trades
               </p>
@@ -320,7 +320,7 @@ const SchedulingPage: React.FC = () => {
           {canManage && activeTab === 'schedule' && (
             <button
               onClick={() => setShowCreateShift(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors"
+              className="flex items-center justify-center space-x-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors w-full sm:w-auto"
             >
               <Plus className="w-4 h-4" aria-hidden="true" />
               <span>Create Shift</span>
@@ -329,8 +329,8 @@ const SchedulingPage: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="border-b border-theme-surface-border mb-6">
-          <nav className="flex space-x-1 overflow-x-auto" aria-label="Scheduling tabs">
+        <div className="border-b border-theme-surface-border mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+          <nav className="flex space-x-1 overflow-x-auto scrollbar-thin" aria-label="Scheduling tabs">
             {visibleTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -378,20 +378,20 @@ const SchedulingPage: React.FC = () => {
             )}
 
             {/* Calendar Navigation */}
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border mb-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center space-x-2 sm:space-x-4">
                   <button
                     onClick={() => navigate_(-1)}
-                    className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                     aria-label={viewMode === 'month' ? 'Previous month' : 'Previous week'}
                   >
                     <ChevronLeft className="w-5 h-5" aria-hidden="true" />
                   </button>
-                  <h2 className="text-theme-text-primary font-semibold text-lg">{formatDateRange()}</h2>
+                  <h2 className="text-theme-text-primary font-semibold text-base sm:text-lg whitespace-nowrap">{formatDateRange()}</h2>
                   <button
                     onClick={() => navigate_(1)}
-                    className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                     aria-label={viewMode === 'month' ? 'Next month' : 'Next week'}
                   >
                     <ChevronRight className="w-5 h-5" aria-hidden="true" />
@@ -442,114 +442,255 @@ const SchedulingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Week Calendar Grid */}
+            {/* Week Calendar Grid — desktop: 7-column grid, mobile: stacked list */}
             {!loading && viewMode === 'week' && (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
-                <div className="grid grid-cols-7 border-b border-theme-surface-border">
-                  {weekDates.map((date, i) => (
-                    <div
-                      key={i}
-                      className={`p-3 text-center border-r border-theme-surface-border last:border-r-0 ${
-                        isToday(date) ? 'bg-violet-600/20' : ''
-                      }`}
-                    >
-                      <p className="text-theme-text-muted text-xs uppercase">{DAYS_OF_WEEK[i]}</p>
-                      <p className={`text-lg font-bold mt-1 ${
-                        isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
-                      }`}>
-                        {date.getDate()}
-                      </p>
-                    </div>
-                  ))}
+              <>
+                {/* Desktop grid (hidden on mobile) */}
+                <div className="hidden md:block bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
+                  <div className="grid grid-cols-7 border-b border-theme-surface-border">
+                    {weekDates.map((date, i) => (
+                      <div
+                        key={i}
+                        className={`p-3 text-center border-r border-theme-surface-border last:border-r-0 ${
+                          isToday(date) ? 'bg-violet-600/20' : ''
+                        }`}
+                      >
+                        <p className="text-theme-text-muted text-xs uppercase">{DAYS_OF_WEEK[i]}</p>
+                        <p className={`text-lg font-bold mt-1 ${
+                          isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
+                        }`}>
+                          {date.getDate()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 min-h-[300px]">
+                    {weekDates.map((date, i) => {
+                      const dayShifts = getShiftsForDate(date);
+                      return (
+                        <div
+                          key={i}
+                          className={`p-2 border-r border-theme-surface-border last:border-r-0 ${
+                            isToday(date) ? 'bg-violet-600/5' : ''
+                          }`}
+                        >
+                          {dayShifts.map((shift) => (
+                            <button
+                              key={shift.id}
+                              onClick={() => handleShiftClick(shift)}
+                              className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
+                            >
+                              <p className="font-medium truncate">
+                                {formatTime(shift.start_time, tz)}
+                                {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                              </p>
+                              {shift.notes && (
+                                <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
+                              )}
+                              <div className="flex items-center gap-2 mt-1">
+                                {shift.attendee_count > 0 && (
+                                  <span className="opacity-70 flex items-center gap-0.5">
+                                    <Users className="w-3 h-3" /> {shift.attendee_count}
+                                  </span>
+                                )}
+                                {shift.apparatus_unit_number && (
+                                  <span className="opacity-70 flex items-center gap-0.5">
+                                    <Truck className="w-3 h-3" /> {shift.apparatus_unit_number}
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="grid grid-cols-7 min-h-[300px]">
+
+                {/* Mobile list view (shown on mobile only) */}
+                <div className="md:hidden space-y-2 mb-8">
                   {weekDates.map((date, i) => {
                     const dayShifts = getShiftsForDate(date);
                     return (
                       <div
                         key={i}
-                        className={`p-2 border-r border-theme-surface-border last:border-r-0 ${
-                          isToday(date) ? 'bg-violet-600/5' : ''
+                        className={`bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden ${
+                          isToday(date) ? 'ring-2 ring-violet-500/30' : ''
                         }`}
                       >
-                        {dayShifts.map((shift) => (
-                          <button
-                            key={shift.id}
-                            onClick={() => handleShiftClick(shift)}
-                            className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
-                          >
-                            <p className="font-medium truncate">
-                              {formatTime(shift.start_time, tz)}
-                              {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
-                            </p>
-                            {shift.notes && (
-                              <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
-                            )}
-                            <div className="flex items-center gap-2 mt-1">
-                              {shift.attendee_count > 0 && (
-                                <span className="opacity-70 flex items-center gap-0.5">
-                                  <Users className="w-3 h-3" /> {shift.attendee_count}
-                                </span>
-                              )}
-                              {shift.apparatus_unit_number && (
-                                <span className="opacity-70 flex items-center gap-0.5">
-                                  <Truck className="w-3 h-3" /> {shift.apparatus_unit_number}
-                                </span>
-                              )}
+                        <div className={`px-4 py-2 border-b border-theme-surface-border flex items-center justify-between ${
+                          isToday(date) ? 'bg-violet-600/10' : 'bg-theme-surface-secondary'
+                        }`}>
+                          <span className={`text-sm font-semibold ${
+                            isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
+                          }`}>
+                            {DAYS_OF_WEEK[i]}, {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                          {isToday(date) && (
+                            <span className="text-xs px-2 py-0.5 bg-violet-600 text-white rounded-full">Today</span>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          {dayShifts.length === 0 ? (
+                            <p className="text-theme-text-muted text-sm text-center py-2">No shifts</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {dayShifts.map((shift) => (
+                                <button
+                                  key={shift.id}
+                                  onClick={() => handleShiftClick(shift)}
+                                  className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
+                                >
+                                  <p className="font-medium">
+                                    {formatTime(shift.start_time, tz)}
+                                    {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                                  </p>
+                                  {shift.notes && (
+                                    <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
+                                  )}
+                                  <div className="flex items-center gap-3 mt-1.5">
+                                    {shift.attendee_count > 0 && (
+                                      <span className="opacity-70 flex items-center gap-1 text-xs">
+                                        <Users className="w-3.5 h-3.5" /> {shift.attendee_count} staff
+                                      </span>
+                                    )}
+                                    {shift.apparatus_unit_number && (
+                                      <span className="opacity-70 flex items-center gap-1 text-xs">
+                                        <Truck className="w-3.5 h-3.5" /> {shift.apparatus_unit_number}
+                                      </span>
+                                    )}
+                                  </div>
+                                </button>
+                              ))}
                             </div>
-                          </button>
-                        ))}
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </>
             )}
 
-            {/* Month Calendar Grid */}
+            {/* Month Calendar Grid — desktop: 7-column grid, mobile: stacked list */}
             {!loading && viewMode === 'month' && (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
-                <div className="grid grid-cols-7 border-b border-theme-surface-border">
-                  {DAYS_OF_WEEK.map((day) => (
-                    <div key={day} className="p-3 text-center border-r border-theme-surface-border last:border-r-0">
-                      <p className="text-theme-text-muted text-xs uppercase">{day}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7">
-                  {monthDates.map((date, i) => {
-                    const dayShifts = getShiftsForDate(date);
-                    const isCurrentMonth = date.getMonth() === currentDate.getMonth();
-                    return (
-                      <div
-                        key={i}
-                        className={`p-2 border-r border-b border-theme-surface-border last:border-r-0 min-h-[100px] ${
-                          isToday(date) ? 'bg-violet-600/5' : ''
-                        } ${!isCurrentMonth ? 'opacity-40' : ''}`}
-                      >
-                        <p className={`text-sm font-medium mb-1 ${
-                          isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
-                        }`}>
-                          {date.getDate()}
-                        </p>
-                        {dayShifts.map((shift) => (
-                          <button
-                            key={shift.id}
-                            onClick={() => handleShiftClick(shift)}
-                            className={`mb-1 px-1.5 py-1 rounded border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
-                          >
-                            <p className="font-medium truncate">
-                              {formatTime(shift.start_time)}
-                              {shift.apparatus_unit_number && <span className="ml-1 opacity-70">{shift.apparatus_unit_number}</span>}
-                              {shift.attendee_count > 0 && <span className="ml-1 opacity-70">({shift.attendee_count})</span>}
-                            </p>
-                          </button>
-                        ))}
+              <>
+                {/* Desktop grid (hidden on mobile) */}
+                <div className="hidden md:block bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
+                  <div className="grid grid-cols-7 border-b border-theme-surface-border">
+                    {DAYS_OF_WEEK.map((day) => (
+                      <div key={day} className="p-3 text-center border-r border-theme-surface-border last:border-r-0">
+                        <p className="text-theme-text-muted text-xs uppercase">{day}</p>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7">
+                    {monthDates.map((date, i) => {
+                      const dayShifts = getShiftsForDate(date);
+                      const isCurrentMonth = date.getMonth() === currentDate.getMonth();
+                      return (
+                        <div
+                          key={i}
+                          className={`p-2 border-r border-b border-theme-surface-border last:border-r-0 min-h-[100px] ${
+                            isToday(date) ? 'bg-violet-600/5' : ''
+                          } ${!isCurrentMonth ? 'opacity-40' : ''}`}
+                        >
+                          <p className={`text-sm font-medium mb-1 ${
+                            isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
+                          }`}>
+                            {date.getDate()}
+                          </p>
+                          {dayShifts.map((shift) => (
+                            <button
+                              key={shift.id}
+                              onClick={() => handleShiftClick(shift)}
+                              className={`mb-1 px-1.5 py-1 rounded border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
+                            >
+                              <p className="font-medium truncate">
+                                {formatTime(shift.start_time)}
+                                {shift.apparatus_unit_number && <span className="ml-1 opacity-70">{shift.apparatus_unit_number}</span>}
+                                {shift.attendee_count > 0 && <span className="ml-1 opacity-70">({shift.attendee_count})</span>}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+
+                {/* Mobile list view (shown on mobile only) — only days with shifts */}
+                <div className="md:hidden space-y-2 mb-8">
+                  {(() => {
+                    const daysWithShifts = monthDates
+                      .filter(date => date.getMonth() === currentDate.getMonth())
+                      .filter(date => getShiftsForDate(date).length > 0);
+
+                    if (daysWithShifts.length === 0) {
+                      return (
+                        <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-8 text-center">
+                          <CalendarDays className="w-10 h-10 text-theme-text-muted mx-auto mb-2" />
+                          <p className="text-theme-text-muted text-sm">No shifts this month</p>
+                        </div>
+                      );
+                    }
+
+                    return daysWithShifts.map((date, i) => {
+                      const dayShifts = getShiftsForDate(date);
+                      return (
+                        <div
+                          key={i}
+                          className={`bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden ${
+                            isToday(date) ? 'ring-2 ring-violet-500/30' : ''
+                          }`}
+                        >
+                          <div className={`px-4 py-2 border-b border-theme-surface-border flex items-center justify-between ${
+                            isToday(date) ? 'bg-violet-600/10' : 'bg-theme-surface-secondary'
+                          }`}>
+                            <span className={`text-sm font-semibold ${
+                              isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
+                            }`}>
+                              {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                            </span>
+                            {isToday(date) && (
+                              <span className="text-xs px-2 py-0.5 bg-violet-600 text-white rounded-full">Today</span>
+                            )}
+                          </div>
+                          <div className="p-3 space-y-2">
+                            {dayShifts.map((shift) => (
+                              <button
+                                key={shift.id}
+                                onClick={() => handleShiftClick(shift)}
+                                className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
+                              >
+                                <p className="font-medium">
+                                  {formatTime(shift.start_time, tz)}
+                                  {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                                </p>
+                                {shift.notes && (
+                                  <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
+                                )}
+                                <div className="flex items-center gap-3 mt-1.5">
+                                  {shift.attendee_count > 0 && (
+                                    <span className="opacity-70 flex items-center gap-1 text-xs">
+                                      <Users className="w-3.5 h-3.5" /> {shift.attendee_count} staff
+                                    </span>
+                                  )}
+                                  {shift.apparatus_unit_number && (
+                                    <span className="opacity-70 flex items-center gap-1 text-xs">
+                                      <Truck className="w-3.5 h-3.5" /> {shift.apparatus_unit_number}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </>
             )}
 
             {/* Empty State */}
@@ -696,7 +837,7 @@ const SchedulingPage: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date *</label>
                         <input
