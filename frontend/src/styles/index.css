@@ -296,6 +296,14 @@ body {
   overscroll-behavior: none;
 }
 
+/* Native <option> elements render against the OS dropdown background
+   (white on most platforms), so force readable dark-on-white colors
+   regardless of the page's dark theme. */
+option {
+  background-color: #fff;
+  color: #111;
+}
+
 /* Mobile touch optimizations */
 @media (max-width: 767px) {
   /* Prevent text size adjustment on orientation change (iOS) */
