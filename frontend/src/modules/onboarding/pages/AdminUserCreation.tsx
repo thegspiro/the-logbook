@@ -295,18 +295,18 @@ const AdminUserCreation: React.FC = () => {
           </div>
 
           {/* Administrator Type Clarification */}
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+          <div className="alert-purple mb-6">
             <div className="flex items-start space-x-3">
-              <Info className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+              <Info className="w-5 h-5 text-theme-alert-purple-icon flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-purple-800 text-sm font-medium mb-1">
+                <p className="text-theme-alert-purple-title text-sm font-medium mb-1">
                   IT Administrator vs. Administrative Member
                 </p>
-                <p className="text-purple-700 text-sm mb-2">
+                <p className="text-theme-alert-purple-text text-sm mb-2">
                   This creates an <strong>IT Administrator</strong> account for system and technical administration.
                   This is different from members who have an "Administrative" membership type.
                 </p>
-                <ul className="text-purple-700 text-sm space-y-1 list-disc list-inside ml-2">
+                <ul className="text-theme-alert-purple-text text-sm space-y-1 list-disc list-inside ml-2">
                   <li><strong>IT Administrator:</strong> System admin role with full technical access (what you're creating now)</li>
                   <li><strong>Administrative Member:</strong> A member with administrative membership type (managed separately in the Members module)</li>
                 </ul>
@@ -315,14 +315,14 @@ const AdminUserCreation: React.FC = () => {
           </div>
 
           {/* Security Notice */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="alert-info mb-6">
             <div className="flex items-start space-x-3">
-              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <Info className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-blue-800 text-sm font-medium mb-1">
+                <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                   Security Requirements
                 </p>
-                <p className="text-blue-700 text-sm">
+                <p className="text-theme-alert-info-text text-sm">
                   Your password will be encrypted using Argon2id hashing and
                   stored securely. Choose a strong password that meets all
                   requirements below.

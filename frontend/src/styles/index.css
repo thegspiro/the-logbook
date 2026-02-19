@@ -34,6 +34,41 @@
 
   /* Focus ring offset */
   --ring-offset-bg: #ffffff;               /* white */
+
+  /* Alert: Info (blue) */
+  --alert-info-bg: #eff6ff;                /* blue-50 */
+  --alert-info-border: #bfdbfe;            /* blue-200 */
+  --alert-info-icon: #2563eb;              /* blue-600 */
+  --alert-info-title: #1e40af;             /* blue-800 */
+  --alert-info-text: #1d4ed8;              /* blue-700 */
+
+  /* Alert: Success (green) */
+  --alert-success-bg: #f0fdf4;             /* green-50 */
+  --alert-success-border: #bbf7d0;         /* green-200 */
+  --alert-success-icon: #16a34a;           /* green-600 */
+  --alert-success-title: #166534;          /* green-800 */
+  --alert-success-text: #15803d;           /* green-700 */
+
+  /* Alert: Warning (amber) */
+  --alert-warning-bg: #fffbeb;             /* amber-50 */
+  --alert-warning-border: #fde68a;         /* amber-200 */
+  --alert-warning-icon: #d97706;           /* amber-600 */
+  --alert-warning-title: #92400e;          /* amber-800 */
+  --alert-warning-text: #b45309;           /* amber-700 */
+
+  /* Alert: Purple */
+  --alert-purple-bg: #faf5ff;              /* purple-50 */
+  --alert-purple-border: #e9d5ff;          /* purple-200 */
+  --alert-purple-icon: #9333ea;            /* purple-600 */
+  --alert-purple-title: #6b21a8;           /* purple-800 */
+  --alert-purple-text: #7e22ce;            /* purple-700 */
+
+  /* Alert: Danger (red) */
+  --alert-danger-bg: #fef2f2;              /* red-50 */
+  --alert-danger-border: #fecaca;          /* red-200 */
+  --alert-danger-icon: #dc2626;            /* red-600 */
+  --alert-danger-title: #991b1b;           /* red-800 */
+  --alert-danger-text: #b91c1c;            /* red-700 */
 }
 
 .dark {
@@ -67,6 +102,41 @@
 
   /* Focus ring offset */
   --ring-offset-bg: #0f172a;              /* slate-900 */
+
+  /* Alert: Info (blue) */
+  --alert-info-bg: rgba(59, 130, 246, 0.1);
+  --alert-info-border: rgba(59, 130, 246, 0.5);
+  --alert-info-icon: #60a5fa;              /* blue-400 */
+  --alert-info-title: #93c5fd;             /* blue-300 */
+  --alert-info-text: #bfdbfe;              /* blue-200 */
+
+  /* Alert: Success (green) */
+  --alert-success-bg: rgba(34, 197, 94, 0.1);
+  --alert-success-border: rgba(34, 197, 94, 0.5);
+  --alert-success-icon: #4ade80;           /* green-400 */
+  --alert-success-title: #86efac;          /* green-300 */
+  --alert-success-text: #bbf7d0;           /* green-200 */
+
+  /* Alert: Warning (amber) */
+  --alert-warning-bg: rgba(245, 158, 11, 0.1);
+  --alert-warning-border: rgba(245, 158, 11, 0.5);
+  --alert-warning-icon: #fbbf24;           /* amber-400 */
+  --alert-warning-title: #fcd34d;          /* amber-300 */
+  --alert-warning-text: #fde68a;           /* amber-200 */
+
+  /* Alert: Purple */
+  --alert-purple-bg: rgba(168, 85, 247, 0.1);
+  --alert-purple-border: rgba(168, 85, 247, 0.5);
+  --alert-purple-icon: #c084fc;            /* purple-400 */
+  --alert-purple-title: #d8b4fe;           /* purple-300 */
+  --alert-purple-text: #e9d5ff;            /* purple-200 */
+
+  /* Alert: Danger (red) */
+  --alert-danger-bg: rgba(239, 68, 68, 0.1);
+  --alert-danger-border: rgba(239, 68, 68, 0.5);
+  --alert-danger-icon: #f87171;            /* red-400 */
+  --alert-danger-title: #fca5a5;           /* red-300 */
+  --alert-danger-text: #fecaca;            /* red-200 */
 }
 
 /* Custom scrollbar */
@@ -143,6 +213,23 @@
   /* --- Stat Cards --- */
   .stat-card {
     @apply bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border;
+  }
+
+  /* --- Alert / Info Boxes --- */
+  .alert-info {
+    @apply bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-4;
+  }
+  .alert-success {
+    @apply bg-theme-alert-success-bg border border-theme-alert-success-border rounded-lg p-4;
+  }
+  .alert-warning {
+    @apply bg-theme-alert-warning-bg border border-theme-alert-warning-border rounded-lg p-4;
+  }
+  .alert-purple {
+    @apply bg-theme-alert-purple-bg border border-theme-alert-purple-border rounded-lg p-4;
+  }
+  .alert-danger {
+    @apply bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4;
   }
 }
 

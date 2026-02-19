@@ -367,18 +367,18 @@ const ITTeamBackupAccess: React.FC = () => {
             {/* Backup Access Section */}
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
               <div className="flex items-center space-x-3 mb-4">
-                <Shield className="w-6 h-6 text-amber-600" />
+                <Shield className="w-6 h-6 text-theme-alert-warning-icon" />
                 <h3 className="text-xl font-bold text-theme-text-primary">Backup Access Methods</h3>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <div className="alert-warning mb-6">
                 <div className="flex items-start space-x-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-theme-alert-warning-icon flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-amber-800 text-sm font-medium mb-1">
+                    <p className="text-theme-alert-warning-title text-sm font-medium mb-1">
                       Critical for Account Recovery
                     </p>
-                    <p className="text-amber-700 text-sm">
+                    <p className="text-theme-alert-warning-text text-sm">
                       These backup methods will be used to recover access if the primary admin account
                       is locked or credentials are lost. Keep this information current.
                     </p>

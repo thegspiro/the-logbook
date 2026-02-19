@@ -223,14 +223,14 @@ const AuthenticationChoice: React.FC = () => {
 
           {/* Smart Recommendation Notice */}
           {emailPlatform && (emailPlatform === 'gmail' || emailPlatform === 'microsoft') && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 max-w-3xl mx-auto">
+            <div className="alert-success mb-6 max-w-3xl mx-auto">
               <div className="flex items-start space-x-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <CheckCircle className="w-5 h-5 text-theme-alert-success-icon flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-green-800 text-sm font-medium mb-1">
+                  <p className="text-theme-alert-success-title text-sm font-medium mb-1">
                     Smart Recommendation
                   </p>
-                  <p className="text-green-700 text-sm">
+                  <p className="text-theme-alert-success-text text-sm">
                     Based on your {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} setup,
                     we recommend {emailPlatform === 'gmail' ? 'Google OAuth' : 'Microsoft Azure AD'} for
                     seamless integration with your existing accounts.
@@ -241,14 +241,14 @@ const AuthenticationChoice: React.FC = () => {
           )}
 
           {/* Security Notice */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 max-w-3xl mx-auto">
+          <div className="alert-info mb-6 max-w-3xl mx-auto">
             <div className="flex items-start space-x-3">
-              <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <Shield className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-blue-800 text-sm font-medium mb-1">
+                <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                   Enterprise Security
                 </p>
-                <p className="text-blue-700 text-sm">
+                <p className="text-theme-alert-info-text text-sm">
                   All authentication methods support multi-factor authentication (MFA) and are
                   HIPAA compliant when properly configured.
                 </p>
@@ -312,8 +312,8 @@ const AuthenticationChoice: React.FC = () => {
                     </ul>
 
                     {/* Setup Info */}
-                    <div className="bg-blue-50 border border-blue-200 rounded px-3 py-2">
-                      <p className="text-blue-700 text-xs flex items-start">
+                    <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded px-3 py-2">
+                      <p className="text-theme-alert-info-text text-xs flex items-start">
                         <Info className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" />
                         <span>{platform.setupInfo}</span>
                       </p>

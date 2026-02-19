@@ -85,8 +85,8 @@ const ModuleOverview: React.FC = () => {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'essential': return 'text-red-700 bg-red-50 border-red-200';
-      case 'recommended': return 'text-blue-700 bg-blue-50 border-blue-200';
+      case 'essential': return 'text-theme-alert-danger-text bg-theme-alert-danger-bg border-theme-alert-danger-border';
+      case 'recommended': return 'text-theme-alert-info-text bg-theme-alert-info-bg border-theme-alert-info-border';
       case 'optional': return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
       default: return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
     }
@@ -185,9 +185,9 @@ const ModuleOverview: React.FC = () => {
           {/* Essential Modules */}
           <div className="mb-8">
             <div className="flex items-center mb-4">
-              <div className="flex-1 h-px bg-red-500/30"></div>
-              <h2 className="px-4 text-lg font-bold text-red-700">ESSENTIAL MODULES</h2>
-              <div className="flex-1 h-px bg-red-500/30"></div>
+              <div className="flex-1 h-px bg-theme-alert-danger-border"></div>
+              <h2 className="px-4 text-lg font-bold text-theme-alert-danger-text">ESSENTIAL MODULES</h2>
+              <div className="flex-1 h-px bg-theme-alert-danger-border"></div>
             </div>
             <p className="text-center text-theme-text-muted text-sm mb-6">
               These core modules are recommended for all departments and are enabled by default
@@ -245,9 +245,9 @@ const ModuleOverview: React.FC = () => {
           {/* Recommended Modules */}
           <div className="mb-8">
             <div className="flex items-center mb-4">
-              <div className="flex-1 h-px bg-blue-500/30"></div>
-              <h2 className="px-4 text-lg font-bold text-blue-700">RECOMMENDED MODULES</h2>
-              <div className="flex-1 h-px bg-blue-500/30"></div>
+              <div className="flex-1 h-px bg-theme-alert-info-border"></div>
+              <h2 className="px-4 text-lg font-bold text-theme-alert-info-text">RECOMMENDED MODULES</h2>
+              <div className="flex-1 h-px bg-theme-alert-info-border"></div>
             </div>
             <p className="text-center text-theme-text-muted text-sm mb-6">
               Popular modules that enhance operations - configure what fits your workflow

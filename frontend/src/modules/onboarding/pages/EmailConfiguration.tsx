@@ -236,14 +236,14 @@ const EmailConfiguration: React.FC = () => {
         return (
           <>
             {/* OAuth vs App Password Toggle */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="alert-info mb-6">
               <div className="flex items-start space-x-3 mb-4">
-                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-blue-800 text-sm font-medium mb-1">
+                  <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                     Choose Authentication Method
                   </p>
-                  <p className="text-blue-700 text-sm">
+                  <p className="text-theme-alert-info-text text-sm">
                     OAuth 2.0 is recommended for better security. App Password is simpler but less secure.
                   </p>
                 </div>
@@ -316,7 +316,7 @@ const EmailConfiguration: React.FC = () => {
                     href="https://console.cloud.google.com/apis/credentials"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
+                    className="text-theme-alert-info-icon hover:text-theme-alert-info-title underline mt-2 inline-block"
                   >
                     Open Google Cloud Console →
                   </a>
@@ -363,7 +363,7 @@ const EmailConfiguration: React.FC = () => {
                     href="https://myaccount.google.com/apppasswords"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
+                    className="text-theme-alert-info-icon hover:text-theme-alert-info-title underline mt-2 inline-block"
                   >
                     Create App Password →
                   </a>
@@ -376,14 +376,14 @@ const EmailConfiguration: React.FC = () => {
       case 'microsoft':
         return (
           <>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="alert-info mb-6">
               <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-blue-800 text-sm font-medium mb-1">
+                  <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                     Microsoft 365 / Azure AD Setup
                   </p>
-                  <p className="text-blue-700 text-sm">
+                  <p className="text-theme-alert-info-text text-sm">
                     You'll need admin access to your Microsoft 365 tenant to configure email integration.
                   </p>
                 </div>
@@ -444,7 +444,7 @@ const EmailConfiguration: React.FC = () => {
                 href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
+                className="text-theme-alert-info-icon hover:text-theme-alert-info-title underline mt-2 inline-block"
               >
                 Open Azure Portal →
               </a>

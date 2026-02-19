@@ -857,10 +857,10 @@ const OrganizationSetup: React.FC = () => {
             {expandedSections.mailing && (
               <div className="p-4 bg-theme-surface-secondary space-y-4">
                 {/* Info banner explaining why mailing address is required */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-3">
                   <div className="flex items-start space-x-2">
-                    <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-blue-700">
+                    <AlertCircle className="w-4 h-4 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-theme-alert-info-text">
                       <strong>Why is this required?</strong> Your mailing address is used for official correspondence,
                       certifications, and legal documentation. If your physical location differs (e.g., PO Box vs. station address),
                       you can specify that separately below.

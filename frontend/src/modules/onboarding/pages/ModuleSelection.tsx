@@ -228,14 +228,14 @@ const ModuleSelection: React.FC = () => {
               )}
 
               {!module.canDisable && (
-                <p className="text-blue-600 text-xs mt-2 flex items-center space-x-1">
+                <p className="text-theme-alert-info-icon text-xs mt-2 flex items-center space-x-1">
                   <Info className="w-3 h-3" />
                   <span>Always enabled</span>
                 </p>
               )}
 
               {module.requiresSetup && (
-                <p className="text-yellow-600 text-xs mt-2 flex items-center space-x-1">
+                <p className="text-theme-alert-warning-icon text-xs mt-2 flex items-center space-x-1">
                   <Info className="w-3 h-3" />
                   <span>{module.setupDescription}</span>
                 </p>
@@ -294,12 +294,12 @@ const ModuleSelection: React.FC = () => {
           </div>
 
           {/* Info Banner */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="alert-info mb-6">
             <div className="flex items-start space-x-3">
-              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <Info className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-blue-800 text-sm font-medium mb-1">Module Categories</p>
-                <div className="text-blue-700 text-sm space-y-1">
+                <p className="text-theme-alert-info-title text-sm font-medium mb-1">Module Categories</p>
+                <div className="text-theme-alert-info-text text-sm space-y-1">
                   <p>
                     <strong>Core Modules:</strong> Always enabled – essential for all departments
                   </p>

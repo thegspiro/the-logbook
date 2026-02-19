@@ -97,11 +97,11 @@ const ModuleConfigTemplate: React.FC = () => {
         </div>
 
         {/* Two-Tier Permission Model Explanation */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div className="alert-info mb-6">
           <div className="flex items-start">
-            <Info className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+            <Info className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 flex-shrink-0" />
             <div>
-              <p className="text-blue-800 font-semibold mb-1">How Permissions Work</p>
+              <p className="text-theme-alert-info-title font-semibold mb-1">How Permissions Work</p>
               <p className="text-theme-text-secondary text-sm">
                 <strong>View Access</strong> allows members to see and use basic features.{' '}
                 <strong>Manage Access</strong> allows creating, editing, and administrative actions.
@@ -120,7 +120,7 @@ const ModuleConfigTemplate: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-theme-text-primary font-bold text-lg">View Access</h2>
-                <p className="text-green-600 text-sm">All Members</p>
+                <p className="text-theme-alert-success-icon text-sm">All Members</p>
               </div>
             </div>
             <p className="text-theme-text-secondary text-sm mb-4">{config?.permissions.viewDescription}</p>

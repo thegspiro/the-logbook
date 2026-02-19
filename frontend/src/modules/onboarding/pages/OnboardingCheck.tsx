@@ -467,22 +467,22 @@ const OnboardingCheck: React.FC = () => {
 
           {/* Schema error specific instructions */}
           {schemaError && (
-            <div className="mb-6 text-left bg-orange-50 rounded-lg p-4 border border-orange-200">
-              <p className="text-orange-800 text-sm font-semibold mb-2">To Fix This Issue:</p>
+            <div className="mb-6 text-left alert-warning">
+              <p className="text-theme-alert-warning-title text-sm font-semibold mb-2">To Fix This Issue:</p>
               <ol className="text-theme-text-secondary text-sm space-y-2 list-decimal list-inside">
                 <li>Stop all containers:
-                  <code className="block mt-1 bg-orange-100 rounded px-2 py-1 text-orange-800 font-mono text-xs">
+                  <code className="block mt-1 bg-theme-alert-warning-bg rounded px-2 py-1 text-theme-alert-warning-title font-mono text-xs">
                     docker compose down -v
                   </code>
                 </li>
                 <li>Rebuild and start:
-                  <code className="block mt-1 bg-orange-100 rounded px-2 py-1 text-orange-800 font-mono text-xs">
+                  <code className="block mt-1 bg-theme-alert-warning-bg rounded px-2 py-1 text-theme-alert-warning-title font-mono text-xs">
                     docker compose up --build
                   </code>
                 </li>
               </ol>
               <p className="text-theme-text-muted text-xs mt-3">
-                The <code className="text-orange-700">-v</code> flag removes database volumes for a fresh start.
+                The <code className="text-theme-alert-warning-text">-v</code> flag removes database volumes for a fresh start.
                 Since onboarding hasn't completed, no data will be lost.
               </p>
             </div>
@@ -578,14 +578,14 @@ const OnboardingCheck: React.FC = () => {
             <div className="mt-4 pt-4 border-t border-theme-nav-border">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 mt-0.5">
-                  <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="text-blue-600 animate-pulse">
+                  <div className="p-2 bg-theme-alert-info-bg rounded-lg border border-theme-alert-info-border">
+                    <div className="text-theme-alert-info-icon animate-pulse">
                       <Server className="h-5 w-5" />
                     </div>
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-blue-800 font-semibold text-base mb-1">
+                  <h3 className="text-theme-alert-info-title font-semibold text-base mb-1">
                     Waiting for Backend
                   </h3>
                   <p className="text-theme-text-secondary text-sm mb-1">
@@ -607,14 +607,14 @@ const OnboardingCheck: React.FC = () => {
                     {/* Current Phase with Icon */}
                     <div className="flex items-start gap-3 mb-3">
                       <div className="flex-shrink-0 mt-0.5">
-                        <div className="p-2 bg-orange-500/10 rounded-lg border border-orange-500/30">
-                          <div className="text-orange-400 animate-pulse">
+                        <div className="p-2 bg-theme-alert-warning-bg rounded-lg border border-theme-alert-warning-border">
+                          <div className="text-theme-alert-warning-icon animate-pulse">
                             {phaseDetails.icon}
                           </div>
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-orange-400 font-semibold text-base mb-1">
+                        <h3 className="text-theme-alert-warning-icon font-semibold text-base mb-1">
                           {phaseDetails.title}
                         </h3>
                         <p className="text-theme-text-secondary text-sm mb-1">
@@ -633,13 +633,13 @@ const OnboardingCheck: React.FC = () => {
                       <div className="mt-3 p-3 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
                         <div className="flex items-center justify-between text-xs text-theme-text-muted mb-2">
                           <span className="font-medium">Database Migrations</span>
-                          <span className="text-orange-400 font-semibold">
+                          <span className="text-theme-alert-warning-icon font-semibold">
                             {startupInfo.migrations.completed}/{startupInfo.migrations.total}
                           </span>
                         </div>
                         {startupInfo.migrations.completed === 0 && startupInfo.migrations.total > 0 && (
                           <div className="text-xs text-theme-text-muted mb-2 space-y-1">
-                            <p className="font-medium text-orange-400">
+                            <p className="font-medium text-theme-alert-warning-icon">
                               Creating {startupInfo.migrations.total} database tables...
                             </p>
                             <p className="text-theme-text-muted">
@@ -657,7 +657,7 @@ const OnboardingCheck: React.FC = () => {
 
                         {/* Current feature being set up and ETA */}
                         <div className="space-y-1">
-                          <p className="text-orange-700 text-sm font-medium">
+                          <p className="text-theme-alert-warning-text text-sm font-medium">
                             {getMigrationFeatureMessage(startupInfo.migrations.current)}
                           </p>
                           {getEstimatedTimeRemaining() && (
@@ -677,11 +677,11 @@ const OnboardingCheck: React.FC = () => {
           {/* Educational Tips - shown while waiting */}
           {(isWaiting || (startupInfo && !startupInfo.ready)) && (
             <div className="mt-4 pt-4 border-t border-theme-nav-border">
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <div className="bg-theme-alert-info-bg rounded-lg p-4 border border-theme-alert-info-border">
                 <div className="flex items-start gap-3">
                   <div className="text-3xl flex-shrink-0">{educationalTips[currentTipIndex].icon}</div>
                   <div className="flex-1">
-                    <h4 className="text-blue-800 font-semibold text-sm mb-1">
+                    <h4 className="text-theme-alert-info-title font-semibold text-sm mb-1">
                       {educationalTips[currentTipIndex].title}
                     </h4>
                     <p className="text-theme-text-secondary text-xs">
@@ -694,7 +694,7 @@ const OnboardingCheck: React.FC = () => {
                     <div
                       key={index}
                       className={`h-1 rounded-full transition-all duration-300 ${
-                        index === currentTipIndex ? 'w-6 bg-blue-600' : 'w-1 bg-theme-surface-border'
+                        index === currentTipIndex ? 'w-6 bg-theme-alert-info-icon' : 'w-1 bg-theme-surface-border'
                       }`}
                     />
                   ))}
@@ -788,13 +788,13 @@ const OnboardingCheck: React.FC = () => {
 
         {/* Skip option - shown after several attempts */}
         {showSkipOption && requiredConnected >= 1 && (
-          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-yellow-800 text-sm mb-3">
+          <div className="mt-4 alert-warning">
+            <p className="text-theme-alert-warning-title text-sm mb-3">
               Taking longer than expected? If the Backend API is connected, you can try to continue.
             </p>
             <button
               onClick={handleSkip}
-              className="w-full px-4 py-2 bg-yellow-100 hover:bg-yellow-200 border border-yellow-300 text-yellow-800 font-medium rounded-lg transition-all duration-300 text-sm"
+              className="w-full px-4 py-2 bg-theme-alert-warning-bg hover:opacity-80 border border-theme-alert-warning-border text-theme-alert-warning-title font-medium rounded-lg transition-all duration-300 text-sm"
             >
               Skip Wait & Continue
             </button>
