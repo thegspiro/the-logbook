@@ -1143,7 +1143,6 @@ export default function LocationsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {(rooms.get('__other__') || []).map(room => (
                   <RoomCard key={room.id} room={room} onEdit={openEditRoom} onDelete={handleDeleteRoom} />
-                  </div>
                 ))}
               </div>
             </div>
