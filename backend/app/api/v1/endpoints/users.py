@@ -189,7 +189,7 @@ async def create_member(
         # Verify all role IDs exist and belong to the organization
         result = await db.execute(
             select(Role)
-            .where(Role.id.in_(user_data.role_ids))
+            .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
@@ -375,7 +375,7 @@ async def assign_user_roles(
     if role_assignment.role_ids:
         result = await db.execute(
             select(Role)
-            .where(Role.id.in_(role_assignment.role_ids))
+            .where(Role.id.in_([str(rid) for rid in role_assignment.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
