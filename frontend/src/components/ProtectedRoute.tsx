@@ -59,6 +59,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Force password change if required by admin or expired
+  const needsPasswordChange = user?.must_change_password || user?.password_expired;
+  if (needsPasswordChange && location.pathname !== '/settings') {
+    return <Navigate to="/settings" state={{ forcePasswordChange: true }} replace />;
+  }
+
   // Check for required permission
   if (requiredPermission && !checkPermission(requiredPermission)) {
     return (

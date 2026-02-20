@@ -21,6 +21,7 @@ from app.schemas.user import (
     ContactInfoUpdate,
     UserProfileResponse,
     AdminUserCreate,
+    AdminPasswordReset,
     UserUpdate,
 )
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
@@ -163,8 +164,20 @@ async def create_member(
             detail="Email already exists"
         )
 
-    # Generate temporary password
-    temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*") for _ in range(16))
+    # Use admin-provided password or generate a temporary one
+    if user_data.password:
+        from app.core.security import validate_password_strength
+        is_valid, error_msg = validate_password_strength(user_data.password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+        initial_password = user_data.password
+        password_hash = hash_password(initial_password)
+    else:
+        initial_password = ''.join(secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*") for _ in range(16))
+        password_hash = hash_password(initial_password, skip_validation=True)
 
     # Create new user
     new_user = User(
@@ -172,7 +185,7 @@ async def create_member(
         organization_id=current_user.organization_id,
         username=user_data.username,
         email=user_data.email,
-        password_hash=hash_password(temp_password),
+        password_hash=password_hash,
         first_name=user_data.first_name,
         middle_name=user_data.middle_name,
         last_name=user_data.last_name,
@@ -194,6 +207,7 @@ async def create_member(
         emergency_contacts=[ec.model_dump() for ec in user_data.emergency_contacts],
         email_verified=False,
         status=UserStatus.ACTIVE,
+        must_change_password=True,
     )
 
     db.add(new_user)
@@ -279,7 +293,7 @@ async def create_member(
                     first_name=welcome_first,
                     last_name=welcome_last,
                     username=welcome_username,
-                    temp_password=temp_password,
+                    temp_password=initial_password,
                     organization_name=org_name,
                     login_url=login_url,
                     organization_id=welcome_org_id,
@@ -945,3 +959,78 @@ async def delete_user(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+
+@router.post("/{user_id}/reset-password", status_code=status.HTTP_200_OK)
+async def admin_reset_password(
+    user_id: UUID,
+    reset_data: AdminPasswordReset,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("users.create", "members.manage")),
+):
+    """
+    Reset a user's password (IT Lead / Admin only)
+
+    Allows administrators to set a new password for any member.
+    By default the user is required to change the password on next login.
+
+    Requires `users.create` or `members.manage` permission.
+
+    **Authentication required**
+    """
+    from app.core.security import hash_password, validate_password_strength
+
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use the change-password endpoint to change your own password",
+        )
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Validate the new password
+    is_valid, error_msg = validate_password_strength(reset_data.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
+    # Capture username before commit
+    target_username = user.username
+
+    user.password_hash = hash_password(reset_data.new_password)
+    user.must_change_password = reset_data.force_change
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.password_changed_at = datetime.now(timezone.utc)
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="admin_password_reset",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user_id),
+            "target_username": target_username,
+            "force_change": reset_data.force_change,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {"message": f"Password has been reset for {target_username}"}

@@ -77,6 +77,7 @@ class AdminUserCreate(BaseModel):
     emergency_contacts: List[EmergencyContact] = Field(default_factory=list)
 
     # Admin options
+    password: Optional[str] = Field(None, min_length=12, description="Optional initial password. If omitted a temporary password is auto-generated.")
     role_ids: List[UUID] = Field(default_factory=list, description="Initial roles to assign")
     send_welcome_email: bool = Field(default=True, description="Send welcome email with password setup link")
 
@@ -232,3 +233,9 @@ class UserProfileResponse(UserResponse):
     notification_preferences: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdminPasswordReset(BaseModel):
+    """Schema for admin resetting a user's password"""
+    new_password: str = Field(..., min_length=12, description="New password for the user")
+    force_change: bool = Field(default=True, description="Require the user to change the password on next login")

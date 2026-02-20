@@ -115,6 +115,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         positions: user.positions ?? user.roles ?? [],
         rank: user.rank ?? null,
         membership_type: user.membership_type ?? 'member',
+        must_change_password: user.must_change_password ?? false,
       };
       set({
         user: normalizedUser,

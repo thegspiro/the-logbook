@@ -357,6 +357,7 @@ async def get_current_user_info(
         email_verified=current_user.email_verified,
         mfa_enabled=current_user.mfa_enabled,
         password_expired=password_expired,
+        must_change_password=bool(current_user.must_change_password),
     )
 
 

@@ -37,7 +37,7 @@ password_hasher = PasswordHasher(
 )
 
 
-def hash_password(password: str) -> str:
+def hash_password(password: str, *, skip_validation: bool = False) -> str:
     """
     Hash a password using Argon2id
 
@@ -46,6 +46,9 @@ def hash_password(password: str) -> str:
 
     Args:
         password: Plain text password
+        skip_validation: If True, skip password strength validation.
+            Used for admin-generated temporary passwords that may not
+            meet user-facing complexity requirements.
 
     Returns:
         Hashed password string
@@ -53,8 +56,10 @@ def hash_password(password: str) -> str:
     Raises:
         ValueError: If password doesn't meet complexity requirements
     """
-    # Validate password strength
-    validate_password_strength(password)
+    if not skip_validation:
+        is_valid, error_msg = validate_password_strength(password)
+        if not is_valid:
+            raise ValueError(error_msg)
 
     # Hash the password
     return password_hasher.hash(password)
