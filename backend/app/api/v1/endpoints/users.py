@@ -217,8 +217,18 @@ async def create_member(
 
         new_user.roles = roles
 
+    # Capture assigned role IDs before commit expires the relationship
+    assigned_role_ids = [str(r.id) for r in roles] if user_data.role_ids else []
+
     await db.commit()
-    await db.refresh(new_user, ["positions"])
+
+    # Re-query with eager loading so Pydantic can serialize roles without lazy loading
+    result = await db.execute(
+        select(User)
+        .where(User.id == new_user.id)
+        .options(selectinload(User.positions))
+    )
+    new_user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -229,7 +239,7 @@ async def create_member(
             "new_user_id": str(new_user.id),
             "username": new_user.username,
             "email": new_user.email,
-            "roles_assigned": [str(r.id) for r in new_user.roles],
+            "roles_assigned": assigned_role_ids,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -411,7 +421,14 @@ async def assign_user_roles(
     # Assign new roles
     user.roles = roles
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -489,7 +506,14 @@ async def add_role_to_user(
     # Add role
     user.roles.append(role)
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -557,9 +581,17 @@ async def remove_role_from_user(
             detail="User does not have this role"
         )
 
+    role_removed_name = role_to_remove.name
     user.roles.remove(role_to_remove)
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -569,7 +601,7 @@ async def remove_role_from_user(
         event_data={
             "target_user_id": str(user_id),
             "role_id": str(role_id),
-            "role_name": role_to_remove.name,
+            "role_name": role_removed_name,
             "action": "role_removed",
         },
         user_id=str(current_user.id),
@@ -695,7 +727,14 @@ async def update_contact_info(
         user.notification_preferences = contact_update.notification_preferences.model_dump()
 
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -788,7 +827,14 @@ async def update_user_profile(
             setattr(user, field, value)
 
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,

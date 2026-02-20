@@ -310,7 +310,7 @@ export const MemberProfilePage: React.FC = () => {
                   <p className="text-sm text-theme-text-secondary mt-1">Badge #{user.badge_number}</p>
                 )}
                 <div className="flex gap-2 mt-2">
-                  {user.roles.map((role) => (
+                  {(user.roles || []).map((role) => (
                     <span
                       key={role.id}
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
