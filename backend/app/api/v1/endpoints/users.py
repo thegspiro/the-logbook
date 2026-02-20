@@ -200,7 +200,14 @@ async def create_member(
                 detail="One or more role IDs are invalid"
             )
 
-        new_user.roles = roles
+        for role in roles:
+            await db.execute(
+                user_roles.insert().values(
+                    user_id=new_user.id,
+                    position_id=role.id,
+                    assigned_by=current_user.id,
+                )
+            )
 
     await db.commit()
     await db.refresh(new_user, ["positions"])
