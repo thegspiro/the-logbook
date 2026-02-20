@@ -350,6 +350,7 @@ export const ElectionsPage: React.FC = () => {
                     </label>
                     <input
                       type="datetime-local"
+                      step="900"
                       id="election-start-date"
                       required
                       aria-required="true"
@@ -365,6 +366,7 @@ export const ElectionsPage: React.FC = () => {
                     </label>
                     <input
                       type="datetime-local"
+                      step="900"
                       id="election-end-date"
                       required
                       aria-required="true"
@@ -401,7 +403,7 @@ export const ElectionsPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setEndOfDay()}
-                            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
                           >
                             End of Day (Default)
                           </button>

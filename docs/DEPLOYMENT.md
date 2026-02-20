@@ -368,7 +368,7 @@ See [BACKUP.md](./BACKUP.md) for detailed backup configuration.
 ### 3. Set Up Monitoring
 
 **Health Checks:**
-- Backend: `https://yourdomain.com/api/v1/health`
+- Backend: `https://yourdomain.com/health`
 - Database: `docker compose exec backend alembic current`
 
 **Monitoring Tools:**

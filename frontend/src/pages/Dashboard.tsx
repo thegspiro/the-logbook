@@ -362,7 +362,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
               </div>
 
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/dashboard')}>
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/action-items')}>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-theme-text-secondary text-xs font-medium uppercase">Action Items</p>
@@ -413,7 +413,7 @@ const Dashboard: React.FC = () => {
                 {loadingHours ? (
                   <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                 ) : (
-                  <p className="text-green-400 text-2xl font-bold mt-1">{hours.training}</p>
+                  <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{hours.training}</p>
                 )}
               </div>
               <BookOpen className="w-8 h-8 text-green-400" aria-hidden="true" />
@@ -428,7 +428,7 @@ const Dashboard: React.FC = () => {
                 {loadingHours ? (
                   <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                 ) : (
-                  <p className="text-yellow-400 text-2xl font-bold mt-1">{hours.standby}</p>
+                  <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">{hours.standby}</p>
                 )}
               </div>
               <Shield className="w-8 h-8 text-yellow-400" aria-hidden="true" />
@@ -741,7 +741,7 @@ const Dashboard: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-3">
                       <div
                         className={`h-2 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
                         style={{ width: `${enrollment.progress_percentage}%` }}

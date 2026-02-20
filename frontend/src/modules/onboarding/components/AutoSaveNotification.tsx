@@ -50,7 +50,7 @@ export const AutoSaveNotification: React.FC<AutoSaveNotificationProps> = ({
       </div>
 
       {showTimestamp && lastSaved && (
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-theme-text-muted">
           Last saved: {formatTimestamp(lastSaved)}
         </span>
       )}

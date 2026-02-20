@@ -13,7 +13,7 @@ const OnboardingFooter: React.FC<OnboardingFooterProps> = ({ departmentName }) =
         <p className="text-theme-text-secondary text-sm">
           © {currentYear} {departmentName}. All rights reserved.
         </p>
-        <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
+        <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
       </div>
     </footer>
   );

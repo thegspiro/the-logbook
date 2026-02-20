@@ -457,7 +457,7 @@ export const MembersAdminPage: React.FC = () => {
                             key={role.id}
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               role.is_system
-                                ? 'bg-blue-500/10 text-blue-400'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
                                 : 'bg-theme-surface text-theme-text-secondary'
                             }`}
                           >
@@ -478,8 +478,8 @@ export const MembersAdminPage: React.FC = () => {
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.status === 'active'
-                          ? 'bg-green-500/10 text-green-400'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
                       }`}
                     >
                       {user.status}
@@ -532,7 +532,7 @@ export const MembersAdminPage: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
                         {role.is_system && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                             System
                           </span>
                         )}
@@ -598,7 +598,7 @@ export const MembersAdminPage: React.FC = () => {
       {/* Edit Profile Modal */}
       {editingProfile && profileUser && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-profile-title"
@@ -736,7 +736,7 @@ export const MembersAdminPage: React.FC = () => {
       {/* Role Assignment Modal (for View by Member) */}
       {editingRoles && selectedUser && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="manage-roles-title"
@@ -772,7 +772,7 @@ export const MembersAdminPage: React.FC = () => {
                           {role.name}
                         </span>
                         {role.is_system && (
-                          <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded">
+                          <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 px-2 py-0.5 rounded">
                             System
                           </span>
                         )}
@@ -813,7 +813,7 @@ export const MembersAdminPage: React.FC = () => {
       {/* Member Assignment Modal (for View by Role) */}
       {editingMembers && selectedRole && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="manage-members-title"

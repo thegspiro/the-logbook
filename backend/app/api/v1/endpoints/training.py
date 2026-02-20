@@ -8,6 +8,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+import csv
+import io
 from sqlalchemy.orm import selectinload
 from uuid import UUID
 from datetime import date, datetime, timedelta
@@ -1734,3 +1736,169 @@ async def get_expiring_certifications_detailed(
         }
         for r in records
     ]
+
+
+VALID_TRAINING_TYPES = {"certification", "continuing_education", "skills_practice", "orientation", "refresher", "specialty"}
+VALID_STATUSES = {"scheduled", "in_progress", "completed", "cancelled", "failed"}
+
+
+@router.post("/records/import-csv")
+async def import_training_csv(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Import historical training records from a CSV file.
+
+    The CSV must include headers. Required columns: memberEmail, courseName,
+    trainingType, completionDate, hoursCompleted. Users are matched by email
+    within the current organisation.
+
+    **Requires permission: training.manage**
+    """
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a .csv")
+
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")  # handle BOM from Excel
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV file is empty or has no headers")
+
+    lower_fields = [f.strip().lower() for f in reader.fieldnames]
+    required = {"memberemail", "coursename", "trainingtype", "completiondate", "hourscompleted"}
+    missing = required - set(lower_fields)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required columns: {', '.join(sorted(missing))}",
+        )
+
+    # Build a column-name → index map (case-insensitive)
+    col_map = {f.strip().lower(): f.strip() for f in reader.fieldnames}
+
+    # Pre-load all org users keyed by lowercase email for fast lookup
+    result = await db.execute(
+        select(User)
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.deleted_at.is_(None))
+    )
+    org_users = {u.email.lower(): u for u in result.scalars().all() if u.email}
+
+    successes = 0
+    failures: list[dict] = []
+
+    for row_num, row in enumerate(reader, start=2):  # row 1 is header
+        try:
+            email = (row.get(col_map.get("memberemail", ""), "") or "").strip().lower()
+            if not email:
+                failures.append({"row": row_num, "error": "Missing memberEmail"})
+                continue
+
+            user = org_users.get(email)
+            if not user:
+                failures.append({"row": row_num, "error": f"No member found with email: {email}"})
+                continue
+
+            course_name = (row.get(col_map.get("coursename", ""), "") or "").strip()
+            if not course_name:
+                failures.append({"row": row_num, "error": "Missing courseName"})
+                continue
+
+            training_type = (row.get(col_map.get("trainingtype", ""), "") or "").strip().lower()
+            if training_type not in VALID_TRAINING_TYPES:
+                failures.append({"row": row_num, "error": f"Invalid trainingType: '{training_type}'. Must be one of: {', '.join(sorted(VALID_TRAINING_TYPES))}"})
+                continue
+
+            completion_str = (row.get(col_map.get("completiondate", ""), "") or "").strip()
+            if not completion_str:
+                failures.append({"row": row_num, "error": "Missing completionDate"})
+                continue
+            try:
+                completion_date_val = date.fromisoformat(completion_str)
+            except ValueError:
+                failures.append({"row": row_num, "error": f"Invalid completionDate format: '{completion_str}'. Use YYYY-MM-DD"})
+                continue
+
+            hours_str = (row.get(col_map.get("hourscompleted", ""), "") or "").strip()
+            if not hours_str:
+                failures.append({"row": row_num, "error": "Missing hoursCompleted"})
+                continue
+            try:
+                hours_val = float(hours_str)
+                if hours_val < 0:
+                    raise ValueError
+            except ValueError:
+                failures.append({"row": row_num, "error": f"Invalid hoursCompleted: '{hours_str}'. Must be a non-negative number"})
+                continue
+
+            # Optional fields
+            course_code = (row.get(col_map.get("coursecode", ""), "") or "").strip() or None
+            instructor = (row.get(col_map.get("instructor", ""), "") or "").strip() or None
+            location = (row.get(col_map.get("location", ""), "") or "").strip() or None
+            cert_number = (row.get(col_map.get("certificationnumber", ""), "") or "").strip() or None
+            issuing_agency = (row.get(col_map.get("issuingagency", ""), "") or "").strip() or None
+            notes = (row.get(col_map.get("notes", ""), "") or "").strip() or None
+
+            status_str = (row.get(col_map.get("status", ""), "") or "").strip().lower() or "completed"
+            if status_str not in VALID_STATUSES:
+                status_str = "completed"
+
+            expiration_date_val = None
+            exp_str = (row.get(col_map.get("expirationdate", ""), "") or "").strip()
+            if exp_str:
+                try:
+                    expiration_date_val = date.fromisoformat(exp_str)
+                except ValueError:
+                    pass  # non-critical, skip silently
+
+            credit_hours = None
+            ch_str = (row.get(col_map.get("credithours", ""), "") or "").strip()
+            if ch_str:
+                try:
+                    credit_hours = float(ch_str)
+                except ValueError:
+                    pass
+
+            score = None
+            score_str = (row.get(col_map.get("score", ""), "") or "").strip()
+            if score_str:
+                try:
+                    score = float(score_str)
+                except ValueError:
+                    pass
+
+            record = TrainingRecord(
+                organization_id=current_user.organization_id,
+                created_by=current_user.id,
+                user_id=user.id,
+                course_name=course_name,
+                course_code=course_code,
+                training_type=training_type,
+                completion_date=completion_date_val,
+                expiration_date=expiration_date_val,
+                hours_completed=hours_val,
+                credit_hours=credit_hours,
+                certification_number=cert_number,
+                issuing_agency=issuing_agency,
+                status=status_str,
+                score=score,
+                instructor=instructor,
+                location=location,
+                notes=notes,
+            )
+            db.add(record)
+            successes += 1
+
+        except Exception as e:
+            failures.append({"row": row_num, "error": str(e)})
+
+    if successes > 0:
+        await db.commit()
+
+    return {"success": successes, "failed": len(failures), "errors": failures}

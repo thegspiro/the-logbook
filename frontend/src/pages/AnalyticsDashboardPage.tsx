@@ -182,7 +182,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                 .map(([errorType, count]) => (
                   <div key={errorType} className="flex justify-between items-center">
                     <span className="text-sm text-theme-text-secondary truncate flex-1">{errorType}</span>
-                    <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-semibold ml-2">
+                    <span className="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 rounded text-xs font-semibold ml-2">
                       {count}
                     </span>
                   </div>

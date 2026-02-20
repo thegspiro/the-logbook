@@ -140,6 +140,10 @@ async def create_election(
         )
 
     import secrets as _secrets
+    election_data = election.model_dump()
+    # Convert UUID objects to strings for JSON-serializable storage
+    if election_data.get("eligible_voters"):
+        election_data["eligible_voters"] = [str(v) for v in election_data["eligible_voters"]]
     new_election = Election(
         id=uuid4(),
         organization_id=current_user.organization_id,
@@ -147,7 +151,7 @@ async def create_election(
         status=ElectionStatus.DRAFT,
         # SEC-12: Generate per-election salt for anonymous voter hash privacy
         voter_anonymity_salt=_secrets.token_hex(32),
-        **election.model_dump()
+        **election_data
     )
 
     db.add(new_election)
@@ -445,6 +449,10 @@ async def update_election(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="End date must be after start date"
                 )
+
+    # Convert UUID objects to strings for JSON-serializable storage
+    if "eligible_voters" in update_data and update_data["eligible_voters"]:
+        update_data["eligible_voters"] = [str(v) for v in update_data["eligible_voters"]]
 
     # Update fields
     for field, value in update_data.items():
@@ -774,7 +782,7 @@ async def update_candidate(
     result = await db.execute(
         select(Candidate)
         .where(Candidate.id == str(candidate_id))
-        .where(Candidate.election_id == election_id)
+        .where(Candidate.election_id == str(election_id))
     )
     candidate = result.scalar_one_or_none()
 
@@ -813,7 +821,7 @@ async def delete_candidate(
     result = await db.execute(
         select(Candidate)
         .where(Candidate.id == str(candidate_id))
-        .where(Candidate.election_id == election_id)
+        .where(Candidate.election_id == str(election_id))
     )
     candidate = result.scalar_one_or_none()
 

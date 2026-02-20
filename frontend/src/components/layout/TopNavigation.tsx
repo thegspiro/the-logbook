@@ -41,10 +41,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [facilitiesModuleEnabled, setFacilitiesModuleEnabled] = useState(false);
+  const [apparatusModuleEnabled, setApparatusModuleEnabled] = useState(false);
 
   useEffect(() => {
     organizationService.getEnabledModules()
-      .then(res => setFacilitiesModuleEnabled(res.enabled_modules.includes('facilities')))
+      .then(res => {
+        setFacilitiesModuleEnabled(res.enabled_modules.includes('facilities'));
+        setApparatusModuleEnabled(res.enabled_modules.includes('apparatus'));
+      })
       .catch(() => { /* default to false */ });
   }, []);
 
@@ -65,7 +69,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     checkPermission('events.manage') ||
     checkPermission('training.manage') ||
     checkPermission('inventory.manage') ||
-    checkPermission('roles.manage') ||
+    checkPermission('positions.manage_permissions') ||
     checkPermission('settings.manage') ||
     checkPermission('analytics.view');
 
@@ -92,7 +96,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       path: '/inventory',
       subItems: [
         { label: 'Inventory', path: '/inventory' },
-        { label: 'Apparatus', path: '/apparatus' },
+        ...(apparatusModuleEnabled
+          ? [{ label: 'Apparatus', path: '/apparatus' }]
+          : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
         ...(facilitiesModuleEnabled ? [{ label: 'Facilities', path: '/facilities' }] : []),
       ],
     },
@@ -103,6 +109,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       subItems: [
         { label: 'Elections', path: '/elections' },
         { label: 'Minutes', path: '/minutes' },
+        { label: 'Action Items', path: '/action-items' },
       ],
     },
     { label: 'Notifications', path: '/notifications' },
@@ -123,7 +130,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Integrations', path: '/integrations', permission: 'settings.manage' },
         { label: 'Reports', path: '/reports' },
         { label: 'Organization', path: '/settings', permission: 'settings.manage' },
-        { label: 'Role Management', path: '/settings/roles', permission: 'roles.manage' },
+        { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
         { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
         { label: 'Analytics', path: '/admin/analytics', permission: 'analytics.view' },
         { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },

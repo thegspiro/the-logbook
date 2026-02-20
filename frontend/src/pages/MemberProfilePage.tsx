@@ -155,17 +155,17 @@ export const MemberProfilePage: React.FC = () => {
   const getTrainingStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-500/10 text-green-400';
+        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
       case 'in_progress':
-        return 'bg-blue-500/10 text-blue-400';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400';
       case 'scheduled':
-        return 'bg-yellow-500/10 text-yellow-400';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'failed':
-        return 'bg-red-500/10 text-red-400';
+        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       case 'cancelled':
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
     }
   };
 
@@ -322,7 +322,7 @@ export const MemberProfilePage: React.FC = () => {
                     <span
                       key={role.id}
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        role.is_system ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-100 text-gray-800'
+                        role.is_system ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
                       }`}
                     >
                       {role.name}
@@ -334,8 +334,8 @@ export const MemberProfilePage: React.FC = () => {
             <span
               className={`px-3 py-1 text-sm font-semibold rounded-full ${
                 user.status === 'active'
-                  ? 'bg-green-500/10 text-green-400'
-                  : 'bg-gray-100 text-gray-800'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                  : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
               }`}
             >
               {user.status}
@@ -410,12 +410,12 @@ export const MemberProfilePage: React.FC = () => {
                             {training.status.replace('_', ' ')}
                           </span>
                           {isExpired(training) && (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">
                               expired
                             </span>
                           )}
                           {!isExpired(training) && isExpiringSoon(training) && (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-400">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                               expiring soon
                             </span>
                           )}
@@ -476,10 +476,10 @@ export const MemberProfilePage: React.FC = () => {
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                               item.condition === 'Excellent'
-                                ? 'bg-green-500/10 text-green-400'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
                                 : item.condition === 'Good'
-                                ? 'bg-blue-500/10 text-blue-400'
-                                : 'bg-yellow-500/10 text-yellow-400'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
                             }`}
                           >
                             {item.condition}
