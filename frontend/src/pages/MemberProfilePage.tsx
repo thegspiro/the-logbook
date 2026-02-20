@@ -16,7 +16,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { userService, organizationService, trainingService, inventoryService } from '../services/api';
+import { userService, organizationService, trainingService, inventoryService, memberStatusService } from '../services/api';
+import type { LeaveOfAbsenceResponse } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
@@ -76,6 +77,7 @@ export const MemberProfilePage: React.FC = () => {
   const [trainingsLoading, setTrainingsLoading] = useState(false);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [activeLeaves, setActiveLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
@@ -84,6 +86,7 @@ export const MemberProfilePage: React.FC = () => {
     if (userId) {
       fetchUserData();
       fetchModuleStatus();
+      fetchLeaves();
       if (trainingEnabled) {
         fetchTrainingRecords();
       }
@@ -149,6 +152,15 @@ export const MemberProfilePage: React.FC = () => {
       // Don't set error - show empty state
     } finally {
       setInventoryLoading(false);
+    }
+  };
+
+  const fetchLeaves = async () => {
+    try {
+      const data = await memberStatusService.getMemberLeaves(userId!);
+      setActiveLeaves(data);
+    } catch {
+      // Don't set error - show empty state
     }
   };
 
@@ -685,6 +697,31 @@ export const MemberProfilePage: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Active Leaves of Absence */}
+          {activeLeaves.length > 0 && (
+            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Leave of Absence</h2>
+              <div className="space-y-3">
+                {activeLeaves.map((leave) => (
+                  <div key={leave.id} className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-yellow-700 dark:text-yellow-400 capitalize">
+                        {leave.leave_type.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-xs text-theme-text-muted">Active</span>
+                    </div>
+                    <p className="text-xs text-theme-text-secondary">
+                      {new Date(leave.start_date + 'T00:00:00').toLocaleDateString()} &ndash; {new Date(leave.end_date + 'T00:00:00').toLocaleDateString()}
+                    </p>
+                    {leave.reason && (
+                      <p className="text-xs text-theme-text-muted mt-1">{leave.reason}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       </div>

@@ -10,7 +10,9 @@ from app.models.user import (
     Role,
     Session,
     UserStatus,
-    user_roles
+    user_roles,
+    MemberLeaveOfAbsence,
+    LeaveType,
 )
 
 from app.models.audit import (
@@ -240,6 +242,8 @@ __all__ = [
     "Session",
     "UserStatus",
     "user_roles",
+    "MemberLeaveOfAbsence",
+    "LeaveType",
     # Audit models
     "AuditLog",
     "AuditLogCheckpoint",

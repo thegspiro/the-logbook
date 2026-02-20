@@ -19,7 +19,8 @@ from app.models.training import (
     BasicApparatus,
     TrainingRequirement, RequirementType, RequirementFrequency, DueDateType,
 )
-from app.models.user import User, Position, user_positions
+from app.models.user import User, Position, user_positions, MemberLeaveOfAbsence
+from app.services.member_leave_service import MemberLeaveService
 
 
 class SchedulingService:
@@ -723,6 +724,17 @@ class SchedulingService:
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return None, "Shift not found"
+
+            # Check if the member is on leave of absence for the shift date
+            user_id = assignment_data.get("user_id")
+            if user_id and shift.shift_date:
+                leave_svc = MemberLeaveService(self.db)
+                leaves = await leave_svc.get_active_leaves_for_user(
+                    str(organization_id), str(user_id),
+                    shift.shift_date, shift.shift_date,
+                )
+                if leaves:
+                    return None, "Member is on leave of absence for this date"
 
             assignment = ShiftAssignment(
                 organization_id=organization_id,
@@ -1603,6 +1615,23 @@ class SchedulingService:
                     "total_hours": round(row.total_minutes / 60.0, 1),
                 }
 
+            # Pre-load leave months for rolling requirements so we can
+            # pro-rate each member's required value.
+            is_rolling = (
+                req.due_date_type == DueDateType.ROLLING
+                and req.rolling_period_months
+            )
+            user_leave_months: Dict[str, int] = {}
+            if is_rolling:
+                leave_svc = MemberLeaveService(self.db)
+                for uid in user_ids:
+                    leaves = await leave_svc.get_active_leaves_for_user(
+                        str(organization_id), uid, period_start, period_end,
+                    )
+                    user_leave_months[uid] = MemberLeaveService.count_leave_months(
+                        leaves, period_start, period_end,
+                    )
+
             # Build member compliance list
             members = []
             compliant_count = 0
@@ -1615,10 +1644,20 @@ class SchedulingService:
                 else:
                     completed_value = att["total_hours"]
 
+                # Adjust required value for rolling-period requirements
+                # by excluding months the member was on leave.
+                member_required = required_value
+                leave_months = user_leave_months.get(user.id, 0)
+                if is_rolling and leave_months > 0 and req.rolling_period_months:
+                    active_months = max(req.rolling_period_months - leave_months, 1)
+                    member_required = round(
+                        required_value * active_months / req.rolling_period_months, 1
+                    )
+
                 percentage = round(
-                    (completed_value / required_value * 100) if required_value > 0 else 100, 1
+                    (completed_value / member_required * 100) if member_required > 0 else 100, 1
                 )
-                is_compliant = completed_value >= required_value
+                is_compliant = completed_value >= member_required
 
                 if is_compliant:
                     compliant_count += 1
@@ -1630,6 +1669,8 @@ class SchedulingService:
                     "full_name": user.full_name,
                     "rank": user.rank,
                     "completed_value": completed_value,
+                    "required_value": member_required,
+                    "leave_months": leave_months,
                     "percentage": min(percentage, 100),
                     "compliant": is_compliant,
                     "shift_count": att["shift_count"],

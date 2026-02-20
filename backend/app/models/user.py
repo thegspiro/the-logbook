@@ -442,6 +442,79 @@ class Prospect(Base):
         return f"<Prospect(name={self.first_name} {self.last_name}, status={self.status})>"
 
 
+class LeaveType(str, enum.Enum):
+    """Type of leave of absence."""
+    LEAVE_OF_ABSENCE = "leave_of_absence"
+    MEDICAL = "medical"
+    MILITARY = "military"
+    PERSONAL = "personal"
+    ADMINISTRATIVE = "administrative"
+    OTHER = "other"
+
+
+class MemberLeaveOfAbsence(Base):
+    """
+    Member Leave of Absence
+
+    Records periods where a member is on leave from the department.
+    When a rolling-period requirement is calculated, months that fall
+    within a leave period are excluded from the denominator so the
+    member is not penalised for time they were inactive.
+
+    Managed through the membership module and read by training and
+    shift modules.
+    """
+
+    __tablename__ = "member_leaves_of_absence"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    leave_type = Column(
+        Enum(LeaveType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=LeaveType.LEAVE_OF_ABSENCE,
+    )
+    reason = Column(Text, nullable=True)
+
+    # The period the member is on leave (inclusive, month-level granularity)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    # Approval
+    granted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    granted_at = Column(DateTime(timezone=True), nullable=True)
+
+    active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    grantor = relationship("User", foreign_keys=[granted_by])
+
+    __table_args__ = (
+        Index('idx_member_leave_org_user', 'organization_id', 'user_id'),
+        Index('idx_member_leave_dates', 'start_date', 'end_date'),
+    )
+
+    def __repr__(self):
+        return f"<MemberLeaveOfAbsence(user_id={self.user_id}, {self.start_date} - {self.end_date})>"
+
+
 class Session(Base):
     """
     User session model for tracking active sessions
