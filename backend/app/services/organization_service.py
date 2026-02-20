@@ -49,22 +49,25 @@ class OrganizationService:
         perform a one-time migration from OnboardingStatus.enabled_modules
         and persist the result so subsequent reads are fast and consistent.
         """
-        modules = settings_dict.get("modules", {})
+        modules = settings_dict.get("modules")
 
-        # Happy path: org.settings.modules already populated
-        if modules and any(v is True for v in modules.values()):
+        # Happy path: org.settings.modules has been explicitly configured.
+        # Check that the key exists and is a non-empty dict.  We intentionally
+        # do NOT require any value to be True — the user may have deliberately
+        # disabled every optional module and that choice must be respected.
+        if isinstance(modules, dict) and len(modules) > 0:
             return ModuleSettings(
-                training=modules.get("training", False),
-                inventory=modules.get("inventory", False),
-                scheduling=modules.get("scheduling", False),
-                elections=modules.get("elections", False),
-                minutes=modules.get("minutes", False),
-                reports=modules.get("reports", False),
-                notifications=modules.get("notifications", False),
-                mobile=modules.get("mobile", False),
-                forms=modules.get("forms", False),
-                integrations=modules.get("integrations", False),
-                facilities=modules.get("facilities", False),
+                training=bool(modules.get("training", False)),
+                inventory=bool(modules.get("inventory", False)),
+                scheduling=bool(modules.get("scheduling", False)),
+                elections=bool(modules.get("elections", False)),
+                minutes=bool(modules.get("minutes", False)),
+                reports=bool(modules.get("reports", False)),
+                notifications=bool(modules.get("notifications", False)),
+                mobile=bool(modules.get("mobile", False)),
+                forms=bool(modules.get("forms", False)),
+                integrations=bool(modules.get("integrations", False)),
+                facilities=bool(modules.get("facilities", False)),
             )
 
         # ── One-time migration from legacy OnboardingStatus ──
