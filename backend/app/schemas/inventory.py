@@ -419,6 +419,27 @@ class UserInventoryResponse(BaseModel):
     issued_items: List[UserIssuedItem] = []
 
 
+class MemberInventorySummary(BaseModel):
+    """Summary of a single member's inventory holdings"""
+    user_id: UUID
+    username: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    badge_number: Optional[str] = None
+    permanent_count: int = 0
+    checkout_count: int = 0
+    issued_count: int = 0
+    overdue_count: int = 0
+    total_items: int = 0
+
+
+class MembersInventoryListResponse(BaseModel):
+    """Response listing all members with inventory summary"""
+    members: List[MemberInventorySummary]
+    total: int
+
+
 class ItemRetireRequest(BaseModel):
     """Schema for retiring an item"""
     notes: Optional[str] = None

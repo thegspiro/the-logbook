@@ -952,6 +952,111 @@ class InventoryService:
             ],
         }
 
+    async def get_members_inventory_summary(
+        self, organization_id: UUID, search: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Return every active member in the organization with counts of their
+        permanent assignments, active checkouts, active issuances, and overdue items.
+        """
+        org_id = str(organization_id)
+
+        # Base query: all active users in the organization
+        user_q = (
+            select(User)
+            .where(User.organization_id == org_id)
+            .where(User.status == "active")
+        )
+        if search:
+            pattern = f"%{search}%"
+            user_q = user_q.where(
+                or_(
+                    User.username.ilike(pattern),
+                    User.first_name.ilike(pattern),
+                    User.last_name.ilike(pattern),
+                    User.badge_number.ilike(pattern),
+                )
+            )
+        user_q = user_q.order_by(User.last_name, User.first_name)
+        users_result = await self.db.execute(user_q)
+        users = users_result.scalars().all()
+
+        if not users:
+            return []
+
+        user_ids = [str(u.id) for u in users]
+
+        # Count permanent assignments per user
+        assign_q = await self.db.execute(
+            select(
+                ItemAssignment.user_id,
+                func.count(ItemAssignment.id).label("cnt"),
+            )
+            .where(ItemAssignment.user_id.in_(user_ids))
+            .where(ItemAssignment.is_active == True)
+            .group_by(ItemAssignment.user_id)
+        )
+        assign_counts = {row.user_id: row.cnt for row in assign_q.all()}
+
+        # Count active checkouts per user
+        checkout_q = await self.db.execute(
+            select(
+                CheckOutRecord.user_id,
+                func.count(CheckOutRecord.id).label("cnt"),
+            )
+            .where(CheckOutRecord.user_id.in_(user_ids))
+            .where(CheckOutRecord.is_returned == False)
+            .group_by(CheckOutRecord.user_id)
+        )
+        checkout_counts = {row.user_id: row.cnt for row in checkout_q.all()}
+
+        # Count overdue checkouts per user
+        overdue_q = await self.db.execute(
+            select(
+                CheckOutRecord.user_id,
+                func.count(CheckOutRecord.id).label("cnt"),
+            )
+            .where(CheckOutRecord.user_id.in_(user_ids))
+            .where(CheckOutRecord.is_returned == False)
+            .where(CheckOutRecord.is_overdue == True)
+            .group_by(CheckOutRecord.user_id)
+        )
+        overdue_counts = {row.user_id: row.cnt for row in overdue_q.all()}
+
+        # Count active issuances per user
+        issue_q = await self.db.execute(
+            select(
+                ItemIssuance.user_id,
+                func.count(ItemIssuance.id).label("cnt"),
+            )
+            .where(ItemIssuance.user_id.in_(user_ids))
+            .where(ItemIssuance.is_returned == False)
+            .group_by(ItemIssuance.user_id)
+        )
+        issue_counts = {row.user_id: row.cnt for row in issue_q.all()}
+
+        result = []
+        for u in users:
+            uid = str(u.id)
+            perm = assign_counts.get(uid, 0)
+            co = checkout_counts.get(uid, 0)
+            iss = issue_counts.get(uid, 0)
+            full_name = " ".join(filter(None, [u.first_name, u.last_name])) or None
+            result.append({
+                "user_id": u.id,
+                "username": u.username,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "full_name": full_name,
+                "badge_number": u.badge_number,
+                "permanent_count": perm,
+                "checkout_count": co,
+                "issued_count": iss,
+                "overdue_count": overdue_counts.get(uid, 0),
+                "total_items": perm + co + iss,
+            })
+        return result
+
     # ============================================
     # Barcode / Serial / Asset Tag Lookup
     # ============================================
