@@ -396,7 +396,8 @@ class TrainingService:
         self, organization_id: UUID, days_ahead: int = 90
     ) -> List[TrainingRecord]:
         """
-        Get certifications that are expiring within the specified number of days
+        Get certifications that are expiring within the specified number of days,
+        including those that have already expired.
         """
         today = date.today()
         future_date = today + timedelta(days=days_ahead)
@@ -405,9 +406,7 @@ class TrainingService:
             select(TrainingRecord)
             .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-            .where(TrainingRecord.certification_number.isnot(None))
             .where(TrainingRecord.expiration_date.isnot(None))
-            .where(TrainingRecord.expiration_date > today)
             .where(TrainingRecord.expiration_date <= future_date)
             .order_by(TrainingRecord.expiration_date)
         )

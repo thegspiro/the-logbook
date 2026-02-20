@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import List, Optional
 from datetime import datetime, date
+import calendar
 
 from app.models.training import (
     TrainingSubmission,
     SelfReportConfig,
     TrainingRecord,
+    TrainingCourse,
     TrainingStatus,
     TrainingType,
     SubmissionStatus,
@@ -299,6 +301,25 @@ class TrainingSubmissionService:
         self, submission: TrainingSubmission
     ) -> TrainingRecord:
         """Create a TrainingRecord from an approved submission."""
+        # Auto-calculate expiration_date from the course's expiration_months
+        # when not explicitly provided but completion_date and course_code are set
+        expiration_date = submission.expiration_date
+        if not expiration_date and submission.completion_date and submission.course_code:
+            course_result = await self.db.execute(
+                select(TrainingCourse).where(
+                    TrainingCourse.code == submission.course_code,
+                    TrainingCourse.organization_id == submission.organization_id,
+                )
+            )
+            course = course_result.scalar_one_or_none()
+            if course and course.expiration_months:
+                comp = submission.completion_date
+                month = comp.month - 1 + course.expiration_months
+                year = comp.year + month // 12
+                month = month % 12 + 1
+                day = min(comp.day, calendar.monthrange(year, month)[1])
+                expiration_date = date(year, month, day)
+
         record = TrainingRecord(
             id=generate_uuid(),
             organization_id=submission.organization_id,
@@ -316,7 +337,7 @@ class TrainingSubmissionService:
             notes=submission.description,
             attachments=submission.attachments,
             status=TrainingStatus.COMPLETED,
-            expiration_date=submission.expiration_date,
+            expiration_date=expiration_date,
             created_by=submission.submitted_by,
         )
         self.db.add(record)

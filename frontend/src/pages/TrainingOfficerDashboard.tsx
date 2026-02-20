@@ -134,7 +134,7 @@ const TrainingOfficerDashboard: React.FC = () => {
           memberName: member?.name || 'Unknown',
           memberId: record.user_id,
           courseName: record.course_name,
-          daysLeft: Math.max(0, daysLeft),
+          daysLeft,
           expirationDate: record.expiration_date!,
         };
       }).sort((a, b) => a.daysLeft - b.daysLeft);
@@ -644,10 +644,10 @@ const UpcomingExpirationsWidget: React.FC<UpcomingExpirationsWidgetProps> = ({ e
             </div>
             <span
               className={`text-xs font-semibold px-2 py-1 rounded ${
-                item.daysLeft <= 14 ? 'bg-red-600 text-white' : item.daysLeft <= 30 ? 'bg-orange-600 text-white' : 'bg-yellow-600 text-white'
+                item.daysLeft < 0 ? 'bg-red-600 text-white' : item.daysLeft <= 14 ? 'bg-red-600 text-white' : item.daysLeft <= 30 ? 'bg-orange-600 text-white' : 'bg-yellow-600 text-white'
               }`}
             >
-              {item.daysLeft} days
+              {item.daysLeft < 0 ? `Expired ${Math.abs(item.daysLeft)}d ago` : `${item.daysLeft} days`}
             </span>
           </div>
         ))}
