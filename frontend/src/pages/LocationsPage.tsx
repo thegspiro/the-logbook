@@ -259,8 +259,9 @@ function LocationSetupWizard({
         }
       }
       setStep('done');
-    } catch {
-      toast.error('Failed to save rooms');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to save rooms');
     } finally {
       setIsSaving(false);
     }
@@ -883,8 +884,9 @@ export default function LocationsPage() {
       }
       setShowStationModal(false);
       loadLocations();
-    } catch {
-      toast.error('Failed to save station');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to save station');
     } finally {
       setIsSavingStation(false);
     }
@@ -948,8 +950,9 @@ export default function LocationsPage() {
       }
       setShowRoomModal(false);
       loadLocations();
-    } catch {
-      toast.error('Failed to save room');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to save room');
     } finally {
       setIsSavingRoom(false);
     }
