@@ -18,7 +18,9 @@ const ModuleConfigTemplate: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   // Get module config from the central registry
-  const config = useMemo(() => (moduleId ? getModuleById(moduleId) : undefined), [moduleId]);
+  // Normalize hyphens to underscores so URL slugs like "prospective-members" match registry IDs like "prospective_members"
+  const normalizedModuleId = moduleId?.replace(/-/g, '_');
+  const config = useMemo(() => (normalizedModuleId ? getModuleById(normalizedModuleId) : undefined), [normalizedModuleId]);
   const moduleName = config?.name || 'Module';
 
   // Read positions from the onboarding store (set during PositionSetup step)
@@ -49,8 +51,8 @@ const ModuleConfigTemplate: React.FC = () => {
   // Filter out any positions that were removed since the config was saved.
   const availablePositionIds = useMemo(() => new Set(availablePositions.map(p => p.id)), [availablePositions]);
   const [managePositions, setManagePositions] = useState<string[]>(() => {
-    if (moduleId && modulePermissionConfigs[moduleId]) {
-      return modulePermissionConfigs[moduleId].filter(id => availablePositionIds.has(id));
+    if (normalizedModuleId && modulePermissionConfigs[normalizedModuleId]) {
+      return modulePermissionConfigs[normalizedModuleId].filter(id => availablePositionIds.has(id));
     }
     return config?.permissions.defaultManagePositions || ['it_manager'];
   });
@@ -65,9 +67,9 @@ const ModuleConfigTemplate: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!moduleId) return;
+    if (!normalizedModuleId) return;
     setSaving(true);
-    setModulePermissionConfig(moduleId, managePositions);
+    setModulePermissionConfig(normalizedModuleId, managePositions);
     toast.success(`${moduleName} permissions configured!`);
     setSaving(false);
     navigate('/onboarding/modules');

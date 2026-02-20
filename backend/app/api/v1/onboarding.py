@@ -1282,7 +1282,7 @@ async def save_session_modules(
         # Core modules (always enabled)
         "members", "events", "documents", "forms",
         # Operations modules
-        "training", "inventory", "scheduling", "apparatus",
+        "training", "inventory", "scheduling", "apparatus", "facilities",
         # Governance modules
         "elections", "minutes", "reports",
         # Communication modules

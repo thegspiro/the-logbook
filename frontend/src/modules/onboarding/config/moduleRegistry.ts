@@ -75,7 +75,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Add/edit members, assign positions, update member status',
       view: ['View member directory', 'See contact information', 'View member profiles'],
       manage: ['Add new members', 'Edit member information', 'Assign positions', 'Manage member status'],
-      defaultManagePositions: ['it_manager', 'membership_committee_chair'],
+      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'membership_committee_chair', 'training_officer', 'captain', 'secretary', 'assistant_secretary'],
     },
   },
   {
@@ -92,7 +92,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create events, manage RSVPs, record attendance',
       view: ['View all events', 'RSVP to events', "See who's attending", 'Check in to events'],
       manage: ['Create new events', 'Edit/cancel events', 'Manage RSVPs', 'Override attendance'],
-      defaultManagePositions: ['it_manager', 'secretary'],
+      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'secretary', 'training_officer', 'meeting_hall_coordinator', 'public_outreach', 'scheduling_officer', 'facilities_manager'],
     },
   },
   {
@@ -147,7 +147,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create courses, record completions, manage requirements',
       view: ['View personal training records', 'See available courses', 'Track certification status'],
       manage: ['Create training courses', 'Record completions', 'Set requirements', 'Approve certifications'],
-      defaultManagePositions: ['it_manager', 'training_officer'],
+      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'training_officer', 'safety_officer'],
     },
   },
   {
@@ -164,7 +164,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Add equipment, track maintenance, manage assignments',
       view: ['View equipment list', 'Check item status', 'Request equipment'],
       manage: ['Add/edit equipment', 'Assign items', 'Record maintenance', 'Manage inventory levels'],
-      defaultManagePositions: ['it_manager', 'quartermaster'],
+      defaultManagePositions: ['it_manager', 'quartermaster', 'president', 'fire_chief'],
     },
   },
   {
@@ -181,7 +181,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create schedules, approve swaps, manage coverage',
       view: ['View shift schedules', 'See personal assignments', 'Request shift swaps'],
       manage: ['Create schedules', 'Assign shifts', 'Approve swap requests', 'Override assignments'],
-      defaultManagePositions: ['it_manager', 'secretary'],
+      defaultManagePositions: ['it_manager', 'president', 'secretary', 'vice_president', 'training_officer', 'scheduling_officer', 'fire_chief'],
     },
   },
 
@@ -255,7 +255,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Record minutes, publish drafts, manage archives',
       view: ['Read published minutes', 'Search meeting history', 'View action items'],
       manage: ['Record minutes', 'Edit drafts', 'Publish minutes', 'Manage archives'],
-      defaultManagePositions: ['it_manager', 'secretary'],
+      defaultManagePositions: ['it_manager', 'secretary', 'assistant_secretary'],
     },
   },
   {
@@ -272,7 +272,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create custom reports, export data, configure analytics',
       view: ['View dashboards', 'See personal statistics', 'Access standard reports'],
       manage: ['Create custom reports', 'Export data', 'Configure analytics', 'Share reports'],
-      defaultManagePositions: ['it_manager', 'president', 'treasurer'],
+      defaultManagePositions: ['it_manager', 'safety_officer', 'training_officer', 'president', 'fire_chief'],
     },
   },
 
@@ -352,7 +352,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Manage applicants, configure pipeline stages, and convert members',
       view: ['View applicant pipeline', 'See applicant progress', 'View pipeline statistics'],
       manage: ['Add/edit applicants', 'Advance or reject applicants', 'Configure pipeline stages', 'Convert applicants to members'],
-      defaultManagePositions: ['it_manager', 'secretary', 'membership_committee_chair'],
+      defaultManagePositions: ['it_manager', 'president', 'fire_chief', 'membership_committee_chair'],
     },
   },
 
