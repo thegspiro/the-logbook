@@ -69,7 +69,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     checkPermission('events.manage') ||
     checkPermission('training.manage') ||
     checkPermission('inventory.manage') ||
-    checkPermission('roles.manage') ||
+    checkPermission('positions.manage_permissions') ||
     checkPermission('settings.manage') ||
     checkPermission('analytics.view');
 
@@ -130,7 +130,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Integrations', path: '/integrations', permission: 'settings.manage' },
         { label: 'Reports', path: '/reports' },
         { label: 'Organization', path: '/settings', permission: 'settings.manage' },
-        { label: 'Role Management', path: '/settings/roles', permission: 'roles.manage' },
+        { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
         { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
         { label: 'Analytics', path: '/admin/analytics', permission: 'analytics.view' },
         { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
