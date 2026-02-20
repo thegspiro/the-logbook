@@ -345,6 +345,7 @@ export const TrainingApprovalPage: React.FC = () => {
                       <input
                         id={`override-in-${attendee.user_id}`}
                         type="datetime-local"
+                        step="900"
                         value={formatDateTimeForInput(attendee.override_check_in_at)}
                         onChange={(e) => handleOverrideTime(attendee.user_id, 'override_check_in_at', e.target.value ? new Date(e.target.value).toISOString() : '')}
                         className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-purple-500"
@@ -357,6 +358,7 @@ export const TrainingApprovalPage: React.FC = () => {
                       <input
                         id={`override-out-${attendee.user_id}`}
                         type="datetime-local"
+                        step="900"
                         value={formatDateTimeForInput(attendee.override_check_out_at)}
                         onChange={(e) => handleOverrideTime(attendee.user_id, 'override_check_out_at', e.target.value ? new Date(e.target.value).toISOString() : '')}
                         className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-purple-500"

@@ -183,6 +183,7 @@ const PublicFormPage = () => {
         return (
           <input
             type="datetime-local"
+            step="900"
             className={baseInputClass}
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}

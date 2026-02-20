@@ -254,6 +254,7 @@ const SubmissionForm: React.FC<{
           </label>
           <input
             type="datetime-local"
+            step="900"
             value={startDatetime}
             onChange={(e) => setStartDatetime(e.target.value)}
             className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -266,6 +267,7 @@ const SubmissionForm: React.FC<{
           </label>
           <input
             type="datetime-local"
+            step="900"
             value={endDatetime}
             onChange={(e) => setEndDatetime(e.target.value)}
             min={startDatetime || undefined}

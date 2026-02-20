@@ -195,6 +195,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
               <input
                 id="call-dispatched"
                 type="datetime-local"
+                step="900"
                 value={formData.dispatched_at}
                 onChange={(e) => setFormData(prev => ({ ...prev, dispatched_at: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
@@ -207,6 +208,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
               <input
                 id="call-on-scene"
                 type="datetime-local"
+                step="900"
                 value={formData.on_scene_at}
                 onChange={(e) => setFormData(prev => ({ ...prev, on_scene_at: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
@@ -219,6 +221,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
               <input
                 id="call-cleared"
                 type="datetime-local"
+                step="900"
                 value={formData.cleared_at}
                 onChange={(e) => setFormData(prev => ({ ...prev, cleared_at: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
