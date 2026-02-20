@@ -215,7 +215,14 @@ async def create_member(
                 detail="One or more role IDs are invalid"
             )
 
-        new_user.roles = roles
+        for role in roles:
+            await db.execute(
+                user_roles.insert().values(
+                    user_id=new_user.id,
+                    position_id=role.id,
+                    assigned_by=current_user.id,
+                )
+            )
 
     # Capture assigned role IDs before commit expires the relationship
     assigned_role_ids = [str(r.id) for r in roles] if user_data.role_ids else []
