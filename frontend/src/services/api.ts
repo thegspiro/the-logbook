@@ -74,6 +74,10 @@ import type {
   ImportRecordRequest,
   BulkImportRequest,
   BulkImportResponse,
+  // Historical Training Import types
+  HistoricalImportParseResponse,
+  HistoricalImportConfirmRequest,
+  HistoricalImportResult,
 } from '../types/training';
 import type {
   Event,
@@ -825,6 +829,27 @@ export const trainingService = {
     const response = await api.get<ExpiringCertification[]>('/training/expiring-certifications', {
       params: { days },
     });
+    return response.data;
+  },
+
+  // ==================== Historical Training Import ====================
+
+  async parseHistoricalImport(file: File, matchBy: 'email' | 'badge_number' | 'name' = 'email'): Promise<HistoricalImportParseResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<HistoricalImportParseResponse>(
+      '/training/import/parse',
+      formData,
+      { params: { match_by: matchBy }, headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  async confirmHistoricalImport(request: HistoricalImportConfirmRequest): Promise<HistoricalImportResult> {
+    const response = await api.post<HistoricalImportResult>(
+      '/training/import/confirm',
+      request
+    );
     return response.data;
   },
 };
