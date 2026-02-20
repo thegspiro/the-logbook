@@ -95,7 +95,9 @@ class EnrollmentStatus(str, enum.Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
     EXPIRED = "expired"
+    ON_HOLD = "on_hold"
     WITHDRAWN = "withdrawn"
+    FAILED = "failed"
 
 
 class RequirementProgressStatus(str, enum.Enum):
@@ -104,6 +106,7 @@ class RequirementProgressStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     VERIFIED = "verified"  # Completed and verified by officer
+    WAIVED = "waived"  # Requirement waived for this member
 
 
 class TrainingCategory(Base):

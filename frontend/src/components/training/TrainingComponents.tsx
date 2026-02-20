@@ -265,6 +265,7 @@ interface EnrollmentStatusBadgeProps {
 const enrollmentStatusConfig: Record<EnrollmentStatus, { label: string; classes: string }> = {
   active: { label: 'Active', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
   completed: { label: 'Completed', classes: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
+  expired: { label: 'Expired', classes: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
   on_hold: { label: 'On Hold', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400' },
   withdrawn: { label: 'Withdrawn', classes: 'bg-theme-surface-secondary text-theme-text-primary' },
   failed: { label: 'Failed', classes: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },

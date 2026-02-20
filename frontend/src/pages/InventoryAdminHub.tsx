@@ -2,8 +2,8 @@
  * Inventory Admin Hub
  *
  * Consolidated admin page for inventory management.
- * Currently wraps the main InventoryPage which has inline admin controls.
- * Additional tabs can be added as inventory features grow.
+ * Tabs: Manage Inventory (items/categories) and Members (per-member view
+ * with barcode check-out / return).
  *
  * Requires: inventory.manage permission
  */
@@ -12,11 +12,13 @@ import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 const InventoryPage = lazy(() => import('./InventoryPage'));
+const InventoryMembersTab = lazy(() => import('./InventoryMembersTab'));
 
-type AdminTab = 'manage';
+type AdminTab = 'manage' | 'members';
 
 const tabs: { id: AdminTab; label: string }[] = [
   { id: 'manage', label: 'Manage Inventory' },
+  { id: 'members', label: 'Members' },
 ];
 
 const TabLoading = () => (
@@ -48,7 +50,7 @@ export const InventoryAdminHub: React.FC = () => {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-theme-text-primary">Inventory Administration</h1>
           <p className="mt-1 text-sm text-theme-text-muted">
-            Manage inventory items, categories, and assignments
+            Manage inventory items, categories, and member assignments
           </p>
         </div>
 
@@ -75,6 +77,7 @@ export const InventoryAdminHub: React.FC = () => {
       {/* Tab Content */}
       <Suspense fallback={<TabLoading />}>
         {activeTab === 'manage' && <InventoryPage />}
+        {activeTab === 'members' && <InventoryMembersTab />}
       </Suspense>
     </div>
   );

@@ -44,7 +44,10 @@ async def get_organization_settings(
     org_service = OrganizationService(db)
     settings = await org_service.get_organization_settings(current_user.organization_id)
 
-    return settings
+    # Return as dict so FastAPI's response_model validation preserves
+    # extra fields (e.g. station_mode).  Pydantic V2 drops __pydantic_extra__
+    # when converting between model instances via model_validate(from_attributes=True).
+    return settings.model_dump()
 
 
 @router.patch("/settings", response_model=OrganizationSettingsResponse)
@@ -71,15 +74,8 @@ async def update_organization_settings(
     # Convert Pydantic model to dict for updating
     settings_dict = settings_update.model_dump(exclude_unset=True)
 
-    # Convert nested contact_info_visibility to dict format for JSONB
-    if "contact_info_visibility" in settings_dict:
-        contact_info = settings_dict["contact_info_visibility"]
-        settings_dict["contact_info_visibility"] = {
-            "enabled": contact_info.enabled,
-            "show_email": contact_info.show_email,
-            "show_phone": contact_info.show_phone,
-            "show_mobile": contact_info.show_mobile,
-        }
+    # model_dump() already converts nested Pydantic models to dicts,
+    # so contact_info_visibility is already in the correct format for JSONB.
 
     # Update settings
     try:
@@ -100,7 +96,8 @@ async def update_organization_settings(
             username=current_user.username,
         )
 
-        return updated_settings
+        # Return as dict to preserve extra fields (see GET /settings comment).
+        return updated_settings.model_dump()
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

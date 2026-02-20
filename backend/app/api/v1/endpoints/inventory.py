@@ -61,6 +61,8 @@ from app.schemas.inventory import (
     BatchCheckoutResponse,
     BatchReturnRequest,
     BatchReturnResponse,
+    # Members summary
+    MembersInventoryListResponse,
 )
 from app.services.inventory_service import InventoryService
 from app.services.departure_clearance_service import DepartureClearanceService
@@ -812,6 +814,29 @@ async def get_low_stock_alerts(
         organization_id=current_user.organization_id
     )
     return low_stock
+
+
+@router.get("/members-summary", response_model=MembersInventoryListResponse)
+async def get_members_inventory_summary(
+    search: Optional[str] = Query(None, description="Search by name, username, or badge number"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    List all active members with their inventory item counts.
+
+    Returns permanent assignment, checkout, issuance, and overdue counts
+    for every member. Used by the Quartermaster's Members tab.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    members = await service.get_members_inventory_summary(
+        organization_id=current_user.organization_id,
+        search=search,
+    )
+    return MembersInventoryListResponse(members=members, total=len(members))
 
 
 @router.get("/users/{user_id}/inventory", response_model=UserInventoryResponse)
