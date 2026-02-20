@@ -49,7 +49,7 @@ const ImportMembers: React.FC = () => {
       const rows = text.split('\n').map((row) => row.split(','));
 
       if (!rows[0] || rows[0].length === 0) {
-        setError('The file is empty or has no header row.');
+        toast.error('The file is empty or has no header row.');
         setValidating(false);
         return;
       }
@@ -137,7 +137,7 @@ const ImportMembers: React.FC = () => {
       const rows = text.split('\n').map((row) => row.split(','));
 
       if (!rows[0] || rows[0].length === 0) {
-        result.errors.push('The file is empty or has no header row.');
+        result.errors.push({ row: 0, error: 'The file is empty or has no header row.', data: null });
         setImportResult(result);
         setImporting(false);
         return;
