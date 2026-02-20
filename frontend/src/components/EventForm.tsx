@@ -153,7 +153,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     if (!formData.end_datetime && startDate) {
       const start = new Date(startDate);
       const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
-      changes.end_datetime = end.toISOString().slice(0, 16);
+      changes.end_datetime = formatForDateTimeInput(end);
     }
     update(changes);
   };
@@ -165,7 +165,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
     const start = new Date(formData.start_datetime);
     const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
-    update({ end_datetime: end.toISOString().slice(0, 16) });
+    update({ end_datetime: formatForDateTimeInput(end) });
   };
 
   const toggleRsvpStatus = (status: RSVPStatus, checked: boolean) => {
