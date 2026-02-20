@@ -20,6 +20,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 
 from app.models.user import User, UserStatus, Organization
+from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.models.inventory import (
     ItemAssignment,
     CheckOutRecord,
@@ -432,7 +433,7 @@ class PropertyReturnReminderService:
         admin_emails = []
         for u in admins:
             role_names = [r.name for r in (u.roles or [])]
-            if any(r in role_names for r in ["admin", "quartermaster", "chief"]):
+            if any(r in role_names for r in ADMIN_NOTIFY_ROLE_SLUGS):
                 if u.email:
                     admin_emails.append(u.email)
 

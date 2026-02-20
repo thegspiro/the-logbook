@@ -409,7 +409,7 @@ class EventService:
             self.db.add(rsvp)
 
         # Check capacity if user is going
-        if rsvp_data.status == "going" and event.max_attendees:
+        if rsvp_data.status == RSVPStatus.GOING.value and event.max_attendees:
             # Count current "going" RSVPs, excluding this user's RSVP if updating
             capacity_query = (
                 select(func.count(EventRSVP.id))

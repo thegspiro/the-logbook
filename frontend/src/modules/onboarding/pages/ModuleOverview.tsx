@@ -13,6 +13,7 @@ import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, E
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { getUserFacingModules, type ModuleDefinition } from '../config';
+import { FeatureStatus } from '../../../constants/enums';
 
 const ModuleOverview: React.FC = () => {
   const navigate = useNavigate();
@@ -60,7 +61,7 @@ const ModuleOverview: React.FC = () => {
       async () => {
         const response = await apiClient.saveModuleConfig({
           modules: Object.entries(moduleStatuses)
-            .filter(([_, status]) => status === 'enabled')
+            .filter(([_, status]) => status === FeatureStatus.ENABLED)
             .map(([id]) => id),
         });
 
@@ -107,7 +108,7 @@ const ModuleOverview: React.FC = () => {
     optional: modules.filter(m => m.priority === 'optional'),
   };
 
-  const enabledCount = Object.values(moduleStatuses).filter(s => s === 'enabled').length;
+  const enabledCount = Object.values(moduleStatuses).filter(s => s === FeatureStatus.ENABLED).length;
   const currentYear = new Date().getFullYear();
 
   return (

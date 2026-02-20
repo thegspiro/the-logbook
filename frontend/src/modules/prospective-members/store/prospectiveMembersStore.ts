@@ -18,6 +18,7 @@ import type {
   ElectionPackageUpdate,
 } from '../types';
 import { pipelineService, applicantService } from '../services/api';
+import { StageType } from '../../../constants/enums';
 
 export type PipelineTab = 'active' | 'inactive' | 'withdrawn';
 
@@ -296,7 +297,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
           const newStage = (pipeline.stages || []).find(
             (s) => s.id === advanced.current_stage_id
           );
-          if (newStage?.stage_type === 'election_vote') {
+          if (newStage?.stage_type === StageType.ELECTION_VOTE) {
             try {
               await applicantService.createElectionPackage(id, {
                 applicant_id: id,

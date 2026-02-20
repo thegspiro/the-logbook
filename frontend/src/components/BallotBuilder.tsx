@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { Election, BallotItem, BallotTemplate } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import { ElectionStatus, VoteType } from '../constants/enums';
 
 interface BallotBuilderProps {
   electionId: string;
@@ -147,7 +148,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
     await saveItems(updated);
   };
 
-  const isClosed = election.status === 'closed' || election.status === 'cancelled';
+  const isClosed = election.status === ElectionStatus.CLOSED || election.status === ElectionStatus.CANCELLED;
 
   const getVoterTypeLabel = (types: string[]) => {
     if (types.includes('all')) return 'All Members';
@@ -209,7 +210,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 <p className="text-xs text-theme-text-muted mt-1">{template.description}</p>
                 <div className="flex gap-2 mt-2">
                   <span className="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 rounded">
-                    {template.vote_type === 'approval' ? 'Yes/No' : 'Candidates'}
+                    {template.vote_type === VoteType.APPROVAL ? 'Yes/No' : 'Candidates'}
                   </span>
                   <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-secondary rounded">
                     {getVoterTypeLabel(template.eligible_voter_types)}
@@ -236,9 +237,9 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-theme-text-primary">
-                {selectedTemplate.type === 'membership_approval'
+                {selectedTemplate.type === VoteType.MEMBERSHIP_APPROVAL
                   ? 'Member Name'
-                  : selectedTemplate.type === 'officer_election'
+                  : selectedTemplate.type === VoteType.OFFICER_ELECTION
                     ? 'Position Name'
                     : 'Title / Topic'}
               </label>
@@ -248,9 +249,9 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 onChange={(e) => setTemplateNameInput(e.target.value)}
                 className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                 placeholder={
-                  selectedTemplate.type === 'membership_approval'
+                  selectedTemplate.type === VoteType.MEMBERSHIP_APPROVAL
                     ? 'e.g., John Smith'
-                    : selectedTemplate.type === 'officer_election'
+                    : selectedTemplate.type === VoteType.OFFICER_ELECTION
                       ? 'e.g., Chief'
                       : 'e.g., Approve new equipment purchase'
                 }
@@ -433,7 +434,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       {item.type.replace('_', ' ')}
                     </span>
                     <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-700 dark:text-purple-300 rounded">
-                      {item.vote_type === 'approval' ? 'Yes/No Vote' : 'Candidate Selection'}
+                      {item.vote_type === VoteType.APPROVAL ? 'Yes/No Vote' : 'Candidate Selection'}
                     </span>
                     <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-secondary rounded">
                       {getVoterTypeLabel(item.eligible_voter_types)}

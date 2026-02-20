@@ -51,6 +51,18 @@
   /* Focus ring */
   --focus-ring: #dc2626;                  /* red-600 */
 
+  /* Toast icon colors */
+  --toast-success: #10b981;              /* emerald-500 */
+  --toast-error: #ef4444;                /* red-500 */
+  --toast-icon-secondary: #ffffff;       /* white */
+  --toast-warning-bg: #fbbf24;           /* amber-400 */
+  --toast-warning-text: #1a1a2e;         /* dark navy */
+
+  /* Status indicator colors */
+  --status-passed: #16a34a;              /* green-600 */
+  --status-failed: #dc2626;              /* red-600 */
+  --status-pending: #ca8a04;             /* yellow-600 */
+
   /* Alert: Info (blue) */
   --alert-info-bg: #eff6ff;                /* blue-50 */
   --alert-info-border: #bfdbfe;            /* blue-200 */
@@ -134,6 +146,18 @@
 
   /* Focus ring */
   --focus-ring: #f87171;                 /* red-400 */
+
+  /* Toast icon colors */
+  --toast-success: #34d399;              /* emerald-400 */
+  --toast-error: #f87171;                /* red-400 */
+  --toast-icon-secondary: #ffffff;       /* white */
+  --toast-warning-bg: #fbbf24;           /* amber-400 */
+  --toast-warning-text: #1a1a2e;         /* dark navy */
+
+  /* Status indicator colors */
+  --status-passed: #4ade80;              /* green-400 */
+  --status-failed: #f87171;              /* red-400 */
+  --status-pending: #facc15;             /* yellow-400 */
 
   /* Alert: Info (blue) */
   --alert-info-bg: rgba(59, 130, 246, 0.1);

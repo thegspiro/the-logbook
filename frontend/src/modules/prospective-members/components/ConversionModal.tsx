@@ -23,6 +23,7 @@ import { applicantService } from '../services/api';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
+import { MembershipType } from '../../../constants/enums';
 
 interface ConversionModalProps {
   isOpen: boolean;
@@ -178,7 +179,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                   <button
                     onClick={() => setMembershipType('probationary')}
                     className={`p-3 rounded-lg border text-left transition-all ${
-                      membershipType === 'probationary'
+                      membershipType === MembershipType.PROBATIONARY
                         ? 'border-red-500 bg-red-500/10'
                         : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-border'
                     }`}

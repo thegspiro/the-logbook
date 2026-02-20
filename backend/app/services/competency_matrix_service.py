@@ -24,6 +24,7 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
     RequirementType,
+    RequirementFrequency,
 )
 from app.models.user import User, UserStatus
 
@@ -191,12 +192,12 @@ class CompetencyMatrixService:
         freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
         current_year = today.year
 
-        if freq == "one_time":
+        if freq == RequirementFrequency.ONE_TIME.value:
             return None, None
-        elif freq == "biannual":
+        elif freq == RequirementFrequency.BIANNUAL.value:
             base_year = req.year if req.year else current_year
             return date(base_year - 1, 1, 1), date(base_year, 12, 31)
-        elif freq == "quarterly":
+        elif freq == RequirementFrequency.QUARTERLY.value:
             quarter_month = ((today.month - 1) // 3) * 3 + 1
             start_date = date(current_year, quarter_month, 1)
             end_month = quarter_month + 2
@@ -206,7 +207,7 @@ class CompetencyMatrixService:
                 end_year += 1
             end_day = calendar.monthrange(end_year, end_month)[1]
             return start_date, date(end_year, end_month, end_day)
-        elif freq == "monthly":
+        elif freq == RequirementFrequency.MONTHLY.value:
             start_date = date(current_year, today.month, 1)
             end_day = calendar.monthrange(current_year, today.month)[1]
             return start_date, date(current_year, today.month, end_day)
@@ -237,7 +238,7 @@ class CompetencyMatrixService:
             windowed = completed
 
         # ---- HOURS requirements: sum hours by training_type within date window ----
-        if req_type == "hours":
+        if req_type == RequirementType.HOURS.value:
             type_matched = windowed
             if requirement.training_type:
                 type_matched = [r for r in windowed if r.training_type == requirement.training_type]
@@ -274,7 +275,7 @@ class CompetencyMatrixService:
             }
 
         # ---- COURSES requirements: check required course IDs ----
-        if req_type == "courses":
+        if req_type == RequirementType.COURSES.value:
             course_ids = requirement.required_courses or []
             if not course_ids:
                 return not_started
@@ -300,7 +301,7 @@ class CompetencyMatrixService:
             }
 
         # ---- CERTIFICATION requirements ----
-        if req_type == "certification":
+        if req_type == RequirementType.CERTIFICATION.value:
             matching = [
                 r for r in completed
                 if (

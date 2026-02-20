@@ -11,6 +11,8 @@ from uuid import UUID
 from enum import Enum
 import re
 
+from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
+
 
 class OrganizationTypeEnum(str, Enum):
     """Organization/Department type"""
@@ -89,7 +91,7 @@ class MemberDropNotificationSettings(BaseModel):
     personal email is included in drop/property-return notifications.
     """
     cc_roles: List[str] = Field(
-        default_factory=lambda: ["admin", "quartermaster", "chief"],
+        default_factory=lambda: list(ADMIN_NOTIFY_ROLE_SLUGS),
         description="Role names whose holders are automatically CC'd on drop notifications",
     )
     cc_emails: List[str] = Field(

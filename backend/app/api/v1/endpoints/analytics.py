@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.models.analytics import AnalyticsEvent
 from app.models.user import User
 from app.api.dependencies import get_current_user, require_permission
+from app.core.constants import ANALYTICS_QR_SCAN, ANALYTICS_CHECK_IN_SUCCESS, ANALYTICS_CHECK_IN_FAILURE
 
 router = APIRouter()
 
@@ -52,7 +53,7 @@ async def get_metrics(
     # Total scans
     scans_result = await db.execute(
         select(func.count()).select_from(AnalyticsEvent).where(
-            *base_filter, AnalyticsEvent.event_type == "qr_scan"
+            *base_filter, AnalyticsEvent.event_type == ANALYTICS_QR_SCAN
         )
     )
     total_scans = scans_result.scalar() or 0
@@ -60,7 +61,7 @@ async def get_metrics(
     # Successful check-ins
     success_result = await db.execute(
         select(func.count()).select_from(AnalyticsEvent).where(
-            *base_filter, AnalyticsEvent.event_type == "check_in_success"
+            *base_filter, AnalyticsEvent.event_type == ANALYTICS_CHECK_IN_SUCCESS
         )
     )
     successful = success_result.scalar() or 0
@@ -68,7 +69,7 @@ async def get_metrics(
     # Failed check-ins
     fail_result = await db.execute(
         select(func.count()).select_from(AnalyticsEvent).where(
-            *base_filter, AnalyticsEvent.event_type == "check_in_failure"
+            *base_filter, AnalyticsEvent.event_type == ANALYTICS_CHECK_IN_FAILURE
         )
     )
     failed = fail_result.scalar() or 0
@@ -98,7 +99,7 @@ async def get_metrics(
     # Error breakdown from failure events
     error_events = await db.execute(
         select(AnalyticsEvent.event_metadata).where(
-            *base_filter, AnalyticsEvent.event_type == "check_in_failure"
+            *base_filter, AnalyticsEvent.event_type == ANALYTICS_CHECK_IN_FAILURE
         ).limit(500)
     )
     error_breakdown: dict[str, int] = {}
@@ -129,8 +130,8 @@ async def get_metrics(
                     scan.organization_id == checkin.organization_id,
                     scan.event_id == checkin.event_id,
                     scan.user_id == checkin.user_id,
-                    scan.event_type == "qr_scan",
-                    checkin.event_type == "check_in_success",
+                    scan.event_type == ANALYTICS_QR_SCAN,
+                    checkin.event_type == ANALYTICS_CHECK_IN_SUCCESS,
                     checkin.created_at > scan.created_at,
                 ),
             )

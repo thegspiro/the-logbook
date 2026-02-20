@@ -13,10 +13,11 @@ from sqlalchemy.orm import selectinload
 import secrets
 
 from app.models.event import Event, EventRSVP, EventType, CheckInWindowType
+from app.core.constants import ROLE_TRAINING_OFFICER
 from app.models.training import (
     TrainingSession, TrainingCourse, TrainingApproval, ApprovalStatus,
     TrainingType, TrainingRecord, ProgramEnrollment, RequirementProgress,
-    EnrollmentStatus,
+    EnrollmentStatus, RequirementProgressStatus,
 )
 from app.models.user import User, Role
 from app.schemas.training_session import TrainingSessionCreate, AttendeeApprovalData
@@ -313,7 +314,7 @@ class TrainingSessionService:
             # Get training officer role
             role_result = await self.db.execute(
                 select(Role)
-                .where(Role.slug == "training_officer")
+                .where(Role.slug == ROLE_TRAINING_OFFICER)
                 .where(Role.organization_id == str(organization_id))
             )
             training_officer_role = role_result.scalar_one_or_none()
@@ -645,8 +646,8 @@ class TrainingSessionService:
             progress.progress_value = current_value + hours_completed
 
             # Update status if not already completed
-            if progress.status == "not_started":
-                progress.status = "in_progress"
+            if progress.status == RequirementProgressStatus.NOT_STARTED:
+                progress.status = RequirementProgressStatus.IN_PROGRESS
 
             logger.info(
                 f"Updated enrollment progress: user={user_id}, "

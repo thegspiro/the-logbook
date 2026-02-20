@@ -19,6 +19,7 @@ from app.services.auth_service import AuthService
 from app.core.config import settings
 from app.core.audit import log_audit_event
 from app.core.permissions import DEFAULT_ROLES
+from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 
 
 class OnboardingService:
@@ -524,7 +525,7 @@ class OnboardingService:
         result = await self.db.execute(
             select(Role).where(
                 Role.organization_id == organization_id,
-                Role.slug == "it_manager"
+                Role.slug == ROLE_IT_MANAGER
             )
         )
         it_manager_position = result.scalar_one_or_none()
@@ -539,7 +540,7 @@ class OnboardingService:
         member_result = await self.db.execute(
             select(Role).where(
                 Role.organization_id == organization_id,
-                Role.slug == "member"
+                Role.slug == ROLE_MEMBER
             )
         )
         member_position = member_result.scalar_one_or_none()

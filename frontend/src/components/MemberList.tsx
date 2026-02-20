@@ -7,6 +7,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import type { User, ContactInfoSettings } from '../types/user';
+import { UserStatus } from '../constants/enums';
 
 interface MemberListProps {
   members: User[];
@@ -154,11 +155,11 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        member.status === 'active'
+                        member.status === UserStatus.ACTIVE
                           ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                          : member.status === 'inactive'
+                          : member.status === UserStatus.INACTIVE
                           ? 'bg-theme-surface-secondary text-theme-text-primary'
-                          : member.status === 'suspended'
+                          : member.status === UserStatus.SUSPENDED
                           ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
                           : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
                       }`}

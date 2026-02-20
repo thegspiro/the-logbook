@@ -19,6 +19,7 @@ import {
 import type { EventCreate, EventType, RSVPStatus } from '../types/event';
 import type { Role } from '../types/role';
 import { roleService, locationsService } from '../services/api';
+import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
@@ -335,7 +336,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               </option>
             ))}
           </select>
-          {formData.event_type === 'training' && (
+          {formData.event_type === EventTypeEnum.TRAINING && (
             <div className="mt-2 bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
               <p className="text-sm text-purple-700 dark:text-purple-300">
                 For training events with course tracking, use "Create Training Session" instead.
@@ -634,7 +635,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                       className={checkboxClass}
                     />
                     <span className="text-theme-text-secondary">
-                      {status === 'going' ? 'Going' : status === 'not_going' ? 'Not Going' : 'Maybe'}
+                      {status === RSVPStatusEnum.GOING ? 'Going' : status === RSVPStatusEnum.NOT_GOING ? 'Not Going' : 'Maybe'}
                     </span>
                   </label>
                 ))}
@@ -669,7 +670,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           </select>
         </div>
 
-        {formData.check_in_window_type === 'window' && (
+        {formData.check_in_window_type === CheckInWindowType.WINDOW && (
           <div className="grid grid-cols-2 gap-4 pl-6 border-l-2 border-red-500/30">
             <div>
               <label htmlFor="checkin-before" className={labelClass}>

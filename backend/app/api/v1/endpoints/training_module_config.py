@@ -16,6 +16,7 @@ from datetime import date
 
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, require_permission
+from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.models.user import User, UserStatus
 from app.models.training import (
     TrainingRecord, TrainingStatus,
@@ -98,7 +99,7 @@ async def get_my_training_summary(
         user_with_roles = user_result.scalar_one_or_none()
         if user_with_roles and user_with_roles.roles:
             role_names = [r.name for r in user_with_roles.roles]
-            is_officer = any(r in role_names for r in ["admin", "training_officer", "chief"])
+            is_officer = any(r in role_names for r in TRAINING_OFFICER_ROLE_SLUGS)
     except Exception:
         pass
 

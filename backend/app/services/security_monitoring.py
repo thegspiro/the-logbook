@@ -27,6 +27,7 @@ from loguru import logger
 
 from app.models.audit import AuditLog
 from app.core.audit import log_audit_event, verify_audit_log_integrity
+from app.core.constants import AUDIT_EVENT_LOGIN_FAILED
 
 
 class ThreatLevel(str, Enum):
@@ -653,7 +654,7 @@ class SecurityMonitoringService:
         # Get failed login stats from audit log
         failed_logins_result = await db.execute(
             select(func.count(AuditLog.id))
-            .where(AuditLog.event_type == "login_failed")
+            .where(AuditLog.event_type == AUDIT_EVENT_LOGIN_FAILED)
             .where(AuditLog.timestamp > hour_ago)
         )
         failed_logins_hour = failed_logins_result.scalar() or 0

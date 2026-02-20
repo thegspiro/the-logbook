@@ -25,6 +25,11 @@ from app.models.election import (
     ElectionStatus,
 )
 from app.models.user import User, Organization
+from app.core.constants import (
+    LEADERSHIP_ROLE_SLUGS,
+    OPERATIONAL_ROLE_SLUGS,
+    ADMINISTRATIVE_ROLE_SLUGS,
+)
 from app.schemas.election import (
     ElectionResults,
     CandidateResult,
@@ -92,8 +97,8 @@ class ElectionService:
                 return True
 
         # Check for role type categories
-        operational_roles = ["chief", "assistant_chief", "captain", "lieutenant", "firefighter", "driver", "emt", "paramedic"]
-        administrative_roles = ["president", "vice_president", "secretary", "assistant_secretary", "treasurer"]
+        operational_roles = OPERATIONAL_ROLE_SLUGS
+        administrative_roles = ADMINISTRATIVE_ROLE_SLUGS
 
         if "operational" in role_types:
             if any(slug in operational_roles for slug in user_role_slugs):
@@ -1701,7 +1706,7 @@ class ElectionService:
         from app.services.email_service import EmailService
 
         # Get leadership users (Chief, President, Vice President, Secretary roles)
-        leadership_roles = ["chief", "president", "vice_president", "secretary"]
+        leadership_roles = LEADERSHIP_ROLE_SLUGS
 
         users_result = await self.db.execute(
             select(User)
@@ -1872,7 +1877,7 @@ Best regards,
         """
         from app.services.email_service import EmailService
 
-        leadership_roles = ["chief", "president", "vice_president", "secretary"]
+        leadership_roles = LEADERSHIP_ROLE_SLUGS
 
         users_result = await self.db.execute(
             select(User)

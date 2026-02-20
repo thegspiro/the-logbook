@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Trash2, GripVertical, GitBranch } from 'lucide-react';
 import type { FormFieldCreate, FormFieldOption } from '../../services/api';
+import { FieldType } from '../../constants/enums';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text', icon: 'Aa' },
@@ -117,7 +118,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
 
   // Available sibling fields for condition (exclude self)
   const conditionTargets = siblingFields.filter(
-    (f) => f.id !== editingFieldId && f.field_type !== 'section_header'
+    (f) => f.id !== editingFieldId && f.field_type !== FieldType.SECTION_HEADER
   );
   const selectedConditionField = conditionTargets.find((f) => f.id === conditionFieldId);
   const conditionNeedsValue = ['equals', 'not_equals', 'contains'].includes(conditionOperator);

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.user import User, UserStatus, Organization
+from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.models.inventory import (
     ItemAssignment,
     CheckOutRecord,
@@ -162,7 +163,7 @@ async def check_and_auto_archive(
         admin_emails = []
         for u in admins:
             role_names = [r.name for r in (u.roles or [])]
-            if any(r in role_names for r in ["admin", "quartermaster", "chief"]):
+            if any(r in role_names for r in ADMIN_NOTIFY_ROLE_SLUGS):
                 if u.email:
                     admin_emails.append(u.email)
 

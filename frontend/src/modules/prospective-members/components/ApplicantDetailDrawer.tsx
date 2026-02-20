@@ -44,6 +44,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
+import { ApplicantStatus, StageType as StageTypeEnum, ElectionStatus } from '../../../constants/enums';
 
 interface ApplicantDetailDrawerProps {
   applicant: Applicant | null;
@@ -102,7 +103,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
 
-  const isOnElectionStage = applicant?.current_stage_type === 'election_vote' && applicant?.status === 'active';
+  const isOnElectionStage = applicant?.current_stage_type === StageTypeEnum.ELECTION_VOTE && applicant?.status === ApplicantStatus.ACTIVE;
 
   // Reset action notes and confirm state when applicant changes
   useEffect(() => {
@@ -327,7 +328,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             </div>
 
             {/* Inactive Notice */}
-            {applicant.status === 'inactive' && (
+            {applicant.status === ApplicantStatus.INACTIVE && (
               <div className="mx-4 mt-4 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -349,7 +350,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             )}
 
             {/* Withdrawn Notice */}
-            {applicant.status === 'withdrawn' && (
+            {applicant.status === ApplicantStatus.WITHDRAWN && (
               <div className="mx-4 mt-4 p-3 bg-slate-500/5 border border-slate-500/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
                   <Archive className="w-4 h-4 text-theme-text-muted" />
@@ -768,7 +769,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             </div>
 
             {/* Footer Actions */}
-            {applicant.status === 'active' && (
+            {applicant.status === ApplicantStatus.ACTIVE && (
               <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {/* Notes input */}
                 {showNotesInput && (
@@ -986,7 +987,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             )}
 
             {/* Withdrawn Actions */}
-            {applicant.status === 'withdrawn' && (
+            {applicant.status === ApplicantStatus.WITHDRAWN && (
               <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
@@ -1026,7 +1027,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             )}
 
             {/* Inactive Actions */}
-            {applicant.status === 'inactive' && (
+            {applicant.status === ApplicantStatus.INACTIVE && (
               <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
