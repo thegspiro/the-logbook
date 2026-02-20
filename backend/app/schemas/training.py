@@ -589,3 +589,80 @@ class BulkImportResponse(BaseModel):
     skipped: int
     failed: int
     errors: List[str]
+
+
+# ============================================
+# Historical Training Import Schemas
+# ============================================
+
+
+class HistoricalImportParsedRow(BaseModel):
+    """A single parsed row from the CSV with match status"""
+    row_number: int
+    email: str
+    member_name: Optional[str] = None  # Display name from CSV (if available)
+    user_id: Optional[str] = None  # Matched internal user ID
+    matched_member_name: Optional[str] = None  # Name from system for matched user
+    member_matched: bool = False
+    course_name: str
+    course_code: Optional[str] = None
+    course_matched: bool = False
+    matched_course_id: Optional[str] = None
+    training_type: Optional[str] = None
+    completion_date: Optional[date] = None
+    expiration_date: Optional[date] = None
+    hours_completed: Optional[float] = None
+    credit_hours: Optional[float] = None
+    certification_number: Optional[str] = None
+    issuing_agency: Optional[str] = None
+    instructor: Optional[str] = None
+    location: Optional[str] = None
+    score: Optional[float] = None
+    passed: Optional[bool] = None
+    notes: Optional[str] = None
+    errors: List[str] = []
+
+
+class UnmatchedCourse(BaseModel):
+    """A course from the CSV that doesn't match any existing course"""
+    csv_course_name: str
+    csv_course_code: Optional[str] = None
+    occurrences: int = 1
+
+
+class HistoricalImportParseResponse(BaseModel):
+    """Response from parsing a historical training CSV"""
+    total_rows: int
+    valid_rows: int
+    members_matched: int
+    members_unmatched: int
+    courses_matched: int
+    unmatched_courses: List[UnmatchedCourse]
+    column_headers: List[str]
+    rows: List[HistoricalImportParsedRow]
+    parse_errors: List[str] = []
+
+
+class CourseMappingEntry(BaseModel):
+    """Maps a CSV course to an existing course or creates a new one"""
+    csv_course_name: str
+    action: str = Field(..., pattern=r'^(map_existing|create_new|skip)$')
+    existing_course_id: Optional[str] = None  # If action == map_existing
+    new_training_type: Optional[str] = None  # If action == create_new
+
+
+class HistoricalImportConfirmRequest(BaseModel):
+    """Request to confirm and execute a historical import"""
+    rows: List[HistoricalImportParsedRow]
+    course_mappings: List[CourseMappingEntry] = []
+    default_training_type: str = "continuing_education"
+    default_status: str = "completed"
+
+
+class HistoricalImportResult(BaseModel):
+    """Result of a confirmed historical import"""
+    total: int
+    imported: int
+    skipped: int
+    failed: int
+    errors: List[str]
