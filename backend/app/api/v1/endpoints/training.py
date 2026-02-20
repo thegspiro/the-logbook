@@ -1388,6 +1388,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
     - Others:         Match by training_type or name
     """
     req_type = req.requirement_type.value if hasattr(req.requirement_type, 'value') else str(req.requirement_type)
+    freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
     start_date, end_date = _get_requirement_date_window(req, today)
 
     # Filter completed records within the date window
@@ -1416,6 +1417,17 @@ def _evaluate_member_requirement(req, member_records, today: date):
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
         latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
 
+        # For biannual requirements, check if the latest matching record with
+        # an expiration date has expired — an expired cert overrides hours met.
+        if freq == "biannual" and type_matched:
+            with_exp = [r for r in type_matched if r.expiration_date]
+            if with_exp:
+                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
+                if newest_cert.expiration_date < today:
+                    exp_comp = newest_cert.completion_date.isoformat() if newest_cert.completion_date else latest_comp
+                    exp_exp = newest_cert.expiration_date.isoformat()
+                    return "expired", exp_comp, exp_exp
+
         if required > 0 and total_hours >= required:
             return "completed", latest_comp, latest_exp
         elif total_hours > 0:
@@ -1435,6 +1447,16 @@ def _evaluate_member_requirement(req, member_records, today: date):
         latest = max(windowed, key=lambda r: r.completion_date or date.min) if windowed else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
         latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
+
+        # For biannual requirements, expired cert overrides course completion
+        if freq == "biannual" and windowed:
+            with_exp = [r for r in windowed if r.expiration_date]
+            if with_exp:
+                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
+                if newest_cert.expiration_date < today:
+                    exp_comp = newest_cert.completion_date.isoformat() if newest_cert.completion_date else latest_comp
+                    exp_exp = newest_cert.expiration_date.isoformat()
+                    return "expired", exp_comp, exp_exp
 
         if matched_count >= len(course_ids):
             return "completed", latest_comp, latest_exp
