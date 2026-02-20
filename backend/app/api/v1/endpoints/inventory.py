@@ -857,7 +857,7 @@ async def get_user_inventory(
     if user_id != current_user.id:
         # Check if user has inventory.view permission
         has_permission = any(
-            "inventory.view" in [p.name for p in role.permissions]
+            "inventory.view" in (role.permissions or [])
             for role in current_user.roles
         )
         if not has_permission:
@@ -1133,7 +1133,7 @@ async def get_user_departure_clearance(
     """
     if str(user_id) != str(current_user.id):
         has_permission = any(
-            "inventory.view" in [p.name for p in role.permissions]
+            "inventory.view" in (role.permissions or [])
             for role in current_user.roles
         )
         if not has_permission:

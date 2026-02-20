@@ -8,6 +8,8 @@ import {
   AlertCircle,
   X,
   Tag,
+  Layers,
+  Barcode,
 } from 'lucide-react';
 import {
   inventoryService,
@@ -91,18 +93,32 @@ const InventoryPage: React.FC = () => {
   const [showAddCategory, setShowAddCategory] = useState(false);
 
   // Add item form
-  const [itemForm, setItemForm] = useState<InventoryItemCreate>({
+  const defaultItemForm: InventoryItemCreate = {
     name: '',
     description: '',
     category_id: '',
+    tracking_type: 'individual',
     manufacturer: '',
     model_number: '',
     serial_number: '',
+    asset_tag: '',
+    barcode: '',
     storage_location: '',
+    station: '',
+    size: '',
+    color: '',
     condition: 'good',
     status: 'available',
     quantity: 1,
-  });
+    unit_of_measure: '',
+    purchase_price: undefined,
+    purchase_date: '',
+    vendor: '',
+    warranty_expiration: '',
+    inspection_interval_days: undefined,
+    notes: '',
+  };
+  const [itemForm, setItemForm] = useState<InventoryItemCreate>(defaultItemForm);
 
   // Add category form
   const [categoryForm, setCategoryForm] = useState<InventoryCategoryCreate>({
@@ -165,16 +181,16 @@ const InventoryPage: React.FC = () => {
     e.preventDefault();
     setFormError(null);
     try {
-      await inventoryService.createItem({
-        ...itemForm,
-        category_id: itemForm.category_id || undefined,
-      });
+      // Strip empty strings so the backend only receives fields with real values
+      const payload: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(itemForm)) {
+        if (value !== '' && value !== undefined && value !== null) {
+          payload[key] = value;
+        }
+      }
+      await inventoryService.createItem(payload as InventoryItemCreate);
       setShowAddItem(false);
-      setItemForm({
-        name: '', description: '', category_id: '', manufacturer: '',
-        model_number: '', serial_number: '', storage_location: '',
-        condition: 'good', status: 'available', quantity: 1,
-      });
+      setItemForm(defaultItemForm);
       loadData();
       toast.success('Item added successfully');
     } catch (err: unknown) {
@@ -522,6 +538,7 @@ const InventoryPage: React.FC = () => {
                     )}
 
                     <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                      {/* ── Basic Info ── */}
                       <div>
                         <label htmlFor="item-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Name <span aria-hidden="true">*</span></label>
                         <input
@@ -532,20 +549,46 @@ const InventoryPage: React.FC = () => {
                         />
                       </div>
 
-                      <div>
-                        <label htmlFor="item-category" className="block text-sm font-medium text-theme-text-secondary mb-1">Category</label>
-                        <select
-                          id="item-category"
-                          value={itemForm.category_id}
-                          onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        >
-                          <option value="">No Category</option>
-                          {categories.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="item-category" className="block text-sm font-medium text-theme-text-secondary mb-1">Category</label>
+                          <select
+                            id="item-category"
+                            value={itemForm.category_id}
+                            onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
+                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            <option value="">No Category</option>
+                            {categories.map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="item-tracking-type" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                            Tracking Type <span aria-hidden="true">*</span>
+                          </label>
+                          <select
+                            id="item-tracking-type"
+                            value={itemForm.tracking_type}
+                            onChange={(e) => setItemForm({ ...itemForm, tracking_type: e.target.value })}
+                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            <option value="individual">Individual (unique, serialized item)</option>
+                            <option value="pool">Pool (bulk stock issued by quantity)</option>
+                          </select>
+                        </div>
                       </div>
+
+                      {/* Pool hint */}
+                      {itemForm.tracking_type === 'pool' && (
+                        <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                          <Layers className="w-4 h-4 text-purple-700 dark:text-purple-400 mt-0.5 shrink-0" aria-hidden="true" />
+                          <p className="text-xs text-purple-700 dark:text-purple-300">
+                            Pool items are tracked by quantity (e.g., 50 pairs of gloves). Set the total stock below. Individual units are issued to members from this pool.
+                          </p>
+                        </div>
+                      )}
 
                       <div>
                         <label htmlFor="item-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
@@ -557,6 +600,46 @@ const InventoryPage: React.FC = () => {
                         />
                       </div>
 
+                      {/* ── Identification & Tracking ── */}
+                      <fieldset>
+                        <legend className="flex items-center gap-1.5 text-xs font-semibold uppercase text-theme-text-muted mb-2">
+                          <Barcode className="w-3.5 h-3.5" aria-hidden="true" /> Identification
+                        </legend>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label htmlFor="item-serial-number" className="block text-sm font-medium text-theme-text-secondary mb-1">Serial Number</label>
+                            <input
+                              id="item-serial-number"
+                              type="text" value={itemForm.serial_number}
+                              onChange={(e) => setItemForm({ ...itemForm, serial_number: e.target.value })}
+                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              placeholder="e.g., SN-12345"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="item-asset-tag" className="block text-sm font-medium text-theme-text-secondary mb-1">Asset Tag</label>
+                            <input
+                              id="item-asset-tag"
+                              type="text" value={itemForm.asset_tag}
+                              onChange={(e) => setItemForm({ ...itemForm, asset_tag: e.target.value })}
+                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              placeholder="e.g., AT-001"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="item-barcode" className="block text-sm font-medium text-theme-text-secondary mb-1">Barcode</label>
+                            <input
+                              id="item-barcode"
+                              type="text" value={itemForm.barcode}
+                              onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })}
+                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              placeholder="Scan or type barcode"
+                            />
+                          </div>
+                        </div>
+                      </fieldset>
+
+                      {/* ── Product Details ── */}
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label htmlFor="item-manufacturer" className="block text-sm font-medium text-theme-text-secondary mb-1">Manufacturer</label>
@@ -578,16 +661,44 @@ const InventoryPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      {/* ── Physical Properties (contextual) ── */}
+                      <div className="grid grid-cols-3 gap-4">
                         <div>
-                          <label htmlFor="item-serial-number" className="block text-sm font-medium text-theme-text-secondary mb-1">Serial Number</label>
+                          <label htmlFor="item-size" className="block text-sm font-medium text-theme-text-secondary mb-1">Size</label>
                           <input
-                            id="item-serial-number"
-                            type="text" value={itemForm.serial_number}
-                            onChange={(e) => setItemForm({ ...itemForm, serial_number: e.target.value })}
+                            id="item-size"
+                            type="text" value={itemForm.size}
+                            onChange={(e) => setItemForm({ ...itemForm, size: e.target.value })}
                             className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            placeholder="e.g., Large, 10.5"
                           />
                         </div>
+                        <div>
+                          <label htmlFor="item-color" className="block text-sm font-medium text-theme-text-secondary mb-1">Color</label>
+                          <input
+                            id="item-color"
+                            type="text" value={itemForm.color}
+                            onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })}
+                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            placeholder="e.g., Black"
+                          />
+                        </div>
+                        {itemForm.tracking_type === 'pool' && (
+                          <div>
+                            <label htmlFor="item-unit-of-measure" className="block text-sm font-medium text-theme-text-secondary mb-1">Unit of Measure</label>
+                            <input
+                              id="item-unit-of-measure"
+                              type="text" value={itemForm.unit_of_measure}
+                              onChange={(e) => setItemForm({ ...itemForm, unit_of_measure: e.target.value })}
+                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              placeholder="e.g., pair, box, each"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Location ── */}
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label htmlFor="item-storage-location" className="block text-sm font-medium text-theme-text-secondary mb-1">Storage Location</label>
                           <input
@@ -595,10 +706,22 @@ const InventoryPage: React.FC = () => {
                             type="text" value={itemForm.storage_location}
                             onChange={(e) => setItemForm({ ...itemForm, storage_location: e.target.value })}
                             className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            placeholder="e.g., Shelf B-3"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="item-station" className="block text-sm font-medium text-theme-text-secondary mb-1">Station</label>
+                          <input
+                            id="item-station"
+                            type="text" value={itemForm.station}
+                            onChange={(e) => setItemForm({ ...itemForm, station: e.target.value })}
+                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            placeholder="e.g., Station 1"
                           />
                         </div>
                       </div>
 
+                      {/* ── Status & Quantity ── */}
                       <div className="grid grid-cols-3 gap-4">
                         <div>
                           <label htmlFor="item-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Condition</label>
@@ -627,7 +750,9 @@ const InventoryPage: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <label htmlFor="item-quantity" className="block text-sm font-medium text-theme-text-secondary mb-1">Quantity</label>
+                          <label htmlFor="item-quantity" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                            {itemForm.tracking_type === 'pool' ? 'Total Stock' : 'Quantity'}
+                          </label>
                           <input
                             id="item-quantity"
                             type="number" min="1" value={itemForm.quantity}
@@ -637,6 +762,70 @@ const InventoryPage: React.FC = () => {
                         </div>
                       </div>
 
+                      {/* ── Purchase & Warranty ── */}
+                      <details className="group">
+                        <summary className="cursor-pointer text-xs font-semibold uppercase text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1.5 select-none">
+                          <span className="transition-transform group-open:rotate-90">&#9654;</span>
+                          Purchase & Warranty
+                        </summary>
+                        <div className="mt-3 space-y-3">
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <label htmlFor="item-purchase-price" className="block text-sm font-medium text-theme-text-secondary mb-1">Purchase Price</label>
+                              <input
+                                id="item-purchase-price"
+                                type="number" min="0" step="0.01"
+                                value={itemForm.purchase_price ?? ''}
+                                onChange={(e) => setItemForm({ ...itemForm, purchase_price: e.target.value ? parseFloat(e.target.value) : undefined })}
+                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="item-purchase-date" className="block text-sm font-medium text-theme-text-secondary mb-1">Purchase Date</label>
+                              <input
+                                id="item-purchase-date"
+                                type="date" value={itemForm.purchase_date}
+                                onChange={(e) => setItemForm({ ...itemForm, purchase_date: e.target.value })}
+                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="item-vendor" className="block text-sm font-medium text-theme-text-secondary mb-1">Vendor</label>
+                              <input
+                                id="item-vendor"
+                                type="text" value={itemForm.vendor}
+                                onChange={(e) => setItemForm({ ...itemForm, vendor: e.target.value })}
+                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label htmlFor="item-warranty-expiration" className="block text-sm font-medium text-theme-text-secondary mb-1">Warranty Expiration</label>
+                              <input
+                                id="item-warranty-expiration"
+                                type="date" value={itemForm.warranty_expiration}
+                                onChange={(e) => setItemForm({ ...itemForm, warranty_expiration: e.target.value })}
+                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="item-inspection-interval" className="block text-sm font-medium text-theme-text-secondary mb-1">Inspection Interval (days)</label>
+                              <input
+                                id="item-inspection-interval"
+                                type="number" min="0"
+                                value={itemForm.inspection_interval_days ?? ''}
+                                onChange={(e) => setItemForm({ ...itemForm, inspection_interval_days: e.target.value ? parseInt(e.target.value) : undefined })}
+                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                placeholder="e.g., 365"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+
+                      {/* ── Notes ── */}
                       <div>
                         <label htmlFor="item-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
                         <textarea
@@ -660,7 +849,7 @@ const InventoryPage: React.FC = () => {
                       type="submit"
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
                     >
-                      Add Item
+                      {itemForm.tracking_type === 'pool' ? 'Add Pool Item' : 'Add Item'}
                     </button>
                   </div>
                 </form>
