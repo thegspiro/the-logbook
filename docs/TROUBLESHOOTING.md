@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-20 (includes comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique badge number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
+**Last Updated**: 2026-02-20 (includes hardcoded value elimination across 43 files, centralized constants for role groups/event types/folder slugs, CSS variable consolidation for toast/status colors, dependency version bumps; comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique badge number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
 
 ---
 
@@ -31,7 +31,10 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 18. [TypeScript Build Issues](#typescript-build-issues)
 19. [Error Message Reference](#error-message-reference)
 19. [Error Handling Patterns](#error-handling-patterns)
-20. [Getting Help](#getting-help)
+20. [Centralized Constants & Enum Usage Issues](#centralized-constants--enum-usage-issues)
+21. [CSS Variable & Theming Issues](#css-variable--theming-issues)
+22. [Dependency Version Management](#dependency-version-management)
+23. [Getting Help](#getting-help)
 
 ---
 
@@ -3467,7 +3470,206 @@ If you find new `as any` assertions, replace them with proper types following th
 
 ---
 
+## Centralized Constants & Enum Usage Issues
+
+### Import Errors After Constants Refactor (2026-02-20)
+
+**Symptom**: Backend raises `ImportError` or `ModuleNotFoundError` referencing `app.core.constants`.
+
+**Cause**: The `backend/app/core/constants.py` module was introduced to centralize role group slugs, folder names, analytics event types, and audit categories. If your local branch predates this change, the import target won't exist.
+
+**Fix**:
+```bash
+git pull origin main
+docker compose build --no-cache backend
+docker compose up -d
+```
+
+**What changed**: 20 backend service files now import constants from `app.core.constants` instead of using inline string arrays. See `docs/ENUM_CONVENTIONS.md` Rule 7 for the full list of available constants.
+
+---
+
+### Frontend Enum Constants Not Found (2026-02-20)
+
+**Symptom**: TypeScript build errors referencing missing exports from `constants/enums`:
+```
+Module '"../constants/enums"' has no exported member 'UserStatus'
+```
+
+**Cause**: The new `frontend/src/constants/enums.ts` file provides centralized `as const` objects for all backend enums (UserStatus, ElectionStatus, RSVPStatus, TrainingStatus, etc.). If you're on an older branch, this file won't exist.
+
+**Fix**:
+```bash
+git pull origin main
+cd frontend && npm install
+npm run typecheck
+```
+
+**What changed**: 17 frontend component files now import enum constants from `constants/enums.ts` instead of using hardcoded string literals. See `docs/ENUM_CONVENTIONS.md` Rule 6 for usage patterns.
+
+---
+
+### Hardcoded String Comparison Still in Use
+
+**Symptom**: A comparison like `if record.status == "completed"` silently fails to match because the column stores an enum member, not a raw string.
+
+**Diagnosis**: Search for raw string comparisons that should use enum constants:
+```bash
+# Backend — look for status string comparisons
+grep -rn '"completed"\|"active"\|"pending"\|"going"\|"not_going"' backend/app/ --include="*.py"
+
+# Frontend — look for status string comparisons
+grep -rn "'active'\|'completed'\|'going'\|'closed'" frontend/src/ --include="*.ts" --include="*.tsx"
+```
+
+**Fix**: Replace raw strings with the appropriate constant:
+
+| Layer | Wrong | Right |
+|-------|-------|-------|
+| Backend (SQLAlchemy column) | `record.status == "completed"` | `record.status == TrainingStatus.COMPLETED` |
+| Backend (plain string/dict) | `data["status"] == "completed"` | `data["status"] == TrainingStatus.COMPLETED.value` |
+| Frontend | `status === 'active'` | `status === UserStatus.ACTIVE` |
+
+See `docs/ENUM_CONVENTIONS.md` Rule 6 for full guidance.
+
+---
+
+### Role Group Arrays Out of Sync
+
+**Symptom**: A notification or permission check silently skips roles because an inline array doesn't match the canonical list.
+
+**Diagnosis**: Search for inline role arrays:
+```bash
+grep -rn '\["admin".*"chief"\]\|\["chief".*"admin"\]' backend/app/ --include="*.py"
+```
+
+**Fix**: Replace inline arrays with the centralized constant from `app.core.constants`:
+
+| Constant | Roles | Purpose |
+|----------|-------|---------|
+| `ADMIN_NOTIFY_ROLE_SLUGS` | admin, quartermaster, chief | Drop/archive CC notifications |
+| `LEADERSHIP_ROLE_SLUGS` | chief, president, VP, secretary | Critical event alerts |
+| `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief | Training module checks |
+| `OPERATIONAL_ROLE_SLUGS` | chief, asst_chief, captain, … | Election eligibility |
+| `ADMINISTRATIVE_ROLE_SLUGS` | president, VP, secretary, … | Election eligibility |
+
+---
+
+## CSS Variable & Theming Issues
+
+### Toast Colors Not Matching Theme (Fixed 2026-02-20)
+
+**Symptom**: Toast notifications show hardcoded colors that don't adapt when switching between light and dark themes.
+
+**Cause**: `App.tsx` and `useIdleTimer.ts` previously used hex color literals (`#10b981`, `#ef4444`, `#fbbf24`) for toast icon and background colors.
+
+**Fix Applied**: Toast colors now reference CSS custom properties:
+
+| Old (hardcoded) | New (CSS variable) | Purpose |
+|---|---|---|
+| `#10b981` | `var(--toast-success)` | Success toast icon |
+| `#ef4444` | `var(--toast-error)` | Error toast icon |
+| `#fff` | `var(--toast-icon-secondary)` | Secondary toast icon |
+| `#fbbf24` | `var(--toast-warning-bg)` | Warning toast background |
+| `#1a1a2e` | `var(--toast-warning-text)` | Warning toast text |
+
+These variables are defined in `frontend/src/styles/index.css` under `:root` (light) and `.dark` (dark) selectors, and registered in `tailwind.config.js`.
+
+---
+
+### Status Indicator Colors Not Theme-Aware
+
+**Symptom**: Training status badges (passed/failed/pending) display hardcoded colors that may have poor contrast in one theme mode.
+
+**Fix Applied**: Status colors are now CSS variables:
+
+| Variable | Light Mode | Dark Mode | Usage |
+|---|---|---|---|
+| `--status-passed` | `#16a34a` | `#22c55e` | Passed/complete indicators |
+| `--status-failed` | `#dc2626` | `#ef4444` | Failed/overdue indicators |
+| `--status-pending` | `#d97706` | `#f59e0b` | Pending/in-progress indicators |
+
+Use the Tailwind utilities `text-theme-status-passed`, `text-theme-status-failed`, `text-theme-status-pending` or reference the CSS variables directly.
+
+---
+
+## Dependency Version Management
+
+### After Dependency Bump: Backend Startup Fails
+
+**Symptom**: Backend fails to start after pulling dependency updates with import or compatibility errors.
+
+**Diagnosis**:
+```bash
+docker compose logs backend | head -50
+```
+
+**Common causes after the 2026-02-20 bump**:
+1. **Stale Docker image**: Rebuild with `docker compose build --no-cache backend`
+2. **pip cache**: Add `--no-cache-dir` to the Dockerfile `pip install` line
+3. **Version conflict**: Check `requirements.txt` for pinned versions that conflict
+
+**Versions bumped (2026-02-20)**:
+| Package | From | To |
+|---|---|---|
+| fastapi | 0.115.6 | 0.129.0 |
+| uvicorn | 0.34.0 | 0.41.0 |
+| pydantic | 2.10.5 | 2.12.5 |
+| sqlalchemy | 2.0.36 | 2.0.46 |
+| sentry-sdk | 2.20.0 | 2.53.0 |
+| celery | 5.4.0 | 5.6.2 |
+
+All bumps are minor/patch within the same major version — no breaking API changes.
+
+---
+
+### After Dependency Bump: Frontend Build Fails
+
+**Symptom**: Frontend `npm run build` or `npm run typecheck` fails after pulling updates.
+
+**Fix**:
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm run typecheck
+npm run build
+```
+
+**Versions bumped (2026-02-20)**:
+| Package | From | To |
+|---|---|---|
+| lucide-react | ^0.469.0 | ^0.575.0 |
+| @vitejs/plugin-react | ^4.3.4 | ^5.1.4 |
+| typescript | ^5.7.3 | ^5.9.3 |
+
+**Note**: `@vitejs/plugin-react` jumped to v5 which requires `vite` v7 (already in use). If you're on an older vite version, update vite first.
+
+---
+
+### Major Versions Intentionally Skipped
+
+The following major version upgrades were **not** applied because they require migration work:
+
+| Package | Current | Available | Migration Needed |
+|---|---|---|---|
+| React | 18.x | 19.x | New hook patterns, ref changes |
+| React Router | 6.x | 7.x | Loader/action API rewrite |
+| Tailwind CSS | 3.x | 4.x | Config format change |
+| ESLint | 8.x | 10.x | Flat config migration |
+| Zod | 3.x | 4.x | Schema API changes |
+
+These can be upgraded individually when the team is ready to handle the migration.
+
+---
+
 ## Version History
+
+**v2.0** - 2026-02-20
+- Added centralized constants and enum usage troubleshooting (4 new entries)
+- Added CSS variable and theming issues section (2 new entries for toast/status colors)
+- Added dependency version management section (3 entries covering backend, frontend, skipped majors)
+- Documents new files: `backend/app/core/constants.py`, `frontend/src/constants/enums.ts`
 
 **v1.9** - 2026-02-18
 - Added missing API service methods troubleshooting (70+ TS build errors from missing service methods/types)
