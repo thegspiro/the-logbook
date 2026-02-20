@@ -127,7 +127,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
             </div>
             <div className="mt-1">
               {stats.is_check_in_active ? (
-                <span className="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                <span className="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400 rounded-full text-sm font-medium">
                   <span className="w-2 h-2 bg-green-600 rounded-full mr-2 animate-pulse"></span>
                   Check-In Active
                 </span>
@@ -258,7 +258,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
                       <div className="text-sm text-theme-text-secondary">{activity.user_email}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
                         {activity.rsvp_status}
                       </span>
                     </td>

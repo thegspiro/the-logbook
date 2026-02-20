@@ -443,7 +443,7 @@ export const MembersAdminPage: React.FC = () => {
                             key={role.id}
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               role.is_system
-                                ? 'bg-blue-100 text-blue-800'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
                                 : 'bg-theme-surface text-theme-text-secondary'
                             }`}
                           >
@@ -464,7 +464,7 @@ export const MembersAdminPage: React.FC = () => {
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.status === 'active'
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
                           : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
                       }`}
                     >
@@ -510,7 +510,7 @@ export const MembersAdminPage: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
                         {role.is_system && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                             System
                           </span>
                         )}
@@ -750,7 +750,7 @@ export const MembersAdminPage: React.FC = () => {
                           {role.name}
                         </span>
                         {role.is_system && (
-                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                          <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 px-2 py-0.5 rounded">
                             System
                           </span>
                         )}

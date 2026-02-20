@@ -334,13 +334,13 @@ export const ElectionDetailPage: React.FC = () => {
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'open':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
       case 'closed':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
       case 'draft':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'cancelled':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
     }
@@ -438,7 +438,7 @@ export const ElectionDetailPage: React.FC = () => {
                 {election.positions.map((position) => (
                   <span
                     key={position}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+                    className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400"
                   >
                     {position}
                   </span>
@@ -914,8 +914,8 @@ export const ElectionDetailPage: React.FC = () => {
                                 <td className="px-3 py-2 text-xs">{entry.event_type}</td>
                                 <td className="px-3 py-2">
                                   <span className={`text-xs px-2 py-0.5 rounded ${
-                                    entry.severity === 'critical' ? 'bg-red-100 text-red-800' :
-                                    entry.severity === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                                    entry.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' :
+                                    entry.severity === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400' :
                                     'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
                                   }`}>
                                     {entry.severity || 'info'}
@@ -1241,7 +1241,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => extendToEndOfDay()}
-                        className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                        className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
                       >
                         End of Day
                       </button>
@@ -1327,7 +1327,7 @@ export const ElectionDetailPage: React.FC = () => {
                       {/* Item Header */}
                       <div className="bg-theme-surface-secondary px-6 py-4 border-b border-theme-surface-border">
                         <div className="flex items-start gap-3">
-                          <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center text-sm font-bold">
+                          <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold">
                             {index + 1}
                           </span>
                           <div>
@@ -1396,12 +1396,12 @@ export const ElectionDetailPage: React.FC = () => {
                           {isApprovalType ? 'Yes/No vote' : 'Candidate selection'}
                         </span>
                         {item.require_attendance && (
-                          <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-700">
+                          <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
                             Requires attendance
                           </span>
                         )}
                         {item.eligible_voter_types && !item.eligible_voter_types.includes('all') && (
-                          <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                          <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
                             Restricted: {item.eligible_voter_types.join(', ')}
                           </span>
                         )}

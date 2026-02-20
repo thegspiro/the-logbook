@@ -177,7 +177,7 @@ export const RoleManagementPage: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
                       {role.is_system && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                           System Role
                         </span>
                       )}
