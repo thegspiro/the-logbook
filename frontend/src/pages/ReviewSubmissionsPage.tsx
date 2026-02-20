@@ -20,8 +20,9 @@ import {
   AlertCircle,
   Filter,
   Info,
+  Edit2,
 } from 'lucide-react';
-import { trainingSubmissionService } from '../services/api';
+import { trainingSubmissionService, trainingService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import type {
@@ -31,6 +32,7 @@ import type {
   SubmissionReviewRequest,
   SubmissionStatus,
   TrainingType,
+  TrainingRecordUpdate,
   FieldConfig,
 } from '../types/training';
 
@@ -201,15 +203,198 @@ const ReviewPanel: React.FC<{
   );
 };
 
+// ==================== Edit Record Panel ====================
+
+const EditRecordPanel: React.FC<{
+  recordId: string;
+  submission: TrainingSubmission;
+  onSaved: () => void;
+}> = ({ recordId, submission, onSaved }) => {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [fields, setFields] = useState({
+    course_name: submission.course_name,
+    training_type: submission.training_type as TrainingType,
+    hours_completed: submission.hours_completed,
+    completion_date: submission.completion_date,
+    certification_number: submission.certification_number || '',
+    issuing_agency: submission.issuing_agency || '',
+    expiration_date: submission.expiration_date || '',
+    instructor: submission.instructor || '',
+    location: submission.location || '',
+  });
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updates: TrainingRecordUpdate = {};
+      if (fields.course_name !== submission.course_name) updates.course_name = fields.course_name;
+      if (fields.training_type !== submission.training_type) updates.training_type = fields.training_type;
+      if (fields.hours_completed !== submission.hours_completed) {
+        updates.hours_completed = fields.hours_completed;
+        updates.credit_hours = fields.hours_completed;
+      }
+      if (fields.completion_date !== submission.completion_date) updates.completion_date = fields.completion_date;
+      if (fields.certification_number !== (submission.certification_number || ''))
+        updates.certification_number = fields.certification_number || undefined;
+      if (fields.issuing_agency !== (submission.issuing_agency || ''))
+        updates.issuing_agency = fields.issuing_agency || undefined;
+      if (fields.expiration_date !== (submission.expiration_date || ''))
+        updates.expiration_date = fields.expiration_date || undefined;
+      if (fields.instructor !== (submission.instructor || ''))
+        updates.instructor = fields.instructor || undefined;
+      if (fields.location !== (submission.location || ''))
+        updates.location = fields.location || undefined;
+
+      if (Object.keys(updates).length === 0) {
+        setEditing(false);
+        return;
+      }
+
+      await trainingService.updateRecord(recordId, updates);
+      toast.success('Training record updated');
+      setEditing(false);
+      onSaved();
+    } catch {
+      toast.error('Failed to update training record');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <div className="border-t border-theme-surface-border pt-3 mt-4">
+        <button
+          onClick={() => setEditing(true)}
+          className="flex items-center space-x-2 px-3 py-1.5 bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg text-sm transition-colors"
+        >
+          <Edit2 className="w-4 h-4" />
+          <span>Edit Training Record</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-theme-surface-border pt-4 mt-4">
+      <h4 className="text-sm font-medium text-theme-text-primary mb-3 flex items-center space-x-2">
+        <Edit2 className="w-4 h-4" />
+        <span>Edit Training Record</span>
+      </h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-theme-text-muted">Course Name</label>
+          <input
+            type="text"
+            value={fields.course_name}
+            onChange={(e) => setFields({ ...fields, course_name: e.target.value })}
+            className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-theme-text-muted">Training Type</label>
+          <select
+            value={fields.training_type}
+            onChange={(e) => setFields({ ...fields, training_type: e.target.value as TrainingType })}
+            className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
+          >
+            {Object.entries(TRAINING_TYPE_LABELS).map(([val, label]) => (
+              <option key={val} value={val}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-theme-text-muted">Hours Completed</label>
+          <input
+            type="number"
+            value={fields.hours_completed}
+            onChange={(e) => setFields({ ...fields, hours_completed: parseFloat(e.target.value) || 0 })}
+            className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
+            min={0}
+            step={0.5}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-theme-text-muted">Completion Date</label>
+          <input
+            type="date"
+            value={fields.completion_date}
+            onChange={(e) => setFields({ ...fields, completion_date: e.target.value })}
+            className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-theme-text-muted">Certification Number</label>
+          <input
+            type="text"
+            value={fields.certification_number}
+            onChange={(e) => setFields({ ...fields, certification_number: e.target.value })}
+            className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
+            placeholder="Optional"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-theme-text-muted">Issuing Agency</label>
+          <input
+            type="text"
+            value={fields.issuing_agency}
+            onChange={(e) => setFields({ ...fields, issuing_agency: e.target.value })}
+            className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
+            placeholder="Optional"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-theme-text-muted">Expiration Date</label>
+          <input
+            type="date"
+            value={fields.expiration_date}
+            onChange={(e) => setFields({ ...fields, expiration_date: e.target.value })}
+            className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-theme-text-muted">Instructor</label>
+          <input
+            type="text"
+            value={fields.instructor}
+            onChange={(e) => setFields({ ...fields, instructor: e.target.value })}
+            className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
+            placeholder="Optional"
+          />
+        </div>
+      </div>
+      <div className="flex items-center space-x-2 mt-3">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+        >
+          <Save className="w-4 h-4" />
+          <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+        </button>
+        <button
+          onClick={() => setEditing(false)}
+          className="px-3 py-1.5 bg-theme-surface text-theme-text-secondary rounded-lg text-sm hover:bg-theme-surface-hover"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ==================== Submission Card ====================
 
 const SubmissionCard: React.FC<{
   submission: TrainingSubmission;
   onReview: (id: string, review: SubmissionReviewRequest) => Promise<void>;
-}> = ({ submission, onReview }) => {
+  onRecordUpdated: () => void;
+}> = ({ submission, onReview, onRecordUpdated }) => {
   const [expanded, setExpanded] = useState(false);
   const tz = useTimezone();
   const isPending = submission.status === 'pending_review';
+  const isApproved = submission.status === 'approved' && !!submission.training_record_id;
 
   return (
     <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
@@ -317,6 +502,15 @@ const SubmissionCard: React.FC<{
           {isPending && (
             <ReviewPanel submission={submission} onReview={onReview} />
           )}
+
+          {/* Edit Record Panel (approved submissions only) */}
+          {isApproved && (
+            <EditRecordPanel
+              recordId={submission.training_record_id!}
+              submission={submission}
+              onSaved={onRecordUpdated}
+            />
+          )}
         </div>
       )}
     </div>
@@ -337,7 +531,7 @@ const DEFAULT_FIELD_CONFIG: Record<string, FieldConfig> = {
   category_id: { visible: true, required: false, label: 'Training Category' },
   certification_number: { visible: true, required: false, label: 'Certificate / ID Number' },
   issuing_agency: { visible: true, required: false, label: 'Issuing Agency' },
-  expiration_date: { visible: false, required: false, label: 'Expiration Date' },
+  expiration_date: { visible: true, required: false, label: 'Expiration Date' },
 };
 
 const ConfigEditor: React.FC<{
@@ -745,7 +939,7 @@ const ReviewSubmissionsPage: React.FC = () => {
               </div>
             )}
             {submissions.map((sub) => (
-              <SubmissionCard key={sub.id} submission={sub} onReview={handleReview} />
+              <SubmissionCard key={sub.id} submission={sub} onReview={handleReview} onRecordUpdated={loadData} />
             ))}
           </div>
         )}
