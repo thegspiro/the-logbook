@@ -413,6 +413,22 @@ const SubmissionForm: React.FC<{
             />
           </div>
         )}
+
+        {/* Expiration Date */}
+        {isFieldVisible('expiration_date') && (
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('expiration_date', 'Expiration Date')} {isFieldRequired('expiration_date') && <span className="text-red-700 dark:text-red-400">*</span>}
+            </label>
+            <input
+              type="date"
+              value={formData.expiration_date || ''}
+              onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value || undefined })}
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              required={isFieldRequired('expiration_date')}
+            />
+          </div>
+        )}
       </div>
 
       {/* Buttons */}

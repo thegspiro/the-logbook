@@ -219,10 +219,28 @@ async def create_record(
     **Authentication required**
     **Requires permission: training.manage**
     """
+    record_data = record.model_dump()
+
+    # Auto-calculate expiration_date from the course's expiration_months
+    # when not explicitly provided but completion_date and course_id are set
+    if not record_data.get("expiration_date") and record_data.get("course_id") and record_data.get("completion_date"):
+        course_result = await db.execute(
+            select(TrainingCourse).where(TrainingCourse.id == str(record_data["course_id"]))
+        )
+        course = course_result.scalar_one_or_none()
+        if course and course.expiration_months:
+            comp = record_data["completion_date"]
+            # Add expiration_months to completion_date
+            month = comp.month - 1 + course.expiration_months
+            year = comp.year + month // 12
+            month = month % 12 + 1
+            day = min(comp.day, calendar.monthrange(year, month)[1])
+            record_data["expiration_date"] = date(year, month, day)
+
     new_record = TrainingRecord(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        **record.model_dump()
+        **record_data
     )
 
     db.add(new_record)
