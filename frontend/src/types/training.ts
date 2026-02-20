@@ -1219,7 +1219,8 @@ export interface MyTrainingSummary {
 
 export interface HistoricalImportParsedRow {
   row_number: number;
-  email: string;
+  email?: string;
+  badge_number?: string;
   member_name?: string;
   user_id?: string;
   matched_member_name?: string;

@@ -834,13 +834,13 @@ export const trainingService = {
 
   // ==================== Historical Training Import ====================
 
-  async parseHistoricalImport(file: File): Promise<HistoricalImportParseResponse> {
+  async parseHistoricalImport(file: File, matchBy: 'email' | 'badge_number' | 'name' = 'email'): Promise<HistoricalImportParseResponse> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await api.post<HistoricalImportParseResponse>(
       '/training/import/parse',
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      { params: { match_by: matchBy }, headers: { 'Content-Type': 'multipart/form-data' } }
     );
     return response.data;
   },

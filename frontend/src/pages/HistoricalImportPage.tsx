@@ -44,6 +44,14 @@ import type {
 
 // ==================== Constants ====================
 
+type MatchStrategy = 'email' | 'badge_number' | 'name';
+
+const MATCH_STRATEGIES: { value: MatchStrategy; label: string; description: string; requiredCol: string }[] = [
+  { value: 'email', label: 'Email Address', description: 'Match members by their email address', requiredCol: 'email' },
+  { value: 'badge_number', label: 'Badge Number', description: 'Match members by badge/employee number', requiredCol: 'badge_number' },
+  { value: 'name', label: 'Full Name', description: 'Match members by first + last name (case-insensitive)', requiredCol: 'name' },
+];
+
 const TRAINING_TYPE_OPTIONS: { value: TrainingType; label: string }[] = [
   { value: 'certification', label: 'Certification' },
   { value: 'continuing_education', label: 'Continuing Education' },
@@ -105,9 +113,11 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
 
 interface UploadStepProps {
   onParsed: (result: HistoricalImportParseResponse) => void;
+  matchBy: MatchStrategy;
+  onMatchByChange: (strategy: MatchStrategy) => void;
 }
 
-const UploadStep: React.FC<UploadStepProps> = ({ onParsed }) => {
+const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByChange }) => {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -120,7 +130,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed }) => {
     setFileName(file.name);
     setUploading(true);
     try {
-      const result = await trainingService.parseHistoricalImport(file);
+      const result = await trainingService.parseHistoricalImport(file, matchBy);
       onParsed(result);
       toast.success(`Parsed ${result.total_rows} rows from ${file.name}`);
     } catch (err) {
@@ -129,7 +139,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed }) => {
     } finally {
       setUploading(false);
     }
-  }, [onParsed]);
+  }, [onParsed, matchBy]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -184,6 +194,39 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed }) => {
         )}
       </div>
 
+      {/* Match strategy selector */}
+      <div className="bg-theme-surface-secondary rounded-xl p-5 border border-theme-surface-border">
+        <h3 className="text-sm font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
+          <Users className="w-4 h-4" />
+          How should members be matched?
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {MATCH_STRATEGIES.map((strategy) => (
+            <button
+              key={strategy.value}
+              onClick={() => onMatchByChange(strategy.value)}
+              className={`text-left p-3 rounded-lg border-2 transition-colors ${
+                matchBy === strategy.value
+                  ? 'border-red-500 bg-red-600/10'
+                  : 'border-theme-surface-border hover:border-theme-text-muted'
+              }`}
+            >
+              <span className={`block text-sm font-medium ${
+                matchBy === strategy.value ? 'text-red-400' : 'text-theme-text-primary'
+              }`}>
+                {strategy.label}
+              </span>
+              <span className="block text-xs text-theme-text-muted mt-0.5">
+                {strategy.description}
+              </span>
+              <span className="block text-xs text-theme-text-muted mt-1">
+                Required column: <code className="text-red-500">{strategy.requiredCol}</code>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Required columns info */}
       <div className="bg-theme-surface-secondary rounded-xl p-5 border border-theme-surface-border">
         <h3 className="text-sm font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
@@ -194,7 +237,9 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed }) => {
           <div>
             <p className="font-medium text-theme-text-primary mb-1">Required Columns</p>
             <ul className="text-theme-text-muted space-y-0.5">
-              <li><code className="text-red-500">email</code> - Member email for matching</li>
+              {matchBy === 'email' && <li><code className="text-red-500">email</code> - Member email for matching</li>}
+              {matchBy === 'badge_number' && <li><code className="text-red-500">badge_number</code> - Badge or employee number</li>}
+              {matchBy === 'name' && <li><code className="text-red-500">name</code> - Full name (or <code>first_name</code> + <code>last_name</code>)</li>}
               <li><code className="text-red-500">course_name</code> - Training course title</li>
             </ul>
           </div>
@@ -213,8 +258,12 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed }) => {
       {/* Sample CSV download */}
       <button
         onClick={() => {
-          const csv = 'email,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\njohn@dept.gov,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\njane@dept.gov,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n';
-          const blob = new Blob([csv], { type: 'text/csv' });
+          const templates: Record<MatchStrategy, string> = {
+            email: 'email,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\njohn@dept.gov,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\njane@dept.gov,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n',
+            badge_number: 'badge_number,name,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\n1234,John Smith,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\n5678,Jane Doe,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n',
+            name: 'name,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\nJohn Smith,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\nJane Doe,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n',
+          };
+          const blob = new Blob([templates[matchBy]], { type: 'text/csv' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -571,11 +620,15 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                     {row.member_matched ? (
                       <div>
                         <span className="text-theme-text-primary">{row.matched_member_name}</span>
-                        <span className="block text-xs text-theme-text-muted">{row.email}</span>
+                        <span className="block text-xs text-theme-text-muted">
+                          {row.email || row.badge_number || row.member_name}
+                        </span>
                       </div>
                     ) : (
                       <div>
-                        <span className="text-yellow-400">{row.member_name || row.email}</span>
+                        <span className="text-yellow-400">
+                          {row.member_name || row.email || row.badge_number || 'Unknown'}
+                        </span>
                         <span className="block text-xs text-yellow-500">No match</span>
                       </div>
                     )}
@@ -735,6 +788,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
 
 const HistoricalImportPage: React.FC = () => {
   const [step, setStep] = useState(1);
+  const [matchBy, setMatchBy] = useState<MatchStrategy>('email');
   const [parseResult, setParseResult] = useState<HistoricalImportParseResponse | null>(null);
   const [courseMappings, setCourseMappings] = useState<CourseMappingEntry[]>([]);
   const [existingCourses, setExistingCourses] = useState<TrainingCourse[]>([]);
@@ -791,6 +845,7 @@ const HistoricalImportPage: React.FC = () => {
 
   const handleReset = useCallback(() => {
     setStep(1);
+    setMatchBy('email');
     setParseResult(null);
     setCourseMappings([]);
     setImportResult(null);
@@ -810,7 +865,7 @@ const HistoricalImportPage: React.FC = () => {
 
       <StepIndicator currentStep={step} />
 
-      {step === 1 && <UploadStep onParsed={handleParsed} />}
+      {step === 1 && <UploadStep onParsed={handleParsed} matchBy={matchBy} onMatchByChange={setMatchBy} />}
 
       {step === 2 && parseResult && (
         <MapCoursesStep
