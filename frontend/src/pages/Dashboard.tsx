@@ -217,15 +217,16 @@ const Dashboard: React.FC = () => {
       const data = await trainingProgramService.getMyEnrollments('active');
       setEnrollments(data);
 
+      const top3 = data.slice(0, 3);
+      const results = await Promise.allSettled(
+        top3.map((e) => trainingProgramService.getEnrollmentProgress(e.id))
+      );
       const details = new Map<string, MemberProgramProgress>();
-      for (const enrollment of data.slice(0, 3)) {
-        try {
-          const progress = await trainingProgramService.getEnrollmentProgress(enrollment.id);
-          details.set(enrollment.id, progress);
-        } catch {
-          // Continue loading other enrollments
+      results.forEach((result, i) => {
+        if (result.status === 'fulfilled') {
+          details.set(top3[i].id, result.value);
         }
-      }
+      });
       setProgressDetails(details);
     } catch {
       // Training is non-critical on dashboard
