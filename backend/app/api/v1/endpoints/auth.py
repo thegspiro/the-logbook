@@ -7,6 +7,7 @@ Endpoints for user authentication, registration, and session management.
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from typing import List
 
 from app.core.database import get_db
@@ -302,6 +303,14 @@ async def get_current_user_info(
     Returns the authenticated user's profile and permissions.
     """
     from datetime import datetime
+
+    # Re-fetch with eager loading so we can iterate positions safely in async
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == current_user.id)
+        .options(selectinload(User.positions))
+    )
+    current_user = user_result.scalar_one()
 
     # Get all positions and permissions
     position_names = [pos.name for pos in current_user.positions]

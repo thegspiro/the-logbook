@@ -15,19 +15,39 @@ const AnalyticsDashboardPage: React.FC = () => {
   const { id: eventId } = useParams<{ id?: string }>();
   const tz = useTimezone();
   const [metrics, setMetrics] = useState<QRCodeMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadMetrics = async () => {
-      const data = eventId
-        ? await analyticsService.getEventMetrics(eventId)
-        : await analyticsService.getOverallMetrics();
-      setMetrics(data);
+      try {
+        const data = eventId
+          ? await analyticsService.getEventMetrics(eventId)
+          : await analyticsService.getOverallMetrics();
+        if (!cancelled) {
+          setMetrics(data);
+          setError(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setError('Failed to load analytics data');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     };
 
     loadMetrics();
     const interval = setInterval(loadMetrics, 10000); // Refresh every 10 seconds
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [eventId]);
 
   const exportData = async () => {
@@ -41,10 +61,26 @@ const AnalyticsDashboardPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  if (!metrics) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-theme-text-secondary">Loading analytics...</div>
+      </div>
+    );
+  }
+
+  if (error || !metrics) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">{error || 'No analytics data available'}</p>
+          <button
+            onClick={() => { setLoading(true); setError(null); }}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

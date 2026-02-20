@@ -90,16 +90,20 @@ async def list_elections(
     result = await db.execute(query)
     elections = result.scalars().all()
 
-    # Add vote counts if available (exclude soft-deleted votes)
+    # Batch-fetch vote counts in a single query instead of N+1
+    election_ids = [e.id for e in elections]
+    vote_counts_map: dict = {}
+    if election_ids:
+        vote_counts_result = await db.execute(
+            select(Vote.election_id, func.count(Vote.id))
+            .where(Vote.election_id.in_(election_ids))
+            .where(Vote.deleted_at.is_(None))
+            .group_by(Vote.election_id)
+        )
+        vote_counts_map = dict(vote_counts_result.all())
+
     response_elections = []
     for election in elections:
-        votes_result = await db.execute(
-            select(func.count(Vote.id))
-            .where(Vote.election_id == election.id)
-            .where(Vote.deleted_at.is_(None))
-        )
-        total_votes = votes_result.scalar() or 0
-
         response_elections.append(
             ElectionListResponse(
                 id=election.id,
@@ -109,7 +113,7 @@ async def list_elections(
                 end_date=election.end_date,
                 status=election.status.value,
                 positions=election.positions,
-                total_votes=total_votes,
+                total_votes=vote_counts_map.get(election.id, 0),
             )
         )
 

@@ -78,8 +78,8 @@ export const EventDetailPage: React.FC = () => {
     try {
       const data = await eventService.getEventRSVPs(eventId);
       setRsvps(data);
-    } catch (_err) {
-      // Error silently handled - RSVPs section will show empty
+    } catch {
+      toast.error('Failed to load RSVPs');
     }
   };
 
@@ -89,8 +89,8 @@ export const EventDetailPage: React.FC = () => {
     try {
       const data = await eventService.getEventStats(eventId);
       setStats(data);
-    } catch (_err) {
-      // Error silently handled - stats section will show empty
+    } catch {
+      toast.error('Failed to load event statistics');
     }
   };
 
@@ -100,8 +100,8 @@ export const EventDetailPage: React.FC = () => {
     try {
       const data = await eventService.getEligibleMembers(eventId);
       setEligibleMembers(data);
-    } catch (_err) {
-      // Error silently handled - eligible members list will show empty
+    } catch {
+      toast.error('Failed to load eligible members');
     }
   };
 
