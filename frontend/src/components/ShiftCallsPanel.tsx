@@ -149,7 +149,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
       <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="call-form-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
-          <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
+          <button onClick={onClose} className="p-1 rounded text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500" aria-label="Close">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
@@ -232,7 +232,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
                 type="checkbox"
                 checked={formData.cancelled_en_route}
                 onChange={(e) => setFormData(prev => ({ ...prev, cancelled_en_route: e.target.checked }))}
-                className="rounded border-theme-input-border"
+                className="rounded border-theme-input-border focus:ring-2 focus:ring-blue-500"
               />
               Cancelled En Route
             </label>
@@ -241,7 +241,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
                 type="checkbox"
                 checked={formData.medical_refusal}
                 onChange={(e) => setFormData(prev => ({ ...prev, medical_refusal: e.target.checked }))}
-                className="rounded border-theme-input-border"
+                className="rounded border-theme-input-border focus:ring-2 focus:ring-blue-500"
               />
               Medical Refusal
             </label>
@@ -279,7 +279,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary"
+              className="px-4 py-2 rounded text-theme-text-secondary hover:text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             >
               Cancel
             </button>
@@ -443,7 +443,7 @@ export const ShiftCallsPanel: React.FC<ShiftCallsPanelProps> = ({ shiftId }) => 
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => setEditingCall(call)}
-                        className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded"
+                        className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                         aria-label={`Edit call ${call.incident_number || call.id}`}
                       >
                         <Edit2 className="w-4 h-4" aria-hidden="true" />
@@ -451,7 +451,7 @@ export const ShiftCallsPanel: React.FC<ShiftCallsPanelProps> = ({ shiftId }) => 
                       <button
                         onClick={() => handleDelete(call.id)}
                         disabled={deletingId === call.id}
-                        className="p-1 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 rounded disabled:opacity-50"
+                        className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                         aria-label={`Delete call ${call.incident_number || call.id}`}
                       >
                         {deletingId === call.id ? (

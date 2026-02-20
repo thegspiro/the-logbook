@@ -77,7 +77,7 @@ export const ScheduledTasksPage: React.FC = () => {
       case 'monthly':
         return 'bg-amber-500/10 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400';
       default:
-        return 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400';
+        return 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300';
     }
   };
 

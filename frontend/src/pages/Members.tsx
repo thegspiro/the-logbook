@@ -18,6 +18,7 @@ import { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { useAuthStore } from '../stores/authStore';
 
 interface MemberStats {
   total: number;
@@ -30,6 +31,7 @@ interface MemberStats {
 const Members: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { user: currentUser } = useAuthStore();
   const [members, setMembers] = useState<User[]>([]);
   const [stats, setStats] = useState<MemberStats>({
     total: 0,
@@ -83,6 +85,21 @@ const Members: React.FC = () => {
       setContactInfoEnabled(settings);
     } catch (_err) {
       // Error silently handled - contact info settings default to disabled
+    }
+  };
+
+  const handleDeleteMember = async (member: User) => {
+    const name = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.username;
+    if (!confirm(`Are you sure you want to delete ${name}? This action cannot be easily undone.`)) {
+      return;
+    }
+
+    try {
+      setError(null);
+      await userService.deleteUser(member.id);
+      await loadMembers();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to delete the member. Please check your connection and try again.'));
     }
   };
 
@@ -336,12 +353,15 @@ const Members: React.FC = () => {
                     >
                       <Edit className="w-4 h-4" />
                     </button>
-                    <button
-                      className="p-2 text-red-700 dark:text-red-400 hover:bg-red-500/10 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {currentUser?.id !== member.id && (
+                      <button
+                        onClick={() => handleDeleteMember(member)}
+                        className="p-2 text-red-700 dark:text-red-400 hover:bg-red-500/10 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -463,12 +483,15 @@ const Members: React.FC = () => {
                           >
                             <Edit className="w-4 h-4" />
                           </button>
-                          <button
-                            className="p-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {currentUser?.id !== member.id && (
+                            <button
+                              onClick={() => handleDeleteMember(member)}
+                              className="p-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

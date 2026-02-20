@@ -823,7 +823,7 @@ export const ElectionDetailPage: React.FC = () => {
                   </div>
 
                   {/* Anomaly Detection */}
-                  {Object.keys(forensicsReport.anomaly_detection.suspicious_ips).length > 0 && (
+                  {forensicsReport.anomaly_detection && Object.keys(forensicsReport.anomaly_detection.suspicious_ips || {}).length > 0 && (
                     <div className="border-t border-theme-surface-border pt-4">
                       <h3 className="text-md font-semibold text-red-300 mb-2">
                         Suspicious IP Addresses
@@ -840,7 +840,7 @@ export const ElectionDetailPage: React.FC = () => {
                   )}
 
                   {/* Voting Timeline */}
-                  {Object.keys(forensicsReport.voting_timeline).length > 0 && (
+                  {forensicsReport.voting_timeline && Object.keys(forensicsReport.voting_timeline).length > 0 && (
                     <div className="border-t border-theme-surface-border pt-4">
                       <h3 className="text-md font-semibold text-theme-text-primary mb-2">Voting Timeline</h3>
                       <div className="space-y-1">
@@ -889,11 +889,12 @@ export const ElectionDetailPage: React.FC = () => {
                   </div>
 
                   {/* Audit Log Summary */}
+                  {forensicsReport.audit_log && (
                   <div className="border-t border-theme-surface-border pt-4">
                     <h3 className="text-md font-semibold text-theme-text-primary mb-2">
                       Audit Log ({forensicsReport.audit_log.total_entries} entries)
                     </h3>
-                    {forensicsReport.audit_log.entries.length === 0 ? (
+                    {(forensicsReport.audit_log.entries || []).length === 0 ? (
                       <p className="text-sm text-theme-text-muted">No audit entries.</p>
                     ) : (
                       <div className="max-h-64 overflow-y-auto">
@@ -906,7 +907,7 @@ export const ElectionDetailPage: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-theme-surface-border">
-                            {forensicsReport.audit_log.entries.slice(0, 50).map((entry, i) => (
+                            {(forensicsReport.audit_log.entries || []).slice(0, 50).map((entry, i) => (
                               <tr key={entry.id || i}>
                                 <td className="px-3 py-2 text-xs text-theme-text-muted whitespace-nowrap">
                                   {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
@@ -928,6 +929,7 @@ export const ElectionDetailPage: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  )}
 
                   <div className="border-t border-theme-surface-border pt-3">
                     <button
@@ -1311,7 +1313,7 @@ export const ElectionDetailPage: React.FC = () => {
             {/* Ballot Items */}
             <div className="px-6 py-6 space-y-6">
               {(election.ballot_items || []).length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
+                <div className="text-center py-8 text-theme-text-muted">
                   No ballot items have been added yet.
                 </div>
               ) : (
@@ -1421,7 +1423,7 @@ export const ElectionDetailPage: React.FC = () => {
                   >
                     Submit Ballot
                   </button>
-                  <p className="mt-2 text-sm text-gray-400">
+                  <p className="mt-2 text-sm text-theme-text-muted">
                     You will have a chance to review your choices before they are submitted.
                   </p>
                 </div>

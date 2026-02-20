@@ -445,10 +445,11 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
                         <button
                           onClick={() => removeItem(si.code)}
-                          className="p-1 text-theme-text-muted hover:text-red-600 rounded"
+                          className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-red-600 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
                           title="Remove"
+                          aria-label={`Remove item ${si.code}`}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </button>
                       </div>
                     </div>
