@@ -172,6 +172,7 @@ const PublicFormPage = () => {
         return (
           <input
             type="time"
+            step="900"
             className={baseInputClass}
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
