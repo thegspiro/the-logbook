@@ -296,10 +296,22 @@ export const userService = {
       email?: string;
       is_primary: boolean;
     }>;
+    password?: string;
     role_ids?: string[];
     send_welcome_email?: boolean;
   }): Promise<UserWithRoles> {
     const response = await api.post<UserWithRoles>('/users', memberData);
+    return response.data;
+  },
+
+  /**
+   * Reset a user's password (admin only)
+   */
+  async adminResetPassword(userId: string, newPassword: string, forceChange: boolean = true): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/users/${userId}/reset-password`, {
+      new_password: newPassword,
+      force_change: forceChange,
+    });
     return response.data;
   },
 
@@ -1908,7 +1920,33 @@ export interface BatchReturnResponse {
   results: BatchReturnResultItem[];
 }
 
+export interface MemberInventorySummary {
+  user_id: string;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  badge_number?: string;
+  permanent_count: number;
+  checkout_count: number;
+  issued_count: number;
+  overdue_count: number;
+  total_items: number;
+}
+
+export interface MembersInventoryListResponse {
+  members: MemberInventorySummary[];
+  total: number;
+}
+
 export const inventoryService = {
+  async getMembersSummary(search?: string): Promise<MembersInventoryListResponse> {
+    const response = await api.get<MembersInventoryListResponse>('/inventory/members-summary', {
+      params: search ? { search } : undefined,
+    });
+    return response.data;
+  },
+
   async getUserInventory(userId: string): Promise<UserInventoryResponse> {
     const response = await api.get<UserInventoryResponse>(`/inventory/users/${userId}/inventory`);
     return response.data;

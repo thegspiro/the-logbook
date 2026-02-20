@@ -127,6 +127,7 @@ class CurrentUser(BaseModel):
     email_verified: bool
     mfa_enabled: bool
     password_expired: bool = False  # True when password age exceeds HIPAA max
+    must_change_password: bool = False  # True when admin requires password change on next login
 
 
 class PasswordChange(BaseModel):

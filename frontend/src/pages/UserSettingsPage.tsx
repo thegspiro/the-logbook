@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Palette } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Palette, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -20,9 +21,13 @@ import { getErrorMessage } from '../utils/errorHandling';
 type TabType = 'account' | 'password' | 'appearance' | 'notifications';
 
 export const UserSettingsPage: React.FC = () => {
-  const { user } = useAuthStore();
+  const { user, loadUser } = useAuthStore();
   const { theme, setTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState<TabType>('account');
+  const location = useLocation();
+  const forcePasswordChange = (location.state as { forcePasswordChange?: boolean } | null)?.forcePasswordChange
+    || user?.must_change_password
+    || user?.password_expired;
+  const [activeTab, setActiveTab] = useState<TabType>(forcePasswordChange ? 'password' : 'account');
 
   // Profile state
   const [_profile, setProfile] = useState<UserWithRoles | null>(null);
@@ -148,6 +153,9 @@ export const UserSettingsPage: React.FC = () => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+
+      // Reload user to clear must_change_password flag
+      await loadUser();
 
       toast.success('Password changed successfully!');
     } catch (err: unknown) {
@@ -440,6 +448,19 @@ export const UserSettingsPage: React.FC = () => {
         {/* Password Tab */}
         {activeTab === 'password' && (
           <div className="space-y-6">
+            {forcePasswordChange && (
+              <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-300 dark:border-yellow-500/30 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                    Password change required
+                  </p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
+                    Your administrator has required you to change your password before continuing. Please set a new password below.
+                  </p>
+                </div>
+              </div>
+            )}
             <div>
               <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Change Password</h2>
               <p className="text-theme-text-secondary text-sm mb-6">

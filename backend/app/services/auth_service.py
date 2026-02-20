@@ -476,6 +476,7 @@ class AuthService:
         # Update password
         user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.utcnow()
+        user.must_change_password = False
         user.failed_login_attempts = 0
         user.locked_until = None
 
@@ -702,6 +703,7 @@ class AuthService:
         # Set new password and clear token
         user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.utcnow()
+        user.must_change_password = False
         user.password_reset_token = None
         user.password_reset_expires_at = None
         user.failed_login_attempts = 0

@@ -17,6 +17,7 @@ import { userService, roleService } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
 import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
+import { validatePasswordStrength } from '../utils/passwordValidation';
 
 type ViewMode = 'by-member' | 'by-role';
 
@@ -60,6 +61,13 @@ export const MembersAdminPage: React.FC = () => {
     station: '',
   });
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // Reset password state
+  const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRoles | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [resetForceChange, setResetForceChange] = useState(true);
+  const [savingReset, setSavingReset] = useState(false);
 
   const canCreateMembers = checkPermission('users.create');
 
@@ -308,6 +316,36 @@ export const MembersAdminPage: React.FC = () => {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetPasswordUser) return;
+
+    if (resetNewPassword !== resetConfirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    const validation = validatePasswordStrength(resetNewPassword);
+    if (!validation.isValid) {
+      setError('Password does not meet strength requirements');
+      return;
+    }
+
+    try {
+      setSavingReset(true);
+      setError(null);
+      await userService.adminResetPassword(resetPasswordUser.id, resetNewPassword, resetForceChange);
+      setResetPasswordUser(null);
+      setResetNewPassword('');
+      setResetConfirmPassword('');
+      setResetForceChange(true);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || 'Unable to reset password. Please try again.');
+    } finally {
+      setSavingReset(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -499,6 +537,14 @@ export const MembersAdminPage: React.FC = () => {
                       >
                         Manage Roles
                       </button>
+                      {currentUser?.id !== user.id && (
+                        <button
+                          onClick={() => setResetPasswordUser(user)}
+                          className="text-yellow-400 hover:text-yellow-300"
+                        >
+                          Reset Password
+                        </button>
+                      )}
                       {currentUser?.id !== user.id && (
                         <button
                           onClick={() => handleDeleteUser(user)}
@@ -727,6 +773,95 @@ export const MembersAdminPage: React.FC = () => {
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 {savingProfile ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {resetPasswordUser && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-password-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setResetPasswordUser(null); setResetNewPassword(''); setResetConfirmPassword(''); setError(null); } }}
+        >
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="reset-password-title" className="text-lg font-medium text-theme-text-primary">
+                Reset Password for {resetPasswordUser.full_name || resetPasswordUser.username}
+              </h3>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={resetNewPassword}
+                  onChange={(e) => setResetNewPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Minimum 12 characters"
+                  disabled={savingReset}
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  value={resetConfirmPassword}
+                  onChange={(e) => setResetConfirmPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Re-enter password"
+                  disabled={savingReset}
+                  autoComplete="new-password"
+                />
+                {resetConfirmPassword && resetNewPassword !== resetConfirmPassword && (
+                  <p className="mt-1 text-xs text-red-400">Passwords do not match</p>
+                )}
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={resetForceChange}
+                  onChange={(e) => setResetForceChange(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
+                  disabled={savingReset}
+                />
+                <span className="text-sm text-theme-text-secondary">
+                  Require user to change password on next login
+                </span>
+              </label>
+
+              {error && (
+                <div className="text-sm text-red-400">{error}</div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setResetPasswordUser(null);
+                  setResetNewPassword('');
+                  setResetConfirmPassword('');
+                  setError(null);
+                }}
+                disabled={savingReset}
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetPassword}
+                disabled={savingReset || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
+                className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
+              >
+                {savingReset ? 'Resetting...' : 'Reset Password'}
               </button>
             </div>
           </div>
