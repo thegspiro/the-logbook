@@ -444,6 +444,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   ? 'bg-green-600/20 text-green-700 dark:text-green-400 hover:bg-green-600/30'
                   : 'bg-theme-surface-hover/20 text-theme-text-muted hover:bg-theme-surface-hover/30'
               }`}
+              title={requirement.active ? 'Deactivate' : 'Activate'}
               aria-label={requirement.active ? 'Deactivate requirement' : 'Activate requirement'}
             >
               {requirement.active ? <CheckCircle className="w-5 h-5" aria-hidden="true" /> : <AlertCircle className="w-5 h-5" aria-hidden="true" />}
@@ -451,6 +452,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             <button
               onClick={onEdit}
               className="p-2 bg-blue-600/20 text-blue-700 dark:text-blue-400 hover:bg-blue-600/30 rounded-lg transition-colors"
+              title="Edit"
               aria-label="Edit requirement"
             >
               <Edit className="w-5 h-5" aria-hidden="true" />
@@ -458,6 +460,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             <button
               onClick={onDuplicate}
               className="p-2 bg-purple-600/20 text-purple-700 dark:text-purple-400 hover:bg-purple-600/30 rounded-lg transition-colors"
+              title="Duplicate"
               aria-label="Duplicate requirement"
             >
               <Copy className="w-5 h-5" aria-hidden="true" />
@@ -465,6 +468,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             <button
               onClick={onDelete}
               className="p-2 bg-red-600/20 text-red-700 dark:text-red-400 hover:bg-red-600/30 rounded-lg transition-colors"
+              title="Delete"
               aria-label="Delete requirement"
             >
               <Trash2 className="w-5 h-5" aria-hidden="true" />
@@ -472,6 +476,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             <button
               onClick={onToggleExpand}
               className="p-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
+              title={isExpanded ? 'Collapse' : 'Expand'}
               aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
             >
               {isExpanded ? <ChevronUp className="w-5 h-5" aria-hidden="true" /> : <ChevronDown className="w-5 h-5" aria-hidden="true" />}
