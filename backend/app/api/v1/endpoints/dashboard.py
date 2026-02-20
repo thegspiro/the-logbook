@@ -20,7 +20,15 @@ from app.models.event import Event, EventRSVP, EventExternalAttendee, EventType
 from app.models.user import User, UserStatus
 from app.models.meeting import MeetingActionItem, ActionItemStatus
 from app.models.minute import ActionItem, MinutesActionItemStatus, MeetingMinutes
-from app.models.training import TrainingRecord, TrainingStatus
+from app.models.training import (
+    TrainingRecord,
+    TrainingStatus,
+    ProgramEnrollment,
+    EnrollmentStatus,
+    RequirementProgress,
+    RequirementProgressStatus,
+    ProgramRequirement,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -154,29 +162,81 @@ async def get_admin_summary(
     active_members = result.scalar() or 0
     inactive_members = total_members - active_members
 
-    # ── Training completion % (last 12 months) ──
+    # ── Training compliance % ──
+    # Primary: Use program enrollment requirement progress (the real compliance data).
+    # For each active/completed enrollment, count required requirement-progress
+    # items that are completed or verified vs total required items.
+    # Fallback: If no enrollments exist, use completed/non-cancelled training
+    # records from the last 12 months.
     training_pct = 0.0
     try:
-        twelve_months_ago = datetime.utcnow() - timedelta(days=365)
-        result = await db.execute(
-            select(func.count(TrainingRecord.id)).where(
-                TrainingRecord.organization_id == org_id,
-                TrainingRecord.created_at >= twelve_months_ago,
+        # Count total required requirement-progress entries for active/completed enrollments
+        total_required_result = await db.execute(
+            select(func.count(RequirementProgress.id))
+            .join(ProgramEnrollment, RequirementProgress.enrollment_id == ProgramEnrollment.id)
+            .join(
+                ProgramRequirement,
+                and_(
+                    ProgramRequirement.requirement_id == RequirementProgress.requirement_id,
+                    ProgramRequirement.program_id == ProgramEnrollment.program_id,
+                ),
+            )
+            .where(
+                ProgramEnrollment.organization_id == org_id,
+                ProgramEnrollment.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]),
+                ProgramRequirement.is_required == True,  # noqa: E712
             )
         )
-        total_records = result.scalar() or 0
+        total_required = total_required_result.scalar() or 0
 
-        result = await db.execute(
-            select(func.count(TrainingRecord.id)).where(
-                TrainingRecord.organization_id == org_id,
-                TrainingRecord.created_at >= twelve_months_ago,
-                TrainingRecord.status == TrainingStatus.COMPLETED,
+        if total_required > 0:
+            # Count completed/verified ones
+            satisfied_result = await db.execute(
+                select(func.count(RequirementProgress.id))
+                .join(ProgramEnrollment, RequirementProgress.enrollment_id == ProgramEnrollment.id)
+                .join(
+                    ProgramRequirement,
+                    and_(
+                        ProgramRequirement.requirement_id == RequirementProgress.requirement_id,
+                        ProgramRequirement.program_id == ProgramEnrollment.program_id,
+                    ),
+                )
+                .where(
+                    ProgramEnrollment.organization_id == org_id,
+                    ProgramEnrollment.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]),
+                    ProgramRequirement.is_required == True,  # noqa: E712
+                    RequirementProgress.status.in_([
+                        RequirementProgressStatus.COMPLETED,
+                        RequirementProgressStatus.VERIFIED,
+                    ]),
+                )
             )
-        )
-        completed_records = result.scalar() or 0
-        training_pct = (completed_records / total_records * 100) if total_records > 0 else 0.0
+            satisfied = satisfied_result.scalar() or 0
+            training_pct = (satisfied / total_required * 100)
+        else:
+            # Fallback: no program enrollments — use record-based metric
+            # but exclude cancelled records from the denominator
+            twelve_months_ago = datetime.utcnow() - timedelta(days=365)
+            result = await db.execute(
+                select(func.count(TrainingRecord.id)).where(
+                    TrainingRecord.organization_id == org_id,
+                    TrainingRecord.created_at >= twelve_months_ago,
+                    TrainingRecord.status != TrainingStatus.CANCELLED,
+                )
+            )
+            total_records = result.scalar() or 0
+
+            result = await db.execute(
+                select(func.count(TrainingRecord.id)).where(
+                    TrainingRecord.organization_id == org_id,
+                    TrainingRecord.created_at >= twelve_months_ago,
+                    TrainingRecord.status == TrainingStatus.COMPLETED,
+                )
+            )
+            completed_records = result.scalar() or 0
+            training_pct = (completed_records / total_records * 100) if total_records > 0 else 0.0
     except Exception as exc:
-        logger.warning("admin-summary: training completion query failed: %s", exc)
+        logger.warning("admin-summary: training compliance query failed: %s", exc)
 
     # ── Upcoming events ──
     upcoming_events = 0
