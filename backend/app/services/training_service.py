@@ -18,6 +18,7 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
     TrainingType,
+    RequirementFrequency,
 )
 from app.models.user import User
 from app.schemas.training import (
@@ -268,15 +269,15 @@ class TrainingService:
         freq = requirement.frequency.value if hasattr(requirement.frequency, 'value') else str(requirement.frequency)
         current_year = today.year
 
-        if freq == "one_time":
+        if freq == RequirementFrequency.ONE_TIME.value:
             start_date = None
             end_date = None
-        elif freq == "biannual":
+        elif freq == RequirementFrequency.BIANNUAL.value:
             # Biannual: no date window — compliance is based on having a
             # non-expired certification
             start_date = None
             end_date = None
-        elif freq == "quarterly":
+        elif freq == RequirementFrequency.QUARTERLY.value:
             quarter_month = ((today.month - 1) // 3) * 3 + 1
             start_date = date(current_year, quarter_month, 1)
             end_month = quarter_month + 2
@@ -286,7 +287,7 @@ class TrainingService:
                 end_year += 1
             end_day = calendar.monthrange(end_year, end_month)[1]
             end_date = date(end_year, end_month, end_day)
-        elif freq == "monthly":
+        elif freq == RequirementFrequency.MONTHLY.value:
             start_date = date(current_year, today.month, 1)
             end_day = calendar.monthrange(current_year, today.month)[1]
             end_date = date(current_year, today.month, end_day)

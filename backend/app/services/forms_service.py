@@ -79,9 +79,9 @@ class FormsService:
 
             # Enforce length limits by field type
             field_type = field.field_type if isinstance(field.field_type, str) else field.field_type.value
-            if field_type == "textarea":
+            if field_type == FieldType.TEXTAREA.value:
                 max_len = field.max_length or FormsService.MAX_TEXTAREA_LENGTH
-            elif field_type == "email":
+            elif field_type == FieldType.EMAIL.value:
                 max_len = FormsService.MAX_EMAIL_LENGTH
             else:
                 max_len = field.max_length or FormsService.MAX_TEXT_LENGTH
@@ -94,7 +94,7 @@ class FormsService:
                 return {}, f"Value for '{field.label}' must be at least {field.min_length} characters"
 
             # Type-specific validation
-            if field_type == "email" and str_value.strip():
+            if field_type == FieldType.EMAIL.value and str_value.strip():
                 email_pattern = r'^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$'
                 raw_value = html_lib.unescape(str_value)
                 if not re.match(email_pattern, raw_value):
@@ -103,13 +103,13 @@ class FormsService:
                 if '\n' in raw_value or '\r' in raw_value:
                     return {}, f"Invalid email format for '{field.label}'"
 
-            if field_type == "phone" and str_value.strip():
+            if field_type == FieldType.PHONE.value and str_value.strip():
                 raw_value = html_lib.unescape(str_value)
                 digits_only = re.sub(r'[^\d+\-() ]', '', raw_value)
                 if digits_only != raw_value:
                     return {}, f"Invalid phone number for '{field.label}'"
 
-            if field_type == "number" and str_value.strip():
+            if field_type == FieldType.NUMBER.value and str_value.strip():
                 try:
                     num_val = float(html_lib.unescape(str_value))
                     if field.min_value is not None and num_val < field.min_value:
@@ -119,7 +119,7 @@ class FormsService:
                 except ValueError:
                     return {}, f"Invalid number for '{field.label}'"
 
-            if field_type in ("select", "radio") and str_value.strip():
+            if field_type in (FieldType.SELECT.value, FieldType.RADIO.value) and str_value.strip():
                 # Validate against allowed options
                 if field.options:
                     allowed = {opt.value if hasattr(opt, 'value') else opt.get('value', '') for opt in field.options}
@@ -127,7 +127,7 @@ class FormsService:
                     if raw_value not in allowed:
                         return {}, f"Invalid option for '{field.label}'"
 
-            if field_type == "checkbox" and str_value.strip():
+            if field_type == FieldType.CHECKBOX.value and str_value.strip():
                 # Validate each comma-separated value against allowed options
                 if field.options:
                     allowed = {opt.value if hasattr(opt, 'value') else opt.get('value', '') for opt in field.options}
@@ -298,7 +298,7 @@ class FormsService:
             # Handle status changes
             if "status" in update_data:
                 new_status = update_data["status"]
-                if new_status == "published" and form.status != FormStatus.PUBLISHED:
+                if new_status == FormStatus.PUBLISHED.value and form.status != FormStatus.PUBLISHED:
                     update_data["published_at"] = datetime.now()
 
             for key, value in update_data.items():

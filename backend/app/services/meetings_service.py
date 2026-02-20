@@ -298,7 +298,7 @@ class MeetingsService:
             # Handle status changes
             if "status" in update_data:
                 new_status = update_data["status"]
-                if new_status == "completed" and item.status != ActionItemStatus.COMPLETED:
+                if new_status == ActionItemStatus.COMPLETED.value and item.status != ActionItemStatus.COMPLETED:
                     item.completed_at = datetime.now()
 
             for key, value in update_data.items():
@@ -406,7 +406,7 @@ class MeetingsService:
         Bridges Event check-in attendance → Meeting attendance.
         Pre-populates attendees from EventRSVP check-in data.
         """
-        from app.models.event import Event, EventRSVP
+        from app.models.event import Event, EventRSVP, RSVPStatus
         from app.core.utils import generate_uuid
 
         # Get the event
@@ -462,7 +462,7 @@ class MeetingsService:
                     meeting_id=meeting.id,
                     user_id=rsvp.user_id,
                     present=rsvp.checked_in,
-                    excused=not rsvp.checked_in and rsvp.status.value == "not_going" if hasattr(rsvp.status, 'value') else False,
+                    excused=not rsvp.checked_in and rsvp.status == RSVPStatus.NOT_GOING if hasattr(rsvp.status, 'value') else False,
                 )
                 self.db.add(attendee)
 

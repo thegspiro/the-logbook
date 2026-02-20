@@ -10,6 +10,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { FeatureStatus } from '../../../constants/enums';
 
 export interface OnboardingError {
   timestamp: string;
@@ -297,9 +298,9 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
 
         // Update selectedModules based on status
         let newSelectedModules = [...selectedModules];
-        if (status === 'enabled' && !newSelectedModules.includes(moduleId)) {
+        if (status === FeatureStatus.ENABLED && !newSelectedModules.includes(moduleId)) {
           newSelectedModules.push(moduleId);
-        } else if (status !== 'enabled') {
+        } else if (status !== FeatureStatus.ENABLED) {
           newSelectedModules = newSelectedModules.filter(id => id !== moduleId);
         }
 
@@ -310,7 +311,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
       setModuleStatuses: (statuses) => {
         // Update selectedModules based on all statuses
         const enabledModules = Object.entries(statuses)
-          .filter(([_, status]) => status === 'enabled')
+          .filter(([_, status]) => status === FeatureStatus.ENABLED)
           .map(([id]) => id);
 
         set({ moduleStatuses: statuses, selectedModules: enabledModules });

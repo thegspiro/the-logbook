@@ -25,6 +25,7 @@ import type { SiblingField } from './FieldEditor';
 import { formsService } from '../../services/api';
 import type { FormField, FormFieldCreate } from '../../services/api';
 import type { FieldDefinition } from './FieldRenderer';
+import { FieldType } from '../../constants/enums';
 
 const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
   text: <Type className="w-4 h-4" />,
@@ -388,7 +389,7 @@ const FormBuilder = ({
           <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-4">Preview</p>
           <div className="space-y-4">
             {sortedFields.map((field) => {
-              if (field.field_type === 'section_header') {
+              if (field.field_type === FieldType.SECTION_HEADER) {
                 return (
                   <div key={field.id} className="border-b border-theme-surface-border pb-2 pt-2">
                     <h3 className="text-lg font-semibold text-theme-text-primary">{field.label}</h3>

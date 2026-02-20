@@ -18,6 +18,7 @@ from app.core.database import get_db
 from app.core.audit import log_audit_event
 from app.api.dependencies import get_current_user, require_permission
 from app.models.user import User, UserStatus, Organization
+from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 
 router = APIRouter()
 
@@ -169,7 +170,7 @@ async def change_member_status(
             # Load drop notification settings from organization
             org_settings = (organization.settings or {}) if organization else {}
             drop_notif_config = org_settings.get("member_drop_notifications", {})
-            cc_role_names = drop_notif_config.get("cc_roles", ["admin", "quartermaster", "chief"])
+            cc_role_names = drop_notif_config.get("cc_roles", ADMIN_NOTIFY_ROLE_SLUGS)
             cc_static_emails = drop_notif_config.get("cc_emails", [])
             include_personal = drop_notif_config.get("include_personal_email", True)
 

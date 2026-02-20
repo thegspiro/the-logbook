@@ -45,6 +45,15 @@ export default {
           'accent-green-muted': 'var(--accent-green-muted)',
           'accent-orange-muted': 'var(--accent-orange-muted)',
           'focus-ring': 'var(--focus-ring)',
+          // Toast colors
+          'toast-success': 'var(--toast-success)',
+          'toast-error': 'var(--toast-error)',
+          'toast-warning-bg': 'var(--toast-warning-bg)',
+          'toast-warning-text': 'var(--toast-warning-text)',
+          // Status indicator colors
+          'status-passed': 'var(--status-passed)',
+          'status-failed': 'var(--status-failed)',
+          'status-pending': 'var(--status-pending)',
           // Alert variants
           'alert-info-bg': 'var(--alert-info-bg)',
           'alert-info-border': 'var(--alert-info-border)',

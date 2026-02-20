@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import { userService } from '../../../services/api';
 import type { User, ContactInfoSettings } from '../types';
 import type { MemberStats } from '../../../types/member';
+import { UserStatus } from '../../../constants/enums';
 
 interface MembershipState {
   // Data
@@ -104,10 +105,10 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
       // Calculate stats from all members (before pagination)
       const stats: MemberStats = {
         total: allMembers.length,
-        active: allMembers.filter((m) => m.status === 'active').length,
-        inactive: allMembers.filter((m) => m.status === 'inactive').length,
+        active: allMembers.filter((m) => m.status === UserStatus.ACTIVE).length,
+        inactive: allMembers.filter((m) => m.status === UserStatus.INACTIVE).length,
         onLeave: allMembers.filter((m) => m.status === 'leave' || m.status === 'on_leave').length,
-        retired: allMembers.filter((m) => m.status === 'retired').length,
+        retired: allMembers.filter((m) => m.status === UserStatus.RETIRED).length,
         expiringCertifications: 0,
       };
 

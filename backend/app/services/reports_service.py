@@ -83,7 +83,7 @@ class ReportsService:
 
         for user in users:
             status_val = user.status.value if hasattr(user.status, 'value') else str(user.status)
-            is_active = status_val == "active"
+            is_active = status_val == UserStatus.ACTIVE.value
             if is_active:
                 active_count += 1
             else:
@@ -171,7 +171,7 @@ class ReportsService:
             if uid in member_stats:
                 member_stats[uid]["total_courses"] += 1
                 status_val = record.status.value if hasattr(record.status, 'value') else str(record.status)
-                if status_val == "completed":
+                if status_val == TrainingStatus.COMPLETED.value:
                     member_stats[uid]["completed_courses"] += 1
                     completed_count += 1
                 if record.hours_completed:
@@ -192,7 +192,7 @@ class ReportsService:
                 }
             course_stats[cid]["total"] += 1
             status_val2 = record.status.value if hasattr(record.status, 'value') else str(record.status)
-            if status_val2 == "completed":
+            if status_val2 == TrainingStatus.COMPLETED.value:
                 course_stats[cid]["completed"] += 1
             if record.hours_completed:
                 course_stats[cid]["total_hours"] += float(record.hours_completed)
@@ -466,7 +466,7 @@ class ReportsService:
 
             if uid in member_data:
                 member_data[uid]["training_hours"] += hours
-                if status_val == "completed":
+                if status_val == TrainingStatus.COMPLETED.value:
                     member_data[uid]["courses_completed"] += 1
                     total_completions += 1
                 total_hours += hours

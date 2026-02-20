@@ -278,14 +278,14 @@ function App() {
             },
             success: {
               iconTheme: {
-                primary: '#10b981',
-                secondary: '#fff',
+                primary: 'var(--toast-success)',
+                secondary: 'var(--toast-icon-secondary)',
               },
             },
             error: {
               iconTheme: {
-                primary: '#ef4444',
-                secondary: '#fff',
+                primary: 'var(--toast-error)',
+                secondary: 'var(--toast-icon-secondary)',
               },
             },
           }}

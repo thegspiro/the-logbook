@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Database, Server, Shield, Wrench, Clock, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../services/api-client';
+import { HealthStatus, ConnectionStatus } from '../../../constants/enums';
 
 interface ServiceStatus {
   name: string;
@@ -32,9 +33,9 @@ const SKIP_AVAILABLE_AFTER = 5; // Show skip option after 5 attempts (~5 minutes
 const OnboardingCheck: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [services, setServices] = useState<ServiceStatus[]>([
-    { name: 'Backend API', status: 'checking' },
-    { name: 'Database', status: 'checking' },
-    { name: 'Cache (Redis)', status: 'checking', optional: true },
+    { name: 'Backend API', status: ConnectionStatus.CHECKING },
+    { name: 'Database', status: ConnectionStatus.CHECKING },
+    { name: 'Cache (Redis)', status: ConnectionStatus.CHECKING, optional: true },
   ]);
   const [retryCount, setRetryCount] = useState(0);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -264,9 +265,9 @@ const OnboardingCheck: React.FC = () => {
     const healthResponse = await apiClient.checkHealth();
 
     if (healthResponse.error || !healthResponse.data) {
-      updateServiceStatus('Backend API', 'disconnected', healthResponse.error || 'Not responding');
-      updateServiceStatus('Database', 'checking');
-      updateServiceStatus('Cache (Redis)', 'checking');
+      updateServiceStatus('Backend API', ConnectionStatus.DISCONNECTED, healthResponse.error || 'Not responding');
+      updateServiceStatus('Database', ConnectionStatus.CHECKING);
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.CHECKING);
       // Don't clear startupInfo - preserve last known state for user visibility
       return false;
     }
@@ -301,29 +302,29 @@ const OnboardingCheck: React.FC = () => {
     }
 
     // Update Backend API status
-    updateServiceStatus('Backend API', 'connected', `v${health.version}`);
+    updateServiceStatus('Backend API', ConnectionStatus.CONNECTED, `v${health.version}`);
 
     // Update Database status
-    if (health.checks.database === 'connected') {
-      updateServiceStatus('Database', 'connected');
-    } else if (health.checks.database === 'disconnected') {
-      updateServiceStatus('Database', 'disconnected', 'Starting up...');
+    if (health.checks.database === ConnectionStatus.CONNECTED) {
+      updateServiceStatus('Database', ConnectionStatus.CONNECTED);
+    } else if (health.checks.database === ConnectionStatus.DISCONNECTED) {
+      updateServiceStatus('Database', ConnectionStatus.DISCONNECTED, 'Starting up...');
       return false;
     } else {
-      updateServiceStatus('Database', 'error', health.checks.database);
+      updateServiceStatus('Database', ConnectionStatus.ERROR, health.checks.database);
       return false;
     }
 
     // Update Redis status (non-critical)
-    if (health.checks.redis === 'connected') {
-      updateServiceStatus('Cache (Redis)', 'connected');
-    } else if (health.checks.redis === 'disconnected') {
-      updateServiceStatus('Cache (Redis)', 'disconnected', 'Optional - skipped');
+    if (health.checks.redis === ConnectionStatus.CONNECTED) {
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.CONNECTED);
+    } else if (health.checks.redis === ConnectionStatus.DISCONNECTED) {
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.DISCONNECTED, 'Optional - skipped');
     } else {
-      updateServiceStatus('Cache (Redis)', 'error', 'Optional - failed');
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.ERROR, 'Optional - failed');
     }
 
-    return health.status !== 'unhealthy' && health.checks.database === 'connected';
+    return health.status !== HealthStatus.UNHEALTHY && health.checks.database === ConnectionStatus.CONNECTED;
   }, [updateServiceStatus]);
 
   const checkOnboardingStatus = useCallback(async () => {
@@ -409,9 +410,9 @@ const OnboardingCheck: React.FC = () => {
     setElapsedTime(0);
     setShowSkipOption(false);
     setServices([
-      { name: 'Backend API', status: 'checking' },
-      { name: 'Database', status: 'checking' },
-      { name: 'Cache (Redis)', status: 'checking', optional: true },
+      { name: 'Backend API', status: ConnectionStatus.CHECKING },
+      { name: 'Database', status: ConnectionStatus.CHECKING },
+      { name: 'Cache (Redis)', status: ConnectionStatus.CHECKING, optional: true },
     ]);
     runCheck();
   };
@@ -422,13 +423,13 @@ const OnboardingCheck: React.FC = () => {
 
   const getStatusIcon = (status: ServiceStatus['status']) => {
     switch (status) {
-      case 'connected':
+      case ConnectionStatus.CONNECTED:
         return <span className="text-theme-accent-green text-xl">✓</span>;
-      case 'disconnected':
+      case ConnectionStatus.DISCONNECTED:
         return <span className="text-theme-accent-yellow text-xl animate-pulse">●</span>;
-      case 'error':
+      case ConnectionStatus.ERROR:
         return <span className="text-theme-accent-red text-xl">✗</span>;
-      case 'checking':
+      case ConnectionStatus.CHECKING:
       default:
         return (
           <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-theme-text-primary border-t-transparent"></span>
@@ -438,11 +439,11 @@ const OnboardingCheck: React.FC = () => {
 
   const getStatusColor = (status: ServiceStatus['status']) => {
     switch (status) {
-      case 'connected':
+      case ConnectionStatus.CONNECTED:
         return 'text-theme-accent-green';
-      case 'disconnected':
+      case ConnectionStatus.DISCONNECTED:
         return 'text-theme-accent-yellow';
-      case 'error':
+      case ConnectionStatus.ERROR:
         return 'text-theme-accent-red';
       default:
         return 'text-theme-text-secondary';
@@ -451,9 +452,9 @@ const OnboardingCheck: React.FC = () => {
 
   // Calculate progress percentage
   const progressPercent = Math.min((retryCount / MAX_RETRIES) * 100, 100);
-  const connectedCount = services.filter(s => s.status === 'connected').length;
+  const connectedCount = services.filter(s => s.status === ConnectionStatus.CONNECTED).length;
   const requiredServices = services.filter(s => !s.optional);
-  const requiredConnected = requiredServices.filter(s => s.status === 'connected').length;
+  const requiredConnected = requiredServices.filter(s => s.status === ConnectionStatus.CONNECTED).length;
 
   if (error) {
     return (
@@ -563,10 +564,10 @@ const OnboardingCheck: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-sm ${getStatusColor(service.status)}`}>
-                  {service.status === 'connected' && 'Ready'}
-                  {service.status === 'disconnected' && 'Waiting...'}
-                  {service.status === 'error' && 'Error'}
-                  {service.status === 'checking' && 'Checking...'}
+                  {service.status === ConnectionStatus.CONNECTED && 'Ready'}
+                  {service.status === ConnectionStatus.DISCONNECTED && 'Waiting...'}
+                  {service.status === ConnectionStatus.ERROR && 'Error'}
+                  {service.status === ConnectionStatus.CHECKING && 'Checking...'}
                 </span>
                 {getStatusIcon(service.status)}
               </div>

@@ -17,7 +17,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
-from app.models.event import Event, EventRSVP, EventType
+from app.models.event import Event, EventRSVP, EventType, RSVPStatus
 from app.models.user import User
 from app.schemas.event import (
     EventCreate,
@@ -139,7 +139,7 @@ async def list_events(
     event_list = []
     for event in events:
         rsvp_count = len(event.rsvps) if event.rsvps else 0
-        going_count = sum(1 for rsvp in event.rsvps if rsvp.status.value == "going") if event.rsvps else 0
+        going_count = sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.GOING) if event.rsvps else 0
 
         location_name = None
         if event.location_obj:
@@ -235,9 +235,9 @@ async def get_event(
 
     # Count RSVPs
     rsvp_count = len(event.rsvps) if event.rsvps else 0
-    going_count = sum(1 for rsvp in event.rsvps if rsvp.status.value == "going") if event.rsvps else 0
-    not_going_count = sum(1 for rsvp in event.rsvps if rsvp.status.value == "not_going") if event.rsvps else 0
-    maybe_count = sum(1 for rsvp in event.rsvps if rsvp.status.value == "maybe") if event.rsvps else 0
+    going_count = sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.GOING) if event.rsvps else 0
+    not_going_count = sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.NOT_GOING) if event.rsvps else 0
+    maybe_count = sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.MAYBE) if event.rsvps else 0
 
     return _build_event_response(
         event,

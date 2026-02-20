@@ -26,6 +26,7 @@ import type {
   BallotSubmissionResponse,
 } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import { VoteType } from '../constants/enums';
 
 type ItemChoice = {
   choice: string; // 'approve' | 'deny' | 'write_in' | 'abstain' | candidate UUID
@@ -261,7 +262,7 @@ export const BallotVotingPage: React.FC = () => {
           {ballotItems.map((item, index) => {
             const itemChoice = choices[item.id];
             const itemCandidates = getCandidatesForItem(item);
-            const isApprovalType = item.vote_type === 'approval';
+            const isApprovalType = item.vote_type === VoteType.APPROVAL;
 
             return (
               <div

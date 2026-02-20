@@ -299,7 +299,7 @@ async def update_record(
 
     event_data = {"record_id": str(record_id), "fields_updated": list(update_fields.keys())}
     # Detect completion
-    if "status" in update_fields and update_fields["status"] == "completed":
+    if "status" in update_fields and update_fields["status"] == TrainingStatus.COMPLETED.value:
         event_data["completion_recorded"] = True
     await log_audit_event(
         db=db,
@@ -1374,13 +1374,13 @@ def _get_requirement_date_window(req, today: date):
     freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
     current_year = today.year
 
-    if freq == "one_time":
+    if freq == RequirementFrequency.ONE_TIME.value:
         return None, None
-    elif freq == "biannual":
+    elif freq == RequirementFrequency.BIANNUAL.value:
         # Biannual: no date window — compliance is based on having a
         # non-expired certification (checked in _evaluate_member_requirement)
         return None, None
-    elif freq == "quarterly":
+    elif freq == RequirementFrequency.QUARTERLY.value:
         quarter_month = ((today.month - 1) // 3) * 3 + 1
         start_date = date(current_year, quarter_month, 1)
         end_month = quarter_month + 2
@@ -1390,7 +1390,7 @@ def _get_requirement_date_window(req, today: date):
             end_year += 1
         end_day = calendar.monthrange(end_year, end_month)[1]
         return start_date, date(end_year, end_month, end_day)
-    elif freq == "monthly":
+    elif freq == RequirementFrequency.MONTHLY.value:
         start_date = date(current_year, today.month, 1)
         end_day = calendar.monthrange(current_year, today.month)[1]
         return start_date, date(current_year, today.month, end_day)
@@ -1428,7 +1428,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
         windowed = completed
 
     # ---- HOURS requirements: sum hours by training_type ----
-    if req_type == "hours":
+    if req_type == RequirementType.HOURS.value:
         type_matched = windowed
         if req.training_type:
             type_matched = [r for r in windowed if r.training_type == req.training_type]
@@ -1445,7 +1445,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
 
         # For biannual requirements, check if the latest matching record with
         # an expiration date has expired — an expired cert overrides hours met.
-        if freq == "biannual" and type_matched:
+        if freq == RequirementFrequency.BIANNUAL.value and type_matched:
             with_exp = [r for r in type_matched if r.expiration_date]
             if with_exp:
                 newest_cert = max(with_exp, key=lambda r: r.expiration_date)
@@ -1462,7 +1462,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
             return "not_started", None, None
 
     # ---- COURSES requirements: check required course IDs ----
-    if req_type == "courses":
+    if req_type == RequirementType.COURSES.value:
         course_ids = req.required_courses or []
         if not course_ids:
             return "not_started", None, None
@@ -1475,7 +1475,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
         latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
 
         # For biannual requirements, expired cert overrides course completion
-        if freq == "biannual" and windowed:
+        if freq == RequirementFrequency.BIANNUAL.value and windowed:
             with_exp = [r for r in windowed if r.expiration_date]
             if with_exp:
                 newest_cert = max(with_exp, key=lambda r: r.expiration_date)
@@ -1492,7 +1492,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
             return "not_started", None, None
 
     # ---- CERTIFICATION requirements: match by name, training_type, or cert number ----
-    if req_type == "certification":
+    if req_type == RequirementType.CERTIFICATION.value:
         matching = [
             r for r in completed
             if (
@@ -1512,7 +1512,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
         return "not_started", None, None
 
     # ---- SHIFTS requirements ----
-    if req_type == "shifts":
+    if req_type == RequirementType.SHIFTS.value:
         type_matched = windowed
         if req.training_type:
             type_matched = [r for r in windowed if r.training_type == req.training_type]
@@ -1530,7 +1530,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
         return "not_started", None, None
 
     # ---- CALLS requirements ----
-    if req_type == "calls":
+    if req_type == RequirementType.CALLS.value:
         type_matched = windowed
         if req.training_type:
             type_matched = [r for r in windowed if r.training_type == req.training_type]
@@ -1644,7 +1644,7 @@ async def get_compliance_matrix(
                 req, member_records, today
             )
 
-            if req_status == "completed":
+            if req_status == TrainingStatus.COMPLETED.value:
                 completed_count += 1
 
             req_statuses.append(RequirementStatusItem(

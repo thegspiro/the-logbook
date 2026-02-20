@@ -11,6 +11,7 @@ import { electionService, userService } from '../services/api';
 import type { Election, Candidate, CandidateCreate, CandidateUpdate } from '../types/election';
 import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
+import { UserStatus, ElectionStatus } from '../constants/enums';
 
 interface CandidateManagementProps {
   electionId: string;
@@ -59,7 +60,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
         userService.getUsers(),
       ]);
       setCandidates(candidateData);
-      setMembers(memberData.filter((m: User) => m.status === 'active' || m.status === 'probationary'));
+      setMembers(memberData.filter((m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY));
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load candidates'));
     } finally {
@@ -217,7 +218,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
     );
   }
 
-  const isClosed = election.status === 'closed' || election.status === 'cancelled';
+  const isClosed = election.status === ElectionStatus.CLOSED || election.status === ElectionStatus.CANCELLED;
 
   return (
     <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">

@@ -12,6 +12,7 @@ import { userService } from '../services/api';
 import type { Election, Attendee } from '../types/election';
 import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
+import { UserStatus, ElectionStatus } from '../constants/enums';
 
 interface MeetingAttendanceProps {
   electionId: string;
@@ -42,7 +43,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
         userService.getUsers(),
       ]);
       setAttendees(attendeeData.attendees);
-      setMembers(memberData.filter((m: User) => m.status === 'active' || m.status === 'probationary'));
+      setMembers(memberData.filter((m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY));
     } catch (_err) {
       toast.error('Failed to load attendance data');
     } finally {
@@ -101,7 +102,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
     }
   };
 
-  const isClosed = election.status === 'closed' || election.status === 'cancelled';
+  const isClosed = election.status === ElectionStatus.CLOSED || election.status === ElectionStatus.CANCELLED;
 
   if (loading) {
     return (
@@ -200,7 +201,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                     </div>
                     <span
                       className={`px-1.5 py-0.5 text-xs rounded ${
-                        member.status === 'probationary'
+                        member.status === UserStatus.PROBATIONARY
                           ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300'
                           : 'bg-green-500/20 text-green-700 dark:text-green-300'
                       }`}
