@@ -202,7 +202,7 @@ export default function TrainingDashboardPage() {
                           {course.code || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                             {course.training_type.replace('_', ' ')}
                           </span>
                         </td>
@@ -271,8 +271,8 @@ export default function TrainingDashboardPage() {
                           <span
                             className={`px-2 py-1 text-xs font-semibold rounded-full ${
                               req.applies_to_all
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
                             }`}
                           >
                             {req.applies_to_all ? 'Applies to All' : 'Specific Roles'}

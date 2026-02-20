@@ -201,7 +201,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
               <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                 insp.passed === true ? 'bg-emerald-500/10 text-emerald-500' :
                 insp.passed === false ? 'bg-red-500/10 text-red-500' :
-                'bg-gray-500/10 text-gray-500'
+                'bg-gray-500/10 text-gray-700 dark:text-gray-400'
               }`}>
                 {insp.passed === true ? <CheckCircle2 className="w-4 h-4" /> :
                  insp.passed === false ? <XCircle className="w-4 h-4" /> :

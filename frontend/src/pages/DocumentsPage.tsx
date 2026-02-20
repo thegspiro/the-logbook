@@ -298,15 +298,15 @@ const DocumentsPage: React.FC = () => {
             </div>
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Folders</p>
-              <p className="text-amber-400 text-2xl font-bold mt-1">{summary.total_folders}</p>
+              <p className="text-amber-700 dark:text-amber-400 text-2xl font-bold mt-1">{summary.total_folders}</p>
             </div>
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Size</p>
-              <p className="text-blue-400 text-2xl font-bold mt-1">{formatFileSize(summary.total_size_bytes)}</p>
+              <p className="text-blue-700 dark:text-blue-400 text-2xl font-bold mt-1">{formatFileSize(summary.total_size_bytes)}</p>
             </div>
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
               <p className="text-theme-text-muted text-xs font-medium uppercase">This Month</p>
-              <p className="text-green-400 text-2xl font-bold mt-1">{summary.documents_this_month}</p>
+              <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary.documents_this_month}</p>
             </div>
           </div>
         )}

@@ -271,7 +271,7 @@ export const BallotVotingPage: React.FC = () => {
                 {/* Item Header */}
                 <div className="bg-theme-surface-secondary px-6 py-4 border-b border-theme-surface-border">
                   <div className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center text-sm font-bold">
+                    <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold">
                       {index + 1}
                     </span>
                     <div>

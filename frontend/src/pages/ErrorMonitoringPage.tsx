@@ -179,8 +179,8 @@ const ErrorMonitoringPage: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         error.errorType.startsWith('BACKEND_')
-                          ? 'bg-orange-100 text-orange-800'
-                          : 'bg-red-100 text-red-800'
+                          ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
+                          : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
                       }`}>
                         {error.errorType}
                       </span>
