@@ -329,6 +329,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
                     <input
                       id="edit-checkin"
                       type="datetime-local"
+                      step="900"
                       value={editCheckedInAt}
                       onChange={(e) => setEditCheckedInAt(e.target.value)}
                       className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -342,6 +343,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
                     <input
                       id="edit-checkout"
                       type="datetime-local"
+                      step="900"
                       value={editCheckedOutAt}
                       onChange={(e) => setEditCheckedOutAt(e.target.value)}
                       className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"

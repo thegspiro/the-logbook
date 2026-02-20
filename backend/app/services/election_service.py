@@ -2429,7 +2429,7 @@ Best regards,
             # Use election's eligible voters list
             users_result = await self.db.execute(
                 select(User)
-                .where(User.id.in_(election.eligible_voters))
+                .where(User.id.in_([str(v) for v in election.eligible_voters]))
                 .where(User.organization_id == str(organization_id))
             )
             recipients = users_result.scalars().all()

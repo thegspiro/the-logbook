@@ -45,6 +45,7 @@ class PermissionCategory(str, Enum):
     INTEGRATIONS = "integrations"
     NOTIFICATIONS = "notifications"
     REPORTS = "reports"
+    PROSPECTIVE_MEMBERS = "prospective_members"
 
 
 class Permission:
@@ -72,6 +73,9 @@ USERS_UPDATE_POSITIONS = Permission("users.update_positions", "Update user posit
 MEMBERS_VIEW = Permission("members.view", "View member list", PermissionCategory.MEMBERS)
 MEMBERS_MANAGE = Permission("members.manage", "Manage member profiles", PermissionCategory.MEMBERS)
 MEMBERS_ASSIGN_POSITIONS = Permission("members.assign_positions", "Assign positions to members", PermissionCategory.MEMBERS)
+
+PROSPECTIVE_MEMBERS_VIEW = Permission("prospective_members.view", "View prospective member pipeline", PermissionCategory.PROSPECTIVE_MEMBERS)
+PROSPECTIVE_MEMBERS_MANAGE = Permission("prospective_members.manage", "Manage prospective members and pipeline", PermissionCategory.PROSPECTIVE_MEMBERS)
 
 # ============================================
 # Position Management Permissions
@@ -414,6 +418,7 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     ANALYTICS_VIEW.name,
     NOTIFICATIONS_VIEW.name,
     REPORTS_VIEW.name,
+    PROSPECTIVE_MEMBERS_VIEW.name,
 ]
 
 OPERATIONAL_RANKS: Dict[str, dict] = {
@@ -426,6 +431,7 @@ OPERATIONAL_RANKS: Dict[str, dict] = {
             USERS_DELETE.name,
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             POSITIONS_CREATE.name,
@@ -483,6 +489,7 @@ OPERATIONAL_RANKS: Dict[str, dict] = {
             USERS_EDIT.name,
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             TRAINING_MANAGE.name,
@@ -528,6 +535,7 @@ OPERATIONAL_RANKS: Dict[str, dict] = {
             USERS_EDIT.name,
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             TRAINING_MANAGE.name,
@@ -563,6 +571,7 @@ OPERATIONAL_RANKS: Dict[str, dict] = {
         "priority": 70,
         "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS + [
             MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
             TRAINING_MANAGE.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
@@ -743,6 +752,7 @@ DEFAULT_POSITIONS: Dict[str, dict] = {
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             POSITIONS_VIEW.name,
@@ -825,6 +835,7 @@ DEFAULT_POSITIONS: Dict[str, dict] = {
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
@@ -888,6 +899,7 @@ DEFAULT_POSITIONS: Dict[str, dict] = {
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
@@ -1055,6 +1067,7 @@ DEFAULT_POSITIONS: Dict[str, dict] = {
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             POSITIONS_VIEW.name,

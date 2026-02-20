@@ -1,190 +1,356 @@
-# Unraid Instance Update Guide
+# Unraid Setup Guide
 
-**Last Updated:** January 24, 2026
+Complete guide for installing and running The Logbook on Unraid.
 
-This guide will help you update your Unraid instance of The Logbook with the latest fixes and security updates.
+## Table of Contents
 
-## What's Been Fixed
-
-### ✅ Onboarding Module Improvements
-- Fixed inconsistent button text in Module Overview page
-- "Start Working" → "Configure Now" for consistency
-- "Continue to Dashboard" → "Continue to Admin Setup" for clarity
-- All navigation flows now properly aligned with documentation
-
-### ✅ Security Updates
-- Updated deprecated packages including `are-we-there-yet` (now replaced)
-- Fixed moderate severity vulnerabilities in `lodash`
-- Updated npm dependencies to latest compatible versions
-
-### ⚠️ Remaining Vulnerabilities (Development Only)
-The following vulnerabilities only affect **development builds** and do NOT impact production:
-- `esbuild` - Development server vulnerability (not used in production)
-- `vite` - Build tool vulnerability (not used in production)
-- `pdfjs-dist` - Requires updating to breaking changes (planned for next major release)
-- `tar` - Transitive dependency (used only in development)
-
-**Your production deployment is safe** - these tools are not included in the Docker container.
+- [Requirements](#requirements)
+- [Installation](#installation)
+  - [Automated Install (Recommended)](#automated-install-recommended)
+  - [Manual Install](#manual-install)
+- [Post-Install Setup](#post-install-setup)
+- [Configuration](#configuration)
+- [HTTPS with Reverse Proxy](#https-with-reverse-proxy)
+- [Backup and Restore](#backup-and-restore)
+- [Updating](#updating)
+- [Troubleshooting](#troubleshooting)
+- [Common Commands](#common-commands)
 
 ---
 
-## Quick Update Steps
+## Requirements
 
-### Option 1: Pull Latest Changes (Recommended)
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| Unraid | 6.9.0+ | 6.12.0+ |
+| RAM | 4 GB free | 8 GB free |
+| Disk | 20 GB | 50 GB+ |
+| CPU | 2 cores | 4+ cores |
 
-If you have The Logbook installed on Unraid via git:
+Docker must be enabled on your Unraid server (Settings > Docker > Enable Docker: Yes).
+
+---
+
+## Installation
+
+### Automated Install (Recommended)
+
+SSH into your Unraid server and run the setup script:
 
 ```bash
-# SSH into your Unraid server
 ssh root@YOUR-UNRAID-IP
 
-# Navigate to the app directory
-cd /mnt/user/appdata/the-logbook
-
-# Check current branch
-git branch
-
-# Pull latest changes from the current branch
-git pull origin claude/review-logbook-unraid-setup-0i5sZ
-
-# Rebuild the Docker containers
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh | bash
 ```
 
-### Option 2: Fresh Installation
+The script will:
+- Clone the repository to `/mnt/user/appdata/the-logbook`
+- Generate secure passwords and encryption keys
+- Create the directory structure with correct Unraid permissions
+- Build and start all containers (frontend, backend, MySQL, Redis)
+- Verify the deployment
 
-For a clean start:
+When prompted, choose:
+- **1** for a fresh installation
+- **2** to update an existing installation
+- **3** for a clean install (removes all data)
+
+### Manual Install
 
 ```bash
-# SSH into your Unraid server
 ssh root@YOUR-UNRAID-IP
 
-# Backup existing installation (if you have data)
-cd /mnt/user/appdata
-mv the-logbook the-logbook-backup-$(date +%Y%m%d)
-
 # Clone the repository
+cd /mnt/user/appdata
 git clone https://github.com/thegspiro/the-logbook.git
 cd the-logbook
 
-# Switch to the updated branch
-git checkout claude/review-logbook-unraid-setup-0i5sZ
+# Copy the Unraid-specific docker-compose file
+cp unraid/docker-compose-unraid.yml docker-compose.yml
 
-# Copy environment configuration
-cp .env.example .env
+# Create environment file
+cp unraid/.env.example .env
+```
 
-# Edit environment file with your settings
+Generate and set security keys:
+
+```bash
+# Generate keys
+openssl rand -hex 32   # Use for SECRET_KEY
+openssl rand -hex 32   # Use for ENCRYPTION_KEY
+openssl rand -hex 16   # Use for ENCRYPTION_SALT
+
+# Edit .env with the generated values
 nano .env
 ```
 
-**Required .env settings:**
+Required `.env` values to change:
+
 ```bash
-# Database Configuration
-DB_HOST=YOUR_UNRAID_IP          # e.g., 192.168.1.100
-DB_NAME=the_logbook
-DB_USER=logbook_user
-DB_PASSWORD=your_secure_password
-
-# Security Keys (generate with: openssl rand -hex 32)
-SECRET_KEY=your_generated_secret_key_here
-ENCRYPTION_KEY=your_generated_encryption_key_here
-
-# Unraid Port Configuration
-FRONTEND_PORT=7880
-BACKEND_PORT=7881
+SECRET_KEY=<paste generated value>
+ENCRYPTION_KEY=<paste generated value>
+ENCRYPTION_SALT=<paste generated value>
+MYSQL_ROOT_PASSWORD=<strong password>
+DB_PASSWORD=<strong password>
+REDIS_PASSWORD=<strong password>
+ALLOWED_ORIGINS=http://YOUR-UNRAID-IP:7880
+TZ=America/New_York  # Your timezone
 ```
 
-**Generate security keys:**
-```bash
-# Generate Secret Key
-openssl rand -hex 32
+Create directories and start:
 
-# Generate Encryption Key
-openssl rand -hex 32
-```
-
-**Build and start:**
 ```bash
+mkdir -p mysql redis data uploads logs
+mkdir -p /mnt/user/backups/the-logbook
+chown -R 99:100 mysql redis data uploads logs
+
 docker-compose build
 docker-compose up -d
 ```
 
 ---
 
-## Post-Update Verification
+## Post-Install Setup
 
-### 1. Check Container Status
+Once the containers are running, open your browser:
+
+- **Frontend:** `http://YOUR-UNRAID-IP:7880`
+- **API Docs:** `http://YOUR-UNRAID-IP:7881/docs`
+- **Health Check:** `http://YOUR-UNRAID-IP:7881/health`
+
+Complete the onboarding wizard to configure your organization, create the admin account, and enable the modules you need.
+
+---
+
+## Configuration
+
+All settings live in `/mnt/user/appdata/the-logbook/.env`. After editing, restart with:
 
 ```bash
-docker ps | grep logbook
+cd /mnt/user/appdata/the-logbook
+docker-compose restart
 ```
 
-You should see both frontend and backend containers running.
+### Ports
 
-### 2. Check Logs
+| Service | Default Port | Purpose |
+|---------|-------------|---------|
+| Frontend | 7880 | Web interface |
+| Backend API | 7881 | API endpoint |
+| MySQL | 3306 (internal) | Database (not exposed to host) |
+| Redis | 6379 (internal) | Cache (not exposed to host) |
+
+To change ports, edit `FRONTEND_PORT` and `BACKEND_PORT` in `.env` and update `ALLOWED_ORIGINS` to match.
+
+### Modules
+
+Enable or disable features in `.env`:
 
 ```bash
-# View all logs
-docker-compose logs -f
-
-# View just backend logs
-docker-compose logs -f backend
-
-# View just frontend logs
-docker-compose logs -f frontend
+MODULE_TRAINING_ENABLED=true
+MODULE_COMPLIANCE_ENABLED=true
+MODULE_SCHEDULING_ENABLED=true
+MODULE_ELECTIONS_ENABLED=true
 ```
 
-### 3. Access the Application
+### Email Notifications
 
-Open your browser and navigate to:
-- **Frontend**: `http://YOUR-UNRAID-IP:7880`
-- **Backend API**: `http://YOUR-UNRAID-IP:7881/docs`
-- **Health Check**: `http://YOUR-UNRAID-IP:7881/health`
+```bash
+EMAIL_ENABLED=true
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM_EMAIL=noreply@yourdomain.com
+```
 
-### 4. Test Onboarding Flow
+### Data Directories
 
-If this is a fresh install:
-1. Navigate to `http://YOUR-UNRAID-IP:7880`
-2. Complete the onboarding wizard
-3. Verify the improved button text and navigation flow
+```
+/mnt/user/appdata/the-logbook/
+  mysql/       Database files
+  redis/       Cache data
+  data/        Application data
+  uploads/     User-uploaded files
+  logs/        Application logs
+  .env         Configuration
+
+/mnt/user/backups/the-logbook/
+               Automated backups
+```
+
+---
+
+## HTTPS with Reverse Proxy
+
+### Using Swag
+
+1. Install Swag from Community Apps.
+2. Create `/mnt/user/appdata/swag/nginx/proxy-confs/logbook.subdomain.conf`:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name logbook.*;
+
+    include /config/nginx/ssl.conf;
+
+    location / {
+        include /config/nginx/proxy.conf;
+        proxy_pass http://YOUR-UNRAID-IP:7880;
+    }
+
+    location /api {
+        include /config/nginx/proxy.conf;
+        proxy_pass http://YOUR-UNRAID-IP:7881;
+    }
+}
+```
+
+3. Restart Swag. Access at `https://logbook.yourdomain.com`.
+
+### Using Nginx Proxy Manager
+
+1. Add a Proxy Host.
+2. Domain: `logbook.yourdomain.com`
+3. Forward to: `YOUR-UNRAID-IP:7880`
+4. Enable SSL with Let's Encrypt.
+
+---
+
+## Backup and Restore
+
+### Automated Backups
+
+Enabled by default. Runs daily at 2 AM. Stored in `/mnt/user/backups/the-logbook/`.
+
+Configure in `.env`:
+
+```bash
+BACKUP_ENABLED=true
+BACKUP_SCHEDULE=0 2 * * *
+BACKUP_RETENTION_DAYS=30
+```
+
+### Manual Backup
+
+```bash
+cd /mnt/user/appdata/the-logbook
+docker-compose exec backend /app/scripts/backup.sh
+```
+
+### Restore
+
+```bash
+cd /mnt/user/appdata/the-logbook
+docker-compose down
+
+# Restore database
+gunzip < /mnt/user/backups/the-logbook/backup_YYYYMMDD.sql.gz | \
+  docker exec -i logbook-db mysql -u logbook_user -p the_logbook
+
+# Restore uploads
+cp -r /mnt/user/backups/the-logbook/backup_YYYYMMDD/uploads/* uploads/
+
+docker-compose up -d
+```
+
+---
+
+## Updating
+
+### Using the Setup Script
+
+```bash
+cd /mnt/user/appdata/the-logbook/unraid
+./unraid-setup.sh
+# Choose option 2 (Update)
+```
+
+### Manual Update
+
+```bash
+cd /mnt/user/appdata/the-logbook
+git pull origin main
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+Back up before updating:
+
+```bash
+docker-compose exec backend /app/scripts/backup.sh
+```
 
 ---
 
 ## Troubleshooting
 
-### Port Conflicts
+### Container Conflicts
 
-If ports 7880 or 7881 are already in use:
+If you see `Error: The container name "/logbook-redis" is already in use`:
 
 ```bash
-# Check what's using the ports
-netstat -tulpn | grep 7880
-netstat -tulpn | grep 7881
+cd /mnt/user/appdata/the-logbook
+docker-compose down --remove-orphans
+docker-compose up -d
+```
 
-# Update .env file with different ports
-nano .env
-# Change FRONTEND_PORT and BACKEND_PORT
+Or remove containers manually:
 
-# Restart containers
+```bash
+docker stop logbook-frontend logbook-backend logbook-db logbook-redis 2>/dev/null
+docker rm -f logbook-frontend logbook-backend logbook-db logbook-redis 2>/dev/null
+docker-compose up -d
+```
+
+### Port Conflicts
+
+```bash
+# Check what is using a port
+netstat -tuln | grep 7880
+
+# Change ports in .env
+nano /mnt/user/appdata/the-logbook/.env
+# Update FRONTEND_PORT, BACKEND_PORT, and ALLOWED_ORIGINS
+
 docker-compose down
 docker-compose up -d
+```
+
+### Frontend Not Loading
+
+```bash
+docker ps | grep logbook-frontend
+docker-compose logs frontend
+
+# Rebuild if needed
+docker-compose build --no-cache frontend
+docker-compose up -d frontend
+```
+
+### Backend Errors
+
+```bash
+curl http://localhost:7881/health
+docker-compose logs backend
+docker-compose restart backend
 ```
 
 ### Database Connection Issues
 
 ```bash
-# Test database connection
-docker exec -it logbook-db mysql -u logbook_user -p
+docker ps | grep logbook-db
+docker-compose logs db
 
-# Once logged in, verify database exists
-SHOW DATABASES;
-USE the_logbook;
-SHOW TABLES;
+# Access the database directly
+docker exec -it logbook-db mysql -u logbook_user -p
 ```
 
-If database doesn't exist, create it:
+If the database does not exist:
+
 ```sql
 CREATE DATABASE the_logbook CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'logbook_user'@'%' IDENTIFIED BY 'your_password';
@@ -192,227 +358,63 @@ GRANT ALL PRIVILEGES ON the_logbook.* TO 'logbook_user'@'%';
 FLUSH PRIVILEGES;
 ```
 
-### Container Won't Start
+### Docker Not Running
 
 ```bash
-# View detailed error logs
-docker-compose logs backend
-docker-compose logs frontend
+/etc/rc.d/rc.docker start
+```
 
-# Common fixes:
+### Full Rebuild
 
-# 1. Clear old containers and rebuild
-docker-compose down --volumes
+```bash
+cd /mnt/user/appdata/the-logbook
+docker-compose down
 docker system prune -a
 docker-compose build --no-cache
 docker-compose up -d
-
-# 2. Check environment variables
-cat .env
-# Verify all required variables are set
-
-# 3. Check file permissions
-ls -la /mnt/user/appdata/the-logbook
-chmod -R 755 /mnt/user/appdata/the-logbook
 ```
 
-### Build Errors
+---
 
-If you encounter TypeScript or build errors:
+## Common Commands
 
 ```bash
-# Clear all build caches
+cd /mnt/user/appdata/the-logbook
+
+# Status
+docker-compose ps
+
+# Logs (all services)
+docker-compose logs -f
+
+# Logs (single service)
+docker-compose logs -f backend
+
+# Restart
+docker-compose restart
+
+# Stop
 docker-compose down
-docker system prune -a --volumes
-rm -rf frontend/node_modules
-rm -rf frontend/dist
+
+# Start
+docker-compose up -d
 
 # Rebuild
-docker-compose build --no-cache
-docker-compose up -d
+docker-compose build --no-cache && docker-compose up -d
+
+# Database shell
+docker exec -it logbook-db mysql -u logbook_user -p
+
+# Resource usage
+docker stats --filter name=logbook
 ```
 
 ---
 
-## What Changed in This Update
+## More Information
 
-### Code Changes
-1. **frontend/src/modules/onboarding/pages/ModuleOverview.tsx**
-   - Line 411: "Start Working" → "Configure Now"
-   - Line 304: "Continue to Dashboard" → "Continue to Admin Setup"
-
-2. **Package Updates**
-   - Removed deprecated `are-we-there-yet` package
-   - Updated `lodash` to latest secure version
-   - Updated various devDependencies
-
-### Documentation Updates
-- Created this comprehensive update guide
-- Clarified Unraid-specific deployment steps
-- Added troubleshooting section for common issues
-
----
-
-## Security Best Practices
-
-### 1. Keep Keys Secure
-- **Never commit .env files to git**
-- **Use strong, unique keys** for SECRET_KEY and ENCRYPTION_KEY
-- **Regenerate keys** if they're ever exposed
-
-### 2. Use HTTPS (Recommended)
-Set up a reverse proxy with SSL:
-- **Swag** (recommended for Unraid)
-- **Nginx Proxy Manager**
-- **Traefik**
-
-Example Swag configuration:
-```nginx
-# /mnt/user/appdata/swag/nginx/proxy-confs/logbook.subdomain.conf
-server {
-    listen 443 ssl http2;
-    server_name logbook.*;
-
-    location / {
-        proxy_pass http://192.168.1.100:7880;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /api {
-        proxy_pass http://192.168.1.100:7881;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### 3. Enable Backups
-```bash
-# Manual backup
-docker exec TheLogbook /app/scripts/backup.sh
-
-# View backups
-ls -lh /mnt/user/backups/the-logbook/
-
-# Restore from backup
-docker exec -it TheLogbook /app/scripts/backup.sh --restore /backups/backup_20260124.tar.gz
-```
-
----
-
-## Package Version Status
-
-### Current Versions (After Update)
-- Node.js: 18.x (via Docker)
-- React: 18.2.0
-- TypeScript: 5.3.3
-- Vite: 5.0.11
-- Python: 3.11 (backend)
-- FastAPI: Latest (backend)
-
-### Deprecated Packages Removed
-- ✅ `are-we-there-yet` - Removed, replaced by npm's built-in progress
-- ✅ `npmlog` - Removed, replaced by modern logging
-- ✅ Old `tar` versions - Updated where possible
-
-### Packages Pending Major Updates
-These require breaking changes and are scheduled for next major release:
-- `react-pdf` (v7 → v10)
-- `vite` (v5 → v7)
-- `vitest` (v1 → v4)
-- `eslint` (v8 → v9)
-
----
-
-## Getting Help
-
-### Documentation
-- [Unraid Installation Guide](./unraid/UNRAID-INSTALLATION.md)
-- [Onboarding Flow Documentation](./docs/ONBOARDING_FLOW.md)
-- [Main README](./README.md)
-
-### Support Channels
-- **GitHub Issues**: https://github.com/thegspiro/the-logbook/issues
-- **Unraid Forums**: https://forums.unraid.net/
-- **Email Support**: support@the-logbook.io (if configured)
-
-### Useful Commands Reference
-```bash
-# Container Management
-docker ps -a                                    # List all containers
-docker-compose logs -f                          # Follow logs
-docker-compose restart                          # Restart services
-docker-compose down && docker-compose up -d     # Full restart
-
-# Database
-docker exec -it logbook-db mysql -u root -p        # Access database
-docker exec logbook-db mysqldump -u root -p the_logbook > backup.sql  # Backup DB
-
-# System Health
-curl http://localhost:7881/health               # Backend health check
-curl http://localhost:7880                      # Frontend check
-docker stats                                    # Resource usage
-
-# Cleanup
-docker system prune -a                          # Remove unused data
-docker volume prune                             # Remove unused volumes
-```
-
----
-
-## Next Steps
-
-After updating:
-
-1. ✅ **Verify the update was successful**
-   - Check container status
-   - Access the web interface
-   - Test the onboarding flow
-
-2. ✅ **Configure SSL (if not already done)**
-   - Set up reverse proxy
-   - Configure domain name
-   - Enable HTTPS
-
-3. ✅ **Set up automated backups**
-   - Configure backup schedule
-   - Test restore process
-   - Set up off-site backup storage
-
-4. ✅ **Review security settings**
-   - Ensure strong passwords
-   - Enable 2FA (when available)
-   - Review user permissions
-
-5. ✅ **Join the community**
-   - Star the GitHub repo
-   - Join discussions
-   - Provide feedback
-
----
-
-## Changelog
-
-**January 24, 2026**
-- Fixed onboarding module button text inconsistencies
-- Updated npm packages to address security vulnerabilities
-- Removed deprecated `are-we-there-yet` and other obsolete packages
-- Created comprehensive update guide
-- Improved Unraid deployment documentation
-
----
-
-**Questions or Issues?**
-
-If you encounter any problems during the update process, please:
-1. Check the troubleshooting section above
-2. Review the logs for error messages
-3. Create an issue on GitHub with detailed information
-4. Include your Unraid version, container logs, and steps to reproduce
-
-**We're here to help!** 🚒
+- [Unraid Quick Start](../../unraid/QUICK-START-UPDATED.md) - condensed setup steps
+- [Unraid Docker Compose](../../unraid/docker-compose-unraid.yml) - the Unraid-optimized compose file
+- [Full Installation Guide](../../unraid/UNRAID-INSTALLATION.md) - Community Apps template details
+- [Main README](../../README.md) - project overview
+- [GitHub Issues](https://github.com/thegspiro/the-logbook/issues) - bug reports and support

@@ -362,6 +362,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             </label>
             <input
               type="datetime-local"
+              step="900"
               id="start-datetime"
               required
               value={formData.start_datetime}
@@ -375,6 +376,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             </label>
             <input
               type="datetime-local"
+              step="900"
               id="end-datetime"
               required
               value={formData.end_datetime}
@@ -588,6 +590,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 </label>
                 <input
                   type="datetime-local"
+                  step="900"
                   id="rsvp-deadline"
                   value={formData.rsvp_deadline || ''}
                   onChange={(e) => update({ rsvp_deadline: e.target.value })}

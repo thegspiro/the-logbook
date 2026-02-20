@@ -238,7 +238,7 @@ function App() {
               {/* Settings Module */}
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/account" element={<UserSettingsPage />} />
-              <Route path="/settings/roles" element={<ProtectedRoute requiredPermission="roles.manage"><RoleManagementPage /></ProtectedRoute>} />
+              <Route path="/settings/roles" element={<ProtectedRoute requiredPermission="positions.manage_permissions"><RoleManagementPage /></ProtectedRoute>} />
               <Route path="/setup" element={<ProtectedRoute requiredPermission="settings.manage"><DepartmentSetupPage /></ProtectedRoute>} />
 
               {/* Reports */}

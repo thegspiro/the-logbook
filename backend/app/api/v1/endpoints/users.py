@@ -204,7 +204,7 @@ async def create_member(
         # Verify all role IDs exist and belong to the organization
         result = await db.execute(
             select(Role)
-            .where(Role.id.in_(user_data.role_ids))
+            .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
@@ -380,7 +380,7 @@ async def assign_user_roles(
     user_id: UUID,
     role_assignment: UserRoleAssignment,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
+    current_user: User = Depends(require_permission("users.update_positions", "members.assign_positions", "users.update_roles", "members.assign_roles")),
 ):
     """
     Assign roles to a user (replaces all existing roles)
@@ -409,7 +409,7 @@ async def assign_user_roles(
     if role_assignment.role_ids:
         result = await db.execute(
             select(Role)
-            .where(Role.id.in_(role_assignment.role_ids))
+            .where(Role.id.in_([str(rid) for rid in role_assignment.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
@@ -468,7 +468,7 @@ async def add_role_to_user(
     user_id: UUID,
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
+    current_user: User = Depends(require_permission("users.update_positions", "members.assign_positions", "users.update_roles", "members.assign_roles")),
 ):
     """
     Add a single role to a user (keeps existing roles)
@@ -559,7 +559,7 @@ async def remove_role_from_user(
     user_id: UUID,
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
+    current_user: User = Depends(require_permission("users.update_positions", "members.assign_positions", "users.update_roles", "members.assign_roles")),
 ):
     """
     Remove a role from a user
@@ -694,20 +694,10 @@ async def update_contact_info(
     **Authentication required**
     """
     # Check if user is updating their own profile or has admin permissions
-    is_self = str(current_user.id) == str(user_id)
-    if not is_self:
-        # Eagerly load roles to check permissions without MissingGreenlet
-        perm_result = await db.execute(
-            select(User)
-            .where(User.id == current_user.id)
-            .options(selectinload(User.roles))
-        )
-        perm_user = perm_result.scalar_one_or_none()
-        user_permissions = []
-        if perm_user:
-            for role in perm_user.roles:
-                user_permissions.extend(role.permissions or [])
-        if "users.update" not in user_permissions and "members.manage" not in user_permissions:
+    if current_user.id != str(user_id):
+        # Admins with users.edit or members.manage can update other users
+        user_perms = _collect_user_permissions(current_user)
+        if not _has_permission("users.edit", user_perms) and not _has_permission("members.manage", user_perms):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only update your own contact information"
@@ -792,7 +782,7 @@ async def update_user_profile(
     """
     Update user profile information (name, address, emergency contacts, etc.)
 
-    Users can update their own profile. Admins with users.update or members.manage
+    Users can update their own profile. Admins with users.edit or members.manage
     permission can update any user's profile.
 
     **Authentication required**

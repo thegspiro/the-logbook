@@ -35,14 +35,14 @@ import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDe
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'completed': return 'bg-green-500/20 text-green-400';
-    case 'approved': return 'bg-green-500/20 text-green-400';
-    case 'active': return 'bg-blue-500/20 text-blue-400';
-    case 'in_progress': return 'bg-blue-500/20 text-blue-400';
-    case 'pending_review': return 'bg-yellow-500/20 text-yellow-400';
-    case 'rejected': return 'bg-red-500/20 text-red-400';
-    case 'revision_requested': return 'bg-orange-500/20 text-orange-400';
-    default: return 'bg-gray-500/20 text-gray-400';
+    case 'completed': return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
+    case 'approved': return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
+    case 'active': return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
+    case 'in_progress': return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
+    case 'pending_review': return 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
+    case 'rejected': return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
+    case 'revision_requested': return 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400';
+    default: return 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400';
   }
 };
 
@@ -382,7 +382,7 @@ const MyTrainingPage: React.FC = () => {
                         </div>
 
                         {/* Progress bar */}
-                        <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-2">
                           <div
                             className={`h-2 rounded-full transition-all ${
                               req.is_met ? 'bg-green-500' :
@@ -486,7 +486,7 @@ const MyTrainingPage: React.FC = () => {
                       </span>
                       <span className="text-sm text-theme-text-primary font-semibold">{Math.round(e.progress_percentage)}%</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-2">
                       <div
                         className={`h-2 rounded-full transition-all ${
                           e.progress_percentage >= 75 ? 'bg-green-500' :

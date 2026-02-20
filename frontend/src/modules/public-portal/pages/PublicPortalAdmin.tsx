@@ -127,8 +127,8 @@ const PublicPortalAdmin: React.FC = () => {
                   onClick={handleToggleEnabled}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     config?.enabled
-                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                      ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
+                      : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
                   }`}
                 >
                   {config?.enabled ? 'Disable Portal' : 'Enable Portal'}

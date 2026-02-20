@@ -296,7 +296,7 @@ export const EventDetailPage: React.FC = () => {
                 </span>
               )}
               {event.is_mandatory && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                   Mandatory
                 </span>
               )}
@@ -382,7 +382,7 @@ export const EventDetailPage: React.FC = () => {
                       }
                     }}
                     disabled={submitting}
-                    className="inline-flex items-center px-4 py-2 border border-cyan-300 rounded-md shadow-sm text-sm font-medium text-cyan-400 bg-theme-surface hover:bg-cyan-500/20 disabled:opacity-50"
+                    className="inline-flex items-center px-4 py-2 border border-cyan-300 rounded-md shadow-sm text-sm font-medium text-cyan-700 dark:text-cyan-400 bg-theme-surface hover:bg-cyan-500/20 disabled:opacity-50"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -605,7 +605,7 @@ export const EventDetailPage: React.FC = () => {
                         </button>
                       )}
                       {rsvp.checked_in && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
                           Checked In
                         </span>
                       )}
@@ -995,7 +995,7 @@ export const EventDetailPage: React.FC = () => {
                           </div>
                           <div>
                             {isCheckedIn ? (
-                              <span className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-green-100 text-green-800">
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                 Checked In
                               </span>
                             ) : (
@@ -1078,6 +1078,7 @@ export const EventDetailPage: React.FC = () => {
                       </label>
                       <input
                         type="datetime-local"
+                        step="900"
                         id="actual_start_time"
                         value={actualStartTime}
                         onChange={(e) => setActualStartTime(e.target.value)}
@@ -1096,6 +1097,7 @@ export const EventDetailPage: React.FC = () => {
                       </label>
                       <input
                         type="datetime-local"
+                        step="900"
                         id="actual_end_time"
                         value={actualEndTime}
                         onChange={(e) => setActualEndTime(e.target.value)}
