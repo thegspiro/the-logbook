@@ -47,9 +47,9 @@ import type {
 type MatchStrategy = 'email' | 'badge_number' | 'name';
 
 const MATCH_STRATEGIES: { value: MatchStrategy; label: string; description: string; requiredCol: string }[] = [
+  { value: 'badge_number', label: 'Badge Number', description: 'Most reliable — match by badge or employee number', requiredCol: 'badge_number' },
   { value: 'email', label: 'Email Address', description: 'Match members by their email address', requiredCol: 'email' },
-  { value: 'badge_number', label: 'Badge Number', description: 'Match members by badge/employee number', requiredCol: 'badge_number' },
-  { value: 'name', label: 'Full Name', description: 'Match members by first + last name (case-insensitive)', requiredCol: 'name' },
+  { value: 'name', label: 'Full Name', description: 'Match by first + last name (case-insensitive, less reliable)', requiredCol: 'name' },
 ];
 
 const TRAINING_TYPE_OPTIONS: { value: TrainingType; label: string }[] = [
@@ -788,7 +788,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
 
 const HistoricalImportPage: React.FC = () => {
   const [step, setStep] = useState(1);
-  const [matchBy, setMatchBy] = useState<MatchStrategy>('email');
+  const [matchBy, setMatchBy] = useState<MatchStrategy>('badge_number');
   const [parseResult, setParseResult] = useState<HistoricalImportParseResponse | null>(null);
   const [courseMappings, setCourseMappings] = useState<CourseMappingEntry[]>([]);
   const [existingCourses, setExistingCourses] = useState<TrainingCourse[]>([]);
@@ -845,7 +845,7 @@ const HistoricalImportPage: React.FC = () => {
 
   const handleReset = useCallback(() => {
     setStep(1);
-    setMatchBy('email');
+    setMatchBy('badge_number');
     setParseResult(null);
     setCourseMappings([]);
     setImportResult(null);
