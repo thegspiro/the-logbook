@@ -407,7 +407,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Day-to-day building management, maintenance logging, and inspections',
         icon: Building2,
         priority: 50,
-        permissions: generateRolePermissions(modules, 'specialist', ['inventory']),
+        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'facilities']),
       },
     ],
   },

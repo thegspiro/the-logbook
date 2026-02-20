@@ -140,8 +140,12 @@ class LocationService:
         """
         Delete a location
 
-        Returns True if deleted, False if not found
-        Raises ValueError if location has associated events
+        Hard-deletes the location if it has no events.  If events
+        reference this location, it is deactivated (is_active=False)
+        instead so existing events keep a valid FK while the location
+        no longer appears in pickers.
+
+        Returns True if deleted or deactivated, False if not found.
         """
         location = await self.get_location(location_id, organization_id)
         if not location:
@@ -154,10 +158,10 @@ class LocationService:
         )
         event_count = result.scalar()
         if event_count > 0:
-            raise ValueError(
-                f"Cannot delete location. {event_count} event(s) are associated with this location. "
-                "Please update or delete those events first, or deactivate the location instead."
-            )
+            # Soft-delete: deactivate so existing events keep their FK
+            location.is_active = False
+            await self.db.commit()
+            return True
 
         await self.db.delete(location)
         await self.db.commit()

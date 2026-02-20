@@ -24,6 +24,7 @@ import {
   UserCog,
   Truck,
   UserPlus,
+  Building2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -199,6 +200,24 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       view: ['View fleet roster', 'See apparatus details', 'Check maintenance schedules', 'View fuel logs'],
       manage: ['Add/edit apparatus', 'Log maintenance and fuel', 'Manage operators', 'Change apparatus status'],
       defaultManagePositions: ['it_manager', 'apparatus_officer'],
+    },
+  },
+
+  {
+    id: 'facilities',
+    name: 'Facilities Management',
+    description:
+      'Manage buildings, schedule maintenance, log inspections, and track facility systems. Keep your stations mission-ready.',
+    icon: Building2,
+    priority: 'recommended',
+    category: 'Operations',
+    configRoute: '/onboarding/modules/facilities/config',
+    permissions: {
+      viewDescription: 'View facilities, buildings, and maintenance schedules',
+      manageDescription: 'Add facilities, log maintenance, manage inspections and systems',
+      view: ['View facility list', 'See building details', 'Check maintenance schedules'],
+      manage: ['Add/edit facilities', 'Log maintenance', 'Manage inspections', 'Track facility systems'],
+      defaultManagePositions: ['it_manager', 'facilities_manager'],
     },
   },
 
