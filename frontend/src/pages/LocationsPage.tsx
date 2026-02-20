@@ -891,7 +891,16 @@ export default function LocationsPage() {
         description: stationForm.description.trim() || undefined,
       };
       if (editingStation) {
+        const oldName = editingStation.name;
         await locationsService.updateLocation(editingStation.id, payload);
+        // If station name changed, update the building field on all child rooms
+        // so they stay grouped under the renamed station.
+        if (oldName !== payload.name) {
+          const stationRooms = rooms.get(oldName) || [];
+          for (const room of stationRooms) {
+            await locationsService.updateLocation(room.id, { building: payload.name } as LocationCreate);
+          }
+        }
         toast.success('Station updated');
       } else {
         await locationsService.createLocation(payload);

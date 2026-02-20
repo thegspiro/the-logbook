@@ -54,7 +54,9 @@ async def list_locations(
     return [
         LocationListItem(
             id=UUID(loc.id),
+            organization_id=UUID(loc.organization_id),
             name=loc.name,
+            description=loc.description,
             address=loc.address,
             city=loc.city,
             state=loc.state,
@@ -66,6 +68,8 @@ async def list_locations(
             is_active=loc.is_active,
             facility_id=UUID(loc.facility_id) if loc.facility_id else None,
             display_code=loc.display_code,
+            created_at=loc.created_at,
+            updated_at=loc.updated_at,
         )
         for loc in locations
     ]
