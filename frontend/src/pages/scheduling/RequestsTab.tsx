@@ -44,11 +44,11 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
   approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
+  cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
 };
 
 export const RequestsTab: React.FC = () => {
-  const { checkPermission } = useAuthStore();
+  const { checkPermission, user: currentUser } = useAuthStore();
   const canManage = checkPermission('scheduling.manage');
 
   const [activeView, setActiveView] = useState<'swaps' | 'timeoff'>('swaps');
@@ -204,7 +204,7 @@ export const RequestsTab: React.FC = () => {
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && (
+                      {req.status === 'pending' && req.user_id === currentUser?.id && (
                         <button onClick={() => handleCancel('swap', req.id)}
                           className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Cancel"
                         >
@@ -263,7 +263,7 @@ export const RequestsTab: React.FC = () => {
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && (
+                      {req.status === 'pending' && req.user_id === currentUser?.id && (
                         <button onClick={() => handleCancel('timeoff', req.id)}
                           className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Cancel"
                         >

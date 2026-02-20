@@ -302,6 +302,11 @@ const SchedulingPage: React.FC = () => {
 
     try {
       const template = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+      if (!template) {
+        setCreateError('No shift template available. Please create a template first.');
+        setCreating(false);
+        return;
+      }
       const startTime = template.start_time_of_day;
       const endTime = template.end_time_of_day;
       const startDateTime = `${shiftForm.startDate}T${startTime}:00`;

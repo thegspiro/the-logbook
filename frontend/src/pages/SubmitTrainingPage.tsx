@@ -256,7 +256,21 @@ const SubmissionForm: React.FC<{
             type="datetime-local"
             step="900"
             value={startDatetime}
-            onChange={(e) => setStartDatetime(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setStartDatetime(val);
+              // Auto-populate end datetime to start + 1 hour if end is empty or before new start
+              if (val) {
+                const startMs = new Date(val).getTime();
+                const endMs = startMs + 60 * 60 * 1000; // +1 hour
+                const endDt = new Date(endMs);
+                const pad = (n: number) => String(n).padStart(2, '0');
+                const autoEnd = `${endDt.getFullYear()}-${pad(endDt.getMonth() + 1)}-${pad(endDt.getDate())}T${pad(endDt.getHours())}:${pad(endDt.getMinutes())}`;
+                if (!endDatetime || new Date(endDatetime).getTime() <= startMs) {
+                  setEndDatetime(autoEnd);
+                }
+              }
+            }}
             className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             required
           />
@@ -399,6 +413,22 @@ const SubmissionForm: React.FC<{
             />
           </div>
         )}
+
+        {/* Expiration Date */}
+        {isFieldVisible('expiration_date') && (
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('expiration_date', 'Expiration Date')} {isFieldRequired('expiration_date') && <span className="text-red-700 dark:text-red-400">*</span>}
+            </label>
+            <input
+              type="date"
+              value={formData.expiration_date || ''}
+              onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value || undefined })}
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              required={isFieldRequired('expiration_date')}
+            />
+          </div>
+        )}
       </div>
 
       {/* Buttons */}
@@ -440,10 +470,12 @@ const SubmitTrainingPage: React.FC = () => {
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [submissions, setSubmissions] = useState<TrainingSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editingSubmission, setEditingSubmission] = useState<TrainingSubmission | null>(null);
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [configData, categoriesData, submissionsData] = await Promise.all([
         trainingSubmissionService.getConfig(),
@@ -454,6 +486,7 @@ const SubmitTrainingPage: React.FC = () => {
       setCategories(categoriesData);
       setSubmissions(submissionsData);
     } catch (_error) {
+      setLoadError('Failed to load submission form. Please try again.');
       toast.error('Failed to load submission form');
     } finally {
       setLoading(false);
@@ -473,12 +506,25 @@ const SubmitTrainingPage: React.FC = () => {
     }
   };
 
-  if (loading || !config) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
           <p className="text-theme-text-muted mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError || !config) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{loadError || 'Unable to load configuration.'}</p>
+          <button onClick={loadData} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+            Try Again
+          </button>
         </div>
       </div>
     );

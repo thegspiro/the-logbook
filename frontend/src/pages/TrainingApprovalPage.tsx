@@ -80,7 +80,7 @@ export const TrainingApprovalPage: React.FC = () => {
       const data = await trainingSessionService.getApprovalData(token) as unknown as ApprovalData;
       setApprovalData(data);
       setAttendees(
-        data.attendees.map((a) => ({
+        (data.attendees || []).map((a) => ({
           ...a,
           approved: true, // Default all to approved
         }))

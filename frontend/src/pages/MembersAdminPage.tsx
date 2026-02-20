@@ -32,7 +32,7 @@ interface EditProfileForm {
 }
 
 export const MembersAdminPage: React.FC = () => {
-  const { checkPermission } = useAuthStore();
+  const { checkPermission, user: currentUser } = useAuthStore();
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -294,6 +294,20 @@ export const MembersAdminPage: React.FC = () => {
     }
   };
 
+  const handleDeleteUser = async (user: UserWithRoles) => {
+    if (!confirm(`Are you sure you want to delete ${user.full_name || user.username}? This action cannot be easily undone.`)) {
+      return;
+    }
+
+    try {
+      setError(null);
+      await userService.deleteUser(user.id);
+      await fetchData();
+    } catch (_err) {
+      setError('Unable to delete the member. Please check your connection and try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -310,10 +324,10 @@ export const MembersAdminPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
             <div className="flex">
               <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
+                <p className="text-sm text-red-400">{error}</p>
               </div>
             </div>
           </div>
@@ -356,8 +370,8 @@ export const MembersAdminPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <p className="text-sm text-red-400">{error}</p>
         </div>
       )}
 
@@ -485,6 +499,14 @@ export const MembersAdminPage: React.FC = () => {
                       >
                         Manage Roles
                       </button>
+                      {currentUser?.id !== user.id && (
+                        <button
+                          onClick={() => handleDeleteUser(user)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

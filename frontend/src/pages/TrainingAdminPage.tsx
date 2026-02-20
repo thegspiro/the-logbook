@@ -17,7 +17,7 @@ const CreateTrainingSessionPage = lazy(() => import('./CreateTrainingSessionPage
 const CreatePipelinePage = lazy(() => import('./CreatePipelinePage'));
 const ShiftReportPage = lazy(() => import('./ShiftReportPage'));
 const ExternalTrainingPage = lazy(() => import('./ExternalTrainingPage'));
-const ImportTrainingPage = lazy(() => import('./ImportTrainingPage'));
+const HistoricalImportPage = lazy(() => import('./HistoricalImportPage'));
 const ComplianceMatrixTab = lazy(() => import('./ComplianceMatrixTab'));
 const ExpiringCertsTab = lazy(() => import('./ExpiringCertsTab'));
 
@@ -33,7 +33,7 @@ const tabs: { id: AdminTab; label: string }[] = [
   { id: 'pipelines', label: 'Pipelines' },
   { id: 'shift-reports', label: 'Shift Reports' },
   { id: 'integrations', label: 'Integrations' },
-  { id: 'import', label: 'Import Historical' },
+  { id: 'import', label: 'Import History' },
 ];
 
 const TabLoading = () => (
@@ -100,7 +100,7 @@ export const TrainingAdminPage: React.FC = () => {
         {activeTab === 'pipelines' && <CreatePipelinePage />}
         {activeTab === 'shift-reports' && <ShiftReportPage />}
         {activeTab === 'integrations' && <ExternalTrainingPage />}
-        {activeTab === 'import' && <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8"><ImportTrainingPage /></div>}
+        {activeTab === 'import' && <HistoricalImportPage />}
       </Suspense>
     </div>
   );

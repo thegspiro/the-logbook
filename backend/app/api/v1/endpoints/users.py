@@ -4,6 +4,7 @@ Users API Endpoints
 Endpoints for user management and listing.
 """
 
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from loguru import logger
@@ -119,6 +120,20 @@ async def create_member(
             detail="Username already exists"
         )
 
+    # Check if badge number already exists in the organization
+    if user_data.badge_number:
+        result = await db.execute(
+            select(User)
+            .where(User.badge_number == user_data.badge_number)
+            .where(User.organization_id == str(current_user.organization_id))
+            .where(User.deleted_at.is_(None))
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member with this Department ID / badge number already exists"
+            )
+
     # Check if email already exists (including archived members)
     result = await db.execute(
         select(User)
@@ -202,8 +217,18 @@ async def create_member(
 
         new_user.roles = roles
 
+    # Capture assigned role IDs before commit expires the relationship
+    assigned_role_ids = [str(r.id) for r in roles] if user_data.role_ids else []
+
     await db.commit()
-    await db.refresh(new_user, ["positions"])
+
+    # Re-query with eager loading so Pydantic can serialize roles without lazy loading
+    result = await db.execute(
+        select(User)
+        .where(User.id == new_user.id)
+        .options(selectinload(User.positions))
+    )
+    new_user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -214,7 +239,7 @@ async def create_member(
             "new_user_id": str(new_user.id),
             "username": new_user.username,
             "email": new_user.email,
-            "roles_assigned": [str(r.id) for r in new_user.roles],
+            "roles_assigned": assigned_role_ids,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -237,21 +262,28 @@ async def create_member(
         org_name = organization.name if organization else "The Logbook"
         login_url = f"{settings.FRONTEND_URL}/login" if hasattr(settings, 'FRONTEND_URL') and settings.FRONTEND_URL else "/login"
 
+        # Capture scalar values before they expire after the response returns
+        welcome_email = new_user.email
+        welcome_first = new_user.first_name
+        welcome_last = new_user.last_name
+        welcome_username = new_user.username
+        welcome_org_id = str(current_user.organization_id)
+
         async def _send_welcome():
             try:
                 email_svc = EmailService(organization)
                 await email_svc.send_welcome_email(
-                    to_email=new_user.email,
-                    first_name=new_user.first_name,
-                    last_name=new_user.last_name,
-                    username=new_user.username,
+                    to_email=welcome_email,
+                    first_name=welcome_first,
+                    last_name=welcome_last,
+                    username=welcome_username,
                     temp_password=temp_password,
                     organization_name=org_name,
                     login_url=login_url,
-                    organization_id=str(current_user.organization_id),
+                    organization_id=welcome_org_id,
                 )
             except Exception as e:
-                logger.error(f"Failed to send welcome email to {new_user.email}: {e}")
+                logger.error(f"Failed to send welcome email to {welcome_email}: {e}")
 
         background_tasks.add_task(_send_welcome)
 
@@ -396,7 +428,14 @@ async def assign_user_roles(
     # Assign new roles
     user.roles = roles
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -471,10 +510,20 @@ async def add_role_to_user(
             detail="User already has this role"
         )
 
+    # Capture role name before commit expires the ORM object
+    added_role_name = role.name
+
     # Add role
     user.roles.append(role)
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -484,7 +533,7 @@ async def add_role_to_user(
         event_data={
             "target_user_id": str(user_id),
             "role_id": str(role_id),
-            "role_name": role.name,
+            "role_name": added_role_name,
             "action": "role_added",
         },
         user_id=str(current_user.id),
@@ -529,10 +578,10 @@ async def remove_role_from_user(
             detail="User not found"
         )
 
-    # Find and remove role
+    # Find and remove role (cast to str since role.id is String, role_id is UUID)
     role_to_remove = None
     for role in user.roles:
-        if role.id == str(role_id):
+        if str(role.id) == str(role_id):
             role_to_remove = role
             break
 
@@ -542,9 +591,17 @@ async def remove_role_from_user(
             detail="User does not have this role"
         )
 
+    role_removed_name = role_to_remove.name
     user.roles.remove(role_to_remove)
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -554,7 +611,7 @@ async def remove_role_from_user(
         event_data={
             "target_user_id": str(user_id),
             "role_id": str(role_id),
-            "role_name": role_to_remove.name,
+            "role_name": role_removed_name,
             "action": "role_removed",
         },
         user_id=str(current_user.id),
@@ -680,7 +737,14 @@ async def update_contact_info(
         user.notification_preferences = contact_update.notification_preferences.model_dump()
 
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -741,6 +805,21 @@ async def update_user_profile(
     # Update only provided fields
     update_data = profile_update.model_dump(exclude_unset=True)
 
+    # Check badge_number uniqueness within the organization
+    if "badge_number" in update_data and update_data["badge_number"]:
+        existing = await db.execute(
+            select(User)
+            .where(User.badge_number == update_data["badge_number"])
+            .where(User.organization_id == str(current_user.organization_id))
+            .where(User.id != str(user_id))
+            .where(User.deleted_at.is_(None))
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member with this Department ID / badge number already exists"
+            )
+
     # Rank changes restricted to Chief / membership coordinator
     if "rank" in update_data:
         user_perms = _collect_user_permissions(current_user)
@@ -753,12 +832,25 @@ async def update_user_profile(
         if ec_list is not None:
             user.emergency_contacts = [ec.model_dump() if hasattr(ec, 'model_dump') else ec for ec in profile_update.emergency_contacts]
 
+    # Allowlist of safe fields to prevent mass-assignment of sensitive columns
+    ALLOWED_PROFILE_FIELDS = {
+        "first_name", "middle_name", "last_name", "badge_number", "phone", "mobile",
+        "date_of_birth", "hire_date", "rank", "station", "membership_number",
+        "address_street", "address_city", "address_state", "address_zip", "address_country",
+    }
     for field, value in update_data.items():
-        if hasattr(user, field):
+        if field in ALLOWED_PROFILE_FIELDS and hasattr(user, field):
             setattr(user, field, value)
 
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one()
 
     await log_audit_event(
         db=db,
@@ -776,3 +868,58 @@ async def update_user_profile(
     )
 
     return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Soft-delete a member by setting their deleted_at timestamp.
+
+    Requires `members.manage` permission.
+
+    **Authentication required**
+    """
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account",
+        )
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Capture values before commit expires the ORM object
+    deleted_username = user.username
+    deleted_full_name = user.full_name
+
+    user.deleted_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="user_deleted",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "deleted_user_id": str(user_id),
+            "deleted_username": deleted_username,
+            "deleted_full_name": deleted_full_name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )

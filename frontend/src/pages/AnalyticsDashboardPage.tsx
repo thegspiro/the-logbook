@@ -95,8 +95,8 @@ const AnalyticsDashboardPage: React.FC = () => {
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Device Breakdown</h2>
           <div className="space-y-3">
-            {Object.entries(metrics.deviceBreakdown).map(([device, count]) => {
-              const total = Object.values(metrics.deviceBreakdown).reduce((a, b) => a + b, 0);
+            {Object.entries(metrics.deviceBreakdown || {}).map(([device, count]) => {
+              const total = Object.values(metrics.deviceBreakdown || {}).reduce((a, b) => a + b, 0);
               const percentage = total > 0 ? (count / total) * 100 : 0;
 
               return (
@@ -160,8 +160,8 @@ const AnalyticsDashboardPage: React.FC = () => {
       <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Activity by Hour</h2>
         <div className="flex items-end justify-between gap-1 h-48">
-          {metrics.hourlyActivity.map(({ hour, count }) => {
-            const maxCount = Math.max(...metrics.hourlyActivity.map(h => h.count), 1);
+          {(metrics.hourlyActivity || []).map(({ hour, count }) => {
+            const maxCount = Math.max(...(metrics.hourlyActivity || []).map(h => h.count), 1);
             const heightPercent = (count / maxCount) * 100;
 
             return (
@@ -179,15 +179,15 @@ const AnalyticsDashboardPage: React.FC = () => {
       </div>
 
       {/* Check-In Trends */}
-      {metrics.checkInTrends.length > 0 && (
+      {(metrics.checkInTrends || []).length > 0 && (
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
             Check-In Trends (Last 24 Hours)
           </h2>
           <div className="overflow-x-auto">
             <div className="flex items-end gap-2 min-w-max h-32">
-              {metrics.checkInTrends.map(({ time, count }, index) => {
-                const maxCount = Math.max(...metrics.checkInTrends.map(t => t.count), 1);
+              {(metrics.checkInTrends || []).map(({ time, count }, index) => {
+                const maxCount = Math.max(...(metrics.checkInTrends || []).map(t => t.count), 1);
                 const heightPercent = (count / maxCount) * 100;
 
                 return (

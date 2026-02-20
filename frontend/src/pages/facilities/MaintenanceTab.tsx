@@ -164,7 +164,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
           <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search records..." className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+            placeholder="Search records..." aria-label="Search maintenance records" className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
         {filterFacilityId && (
@@ -235,21 +235,21 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
               {/* Actions */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {!record.is_completed && (
-                  <button onClick={() => handleComplete(record)} title="Mark completed"
+                  <button onClick={() => handleComplete(record)} title="Mark completed" aria-label="Mark completed"
                     className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
+                    <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                   </button>
                 )}
-                <button onClick={() => openEdit(record)} title="Edit"
+                <button onClick={() => openEdit(record)} title="Edit" aria-label="Edit record"
                   className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
                 >
-                  <Wrench className="w-4 h-4" />
+                  <Wrench className="w-4 h-4" aria-hidden="true" />
                 </button>
-                <button onClick={() => handleDelete(record)} title="Delete"
+                <button onClick={() => handleDelete(record)} title="Delete" aria-label="Delete record"
                   className="p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -267,7 +267,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
               <h2 className="text-lg font-bold text-theme-text-primary">
                 {editingRecord ? 'Edit Maintenance Record' : 'New Maintenance Record'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-theme-text-muted hover:text-theme-text-primary"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowModal(false)} aria-label="Close dialog" className="text-theme-text-muted hover:text-theme-text-primary"><X className="w-5 h-5" aria-hidden="true" /></button>
             </div>
             <div className="p-6 space-y-4">
               <div>

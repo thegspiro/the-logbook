@@ -81,4 +81,8 @@ def downgrade() -> None:
     op.drop_index("idx_inv_notif_queue_org_user", table_name="inventory_notification_queue")
     op.drop_index("idx_inv_notif_queue_pending", table_name="inventory_notification_queue")
     op.drop_table("inventory_notification_queue")
-    op.execute("DROP TYPE IF EXISTS inventoryactiontype")
+    # PostgreSQL uses standalone enum types; MySQL inlines them — skip on MySQL
+    try:
+        op.execute("DROP TYPE IF EXISTS inventoryactiontype")
+    except Exception:
+        pass  # MySQL has no standalone enum types

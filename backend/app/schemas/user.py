@@ -227,7 +227,8 @@ class MembershipNumberAssignment(BaseModel):
 
 
 class UserProfileResponse(UserResponse):
-    """Extended user response with notification preferences"""
+    """Extended user response with roles and notification preferences"""
+    roles: List[RoleResponse] = []
     notification_preferences: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)

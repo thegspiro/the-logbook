@@ -54,7 +54,7 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: 'bg-green-500/10 text-green-700 dark:text-green-400',
   declined: 'bg-red-500/10 text-red-700 dark:text-red-400',
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-400',
+  no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-300',
 };
 
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
@@ -180,6 +180,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       setAssigning(false);
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const isUserAssigned = assignments.some(a => a.user_id === user?.id);
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');

@@ -36,7 +36,7 @@ import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '..
 import { useAuthStore } from '../stores/authStore';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
 import type { NotificationLogRecord, ShiftRecord } from '../services/api';
-import axios from 'axios';
+import { dashboardService } from '../services/api';
 
 /**
  * Main Dashboard Component
@@ -97,14 +97,12 @@ const Dashboard: React.FC = () => {
     if (savedDepartmentName) {
       setDepartmentName(savedDepartmentName);
     } else {
-      import('axios').then(({ default: axios }) => {
-        axios.get('/api/v1/auth/branding').then((response) => {
-          if (response.data?.name) {
-            setDepartmentName(response.data.name);
-            sessionStorage.setItem('departmentName', response.data.name);
-          }
-        }).catch(() => { /* keep default */ });
-      });
+      dashboardService.getBranding().then((data) => {
+        if (data?.name) {
+          setDepartmentName(data.name);
+          sessionStorage.setItem('departmentName', data.name);
+        }
+      }).catch(() => { /* keep default */ });
     }
 
     loadNotifications();
@@ -120,8 +118,8 @@ const Dashboard: React.FC = () => {
 
   const loadAdminSummary = async () => {
     try {
-      const response = await axios.get('/api/v1/dashboard/admin-summary');
-      setAdminSummary(response.data);
+      const data = await dashboardService.getAdminSummary();
+      setAdminSummary(data);
     } catch (err) {
       console.error('Failed to load admin summary:', err);
     } finally {

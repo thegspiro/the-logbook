@@ -374,8 +374,8 @@ function LocationSetupWizard({
                           {station.saved && <span className="text-green-500 ml-2">Saved</span>}
                         </span>
                         {!station.saved && stations.length > 1 && (
-                          <button onClick={() => removeStation(idx)} className="text-theme-text-muted hover:text-red-500 transition-colors">
-                            <X className="w-4 h-4" />
+                          <button onClick={() => removeStation(idx)} aria-label="Remove station" className="text-theme-text-muted hover:text-red-500 transition-colors">
+                            <X className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -502,8 +502,8 @@ function LocationSetupWizard({
                           )}
                         </div>
                       </div>
-                      <button onClick={() => removeRoom(idx)} className="p-1 text-theme-text-muted hover:text-red-500 transition-colors">
-                        <X className="w-4 h-4" />
+                      <button onClick={() => removeRoom(idx)} aria-label="Remove room" className="p-1 text-theme-text-muted hover:text-red-500 transition-colors">
+                        <X className="w-4 h-4" aria-hidden="true" />
                       </button>
                     </div>
                   ))}
@@ -725,11 +725,11 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
           </div>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onEdit(room)} className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded transition-colors">
-            <Pencil className="w-3.5 h-3.5" />
+          <button onClick={() => onEdit(room)} aria-label="Edit room" className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded transition-colors">
+            <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
-          <button onClick={() => onDelete(room)} className="p-1 text-theme-text-muted hover:text-red-500 rounded transition-colors">
-            <Trash2 className="w-3.5 h-3.5" />
+          <button onClick={() => onDelete(room)} aria-label="Delete room" className="p-1 text-theme-text-muted hover:text-red-500 rounded transition-colors">
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -1105,15 +1105,15 @@ export default function LocationsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => openEditStation(station)} title="Edit station"
+                    <button onClick={() => openEditStation(station)} title="Edit station" aria-label="Edit station"
                       className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
                     >
-                      <Pencil className="w-4 h-4" />
+                      <Pencil className="w-4 h-4" aria-hidden="true" />
                     </button>
-                    <button onClick={() => handleDeleteStation(station)} title="Delete station"
+                    <button onClick={() => handleDeleteStation(station)} title="Delete station" aria-label="Delete station"
                       className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" aria-hidden="true" />
                     </button>
                     <button onClick={() => toggleStation(station.name)}
                       className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
@@ -1175,8 +1175,8 @@ export default function LocationsPage() {
               <h2 className="text-lg font-bold text-theme-text-primary">
                 {editingStation ? 'Edit Station' : 'Add Station'}
               </h2>
-              <button onClick={() => setShowStationModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
-                <X className="w-5 h-5" />
+              <button onClick={() => setShowStationModal(false)} aria-label="Close dialog" className="text-theme-text-muted hover:text-theme-text-primary">
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
             <div className="p-6 space-y-4">
@@ -1236,8 +1236,8 @@ export default function LocationsPage() {
               <h2 className="text-lg font-bold text-theme-text-primary">
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}
               </h2>
-              <button onClick={() => setShowRoomModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
-                <X className="w-5 h-5" />
+              <button onClick={() => setShowRoomModal(false)} aria-label="Close dialog" className="text-theme-text-muted hover:text-theme-text-primary">
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
             <div className="p-6 space-y-4">

@@ -51,12 +51,12 @@ class TrainingService:
         )
         records = result.scalars().all()
 
-        # Calculate total hours
-        total_hours = sum(r.hours_completed for r in records)
+        # Calculate total hours (guard against None values)
+        total_hours = sum(r.hours_completed or 0 for r in records)
 
         # Calculate this year's hours
         hours_this_year = sum(
-            r.hours_completed
+            r.hours_completed or 0
             for r in records
             if r.completion_date and r.completion_date.year == current_year
         )
@@ -166,8 +166,8 @@ class TrainingService:
         result = await self.db.execute(query)
         records = result.scalars().all()
 
-        # Calculate total hours
-        total_hours = sum(r.hours_completed for r in records)
+        # Calculate total hours (guard against None values)
+        total_hours = sum(r.hours_completed or 0 for r in records)
 
         # Get hours by type
         hours_by_type = await self.get_training_hours_by_type(
@@ -272,9 +272,10 @@ class TrainingService:
             start_date = None
             end_date = None
         elif freq == "biannual":
-            base_year = requirement.year if requirement.year else current_year
-            start_date = date(base_year - 1, 1, 1)
-            end_date = date(base_year, 12, 31)
+            # Biannual: no date window — compliance is based on having a
+            # non-expired certification
+            start_date = None
+            end_date = None
         elif freq == "quarterly":
             quarter_month = ((today.month - 1) // 3) * 3 + 1
             start_date = date(current_year, quarter_month, 1)
@@ -395,7 +396,8 @@ class TrainingService:
         self, organization_id: UUID, days_ahead: int = 90
     ) -> List[TrainingRecord]:
         """
-        Get certifications that are expiring within the specified number of days
+        Get certifications that are expiring within the specified number of days,
+        including those that have already expired.
         """
         today = date.today()
         future_date = today + timedelta(days=days_ahead)
@@ -404,9 +406,7 @@ class TrainingService:
             select(TrainingRecord)
             .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-            .where(TrainingRecord.certification_number.isnot(None))
             .where(TrainingRecord.expiration_date.isnot(None))
-            .where(TrainingRecord.expiration_date > today)
             .where(TrainingRecord.expiration_date <= future_date)
             .order_by(TrainingRecord.expiration_date)
         )

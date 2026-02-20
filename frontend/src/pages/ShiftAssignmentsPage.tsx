@@ -110,7 +110,7 @@ const statusStyles: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
   denied: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
   declined: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
-  cancelled: 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
+  cancelled: 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
   no_show: 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
 };
 

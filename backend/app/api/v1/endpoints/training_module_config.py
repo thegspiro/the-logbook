@@ -9,6 +9,7 @@ GET  /my-training     - Member's aggregated training data (respects visibility c
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List
 import calendar
 from datetime import date
@@ -85,11 +86,18 @@ async def get_my_training_summary(
     config_service = TrainingModuleConfigService(db)
     visibility = await config_service.get_member_visibility(current_user.organization_id)
 
-    # Officers see everything
+    # Officers see everything — eagerly load roles to avoid MissingGreenlet
     is_officer = False
+    user_with_roles = None
     try:
-        if current_user.roles:
-            role_names = [r.name for r in current_user.roles]
+        user_result = await db.execute(
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.roles))
+        )
+        user_with_roles = user_result.scalar_one_or_none()
+        if user_with_roles and user_with_roles.roles:
+            role_names = [r.name for r in user_with_roles.roles]
             is_officer = any(r in role_names for r in ["admin", "training_officer", "chief"])
     except Exception:
         pass
@@ -153,11 +161,11 @@ async def get_my_training_summary(
     )
     all_requirements = req_result.scalars().all()
 
-    # Filter to requirements applicable to this user
+    # Filter to requirements applicable to this user (use eagerly-loaded roles)
     user_role_ids: List[str] = []
     try:
-        if current_user.roles:
-            user_role_ids = [str(r.id) for r in current_user.roles]
+        if user_with_roles and user_with_roles.roles:
+            user_role_ids = [str(r.id) for r in user_with_roles.roles]
     except Exception:
         pass
 
@@ -262,10 +270,10 @@ async def get_my_training_summary(
             start_date = None
             end_date = None
         elif freq == "biannual":
-            # Biannual: 2-year window ending at current year
-            base_year = req.year if req.year else current_year
-            start_date = date(base_year - 1, 1, 1)
-            end_date = date(base_year, 12, 31)
+            # Biannual: look at all records (no date window restriction) —
+            # compliance is based on having a non-expired certification
+            start_date = None
+            end_date = None
         elif freq == "quarterly":
             # Quarterly: current quarter
             quarter_month = ((today.month - 1) // 3) * 3 + 1
@@ -323,6 +331,35 @@ async def get_my_training_summary(
         else:
             pct = 100.0
 
+        # For biannual requirements, check if the latest cert is expired.
+        # Filter by training_type when set; otherwise match by requirement name
+        # to avoid picking up an unrelated cert (e.g. CPR cert satisfying EMS req).
+        if freq == "biannual":
+            cert_q = (
+                select(TrainingRecord.expiration_date)
+                .where(
+                    TrainingRecord.organization_id == org_id,
+                    TrainingRecord.user_id == user_id,
+                    TrainingRecord.status == TrainingStatus.COMPLETED,
+                    TrainingRecord.expiration_date.isnot(None),
+                )
+                .order_by(TrainingRecord.expiration_date.desc())
+                .limit(1)
+            )
+            if req.training_type:
+                cert_q = cert_q.where(
+                    TrainingRecord.training_type == req.training_type
+                )
+            elif req.name:
+                # Fallback: match by course_name containing the requirement name
+                cert_q = cert_q.where(
+                    TrainingRecord.course_name.ilike(f"%{req.name}%")
+                )
+            cert_r = await db.execute(cert_q)
+            latest_exp = cert_r.scalar_one_or_none()
+            if not latest_exp or latest_exp < today:
+                pct = 0.0  # Expired or missing cert — not met
+
         total_progress_pct += pct
         if pct >= 100:
             met_count += 1
@@ -346,9 +383,10 @@ async def get_my_training_summary(
             r_start_date = None
             r_end_date = None
         elif freq == "biannual":
-            base_year = req.year if req.year else current_year
-            r_start_date = date(base_year - 1, 1, 1)
-            r_end_date = date(base_year, 12, 31)
+            # Biannual: no date window restriction —
+            # compliance is based on having a non-expired certification
+            r_start_date = None
+            r_end_date = None
         elif freq == "quarterly":
             quarter_month = ((today.month - 1) // 3) * 3 + 1
             r_start_date = date(current_year, quarter_month, 1)
@@ -401,6 +439,54 @@ async def get_my_training_summary(
 
         rq_pct = min(rq_completed_hours / rq_adjusted * 100, 100) if rq_adjusted > 0 else 100.0
 
+        # For biannual requirements, determine due date from the most recent
+        # matching certification record's expiration date rather than a fixed
+        # calendar window.  An expired certification means the requirement is
+        # immediately overdue and should block activity (e.g., shift signups).
+        effective_due_date = req.due_date if req.due_date else (r_end_date if r_end_date else None)
+        cert_expired = False
+        blocks_activity = False
+
+        if freq == "biannual":
+            # Find the most recent matching certification record
+            cert_query = (
+                select(TrainingRecord)
+                .where(
+                    TrainingRecord.organization_id == org_id,
+                    TrainingRecord.user_id == user_id,
+                    TrainingRecord.status == TrainingStatus.COMPLETED,
+                    TrainingRecord.expiration_date.isnot(None),
+                )
+                .order_by(TrainingRecord.expiration_date.desc())
+                .limit(1)
+            )
+            if req.training_type:
+                cert_query = cert_query.where(
+                    TrainingRecord.training_type == req.training_type
+                )
+            elif req.name:
+                cert_query = cert_query.where(
+                    TrainingRecord.course_name.ilike(f"%{req.name}%")
+                )
+            cert_result = await db.execute(cert_query)
+            latest_cert = cert_result.scalar_one_or_none()
+
+            if latest_cert and latest_cert.expiration_date:
+                effective_due_date = latest_cert.expiration_date
+                if latest_cert.expiration_date < today:
+                    cert_expired = True
+                    blocks_activity = True
+                    # Override progress — expired cert means requirement is not met
+                    rq_pct = 0.0
+            else:
+                # No certification record at all — overdue immediately
+                effective_due_date = today
+                cert_expired = True
+                blocks_activity = True
+                rq_pct = 0.0
+
+        days_until_due = (effective_due_date - today).days if effective_due_date else None
+
         detail_entry: Dict[str, Any] = {
             "id": str(req.id),
             "name": req.name,
@@ -411,11 +497,13 @@ async def get_my_training_summary(
             "original_required_hours": rq_base_required,
             "completed_hours": rq_completed_hours,
             "progress_percentage": round(rq_pct, 1),
-            "is_met": rq_pct >= 100,
-            "due_date": str(req.due_date) if req.due_date else (str(r_end_date) if r_end_date else None),
-            "days_until_due": (r_end_date - today).days if r_end_date else None,
+            "is_met": rq_pct >= 100 and not cert_expired,
+            "due_date": str(effective_due_date) if effective_due_date else None,
+            "days_until_due": days_until_due,
             "waived_months": rq_waived,
             "active_months": rq_active,
+            "cert_expired": cert_expired,
+            "blocks_activity": blocks_activity,
         }
         requirements_detail.append(detail_entry)
 

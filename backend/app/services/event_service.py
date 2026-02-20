@@ -243,13 +243,16 @@ class EventService:
         event.cancelled_at = datetime.utcnow()
         event.updated_at = datetime.utcnow()
 
+        # Capture rsvps before commit expires the relationship
+        rsvps_to_notify = list(event.rsvps)
+
         await self.db.commit()
         await self.db.refresh(event)
 
         # Send cancellation notifications if requested
-        if send_notifications and event.rsvps:
+        if send_notifications and rsvps_to_notify:
             notifications_service = NotificationsService(self.db)
-            for rsvp in event.rsvps:
+            for rsvp in rsvps_to_notify:
                 if rsvp.status == RSVPStatus.GOING or rsvp.status == RSVPStatus.MAYBE:
                     await notifications_service.log_notification(
                         organization_id=organization_id,
