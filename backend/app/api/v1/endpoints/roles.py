@@ -412,7 +412,7 @@ async def get_user_permissions(
     # Verify user exists in same organization
     result = await db.execute(
         select(User).where(
-            User.id == user_id,
+            User.id == str(user_id),
             User.organization_id == current_user.organization_id
         )
     )
