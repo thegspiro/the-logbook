@@ -16,6 +16,7 @@ from jwt.exceptions import InvalidTokenError as JWTError
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import secrets
+import string
 import base64
 import hashlib
 import re
@@ -186,6 +187,56 @@ def validate_password_strength(password: str) -> tuple[bool, str | None]:
         return False, error_message
 
     return True, None
+
+
+def generate_temporary_password(length: int = 16) -> str:
+    """
+    Generate a temporary password that is guaranteed to pass
+    validate_password_strength().
+
+    The password always contains at least one character from each required
+    category (uppercase, lowercase, digit, special) and is validated before
+    being returned.  If the random fill happens to introduce a sequential or
+    repeated pattern the generator retries (up to 20 attempts) until a clean
+    password is produced.
+
+    Args:
+        length: Desired password length (minimum 12, clamped automatically).
+
+    Returns:
+        A temporary password string that passes all strength checks.
+
+    Raises:
+        RuntimeError: If a compliant password cannot be generated after
+            multiple attempts (should never happen in practice).
+    """
+    length = max(length, settings.PASSWORD_MIN_LENGTH)
+
+    upper = string.ascii_uppercase
+    lower = string.ascii_lowercase
+    digits = string.digits
+    specials = "!@#$%^&*"
+    all_chars = upper + lower + digits + specials
+
+    for _ in range(20):
+        # Guarantee at least one from each required category
+        chars: list[str] = [
+            secrets.choice(upper),
+            secrets.choice(lower),
+            secrets.choice(digits),
+            secrets.choice(specials),
+        ]
+        # Fill the rest randomly
+        chars.extend(secrets.choice(all_chars) for _ in range(length - len(chars)))
+        # Shuffle so the guaranteed chars aren't always at the front
+        secrets.SystemRandom().shuffle(chars)
+
+        candidate = "".join(chars)
+        is_valid, _ = validate_password_strength(candidate)
+        if is_valid:
+            return candidate
+
+    raise RuntimeError("Failed to generate a compliant temporary password")
 
 
 # ============================================

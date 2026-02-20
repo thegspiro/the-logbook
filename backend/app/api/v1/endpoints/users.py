@@ -104,9 +104,7 @@ async def create_member(
     **Authentication required**
     """
     from uuid import uuid4
-    from app.core.security import hash_password
-    import secrets
-    import string
+    from app.core.security import hash_password, generate_temporary_password
 
     # Check if username already exists
     result = await db.execute(
@@ -165,6 +163,7 @@ async def create_member(
         )
 
     # Use admin-provided password or generate a temporary one
+    password_was_generated = False
     if user_data.password:
         from app.core.security import validate_password_strength
         is_valid, error_msg = validate_password_strength(user_data.password)
@@ -176,8 +175,9 @@ async def create_member(
         initial_password = user_data.password
         password_hash = hash_password(initial_password)
     else:
-        initial_password = ''.join(secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*") for _ in range(16))
-        password_hash = hash_password(initial_password, skip_validation=True)
+        initial_password = generate_temporary_password()
+        password_hash = hash_password(initial_password)
+        password_was_generated = True
 
     # Create new user
     new_user = User(
@@ -190,6 +190,7 @@ async def create_member(
         middle_name=user_data.middle_name,
         last_name=user_data.last_name,
         badge_number=user_data.badge_number,
+        membership_number=user_data.membership_id,
         phone=user_data.phone,
         mobile=user_data.mobile,
         date_of_birth=user_data.date_of_birth,
@@ -208,6 +209,7 @@ async def create_member(
         email_verified=False,
         status=UserStatus.ACTIVE,
         must_change_password=True,
+        password_changed_at=datetime.now(timezone.utc),
     )
 
     db.add(new_user)
@@ -303,7 +305,12 @@ async def create_member(
 
         background_tasks.add_task(_send_welcome)
 
-    return new_user
+    # Build response — include the temporary password so the admin can
+    # communicate it to the user even if the welcome email fails or was skipped.
+    response = UserWithRolesResponse.model_validate(new_user)
+    if password_was_generated:
+        response.temporary_password = initial_password
+    return response
 
 
 @router.get("/contact-info-enabled")

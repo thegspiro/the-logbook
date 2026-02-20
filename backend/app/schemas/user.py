@@ -192,6 +192,7 @@ class RoleResponse(BaseModel):
 class UserWithRolesResponse(UserResponse):
     """User response with roles included"""
     roles: List[RoleResponse] = []
+    temporary_password: Optional[str] = Field(None, description="Auto-generated temporary password (only present on creation)")
 
     model_config = ConfigDict(from_attributes=True)
 
