@@ -274,15 +274,15 @@ export default function ApparatusBasicPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openEdit(apparatus)} title="Edit"
+                    <button onClick={() => openEdit(apparatus)} title="Edit" aria-label="Edit apparatus"
                       className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
                     >
-                      <Pencil className="w-4 h-4" />
+                      <Pencil className="w-4 h-4" aria-hidden="true" />
                     </button>
-                    <button onClick={() => handleDelete(apparatus)} title="Delete"
+                    <button onClick={() => handleDelete(apparatus)} title="Delete" aria-label="Delete apparatus"
                       className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -321,8 +321,8 @@ export default function ApparatusBasicPage() {
               <h2 className="text-lg font-bold text-theme-text-primary">
                 {editing ? 'Edit Apparatus' : 'Add Apparatus'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
-                <X className="w-5 h-5" />
+              <button onClick={() => setShowModal(false)} aria-label="Close dialog" className="text-theme-text-muted hover:text-theme-text-primary">
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
             <div className="p-6 space-y-4">
@@ -381,8 +381,8 @@ export default function ApparatusBasicPage() {
                         ))}
                       </select>
                       {form.positions.length > 1 && (
-                        <button onClick={() => removePosition(i)} className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors">
-                          <X className="w-4 h-4" />
+                        <button onClick={() => removePosition(i)} aria-label="Remove position" className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors">
+                          <X className="w-4 h-4" aria-hidden="true" />
                         </button>
                       )}
                     </div>

@@ -1313,7 +1313,7 @@ export const ElectionDetailPage: React.FC = () => {
             {/* Ballot Items */}
             <div className="px-6 py-6 space-y-6">
               {(election.ballot_items || []).length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
+                <div className="text-center py-8 text-theme-text-muted">
                   No ballot items have been added yet.
                 </div>
               ) : (
@@ -1423,7 +1423,7 @@ export const ElectionDetailPage: React.FC = () => {
                   >
                     Submit Ballot
                   </button>
-                  <p className="mt-2 text-sm text-gray-400">
+                  <p className="mt-2 text-sm text-theme-text-muted">
                     You will have a chance to review your choices before they are submitted.
                   </p>
                 </div>

@@ -54,7 +54,7 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: 'bg-green-500/10 text-green-700 dark:text-green-400',
   declined: 'bg-red-500/10 text-red-700 dark:text-red-400',
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-400',
+  no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-300',
 };
 
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
