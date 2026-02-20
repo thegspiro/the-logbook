@@ -1078,6 +1078,7 @@ export const EventDetailPage: React.FC = () => {
                       </label>
                       <input
                         type="datetime-local"
+                        step="900"
                         id="actual_start_time"
                         value={actualStartTime}
                         onChange={(e) => setActualStartTime(e.target.value)}
@@ -1096,6 +1097,7 @@ export const EventDetailPage: React.FC = () => {
                       </label>
                       <input
                         type="datetime-local"
+                        step="900"
                         id="actual_end_time"
                         value={actualEndTime}
                         onChange={(e) => setActualEndTime(e.target.value)}

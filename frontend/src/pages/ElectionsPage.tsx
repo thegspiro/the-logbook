@@ -350,6 +350,7 @@ export const ElectionsPage: React.FC = () => {
                     </label>
                     <input
                       type="datetime-local"
+                      step="900"
                       id="election-start-date"
                       required
                       aria-required="true"
@@ -365,6 +366,7 @@ export const ElectionsPage: React.FC = () => {
                     </label>
                     <input
                       type="datetime-local"
+                      step="900"
                       id="election-end-date"
                       required
                       aria-required="true"

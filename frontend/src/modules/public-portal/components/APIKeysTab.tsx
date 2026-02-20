@@ -118,6 +118,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
               <input
                 id="api-key-expiration"
                 type="datetime-local"
+                step="900"
                 value={formData.expires_at || ''}
                 onChange={(e) => setFormData({
                   ...formData,

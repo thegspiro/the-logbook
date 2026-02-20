@@ -1210,6 +1210,7 @@ export const ElectionDetailPage: React.FC = () => {
                   </label>
                   <input
                     type="datetime-local"
+                    step="900"
                     id="extend-new-end-time"
                     value={newEndDate}
                     onChange={(e) => setNewEndDate(e.target.value)}
