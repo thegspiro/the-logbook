@@ -667,6 +667,18 @@ export const trainingService = {
   },
 
   /**
+   * Import training records from a CSV file
+   */
+  async importCSV(file: File): Promise<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/training/records/import-csv', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /**
    * Update a training record
    */
   async updateRecord(recordId: string, updates: TrainingRecordUpdate): Promise<TrainingRecord> {
