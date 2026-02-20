@@ -101,10 +101,12 @@ type WizardStep = 'mode' | 'stations' | 'rooms' | 'done';
 
 function LocationSetupWizard({
   onComplete,
+  onDismiss,
   existingMode,
   existingStations,
 }: {
   onComplete: () => void;
+  onDismiss?: () => void;
   existingMode: StationMode;
   existingStations: Location[];
 }) {
@@ -281,12 +283,23 @@ function LocationSetupWizard({
         <div className="px-6 pt-5 pb-2">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-theme-text-muted">Step {stepIndex} of {totalSteps}</span>
-            <span className="text-xs text-theme-text-muted">
-              {step === 'mode' && 'Department Type'}
-              {step === 'stations' && 'Station Setup'}
-              {step === 'rooms' && 'Room Setup'}
-              {step === 'done' && 'Complete'}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-theme-text-muted">
+                {step === 'mode' && 'Department Type'}
+                {step === 'stations' && 'Station Setup'}
+                {step === 'rooms' && 'Room Setup'}
+                {step === 'done' && 'Complete'}
+              </span>
+              {onDismiss && (
+                <button
+                  onClick={onDismiss}
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  aria-label="Close wizard"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
           <div className="w-full bg-theme-surface-hover rounded-full h-1.5">
             <div
@@ -773,6 +786,7 @@ export default function LocationsPage() {
 
   // Setup wizard state
   const [showWizard, setShowWizard] = useState(false);
+  const wizardDismissedRef = React.useRef(false);
 
   // Load station mode from org settings
   useEffect(() => {
@@ -814,16 +828,17 @@ export default function LocationsPage() {
 
   useEffect(() => { loadLocations(); }, [loadLocations]);
 
-  // Auto-show wizard only when initial setup is truly missing (no mode or no stations)
+  // Auto-show wizard only when the user has zero locations and hasn't dismissed it
   useEffect(() => {
     if (stationModeLoading || isLoading) return;
-    const { stations: existingStations } = groupLocations(locations);
-    // Show wizard only if station mode has never been set or there are zero stations.
-    // Do NOT re-show just because rooms are missing — that's optional.
-    if (stationMode === null || existingStations.length === 0) {
+    if (wizardDismissedRef.current) return;
+    // Only auto-show when there are truly no locations at all.
+    // If the user already has locations (even if stationMode isn't set), let them
+    // use the page normally — they can launch the wizard manually if needed.
+    if (locations.length === 0) {
       setShowWizard(true);
     }
-  }, [stationModeLoading, isLoading, locations, stationMode]);
+  }, [stationModeLoading, isLoading, locations]);
 
   const { stations, rooms } = groupLocations(
     locations.filter(l =>
@@ -982,7 +997,12 @@ export default function LocationsPage() {
         <LocationSetupWizard
           existingMode={stationMode}
           existingStations={groupLocations(locations).stations}
+          onDismiss={() => {
+            wizardDismissedRef.current = true;
+            setShowWizard(false);
+          }}
           onComplete={() => {
+            wizardDismissedRef.current = true;
             setShowWizard(false);
             loadLocations();
             // Reload station mode from settings in case it changed
@@ -1013,7 +1033,34 @@ export default function LocationsPage() {
             Change
           </button>
           <button
-            onClick={() => setShowWizard(true)}
+            onClick={() => { wizardDismissedRef.current = false; setShowWizard(true); }}
+            className="text-theme-text-muted hover:text-theme-text-secondary underline"
+          >
+            Run Setup Wizard
+          </button>
+        </div>
+      )}
+
+      {/* Station mode not set but locations exist — let user set mode or launch wizard */}
+      {!stationModeLoading && stationMode === null && locations.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-yellow-500/10 text-yellow-500 rounded-full">
+            <HelpCircle className="w-3.5 h-3.5" /> Station mode not configured
+          </span>
+          <button
+            onClick={() => handleSetStationMode('single_station')}
+            className="text-theme-text-muted hover:text-theme-text-secondary underline"
+          >
+            Set Single-Station
+          </button>
+          <button
+            onClick={() => handleSetStationMode('multi_station')}
+            className="text-theme-text-muted hover:text-theme-text-secondary underline"
+          >
+            Set Multi-Station
+          </button>
+          <button
+            onClick={() => { wizardDismissedRef.current = false; setShowWizard(true); }}
             className="text-theme-text-muted hover:text-theme-text-secondary underline"
           >
             Run Setup Wizard
