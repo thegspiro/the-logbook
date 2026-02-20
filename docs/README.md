@@ -12,9 +12,9 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 1. **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** ⭐ **START HERE**
    - Comprehensive troubleshooting guide for common issues
-   - Step-by-step solutions for onboarding, SMTP, network, and database issues
+   - Step-by-step solutions for onboarding, SMTP, network, database, and member management issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-16 with database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, plus theme support, dashboard redesign, election fixes
+   - **Updated**: 2026-02-20 with member deletion, JavaScript runtime error fixes, member profile crash, badge number enforcement, dashboard zero-member fix, login 500 error, scheduling improvements, mobile optimization, accessibility, taxonomy refactor
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application
