@@ -55,7 +55,7 @@ router = APIRouter()
 async def list_pipelines(
     include_templates: bool = Query(True, description="Include template pipelines"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     List all membership pipelines for the organization.
@@ -88,7 +88,7 @@ async def list_pipelines(
 async def create_pipeline(
     data: PipelineCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Create a new membership pipeline.
@@ -119,7 +119,7 @@ async def create_pipeline(
 async def get_pipeline(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     Get a single pipeline with its steps.
@@ -138,7 +138,7 @@ async def update_pipeline(
     pipeline_id: UUID,
     data: PipelineUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Update a pipeline's properties.
@@ -160,7 +160,7 @@ async def update_pipeline(
 async def delete_pipeline(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Delete a pipeline.
@@ -178,7 +178,7 @@ async def duplicate_pipeline(
     pipeline_id: UUID,
     name: str = Query(..., description="Name for the duplicated pipeline"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Duplicate a pipeline (useful for creating from templates).
@@ -201,7 +201,7 @@ async def duplicate_pipeline(
 async def seed_templates(
     pipeline_id: str = "default",
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Seed default pipeline templates for the organization.
@@ -221,7 +221,7 @@ async def seed_templates(
 async def list_steps(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     List all steps for a pipeline.
@@ -240,7 +240,7 @@ async def add_step(
     pipeline_id: UUID,
     data: PipelineStepCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Add a step to a pipeline.
@@ -264,7 +264,7 @@ async def update_step(
     step_id: UUID,
     data: PipelineStepUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Update a pipeline step.
@@ -288,7 +288,7 @@ async def delete_step(
     pipeline_id: UUID,
     step_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Remove a step from a pipeline.
@@ -308,7 +308,7 @@ async def reorder_steps(
     pipeline_id: UUID,
     data: StepReorderRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Reorder steps in a pipeline by providing an ordered list of step IDs.
@@ -334,7 +334,7 @@ async def reorder_steps(
 async def get_kanban_board(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     Get the kanban board view for a pipeline.
@@ -358,7 +358,7 @@ async def get_kanban_board(
 async def get_pipeline_stats(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     Get statistics for a pipeline (counts by status, by step, conversion rate).
@@ -381,7 +381,7 @@ async def purge_inactive_prospects(
     pipeline_id: UUID,
     data: PurgeInactiveRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Purge withdrawn/inactive prospects from a pipeline.
@@ -422,7 +422,7 @@ async def list_prospects(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     List prospective members with optional filters.
@@ -463,7 +463,7 @@ async def check_existing_members_for_prospect(
     first_name: Optional[str] = Query(None, description="First name for name matching"),
     last_name: Optional[str] = Query(None, description="Last name for name matching"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.create")),
+    current_user: User = Depends(require_permission("members.create", "prospective_members.manage")),
 ):
     """
     Check if a prospective member matches any existing users in the organization.
@@ -493,7 +493,7 @@ async def check_existing_members_for_prospect(
 async def create_prospect(
     data: ProspectCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.create")),
+    current_user: User = Depends(require_permission("members.create", "prospective_members.manage")),
 ):
     """
     Add a new prospective member manually.
@@ -550,7 +550,7 @@ async def create_prospect(
 async def get_prospect(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     Get a prospective member's full details including step progress.
@@ -569,7 +569,7 @@ async def update_prospect(
     prospect_id: UUID,
     data: ProspectUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Update a prospective member's information.
@@ -593,7 +593,7 @@ async def complete_step(
     prospect_id: UUID,
     data: CompleteStepRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Mark a pipeline step as completed for a prospect.
@@ -622,7 +622,7 @@ async def advance_prospect(
     prospect_id: UUID,
     data: AdvanceProspectRequest = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Advance a prospect to the next step in the pipeline.
@@ -646,7 +646,7 @@ async def transfer_prospect(
     prospect_id: UUID,
     data: TransferProspectRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Transfer a prospect to full membership (creates a User record).
@@ -676,7 +676,7 @@ async def get_prospect_activity(
     prospect_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     Get the activity log for a prospect.
@@ -710,7 +710,7 @@ async def get_prospect_activity(
 async def list_prospect_documents(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     List all documents for a prospect.
@@ -736,7 +736,7 @@ async def add_prospect_document(
     mime_type: Optional[str] = Query(None, description="MIME type of the file"),
     step_id: Optional[UUID] = Query(None, description="Associated pipeline step"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Add a document record for a prospect.
@@ -771,7 +771,7 @@ async def delete_prospect_document(
     prospect_id: UUID,
     document_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Delete a prospect document.
@@ -797,7 +797,7 @@ async def delete_prospect_document(
 async def get_election_package(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     Get the election package for a prospect.
@@ -820,7 +820,7 @@ async def create_election_package(
     prospect_id: UUID,
     data: ElectionPackageCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Create an election package for a prospect.
@@ -850,7 +850,7 @@ async def update_election_package(
     prospect_id: UUID,
     data: ElectionPackageUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
 ):
     """
     Update an election package for a prospect.
@@ -874,7 +874,7 @@ async def list_election_packages(
     pipeline_id: Optional[UUID] = Query(None, description="Filter by pipeline"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view")),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
 ):
     """
     List election packages across all prospects, optionally filtered.

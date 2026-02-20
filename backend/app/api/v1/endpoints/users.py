@@ -204,7 +204,7 @@ async def create_member(
         # Verify all role IDs exist and belong to the organization
         result = await db.execute(
             select(Role)
-            .where(Role.id.in_(user_data.role_ids))
+            .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
@@ -407,7 +407,7 @@ async def assign_user_roles(
     if role_assignment.role_ids:
         result = await db.execute(
             select(Role)
-            .where(Role.id.in_(role_assignment.role_ids))
+            .where(Role.id.in_([str(rid) for rid in role_assignment.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
@@ -687,9 +687,9 @@ async def update_contact_info(
     """
     # Check if user is updating their own profile or has admin permissions
     if current_user.id != user_id:
-        # Admins with users.update or members.manage can update other users
+        # Admins with users.edit or members.manage can update other users
         user_perms = _collect_user_permissions(current_user)
-        if not _has_permission("users.update", user_perms) and not _has_permission("members.manage", user_perms):
+        if not _has_permission("users.edit", user_perms) and not _has_permission("members.manage", user_perms):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only update your own contact information"
@@ -772,7 +772,7 @@ async def update_user_profile(
     """
     Update user profile information (name, address, emergency contacts, etc.)
 
-    Users can update their own profile. Admins with users.update or members.manage
+    Users can update their own profile. Admins with users.edit or members.manage
     permission can update any user's profile.
 
     **Authentication required**
@@ -781,7 +781,7 @@ async def update_user_profile(
     is_self = str(current_user.id) == str(user_id)
     if not is_self:
         user_perms = _collect_user_permissions(current_user)
-        if not _has_permission("users.update", user_perms) and not _has_permission("members.manage", user_perms):
+        if not _has_permission("users.edit", user_perms) and not _has_permission("members.manage", user_perms):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to update this user's profile"
