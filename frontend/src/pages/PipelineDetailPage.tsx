@@ -149,9 +149,9 @@ const EnrollModal: React.FC<{
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
       <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full">
-        <div className="p-6 border-b border-theme-surface-border">
-          <h2 className="text-xl font-bold text-theme-text-primary">Enroll Members</h2>
-          <p className="text-theme-text-muted text-sm mt-1">Enroll members into {programName}</p>
+        <div className="p-6 border-b border-gray-700">
+          <h2 className="text-xl font-bold text-white">Enroll Members</h2>
+          <p className="text-gray-300 text-sm mt-1">Enroll members into {programName}</p>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>

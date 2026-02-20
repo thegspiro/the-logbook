@@ -172,16 +172,27 @@ setup_repository() {
     fi
 
     if [ ! -d "$INSTALL_DIR" ]; then
+        # Directory doesn't exist - clone fresh
         print_info "Cloning repository..."
         mkdir -p "$(dirname "$INSTALL_DIR")"
         git clone "$REPO_URL" "$INSTALL_DIR"
         print_success "Repository cloned"
-    else
+    elif [ -d "$INSTALL_DIR/.git" ]; then
+        # Directory exists and is a git repo - update it
         print_info "Updating existing repository..."
         cd "$INSTALL_DIR"
         git fetch origin
         git pull origin main || git pull origin master || print_warning "Could not update from git"
         print_success "Repository updated"
+    else
+        # Directory exists but is NOT a git repo - back it up and clone fresh
+        print_warning "Directory exists but is not a git repository"
+        print_info "Backing up existing directory..."
+        mv "$INSTALL_DIR" "${INSTALL_DIR}.old.$(date +%Y%m%d_%H%M%S)"
+        print_info "Cloning repository..."
+        mkdir -p "$(dirname "$INSTALL_DIR")"
+        git clone "$REPO_URL" "$INSTALL_DIR"
+        print_success "Repository cloned (previous directory backed up)"
     fi
 }
 

@@ -4,6 +4,7 @@ Users API Endpoints
 Endpoints for user management and listing.
 """
 
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from loguru import logger
@@ -118,6 +119,20 @@ async def create_member(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already exists"
         )
+
+    # Check if badge number already exists in the organization
+    if user_data.badge_number:
+        result = await db.execute(
+            select(User)
+            .where(User.badge_number == user_data.badge_number)
+            .where(User.organization_id == str(current_user.organization_id))
+            .where(User.deleted_at.is_(None))
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member with this Department ID / badge number already exists"
+            )
 
     # Check if email already exists (including archived members)
     result = await db.execute(
@@ -741,6 +756,21 @@ async def update_user_profile(
     # Update only provided fields
     update_data = profile_update.model_dump(exclude_unset=True)
 
+    # Check badge_number uniqueness within the organization
+    if "badge_number" in update_data and update_data["badge_number"]:
+        existing = await db.execute(
+            select(User)
+            .where(User.badge_number == update_data["badge_number"])
+            .where(User.organization_id == str(current_user.organization_id))
+            .where(User.id != str(user_id))
+            .where(User.deleted_at.is_(None))
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member with this Department ID / badge number already exists"
+            )
+
     # Rank changes restricted to Chief / membership coordinator
     if "rank" in update_data:
         user_perms = _collect_user_permissions(current_user)
@@ -776,3 +806,54 @@ async def update_user_profile(
     )
 
     return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Soft-delete a member by setting their deleted_at timestamp.
+
+    Requires `members.manage` permission.
+
+    **Authentication required**
+    """
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account",
+        )
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    user.deleted_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="user_deleted",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "deleted_user_id": str(user_id),
+            "deleted_username": user.username,
+            "deleted_full_name": user.full_name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )

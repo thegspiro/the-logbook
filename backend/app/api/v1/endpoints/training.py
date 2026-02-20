@@ -43,6 +43,7 @@ from app.schemas.training import (
     UserTrainingStats,
     TrainingReport,
     RequirementProgress,
+    HistoricalImportConfirmRequest,
 )
 from app.services.training_service import TrainingService
 from app.api.dependencies import get_current_user, require_permission
@@ -897,6 +898,431 @@ async def enroll_member_in_program(
 
 
 # ============================================
+# Historical Training Import (CSV)
+# ============================================
+
+@router.post("/import/parse")
+async def parse_historical_import(
+    file: UploadFile = File(...),
+    match_by: str = Query("badge_number", pattern=r'^(email|badge_number)$',
+                          description="How to match CSV rows to members: badge_number or email"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Parse a CSV file of historical training records and return a preview.
+
+    Matches members using the strategy specified by `match_by`:
+    - **badge_number**: Match by badge/employee number (default, most reliable)
+    - **email**: Match by email address (checks both primary and personal email)
+
+    Also matches courses by name/code.
+    Returns parsed rows with match status so the user can review
+    and map unmatched courses before confirming the import.
+
+    **Requires permission: training.manage**
+    """
+    import csv
+    import io
+
+    if not file.filename or not file.filename.lower().endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are accepted")
+
+    # Read and decode CSV
+    try:
+        contents = await file.read()
+        decoded = contents.decode('utf-8-sig')  # Handle BOM
+    except UnicodeDecodeError:
+        try:
+            decoded = contents.decode('latin-1')
+        except Exception:
+            raise HTTPException(status_code=400, detail="Unable to decode file. Please use UTF-8 encoding.")
+
+    reader = csv.DictReader(io.StringIO(decoded))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV file has no headers")
+
+    column_headers = list(reader.fieldnames)
+
+    # Normalize header lookup: lowercase stripped
+    header_map = {h.strip().lower().replace(' ', '_'): h for h in column_headers}
+
+    # Determine which CSV columns map to which fields
+    def find_col(candidates: list[str]) -> str | None:
+        for c in candidates:
+            if c in header_map:
+                return header_map[c]
+        return None
+
+    col_email = find_col(['email', 'member_email', 'user_email', 'e-mail', 'e_mail'])
+    col_badge = find_col(['badge_number', 'badge', 'badge_no', 'employee_id', 'employee_number', 'member_id', 'id_number'])
+    col_name = find_col(['name', 'member_name', 'full_name', 'member', 'employee_name'])
+    col_course = find_col(['course_name', 'course', 'training', 'training_name', 'class', 'class_name'])
+    col_course_code = find_col(['course_code', 'code', 'class_code'])
+    col_type = find_col(['training_type', 'type', 'category'])
+    col_date = find_col(['completion_date', 'date_completed', 'date', 'completed', 'completed_date'])
+    col_expiration = find_col(['expiration_date', 'expires', 'expiry', 'expiry_date', 'cert_expiration'])
+    col_hours = find_col(['hours_completed', 'hours', 'duration', 'credit_hours', 'total_hours'])
+    col_credit = find_col(['credit_hours', 'credits', 'ceu', 'ce_hours'])
+    col_cert = find_col(['certification_number', 'cert_number', 'cert_no', 'certificate'])
+    col_agency = find_col(['issuing_agency', 'agency', 'issuer', 'issued_by'])
+    col_instructor = find_col(['instructor', 'trainer', 'taught_by'])
+    col_location = find_col(['location', 'venue', 'training_location', 'site'])
+    col_score = find_col(['score', 'grade', 'test_score'])
+    col_passed = find_col(['passed', 'pass', 'pass_fail', 'result'])
+    col_notes = find_col(['notes', 'comments', 'remarks', 'description'])
+
+    # Validate required columns based on match strategy
+    if match_by == "email" and not col_email:
+        raise HTTPException(
+            status_code=400,
+            detail="CSV must contain an 'email' column for email matching. "
+                   f"Found columns: {', '.join(column_headers)}"
+        )
+    if match_by == "badge_number" and not col_badge:
+        raise HTTPException(
+            status_code=400,
+            detail="CSV must contain a 'badge_number' column for badge matching. "
+                   f"Found columns: {', '.join(column_headers)}"
+        )
+    if not col_course:
+        raise HTTPException(
+            status_code=400,
+            detail="CSV must contain a 'course_name' or 'course' column. "
+                   f"Found columns: {', '.join(column_headers)}"
+        )
+
+    # Pre-load org members and build lookup maps
+    members_result = await db.execute(
+        select(User)
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.status != "archived")
+    )
+    members = members_result.scalars().all()
+
+    email_to_user = {}
+    badge_to_user = {}
+
+    for m in members:
+        if m.email:
+            email_to_user[m.email.strip().lower()] = m
+        if hasattr(m, 'personal_email') and m.personal_email:
+            email_to_user[m.personal_email.strip().lower()] = m
+        if hasattr(m, 'badge_number') and m.badge_number:
+            badge_to_user[m.badge_number.strip().lower()] = m
+
+    # Pre-load existing courses
+    courses_result = await db.execute(
+        select(TrainingCourse)
+        .where(TrainingCourse.organization_id == current_user.organization_id)
+        .where(TrainingCourse.active == True)
+    )
+    courses = courses_result.scalars().all()
+    course_name_map = {c.name.strip().lower(): c for c in courses}
+    course_code_map = {c.code.strip().lower(): c for c in courses if c.code}
+
+    # Parse rows
+    rows = []
+    parse_errors = []
+    unmatched_course_counts = {}
+    members_matched_set = set()
+    members_unmatched_set = set()
+    row_num = 0
+
+    for raw_row in reader:
+        row_num += 1
+        row_errors = []
+
+        # Extract match fields
+        email_val = (raw_row.get(col_email) or '').strip().lower() if col_email else ''
+        badge_val = (raw_row.get(col_badge) or '').strip().lower() if col_badge else ''
+
+        # Extract name for display (optional column)
+        name_val = (raw_row.get(col_name) or '').strip() if col_name else ''
+
+        # Validate required match field
+        match_key = ''
+        if match_by == "email":
+            match_key = email_val
+            if not match_key:
+                row_errors.append("Missing email")
+        elif match_by == "badge_number":
+            match_key = badge_val
+            if not match_key:
+                row_errors.append("Missing badge number")
+
+        course_val = (raw_row.get(col_course) or '').strip()
+        if not course_val:
+            row_errors.append("Missing course name")
+
+        # Match member by selected strategy
+        user_id = None
+        matched_name = None
+        member_matched = False
+
+        def try_match(lookup: dict, key: str) -> bool:
+            nonlocal user_id, matched_name, member_matched
+            if key and key in lookup:
+                user = lookup[key]
+                user_id = str(user.id)
+                matched_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+                member_matched = True
+                return True
+            return False
+
+        if match_by == "email":
+            try_match(email_to_user, email_val)
+        elif match_by == "badge_number":
+            try_match(badge_to_user, badge_val)
+
+        if member_matched:
+            members_matched_set.add(match_key)
+        elif match_key:
+            members_unmatched_set.add(match_key)
+
+        # Match course
+        course_matched = False
+        matched_course_id = None
+        course_code_val = (raw_row.get(col_course_code) or '').strip() if col_course_code else None
+        course_lower = course_val.lower()
+
+        if course_code_val and course_code_val.lower() in course_code_map:
+            course_matched = True
+            matched_course_id = str(course_code_map[course_code_val.lower()].id)
+        elif course_lower in course_name_map:
+            course_matched = True
+            matched_course_id = str(course_name_map[course_lower].id)
+
+        if not course_matched and course_val:
+            key = course_val.lower()
+            if key not in unmatched_course_counts:
+                unmatched_course_counts[key] = {"name": course_val, "code": course_code_val, "count": 0}
+            unmatched_course_counts[key]["count"] += 1
+
+        # Parse date fields
+        def parse_date(val: str | None) -> date | None:
+            if not val:
+                return None
+            val = val.strip()
+            for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m-%d-%Y', '%d/%m/%Y', '%m/%d/%y', '%Y/%m/%d'):
+                try:
+                    return datetime.strptime(val, fmt).date()
+                except ValueError:
+                    continue
+            row_errors.append(f"Invalid date format: {val}")
+            return None
+
+        completion = parse_date(raw_row.get(col_date) if col_date else None)
+        expiration = parse_date(raw_row.get(col_expiration) if col_expiration else None)
+
+        # Parse numeric fields
+        def parse_float(val: str | None) -> float | None:
+            if not val or not val.strip():
+                return None
+            try:
+                return float(val.strip())
+            except ValueError:
+                row_errors.append(f"Invalid number: {val}")
+                return None
+
+        hours = parse_float(raw_row.get(col_hours) if col_hours else None)
+        credit = parse_float(raw_row.get(col_credit) if col_credit else None)
+        score = parse_float(raw_row.get(col_score) if col_score else None)
+
+        # Parse passed
+        passed_val = None
+        if col_passed:
+            pv = (raw_row.get(col_passed) or '').strip().lower()
+            if pv in ('true', 'yes', 'pass', 'passed', 'y', '1'):
+                passed_val = True
+            elif pv in ('false', 'no', 'fail', 'failed', 'n', '0'):
+                passed_val = False
+
+        from app.schemas.training import HistoricalImportParsedRow
+        rows.append(HistoricalImportParsedRow(
+            row_number=row_num,
+            email=email_val or None,
+            badge_number=badge_val or None,
+            member_name=name_val or None,
+            user_id=user_id,
+            matched_member_name=matched_name,
+            member_matched=member_matched,
+            course_name=course_val,
+            course_code=course_code_val,
+            course_matched=course_matched,
+            matched_course_id=matched_course_id,
+            training_type=(raw_row.get(col_type) or '').strip() if col_type else None,
+            completion_date=completion,
+            expiration_date=expiration,
+            hours_completed=hours,
+            credit_hours=credit,
+            certification_number=(raw_row.get(col_cert) or '').strip() if col_cert else None,
+            issuing_agency=(raw_row.get(col_agency) or '').strip() if col_agency else None,
+            instructor=(raw_row.get(col_instructor) or '').strip() if col_instructor else None,
+            location=(raw_row.get(col_location) or '').strip() if col_location else None,
+            score=score,
+            passed=passed_val,
+            notes=(raw_row.get(col_notes) or '').strip() if col_notes else None,
+            errors=row_errors,
+        ))
+
+        if row_errors:
+            for e in row_errors:
+                parse_errors.append(f"Row {row_num}: {e}")
+
+    from app.schemas.training import UnmatchedCourse, HistoricalImportParseResponse
+    unmatched_courses = [
+        UnmatchedCourse(
+            csv_course_name=v["name"],
+            csv_course_code=v["code"],
+            occurrences=v["count"],
+        )
+        for v in sorted(unmatched_course_counts.values(), key=lambda x: -x["count"])
+    ]
+
+    return HistoricalImportParseResponse(
+        total_rows=row_num,
+        valid_rows=sum(1 for r in rows if not r.errors and r.member_matched),
+        members_matched=len(members_matched_set),
+        members_unmatched=len(members_unmatched_set),
+        courses_matched=sum(1 for r in rows if r.course_matched),
+        unmatched_courses=unmatched_courses,
+        column_headers=column_headers,
+        rows=rows,
+        parse_errors=parse_errors[:50],
+    )
+
+
+@router.post("/import/confirm")
+async def confirm_historical_import(
+    request: HistoricalImportConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Confirm and execute a historical training import.
+
+    Takes the parsed rows (possibly with updated course mappings) and creates
+    TrainingRecord entries for each valid, matched row.
+
+    **Requires permission: training.manage**
+    """
+    from app.schemas.training import HistoricalImportResult
+
+    # Build course mapping lookup: csv_course_name_lower -> (action, course_id, training_type)
+    course_map = {}
+    for mapping in request.course_mappings:
+        course_map[mapping.csv_course_name.lower()] = mapping
+
+    # Auto-create courses where action == create_new
+    created_courses = {}
+    for mapping in request.course_mappings:
+        if mapping.action == "create_new":
+            t_type = mapping.new_training_type or request.default_training_type
+            new_course = TrainingCourse(
+                organization_id=current_user.organization_id,
+                name=mapping.csv_course_name,
+                training_type=t_type,
+                duration_hours=0,
+                active=True,
+                created_by=current_user.id,
+            )
+            db.add(new_course)
+            await db.flush()
+            created_courses[mapping.csv_course_name.lower()] = str(new_course.id)
+
+    imported = 0
+    skipped = 0
+    failed = 0
+    errors = []
+
+    for row in request.rows:
+        # Skip rows without matched member
+        if not row.user_id:
+            skipped += 1
+            continue
+
+        # Determine course_id and course_name
+        course_id = row.matched_course_id
+        course_name = row.course_name
+        training_type = row.training_type or request.default_training_type
+
+        if not row.course_matched:
+            mapping = course_map.get(row.course_name.lower())
+            if mapping:
+                if mapping.action == "skip":
+                    skipped += 1
+                    continue
+                elif mapping.action == "map_existing":
+                    course_id = mapping.existing_course_id
+                elif mapping.action == "create_new":
+                    course_id = created_courses.get(row.course_name.lower())
+                    if mapping.new_training_type:
+                        training_type = mapping.new_training_type
+            # If no mapping provided, still import with course_name only (no course_id)
+
+        # Validate training type
+        valid_types = {'certification', 'continuing_education', 'skills_practice',
+                       'orientation', 'refresher', 'specialty'}
+        if training_type not in valid_types:
+            training_type = request.default_training_type
+
+        try:
+            record = TrainingRecord(
+                organization_id=current_user.organization_id,
+                user_id=row.user_id,
+                course_id=course_id,
+                course_name=course_name,
+                course_code=row.course_code,
+                training_type=training_type,
+                completion_date=row.completion_date,
+                expiration_date=row.expiration_date,
+                hours_completed=row.hours_completed or 0,
+                credit_hours=row.credit_hours,
+                certification_number=row.certification_number,
+                issuing_agency=row.issuing_agency,
+                status=request.default_status,
+                score=row.score,
+                passed=row.passed,
+                instructor=row.instructor,
+                location=row.location,
+                notes=row.notes or "Imported from historical CSV",
+                created_by=current_user.id,
+            )
+            db.add(record)
+            await db.flush()
+            imported += 1
+        except Exception as e:
+            failed += 1
+            errors.append(f"Row {row.row_number}: {str(e)[:100]}")
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="historical_training_imported",
+        event_category="training",
+        severity="info",
+        event_data={
+            "total": len(request.rows),
+            "imported": imported,
+            "skipped": skipped,
+            "failed": failed,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return HistoricalImportResult(
+        total=len(request.rows),
+        imported=imported,
+        skipped=skipped,
+        failed=failed,
+        errors=errors[:20],
+    )
+
+
+# ============================================
 # Compliance Matrix
 # ============================================
 
@@ -927,8 +1353,9 @@ def _get_requirement_date_window(req, today: date):
     if freq == "one_time":
         return None, None
     elif freq == "biannual":
-        base_year = req.year if req.year else current_year
-        return date(base_year - 1, 1, 1), date(base_year, 12, 31)
+        # Biannual: no date window — compliance is based on having a
+        # non-expired certification (checked in _evaluate_member_requirement)
+        return None, None
     elif freq == "quarterly":
         quarter_month = ((today.month - 1) // 3) * 3 + 1
         start_date = date(current_year, quarter_month, 1)
@@ -963,6 +1390,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
     - Others:         Match by training_type or name
     """
     req_type = req.requirement_type.value if hasattr(req.requirement_type, 'value') else str(req.requirement_type)
+    freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
     start_date, end_date = _get_requirement_date_window(req, today)
 
     # Filter completed records within the date window
@@ -991,6 +1419,17 @@ def _evaluate_member_requirement(req, member_records, today: date):
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
         latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
 
+        # For biannual requirements, check if the latest matching record with
+        # an expiration date has expired — an expired cert overrides hours met.
+        if freq == "biannual" and type_matched:
+            with_exp = [r for r in type_matched if r.expiration_date]
+            if with_exp:
+                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
+                if newest_cert.expiration_date < today:
+                    exp_comp = newest_cert.completion_date.isoformat() if newest_cert.completion_date else latest_comp
+                    exp_exp = newest_cert.expiration_date.isoformat()
+                    return "expired", exp_comp, exp_exp
+
         if required > 0 and total_hours >= required:
             return "completed", latest_comp, latest_exp
         elif total_hours > 0:
@@ -1010,6 +1449,16 @@ def _evaluate_member_requirement(req, member_records, today: date):
         latest = max(windowed, key=lambda r: r.completion_date or date.min) if windowed else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
         latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
+
+        # For biannual requirements, expired cert overrides course completion
+        if freq == "biannual" and windowed:
+            with_exp = [r for r in windowed if r.expiration_date]
+            if with_exp:
+                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
+                if newest_cert.expiration_date < today:
+                    exp_comp = newest_cert.completion_date.isoformat() if newest_cert.completion_date else latest_comp
+                    exp_exp = newest_cert.expiration_date.isoformat()
+                    return "expired", exp_comp, exp_exp
 
         if matched_count >= len(course_ids):
             return "completed", latest_comp, latest_exp

@@ -115,7 +115,7 @@ const LocationKioskPage: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-500 mb-6" />
-          <p className="text-xl text-slate-300">Loading display...</p>
+          <p className="text-xl text-white">Loading display...</p>
         </div>
       </div>
     );
@@ -126,9 +126,9 @@ const LocationKioskPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-8">
         <div className="text-center max-w-md">
-          <MapPin className="w-16 h-16 text-slate-400 mx-auto mb-6" />
-          <h1 className="text-2xl font-bold text-slate-300 mb-4">Display Unavailable</h1>
-          <p className="text-slate-300">{error}</p>
+          <MapPin className="w-16 h-16 text-slate-500 mx-auto mb-6" />
+          <h1 className="text-2xl font-bold text-white mb-4">Display Unavailable</h1>
+          <p className="text-slate-200">{error}</p>
         </div>
       </div>
     );
@@ -154,7 +154,7 @@ const LocationKioskPage: React.FC = () => {
           ) : (
             <WifiOff className="w-5 h-5 text-red-400 animate-pulse" />
           )}
-          <span className="text-lg text-slate-300 font-mono">
+          <span className="text-lg text-slate-100 font-mono">
             {currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
           </span>
         </div>
@@ -186,11 +186,11 @@ const LocationKioskPage: React.FC = () => {
               </div>
               <h2 className="text-4xl font-bold text-white mb-3">{currentEvent.event_name}</h2>
               {currentEvent.event_type && (
-                <p className="text-lg text-slate-300 capitalize mb-2">
+                <p className="text-lg text-slate-200 capitalize mb-2">
                   {currentEvent.event_type.replace('_', ' ')}
                 </p>
               )}
-              <p className="text-xl text-slate-300">
+              <p className="text-xl text-slate-100">
                 {formatDate(currentEvent.start_datetime)} &middot;{' '}
                 {formatTime(currentEvent.start_datetime)} &ndash; {formatTime(currentEvent.end_datetime)}
               </p>
@@ -209,10 +209,10 @@ const LocationKioskPage: React.FC = () => {
             </div>
 
             {/* Instructions */}
-            <p className="text-xl text-slate-300 font-medium">
+            <p className="text-xl text-slate-100 font-medium">
               Scan with your phone to check in
             </p>
-            <p className="text-sm text-slate-300 mt-2">
+            <p className="text-sm text-slate-400 mt-2">
               You will be prompted to log in if needed
             </p>
           </div>
@@ -222,7 +222,7 @@ const LocationKioskPage: React.FC = () => {
             <div className="w-24 h-24 mx-auto mb-8 rounded-full bg-slate-800 flex items-center justify-center">
               <MapPin className="w-12 h-12 text-slate-600" />
             </div>
-            <h2 className="text-3xl font-bold text-slate-300 mb-4">No Active Events</h2>
+            <h2 className="text-3xl font-bold text-slate-200 mb-4">No Active Events</h2>
             <p className="text-lg text-slate-300">
               QR codes will appear here automatically when an event is scheduled in this room.
             </p>
@@ -232,7 +232,7 @@ const LocationKioskPage: React.FC = () => {
 
       {/* Footer */}
       <div className="px-8 py-3 bg-black/20 text-center">
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-slate-500">
           Display refreshes automatically &middot; {data.location_name}
         </p>
       </div>

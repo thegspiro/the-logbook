@@ -256,7 +256,21 @@ const SubmissionForm: React.FC<{
             type="datetime-local"
             step="900"
             value={startDatetime}
-            onChange={(e) => setStartDatetime(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setStartDatetime(val);
+              // Auto-populate end datetime to start + 1 hour if end is empty or before new start
+              if (val) {
+                const startMs = new Date(val).getTime();
+                const endMs = startMs + 60 * 60 * 1000; // +1 hour
+                const endDt = new Date(endMs);
+                const pad = (n: number) => String(n).padStart(2, '0');
+                const autoEnd = `${endDt.getFullYear()}-${pad(endDt.getMonth() + 1)}-${pad(endDt.getDate())}T${pad(endDt.getHours())}:${pad(endDt.getMinutes())}`;
+                if (!endDatetime || new Date(endDatetime).getTime() <= startMs) {
+                  setEndDatetime(autoEnd);
+                }
+              }
+            }}
             className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             required
           />

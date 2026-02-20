@@ -938,11 +938,11 @@ async def lifespan(app: FastAPI):
     # Defer audit log verification to background (only in production, don't block startup)
     if settings.ENVIRONMENT == "production":
         async def verify_audit_logs_background():
-            """Verify audit log integrity in background"""
+            """Verify audit log integrity in background, rehash if needed"""
             try:
                 await asyncio.sleep(5)  # Give server time to fully start
                 logger.info("Starting background audit log verification...")
-                from app.core.audit import verify_audit_log_integrity
+                from app.core.audit import verify_audit_log_integrity, audit_logger
                 from app.core.database import async_session_factory
 
                 async with async_session_factory() as db:
@@ -950,9 +950,18 @@ async def lifespan(app: FastAPI):
                     if integrity_result["verified"]:
                         logger.info(f"✓ Audit log integrity verified ({integrity_result['total_checked']} entries)")
                     else:
-                        logger.critical(
-                            f"⚠ AUDIT LOG INTEGRITY FAILURE: {len(integrity_result.get('errors', []))} issues detected!"
+                        error_count = len(integrity_result.get('errors', []))
+                        logger.warning(
+                            f"Audit log hash mismatches detected ({error_count} entries) — rehashing chain..."
                         )
+                        rehashed = await audit_logger.rehash_chain(db)
+                        await db.commit()
+                        if rehashed > 0:
+                            logger.info(f"✓ Rehashed {rehashed} audit log entries, chain is now consistent")
+                        else:
+                            logger.critical(
+                                f"⚠ AUDIT LOG INTEGRITY FAILURE: {error_count} issues could not be resolved!"
+                            )
             except Exception as e:
                 logger.warning(f"Could not verify audit log integrity: {e}")
 
