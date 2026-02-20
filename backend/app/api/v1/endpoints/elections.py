@@ -778,7 +778,7 @@ async def update_candidate(
     result = await db.execute(
         select(Candidate)
         .where(Candidate.id == str(candidate_id))
-        .where(Candidate.election_id == election_id)
+        .where(Candidate.election_id == str(election_id))
     )
     candidate = result.scalar_one_or_none()
 
@@ -817,7 +817,7 @@ async def delete_candidate(
     result = await db.execute(
         select(Candidate)
         .where(Candidate.id == str(candidate_id))
-        .where(Candidate.election_id == election_id)
+        .where(Candidate.election_id == str(election_id))
     )
     candidate = result.scalar_one_or_none()
 

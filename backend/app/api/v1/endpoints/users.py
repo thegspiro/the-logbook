@@ -686,7 +686,7 @@ async def update_contact_info(
     **Authentication required**
     """
     # Check if user is updating their own profile or has admin permissions
-    if current_user.id != user_id:
+    if current_user.id != str(user_id):
         # Admins with users.edit or members.manage can update other users
         user_perms = _collect_user_permissions(current_user)
         if not _has_permission("users.edit", user_perms) and not _has_permission("members.manage", user_perms):
