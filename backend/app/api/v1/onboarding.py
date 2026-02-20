@@ -1730,10 +1730,10 @@ async def reset_onboarding(
             OnboardingStatus.__table__.delete()
         )
 
-        # 4. Delete user_roles associations (if table exists)
+        # 4. Delete user_positions associations (junction table for user-role/position mapping)
         try:
             from sqlalchemy import text
-            await db.execute(text("DELETE FROM user_roles"))
+            await db.execute(text("DELETE FROM user_positions"))
         except Exception:
             pass  # Table might not exist yet
 

@@ -263,7 +263,7 @@ const Members: React.FC = () => {
         {/* Members Table */}
         {loading ? (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
             <p className="text-theme-text-secondary">Loading members...</p>
           </div>
         ) : filteredMembers.length === 0 ? (
@@ -396,7 +396,7 @@ const Members: React.FC = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/10">
+                <tbody className="divide-y divide-theme-surface-border">
                   {filteredMembers.map((member) => (
                     <tr key={member.id} className="hover:bg-theme-surface-secondary transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">

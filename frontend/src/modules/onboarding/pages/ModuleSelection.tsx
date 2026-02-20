@@ -165,6 +165,9 @@ const ModuleSelection: React.FC = () => {
         <div
           className={`p-4 ${module.canDisable ? 'cursor-pointer' : 'cursor-default'}`}
           onClick={() => module.canDisable && toggleModule(module.id)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleModule(module.id); } }}
         >
           <div className="flex items-start space-x-4">
             {/* Selection Indicator */}

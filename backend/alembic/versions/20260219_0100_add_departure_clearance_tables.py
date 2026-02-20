@@ -84,5 +84,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("departure_clearance_items")
     op.drop_table("departure_clearances")
-    op.execute("DROP TYPE IF EXISTS clearancestatus")
-    op.execute("DROP TYPE IF EXISTS clearancelinedisposition")
+    # PostgreSQL uses standalone enum types; MySQL inlines them — skip on MySQL
+    try:
+        op.execute("DROP TYPE IF EXISTS clearancestatus")
+        op.execute("DROP TYPE IF EXISTS clearancelinedisposition")
+    except Exception:
+        pass  # MySQL has no standalone enum types

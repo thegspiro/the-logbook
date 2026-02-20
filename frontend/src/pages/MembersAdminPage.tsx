@@ -324,10 +324,10 @@ export const MembersAdminPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
             <div className="flex">
               <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
+                <p className="text-sm text-red-400">{error}</p>
               </div>
             </div>
           </div>
@@ -370,8 +370,8 @@ export const MembersAdminPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <p className="text-sm text-red-400">{error}</p>
         </div>
       )}
 

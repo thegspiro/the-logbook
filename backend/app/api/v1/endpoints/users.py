@@ -262,21 +262,28 @@ async def create_member(
         org_name = organization.name if organization else "The Logbook"
         login_url = f"{settings.FRONTEND_URL}/login" if hasattr(settings, 'FRONTEND_URL') and settings.FRONTEND_URL else "/login"
 
+        # Capture scalar values before they expire after the response returns
+        welcome_email = new_user.email
+        welcome_first = new_user.first_name
+        welcome_last = new_user.last_name
+        welcome_username = new_user.username
+        welcome_org_id = str(current_user.organization_id)
+
         async def _send_welcome():
             try:
                 email_svc = EmailService(organization)
                 await email_svc.send_welcome_email(
-                    to_email=new_user.email,
-                    first_name=new_user.first_name,
-                    last_name=new_user.last_name,
-                    username=new_user.username,
+                    to_email=welcome_email,
+                    first_name=welcome_first,
+                    last_name=welcome_last,
+                    username=welcome_username,
                     temp_password=temp_password,
                     organization_name=org_name,
                     login_url=login_url,
-                    organization_id=str(current_user.organization_id),
+                    organization_id=welcome_org_id,
                 )
             except Exception as e:
-                logger.error(f"Failed to send welcome email to {new_user.email}: {e}")
+                logger.error(f"Failed to send welcome email to {welcome_email}: {e}")
 
         background_tasks.add_task(_send_welcome)
 
@@ -503,6 +510,9 @@ async def add_role_to_user(
             detail="User already has this role"
         )
 
+    # Capture role name before commit expires the ORM object
+    added_role_name = role.name
+
     # Add role
     user.roles.append(role)
     await db.commit()
@@ -523,7 +533,7 @@ async def add_role_to_user(
         event_data={
             "target_user_id": str(user_id),
             "role_id": str(role_id),
-            "role_name": role.name,
+            "role_name": added_role_name,
             "action": "role_added",
         },
         user_id=str(current_user.id),
@@ -568,10 +578,10 @@ async def remove_role_from_user(
             detail="User not found"
         )
 
-    # Find and remove role
+    # Find and remove role (cast to str since role.id is String, role_id is UUID)
     role_to_remove = None
     for role in user.roles:
-        if role.id == role_id:
+        if str(role.id) == str(role_id):
             role_to_remove = role
             break
 
@@ -822,8 +832,14 @@ async def update_user_profile(
         if ec_list is not None:
             user.emergency_contacts = [ec.model_dump() if hasattr(ec, 'model_dump') else ec for ec in profile_update.emergency_contacts]
 
+    # Allowlist of safe fields to prevent mass-assignment of sensitive columns
+    ALLOWED_PROFILE_FIELDS = {
+        "first_name", "middle_name", "last_name", "badge_number", "phone", "mobile",
+        "date_of_birth", "hire_date", "rank", "station", "membership_number",
+        "address_street", "address_city", "address_state", "address_zip", "address_country",
+    }
     for field, value in update_data.items():
-        if hasattr(user, field):
+        if field in ALLOWED_PROFILE_FIELDS and hasattr(user, field):
             setattr(user, field, value)
 
     await db.commit()
@@ -887,6 +903,10 @@ async def delete_user(
             detail="User not found",
         )
 
+    # Capture values before commit expires the ORM object
+    deleted_username = user.username
+    deleted_full_name = user.full_name
+
     user.deleted_at = datetime.now(timezone.utc)
     await db.commit()
 
@@ -897,8 +917,8 @@ async def delete_user(
         severity="warning",
         event_data={
             "deleted_user_id": str(user_id),
-            "deleted_username": user.username,
-            "deleted_full_name": user.full_name,
+            "deleted_username": deleted_username,
+            "deleted_full_name": deleted_full_name,
         },
         user_id=str(current_user.id),
         username=current_user.username,

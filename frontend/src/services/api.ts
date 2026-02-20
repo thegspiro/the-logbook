@@ -3211,6 +3211,10 @@ export const dashboardService = {
     const response = await api.get<CommunityEngagement>('/dashboard/community-engagement');
     return response.data;
   },
+  async getBranding(): Promise<{ name?: string }> {
+    const response = await api.get<{ name?: string }>('/auth/branding');
+    return response.data;
+  },
 };
 
 // ============================================

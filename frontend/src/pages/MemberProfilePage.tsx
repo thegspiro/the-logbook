@@ -93,7 +93,7 @@ export const MemberProfilePage: React.FC = () => {
   const fetchModuleStatus = async () => {
     try {
       const response = await organizationService.getEnabledModules();
-      const inventoryEnabled = response.enabled_modules.includes('inventory');
+      const inventoryEnabled = (response?.enabled_modules ?? []).includes('inventory');
       setInventoryModuleEnabled(inventoryEnabled);
 
       // Fetch inventory if module is enabled
@@ -136,7 +136,7 @@ export const MemberProfilePage: React.FC = () => {
       setInventoryLoading(true);
       const response = await inventoryService.getUserInventory(userId!);
       // Transform the inventory response to match our InventoryItem interface
-      const items: InventoryItem[] = response.permanent_assignments.map((item) => ({
+      const items: InventoryItem[] = (response?.permanent_assignments ?? []).map((item) => ({
         id: item.assignment_id,
         name: item.item_name,
         item_number: item.serial_number || item.asset_tag || '',
@@ -260,8 +260,8 @@ export const MemberProfilePage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-700">{error || 'Member not found'}</p>
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+            <p className="text-sm text-red-400">{error || 'Member not found'}</p>
           </div>
         </div>
       </div>
@@ -272,8 +272,8 @@ export const MemberProfilePage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-700">Member not found</p>
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+            <p className="text-sm text-red-400">Member not found</p>
           </div>
         </div>
       </div>

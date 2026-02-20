@@ -51,12 +51,12 @@ class TrainingService:
         )
         records = result.scalars().all()
 
-        # Calculate total hours
-        total_hours = sum(r.hours_completed for r in records)
+        # Calculate total hours (guard against None values)
+        total_hours = sum(r.hours_completed or 0 for r in records)
 
         # Calculate this year's hours
         hours_this_year = sum(
-            r.hours_completed
+            r.hours_completed or 0
             for r in records
             if r.completion_date and r.completion_date.year == current_year
         )
@@ -166,8 +166,8 @@ class TrainingService:
         result = await self.db.execute(query)
         records = result.scalars().all()
 
-        # Calculate total hours
-        total_hours = sum(r.hours_completed for r in records)
+        # Calculate total hours (guard against None values)
+        total_hours = sum(r.hours_completed or 0 for r in records)
 
         # Get hours by type
         hours_by_type = await self.get_training_hours_by_type(

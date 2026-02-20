@@ -454,10 +454,12 @@ const SubmitTrainingPage: React.FC = () => {
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [submissions, setSubmissions] = useState<TrainingSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editingSubmission, setEditingSubmission] = useState<TrainingSubmission | null>(null);
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [configData, categoriesData, submissionsData] = await Promise.all([
         trainingSubmissionService.getConfig(),
@@ -468,6 +470,7 @@ const SubmitTrainingPage: React.FC = () => {
       setCategories(categoriesData);
       setSubmissions(submissionsData);
     } catch (_error) {
+      setLoadError('Failed to load submission form. Please try again.');
       toast.error('Failed to load submission form');
     } finally {
       setLoading(false);
@@ -487,12 +490,25 @@ const SubmitTrainingPage: React.FC = () => {
     }
   };
 
-  if (loading || !config) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
           <p className="text-theme-text-muted mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError || !config) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{loadError || 'Unable to load configuration.'}</p>
+          <button onClick={loadData} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+            Try Again
+          </button>
         </div>
       </div>
     );

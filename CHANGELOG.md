@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security & Stability Audit (2026-02-20)
+
+Full codebase audit of all changes from 2026-02-19/20 identified and fixed 63 issues
+across security, data integrity, accessibility, and reliability.
+
+#### Critical Fixes — Security
+- **Training records authorization**: `POST /records` and `PATCH /records/{id}` now require `training.manage` permission. Previously any authenticated user could fabricate training records for any member.
+- **IDOR in scheduling requests**: Cancel button on swap/time-off requests now checks `req.user_id === currentUser.id`. Previously any member could cancel any other member's pending requests.
+- **Permission enumeration**: `GET /permissions` and `GET /permissions/by-category` now require authentication. Previously exposed all permission names to anonymous users.
+- **Mass-assignment prevention**: `PATCH /users/{id}/profile` now uses an explicit allowlist of safe fields instead of blind `setattr()` loop. Prevents potential overwrite of `password_hash`, `organization_id`, or `deleted_at`.
+
+#### Critical Fixes — Data Integrity
+- **Dashboard admin summary auth bypass**: Replaced raw `axios.get()` with authenticated `api` instance. Admin summary was always failing silently because the auth token was never sent.
+- **Multi-tenant data leak in dashboard**: Minutes action items queries now filter by `organization_id` via `MeetingMinutes` join. Previously counted action items across all organizations.
+- **Onboarding reset wrong table**: Changed `DELETE FROM user_roles` to `DELETE FROM user_positions` (the actual physical table name). Reset was silently failing, leaving stale junction rows.
+- **str vs UUID comparison always False**: `remove_role_from_user` now uses `str(role.id) == str(role_id)`. Previously the endpoint always returned 404.
+- **str vs UUID comparison always True**: `update_contact_info` self-check now uses `str(current_user.id) == str(user_id)`. Previously regular users could never update their own contact info.
+
+#### Critical Fixes — MissingGreenlet / Async ORM
+- **Training dashboard officer detection**: Replaced `current_user.roles` lazy access with eagerly-loaded `selectinload(User.roles)` query. Officers were silently treated as regular members; role-scoped requirements were never matched.
+- **Welcome emails**: Captured `new_user.email`, `first_name`, `last_name`, `username` into local variables before commit. Background task was accessing expired ORM attributes.
+- **Event cancellation notifications**: Captured `event.rsvps` into local list before `db.commit()`. Attendees were never notified of cancellations.
+- **Training session finalization**: Captured `event.title`, `event.start_datetime`, `training_session.course_name` before commit and updated `_notify_training_officers` to accept scalar values instead of ORM objects.
+- **Audit logging after commits**: Captured `role.name`, `user.username`, `user.full_name`, `member.full_name`, `program.name` before `db.commit()` across `add_role_to_user`, `delete_user`, and `enroll_member` endpoints.
+- **Rank permission check**: Replaced lazy `current_user.roles` access with eagerly-loaded query in `update_user_profile`.
+
+#### High — Reliability Fixes
+- **Historical import savepoints**: Wrapped individual row `db.add()` in `async with db.begin_nested()` (savepoint). Previously one failed row poisoned the entire session.
+- **hours_completed sum None guard**: Added `or 0` to all `sum(r.hours_completed ...)` generators in `training_service.py`. Previously crashed with `TypeError` when any record had `NULL` hours.
+- **Biannual cert matching**: Added fallback `course_name.ilike()` filter when `training_type` is None. Previously any unrelated cert could falsely satisfy a requirement.
+- **SubmitTrainingPage error state**: Added `loadError` state so the page shows a "Try Again" button instead of an eternal loading spinner when config API fails.
+- **MemberProfilePage null guards**: Added `?.` and `?? []` guards on `response.enabled_modules` and `response.permanent_assignments` to prevent crashes when API returns unexpected shape.
+
+#### Infrastructure
+- **Nginx CSP header**: Added `Content-Security-Policy` header with restrictive defaults (`default-src 'self'`, `frame-ancestors 'none'`).
+- **Nginx header inheritance**: Re-added security headers in `/api` and `/docs` location blocks (nginx doesn't inherit `add_header` from parent).
+- **Migration MySQL compatibility**: Wrapped `DROP TYPE IF EXISTS` statements in try/except for MySQL compatibility in departure clearance and inventory notification migrations.
+
+#### Accessibility (WCAG 2.1)
+- **ShiftDetailPanel**: Added Escape key listener to close the panel.
+- **MyTrainingPage**: Added `aria-expanded` to section toggle buttons.
+- **ModuleSelection**: Added `role="button"`, `tabIndex={0}`, and keyboard handlers to module cards.
+- **OrganizationSetup**: Added `aria-expanded` to SectionHeader buttons.
+
+#### Theme / Dark Mode
+- **MemberProfilePage**: Replaced light-mode-only badge colors (`bg-green-100 text-green-800`, `bg-red-50 text-red-700`) with dark-compatible variants (`bg-green-500/10 text-green-400`, `bg-red-500/10 text-red-400`).
+- **MembersAdminPage**: Fixed role badges and error banners using light-mode-only colors.
+
 ### UI Improvements (2026-02-20)
 
 #### Login Page

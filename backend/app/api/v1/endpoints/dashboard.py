@@ -19,7 +19,7 @@ from app.core.database import get_db
 from app.models.event import Event, EventRSVP, EventExternalAttendee, EventType
 from app.models.user import User, UserStatus
 from app.models.meeting import MeetingActionItem, ActionItemStatus
-from app.models.minute import ActionItem, MinutesActionItemStatus
+from app.models.minute import ActionItem, MinutesActionItemStatus, MeetingMinutes
 from app.models.training import TrainingRecord, TrainingStatus
 
 logger = logging.getLogger(__name__)
@@ -215,12 +215,15 @@ async def get_admin_summary(
     except Exception as exc:
         logger.warning("admin-summary: meeting action items query failed: %s", exc)
 
-    # ── Action items from minutes ──
+    # ── Action items from minutes (scoped to organization via MeetingMinutes) ──
     overdue_minutes = 0
     open_minutes = 0
     try:
         result = await db.execute(
-            select(func.count(ActionItem.id)).where(
+            select(func.count(ActionItem.id))
+            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+            .where(
+                MeetingMinutes.organization_id == org_id,
                 ActionItem.status.in_([
                     MinutesActionItemStatus.PENDING.value,
                     MinutesActionItemStatus.IN_PROGRESS.value,
@@ -231,7 +234,10 @@ async def get_admin_summary(
         overdue_minutes = result.scalar() or 0
 
         result = await db.execute(
-            select(func.count(ActionItem.id)).where(
+            select(func.count(ActionItem.id))
+            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+            .where(
+                MeetingMinutes.organization_id == org_id,
                 ActionItem.status.in_([
                     MinutesActionItemStatus.PENDING.value,
                     MinutesActionItemStatus.IN_PROGRESS.value,
@@ -306,8 +312,12 @@ async def get_unified_action_items(
             created_at=item.created_at.isoformat() if item.created_at else "",
         ))
 
-    # ── Minutes action items ──
-    query2 = select(ActionItem)
+    # ── Minutes action items (scoped to organization via MeetingMinutes) ──
+    query2 = (
+        select(ActionItem)
+        .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+        .where(MeetingMinutes.organization_id == org_id)
+    )
     if status_filter:
         query2 = query2.where(ActionItem.status == status_filter)
     if assigned_to_me:
