@@ -539,7 +539,7 @@ const MinutesPage: React.FC = () => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="meeting-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Meeting Type</label>
                       <select
@@ -566,7 +566,7 @@ const MinutesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="meeting-date" className="block text-sm font-medium text-theme-text-secondary mb-1">Meeting Date</label>
                       <input

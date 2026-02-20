@@ -304,7 +304,7 @@ export const EventDetailPage: React.FC = () => {
           </div>
 
           {!event.is_cancelled && (
-            <div className="flex space-x-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {canRSVP && (
                 <button
                   onClick={() => setShowRSVPModal(true)}
@@ -411,7 +411,7 @@ export const EventDetailPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Event Details */}
@@ -478,7 +478,7 @@ export const EventDetailPage: React.FC = () => {
                 <h2 className="text-lg font-medium text-theme-text-primary">Training Session Details</h2>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {event.custom_fields.course_name && (
                   <div>
                     <p className="text-sm font-medium text-theme-text-secondary">Course Name</p>

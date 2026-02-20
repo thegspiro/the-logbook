@@ -691,7 +691,7 @@ export const EventsSettingsPage: React.FC = () => {
             </div>
 
             {settings.defaults.check_in_window_type === 'window' && (
-              <div className="grid grid-cols-2 gap-4 pl-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-4">
                 <div>
                   <label className="form-label-sm">Minutes before start</label>
                   <input

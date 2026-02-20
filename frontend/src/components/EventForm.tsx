@@ -549,7 +549,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <p className="text-xs text-theme-text-muted mb-3">
               Leave all unchecked to allow all members. Check specific roles to restrict attendance.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {roles.map((role) => (
                 <label key={role.id} className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
@@ -681,7 +681,7 @@ export const EventForm: React.FC<EventFormProps> = ({
         </div>
 
         {formData.check_in_window_type === CheckInWindowType.WINDOW && (
-          <div className="grid grid-cols-2 gap-4 pl-6 border-l-2 border-red-500/30">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 border-l-2 border-red-500/30">
             <div>
               <label htmlFor="checkin-before" className={labelClass}>
                 Minutes before start

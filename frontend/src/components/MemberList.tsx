@@ -27,20 +27,20 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
             <tr>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
+                className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
               >
                 Name
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
+                className="hidden sm:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
               >
                 Badge Number
               </th>
               {contactSettings.enabled && contactSettings.show_email && (
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
+                  className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
                 >
                   Email
                 </th>
@@ -48,7 +48,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
               {contactSettings.enabled && contactSettings.show_phone && (
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
+                  className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
                 >
                   Phone
                 </th>
@@ -56,14 +56,14 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
               {contactSettings.enabled && contactSettings.show_mobile && (
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
+                  className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
                 >
                   Mobile
                 </th>
               )}
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
+                className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
               >
                 Status
               </th>
@@ -82,7 +82,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
             ) : (
               members.map((member) => (
                 <tr key={member.id} className="hover:bg-theme-surface-hover">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                     <Link to={`/members/${member.id}`} className="flex items-center group">
                       {member.photo_url ? (
                         <div className="flex-shrink-0 h-10 w-10">
@@ -99,19 +99,19 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                           </span>
                         </div>
                       )}
-                      <div className="ml-4">
+                      <div className="ml-3 sm:ml-4">
                         <div className="text-sm font-medium text-theme-text-primary group-hover:text-blue-600">
                           {member.full_name || member.username}
                         </div>
-                        <div className="text-sm text-theme-text-muted">@{member.username}</div>
+                        <div className="text-xs sm:text-sm text-theme-text-muted">@{member.username}</div>
                       </div>
                     </Link>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
+                  <td className="hidden sm:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                     {member.badge_number || '-'}
                   </td>
                   {contactSettings.enabled && contactSettings.show_email && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
+                    <td className="hidden md:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
                       {member.email ? (
                         <a
                           href={`mailto:${member.email}`}
@@ -125,7 +125,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                     </td>
                   )}
                   {contactSettings.enabled && contactSettings.show_phone && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
+                    <td className="hidden lg:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
                       {member.phone ? (
                         <a
                           href={`tel:${member.phone}`}
@@ -139,7 +139,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                     </td>
                   )}
                   {contactSettings.enabled && contactSettings.show_mobile && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
+                    <td className="hidden lg:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
                       {member.mobile ? (
                         <a
                           href={`tel:${member.mobile}`}
@@ -152,7 +152,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                       )}
                     </td>
                   )}
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         member.status === UserStatus.ACTIVE

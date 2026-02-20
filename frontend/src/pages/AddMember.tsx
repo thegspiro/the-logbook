@@ -278,7 +278,7 @@ const AddMember: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Personal Information */}
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
@@ -287,7 +287,7 @@ const AddMember: React.FC = () => {
               <h2 className="text-xl font-bold text-theme-text-primary">Personal Information</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   First Name <span className="text-red-700 dark:text-red-400">*</span>
@@ -424,7 +424,7 @@ const AddMember: React.FC = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-primary mb-2">
                     City <span className="text-red-700 dark:text-red-400">*</span>

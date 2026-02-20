@@ -317,7 +317,7 @@ const Dashboard: React.FC = () => {
               Department Overview
             </h3>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" role="region" aria-label="Department overview">
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-theme-text-secondary text-xs font-medium uppercase">Active Members</p>
@@ -332,7 +332,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mt-2">{adminSummary?.total_members ?? 0} total</p>
               </div>
 
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-theme-text-secondary text-xs font-medium uppercase">Training Compliance</p>
@@ -347,7 +347,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mt-2">{adminSummary?.recent_training_hours ?? 0} hrs last 30 days</p>
               </div>
 
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-theme-text-secondary text-xs font-medium uppercase">Upcoming Events</p>
@@ -362,7 +362,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
               </div>
 
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/action-items')}>
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/action-items')}>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-theme-text-secondary text-xs font-medium uppercase">Action Items</p>
@@ -391,7 +391,7 @@ const Dashboard: React.FC = () => {
 
         {/* Hours Summary Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8" role="region" aria-label="Hours summary">
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Total Hours</p>
@@ -406,7 +406,7 @@ const Dashboard: React.FC = () => {
             <p className="text-theme-text-muted text-xs mt-2">This month</p>
           </div>
 
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Training</p>
@@ -421,7 +421,7 @@ const Dashboard: React.FC = () => {
             <p className="text-theme-text-muted text-xs mt-2">Training hours</p>
           </div>
 
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Standby</p>
@@ -436,7 +436,7 @@ const Dashboard: React.FC = () => {
             <p className="text-theme-text-muted text-xs mt-2">Standby hours</p>
           </div>
 
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Administrative</p>

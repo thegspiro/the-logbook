@@ -366,7 +366,7 @@ const ImportMembers: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Instructions */}
         <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-6 mb-8">
           <h2 className="text-theme-text-primary font-bold mb-3 flex items-center space-x-2">
