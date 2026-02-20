@@ -1138,6 +1138,8 @@ export interface RequirementDetail {
   days_until_due?: number;
   waived_months?: number;
   active_months?: number;
+  cert_expired?: boolean;
+  blocks_activity?: boolean;
 }
 
 export interface MyTrainingSummary {

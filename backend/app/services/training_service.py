@@ -272,9 +272,10 @@ class TrainingService:
             start_date = None
             end_date = None
         elif freq == "biannual":
-            base_year = requirement.year if requirement.year else current_year
-            start_date = date(base_year - 1, 1, 1)
-            end_date = date(base_year, 12, 31)
+            # Biannual: no date window — compliance is based on having a
+            # non-expired certification
+            start_date = None
+            end_date = None
         elif freq == "quarterly":
             quarter_month = ((today.month - 1) // 3) * 3 + 1
             start_date = date(current_year, quarter_month, 1)
