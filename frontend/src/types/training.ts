@@ -415,9 +415,9 @@ export type RequirementSource = 'department' | 'state' | 'national';
 
 export type ProgramStructureType = 'sequential' | 'phases' | 'flexible';
 
-export type EnrollmentStatus = 'active' | 'completed' | 'on_hold' | 'withdrawn' | 'failed';
+export type EnrollmentStatus = 'active' | 'completed' | 'expired' | 'on_hold' | 'withdrawn' | 'failed';
 
-export type RequirementProgressStatus = 'not_started' | 'in_progress' | 'completed' | 'waived';
+export type RequirementProgressStatus = 'not_started' | 'in_progress' | 'completed' | 'verified' | 'waived';
 
 // Enhanced Training Requirement (with all requirement types)
 export interface TrainingRequirementEnhanced {

@@ -28,6 +28,7 @@ class RequirementType(str, Enum):
     CALLS = "calls"
     SKILLS_EVALUATION = "skills_evaluation"
     CHECKLIST = "checklist"
+    KNOWLEDGE_TEST = "knowledge_test"
 
 
 # Training Category Schemas
