@@ -1351,8 +1351,9 @@ def _get_requirement_date_window(req, today: date):
     if freq == "one_time":
         return None, None
     elif freq == "biannual":
-        base_year = req.year if req.year else current_year
-        return date(base_year - 1, 1, 1), date(base_year, 12, 31)
+        # Biannual: no date window — compliance is based on having a
+        # non-expired certification (checked in _evaluate_member_requirement)
+        return None, None
     elif freq == "quarterly":
         quarter_month = ((today.month - 1) // 3) * 3 + 1
         start_date = date(current_year, quarter_month, 1)

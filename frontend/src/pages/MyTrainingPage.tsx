@@ -393,6 +393,15 @@ const MyTrainingPage: React.FC = () => {
                           />
                         </div>
 
+                        {/* Expired certification / blocks activity warning */}
+                        {req.blocks_activity && (
+                          <div className="bg-red-500/10 border border-red-500/30 rounded px-2 py-1.5 mb-2">
+                            <p className="text-xs text-red-400 font-medium">
+                              Certification expired — renew ASAP. This may prevent you from signing up for shifts.
+                            </p>
+                          </div>
+                        )}
+
                         {/* Waiver adjustment notice */}
                         {req.waived_months != null && req.waived_months > 0 && (
                           <div className="bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1 mb-2">
@@ -410,6 +419,8 @@ const MyTrainingPage: React.FC = () => {
                           <div className="flex items-center space-x-2">
                             {req.is_met ? (
                               <span className="text-green-400">Complete</span>
+                            ) : req.cert_expired ? (
+                              <span className="text-red-400 font-medium">Expired — Renew ASAP</span>
                             ) : isOverdue ? (
                               <span className="text-red-400 font-medium">Overdue by {Math.abs(req.days_until_due!)} days</span>
                             ) : req.days_until_due != null ? (
