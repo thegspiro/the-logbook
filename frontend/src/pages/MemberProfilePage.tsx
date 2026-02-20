@@ -213,7 +213,15 @@ export const MemberProfilePage: React.FC = () => {
       setSaving(true);
       setError(null);
 
-      const updatedUser = await userService.updateContactInfo(userId, editForm);
+      // Strip empty strings to undefined so Pydantic doesn't reject '' as an invalid EmailStr
+      const payload: ContactInfoUpdate = {
+        email: editForm.email?.trim() || undefined,
+        phone: editForm.phone?.trim() || undefined,
+        mobile: editForm.mobile?.trim() || undefined,
+        notification_preferences: editForm.notification_preferences,
+      };
+
+      const updatedUser = await userService.updateContactInfo(userId, payload);
       setUser(updatedUser);
       setIsEditing(false);
     } catch (err: unknown) {
