@@ -298,7 +298,7 @@ export const MemberProfilePage: React.FC = () => {
             <div className="flex items-center gap-4">
               <div className="h-20 w-20 rounded-full bg-indigo-100 flex items-center justify-center">
                 <span className="text-2xl font-bold text-indigo-600">
-                  {(user.first_name?.[0] || user.username[0]).toUpperCase()}
+                  {(user.first_name?.[0] || user.username?.[0] || '?').toUpperCase()}
                 </span>
               </div>
               <div>

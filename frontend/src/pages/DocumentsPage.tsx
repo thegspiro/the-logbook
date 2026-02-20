@@ -213,7 +213,7 @@ const DocumentsPage: React.FC = () => {
   const filteredDocuments = searchQuery.trim()
     ? documents.filter(
         d =>
-          d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (d.name && d.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (d.description && d.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (d.file_type && d.file_type.toLowerCase().includes(searchQuery.toLowerCase()))
       )

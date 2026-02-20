@@ -157,7 +157,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
           <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search inspections..." className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+            placeholder="Search inspections..." aria-label="Search inspections" className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
         {filterFacilityId && (
@@ -229,15 +229,15 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
               </div>
               {/* Actions */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => openEdit(insp)} title="Edit"
+                <button onClick={() => openEdit(insp)} title="Edit" aria-label="Edit inspection"
                   className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <Pencil className="w-4 h-4" aria-hidden="true" />
                 </button>
-                <button onClick={() => handleDelete(insp)} title="Delete"
+                <button onClick={() => handleDelete(insp)} title="Delete" aria-label="Delete inspection"
                   className="p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -255,7 +255,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
               <h2 className="text-lg font-bold text-theme-text-primary">
                 {editingInspection ? 'Edit Inspection' : 'New Inspection'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-theme-text-muted hover:text-theme-text-primary"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowModal(false)} aria-label="Close dialog" className="text-theme-text-muted hover:text-theme-text-primary"><X className="w-5 h-5" aria-hidden="true" /></button>
             </div>
             <div className="p-6 space-y-4">
               <div>

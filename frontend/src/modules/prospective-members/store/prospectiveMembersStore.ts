@@ -293,7 +293,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         // Auto-create election package if applicant landed on an election_vote stage
         const pipeline = get().currentPipeline;
         if (pipeline && advanced) {
-          const newStage = pipeline.stages.find(
+          const newStage = (pipeline.stages || []).find(
             (s) => s.id === advanced.current_stage_id
           );
           if (newStage?.stage_type === 'election_vote') {

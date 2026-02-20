@@ -133,7 +133,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
               </div>
 
               <div className="space-y-3">
-                {positionResult.candidates.map((candidate) => (
+                {(positionResult.candidates || []).map((candidate) => (
                   <div
                     key={candidate.candidate_id}
                     className={`flex items-center justify-between p-4 rounded-lg border-2 ${

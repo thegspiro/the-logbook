@@ -259,6 +259,13 @@ export const userService = {
   /**
    * Create a new member (admin/secretary only)
    */
+  /**
+   * Delete (soft-delete) a member
+   */
+  async deleteUser(userId: string): Promise<void> {
+    await api.delete(`/users/${userId}`);
+  },
+
   async createMember(memberData: {
     username: string;
     email: string;

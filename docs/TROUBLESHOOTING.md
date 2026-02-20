@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-18 (includes security hardening — path traversal fix in event attachment downloads, AES-256 encryption for external training provider credentials, magic-byte MIME validation for document uploads, removal of insecure MinIO defaults; unified location architecture with facility bridge and training location dropdown; public kiosk display system for tablets with auto-refreshing QR codes; plus Training Admin compliance matrix fix — rewrote requirement matching to use type-aware evaluation with frequency-based date windows; My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-20 (includes member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique badge number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
 
 ---
 
@@ -14,7 +14,8 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 2. [Onboarding Issues](#onboarding-issues)
 3. [Email & SMTP Configuration](#email--smtp-configuration)
 4. [User Account Issues](#user-account-issues)
-5. [Network & Connection Problems](#network--connection-problems)
+5. [Member Management Issues](#member-management-issues)
+6. [Network & Connection Problems](#network--connection-problems)
 6. [Image Upload Issues](#image-upload-issues)
 7. [Database & Migration Issues](#database--migration-issues)
 8. [Startup Sequence Issues](#startup-sequence-issues)
@@ -481,6 +482,65 @@ docker compose up --build
 - Keep browser tab open during onboarding
 - Complete each step promptly
 - Save work frequently (most steps auto-save)
+
+---
+
+## Member Management Issues
+
+### Cannot Delete a Member
+
+**Symptom**: The trash can icon on the Members page does nothing when clicked, or there is no visible way to delete a member.
+
+**Cause (Fixed 2026-02-20)**: The trash can icon buttons were rendered without an `onClick` handler — they were non-functional placeholders. Additionally, no backend `DELETE /users/{user_id}` endpoint existed.
+
+**Resolution**: This is now fully implemented:
+- The trash can buttons on the Members page (both mobile and desktop views) now trigger a soft-delete with a confirmation prompt
+- The Members Admin page has a "Delete" text button in the actions column
+- The backend `DELETE /users/{user_id}` endpoint sets the `deleted_at` timestamp (soft-delete)
+- The button is hidden for your own row to prevent self-deletion
+- Requires `members.manage` permission
+
+**Note**: Deletion is a soft-delete — the member's data is preserved in the database but they are filtered out of all queries. To restore a soft-deleted member, a database administrator can set `deleted_at = NULL` on the user record.
+
+---
+
+### Member Profile Page Crashes
+
+**Symptom**: White screen or JavaScript error when viewing a member's profile page.
+
+**Cause (Fixed 2026-02-20)**: The member profile avatar tried to access `user.first_name[0]` (first character of first name) without checking if `first_name` was null or empty. Members imported without a first name would crash the page.
+
+**Resolution**: Added optional chaining (`user.first_name?.[0]`) with a fallback to the username initial.
+
+---
+
+### Duplicate Badge Number Error
+
+**Symptom**: Error when creating a member: "A member with badge number 'XXX' already exists in this organization."
+
+**Cause**: As of 2026-02-20, badge numbers are enforced as unique per organization. Previously, duplicates could be silently created, leading to data confusion.
+
+**Resolution**: Use a different badge number, or check with your administrator if the existing badge was assigned incorrectly.
+
+---
+
+### Dashboard Shows 0 Members
+
+**Symptom**: The admin dashboard summary shows "0 Active Members" even though members exist.
+
+**Cause (Fixed 2026-02-20)**: The admin summary queries were joining across all organizations instead of filtering to the current user's organization.
+
+**Resolution**: Update to the latest version. The queries now properly isolate results to the current organization.
+
+---
+
+### Login Returns 500 Internal Server Error
+
+**Symptom**: Login fails with a 500 error after a taxonomy update or fresh deployment.
+
+**Cause (Fixed 2026-02-20)**: The taxonomy refactor renamed the `roles` relationship to `positions` on the User model. Code referencing `User.roles` during authentication would crash with an `AttributeError`.
+
+**Resolution**: A backward-compatible `roles` synonym was added to the User model. Update to the latest version.
 
 ---
 

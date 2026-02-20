@@ -82,7 +82,7 @@ const statusStyles: Record<string, string> = {
   withdrawn: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
   approved: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
   rejected: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
-  draft: 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
+  draft: 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
   submitted: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
   completed: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
 };
