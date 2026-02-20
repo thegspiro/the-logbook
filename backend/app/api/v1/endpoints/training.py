@@ -902,8 +902,8 @@ async def enroll_member_in_program(
 @router.post("/import/parse")
 async def parse_historical_import(
     file: UploadFile = File(...),
-    match_by: str = Query("badge_number", pattern=r'^(email|badge_number|name)$',
-                          description="How to match CSV rows to members: badge_number, email, or name"),
+    match_by: str = Query("badge_number", pattern=r'^(email|badge_number)$',
+                          description="How to match CSV rows to members: badge_number or email"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -911,9 +911,8 @@ async def parse_historical_import(
     Parse a CSV file of historical training records and return a preview.
 
     Matches members using the strategy specified by `match_by`:
+    - **badge_number**: Match by badge/employee number (default, most reliable)
     - **email**: Match by email address (checks both primary and personal email)
-    - **badge_number**: Match by badge/employee number
-    - **name**: Match by full name (first + last, case-insensitive)
 
     Also matches courses by name/code.
     Returns parsed rows with match status so the user can review
@@ -956,8 +955,6 @@ async def parse_historical_import(
     col_email = find_col(['email', 'member_email', 'user_email', 'e-mail', 'e_mail'])
     col_badge = find_col(['badge_number', 'badge', 'badge_no', 'employee_id', 'employee_number', 'member_id', 'id_number'])
     col_name = find_col(['name', 'member_name', 'full_name', 'member', 'employee_name'])
-    col_first = find_col(['first_name', 'first', 'given_name'])
-    col_last = find_col(['last_name', 'last', 'surname', 'family_name'])
     col_course = find_col(['course_name', 'course', 'training', 'training_name', 'class', 'class_name'])
     col_course_code = find_col(['course_code', 'code', 'class_code'])
     col_type = find_col(['training_type', 'type', 'category'])
@@ -986,12 +983,6 @@ async def parse_historical_import(
             detail="CSV must contain a 'badge_number' column for badge matching. "
                    f"Found columns: {', '.join(column_headers)}"
         )
-    if match_by == "name" and not col_name and not (col_first and col_last):
-        raise HTTPException(
-            status_code=400,
-            detail="CSV must contain a 'name' column (or 'first_name' + 'last_name') for name matching. "
-                   f"Found columns: {', '.join(column_headers)}"
-        )
     if not col_course:
         raise HTTPException(
             status_code=400,
@@ -1009,7 +1000,6 @@ async def parse_historical_import(
 
     email_to_user = {}
     badge_to_user = {}
-    name_to_user = {}
 
     for m in members:
         if m.email:
@@ -1018,9 +1008,6 @@ async def parse_historical_import(
             email_to_user[m.personal_email.strip().lower()] = m
         if hasattr(m, 'badge_number') and m.badge_number:
             badge_to_user[m.badge_number.strip().lower()] = m
-        full = f"{m.first_name or ''} {m.last_name or ''}".strip().lower()
-        if full:
-            name_to_user[full] = m
 
     # Pre-load existing courses
     courses_result = await db.execute(
@@ -1048,14 +1035,8 @@ async def parse_historical_import(
         email_val = (raw_row.get(col_email) or '').strip().lower() if col_email else ''
         badge_val = (raw_row.get(col_badge) or '').strip().lower() if col_badge else ''
 
-        # Build name value
-        name_val = ''
-        if col_name:
-            name_val = (raw_row.get(col_name) or '').strip()
-        elif col_first and col_last:
-            first = (raw_row.get(col_first) or '').strip()
-            last = (raw_row.get(col_last) or '').strip()
-            name_val = f"{first} {last}".strip()
+        # Extract name for display (optional column)
+        name_val = (raw_row.get(col_name) or '').strip() if col_name else ''
 
         # Validate required match field
         match_key = ''
@@ -1067,10 +1048,6 @@ async def parse_historical_import(
             match_key = badge_val
             if not match_key:
                 row_errors.append("Missing badge number")
-        elif match_by == "name":
-            match_key = name_val.lower()
-            if not match_key:
-                row_errors.append("Missing name")
 
         course_val = (raw_row.get(col_course) or '').strip()
         if not course_val:
@@ -1095,8 +1072,6 @@ async def parse_historical_import(
             try_match(email_to_user, email_val)
         elif match_by == "badge_number":
             try_match(badge_to_user, badge_val)
-        elif match_by == "name":
-            try_match(name_to_user, name_val.lower())
 
         if member_matched:
             members_matched_set.add(match_key)
