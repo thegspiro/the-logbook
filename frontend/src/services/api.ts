@@ -1796,9 +1796,17 @@ export interface InventoryItemCreate {
   model_number?: string;
   serial_number?: string;
   asset_tag?: string;
+  barcode?: string;
   purchase_date?: string;
   purchase_price?: number;
+  purchase_order?: string;
   vendor?: string;
+  warranty_expiration?: string;
+  expected_lifetime_years?: number;
+  current_value?: number;
+  size?: string;
+  color?: string;
+  weight?: number;
   storage_location?: string;
   station?: string;
   condition?: string;
