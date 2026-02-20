@@ -19,6 +19,8 @@ import {
   X,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
+import { localToUTC } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 // ============================================
 // Interfaces
@@ -99,6 +101,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
   initialData,
   title,
 }) => {
+  const tz = useTimezone();
   const [formData, setFormData] = useState<ShiftCallFormData>(initialData || emptyFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -120,9 +123,9 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
         medical_refusal: formData.medical_refusal,
       };
       if (formData.incident_number) payload.incident_number = formData.incident_number;
-      if (formData.dispatched_at) payload.dispatched_at = formData.dispatched_at;
-      if (formData.on_scene_at) payload.on_scene_at = formData.on_scene_at;
-      if (formData.cleared_at) payload.cleared_at = formData.cleared_at;
+      if (formData.dispatched_at) payload.dispatched_at = localToUTC(formData.dispatched_at, tz);
+      if (formData.on_scene_at) payload.on_scene_at = localToUTC(formData.on_scene_at, tz);
+      if (formData.cleared_at) payload.cleared_at = localToUTC(formData.cleared_at, tz);
       if (formData.notes) payload.notes = formData.notes;
       if (formData.responding_members.trim()) {
         payload.responding_members = formData.responding_members.split(',').map(m => m.trim()).filter(Boolean);

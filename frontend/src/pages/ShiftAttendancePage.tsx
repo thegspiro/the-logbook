@@ -19,6 +19,8 @@ import {
 import { schedulingService } from '../services/api';
 import type { ShiftAttendanceRecord } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 interface ShiftAttendancePageProps {
   /** If provided as a prop, uses this shift ID instead of URL param */
@@ -38,6 +40,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftId: propShiftId }) => {
+  const tz = useTimezone();
   const { shiftId: paramShiftId } = useParams<{ shiftId: string }>();
   const shiftId = propShiftId || paramShiftId;
 
@@ -76,8 +79,8 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
 
   const openEditModal = (record: ShiftAttendanceRecord) => {
     setEditModal({ open: true, record });
-    setEditCheckedInAt(record.checked_in_at ? formatDateTimeForInput(record.checked_in_at) : '');
-    setEditCheckedOutAt(record.checked_out_at ? formatDateTimeForInput(record.checked_out_at) : '');
+    setEditCheckedInAt(record.checked_in_at ? formatDateTimeForInputLocal(record.checked_in_at) : '');
+    setEditCheckedOutAt(record.checked_out_at ? formatDateTimeForInputLocal(record.checked_out_at) : '');
     setEditDurationMinutes(record.duration_minutes != null ? String(record.duration_minutes) : '');
   };
 
@@ -93,8 +96,8 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
     setSaving(true);
     try {
       const updates: Record<string, unknown> = {};
-      if (editCheckedInAt) updates.checked_in_at = new Date(editCheckedInAt).toISOString();
-      if (editCheckedOutAt) updates.checked_out_at = new Date(editCheckedOutAt).toISOString();
+      if (editCheckedInAt) updates.checked_in_at = localToUTC(editCheckedInAt, tz);
+      if (editCheckedOutAt) updates.checked_out_at = localToUTC(editCheckedOutAt, tz);
       if (editDurationMinutes) updates.duration_minutes = parseInt(editDurationMinutes);
 
       await schedulingService.updateAttendance(editModal.record.id, updates);
@@ -130,9 +133,8 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
       minute: '2-digit',
     });
 
-  const formatDateTimeForInput = (dateString: string) => {
-    const d = new Date(dateString);
-    return d.toISOString().slice(0, 16);
+  const formatDateTimeForInputLocal = (dateString: string) => {
+    return formatForDateTimeInput(dateString, tz);
   };
 
   if (!shiftId) {

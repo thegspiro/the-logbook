@@ -11,7 +11,7 @@ import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition }
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatForDateTimeInput } from '../utils/dateFormatting';
+import { formatDate, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -109,7 +109,13 @@ export const ElectionsPage: React.FC = () => {
     setCreateError(null);
 
     try {
-      await electionService.createElection(formData);
+      // Convert local datetime-local values to UTC before sending to backend
+      const submitData = {
+        ...formData,
+        start_date: localToUTC(formData.start_date, tz),
+        end_date: localToUTC(formData.end_date, tz),
+      };
+      await electionService.createElection(submitData);
       setShowCreateModal(false);
       setFormData({
         title: '',

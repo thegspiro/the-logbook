@@ -16,7 +16,7 @@ import type { User } from '../types/user';
 import type { Location } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDateTime, formatForDateTimeInput } from '../utils/dateFormatting';
+import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { userService, schedulingService, locationsService, trainingSessionService, trainingService } from '../services/api';
 
 /**
@@ -105,8 +105,15 @@ const CreateTrainingSessionPage: React.FC = () => {
     setSaving(true);
 
     try {
+      // Convert local datetime-local values to UTC before sending to backend
+      const submitData = {
+        ...formData,
+        start_datetime: localToUTC(formData.start_datetime, tz),
+        end_datetime: localToUTC(formData.end_datetime, tz),
+      };
+
       // Create training session (creates Event + TrainingCourse link)
-      const response = await trainingSessionService.createSession(formData);
+      const response = await trainingSessionService.createSession(submitData);
 
       toast.success('Training session created successfully!');
 

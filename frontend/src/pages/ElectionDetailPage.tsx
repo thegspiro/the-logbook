@@ -17,7 +17,7 @@ import { MeetingAttendance } from '../components/MeetingAttendance';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDateTime, formatForDateTimeInput } from '../utils/dateFormatting';
+import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
@@ -147,7 +147,7 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       setExtendError(null);
       const updated = await electionService.updateElection(electionId, {
-        end_date: newEndDate,
+        end_date: localToUTC(newEndDate, tz),
       });
       setElection(updated);
       setShowExtendModal(false);
