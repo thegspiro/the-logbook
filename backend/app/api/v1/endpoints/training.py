@@ -902,8 +902,8 @@ async def enroll_member_in_program(
 @router.post("/import/parse")
 async def parse_historical_import(
     file: UploadFile = File(...),
-    match_by: str = Query("email", pattern=r'^(email|badge_number|name)$',
-                          description="How to match CSV rows to members: email, badge_number, or name"),
+    match_by: str = Query("badge_number", pattern=r'^(email|badge_number|name)$',
+                          description="How to match CSV rows to members: badge_number, email, or name"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):

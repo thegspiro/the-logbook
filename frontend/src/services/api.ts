@@ -834,7 +834,7 @@ export const trainingService = {
 
   // ==================== Historical Training Import ====================
 
-  async parseHistoricalImport(file: File, matchBy: 'email' | 'badge_number' | 'name' = 'email'): Promise<HistoricalImportParseResponse> {
+  async parseHistoricalImport(file: File, matchBy: 'email' | 'badge_number' | 'name' = 'badge_number'): Promise<HistoricalImportParseResponse> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await api.post<HistoricalImportParseResponse>(
