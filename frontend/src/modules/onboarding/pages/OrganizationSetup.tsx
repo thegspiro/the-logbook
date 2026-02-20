@@ -6,7 +6,7 @@ import {
   MapPin,
   Phone,
   Mail,
-  Clock,
+
   FileText,
   ChevronDown,
   ChevronUp,
@@ -63,9 +63,6 @@ interface OrganizationFormData {
   fdid: string;
   stateId: string;
   departmentId: string;
-  // Additional Info
-  county: string;
-  foundedYear: string;
   logo: string | null;
 }
 
@@ -160,8 +157,6 @@ const initialFormData: OrganizationFormData = {
   fdid: '',
   stateId: '',
   departmentId: '',
-  county: '',
-  foundedYear: '',
   logo: null,
 };
 
@@ -389,7 +384,7 @@ const OrganizationSetup: React.FC = () => {
     mailing: true,
     physical: false,
     identifiers: false,
-    additional: false,
+
     logo: true, // Logo is important and small, show by default
   });
 
@@ -662,8 +657,6 @@ const OrganizationSetup: React.FC = () => {
         fdid: formData.fdid || undefined,
         state_id: formData.stateId || undefined,
         department_id: formData.departmentId || undefined,
-        county: formData.county || undefined,
-        founded_year: formData.foundedYear ? parseInt(formData.foundedYear, 10) : undefined,
         logo: formData.logo || undefined,
       };
 
@@ -1016,39 +1009,6 @@ const OrganizationSetup: React.FC = () => {
                       helpText="Your internal department ID (if applicable)"
                     />
                   )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Additional Information */}
-          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
-            <SectionHeader
-              title="Additional Information"
-              icon={<Clock aria-hidden="true" className="w-5 h-5" />}
-              expanded={expandedSections.additional}
-              onToggle={() => toggleSection('additional')}
-            />
-            {expandedSections.additional && (
-              <div className="p-4 space-y-4 bg-theme-surface-secondary">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <InputField
-                    label="County/Jurisdiction"
-                    id="org-county"
-                    value={formData.county}
-                    onChange={(v) => updateFormData('county', v)}
-                    placeholder="e.g., Jefferson County"
-                    maxLength={100}
-                  />
-                  <InputField
-                    label="Year Founded"
-                    id="org-founded"
-                    value={formData.foundedYear}
-                    onChange={(v) => updateFormData('foundedYear', v.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="e.g., 1920"
-                    type="text"
-                    maxLength={4}
-                  />
                 </div>
               </div>
             )}
