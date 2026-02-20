@@ -742,6 +742,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               <input
                 id="template-start"
                 type="time"
+                step="900"
                 value={formData.start_time_of_day}
                 onChange={(e) => setFormData(prev => ({ ...prev, start_time_of_day: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
@@ -755,6 +756,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               <input
                 id="template-end"
                 type="time"
+                step="900"
                 value={formData.end_time_of_day}
                 onChange={(e) => setFormData(prev => ({ ...prev, end_time_of_day: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"

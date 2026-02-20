@@ -289,6 +289,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
         return (
           <input
             type="time"
+            step="900"
             className={inputClass}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}

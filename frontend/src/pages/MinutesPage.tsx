@@ -582,6 +582,7 @@ const MinutesPage: React.FC = () => {
                       <input
                         id="meeting-time"
                         type="time"
+                        step="900"
                         value={minutesForm.meetingTime}
                         onChange={(e) => setMinutesForm({ ...minutesForm, meetingTime: e.target.value })}
                         className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
