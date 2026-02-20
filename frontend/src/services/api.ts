@@ -296,10 +296,22 @@ export const userService = {
       email?: string;
       is_primary: boolean;
     }>;
+    password?: string;
     role_ids?: string[];
     send_welcome_email?: boolean;
   }): Promise<UserWithRoles> {
     const response = await api.post<UserWithRoles>('/users', memberData);
+    return response.data;
+  },
+
+  /**
+   * Reset a user's password (admin only)
+   */
+  async adminResetPassword(userId: string, newPassword: string, forceChange: boolean = true): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/users/${userId}/reset-password`, {
+      new_password: newPassword,
+      force_change: forceChange,
+    });
     return response.data;
   },
 

@@ -15,7 +15,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
 import { RSVPStatusBadge } from '../components/RSVPStatusBadge';
 import { getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
-import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput } from '../utils/dateFormatting';
+import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 
 export const EventDetailPage: React.FC = () => {
@@ -230,8 +230,8 @@ export const EventDetailPage: React.FC = () => {
       setSubmitError(null);
 
       await eventService.recordActualTimes(eventId, {
-        actual_start_time: actualStartTime ? new Date(actualStartTime).toISOString() : undefined,
-        actual_end_time: actualEndTime ? new Date(actualEndTime).toISOString() : undefined,
+        actual_start_time: actualStartTime ? localToUTC(actualStartTime, tz) : undefined,
+        actual_end_time: actualEndTime ? localToUTC(actualEndTime, tz) : undefined,
       });
 
       setShowRecordTimesModal(false);

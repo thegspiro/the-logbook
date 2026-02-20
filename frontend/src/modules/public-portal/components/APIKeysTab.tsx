@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { useAPIKeys } from '../hooks/usePublicPortal';
 import type { CreateAPIKeyRequest, PublicPortalAPIKey } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDateTime } from '../../../utils/dateFormatting';
+import { formatDateTime, localToUTC } from '../../../utils/dateFormatting';
 
 interface CreateKeyModalProps {
   isOpen: boolean;
@@ -18,6 +18,7 @@ interface CreateKeyModalProps {
 }
 
 const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCreate }) => {
+  const tz = useTimezone();
   const [formData, setFormData] = useState<CreateAPIKeyRequest>({
     name: '',
     rate_limit: undefined,
@@ -29,7 +30,11 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await onCreate(formData);
+      const submitData = {
+        ...formData,
+        expires_at: formData.expires_at ? localToUTC(formData.expires_at, tz) : undefined,
+      };
+      await onCreate(submitData);
       // Reset form and close
       setFormData({ name: '', rate_limit: undefined, expires_at: undefined });
       onClose();

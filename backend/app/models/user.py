@@ -271,6 +271,7 @@ class User(Base):
 
     # Password Management
     password_changed_at = Column(DateTime(timezone=True))
+    must_change_password = Column(Boolean, default=False, nullable=False, server_default="0")
     failed_login_attempts = Column(Integer, default=0)
     locked_until = Column(DateTime(timezone=True))
     password_reset_token = Column(String(128), index=True)

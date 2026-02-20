@@ -23,7 +23,7 @@ import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindow
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatForDateTimeInput } from '../utils/dateFormatting';
+import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
 interface EventFormProps {
   initialData?: Partial<EventCreate>;
@@ -262,6 +262,13 @@ export const EventForm: React.FC<EventFormProps> = ({
     if (!submitData.location) submitData.location = undefined;
     if (!submitData.location_details) submitData.location_details = undefined;
     if (!submitData.rsvp_deadline) submitData.rsvp_deadline = undefined;
+
+    // Convert local datetime-local values to UTC before sending to backend
+    submitData.start_datetime = localToUTC(submitData.start_datetime, tz);
+    submitData.end_datetime = localToUTC(submitData.end_datetime, tz);
+    if (submitData.rsvp_deadline) {
+      submitData.rsvp_deadline = localToUTC(submitData.rsvp_deadline, tz);
+    }
 
     try {
       await onSubmit(submitData);
