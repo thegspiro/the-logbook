@@ -374,6 +374,9 @@ def _cleanup_duplicate_revisions(versions_dir):
                 )
                 try:
                     os.rename(fp, stale_path)
+                except FileNotFoundError:
+                    # Another worker already renamed it — harmless race
+                    logger.info(f"Duplicate migration {fn} already handled by another worker")
                 except Exception as rename_err:
                     logger.error(f"Failed to rename {fn}: {rename_err}")
 
