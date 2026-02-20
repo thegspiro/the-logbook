@@ -2806,6 +2806,40 @@ export interface SchedulingSummary {
   total_hours_this_month: number;
 }
 
+export interface MemberComplianceRecord {
+  user_id: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  rank?: string;
+  completed_value: number;
+  percentage: number;
+  compliant: boolean;
+  shift_count: number;
+  total_hours: number;
+}
+
+export interface RequirementComplianceSummary {
+  requirement_id: string;
+  requirement_name: string;
+  requirement_type: string;
+  required_value: number;
+  frequency: string;
+  period_start: string;
+  period_end: string;
+  members: MemberComplianceRecord[];
+  total_members: number;
+  compliant_count: number;
+  non_compliant_count: number;
+  compliance_rate: number;
+}
+
+export interface ShiftComplianceResponse {
+  requirements: RequirementComplianceSummary[];
+  reference_date: string;
+  total_requirements: number;
+}
+
 export const schedulingService = {
   async getShifts(params?: { start_date?: string; end_date?: string; skip?: number; limit?: number }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
     const response = await api.get('/scheduling/shifts', { params });
@@ -3060,6 +3094,12 @@ export const schedulingService = {
   // --- Open Shifts ---
   async getOpenShifts(params?: { start_date?: string; end_date?: string; apparatus_id?: string }): Promise<Record<string, unknown>[]> {
     const response = await api.get('/scheduling/shifts/open', { params });
+    return response.data;
+  },
+
+  // --- Shift Compliance ---
+  async getComplianceReport(params?: { reference_date?: string }): Promise<ShiftComplianceResponse> {
+    const response = await api.get<ShiftComplianceResponse>('/scheduling/reports/compliance', { params });
     return response.data;
   },
 };
