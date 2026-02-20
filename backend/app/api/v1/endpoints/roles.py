@@ -47,17 +47,23 @@ router = APIRouter()
 # ============================================
 
 @router.get("/permissions", response_model=List[PermissionDetail])
-async def list_permissions():
+async def list_permissions(
+    current_user: User = Depends(get_current_user),
+):
     """
     Get list of all available permissions
 
     Returns permission details grouped by category for display in the UI.
+
+    **Authentication required**
     """
     return get_permission_details()
 
 
 @router.get("/permissions/by-category", response_model=List[PermissionCategory])
-async def list_permissions_by_category():
+async def list_permissions_by_category(
+    current_user: User = Depends(get_current_user),
+):
     """
     Get permissions organized by category
 

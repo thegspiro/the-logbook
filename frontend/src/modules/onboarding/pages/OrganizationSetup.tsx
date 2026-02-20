@@ -177,6 +177,7 @@ const SectionHeader: React.FC<{
   <button
     type="button"
     onClick={onToggle}
+    aria-expanded={expanded}
     className="w-full flex items-center justify-between p-4 bg-theme-surface hover:bg-theme-surface-hover rounded-lg transition-colors"
   >
     <div className="flex items-center gap-3">

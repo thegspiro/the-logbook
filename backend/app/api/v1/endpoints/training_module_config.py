@@ -9,6 +9,7 @@ GET  /my-training     - Member's aggregated training data (respects visibility c
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List
 import calendar
 from datetime import date
@@ -85,11 +86,18 @@ async def get_my_training_summary(
     config_service = TrainingModuleConfigService(db)
     visibility = await config_service.get_member_visibility(current_user.organization_id)
 
-    # Officers see everything
+    # Officers see everything — eagerly load roles to avoid MissingGreenlet
     is_officer = False
+    user_with_roles = None
     try:
-        if current_user.roles:
-            role_names = [r.name for r in current_user.roles]
+        user_result = await db.execute(
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.roles))
+        )
+        user_with_roles = user_result.scalar_one_or_none()
+        if user_with_roles and user_with_roles.roles:
+            role_names = [r.name for r in user_with_roles.roles]
             is_officer = any(r in role_names for r in ["admin", "training_officer", "chief"])
     except Exception:
         pass
@@ -153,11 +161,11 @@ async def get_my_training_summary(
     )
     all_requirements = req_result.scalars().all()
 
-    # Filter to requirements applicable to this user
+    # Filter to requirements applicable to this user (use eagerly-loaded roles)
     user_role_ids: List[str] = []
     try:
-        if current_user.roles:
-            user_role_ids = [str(r.id) for r in current_user.roles]
+        if user_with_roles and user_with_roles.roles:
+            user_role_ids = [str(r.id) for r in user_with_roles.roles]
     except Exception:
         pass
 
@@ -323,7 +331,9 @@ async def get_my_training_summary(
         else:
             pct = 100.0
 
-        # For biannual requirements, check if the latest cert is expired
+        # For biannual requirements, check if the latest cert is expired.
+        # Filter by training_type when set; otherwise match by requirement name
+        # to avoid picking up an unrelated cert (e.g. CPR cert satisfying EMS req).
         if freq == "biannual":
             cert_q = (
                 select(TrainingRecord.expiration_date)
@@ -339,6 +349,11 @@ async def get_my_training_summary(
             if req.training_type:
                 cert_q = cert_q.where(
                     TrainingRecord.training_type == req.training_type
+                )
+            elif req.name:
+                # Fallback: match by course_name containing the requirement name
+                cert_q = cert_q.where(
+                    TrainingRecord.course_name.ilike(f"%{req.name}%")
                 )
             cert_r = await db.execute(cert_q)
             latest_exp = cert_r.scalar_one_or_none()
@@ -448,6 +463,10 @@ async def get_my_training_summary(
             if req.training_type:
                 cert_query = cert_query.where(
                     TrainingRecord.training_type == req.training_type
+                )
+            elif req.name:
+                cert_query = cert_query.where(
+                    TrainingRecord.course_name.ilike(f"%{req.name}%")
                 )
             cert_result = await db.execute(cert_query)
             latest_cert = cert_result.scalar_one_or_none()

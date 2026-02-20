@@ -93,7 +93,7 @@ export const MemberProfilePage: React.FC = () => {
   const fetchModuleStatus = async () => {
     try {
       const response = await organizationService.getEnabledModules();
-      const inventoryEnabled = response.enabled_modules.includes('inventory');
+      const inventoryEnabled = (response?.enabled_modules ?? []).includes('inventory');
       setInventoryModuleEnabled(inventoryEnabled);
 
       // Fetch inventory if module is enabled
@@ -136,7 +136,7 @@ export const MemberProfilePage: React.FC = () => {
       setInventoryLoading(true);
       const response = await inventoryService.getUserInventory(userId!);
       // Transform the inventory response to match our InventoryItem interface
-      const items: InventoryItem[] = response.permanent_assignments.map((item) => ({
+      const items: InventoryItem[] = (response?.permanent_assignments ?? []).map((item) => ({
         id: item.assignment_id,
         name: item.item_name,
         item_number: item.serial_number || item.asset_tag || '',
@@ -155,13 +155,13 @@ export const MemberProfilePage: React.FC = () => {
   const getTrainingStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-500/10 text-green-400';
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-500/10 text-blue-400';
       case 'scheduled':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-500/10 text-yellow-400';
       case 'failed':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-500/10 text-red-400';
       case 'cancelled':
         return 'bg-gray-100 text-gray-600';
       default:
@@ -260,8 +260,8 @@ export const MemberProfilePage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-700">{error || 'Member not found'}</p>
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+            <p className="text-sm text-red-400">{error || 'Member not found'}</p>
           </div>
         </div>
       </div>
@@ -272,8 +272,8 @@ export const MemberProfilePage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-700">Member not found</p>
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+            <p className="text-sm text-red-400">Member not found</p>
           </div>
         </div>
       </div>
@@ -314,7 +314,7 @@ export const MemberProfilePage: React.FC = () => {
                     <span
                       key={role.id}
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        role.is_system ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                        role.is_system ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-100 text-gray-800'
                       }`}
                     >
                       {role.name}
@@ -326,7 +326,7 @@ export const MemberProfilePage: React.FC = () => {
             <span
               className={`px-3 py-1 text-sm font-semibold rounded-full ${
                 user.status === 'active'
-                  ? 'bg-green-100 text-green-800'
+                  ? 'bg-green-500/10 text-green-400'
                   : 'bg-gray-100 text-gray-800'
               }`}
             >
@@ -402,12 +402,12 @@ export const MemberProfilePage: React.FC = () => {
                             {training.status.replace('_', ' ')}
                           </span>
                           {isExpired(training) && (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400">
                               expired
                             </span>
                           )}
                           {!isExpired(training) && isExpiringSoon(training) && (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-400">
                               expiring soon
                             </span>
                           )}
@@ -468,10 +468,10 @@ export const MemberProfilePage: React.FC = () => {
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                               item.condition === 'Excellent'
-                                ? 'bg-green-100 text-green-800'
+                                ? 'bg-green-500/10 text-green-400'
                                 : item.condition === 'Good'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                                ? 'bg-blue-500/10 text-blue-400'
+                                : 'bg-yellow-500/10 text-yellow-400'
                             }`}
                           >
                             {item.condition}

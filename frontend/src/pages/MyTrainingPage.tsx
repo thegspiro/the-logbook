@@ -70,6 +70,7 @@ const Section: React.FC<{ title: string; icon: React.ElementType; children: Reac
     <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-theme-surface-hover transition-colors"
       >
         <div className="flex items-center space-x-3">

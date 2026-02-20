@@ -181,6 +181,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const isUserAssigned = assignments.some(a => a.user_id === user?.id);
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shiftDate < new Date();

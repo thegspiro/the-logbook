@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-20 (includes member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique badge number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
+**Last Updated**: 2026-02-20 (includes comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique badge number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
 
 ---
 
@@ -2137,6 +2137,30 @@ Only explicitly named users can evaluate.
 
 ## Training Module
 
+### Training Officers See Wrong Requirements (Fixed 2026-02-20)
+
+**Symptom**: Training officers using the "My Training" page only see requirements marked `applies_to_all = True`. Role-scoped requirements never appear, and the officer is treated as a regular member.
+
+**Root Cause**: The `GET /my-training` endpoint accessed `current_user.roles` via lazy loading in an async context, which triggered `MissingGreenlet`. The broad `try/except: pass` silently caught the error, so `is_officer` was always `False` and `user_role_ids` was always empty.
+
+**Fix Applied**: Replaced the lazy `current_user.roles` access with an explicit `selectinload(User.roles)` query.
+
+### Training Record Creation / Updates Were Unprotected (Fixed 2026-02-20)
+
+**Symptom**: Any authenticated user could create or modify training records for any member via `POST /records` or `PATCH /records/{id}`.
+
+**Root Cause**: These endpoints only required basic authentication (`get_current_user`) and accepted a `user_id` field in the request body without ownership or permission checks.
+
+**Fix Applied**: Both endpoints now require `training.manage` permission via `require_permission("training.manage")`.
+
+### Event Cancellation Notifications Not Sending (Fixed 2026-02-20)
+
+**Symptom**: When an event is cancelled, attendees who RSVP'd "Going" or "Maybe" do not receive cancellation notifications.
+
+**Root Cause**: After `db.commit()`, the `event.rsvps` relationship was expired. Accessing it in the notification loop triggered `MissingGreenlet` (silently caught), so the loop never executed.
+
+**Fix Applied**: Captured `event.rsvps` into a local `rsvps_to_notify` list before the commit.
+
 ### Overview
 
 The Training module manages courses, requirements, programs (pipelines), shift completion reports, self-reported training, and member visibility settings. Training data is accessible to individual members via their "My Training" page with configurable visibility settings per department.
@@ -3260,6 +3284,22 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 ---
 
 ## Dashboard Issues
+
+### Admin Summary Shows All Zeros (Fixed 2026-02-20)
+
+**Symptom**: Chiefs and admins see all zeros for member counts, upcoming events, and action items on the dashboard admin summary panel.
+
+**Root Cause**: The dashboard used raw `axios.get()` instead of the configured `api` instance. The auth token was never attached to the request, so the backend returned 401 (caught silently), and all stats defaulted to 0.
+
+**Fix Applied**: Replaced raw `axios` import with `dashboardService.getAdminSummary()` which uses the configured API instance with proper auth headers.
+
+### Action Items Count Includes Other Organizations (Fixed 2026-02-20)
+
+**Symptom**: In a multi-tenant deployment, the admin summary shows inflated overdue/open action item counts because minutes action items were not scoped to the current organization.
+
+**Root Cause**: The `ActionItem` (minutes_action_items) table does not have an `organization_id` column directly. The query was counting ALL action items across all organizations.
+
+**Fix Applied**: Added a `JOIN` through `MeetingMinutes` to scope the count query by `MeetingMinutes.organization_id == org_id`.
 
 ### Dashboard Shows Admin Content Instead of Member Content
 

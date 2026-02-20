@@ -209,12 +209,13 @@ async def list_records(
 async def create_record(
     record: TrainingRecordCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Create a new training record
 
     **Authentication required**
+    **Requires permission: training.manage**
     """
     new_record = TrainingRecord(
         organization_id=current_user.organization_id,
@@ -247,12 +248,13 @@ async def update_record(
     record_id: UUID,
     record_update: TrainingRecordUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Update a training record
 
     **Authentication required**
+    **Requires permission: training.manage**
     """
     result = await db.execute(
         select(TrainingRecord)
@@ -859,6 +861,10 @@ async def enroll_member_in_program(
             detail=f"{member.full_name} is already enrolled in '{program.name}'"
         )
 
+    # Capture scalar values before commit expires ORM objects
+    member_name = member.full_name
+    program_name = program.name
+
     enrollment = ProgramEnrollment(
         organization_id=str(current_user.organization_id),
         user_id=str(user_id),
@@ -877,9 +883,9 @@ async def enroll_member_in_program(
         event_data={
             "enrollment_id": str(enrollment.id),
             "user_id": str(user_id),
-            "member_name": member.full_name,
+            "member_name": member_name,
             "program_id": str(program_id),
-            "program_name": program.name,
+            "program_name": program_name,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -888,9 +894,9 @@ async def enroll_member_in_program(
     return {
         "enrollment_id": str(enrollment.id),
         "user_id": str(user_id),
-        "member_name": member.full_name,
+        "member_name": member_name,
         "program_id": str(program_id),
-        "program_name": program.name,
+        "program_name": program_name,
         "status": "active",
     }
 
@@ -1266,29 +1272,29 @@ async def confirm_historical_import(
             training_type = request.default_training_type
 
         try:
-            record = TrainingRecord(
-                organization_id=current_user.organization_id,
-                user_id=row.user_id,
-                course_id=course_id,
-                course_name=course_name,
-                course_code=row.course_code,
-                training_type=training_type,
-                completion_date=row.completion_date,
-                expiration_date=row.expiration_date,
-                hours_completed=row.hours_completed or 0,
-                credit_hours=row.credit_hours,
-                certification_number=row.certification_number,
-                issuing_agency=row.issuing_agency,
-                status=request.default_status,
-                score=row.score,
-                passed=row.passed,
-                instructor=row.instructor,
-                location=row.location,
-                notes=row.notes or "Imported from historical CSV",
-                created_by=current_user.id,
-            )
-            db.add(record)
-            await db.flush()
+            async with db.begin_nested():
+                record = TrainingRecord(
+                    organization_id=current_user.organization_id,
+                    user_id=row.user_id,
+                    course_id=course_id,
+                    course_name=course_name,
+                    course_code=row.course_code,
+                    training_type=training_type,
+                    completion_date=row.completion_date,
+                    expiration_date=row.expiration_date,
+                    hours_completed=row.hours_completed or 0,
+                    credit_hours=row.credit_hours,
+                    certification_number=row.certification_number,
+                    issuing_agency=row.issuing_agency,
+                    status=request.default_status,
+                    score=row.score,
+                    passed=row.passed,
+                    instructor=row.instructor,
+                    location=row.location,
+                    notes=row.notes or "Imported from historical CSV",
+                    created_by=current_user.id,
+                )
+                db.add(record)
             imported += 1
         except Exception as e:
             failed += 1

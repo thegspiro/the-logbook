@@ -324,10 +324,10 @@ export const MembersAdminPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
             <div className="flex">
               <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
+                <p className="text-sm text-red-400">{error}</p>
               </div>
             </div>
           </div>
@@ -370,8 +370,8 @@ export const MembersAdminPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <p className="text-sm text-red-400">{error}</p>
         </div>
       )}
 
@@ -457,7 +457,7 @@ export const MembersAdminPage: React.FC = () => {
                             key={role.id}
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               role.is_system
-                                ? 'bg-blue-100 text-blue-800'
+                                ? 'bg-blue-500/10 text-blue-400'
                                 : 'bg-theme-surface text-theme-text-secondary'
                             }`}
                           >
@@ -478,7 +478,7 @@ export const MembersAdminPage: React.FC = () => {
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.status === 'active'
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-green-500/10 text-green-400'
                           : 'bg-gray-100 text-gray-800'
                       }`}
                     >
@@ -532,7 +532,7 @@ export const MembersAdminPage: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
                         {role.is_system && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400">
                             System
                           </span>
                         )}
@@ -772,7 +772,7 @@ export const MembersAdminPage: React.FC = () => {
                           {role.name}
                         </span>
                         {role.is_system && (
-                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                          <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded">
                             System
                           </span>
                         )}
