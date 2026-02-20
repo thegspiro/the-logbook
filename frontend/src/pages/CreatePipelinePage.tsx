@@ -719,19 +719,19 @@ const StepReview: React.FC<{
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-theme-surface rounded-lg p-4 text-center">
-          <p className="text-2xl font-bold text-red-400">{phases.length}</p>
+          <p className="text-2xl font-bold text-red-700 dark:text-red-400">{phases.length}</p>
           <p className="text-theme-text-muted text-sm">Phases</p>
         </div>
         <div className="bg-theme-surface rounded-lg p-4 text-center">
-          <p className="text-2xl font-bold text-blue-400">{totalReqs}</p>
+          <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{totalReqs}</p>
           <p className="text-theme-text-muted text-sm">Requirements</p>
         </div>
         <div className="bg-theme-surface rounded-lg p-4 text-center">
-          <p className="text-2xl font-bold text-yellow-400">{totalMs}</p>
+          <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{totalMs}</p>
           <p className="text-theme-text-muted text-sm">Milestones</p>
         </div>
         <div className="bg-theme-surface rounded-lg p-4 text-center">
-          <p className="text-2xl font-bold text-green-400">{info.time_limit_days || '\u2014'}</p>
+          <p className="text-2xl font-bold text-green-700 dark:text-green-400">{info.time_limit_days || '\u2014'}</p>
           <p className="text-theme-text-muted text-sm">Days Limit</p>
         </div>
       </div>

@@ -301,6 +301,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
         return (
           <input
             type="datetime-local"
+            step="900"
             className={inputClass}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}

@@ -23,13 +23,13 @@ import type {
 const getStatusColor = (status: RequirementProgressStatus) => {
   switch (status) {
     case 'completed':
-      return 'text-green-400 bg-green-500/10';
+      return 'text-green-700 dark:text-green-400 bg-green-500/10';
     case 'in_progress':
-      return 'text-blue-400 bg-blue-500/10';
+      return 'text-blue-700 dark:text-blue-400 bg-blue-500/10';
     case 'waived':
-      return 'text-gray-400 bg-gray-500/10';
+      return 'text-gray-700 dark:text-gray-400 bg-gray-500/10';
     default:
-      return 'text-gray-500 bg-gray-500/10';
+      return 'text-gray-700 dark:text-gray-400 bg-gray-500/10';
   }
 };
 
@@ -40,7 +40,7 @@ const getStatusIcon = (status: RequirementProgressStatus) => {
     case 'in_progress':
       return <Play className="w-5 h-5 text-blue-400" />;
     default:
-      return <Circle className="w-5 h-5 text-gray-500" />;
+      return <Circle className="w-5 h-5 text-gray-700 dark:text-gray-400" />;
   }
 };
 

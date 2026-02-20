@@ -68,6 +68,8 @@ async def list_permissions_by_category(
     Get permissions organized by category
 
     Useful for building permission selection UI with category grouping.
+
+    **Authentication required**
     """
     categorized = get_permissions_by_category()
 
@@ -96,7 +98,7 @@ async def list_permissions_by_category(
 async def list_roles(
     include_user_count: bool = Query(True, description="Include count of users per role"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("roles.view")),
+    current_user: User = Depends(require_permission("positions.view", "roles.view")),
 ):
     """
     Get all roles for the organization
@@ -119,7 +121,7 @@ async def list_roles(
 async def create_role(
     role_data: RoleCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("roles.create")),
+    current_user: User = Depends(require_permission("positions.create", "roles.create")),
 ):
     """
     Create a new custom role
@@ -169,7 +171,7 @@ async def create_role(
 async def get_role(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("roles.view")),
+    current_user: User = Depends(require_permission("positions.view", "roles.view")),
 ):
     """
     Get a specific role by ID
@@ -197,7 +199,7 @@ async def update_role(
     role_id: UUID,
     role_update: RoleUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("roles.edit", "roles.update")),
+    current_user: User = Depends(require_permission("positions.edit", "positions.update", "roles.edit", "roles.update")),
 ):
     """
     Update a role
@@ -246,7 +248,7 @@ async def update_role(
 async def delete_role(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("roles.delete")),
+    current_user: User = Depends(require_permission("positions.delete", "roles.delete")),
 ):
     """
     Delete a role
@@ -290,7 +292,7 @@ async def clone_role(
     role_id: UUID,
     clone_request: RoleCloneRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("roles.create")),
+    current_user: User = Depends(require_permission("positions.create", "roles.create")),
 ):
     """
     Clone an existing role with new name and slug
@@ -343,7 +345,7 @@ async def clone_role(
 async def get_role_users(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("roles.view", "users.view")),
+    current_user: User = Depends(require_permission("positions.view", "roles.view", "users.view")),
 ):
     """
     Get all users assigned to a specific role
@@ -399,7 +401,7 @@ async def get_role_users(
 async def get_user_permissions(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.view", "roles.view")),
+    current_user: User = Depends(require_permission("users.view", "positions.view", "roles.view")),
 ):
     """
     Get all permissions for a specific user based on their roles

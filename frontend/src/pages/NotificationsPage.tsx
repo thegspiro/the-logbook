@@ -275,11 +275,11 @@ const NotificationsPage: React.FC = () => {
           </div>
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Active Rules</p>
-            <p className="text-green-400 text-2xl font-bold mt-1">{summary?.active_rules ?? rules.filter(r => r.enabled).length}</p>
+            <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary?.active_rules ?? rules.filter(r => r.enabled).length}</p>
           </div>
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Emails Sent (This Month)</p>
-            <p className="text-orange-400 text-2xl font-bold mt-1">{summary?.emails_sent_this_month ?? 0}</p>
+            <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">{summary?.emails_sent_this_month ?? 0}</p>
           </div>
         </div>
 
@@ -346,7 +346,7 @@ const NotificationsPage: React.FC = () => {
                   placeholder="Search notification rules..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
             </div>

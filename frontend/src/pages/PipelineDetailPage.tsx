@@ -42,9 +42,9 @@ type DetailTab = 'overview' | 'phases' | 'enrollments';
 
 const StructureBadge: React.FC<{ type: ProgramStructureType }> = ({ type }) => {
   const colors: Record<ProgramStructureType, string> = {
-    phases: 'bg-blue-500/20 text-blue-400',
-    sequential: 'bg-purple-500/20 text-purple-400',
-    flexible: 'bg-green-500/20 text-green-400',
+    phases: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+    sequential: 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400',
+    flexible: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
   };
 
   return (
@@ -73,13 +73,13 @@ const PositionBadge: React.FC<{ position: string }> = ({ position }) => {
 
 const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   const colors: Record<string, string> = {
-    hours: 'bg-blue-500/20 text-blue-400',
-    courses: 'bg-green-500/20 text-green-400',
-    skills_evaluation: 'bg-purple-500/20 text-purple-400',
-    checklist: 'bg-yellow-500/20 text-yellow-400',
-    certification: 'bg-pink-500/20 text-pink-400',
-    shifts: 'bg-orange-500/20 text-orange-400',
-    calls: 'bg-red-500/20 text-red-400',
+    hours: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+    courses: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+    skills_evaluation: 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400',
+    checklist: 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
+    certification: 'bg-pink-500/10 text-pink-700 dark:bg-pink-500/20 dark:text-pink-400',
+    shifts: 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+    calls: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
   };
 
   const labels: Record<string, string> = {

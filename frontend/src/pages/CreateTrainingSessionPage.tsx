@@ -236,6 +236,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </label>
                   <input
                     type="datetime-local"
+                    step="900"
                     value={formatForDateTimeInput(formData.start_datetime, tz)}
                     onChange={(e) => updateField('start_datetime', e.target.value)}
                     className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -247,6 +248,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </label>
                   <input
                     type="datetime-local"
+                    step="900"
                     value={formatForDateTimeInput(formData.end_datetime, tz)}
                     onChange={(e) => updateField('end_datetime', e.target.value)}
                     className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -381,6 +383,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     </label>
                     <input
                       type="datetime-local"
+                      step="900"
                       value={formatForDateTimeInput(formData.rsvp_deadline, tz)}
                       onChange={(e) => updateField('rsvp_deadline', e.target.value)}
                       className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"

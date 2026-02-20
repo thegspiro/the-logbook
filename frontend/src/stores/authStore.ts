@@ -140,8 +140,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   checkPermission: (permission: string) => {
     const { user } = get();
     if (!user?.permissions) return false;
-    // Wildcard "*" grants all permissions (it_manager / System Owner position)
-    return user.permissions.includes('*') || user.permissions.includes(permission);
+    // Global wildcard "*" grants all permissions (it_manager / System Owner position)
+    if (user.permissions.includes('*')) return true;
+    // Exact match
+    if (user.permissions.includes(permission)) return true;
+    // Module wildcard: "settings.*" matches "settings.manage", etc.
+    if (permission.includes('.')) {
+      const module = permission.split('.')[0];
+      if (user.permissions.includes(`${module}.*`)) return true;
+    }
+    return false;
   },
 
   hasRole: (role: string) => {

@@ -118,7 +118,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     checkPermission('events.manage') ||
     checkPermission('training.manage') ||
     checkPermission('inventory.manage') ||
-    checkPermission('roles.manage') ||
+    checkPermission('positions.manage_permissions') ||
     checkPermission('settings.manage') ||
     checkPermission('analytics.view');
 
@@ -210,7 +210,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         icon: Settings,
         subItems: [
           { label: 'Organization', path: '/settings', icon: Building2 },
-          { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'roles.manage' },
+          { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'positions.manage_permissions' },
           { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'settings.manage' },
           { label: 'Analytics', path: '/admin/analytics', icon: BarChart3, permission: 'analytics.view' },
           { label: 'Error Monitor', path: '/admin/errors', icon: AlertTriangle, permission: 'settings.manage' },

@@ -110,8 +110,8 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
       <div className="bg-theme-surface-modal rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-700">
-          <h2 id="create-provider-title" className="text-2xl font-bold text-white">
+        <div className="p-6 border-b border-theme-surface-border">
+          <h2 id="create-provider-title" className="text-2xl font-bold text-theme-text-primary">
             {step === 'type' ? 'Select Provider Type' : 'Configure Provider'}
           </h2>
         </div>
@@ -593,8 +593,8 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
       <div className="bg-theme-surface-modal rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-700">
-          <h2 id="edit-provider-title" className="text-2xl font-bold text-white">
+        <div className="p-6 border-b border-theme-surface-border">
+          <h2 id="edit-provider-title" className="text-2xl font-bold text-theme-text-primary">
             Edit Provider: {provider.name}
           </h2>
           <p className="text-sm text-theme-text-muted mt-1">
