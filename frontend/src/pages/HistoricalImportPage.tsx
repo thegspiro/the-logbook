@@ -44,12 +44,11 @@ import type {
 
 // ==================== Constants ====================
 
-type MatchStrategy = 'email' | 'badge_number' | 'name';
+type MatchStrategy = 'email' | 'badge_number';
 
 const MATCH_STRATEGIES: { value: MatchStrategy; label: string; description: string; requiredCol: string }[] = [
   { value: 'badge_number', label: 'Badge Number', description: 'Most reliable — match by badge or employee number', requiredCol: 'badge_number' },
   { value: 'email', label: 'Email Address', description: 'Match members by their email address', requiredCol: 'email' },
-  { value: 'name', label: 'Full Name', description: 'Match by first + last name (case-insensitive, less reliable)', requiredCol: 'name' },
 ];
 
 const TRAINING_TYPE_OPTIONS: { value: TrainingType; label: string }[] = [
@@ -239,7 +238,6 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
             <ul className="text-theme-text-muted space-y-0.5">
               {matchBy === 'email' && <li><code className="text-red-500">email</code> - Member email for matching</li>}
               {matchBy === 'badge_number' && <li><code className="text-red-500">badge_number</code> - Badge or employee number</li>}
-              {matchBy === 'name' && <li><code className="text-red-500">name</code> - Full name (or <code>first_name</code> + <code>last_name</code>)</li>}
               <li><code className="text-red-500">course_name</code> - Training course title</li>
             </ul>
           </div>
@@ -261,7 +259,6 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
           const templates: Record<MatchStrategy, string> = {
             email: 'email,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\njohn@dept.gov,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\njane@dept.gov,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n',
             badge_number: 'badge_number,name,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\n1234,John Smith,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\n5678,Jane Doe,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n',
-            name: 'name,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\nJohn Smith,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\nJane Doe,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n',
           };
           const blob = new Blob([templates[matchBy]], { type: 'text/csv' });
           const url = URL.createObjectURL(blob);
