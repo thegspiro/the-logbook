@@ -114,7 +114,8 @@ const Dashboard: React.FC = () => {
     }
     loadHours();
     loadTrainingProgress();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   const loadAdminSummary = async () => {
     try {

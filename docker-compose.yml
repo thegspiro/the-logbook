@@ -171,9 +171,12 @@ services:
     environment:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      - xpack.security.enabled=false
-    ports:
-      - "${ELASTICSEARCH_PORT:-9200}:9200"
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-change_me_in_production}
+    # SEC: Elasticsearch port NOT exposed to host by default.
+    # Uncomment for local development with direct ES access.
+    # ports:
+    #   - "${ELASTICSEARCH_PORT:-9200}:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:

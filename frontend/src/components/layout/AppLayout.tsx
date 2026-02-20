@@ -5,13 +5,11 @@ import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 import { useAuthStore } from '../../stores/authStore';
+import { useIdleTimer } from '../../hooks/useIdleTimer';
 
 interface AppLayoutProps {
   children?: React.ReactNode;
 }
-
-// Inactivity timeout: auto-logout after 30 minutes of no user activity
-const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
@@ -25,28 +23,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   );
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  // Session inactivity timeout
-  useEffect(() => {
-    let inactivityTimer: ReturnType<typeof setTimeout>;
-
-    const resetTimer = () => {
-      clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(async () => {
-        await logout();
-        sessionStorage.clear();
-        navigate('/login', { state: { message: 'You have been logged out due to inactivity.' } });
-      }, INACTIVITY_TIMEOUT_MS);
-    };
-
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
-    events.forEach((event) => document.addEventListener(event, resetTimer));
-    resetTimer();
-
-    return () => {
-      clearTimeout(inactivityTimer);
-      events.forEach((event) => document.removeEventListener(event, resetTimer));
-    };
-  }, [logout, navigate]);
+  // Session inactivity timeout (configurable, fetched from backend, with warning toast)
+  useIdleTimer();
 
   useEffect(() => {
     // Load branding from localStorage first (persists across sessions/logout)

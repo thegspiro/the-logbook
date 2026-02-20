@@ -228,7 +228,9 @@ async def create_member(
         .where(User.id == new_user.id)
         .options(selectinload(User.positions))
     )
-    new_user = result.scalar_one()
+    new_user = result.scalar_one_or_none()
+    if not new_user:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="User disappeared after creation")
 
     await log_audit_event(
         db=db,
@@ -435,7 +437,9 @@ async def assign_user_roles(
         .where(User.id == str(user_id))
         .options(selectinload(User.positions))
     )
-    user = result.scalar_one()
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after role assignment")
 
     await log_audit_event(
         db=db,
@@ -523,7 +527,9 @@ async def add_role_to_user(
         .where(User.id == str(user_id))
         .options(selectinload(User.positions))
     )
-    user = result.scalar_one()
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after role addition")
 
     await log_audit_event(
         db=db,
@@ -601,7 +607,9 @@ async def remove_role_from_user(
         .where(User.id == str(user_id))
         .options(selectinload(User.positions))
     )
-    user = result.scalar_one()
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after role removal")
 
     await log_audit_event(
         db=db,
@@ -744,7 +752,9 @@ async def update_contact_info(
         .where(User.id == str(user_id))
         .options(selectinload(User.positions))
     )
-    user = result.scalar_one()
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after contact update")
 
     await log_audit_event(
         db=db,
@@ -780,8 +790,15 @@ async def update_user_profile(
     # Check if user is updating their own profile or has admin permissions
     is_self = str(current_user.id) == str(user_id)
     if not is_self:
-        user_perms = _collect_user_permissions(current_user)
-        if not _has_permission("users.edit", user_perms) and not _has_permission("members.manage", user_perms):
+        # Eagerly load positions so _collect_user_permissions can iterate safely
+        perm_result = await db.execute(
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.positions))
+        )
+        perm_user = perm_result.scalar_one()
+        user_permissions = _collect_user_permissions(perm_user)
+        if not _has_permission("users.update", user_permissions) and not _has_permission("members.manage", user_permissions):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to update this user's profile"
@@ -822,8 +839,11 @@ async def update_user_profile(
 
     # Rank changes restricted to Chief / membership coordinator
     if "rank" in update_data:
-        user_perms = _collect_user_permissions(current_user)
-        if not _has_permission("members.manage", user_perms):
+        rank_perm_result = await db.execute(
+            select(User).where(User.id == current_user.id).options(selectinload(User.positions))
+        )
+        rank_perm_user = rank_perm_result.scalar_one_or_none()
+        if not rank_perm_user or not _has_permission("members.manage", _collect_user_permissions(rank_perm_user)):
             update_data.pop("rank")
 
     # Handle emergency_contacts separately (needs serialization)
@@ -850,7 +870,9 @@ async def update_user_profile(
         .where(User.id == str(user_id))
         .options(selectinload(User.positions))
     )
-    user = result.scalar_one()
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after profile update")
 
     await log_audit_event(
         db=db,
