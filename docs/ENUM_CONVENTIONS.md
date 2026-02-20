@@ -114,9 +114,14 @@ class OrganizationType(str, enum.Enum):
     FIRE_EMS_COMBINED = "fire_ems_combined"
 ```
 
-**TypeScript (MUST MATCH):**
+**TypeScript Constants** (defined in `frontend/src/constants/enums.ts`):
 ```typescript
-type OrganizationType = 'fire_department' | 'ems_only' | 'fire_ems_combined';
+export const OrganizationType = {
+  FIRE_DEPARTMENT: 'fire_department',
+  EMS_ONLY: 'ems_only',
+  FIRE_EMS_COMBINED: 'fire_ems_combined',
+} as const;
+export type OrganizationType = (typeof OrganizationType)[keyof typeof OrganizationType];
 ```
 
 **Frontend Form Values:**
@@ -125,6 +130,84 @@ type OrganizationType = 'fire_department' | 'ems_only' | 'fire_ems_combined';
 <option value="ems_only">EMS Only</option>
 <option value="fire_ems_combined">Fire/EMS Combined</option>
 ```
+
+---
+
+### Rule 6: Never Compare Against Raw String Literals
+
+Always reference enum members or constants — never hardcode the string value
+at the point of comparison.
+
+**Backend (Python):**
+
+**✅ CORRECT:**
+```python
+from app.models.training import TrainingStatus
+
+# SQLAlchemy column — compare directly to enum member
+if record.status == TrainingStatus.COMPLETED:
+
+# Plain string from dict/request — compare to .value
+if update_fields["status"] == TrainingStatus.COMPLETED.value:
+```
+
+**❌ WRONG:**
+```python
+if record.status == "completed":    # Hardcoded string — WRONG!
+if update_fields["status"] == "completed":  # Hardcoded string — WRONG!
+```
+
+**Frontend (TypeScript):**
+
+**✅ CORRECT:**
+```typescript
+import { UserStatus, ElectionStatus } from '../constants/enums';
+
+if (member.status === UserStatus.ACTIVE) { ... }
+if (election.status === ElectionStatus.CLOSED) { ... }
+```
+
+**❌ WRONG:**
+```typescript
+if (member.status === 'active') { ... }    // Hardcoded string — WRONG!
+if (election.status === 'closed') { ... }  // Hardcoded string — WRONG!
+```
+
+**Why**: Centralising values in constants means a rename or typo is caught at
+import time rather than silently failing at runtime. It also makes refactoring
+(e.g. changing `"going"` to `"attending"`) a single-constant change instead of
+a find-and-replace across dozens of files.
+
+---
+
+### Rule 7: Use Centralized Role Group Constants
+
+Role-based lookups must reference the constants in `backend/app/core/constants.py`
+rather than re-declaring inline arrays.
+
+**✅ CORRECT:**
+```python
+from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
+
+cc_roles = config.get("cc_roles", ADMIN_NOTIFY_ROLE_SLUGS)
+```
+
+**❌ WRONG:**
+```python
+cc_roles = config.get("cc_roles", ["admin", "quartermaster", "chief"])
+```
+
+**Available role group constants:**
+| Constant | Roles | Used For |
+|----------|-------|----------|
+| `ADMIN_NOTIFY_ROLE_SLUGS` | admin, quartermaster, chief | Drop/archive CC notifications |
+| `LEADERSHIP_ROLE_SLUGS` | chief, president, VP, secretary | Critical event alerts |
+| `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief | Training module officer checks |
+| `OPERATIONAL_ROLE_SLUGS` | chief, asst_chief, captain, … | Election eligibility |
+| `ADMINISTRATIVE_ROLE_SLUGS` | president, VP, secretary, … | Election eligibility |
+
+**Individual role slug constants:** `ROLE_TRAINING_OFFICER`, `ROLE_IT_MANAGER`,
+`ROLE_MEMBER`, `ROLE_CHIEF` — for point lookups like `Role.slug == ROLE_MEMBER`.
 
 ---
 

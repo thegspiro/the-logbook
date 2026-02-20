@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dependency Updates & Hardcoded Value Elimination (2026-02-20)
+
+#### Dependency Version Bumps (minor/patch only)
+
+Safe, non-breaking upgrades to current stable versions.
+
+**Backend (requirements.txt):**
+- fastapi 0.115.6 → 0.129.0
+- uvicorn 0.34.0 → 0.41.0
+- pydantic 2.10.5 → 2.12.5
+- pydantic-settings 2.7.1 → 2.13.1
+- sqlalchemy 2.0.36 → 2.0.46
+- alembic 1.14.0 → 1.18.4
+- greenlet 3.1.1 → 3.3.1
+- PyJWT 2.10.1 → 2.11.0
+- jinja2 3.1.5 → 3.1.6
+- sentry-sdk 2.20.0 → 2.53.0
+- celery 5.4.0 → 5.6.2
+- mypy 1.14.0 → 1.19.1
+
+**Frontend (package.json):**
+- lucide-react ^0.469.0 → ^0.575.0
+- @vitejs/plugin-react ^4.3.4 → ^5.1.4 (Vite 7 alignment)
+- typescript ^5.7.3 → ^5.9.3
+
+**Intentionally skipped** (need dedicated migration effort):
+React 19, React Router 7, ESLint 10, Tailwind 4, Zod 4, redis 7, bcrypt 5,
+cryptography 46, Pillow 12, pytest 9, pytest-asyncio 1.3, black 26.
+
+#### Centralized Constants — Eliminate Hardcoded Strings
+
+Created single-source-of-truth constant files to replace ~110 hardcoded string
+literals scattered across 43 files.
+
+**New files:**
+- `backend/app/core/constants.py` — centralized role group slugs, folder slugs,
+  analytics event types, audit event types
+- `frontend/src/constants/enums.ts` — 15 TypeScript const objects mirroring all
+  backend Python enums (UserStatus, ElectionStatus, RSVPStatus, EventType,
+  FormStatus, FieldType, TrainingStatus, VoteType, ConnectionStatus,
+  FeatureStatus, HealthStatus, MembershipType, StageType, ApplicantStatus,
+  CheckInWindowType)
+
+**Backend changes (20 files):**
+- Replaced scattered `["admin", "quartermaster", "chief"]` arrays (appeared in
+  4 files) with `ADMIN_NOTIFY_ROLE_SLUGS` constant
+- Replaced `["chief", "president", "vice_president", "secretary"]` (2 files)
+  with `LEADERSHIP_ROLE_SLUGS`
+- Replaced operational/administrative role arrays with `OPERATIONAL_ROLE_SLUGS`
+  and `ADMINISTRATIVE_ROLE_SLUGS`
+- Replaced ~50 string literal comparisons with Python enum members
+  (e.g. `"completed"` → `TrainingStatus.COMPLETED.value`,
+  `"going"` → `RSVPStatus.GOING`, `"section_header"` → `FieldType.SECTION_HEADER.value`)
+- Replaced hardcoded folder slugs (`"facilities"`, `"events"`) with
+  `FOLDER_FACILITIES`, `FOLDER_EVENTS`
+- Replaced hardcoded analytics/audit event types with named constants
+
+**Frontend changes (17 files):**
+- Replaced ~60 string literal comparisons with constant references
+  (e.g. `'active'` → `UserStatus.ACTIVE`, `'closed'` → `ElectionStatus.CLOSED`,
+  `'approval'` → `VoteType.APPROVAL`, `'section_header'` → `FieldType.SECTION_HEADER`)
+
+#### CSS Variable Cleanup — Eliminate Hardcoded Colors
+
+**New CSS variables** (light + dark mode):
+- `--toast-success`, `--toast-error`, `--toast-icon-secondary`
+- `--toast-warning-bg`, `--toast-warning-text`
+- `--status-passed`, `--status-failed`, `--status-pending`
+
+**Components updated:**
+- `App.tsx` — toast icon colors now use CSS variables
+- `useIdleTimer.ts` — idle warning toast now uses CSS variables
+- `tailwind.config.js` — new variables registered as theme colors
+
 ### Security & Stability Audit (2026-02-20)
 
 Full codebase audit of all changes from 2026-02-19/20 identified and fixed 63 issues
