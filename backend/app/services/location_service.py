@@ -28,12 +28,19 @@ class LocationService:
         self, location_data: LocationCreate, organization_id: str, created_by: str
     ) -> Location:
         """Create a new location"""
-        # Check if location with same name already exists
-        result = await self.db.execute(
+        # Check if location with same name already exists within the same
+        # building/station.  Rooms at different stations may share a name
+        # (e.g. "Bunk Room" at Station 1 and Station 2).
+        dup_query = (
             select(Location)
             .where(Location.organization_id == str(organization_id))
             .where(Location.name == location_data.name)
         )
+        if location_data.building:
+            dup_query = dup_query.where(Location.building == location_data.building)
+        else:
+            dup_query = dup_query.where(Location.building.is_(None))
+        result = await self.db.execute(dup_query)
         existing = result.scalar_one_or_none()
         if existing:
             raise ValueError(f"Location with name '{location_data.name}' already exists")
@@ -96,14 +103,21 @@ class LocationService:
         if not location:
             return None
 
-        # Check if name is being changed and already exists
+        # Check if name is being changed and already exists within the same
+        # building/station scope
         if location_data.name and location_data.name != location.name:
-            result = await self.db.execute(
+            building = location_data.building if location_data.building is not None else location.building
+            dup_query = (
                 select(Location)
                 .where(Location.organization_id == str(organization_id))
                 .where(Location.name == location_data.name)
                 .where(Location.id != str(location_id))
             )
+            if building:
+                dup_query = dup_query.where(Location.building == building)
+            else:
+                dup_query = dup_query.where(Location.building.is_(None))
+            result = await self.db.execute(dup_query)
             existing = result.scalar_one_or_none()
             if existing:
                 raise ValueError(f"Location with name '{location_data.name}' already exists")
