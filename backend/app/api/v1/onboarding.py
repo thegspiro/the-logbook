@@ -515,9 +515,23 @@ async def _persist_session_data_to_org(
         org_settings.setdefault("auth", {})
         org_settings["auth"]["provider"] = auth_data["platform"]
 
+    # Persist module selections
+    modules_data = session_data.get("modules")
+    if modules_data and modules_data.get("enabled"):
+        enabled_list = modules_data["enabled"]
+        # Map the enabled list to the configurable module keys used by the
+        # Settings page (ModuleSettings schema).  Core modules like members,
+        # events, documents are always on and not tracked here.
+        configurable_keys = [
+            "training", "inventory", "scheduling", "elections", "minutes",
+            "reports", "notifications", "mobile", "forms", "integrations",
+            "facilities",
+        ]
+        org_settings["modules"] = {k: k in enabled_list for k in configurable_keys}
+
     organization.settings = org_settings
     await db.flush()
-    logger.info("Persisted session data (IT team, auth) to Organization.settings")
+    logger.info("Persisted session data (IT team, auth, modules) to Organization.settings")
 
 
 # ============================================
