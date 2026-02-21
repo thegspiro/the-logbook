@@ -219,7 +219,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
           <h3 id="field-editor-title" className="text-lg font-semibold text-theme-text-primary">
             {isEditing ? 'Edit Field' : 'Add Field'}
           </h3>
-          <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary p-1" aria-label="Close dialog">
+          <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary p-1 rounded focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)]" aria-label="Close dialog">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>

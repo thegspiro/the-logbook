@@ -1065,7 +1065,7 @@ const FormsPage: React.FC = () => {
                               form.is_public ? 'bg-cyan-600' : 'bg-theme-surface-hover'
                             }`}
                           >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white dark:bg-slate-200 transition-transform ${
                               form.is_public ? 'translate-x-6' : 'translate-x-1'
                             }`} />
                           </button>
@@ -1108,7 +1108,7 @@ const FormsPage: React.FC = () => {
                                 <QrCode className="w-4 h-4" aria-hidden="true" />
                                 <span>QR Code</span>
                               </label>
-                              <div className="flex flex-col items-center p-4 bg-white rounded-lg">
+                              <div className="flex flex-col items-center p-4 bg-white rounded-lg border border-theme-surface-border">
                                 <QRCodeSVG
                                   id={`qr-${form.public_slug}`}
                                   value={getPublicUrl(form.public_slug)}

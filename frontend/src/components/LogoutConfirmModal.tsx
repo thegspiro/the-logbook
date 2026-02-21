@@ -61,7 +61,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
           {/* Close button */}
           <button
             onClick={onCancel}
-            className="absolute top-4 right-4 text-theme-text-muted hover:text-theme-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+            className="absolute top-4 right-4 text-theme-text-muted hover:text-theme-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] rounded"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" aria-hidden="true" />

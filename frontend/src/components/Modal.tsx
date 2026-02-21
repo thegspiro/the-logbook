@@ -143,7 +143,7 @@ export const Modal: React.FC<ModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                className="rounded-md bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 aria-label="Close modal"
               >
                 <X className="h-6 w-6" aria-hidden="true" />
