@@ -14,7 +14,8 @@ The Training Module backend provides a comprehensive RESTful API for managing tr
 │   └── training_program.py
 ├── services/        # Business logic layer
 │   ├── training_session_service.py
-│   └── training_program_service.py
+│   ├── training_program_service.py
+│   └── training_waiver_service.py
 ├── api/v1/endpoints/  # API route handlers
 │   ├── training.py
 │   ├── training_sessions.py
@@ -432,12 +433,13 @@ async def update_requirement_progress(
 
 **Progress Calculation:**
 1. Updates status and progress_value
-2. Calculates progress_percentage based on requirement type:
-   - Hours: `(completed_hours / required_hours) * 100`
-   - Shifts: `(completed_shifts / required_shifts) * 100`
-   - Calls: `(completed_calls / required_calls) * 100`
-3. Auto-completes at 100%
-4. Triggers `_recalculate_enrollment_progress()`
+2. Fetches active waivers/leaves for the user
+3. Calculates progress_percentage based on requirement type (using waiver-adjusted required values):
+   - Hours: `(completed_hours / adjusted_required_hours) * 100`
+   - Shifts: `(completed_shifts / adjusted_required_shifts) * 100`
+   - Calls: `(completed_calls / adjusted_required_calls) * 100`
+4. Auto-completes at 100%
+5. Triggers `_recalculate_enrollment_progress()`
 
 ```python
 async def _recalculate_enrollment_progress(
@@ -467,6 +469,60 @@ async def import_registry_requirements(
 2. Checks for existing requirements (if skip_existing)
 3. Creates new requirements
 4. Returns count and errors
+
+### TrainingWaiverService
+
+Shared calculation service (`training_waiver_service.py`) for adjusting training requirements based on active waivers and leaves of absence. All compliance views in the system use this service to ensure consistent waiver adjustments.
+
+**Data Sources:**
+- `training_waivers` table — training-specific waivers, may target specific requirement IDs via `requirement_ids` JSON column
+- `member_leaves_of_absence` table — department-wide leaves from the Member Lifecycle UI, apply to all requirements
+
+Both are merged into a uniform `WaiverPeriod` dataclass and deduplicated by calendar month.
+
+#### Fetch Helpers
+
+```python
+async def fetch_user_waivers(
+    db: AsyncSession, org_id: str, user_id: str
+) -> List[WaiverPeriod]
+```
+Fetches all active waiver/leave periods for a single user from both tables.
+
+```python
+async def fetch_org_waivers(
+    db: AsyncSession, org_id: str
+) -> Dict[str, List[WaiverPeriod]]
+```
+Batch-fetches all active waivers/leaves for an entire organization, indexed by `user_id`. Used by compliance matrix, competency matrix, and other batch evaluators to avoid N+1 queries.
+
+#### Calculation Helpers (Pure, No I/O)
+
+```python
+def count_waived_months(
+    waivers: List[WaiverPeriod],
+    period_start: date, period_end: date,
+    req_id: Optional[str] = None
+) -> int
+```
+Counts calendar months within the evaluation window covered by ≥15 days of waiver. Deduplicates overlapping waivers via a set of `(year, month)` tuples.
+
+```python
+def adjust_required(
+    base_required: float,
+    period_start: date, period_end: date,
+    waivers: List[WaiverPeriod],
+    req_id: Optional[str] = None
+) -> Tuple[float, int, int]
+```
+Returns `(adjusted_required, waived_months_count, active_months_count)` using the formula: `adjusted = base_required × (active_months / total_months)`.
+
+**Where Used:**
+- `training_module_config.py` — My Training self-view
+- `training.py` — Compliance Matrix (`_evaluate_member_requirement`)
+- `competency_matrix_service.py` — Competency Matrix / Heat Map
+- `training_service.py` — Training Reports, Requirement Progress
+- `training_program_service.py` — Program Enrollment Progress
 
 ## API Endpoints
 

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Waiver Consistency & Meeting Attendance Fixes (2026-02-21)
+
+#### Shared Training Waiver Service
+- **New `training_waiver_service.py`**: Created a centralized service for all training waiver/leave-of-absence calculations. Merges data from both `training_waivers` (training-specific, supports per-requirement targeting) and `member_leaves_of_absence` (department-wide leaves from Member Lifecycle UI) into a uniform `WaiverPeriod` representation.
+- **Consistent waiver adjustments across all compliance views**: Previously, training requirement adjustments for leaves of absence were only applied in the member's My Training self-view (`GET /my-training`). Now the same proportional adjustment formula (`adjusted = base × active_months / total_months`) is applied consistently in:
+  - Compliance Matrix (`GET /training/compliance-matrix`)
+  - Competency Matrix / Heat Map (`GET /training/competency-matrix`)
+  - Individual Training Reports (`GET /training/reports/user/{id}`)
+  - Per-Requirement Progress (`GET /training/requirements/progress/{id}`)
+  - Program Enrollment Progress recalculation
+- **Batch-fetch pattern**: Org-wide views (compliance matrix, competency matrix) use `fetch_org_waivers()` to load all waivers in a single query, avoiding N+1 database calls.
+- **Requirement types adjusted**: Hours, Shifts, and Calls requirements are reduced proportionally. Courses and Certifications are not adjusted (they are binary completions).
+
+#### Meeting Attendance — Leave of Absence Exclusion
+- **Attendance Dashboard**: Meetings that fall within a member's active Leave of Absence are now automatically excluded from the attendance denominator. Officers no longer need to manually grant per-meeting waivers for members on formal leave. New `meetings_on_leave` field added to the dashboard response.
+- **Voting Eligibility**: `MembershipTierService.get_meeting_attendance_pct()` now accounts for Leave of Absence periods when calculating attendance percentage for voting eligibility checks.
+
+#### Documentation
+- **New `TRAINING_WAIVERS.md`**: Comprehensive how-to guide covering: step-by-step UI workflow for creating leaves of absence, waiver calculation details (15-day threshold, overlapping deduplication, requirement types affected), all compliance views where adjustments are applied, API reference for both Member Leaves and Training Waivers endpoints, meeting attendance impact, example scenario, and FAQ.
+
+#### Database Column Type Consistency
+- **DateTime timezone awareness**: Added `timezone=True` to all DateTime columns across `election.py`, `event.py`, `minute.py`, and `training.py` models to ensure consistent UTC storage.
+- **Enum migration**: Created migration `20260221_0100_fix_column_type_consistency.py` to convert `waiver_type` and `leave_type` columns from plain String to proper database ENUM types, matching the SQLAlchemy model definitions.
+
+#### CI Pipeline
+- **New `.github/workflows/ci.yml`**: Added GitHub Actions CI pipeline with backend linting (flake8), frontend build validation (TypeScript + Vite), and Python syntax checking.
+
 ### Dependency Updates & Hardcoded Value Elimination (2026-02-20)
 
 #### Dependency Version Bumps (minor/patch only)
