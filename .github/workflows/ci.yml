@@ -1,0 +1,211 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Backend
+  # ──────────────────────────────────────────────
+  backend-lint:
+    name: Backend Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install linting tools
+        run: pip install flake8 black isort
+
+      - name: Run flake8
+        run: flake8 app/
+
+      - name: Check formatting with black
+        run: black --check app/
+
+      - name: Check import order with isort
+        run: isort --check-only app/
+
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libldap2-dev libsasl2-dev libmagic1
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          pytest tests/ \
+            --ignore=tests/test_onboarding_integration.py \
+            --ignore=tests/test_qr_check_in.py \
+            --ignore=tests/test_docker_integration.py \
+            -v
+
+  backend-test-integration:
+    name: Backend Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend-lint, backend-test]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: intranet_db
+          MYSQL_USER: intranet_user
+          MYSQL_PASSWORD: test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: intranet_db
+      DB_USER: intranet_user
+      DB_PASSWORD: test_password
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      ENVIRONMENT: testing
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      JWT_SECRET: ci-test-jwt-secret-not-for-production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libldap2-dev libsasl2-dev libmagic1
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run database migrations
+        run: alembic upgrade head
+
+      - name: Run integration tests
+        run: |
+          pytest tests/test_onboarding_integration.py \
+                 tests/test_qr_check_in.py \
+            -v --tb=short
+
+  # ──────────────────────────────────────────────
+  # Frontend
+  # ──────────────────────────────────────────────
+  frontend-lint:
+    name: Frontend Lint & Typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript type checking
+        run: npm run typecheck
+
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npx vitest run
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: [frontend-lint, frontend-test]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
