@@ -3168,6 +3168,7 @@ export interface NotificationLogRecord {
   recipient_email?: string;
   recipient_name?: string;
   channel: string;
+  category?: string;
   subject?: string;
   message?: string;
   sent_at: string;
@@ -3175,6 +3176,7 @@ export interface NotificationLogRecord {
   read: boolean;
   read_at?: string;
   error?: string;
+  expires_at?: string;
   created_at: string;
 }
 
@@ -3227,6 +3229,22 @@ export const notificationsService = {
 
   async getSummary(): Promise<NotificationsSummary> {
     const response = await api.get<NotificationsSummary>('/notifications/summary');
+    return response.data;
+  },
+
+  // User-facing notification inbox
+  async getMyNotifications(params?: { include_expired?: boolean; include_read?: boolean; skip?: number; limit?: number }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/notifications/my', { params });
+    return response.data;
+  },
+
+  async getMyUnreadCount(): Promise<{ unread_count: number }> {
+    const response = await api.get<{ unread_count: number }>('/notifications/my/unread-count');
+    return response.data;
+  },
+
+  async markMyNotificationRead(logId: string): Promise<NotificationLogRecord> {
+    const response = await api.post<NotificationLogRecord>(`/notifications/my/${logId}/read`);
     return response.data;
   },
 };

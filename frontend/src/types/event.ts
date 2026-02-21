@@ -370,6 +370,7 @@ export interface EventModuleSettings {
     is_mandatory: boolean;
     send_reminders: boolean;
     reminder_schedule: number[];
+    default_reminder_time: string;
     default_duration_minutes: number;
   };
   // QR code page settings

@@ -190,6 +190,71 @@ class NotificationsService:
 
         return logs, total
 
+    async def get_user_notifications(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        include_expired: bool = False,
+        include_read: bool = True,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[NotificationLog], int]:
+        """Get in-app notifications for a specific user.
+
+        Active view (include_expired=False): hides notifications past their
+        expires_at timestamp. History view (include_expired=True): returns all.
+        """
+        query = (
+            select(NotificationLog)
+            .where(NotificationLog.organization_id == str(organization_id))
+            .where(NotificationLog.recipient_id == str(user_id))
+            .where(NotificationLog.channel == NotificationChannel.IN_APP)
+        )
+
+        if not include_expired:
+            now = datetime.utcnow()
+            query = query.where(
+                or_(
+                    NotificationLog.expires_at.is_(None),
+                    NotificationLog.expires_at > now,
+                )
+            )
+
+        if not include_read:
+            query = query.where(NotificationLog.read == False)
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar()
+
+        query = query.order_by(NotificationLog.sent_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        logs = list(result.scalars().all())
+
+        return logs, total
+
+    async def get_user_unread_count(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+    ) -> int:
+        """Get count of unread, non-expired in-app notifications for a user."""
+        now = datetime.utcnow()
+        result = await self.db.execute(
+            select(func.count(NotificationLog.id))
+            .where(NotificationLog.organization_id == str(organization_id))
+            .where(NotificationLog.recipient_id == str(user_id))
+            .where(NotificationLog.channel == NotificationChannel.IN_APP)
+            .where(NotificationLog.read == False)
+            .where(
+                or_(
+                    NotificationLog.expires_at.is_(None),
+                    NotificationLog.expires_at > now,
+                )
+            )
+        )
+        return result.scalar() or 0
+
     async def mark_as_read(
         self, log_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[NotificationLog], Optional[str]]:
@@ -205,7 +270,7 @@ class NotificationsService:
                 return None, "Notification not found"
 
             log.read = True
-            log.read_at = datetime.now()
+            log.read_at = datetime.utcnow()
 
             await self.db.commit()
             await self.db.refresh(log)

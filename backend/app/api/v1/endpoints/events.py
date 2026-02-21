@@ -1593,6 +1593,7 @@ EVENT_SETTINGS_DEFAULTS = {
         "is_mandatory": False,
         "send_reminders": True,
         "reminder_schedule": [24],
+        "default_reminder_time": "12:00",
         "default_duration_minutes": 60,
     },
     "qr_code": {

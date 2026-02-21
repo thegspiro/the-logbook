@@ -301,10 +301,21 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     For each scheduled interval, if the current time has passed the threshold
     and we haven't already sent that interval's reminder, we send it.
 
-    Tracks which intervals have been sent in custom_fields.reminders_sent (list
-    of hours already notified, e.g. [168]).
+    Reminder timing:
+    - For intervals >= 24 hours (day-level): the reminder fires at the org's
+      default_reminder_time (e.g. noon) on the appropriate day. This is set
+      in the org's event module settings.
+    - For intervals < 24 hours: the reminder fires at exactly X hours before
+      the event start.
+
+    Notifications always create an in-app entry. Email is only sent if the
+    user has not opted out (email_notifications preference). In-app
+    notifications expire 24 hours after the event ends but remain in history.
+
+    Tracks which intervals have been sent in custom_fields.reminders_sent.
     """
-    from datetime import timedelta, timezone as dt_timezone
+    from datetime import timedelta, timezone as dt_timezone, time as dt_time
+    from zoneinfo import ZoneInfo
     from sqlalchemy.orm import selectinload
     from app.models.event import Event, EventRSVP, RSVPStatus
     from app.models.user import User
@@ -326,6 +337,22 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         org_emails = 0
 
         try:
+            # Load org event settings to get default_reminder_time
+            org_settings = (org.settings or {}).get("events", {}).get("defaults", {})
+            default_reminder_time_str = org_settings.get("default_reminder_time", "12:00")
+            try:
+                parts = default_reminder_time_str.split(":")
+                default_reminder_time = dt_time(int(parts[0]), int(parts[1]))
+            except (ValueError, IndexError):
+                default_reminder_time = dt_time(12, 0)
+
+            # Org timezone for day-level reminders
+            org_tz_name = org.timezone or "America/New_York"
+            try:
+                org_tz = ZoneInfo(org_tz_name)
+            except Exception:
+                org_tz = ZoneInfo("America/New_York")
+
             # Look ahead up to 168 hours (max reminder window)
             max_lookahead = now + timedelta(hours=168)
 
@@ -353,7 +380,21 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                 for hours in schedule:
                     if hours in already_sent:
                         continue
-                    threshold = event.start_datetime - timedelta(hours=hours)
+
+                    if hours >= 24:
+                        # Day-level reminder: fire at default_reminder_time on the
+                        # appropriate day in the org's timezone.
+                        days_before = hours // 24
+                        event_local = event.start_datetime.astimezone(org_tz)
+                        reminder_date = (event_local - timedelta(days=days_before)).date()
+                        reminder_local = datetime.combine(
+                            reminder_date, default_reminder_time, tzinfo=org_tz
+                        )
+                        threshold = reminder_local.astimezone(dt_timezone.utc)
+                    else:
+                        # Sub-day reminder: fire at exactly X hours before
+                        threshold = event.start_datetime - timedelta(hours=hours)
+
                     if now >= threshold:
                         due_intervals.append(hours)
 
@@ -403,33 +444,40 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                 event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
                 email_service = EmailService(organization=org)
 
+                # Notifications expire 24 hours after the event ends
+                expires_at = event.end_datetime + timedelta(hours=24)
+
                 # Send one notification per due interval
                 for hours in due_intervals:
                     for user in recipients:
                         prefs = user.notification_preferences or {}
-                        wants_reminders = prefs.get("event_reminders", True)
                         user_name = f"{user.first_name} {user.last_name}"
 
-                        # In-app notification
+                        # In-app notification — always created regardless of
+                        # email preference so users who opt out of email still
+                        # see reminders in the notification inbox.
                         try:
                             in_app_log = NotificationLog(
                                 id=generate_uuid(),
                                 organization_id=str(org.id),
                                 recipient_id=str(user.id),
                                 channel=NotificationChannel.IN_APP,
+                                category="event_reminder",
                                 subject=f"Reminder: {event.title}",
                                 message=(
                                     f"Your event \"{event.title}\" starts "
                                     f"{_format_relative_time(event.start_datetime, now)}."
                                 ),
+                                expires_at=expires_at,
                             )
                             db.add(in_app_log)
                             org_reminders += 1
                         except Exception as e:
                             logger.error(f"Failed to create in-app reminder for user {user.id}: {e}")
 
-                        # Email notification
+                        # Email notification — only if user hasn't opted out
                         wants_email = prefs.get("email_notifications", True)
+                        wants_reminders = prefs.get("event_reminders", True)
                         if wants_reminders and wants_email and user.email:
                             try:
                                 sent = await email_service.send_event_reminder(

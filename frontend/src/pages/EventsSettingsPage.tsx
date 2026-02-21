@@ -63,6 +63,7 @@ const DEFAULT_SETTINGS: EventModuleSettings = {
     is_mandatory: false,
     send_reminders: true,
     reminder_schedule: [24],
+    default_reminder_time: '12:00',
     default_duration_minutes: 120,
   },
   qr_code: {
@@ -704,6 +705,19 @@ export const EventsSettingsPage: React.FC = () => {
                       <option key={value} value={value}>{label}</option>
                     ))}
                   </select>
+
+                  <div className="mt-3 pt-3 border-t border-theme-surface-border">
+                    <label className="form-label-sm">Default notification time of day</label>
+                    <p className="text-xs text-theme-text-muted mb-2">
+                      Day-or-longer reminders (1 day, 2 days, 1 week) will be sent at this time. Shorter reminders (1–12 hours) fire at the exact hours before the event.
+                    </p>
+                    <input
+                      type="time"
+                      value={settings.defaults.default_reminder_time || '12:00'}
+                      onChange={(e) => updateDefaults('default_reminder_time', e.target.value)}
+                      className="form-input-sm w-36"
+                    />
+                  </div>
                 </div>
               )}
             </div>
