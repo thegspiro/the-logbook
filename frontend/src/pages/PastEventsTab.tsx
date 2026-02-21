@@ -1,7 +1,8 @@
 /**
- * Events Page
+ * Past Events Tab
  *
- * Lists all events with filtering by type.
+ * Displays past events for module managers.
+ * Shown within the Events Admin Hub.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -9,23 +10,19 @@ import { Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { EventListItem, EventType } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
-import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
 
-export const EventsPage: React.FC = () => {
+const PastEventsTab: React.FC = () => {
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<EventListItem[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const { checkPermission } = useAuthStore();
-  const canManage = checkPermission('events.manage');
   const tz = useTimezone();
 
   useEffect(() => {
-    fetchEvents();
+    fetchPastEvents();
   }, []);
 
   useEffect(() => {
@@ -36,16 +33,19 @@ export const EventsPage: React.FC = () => {
     }
   }, [events, typeFilter]);
 
-  const fetchEvents = async () => {
+  const fetchPastEvents = async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await eventService.getEvents({
-        end_after: new Date().toISOString(),
+        end_before: new Date().toISOString(),
+        include_cancelled: true,
       });
+      // Sort most recent first
+      data.sort((a, b) => new Date(b.start_datetime).getTime() - new Date(a.start_datetime).getTime());
       setEvents(data);
     } catch (_err) {
-      setError('Failed to load events. Please try again later.');
+      setError('Failed to load past events. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export const EventsPage: React.FC = () => {
     return (
       <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-        <span className="sr-only">Loading events...</span>
+        <span className="sr-only">Loading past events...</span>
       </div>
     );
   }
@@ -66,7 +66,7 @@ export const EventsPage: React.FC = () => {
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
-            onClick={fetchEvents}
+            onClick={fetchPastEvents}
             className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
           >
             Try again
@@ -77,44 +77,10 @@ export const EventsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-theme-text-primary">Events</h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
-            Department events, meetings, training sessions, and more
-          </p>
-        </div>
-        {canManage && (
-          <div className="flex items-center gap-3">
-            <Link
-              to="/events/admin"
-              className="inline-flex items-center px-3 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              title="Module Settings"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </Link>
-            <Link
-              to="/events/new"
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Create Event
-            </Link>
-          </div>
-        )}
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="border-b border-theme-surface-border mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
-        <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-thin pb-px" aria-label="Tabs">
+      {/* Type Filter */}
+      <div className="border-b border-theme-surface-border mb-6">
+        <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-thin pb-px" aria-label="Filter past events by type">
           {['all', 'business_meeting', 'public_education', 'training', 'social', 'fundraiser', 'ceremony', 'other'].map((filter) => (
             <button
               key={filter}
@@ -125,13 +91,13 @@ export const EventsPage: React.FC = () => {
                   : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border'
               } whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 font-medium text-sm flex-shrink-0`}
             >
-              {filter === 'all' ? 'All Events' : getEventTypeLabel(filter as EventType)}
+              {filter === 'all' ? 'All Types' : getEventTypeLabel(filter as EventType)}
             </button>
           ))}
         </nav>
       </div>
 
-      {/* Events List */}
+      {/* Past Events List */}
       {filteredEvents.length === 0 ? (
         <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
           <svg
@@ -148,11 +114,11 @@ export const EventsPage: React.FC = () => {
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
-          <h3 className="mt-2 text-sm font-medium text-theme-text-primary">No events found</h3>
+          <h3 className="mt-2 text-sm font-medium text-theme-text-primary">No past events</h3>
           <p className="mt-1 text-sm text-theme-text-muted">
             {typeFilter === 'all'
-              ? 'Get started by creating a new event.'
-              : `No ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`}
+              ? 'There are no past events to display.'
+              : `No past ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`}
           </p>
         </div>
       ) : (
@@ -215,7 +181,7 @@ export const EventsPage: React.FC = () => {
                       <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
-                      {event.going_count} attending
+                      {event.going_count} attended
                     </div>
                   )}
                 </div>
@@ -225,6 +191,7 @@ export const EventsPage: React.FC = () => {
         </div>
       )}
     </div>
-    </div>
   );
 };
+
+export default PastEventsTab;

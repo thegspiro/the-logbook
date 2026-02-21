@@ -132,6 +132,8 @@ class EventService:
         exclude_event_types: Optional[List[str]] = None,
         start_after: Optional[datetime] = None,
         start_before: Optional[datetime] = None,
+        end_after: Optional[datetime] = None,
+        end_before: Optional[datetime] = None,
         include_cancelled: bool = False,
         skip: int = 0,
         limit: int = 100,
@@ -157,6 +159,12 @@ class EventService:
 
         if start_before:
             query = query.where(Event.start_datetime <= start_before)
+
+        if end_after:
+            query = query.where(Event.end_datetime >= end_after)
+
+        if end_before:
+            query = query.where(Event.end_datetime <= end_before)
 
         query = query.order_by(Event.start_datetime).offset(skip).limit(limit)
 

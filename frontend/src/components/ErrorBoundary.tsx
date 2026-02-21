@@ -129,7 +129,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 </button>
                 <button
                   onClick={this.handleGoHome}
-                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/50 transition-colors"
+                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] focus:ring-red-500 transition-colors"
                 >
                   <svg
                     className="mr-2 h-5 w-5"
