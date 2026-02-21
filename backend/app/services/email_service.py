@@ -675,3 +675,125 @@ Automated IT notification from {organization_name}."""
             html_body=html_body,
             text_body=text_body,
         )
+
+    async def send_event_reminder(
+        self,
+        to_email: str,
+        recipient_name: str,
+        event_title: str,
+        event_start: datetime,
+        event_end: datetime,
+        event_type: str,
+        location_name: Optional[str] = None,
+        location_details: Optional[str] = None,
+        event_url: Optional[str] = None,
+    ) -> bool:
+        """
+        Send an event reminder email.
+
+        Args:
+            to_email: Recipient email address
+            recipient_name: Recipient's display name
+            event_title: Title of the event
+            event_start: Event start datetime (UTC)
+            event_end: Event end datetime (UTC)
+            event_type: Event type label (e.g. "Business Meeting")
+            location_name: Optional location display name
+            location_details: Optional additional location info
+            event_url: Optional link to view the event
+
+        Returns:
+            True if sent successfully
+        """
+        start_str = self._format_local_dt(event_start)
+        end_str = self._format_local_dt(event_end, '%I:%M %p')
+        subject = f"Reminder: {event_title}"
+
+        location_html = ""
+        location_text = ""
+        if location_name:
+            location_html = f'<div class="details-row"><span class="details-label">Location:</span><span>{location_name}</span></div>'
+            location_text = f"Location: {location_name}"
+            if location_details:
+                location_html += f'<div class="details-row"><span class="details-label">Details:</span><span>{location_details}</span></div>'
+                location_text += f"\nDetails: {location_details}"
+
+        button_html = ""
+        button_text = ""
+        if event_url:
+            button_html = f'<p style="text-align: center;"><a href="{event_url}" class="button">View Event</a></p>'
+            button_text = f"\nView Event: {event_url}"
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #dc2626; color: white; padding: 20px; text-align: center; }}
+        .header h1 {{ margin: 0; font-size: 20px; }}
+        .content {{ padding: 20px; background-color: #f9fafb; }}
+        .details {{ background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #e5e7eb; }}
+        .details-row {{ display: flex; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }}
+        .details-label {{ font-weight: bold; width: 100px; color: #6b7280; }}
+        .button {{ display: inline-block; padding: 12px 24px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
+        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Event Reminder</h1>
+        </div>
+        <div class="content">
+            <p>Hello {recipient_name},</p>
+            <p>This is a reminder about an upcoming event.</p>
+
+            <div class="details">
+                <div class="details-row">
+                    <span class="details-label">Event:</span>
+                    <span>{event_title}</span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">Type:</span>
+                    <span>{event_type}</span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">When:</span>
+                    <span>{start_str} &ndash; {end_str}</span>
+                </div>
+                {location_html}
+            </div>
+
+            {button_html}
+        </div>
+        <div class="footer">
+            <p>This is an automated reminder from {self._smtp_config['from_name']}</p>
+        </div>
+    </div>
+</body>
+</html>"""
+
+        text_body = f"""Event Reminder
+
+Hello {recipient_name},
+
+This is a reminder about an upcoming event.
+
+Event: {event_title}
+Type: {event_type}
+When: {start_str} - {end_str}
+{location_text}
+{button_text}
+
+---
+This is an automated reminder from {self._smtp_config['from_name']}"""
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
+        return success_count > 0
