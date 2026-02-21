@@ -500,7 +500,7 @@ export const ElectionsPage: React.FC = () => {
                 </div>
 
                 {formData.victory_condition === 'threshold' && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="election-num-threshold" className="block text-sm font-medium text-theme-text-primary">
                         Numerical Threshold

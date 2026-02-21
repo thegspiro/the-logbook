@@ -562,3 +562,44 @@ class BasicApparatusResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# Shift Compliance Schemas
+# ============================================
+
+class MemberComplianceRecord(BaseModel):
+    """Per-member compliance status for a single requirement"""
+    user_id: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    rank: Optional[str] = None
+    completed_value: float
+    percentage: float
+    compliant: bool
+    shift_count: int
+    total_hours: float
+
+
+class RequirementComplianceSummary(BaseModel):
+    """Compliance summary for a single shift/hours requirement"""
+    requirement_id: str
+    requirement_name: str
+    requirement_type: str
+    required_value: float
+    frequency: str
+    period_start: str
+    period_end: str
+    members: List[MemberComplianceRecord]
+    total_members: int
+    compliant_count: int
+    non_compliant_count: int
+    compliance_rate: float
+
+
+class ShiftComplianceResponse(BaseModel):
+    """Response for shift compliance endpoint"""
+    requirements: List[RequirementComplianceSummary]
+    reference_date: str
+    total_requirements: int

@@ -31,11 +31,17 @@ Complete reference of all pages in the application, organized by module.
 | `/onboarding/file-storage-config` | File Storage Config | Configure file storage |
 | `/onboarding/authentication` | Authentication | Choose auth method |
 | `/onboarding/it-team` | IT Team & Backup | IT team & backup access setup |
-| `/onboarding/roles` | Role Setup | Configure roles |
+| `/onboarding/positions` | Position Setup | Configure positions (formerly roles) |
 | `/onboarding/modules` | Module Selection | Choose which modules to enable |
 | `/onboarding/modules/:moduleId/config` | Module Config | Configure individual module |
-| `/onboarding/admin-user` | Admin User Creation | Create initial admin account |
+| `/onboarding/system-owner` | System Owner Creation | Create initial system owner account |
 | `/onboarding/security-check` | Security Check | Security verification |
+
+**Legacy redirects:**
+- `/onboarding/department` → `/onboarding/start`
+- `/onboarding/roles` → `/onboarding/positions`
+- `/onboarding/admin-user` → `/onboarding/system-owner`
+- `/onboarding/module-selection` → `/onboarding/modules`
 
 ---
 
@@ -49,16 +55,28 @@ Complete reference of all pages in the application, organized by module.
 
 ## Members
 
+### Member-Facing Pages
+
 | URL | Page | Permission |
 |-----|------|------------|
-| `/members` | Members List | Authenticated |
-| `/members/add` | Add Member | `members.create` |
-| `/members/import` | Import Members | `members.create` |
+| `/members` | Member Directory | Authenticated |
 | `/members/:userId` | Member Profile | Authenticated |
 | `/members/:userId/training` | Member Training History | Authenticated |
-| `/members/:userId/permissions` | User Permissions | `roles.manage` |
-| `/members/lifecycle` | Member Lifecycle | `members.manage` |
-| `/admin/members` | Member Management | `members.manage` |
+
+### Members Admin Hub (`/members/admin`)
+
+Requires `members.manage` permission. Tab-based admin interface.
+
+| Tab | Label | Additional Permission |
+|-----|-------|-----------------------|
+| `manage` | Member Management | — |
+| `add` | Add Member | `members.create` |
+| `import` | Import Members | `members.create` |
+
+**Legacy redirects:**
+- `/admin/members` → `/members/admin`
+- `/members/add` → `/members/admin?tab=add`
+- `/members/import` → `/members/admin?tab=import`
 
 ---
 
@@ -79,22 +97,43 @@ Complete reference of all pages in the application, organized by module.
 | `/apparatus/new` | Add Apparatus | Authenticated |
 | `/apparatus/:id` | Apparatus Detail | Authenticated |
 | `/apparatus/:id/edit` | Edit Apparatus | Authenticated |
+| `/apparatus-basic` | Apparatus Basic | Authenticated |
+
+> `/apparatus-basic` is a lightweight alternative used when the full Apparatus module is disabled.
 
 ---
 
 ## Events
 
+### Member-Facing Pages
+
 | URL | Page | Permission |
 |-----|------|------------|
 | `/events` | Events List | Authenticated |
-| `/events/new` | Create Event | `events.manage` |
 | `/events/:id` | Event Detail | Authenticated |
-| `/events/:id/edit` | Edit Event | `events.manage` |
 | `/events/:id/qr-code` | Event QR Code | Authenticated |
 | `/events/:id/check-in` | Self Check-In | Authenticated |
+
+### Per-Event Admin Pages
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/events/:id/edit` | Edit Event | `events.manage` |
 | `/events/:id/monitoring` | Check-In Monitoring | `events.manage` |
 | `/events/:id/analytics` | Event Analytics | `analytics.view` |
-| `/events/settings` | Events Module Settings | `events.manage` |
+
+### Events Admin Hub (`/events/admin`)
+
+Requires `events.manage` permission. Tab-based admin interface.
+
+| Tab | Label |
+|-----|-------|
+| `create` | Create Event |
+| `analytics` | Analytics |
+| `community` | Community Engagement |
+
+**Legacy redirects:**
+- `/events/new` → `/events/admin?tab=create`
 
 ---
 
@@ -114,28 +153,56 @@ Complete reference of all pages in the application, organized by module.
 |-----|------|------------|
 | `/facilities` | Facilities Management | `facilities.view` |
 
+Tab-based interface with the following views:
+
+| Tab | Label |
+|-----|-------|
+| `facilities` | Facilities |
+| `maintenance` | Maintenance |
+| `inspections` | Inspections |
+
 > Full building management including maintenance scheduling, utility tracking, inspections, key management, compliance, and capital projects. Replaces the Locations page when enabled. Locations created through either module are linked via `facility_id` so all event/training location references remain consistent.
 
 ---
 
 ## Training
 
+### Member-Facing Pages
+
 | URL | Page | Permission |
 |-----|------|------------|
-| `/training` | Training Dashboard | Authenticated |
-| `/training/officer` | Training Officer Dashboard | `training.manage` |
-| `/training/requirements` | Training Requirements | `training.manage` |
-| `/training/programs` | Training Programs | Authenticated |
-| `/training/programs/new` | Create Training Program | `training.manage` |
-| `/training/programs/:programId` | Program Detail | Authenticated |
-| `/training/courses` | Course Library | Authenticated |
-| `/training/sessions/new` | Create Training Session | `training.manage` |
-| `/training/submit` | Submit Training | Authenticated |
-| `/training/submissions` | Review Submissions | `training.manage` |
-| `/training/shift-reports` | Shift Reports | Authenticated |
-| `/training/integrations` | External Integrations | `training.manage` |
+| `/training` | My Training | Authenticated |
 | `/training/my-training` | My Training | Authenticated |
-| `/training/approval/:token` | Training Approval | Public (token-based) |
+| `/training/submit` | Submit Training | Authenticated |
+| `/training/courses` | Course Library | Authenticated |
+| `/training/programs` | Training Programs | Authenticated |
+| `/training/programs/:programId` | Program Detail | Authenticated |
+
+### Training Admin Hub (`/training/admin`)
+
+Requires `training.manage` permission. Tab-based admin interface.
+
+| Tab | Label |
+|-----|-------|
+| `dashboard` | Officer Dashboard |
+| `submissions` | Review Submissions |
+| `requirements` | Requirements |
+| `sessions` | Create Session |
+| `compliance` | Compliance Matrix |
+| `expiring-certs` | Expiring Certs |
+| `pipelines` | Pipelines |
+| `shift-reports` | Shift Reports |
+| `integrations` | Integrations |
+| `import` | Import History |
+
+**Legacy redirects:**
+- `/training/officer` → `/training/admin?tab=dashboard`
+- `/training/submissions` → `/training/admin?tab=submissions`
+- `/training/requirements` → `/training/admin?tab=requirements`
+- `/training/sessions/new` → `/training/admin?tab=sessions`
+- `/training/programs/new` → `/training/admin?tab=pipelines`
+- `/training/shift-reports` → `/training/admin?tab=shift-reports`
+- `/training/integrations` → `/training/admin?tab=integrations`
 
 ---
 
@@ -149,9 +216,22 @@ Complete reference of all pages in the application, organized by module.
 
 ## Inventory
 
+### Member-Facing Pages
+
 | URL | Page | Permission |
 |-----|------|------------|
-| `/inventory` | Inventory Management | Authenticated |
+| `/inventory` | Inventory Browse | Authenticated |
+
+### Inventory Admin Hub (`/inventory/admin`)
+
+Requires `inventory.manage` permission. Tab-based admin interface.
+
+| Tab | Label |
+|-----|-------|
+| `manage` | Manage Inventory |
+| `members` | Members |
+
+> The Manage Inventory tab provides full item/category CRUD. The Members tab shows per-member inventory assignments with barcode check-out/return capability.
 
 ---
 
@@ -159,11 +239,19 @@ Complete reference of all pages in the application, organized by module.
 
 | URL | Page | Permission |
 |-----|------|------------|
-| `/scheduling` | Scheduling Calendar | Authenticated |
-| `/scheduling/assignments` | Shift Assignments | `scheduling.manage` |
-| `/scheduling/attendance` | Shift Attendance | `scheduling.manage` |
-| `/scheduling/templates` | Shift Templates & Patterns | `scheduling.manage` |
-| `/scheduling/reports` | Scheduling Reports | `scheduling.view` |
+| `/scheduling` | Scheduling | Authenticated |
+
+Tab-based interface with the following views:
+
+| Tab | Label | Admin Only |
+|-----|-------|------------|
+| `schedule` | Schedule | No |
+| `my-shifts` | My Shifts | No |
+| `open-shifts` | Open Shifts | No |
+| `requests` | Requests | No |
+| `templates` | Templates | Yes |
+| `reports` | Reports | Yes |
+| `settings` | Settings | Yes |
 
 ---
 
@@ -182,6 +270,16 @@ Complete reference of all pages in the application, organized by module.
 |-----|------|------------|
 | `/minutes` | Minutes List | Authenticated |
 | `/minutes/:minutesId` | Minutes Detail | Authenticated |
+
+---
+
+## Action Items
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/action-items` | Action Items | Authenticated |
+
+> Unified cross-module action items view.
 
 ---
 
@@ -223,12 +321,12 @@ Complete reference of all pages in the application, organized by module.
 |-----|------|------------|
 | `/settings` | Settings | Authenticated |
 | `/settings/account` | User Account Settings | Authenticated |
-| `/settings/roles` | Role Management | `roles.manage` |
+| `/settings/roles` | Role Management | `positions.manage_permissions` |
+| `/setup` | Department Setup | `settings.manage` |
 | `/admin/errors` | Error Monitoring | `settings.manage` |
 | `/admin/analytics` | Analytics Dashboard | `analytics.view` |
 | `/admin/public-portal` | Public Portal Admin | `settings.manage` |
-| `/admin/scheduled-tasks` | Scheduled Tasks | `settings.manage` |
 
 ---
 
-**Total: 85+ pages across 15 modules**
+**Total: ~75 direct routes + 25 admin hub tabs across 16 modules**

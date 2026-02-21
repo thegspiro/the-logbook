@@ -221,32 +221,34 @@ export const ProspectiveMembersPage: React.FC = () => {
   );
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="px-4 sm:px-6 py-6 max-w-[1600px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-3">
-            <Users className="w-7 h-7 text-red-700 dark:text-red-500" />
+          <h1 className="text-xl sm:text-2xl font-bold text-theme-text-primary flex items-center gap-3">
+            <Users className="w-6 sm:w-7 h-6 sm:h-7 text-red-700 dark:text-red-500" />
             Prospective Members
           </h1>
-          <p className="text-theme-text-muted mt-1">
+          <p className="text-theme-text-muted mt-1 text-sm">
             Manage your organization's applicant pipeline
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/prospective-members/settings')}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors"
           >
             <Settings className="w-4 h-4" />
-            Pipeline Settings
+            <span className="hidden sm:inline">Pipeline Settings</span>
+            <span className="sm:hidden">Settings</span>
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
           >
             <UserPlus className="w-4 h-4" />
-            Add Applicant
+            <span className="hidden sm:inline">Add Applicant</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
       </div>
@@ -254,7 +256,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Stats Bar */}
       {pipelineStats && !isLoadingStats && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-2">
             <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
               <div className="flex items-center gap-2 text-theme-text-muted text-xs mb-1">
                 <Users className="w-3.5 h-3.5" />
@@ -631,8 +633,8 @@ export const ProspectiveMembersPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden">
-              <table className="w-full">
+            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="border-b border-theme-surface-border">
                     <th className="w-10 p-3">
@@ -782,8 +784,8 @@ export const ProspectiveMembersPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden">
-              <table className="w-full">
+            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="border-b border-theme-surface-border">
                     <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>

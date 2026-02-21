@@ -780,7 +780,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="template-color" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Color
@@ -1075,7 +1075,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="pattern-start-date" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Start Date <span aria-hidden="true">*</span>

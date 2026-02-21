@@ -2806,6 +2806,40 @@ export interface SchedulingSummary {
   total_hours_this_month: number;
 }
 
+export interface MemberComplianceRecord {
+  user_id: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  rank?: string;
+  completed_value: number;
+  percentage: number;
+  compliant: boolean;
+  shift_count: number;
+  total_hours: number;
+}
+
+export interface RequirementComplianceSummary {
+  requirement_id: string;
+  requirement_name: string;
+  requirement_type: string;
+  required_value: number;
+  frequency: string;
+  period_start: string;
+  period_end: string;
+  members: MemberComplianceRecord[];
+  total_members: number;
+  compliant_count: number;
+  non_compliant_count: number;
+  compliance_rate: number;
+}
+
+export interface ShiftComplianceResponse {
+  requirements: RequirementComplianceSummary[];
+  reference_date: string;
+  total_requirements: number;
+}
+
 export const schedulingService = {
   async getShifts(params?: { start_date?: string; end_date?: string; skip?: number; limit?: number }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
     const response = await api.get('/scheduling/shifts', { params });
@@ -3060,6 +3094,12 @@ export const schedulingService = {
   // --- Open Shifts ---
   async getOpenShifts(params?: { start_date?: string; end_date?: string; apparatus_id?: string }): Promise<Record<string, unknown>[]> {
     const response = await api.get('/scheduling/shifts/open', { params });
+    return response.data;
+  },
+
+  // --- Shift Compliance ---
+  async getComplianceReport(params?: { reference_date?: string }): Promise<ShiftComplianceResponse> {
+    const response = await api.get<ShiftComplianceResponse>('/scheduling/reports/compliance', { params });
     return response.data;
   },
 };
@@ -4215,6 +4255,21 @@ export const facilitiesService = {
 // Member Status Service
 // ============================================
 
+export interface LeaveOfAbsenceResponse {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  leave_type: string;
+  reason: string | null;
+  start_date: string;
+  end_date: string;
+  granted_by: string | null;
+  granted_at: string | null;
+  active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export const memberStatusService = {
   async getArchivedMembers(): Promise<{ members: import('../types/user').ArchivedMember[] }> {
     const response = await api.get('/users/archived');
@@ -4254,6 +4309,48 @@ export const memberStatusService = {
   async advanceMembershipTiers(): Promise<Record<string, unknown>> {
     const response = await api.post('/users/advance-membership-tiers');
     return response.data;
+  },
+
+  // Leave of Absence
+  async listLeavesOfAbsence(params?: { user_id?: string; active_only?: boolean }): Promise<LeaveOfAbsenceResponse[]> {
+    const response = await api.get('/users/leaves-of-absence', { params });
+    return response.data;
+  },
+
+  async getMemberLeaves(userId: string, activeOnly = true): Promise<LeaveOfAbsenceResponse[]> {
+    const response = await api.get(`/users/${userId}/leaves-of-absence`, { params: { active_only: activeOnly } });
+    return response.data;
+  },
+
+  async getMyLeaves(): Promise<LeaveOfAbsenceResponse[]> {
+    const response = await api.get('/users/leaves-of-absence/me');
+    return response.data;
+  },
+
+  async createLeaveOfAbsence(data: {
+    user_id: string;
+    leave_type: string;
+    reason?: string;
+    start_date: string;
+    end_date: string;
+  }): Promise<LeaveOfAbsenceResponse> {
+    const response = await api.post('/users/leaves-of-absence', data);
+    return response.data;
+  },
+
+  async updateLeaveOfAbsence(leaveId: string, data: {
+    leave_type?: string;
+    reason?: string;
+    start_date?: string;
+    end_date?: string;
+    active?: boolean;
+  }): Promise<LeaveOfAbsenceResponse> {
+    const response = await api.patch(`/users/leaves-of-absence/${leaveId}`, data);
+    return response.data;
+  },
+
+  async deleteLeaveOfAbsence(leaveId: string): Promise<void> {
+    await api.delete(`/users/leaves-of-absence/${leaveId}`);
   },
 };
 

@@ -17,8 +17,10 @@ from app.models.training import (
     ShiftSwapRequest, ShiftTimeOff,
     AssignmentStatus, SwapRequestStatus, TimeOffStatus, PatternType,
     BasicApparatus,
+    TrainingRequirement, RequirementType, RequirementFrequency, DueDateType,
 )
-from app.models.user import User
+from app.models.user import User, Position, user_positions, MemberLeaveOfAbsence
+from app.services.member_leave_service import MemberLeaveService
 
 
 class SchedulingService:
@@ -723,6 +725,17 @@ class SchedulingService:
             if not shift:
                 return None, "Shift not found"
 
+            # Check if the member is on leave of absence for the shift date
+            user_id = assignment_data.get("user_id")
+            if user_id and shift.shift_date:
+                leave_svc = MemberLeaveService(self.db)
+                leaves = await leave_svc.get_active_leaves_for_user(
+                    str(organization_id), str(user_id),
+                    shift.shift_date, shift.shift_date,
+                )
+                if leaves:
+                    return None, "Member is on leave of absence for this date"
+
             assignment = ShiftAssignment(
                 organization_id=organization_id,
                 shift_id=shift_id,
@@ -1388,3 +1401,301 @@ class SchedulingService:
             shift_list.append(shift_dict)
 
         return shift_list, total
+
+    # ============================================
+    # Shift Compliance
+    # ============================================
+
+    def _compute_period_bounds(
+        self, requirement, reference_date: date
+    ) -> Tuple[date, date]:
+        """Compute the start/end of the compliance period for a requirement."""
+        freq = requirement.frequency
+        due_type = requirement.due_date_type
+
+        if due_type == DueDateType.ROLLING and requirement.rolling_period_months:
+            # Rolling: last N months from reference_date
+            months = requirement.rolling_period_months
+            period_end = reference_date
+            # Subtract months
+            year = period_end.year
+            month = period_end.month - months
+            while month < 1:
+                month += 12
+                year -= 1
+            day = min(period_end.day, 28)  # safe day
+            period_start = date(year, month, day)
+            return period_start, period_end
+
+        # Calendar-period based
+        start_month = requirement.period_start_month or 1
+
+        if freq == RequirementFrequency.MONTHLY:
+            period_start = date(reference_date.year, reference_date.month, 1)
+            # Last day of month
+            next_month = reference_date.month + 1
+            next_year = reference_date.year
+            if next_month > 12:
+                next_month = 1
+                next_year += 1
+            period_end = date(next_year, next_month, 1) - timedelta(days=1)
+
+        elif freq == RequirementFrequency.QUARTERLY:
+            # Determine current quarter relative to start_month
+            # Quarters start at start_month, start_month+3, start_month+6, start_month+9
+            relative_month = ((reference_date.month - start_month) % 12)
+            quarter_offset = (relative_month // 3) * 3
+            q_start_month = ((start_month - 1 + quarter_offset) % 12) + 1
+            q_start_year = reference_date.year
+            if q_start_month > reference_date.month:
+                q_start_year -= 1
+            period_start = date(q_start_year, q_start_month, 1)
+            # Quarter end is 3 months later minus 1 day
+            q_end_month = q_start_month + 3
+            q_end_year = q_start_year
+            if q_end_month > 12:
+                q_end_month -= 12
+                q_end_year += 1
+            period_end = date(q_end_year, q_end_month, 1) - timedelta(days=1)
+
+        elif freq == RequirementFrequency.BIANNUAL:
+            # Two 6-month periods per year starting at start_month
+            relative_month = ((reference_date.month - start_month) % 12)
+            half_offset = (relative_month // 6) * 6
+            h_start_month = ((start_month - 1 + half_offset) % 12) + 1
+            h_start_year = reference_date.year
+            if h_start_month > reference_date.month:
+                h_start_year -= 1
+            period_start = date(h_start_year, h_start_month, 1)
+            h_end_month = h_start_month + 6
+            h_end_year = h_start_year
+            if h_end_month > 12:
+                h_end_month -= 12
+                h_end_year += 1
+            period_end = date(h_end_year, h_end_month, 1) - timedelta(days=1)
+
+        elif freq == RequirementFrequency.ANNUAL:
+            # Annual period from start_month
+            if reference_date.month >= start_month:
+                period_start = date(reference_date.year, start_month, 1)
+                end_year = reference_date.year + 1
+            else:
+                period_start = date(reference_date.year - 1, start_month, 1)
+                end_year = reference_date.year
+            period_end = date(end_year, start_month, 1) - timedelta(days=1)
+
+        else:
+            # ONE_TIME or fallback: use requirement start_date..due_date or last 12 months
+            if requirement.start_date and requirement.due_date:
+                period_start = requirement.start_date
+                period_end = requirement.due_date
+            else:
+                period_end = reference_date
+                period_start = date(reference_date.year - 1, reference_date.month, reference_date.day)
+
+        return period_start, period_end
+
+    async def get_shift_compliance(
+        self, organization_id: UUID, reference_date: Optional[date] = None
+    ) -> List[Dict]:
+        """
+        Compute shift/hours compliance for all members against active
+        TrainingRequirements of type SHIFTS or HOURS.
+
+        Returns a list of requirement compliance summaries, each containing
+        per-member progress data.
+        """
+        if reference_date is None:
+            reference_date = date.today()
+
+        # 1. Get active shift/hours requirements for this org
+        req_result = await self.db.execute(
+            select(TrainingRequirement)
+            .where(TrainingRequirement.organization_id == str(organization_id))
+            .where(TrainingRequirement.active == True)
+            .where(TrainingRequirement.requirement_type.in_([
+                RequirementType.SHIFTS.value,
+                RequirementType.HOURS.value,
+            ]))
+            .order_by(TrainingRequirement.name)
+        )
+        requirements = req_result.scalars().all()
+
+        if not requirements:
+            return []
+
+        # 2. Get all active users with their positions (for role filtering)
+        user_result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == str(organization_id))
+            .where(User.status == "active")
+            .order_by(User.last_name, User.first_name)
+        )
+        all_users = user_result.scalars().all()
+
+        # Load position slugs for each user
+        user_position_slugs: Dict[str, List[str]] = {}
+        for user in all_users:
+            pos_result = await self.db.execute(
+                select(Position.slug)
+                .join(user_positions, Position.id == user_positions.c.position_id)
+                .where(user_positions.c.user_id == user.id)
+            )
+            user_position_slugs[user.id] = [row[0] for row in pos_result.all()]
+
+        # 3. For each requirement, compute compliance
+        compliance_data = []
+
+        for req in requirements:
+            period_start, period_end = self._compute_period_bounds(req, reference_date)
+
+            # Determine required value
+            if req.requirement_type == RequirementType.SHIFTS.value:
+                required_value = req.required_shifts or 0
+            else:
+                required_value = req.required_hours or 0
+
+            # Determine which users this requirement applies to
+            applicable_users = []
+            for user in all_users:
+                if req.applies_to_all:
+                    applicable_users.append(user)
+                    continue
+
+                # Check rank match
+                if req.required_roles and user.rank:
+                    if user.rank in req.required_roles:
+                        applicable_users.append(user)
+                        continue
+
+                # Check position match
+                if req.required_positions:
+                    user_slugs = user_position_slugs.get(user.id, [])
+                    if any(slug in req.required_positions for slug in user_slugs):
+                        applicable_users.append(user)
+                        continue
+
+            if not applicable_users:
+                compliance_data.append({
+                    "requirement_id": req.id,
+                    "requirement_name": req.name,
+                    "requirement_type": req.requirement_type,
+                    "required_value": required_value,
+                    "frequency": req.frequency,
+                    "period_start": period_start.isoformat(),
+                    "period_end": period_end.isoformat(),
+                    "members": [],
+                    "total_members": 0,
+                    "compliant_count": 0,
+                    "non_compliant_count": 0,
+                    "compliance_rate": 0,
+                })
+                continue
+
+            # Batch-query attendance for all applicable users in the period
+            user_ids = [u.id for u in applicable_users]
+            att_result = await self.db.execute(
+                select(
+                    ShiftAttendance.user_id,
+                    func.count(ShiftAttendance.id).label("shift_count"),
+                    func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0).label("total_minutes"),
+                )
+                .join(Shift, ShiftAttendance.shift_id == Shift.id)
+                .where(Shift.organization_id == str(organization_id))
+                .where(Shift.shift_date >= period_start)
+                .where(Shift.shift_date <= period_end)
+                .where(ShiftAttendance.user_id.in_(user_ids))
+                .group_by(ShiftAttendance.user_id)
+            )
+            attendance_map: Dict[str, Dict] = {}
+            for row in att_result.all():
+                attendance_map[row.user_id] = {
+                    "shift_count": row.shift_count,
+                    "total_minutes": row.total_minutes,
+                    "total_hours": round(row.total_minutes / 60.0, 1),
+                }
+
+            # Pre-load leave months for rolling requirements so we can
+            # pro-rate each member's required value.
+            is_rolling = (
+                req.due_date_type == DueDateType.ROLLING
+                and req.rolling_period_months
+            )
+            user_leave_months: Dict[str, int] = {}
+            if is_rolling:
+                leave_svc = MemberLeaveService(self.db)
+                for uid in user_ids:
+                    leaves = await leave_svc.get_active_leaves_for_user(
+                        str(organization_id), uid, period_start, period_end,
+                    )
+                    user_leave_months[uid] = MemberLeaveService.count_leave_months(
+                        leaves, period_start, period_end,
+                    )
+
+            # Build member compliance list
+            members = []
+            compliant_count = 0
+
+            for user in applicable_users:
+                att = attendance_map.get(user.id, {"shift_count": 0, "total_minutes": 0, "total_hours": 0.0})
+
+                if req.requirement_type == RequirementType.SHIFTS.value:
+                    completed_value = att["shift_count"]
+                else:
+                    completed_value = att["total_hours"]
+
+                # Adjust required value for rolling-period requirements
+                # by excluding months the member was on leave.
+                member_required = required_value
+                leave_months = user_leave_months.get(user.id, 0)
+                if is_rolling and leave_months > 0 and req.rolling_period_months:
+                    active_months = max(req.rolling_period_months - leave_months, 1)
+                    member_required = round(
+                        required_value * active_months / req.rolling_period_months, 1
+                    )
+
+                percentage = round(
+                    (completed_value / member_required * 100) if member_required > 0 else 100, 1
+                )
+                is_compliant = completed_value >= member_required
+
+                if is_compliant:
+                    compliant_count += 1
+
+                members.append({
+                    "user_id": user.id,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "full_name": user.full_name,
+                    "rank": user.rank,
+                    "completed_value": completed_value,
+                    "required_value": member_required,
+                    "leave_months": leave_months,
+                    "percentage": min(percentage, 100),
+                    "compliant": is_compliant,
+                    "shift_count": att["shift_count"],
+                    "total_hours": att["total_hours"],
+                })
+
+            total_members = len(members)
+            non_compliant = total_members - compliant_count
+            compliance_rate = round(
+                (compliant_count / total_members * 100) if total_members > 0 else 0, 1
+            )
+
+            compliance_data.append({
+                "requirement_id": req.id,
+                "requirement_name": req.name,
+                "requirement_type": req.requirement_type,
+                "required_value": required_value,
+                "frequency": req.frequency,
+                "period_start": period_start.isoformat(),
+                "period_end": period_end.isoformat(),
+                "members": members,
+                "total_members": total_members,
+                "compliant_count": compliant_count,
+                "non_compliant_count": non_compliant,
+                "compliance_rate": compliance_rate,
+            })
+
+        return compliance_data

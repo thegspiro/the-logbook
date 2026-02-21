@@ -50,6 +50,7 @@ from app.schemas.scheduling import (
     BasicApparatusUpdate,
     BasicApparatusResponse,
     ShiftPosition,
+    ShiftComplianceResponse,
 )
 from app.services.scheduling_service import SchedulingService
 from app.api.dependencies import get_current_user, require_permission
@@ -975,6 +976,39 @@ async def get_call_volume_report(
         current_user.organization_id, start, end, group_by=group_by
     )
     return report
+
+
+@router.get("/reports/compliance", response_model=ShiftComplianceResponse)
+async def get_shift_compliance_report(
+    reference_date: Optional[str] = Query(None, description="Reference date for compliance calculation (YYYY-MM-DD). Defaults to today."),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.report")),
+):
+    """
+    Get shift/hours compliance report.
+
+    Checks all active training requirements of type SHIFTS or HOURS
+    against actual shift attendance records. Returns per-member
+    compliance status for each requirement, respecting role/position
+    applicability filters.
+    """
+    service = SchedulingService(db)
+    ref_date = None
+    if reference_date:
+        try:
+            ref_date = date.fromisoformat(reference_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    compliance = await service.get_shift_compliance(
+        current_user.organization_id, reference_date=ref_date
+    )
+    actual_ref = ref_date or date.today()
+    return {
+        "requirements": compliance,
+        "reference_date": actual_ref.isoformat(),
+        "total_requirements": len(compliance),
+    }
 
 
 # ============================================
