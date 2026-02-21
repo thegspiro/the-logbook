@@ -66,7 +66,7 @@ export const UserSettingsPage: React.FC = () => {
           last_name: data.last_name || '',
           phone: data.phone || '',
           mobile: data.mobile || '',
-          badge_number: data.badge_number || '',
+          membership_number: data.membership_number || '',
           rank: data.rank || '',
           station: data.station || '',
           address_street: data.address_street || '',
@@ -342,12 +342,12 @@ export const UserSettingsPage: React.FC = () => {
                   <h3 className="text-sm font-medium text-theme-text-secondary mb-3 uppercase tracking-wider">Department Information</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label htmlFor="badgeNumber" className="block text-sm font-medium text-theme-text-secondary mb-1">Badge Number</label>
+                      <label htmlFor="membershipNumber" className="block text-sm font-medium text-theme-text-secondary mb-1">Membership Number</label>
                       <input
-                        id="badgeNumber"
+                        id="membershipNumber"
                         type="text"
-                        value={profileForm.badge_number || ''}
-                        onChange={(e) => handleProfileChange('badge_number', e.target.value)}
+                        value={profileForm.membership_number || ''}
+                        onChange={(e) => handleProfileChange('membership_number', e.target.value)}
                         className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />

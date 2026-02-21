@@ -73,7 +73,7 @@ def sample_admin_data():
         "password": "SecurePass123!",
         "first_name": "Test",
         "last_name": "Admin",
-        "badge_number": "ADMIN-001",
+        "membership_number": "ADMIN-001",
     }
 
 

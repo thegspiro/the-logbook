@@ -85,7 +85,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
           (m.first_name?.toLowerCase().includes(q) ?? false) ||
           (m.last_name?.toLowerCase().includes(q) ?? false) ||
           (m.full_name?.toLowerCase().includes(q) ?? false) ||
-          (m.badge_number?.toLowerCase().includes(q) ?? false)
+          (m.membership_number?.toLowerCase().includes(q) ?? false)
       )
       .slice(0, 10);
   }, [members, memberSearch, candidateUserIds]);
@@ -276,8 +276,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                         <span className="text-theme-text-primary">
                           {member.first_name} {member.last_name}
                         </span>
-                        {member.badge_number && (
-                          <span className="text-xs text-theme-text-muted">#{member.badge_number}</span>
+                        {member.membership_number && (
+                          <span className="text-xs text-theme-text-muted">#{member.membership_number}</span>
                         )}
                       </button>
                     ))}

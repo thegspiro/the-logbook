@@ -496,7 +496,7 @@ async def get_archived_members(
                 "user_id": str(m.id),
                 "name": m.full_name,
                 "email": m.email,
-                "badge_number": m.badge_number,
+                "membership_number": m.membership_number,
                 "rank": m.rank,
                 "archived_at": m.archived_at.isoformat() if m.archived_at else None,
                 "status_change_reason": m.status_change_reason,

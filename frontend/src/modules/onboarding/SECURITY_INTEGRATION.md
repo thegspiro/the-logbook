@@ -178,7 +178,7 @@ const response = await apiClient.createAdminUser({
   password_confirm: formData.confirmPassword,
   first_name: formData.firstName,
   last_name: formData.lastName,
-  badge_number: formData.badgeNumber || undefined,
+  membership_number: formData.membershipNumber || undefined,
 });
 
 // SECURITY: Clear password from memory immediately
@@ -187,7 +187,7 @@ setFormData({
   email: '',
   firstName: '',
   lastName: '',
-  badgeNumber: '',
+  membershipNumber: '',
   password: '', // Cleared!
   confirmPassword: '', // Cleared!
 });

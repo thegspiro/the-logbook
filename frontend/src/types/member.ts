@@ -40,7 +40,7 @@ export interface Certification {
 
 export interface Member {
   id: string;
-  departmentId: string; // Department-specific ID number
+  membershipNumber: string; // Organization-assigned membership number
 
   // Personal Info
   firstName: string;
@@ -77,7 +77,7 @@ export interface MemberFormData {
   firstName: string;
   lastName: string;
   middleName: string;
-  departmentId: string;
+  membershipNumber: string;
   dateOfBirth: string;
 
   // Address
@@ -117,7 +117,7 @@ export interface CSVMemberRow {
   firstName: string;
   lastName: string;
   middleName?: string;
-  departmentId: string;
+  membershipNumber: string;
   dateOfBirth?: string;
   street: string;
   city: string;

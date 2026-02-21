@@ -483,7 +483,7 @@ class OnboardingService:
         password: str,
         first_name: str,
         last_name: str,
-        badge_number: Optional[str] = None
+        membership_number: Optional[str] = None
     ) -> User:
         """
         Create the System Owner (IT Manager) user
@@ -498,7 +498,7 @@ class OnboardingService:
             password: Plain text password (will be hashed)
             first_name: First name
             last_name: Last name
-            badge_number: Optional badge number
+            membership_number: Optional badge number
 
         Returns:
             Created User object
@@ -513,7 +513,7 @@ class OnboardingService:
             password=password,
             first_name=first_name,
             last_name=last_name,
-            badge_number=badge_number
+            membership_number=membership_number
         )
 
         if error or not user:

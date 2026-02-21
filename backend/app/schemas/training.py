@@ -601,7 +601,7 @@ class HistoricalImportParsedRow(BaseModel):
     """A single parsed row from the CSV with match status"""
     row_number: int
     email: Optional[str] = None
-    badge_number: Optional[str] = None
+    membership_number: Optional[str] = None
     member_name: Optional[str] = None  # Display name from CSV (if available)
     user_id: Optional[str] = None  # Matched internal user ID
     matched_member_name: Optional[str] = None  # Name from system for matched user

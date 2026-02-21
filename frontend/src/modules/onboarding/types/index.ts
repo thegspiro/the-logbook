@@ -121,7 +121,7 @@ export interface AdminUser {
   email: string;
   firstName: string;
   lastName: string;
-  badgeNumber?: string;
+  membershipNumber?: string;
   password: string;
   confirmPassword: string;
 }

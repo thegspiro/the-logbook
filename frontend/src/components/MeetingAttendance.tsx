@@ -64,7 +64,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
         (m.first_name?.toLowerCase().includes(q) ?? false) ||
         (m.last_name?.toLowerCase().includes(q) ?? false) ||
         (m.full_name?.toLowerCase().includes(q) ?? false) ||
-        (m.badge_number?.toLowerCase().includes(q) ?? false)
+        (m.membership_number?.toLowerCase().includes(q) ?? false)
     );
   }, [members, searchQuery]);
 
@@ -193,9 +193,9 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                       <span className="text-sm font-medium text-theme-text-primary">
                         {member.first_name} {member.last_name}
                       </span>
-                      {member.badge_number && (
+                      {member.membership_number && (
                         <span className="ml-2 text-xs text-theme-text-muted">
-                          #{member.badge_number}
+                          #{member.membership_number}
                         </span>
                       )}
                     </div>

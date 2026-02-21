@@ -61,7 +61,7 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=12)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    badge_number: Optional[str] = Field(None, max_length=50)
+    membership_number: Optional[str] = Field(None, max_length=50)
 
     @field_validator('username')
     @classmethod
@@ -82,16 +82,16 @@ class UserRegister(BaseModel):
             raise ValueError('Name contains invalid characters')
         return v
 
-    @field_validator('badge_number')
+    @field_validator('membership_number')
     @classmethod
-    def validate_badge_number(cls, v: Optional[str]) -> Optional[str]:
-        """Validate badge number contains only safe characters"""
+    def validate_membership_number(cls, v: Optional[str]) -> Optional[str]:
+        """Validate membership number contains only safe characters"""
         if v is None:
             return v
         v = v.strip()
-        # Allow alphanumeric and common badge number separators
+        # Allow alphanumeric and common membership number separators
         if not re.match(r'^[a-zA-Z0-9_\-\.]+$', v):
-            raise ValueError('Badge number can only contain letters, numbers, hyphens, underscores, and periods')
+            raise ValueError('Membership number can only contain letters, numbers, hyphens, underscores, and periods')
         return v
 
 

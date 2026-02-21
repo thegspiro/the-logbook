@@ -27,7 +27,7 @@ interface EditProfileForm {
   last_name: string;
   phone: string;
   mobile: string;
-  badge_number: string;
+  membership_number: string;
   rank: string;
   station: string;
 }
@@ -56,7 +56,7 @@ export const MembersAdminPage: React.FC = () => {
     last_name: '',
     phone: '',
     mobile: '',
-    badge_number: '',
+    membership_number: '',
     rank: '',
     station: '',
   });
@@ -121,7 +121,7 @@ export const MembersAdminPage: React.FC = () => {
         last_name: fullProfile.last_name || '',
         phone: fullProfile.phone || '',
         mobile: fullProfile.mobile || '',
-        badge_number: fullProfile.badge_number || '',
+        membership_number: fullProfile.membership_number || '',
         rank: fullProfile.rank || '',
         station: fullProfile.station || '',
       });
@@ -145,7 +145,7 @@ export const MembersAdminPage: React.FC = () => {
       if (profileForm.last_name !== (profileUser.last_name || '')) updateData.last_name = profileForm.last_name;
       if (profileForm.phone !== (profileUser.phone || '')) updateData.phone = profileForm.phone;
       if (profileForm.mobile !== (profileUser.mobile || '')) updateData.mobile = profileForm.mobile;
-      if (profileForm.badge_number !== (profileUser.badge_number || '')) updateData.badge_number = profileForm.badge_number;
+      if (profileForm.membership_number !== (profileUser.membership_number || '')) updateData.membership_number = profileForm.membership_number;
       if (profileForm.rank !== (profileUser.rank || '')) updateData.rank = profileForm.rank;
       if (profileForm.station !== (profileUser.station || '')) updateData.station = profileForm.station;
 
@@ -451,7 +451,7 @@ export const MembersAdminPage: React.FC = () => {
                   Member
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Badge
+                  Member #
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Roles
@@ -483,7 +483,7 @@ export const MembersAdminPage: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
-                    {user.badge_number || '-'}
+                    {user.membership_number || '-'}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
@@ -618,8 +618,8 @@ export const MembersAdminPage: React.FC = () => {
                               <div className="text-sm font-medium text-theme-text-primary">
                                 {user.full_name || user.username}
                               </div>
-                              {user.badge_number && (
-                                <div className="text-xs text-theme-text-muted">#{user.badge_number}</div>
+                              {user.membership_number && (
+                                <div className="text-xs text-theme-text-muted">#{user.membership_number}</div>
                               )}
                             </div>
                           </div>
@@ -719,11 +719,11 @@ export const MembersAdminPage: React.FC = () => {
               {/* Department Fields */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Badge #</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Membership #</label>
                   <input
                     type="text"
-                    value={profileForm.badge_number}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, badge_number: e.target.value }))}
+                    value={profileForm.membership_number}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, membership_number: e.target.value }))}
                     className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
@@ -990,7 +990,7 @@ export const MembersAdminPage: React.FC = () => {
                         </div>
                         <div className="text-xs text-theme-text-muted">
                           @{user.username}
-                          {user.badge_number && ` • Badge #${user.badge_number}`}
+                          {user.membership_number && ` • #${user.membership_number}`}
                         </div>
                       </div>
                     </div>

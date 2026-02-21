@@ -19,7 +19,7 @@ export const RegisterPage: React.FC = () => {
     confirmPassword: '',
     firstName: '',
     lastName: '',
-    badgeNumber: '',
+    membershipNumber: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
@@ -95,7 +95,7 @@ export const RegisterPage: React.FC = () => {
         password: formData.password,
         first_name: formData.firstName,
         last_name: formData.lastName,
-        badge_number: formData.badgeNumber || undefined,
+        membership_number: formData.membershipNumber || undefined,
       });
       navigate('/');
     } catch (_err) {
@@ -247,16 +247,16 @@ export const RegisterPage: React.FC = () => {
             </fieldset>
 
             <div>
-              <label htmlFor="badgeNumber" className="block text-sm font-medium text-theme-text-secondary">
-                Badge number (optional)
+              <label htmlFor="membershipNumber" className="block text-sm font-medium text-theme-text-secondary">
+                Membership number (optional)
               </label>
               <input
-                id="badgeNumber"
-                name="badgeNumber"
+                id="membershipNumber"
+                name="membershipNumber"
                 type="text"
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-theme-input-border placeholder-theme-text-muted text-theme-text-primary rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 placeholder="1234"
-                value={formData.badgeNumber}
+                value={formData.membershipNumber}
                 onChange={handleChange}
                 disabled={isLoading}
               />

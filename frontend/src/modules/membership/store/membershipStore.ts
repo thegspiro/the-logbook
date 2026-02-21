@@ -92,7 +92,7 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
             (m.full_name?.toLowerCase().includes(q)) ||
             (m.username?.toLowerCase().includes(q)) ||
             (m.email?.toLowerCase().includes(q)) ||
-            (m.badge_number?.toLowerCase().includes(q))
+            (m.membership_number?.toLowerCase().includes(q))
         );
       }
 

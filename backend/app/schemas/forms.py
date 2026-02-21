@@ -291,7 +291,7 @@ class MemberLookupResult(BaseModel):
     first_name: str
     last_name: str
     full_name: str
-    badge_number: Optional[str] = None
+    membership_number: Optional[str] = None
     rank: Optional[str] = None
     station: Optional[str] = None
     email: Optional[str] = None

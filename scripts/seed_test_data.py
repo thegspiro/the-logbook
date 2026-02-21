@@ -240,7 +240,7 @@ def create_member(idx: int) -> Optional[dict]:
         "email": email,
         "first_name": first,
         "last_name": last,
-        "badge_number": badge,
+        "membership_number": badge,
         "mobile": rand_phone(),
         "hire_date": hire_date,
         "rank": rank,
@@ -266,9 +266,9 @@ def create_member(idx: int) -> Optional[dict]:
         user_id = data.get("id") or data.get("user", {}).get("id")
         return {"id": user_id, "name": f"{first} {last}", "rank": rank, "hire_date": hire_date}
     else:
-        # Badge number collision — retry with different badge
+        # Membership number collision — retry with different number
         if resp.status_code == 409 or "already" in resp.text.lower():
-            payload["badge_number"] = f"{random.randint(10000,99999)}"
+            payload["membership_number"] = f"{random.randint(10000,99999)}"
             payload["username"] = f"{username}x"
             payload["email"] = f"{username}x@testdept.example.com"
             resp2 = session.post(f"{API}/users", json=payload)

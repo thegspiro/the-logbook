@@ -931,8 +931,8 @@ async def enroll_member_in_program(
 @router.post("/import/parse")
 async def parse_historical_import(
     file: UploadFile = File(...),
-    match_by: str = Query("badge_number", pattern=r'^(email|badge_number)$',
-                          description="How to match CSV rows to members: badge_number or email"),
+    match_by: str = Query("membership_number", pattern=r'^(email|membership_number)$',
+                          description="How to match CSV rows to members: membership_number or email"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -940,7 +940,7 @@ async def parse_historical_import(
     Parse a CSV file of historical training records and return a preview.
 
     Matches members using the strategy specified by `match_by`:
-    - **badge_number**: Match by badge/employee number (default, most reliable)
+    - **membership_number**: Match by membership number (default, most reliable)
     - **email**: Match by email address (checks both primary and personal email)
 
     Also matches courses by name/code.
@@ -982,7 +982,7 @@ async def parse_historical_import(
         return None
 
     col_email = find_col(['email', 'member_email', 'user_email', 'e-mail', 'e_mail'])
-    col_badge = find_col(['badge_number', 'badge', 'badge_no', 'employee_id', 'employee_number', 'member_id', 'id_number'])
+    col_badge = find_col(['membership_number', 'badge_number', 'badge', 'badge_no', 'employee_id', 'employee_number', 'member_id', 'id_number'])
     col_name = find_col(['name', 'member_name', 'full_name', 'member', 'employee_name'])
     col_course = find_col(['course_name', 'course', 'training', 'training_name', 'class', 'class_name'])
     col_course_code = find_col(['course_code', 'code', 'class_code'])
@@ -1006,10 +1006,10 @@ async def parse_historical_import(
             detail="CSV must contain an 'email' column for email matching. "
                    f"Found columns: {', '.join(column_headers)}"
         )
-    if match_by == "badge_number" and not col_badge:
+    if match_by == "membership_number" and not col_badge:
         raise HTTPException(
             status_code=400,
-            detail="CSV must contain a 'badge_number' column for badge matching. "
+            detail="CSV must contain a 'membership_number' column for membership number matching. "
                    f"Found columns: {', '.join(column_headers)}"
         )
     if not col_course:
@@ -1035,8 +1035,8 @@ async def parse_historical_import(
             email_to_user[m.email.strip().lower()] = m
         if hasattr(m, 'personal_email') and m.personal_email:
             email_to_user[m.personal_email.strip().lower()] = m
-        if hasattr(m, 'badge_number') and m.badge_number:
-            badge_to_user[m.badge_number.strip().lower()] = m
+        if hasattr(m, 'membership_number') and m.membership_number:
+            badge_to_user[m.membership_number.strip().lower()] = m
 
     # Pre-load existing courses
     courses_result = await db.execute(
@@ -1073,10 +1073,10 @@ async def parse_historical_import(
             match_key = email_val
             if not match_key:
                 row_errors.append("Missing email")
-        elif match_by == "badge_number":
+        elif match_by == "membership_number":
             match_key = badge_val
             if not match_key:
-                row_errors.append("Missing badge number")
+                row_errors.append("Missing membership number")
 
         course_val = (raw_row.get(col_course) or '').strip()
         if not course_val:
@@ -1099,7 +1099,7 @@ async def parse_historical_import(
 
         if match_by == "email":
             try_match(email_to_user, email_val)
-        elif match_by == "badge_number":
+        elif match_by == "membership_number":
             try_match(badge_to_user, badge_val)
 
         if member_matched:
@@ -1169,7 +1169,7 @@ async def parse_historical_import(
         rows.append(HistoricalImportParsedRow(
             row_number=row_num,
             email=email_val or None,
-            badge_number=badge_val or None,
+            membership_number=badge_val or None,
             member_name=name_val or None,
             user_id=user_id,
             matched_member_name=matched_name,

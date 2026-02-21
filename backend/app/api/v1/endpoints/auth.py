@@ -150,7 +150,7 @@ async def register(
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         organization_id=organization.id,
-        badge_number=user_data.badge_number,
+        membership_number=user_data.membership_number,
     )
 
     if error:

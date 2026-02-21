@@ -221,9 +221,9 @@ const InventoryMembersTab: React.FC = () => {
                             {member.full_name && (
                               <span className="text-theme-text-muted text-xs">@{member.username}</span>
                             )}
-                            {member.badge_number && (
+                            {member.membership_number && (
                               <span className="hidden sm:inline-flex items-center gap-1 text-xs text-theme-text-muted">
-                                <Shield className="w-3 h-3" /> {member.badge_number}
+                                <Shield className="w-3 h-3" /> {member.membership_number}
                               </span>
                             )}
                           </div>

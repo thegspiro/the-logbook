@@ -103,7 +103,7 @@ const ArchivedMembersPanel: React.FC = () => {
             <tr className="border-b border-theme-surface-border bg-theme-surface">
               <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Name</th>
               <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Email</th>
-              <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Badge</th>
+              <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member #</th>
               <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Archived</th>
               <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Reason</th>
               <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
@@ -117,7 +117,7 @@ const ArchivedMembersPanel: React.FC = () => {
                   {member.rank && <p className="text-xs text-theme-text-muted">{member.rank}</p>}
                 </td>
                 <td className="p-3 text-theme-text-secondary">{member.email || '—'}</td>
-                <td className="p-3 text-theme-text-secondary">{member.badge_number || '—'}</td>
+                <td className="p-3 text-theme-text-secondary">{member.membership_number || '—'}</td>
                 <td className="p-3 text-theme-text-secondary">
                   {member.archived_at ? new Date(member.archived_at).toLocaleDateString() : '—'}
                 </td>

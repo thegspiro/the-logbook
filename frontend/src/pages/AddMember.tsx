@@ -41,7 +41,7 @@ const AddMember: React.FC = () => {
     firstName: '',
     lastName: '',
     middleName: '',
-    departmentId: '',
+    membershipNumber: '',
     dateOfBirth: '',
     street: '',
     city: '',
@@ -121,7 +121,7 @@ const AddMember: React.FC = () => {
     // Required fields
     if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
     if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-    if (!formData.departmentId.trim()) newErrors.departmentId = 'Department ID is required';
+    if (!formData.membershipNumber.trim()) newErrors.membershipNumber = 'Membership number is required';
 
     // Address
     if (!formData.street.trim()) newErrors.street = 'Street address is required';
@@ -209,8 +209,7 @@ const AddMember: React.FC = () => {
         first_name: formData.firstName,
         middle_name: formData.middleName || undefined,
         last_name: formData.lastName,
-        badge_number: formData.departmentId || undefined,
-        membership_id: membershipIdOverride || undefined,
+        membership_number: membershipIdOverride || formData.membershipNumber || undefined,
         phone: formData.primaryPhone || undefined,
         mobile: formData.secondaryPhone || undefined,
         date_of_birth: formData.dateOfBirth || undefined,
@@ -234,9 +233,9 @@ const AddMember: React.FC = () => {
       const errorMessage = getErrorMessage(error, 'Failed to add member. Please try again.');
       toast.error(errorMessage);
 
-      // Highlight the specific field if it's a duplicate badge number error
-      if (errorMessage.toLowerCase().includes('badge number') || errorMessage.toLowerCase().includes('department id')) {
-        setErrors((prev) => ({ ...prev, departmentId: errorMessage }));
+      // Highlight the specific field if it's a duplicate membership number error
+      if (errorMessage.toLowerCase().includes('membership number')) {
+        setErrors((prev) => ({ ...prev, membershipNumber: errorMessage }));
       }
 
       setIsSaving(false);
@@ -341,19 +340,19 @@ const AddMember: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
                 <label className="block text-sm font-medium text-theme-text-primary mb-2">
-                  Department ID <span className="text-red-700 dark:text-red-400">*</span>
+                  Membership Number <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
-                  value={formData.departmentId}
-                  onChange={(e) => handleInputChange('departmentId', e.target.value)}
+                  value={formData.membershipNumber}
+                  onChange={(e) => handleInputChange('membershipNumber', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
-                    errors.departmentId ? 'border-red-500' : 'border-theme-input-border'
+                    errors.membershipNumber ? 'border-red-500' : 'border-theme-input-border'
                   } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="FF-001"
                 />
-                {errors.departmentId && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.departmentId}</p>
+                {errors.membershipNumber && (
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.membershipNumber}</p>
                 )}
               </div>
 

@@ -89,7 +89,7 @@ const ImportMembers: React.FC = () => {
           firstName: row[headers.indexOf('firstname')]?.trim() || '',
           lastName: row[headers.indexOf('lastname')]?.trim() || '',
           middleName: row[headers.indexOf('middlename')]?.trim(),
-          departmentId: row[headers.indexOf('departmentid')]?.trim() || '',
+          membershipNumber: (row[headers.indexOf('membershipnumber')] || row[headers.indexOf('departmentid')])?.trim() || '',
           dateOfBirth: row[headers.indexOf('dateofbirth')]?.trim(),
           street: row[headers.indexOf('street')]?.trim() || '',
           city: row[headers.indexOf('city')]?.trim() || '',
@@ -154,7 +154,7 @@ const ImportMembers: React.FC = () => {
           firstName: row[headers.indexOf('firstname')]?.trim() || '',
           lastName: row[headers.indexOf('lastname')]?.trim() || '',
           middleName: row[headers.indexOf('middlename')]?.trim(),
-          departmentId: row[headers.indexOf('departmentid')]?.trim() || '',
+          membershipNumber: (row[headers.indexOf('membershipnumber')] || row[headers.indexOf('departmentid')])?.trim() || '',
           dateOfBirth: row[headers.indexOf('dateofbirth')]?.trim(),
           street: row[headers.indexOf('street')]?.trim() || '',
           city: row[headers.indexOf('city')]?.trim() || '',
@@ -229,7 +229,7 @@ const ImportMembers: React.FC = () => {
             first_name: rowData.firstName,
             middle_name: rowData.middleName || undefined,
             last_name: rowData.lastName,
-            badge_number: rowData.departmentId || undefined,
+            membership_number: rowData.membershipNumber || undefined,
             phone: rowData.primaryPhone || undefined,
             mobile: rowData.secondaryPhone || undefined,
             date_of_birth: rowData.dateOfBirth || undefined,
@@ -275,7 +275,7 @@ const ImportMembers: React.FC = () => {
       'firstName',
       'lastName',
       'middleName',
-      'departmentId',
+      'membershipNumber',
       'dateOfBirth',
       'street',
       'city',
@@ -467,7 +467,7 @@ const ImportMembers: React.FC = () => {
                       <td className="px-4 py-2 text-theme-text-primary">
                         {row.firstName} {row.lastName}
                       </td>
-                      <td className="px-4 py-2 text-theme-text-secondary font-mono">{row.departmentId}</td>
+                      <td className="px-4 py-2 text-theme-text-secondary font-mono">{row.membershipNumber}</td>
                       <td className="px-4 py-2 text-theme-text-secondary">{row.email}</td>
                       <td className="px-4 py-2 text-theme-text-secondary">{row.primaryPhone}</td>
                       <td className="px-4 py-2 text-theme-text-secondary">

@@ -317,7 +317,7 @@ class AuthService:
         first_name: str,
         last_name: str,
         organization_id: UUID,
-        badge_number: Optional[str] = None
+        membership_number: Optional[str] = None
     ) -> Tuple[Optional[User], Optional[str]]:
         """
         Register a new user
@@ -329,7 +329,7 @@ class AuthService:
             first_name: First name
             last_name: Last name
             organization_id: Organization ID
-            badge_number: Optional badge number
+            membership_number: Optional badge number
 
         Returns:
             Tuple of (User object if successful, error message if failed)
@@ -375,7 +375,7 @@ class AuthService:
             password_hash=hash_password(password),
             first_name=first_name,
             last_name=last_name,
-            badge_number=badge_number,
+            membership_number=membership_number,
             status=UserStatus.ACTIVE,
             email_verified=False,
         )

@@ -512,7 +512,7 @@ class SecureApiClient {
     password_confirm: string;
     first_name: string;
     last_name: string;
-    badge_number?: string;
+    membership_number?: string;
   }): Promise<ApiResponse<{ access_token?: string; refresh_token?: string }>> {
     const response = await this.request<{ access_token?: string; refresh_token?: string }>('POST', '/onboarding/system-owner', data, true);
 
@@ -541,7 +541,7 @@ class SecureApiClient {
     password_confirm: string;
     first_name: string;
     last_name: string;
-    badge_number?: string;
+    membership_number?: string;
   }): Promise<ApiResponse<{ access_token?: string; refresh_token?: string }>> {
     return this.createSystemOwner(data);
   }

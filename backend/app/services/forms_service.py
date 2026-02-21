@@ -892,7 +892,7 @@ class FormsService:
                     User.first_name.ilike(search_term),
                     User.last_name.ilike(search_term),
                     User.email.ilike(search_term),
-                    User.badge_number.ilike(search_term),
+                    User.membership_number.ilike(search_term),
                     func.concat(User.first_name, " ", User.last_name).ilike(search_term),
                 )
             )
@@ -907,7 +907,7 @@ class FormsService:
                 "first_name": u.first_name or "",
                 "last_name": u.last_name or "",
                 "full_name": f"{u.first_name or ''} {u.last_name or ''}".strip(),
-                "badge_number": u.badge_number,
+                "membership_number": u.membership_number,
                 "rank": u.rank,
                 "station": u.station,
                 "email": u.email,

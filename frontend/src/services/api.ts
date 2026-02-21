@@ -276,8 +276,7 @@ export const userService = {
     first_name: string;
     middle_name?: string;
     last_name: string;
-    badge_number?: string;
-    membership_id?: string;
+    membership_number?: string;
     phone?: string;
     mobile?: string;
     date_of_birth?: string;
@@ -858,7 +857,7 @@ export const trainingService = {
 
   // ==================== Historical Training Import ====================
 
-  async parseHistoricalImport(file: File, matchBy: 'email' | 'badge_number' = 'badge_number'): Promise<HistoricalImportParseResponse> {
+  async parseHistoricalImport(file: File, matchBy: 'email' | 'membership_number' = 'membership_number'): Promise<HistoricalImportParseResponse> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await api.post<HistoricalImportParseResponse>(
@@ -1934,7 +1933,7 @@ export interface MemberInventorySummary {
   first_name?: string;
   last_name?: string;
   full_name?: string;
-  badge_number?: string;
+  membership_number?: string;
   permanent_count: number;
   checkout_count: number;
   issued_count: number;
@@ -2176,7 +2175,7 @@ export interface MemberLookupResult {
   first_name: string;
   last_name: string;
   full_name: string;
-  badge_number?: string;
+  membership_number?: string;
   rank?: string;
   station?: string;
   email?: string;

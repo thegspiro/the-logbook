@@ -13,7 +13,7 @@ export interface RegisterData {
   password: string;
   first_name: string;
   last_name: string;
-  badge_number?: string;
+  membership_number?: string;
 }
 
 export interface TokenResponse {

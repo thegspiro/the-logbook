@@ -35,7 +35,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                 scope="col"
                 className="hidden sm:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
               >
-                Badge Number
+                Member #
               </th>
               {contactSettings.enabled && contactSettings.show_email && (
                 <th
@@ -108,7 +108,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                     </Link>
                   </td>
                   <td className="hidden sm:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
-                    {member.badge_number || '-'}
+                    {member.membership_number || '-'}
                   </td>
                   {contactSettings.enabled && contactSettings.show_email && (
                     <td className="hidden md:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">

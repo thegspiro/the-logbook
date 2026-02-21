@@ -57,7 +57,7 @@ class UserService:
                 "first_name": user.first_name,
                 "last_name": user.last_name,
                 "full_name": user.full_name,
-                "badge_number": user.badge_number,
+                "membership_number": user.membership_number,
                 "photo_url": user.photo_url,
                 "status": user.status.value if user.status else "active",
                 "hire_date": user.hire_date,

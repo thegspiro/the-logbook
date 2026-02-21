@@ -110,7 +110,7 @@ const Members: React.FC = () => {
     const matchesSearch =
       fullName.includes(searchLower) ||
       (member.username && member.username.toLowerCase().includes(searchLower)) ||
-      (member.badge_number && member.badge_number.toLowerCase().includes(searchLower)) ||
+      (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
       (member.email && member.email.toLowerCase().includes(searchLower));
 
     const matchesFilter =
@@ -205,7 +205,7 @@ const Members: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
               <input
                 type="text"
-                placeholder="Search by name, badge number, or email..."
+                placeholder="Search by name, membership number, or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -329,8 +329,8 @@ const Members: React.FC = () => {
                 </div>
                 <div className="mt-3 flex items-center justify-between text-sm">
                   <div className="text-theme-text-muted space-y-1">
-                    {member.badge_number && (
-                      <div className="font-mono text-xs">Badge #{member.badge_number}</div>
+                    {member.membership_number && (
+                      <div className="font-mono text-xs">#{member.membership_number}</div>
                     )}
                     {contactInfoEnabled.enabled && contactInfoEnabled.show_phone && member.phone && (
                       <div className="flex items-center gap-1">
@@ -378,7 +378,7 @@ const Members: React.FC = () => {
                       Member
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
-                      ID / Badge
+                      Member #
                     </th>
                     {contactInfoEnabled.enabled && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
@@ -424,10 +424,7 @@ const Members: React.FC = () => {
                         {member.membership_number && (
                           <div className="text-theme-text-primary font-mono text-sm">{member.membership_number}</div>
                         )}
-                        {member.badge_number && (
-                          <div className="text-theme-text-muted font-mono text-xs">Badge #{member.badge_number}</div>
-                        )}
-                        {!member.membership_number && !member.badge_number && (
+                        {!member.membership_number && (
                           <div className="text-theme-text-muted">-</div>
                         )}
                       </td>

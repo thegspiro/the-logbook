@@ -102,7 +102,7 @@ class SystemOwnerCreate(BaseModel):
     password_confirm: str = Field(..., min_length=12)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    badge_number: Optional[str] = Field(None, max_length=50)
+    membership_number: Optional[str] = Field(None, max_length=50)
 
     @validator('password_confirm')
     def passwords_match(cls, v, values):
@@ -124,7 +124,7 @@ class UserResponse(BaseModel):
     email: str
     first_name: str
     last_name: str
-    badge_number: Optional[str]
+    membership_number: Optional[str]
     status: str
 
     class Config:
@@ -138,7 +138,7 @@ class SystemOwnerResponse(BaseModel):
     email: str
     first_name: str
     last_name: str
-    badge_number: Optional[str]
+    membership_number: Optional[str]
     status: str
     access_token: str
     refresh_token: Optional[str] = None
@@ -786,7 +786,7 @@ async def create_system_owner(
             password=user_data.password,
             first_name=user_data.first_name,
             last_name=user_data.last_name,
-            badge_number=user_data.badge_number
+            membership_number=user_data.membership_number
         )
 
         # Commit all changes (user, role assignment, onboarding step) before
@@ -810,7 +810,7 @@ async def create_system_owner(
             email=user.email,
             first_name=user.first_name,
             last_name=user.last_name,
-            badge_number=user.badge_number,
+            membership_number=user.membership_number,
             status=user.status.value,
             access_token=access_token,
             refresh_token=refresh_token,
