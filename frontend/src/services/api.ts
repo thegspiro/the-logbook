@@ -1507,6 +1507,8 @@ export const eventService = {
     event_type?: string;
     start_after?: string;
     start_before?: string;
+    end_after?: string;
+    end_before?: string;
     include_cancelled?: boolean;
     skip?: number;
     limit?: number;

@@ -103,6 +103,8 @@ async def list_events(
     exclude_event_types: Optional[str] = None,
     start_after: Optional[datetime] = None,
     start_before: Optional[datetime] = None,
+    end_after: Optional[datetime] = None,
+    end_before: Optional[datetime] = None,
     include_cancelled: bool = False,
     skip: int = 0,
     limit: int = 100,
@@ -115,6 +117,9 @@ async def list_events(
     Use `exclude_event_types` (comma-separated) to hide certain event types.
     Hall coordinators can use `exclude_event_types=training` to see only
     non-training events while double-booking prevention still applies.
+
+    Use `end_after` to filter events that end on or after a given time
+    (useful for showing only current and future events).
 
     **Authentication required**
     """
@@ -130,6 +135,8 @@ async def list_events(
         exclude_event_types=exclude_list,
         start_after=start_after,
         start_before=start_before,
+        end_after=end_after,
+        end_before=end_before,
         include_cancelled=include_cancelled,
         skip=skip,
         limit=limit,
