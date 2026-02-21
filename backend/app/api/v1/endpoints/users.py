@@ -864,14 +864,19 @@ async def update_user_profile(
                 detail="A member with this membership number already exists"
             )
 
-    # Rank changes restricted to Chief / membership coordinator
-    if "rank" in update_data:
-        rank_perm_result = await db.execute(
+    # Rank, station, and membership number changes restricted to leadership / secretary / membership coordinator
+    restricted_fields = {"rank", "station", "membership_number"}
+    has_restricted = restricted_fields & update_data.keys()
+    if has_restricted:
+        perm_result = await db.execute(
             select(User).where(User.id == current_user.id).options(selectinload(User.positions))
         )
-        rank_perm_user = rank_perm_result.scalar_one_or_none()
-        if not rank_perm_user or not _has_permission("members.manage", _collect_user_permissions(rank_perm_user)):
-            update_data.pop("rank")
+        perm_user = perm_result.scalar_one_or_none()
+        if not perm_user or not _has_permission("members.manage", _collect_user_permissions(perm_user)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, or membership number"
+            )
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
