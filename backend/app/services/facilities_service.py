@@ -40,7 +40,9 @@ from app.schemas.facilities import (
     FacilityStatusCreate,
     FacilityStatusUpdate,
     FacilityPhotoCreate,
+    FacilityPhotoUpdate,
     FacilityDocumentCreate,
+    FacilityDocumentUpdate,
     FacilityMaintenanceTypeCreate,
     FacilityMaintenanceTypeUpdate,
     FacilityMaintenanceCreate,
@@ -52,6 +54,7 @@ from app.schemas.facilities import (
     FacilityUtilityAccountCreate,
     FacilityUtilityAccountUpdate,
     FacilityUtilityReadingCreate,
+    FacilityUtilityReadingUpdate,
     FacilityAccessKeyCreate,
     FacilityAccessKeyUpdate,
     FacilityRoomCreate,
@@ -602,14 +605,24 @@ class FacilitiesService:
     # =========================================================================
 
     async def list_photos(
-        self, organization_id: str, facility_id: str
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[FacilityPhoto]:
         """List photos for a facility"""
+        conditions = [FacilityPhoto.organization_id == str(organization_id)]
+
+        if facility_id:
+            conditions.append(FacilityPhoto.facility_id == str(facility_id))
+
         query = (
             select(FacilityPhoto)
-            .where(FacilityPhoto.facility_id == str(facility_id))
-            .where(FacilityPhoto.organization_id == str(organization_id))
+            .where(and_(*conditions))
             .order_by(desc(FacilityPhoto.is_primary), desc(FacilityPhoto.uploaded_at))
+            .offset(skip)
+            .limit(limit)
         )
 
         result = await self.db.execute(query)
@@ -645,6 +658,44 @@ class FacilitiesService:
 
         return photo
 
+    async def update_photo(
+        self,
+        photo_id: str,
+        photo_data: FacilityPhotoUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityPhoto]:
+        """Update a facility photo"""
+        result = await self.db.execute(
+            select(FacilityPhoto)
+            .where(FacilityPhoto.id == photo_id)
+            .where(FacilityPhoto.organization_id == str(organization_id))
+        )
+        photo = result.scalar_one_or_none()
+        if not photo:
+            return None
+
+        update_data = photo_data.model_dump(exclude_unset=True)
+
+        # If setting as primary, unset other primary photos for this facility
+        if update_data.get("is_primary"):
+            existing = await self.db.execute(
+                select(FacilityPhoto)
+                .where(FacilityPhoto.facility_id == photo.facility_id)
+                .where(FacilityPhoto.organization_id == str(organization_id))
+                .where(FacilityPhoto.is_primary == True)
+                .where(FacilityPhoto.id != photo_id)
+            )
+            for other_photo in existing.scalars().all():
+                other_photo.is_primary = False
+
+        for field, value in update_data.items():
+            setattr(photo, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(photo)
+
+        return photo
+
     async def delete_photo(
         self, photo_id: str, organization_id: str
     ) -> bool:
@@ -668,14 +719,24 @@ class FacilitiesService:
     # =========================================================================
 
     async def list_documents(
-        self, organization_id: str, facility_id: str
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[FacilityDocument]:
         """List documents for a facility"""
+        conditions = [FacilityDocument.organization_id == str(organization_id)]
+
+        if facility_id:
+            conditions.append(FacilityDocument.facility_id == str(facility_id))
+
         query = (
             select(FacilityDocument)
-            .where(FacilityDocument.facility_id == str(facility_id))
-            .where(FacilityDocument.organization_id == str(organization_id))
+            .where(and_(*conditions))
             .order_by(FacilityDocument.document_type, desc(FacilityDocument.uploaded_at))
+            .offset(skip)
+            .limit(limit)
         )
 
         result = await self.db.execute(query)
@@ -695,6 +756,31 @@ class FacilitiesService:
         )
 
         self.db.add(document)
+        await self.db.commit()
+        await self.db.refresh(document)
+
+        return document
+
+    async def update_document(
+        self,
+        document_id: str,
+        document_data: FacilityDocumentUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityDocument]:
+        """Update a facility document"""
+        result = await self.db.execute(
+            select(FacilityDocument)
+            .where(FacilityDocument.id == document_id)
+            .where(FacilityDocument.organization_id == str(organization_id))
+        )
+        document = result.scalar_one_or_none()
+        if not document:
+            return None
+
+        update_data = document_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(document, field, value)
+
         await self.db.commit()
         await self.db.refresh(document)
 
@@ -1465,6 +1551,26 @@ class FacilitiesService:
 
         return reading
 
+    async def update_utility_reading(
+        self,
+        reading_id: str,
+        reading_data: FacilityUtilityReadingUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityUtilityReading]:
+        """Update a utility reading"""
+        reading = await self.get_utility_reading(reading_id, organization_id)
+        if not reading:
+            return None
+
+        update_data = reading_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(reading, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(reading)
+
+        return reading
+
     async def delete_utility_reading(
         self, reading_id: str, organization_id: str
     ) -> bool:
@@ -1666,6 +1772,7 @@ class FacilitiesService:
         room_id: str,
         room_data: FacilityRoomUpdate,
         organization_id: str,
+        updated_by: Optional[str] = None,
     ) -> Optional[FacilityRoom]:
         """Update room"""
         room = await self.get_room(room_id, organization_id)
@@ -1675,6 +1782,9 @@ class FacilitiesService:
         update_data = room_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(room, field, value)
+
+        if updated_by:
+            room.updated_by = updated_by
 
         await self.db.commit()
         await self.db.refresh(room)

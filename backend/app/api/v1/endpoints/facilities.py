@@ -30,9 +30,11 @@ from app.schemas.facilities import (
     FacilityListItem,
     # Photos
     FacilityPhotoCreate,
+    FacilityPhotoUpdate,
     FacilityPhotoResponse,
     # Documents
     FacilityDocumentCreate,
+    FacilityDocumentUpdate,
     FacilityDocumentResponse,
     # Maintenance Types
     FacilityMaintenanceTypeCreate,
@@ -58,6 +60,7 @@ from app.schemas.facilities import (
     FacilityUtilityAccountUpdate,
     FacilityUtilityAccountResponse,
     FacilityUtilityReadingCreate,
+    FacilityUtilityReadingUpdate,
     FacilityUtilityReadingResponse,
     # Access Keys
     KeyTypeEnum,
@@ -592,6 +595,36 @@ async def create_facility_photo(
     return photo
 
 
+@router.patch("/photos/{photo_id}", response_model=FacilityPhotoResponse, tags=["Facility Photos"])
+async def update_facility_photo(
+    photo_id: str,
+    photo_data: FacilityPhotoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility photo
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    photo = await service.update_photo(
+        photo_id=photo_id,
+        photo_data=photo_data,
+        organization_id=current_user.organization_id,
+    )
+
+    if not photo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Photo not found"
+        )
+
+    return photo
+
+
 @router.delete("/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Photos"])
 async def delete_facility_photo(
     photo_id: str,
@@ -671,6 +704,36 @@ async def create_facility_document(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return document
+
+
+@router.patch("/documents/{document_id}", response_model=FacilityDocumentResponse, tags=["Facility Documents"])
+async def update_facility_document(
+    document_id: str,
+    document_data: FacilityDocumentUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility document
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    document = await service.update_document(
+        document_id=document_id,
+        document_data=document_data,
+        organization_id=current_user.organization_id,
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
 
     return document
 
@@ -1423,10 +1486,10 @@ async def list_facility_utility_readings(
     """
     service = FacilitiesService(db)
     readings = await service.list_utility_readings(
-        account_id=account_id,
+        utility_account_id=account_id,
         organization_id=current_user.organization_id,
-        reading_after=reading_after,
-        reading_before=reading_before,
+        after_date=reading_after,
+        before_date=reading_before,
         skip=skip,
         limit=limit,
     )
@@ -1448,15 +1511,47 @@ async def create_facility_utility_reading(
     """
     service = FacilitiesService(db)
 
+    # Ensure reading is associated with the correct account from URL path
+    reading_data.utility_account_id = account_id
+
     try:
         reading = await service.create_utility_reading(
-            account_id=account_id,
             reading_data=reading_data,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return reading
+
+
+@router.patch("/utility-readings/{reading_id}", response_model=FacilityUtilityReadingResponse, tags=["Facility Utilities"])
+async def update_facility_utility_reading(
+    reading_id: str,
+    reading_data: FacilityUtilityReadingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a utility reading
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    reading = await service.update_utility_reading(
+        reading_id=reading_id,
+        reading_data=reading_data,
+        organization_id=current_user.organization_id,
+    )
+
+    if not reading:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utility reading not found"
+        )
 
     return reading
 
@@ -1740,6 +1835,7 @@ async def update_facility_room(
             room_id=room_id,
             room_data=room_data,
             organization_id=current_user.organization_id,
+            updated_by=current_user.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

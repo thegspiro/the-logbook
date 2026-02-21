@@ -424,6 +424,11 @@ class FacilityPhotoCreate(BaseModel):
     is_primary: bool = False
 
 
+class FacilityPhotoUpdate(BaseModel):
+    caption: Optional[str] = Field(None, max_length=500)
+    is_primary: Optional[bool] = None
+
+
 class FacilityPhotoResponse(FacilityPhotoCreate):
     id: str
     organization_id: str
@@ -441,6 +446,13 @@ class FacilityDocumentCreate(BaseModel):
     file_path: str
     file_name: str = Field(..., max_length=200)
     mime_type: Optional[str] = Field(None, max_length=100)
+    document_type: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = None
+    document_date: Optional[date] = None
+    expiration_date: Optional[date] = None
+
+
+class FacilityDocumentUpdate(BaseModel):
     document_type: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
     document_date: Optional[date] = None
@@ -870,6 +882,8 @@ class FacilityRoomUpdate(BaseModel):
 class FacilityRoomResponse(FacilityRoomBase):
     id: str
     organization_id: str
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     model_config = _response_config

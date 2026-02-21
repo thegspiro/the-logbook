@@ -4177,6 +4177,40 @@ export const facilitiesService = {
     await api.delete(`/facilities/utility-accounts/${accountId}`);
   },
 
+  // Photos
+  async getPhotos(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/photos', { params });
+    return response.data;
+  },
+  async createPhoto(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/photos', data);
+    return response.data;
+  },
+  async updatePhoto(photoId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/photos/${photoId}`, data);
+    return response.data;
+  },
+  async deletePhoto(photoId: string): Promise<void> {
+    await api.delete(`/facilities/photos/${photoId}`);
+  },
+
+  // Documents
+  async getFacilityDocuments(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/documents', { params });
+    return response.data;
+  },
+  async createFacilityDocument(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/documents', data);
+    return response.data;
+  },
+  async updateFacilityDocument(documentId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/documents/${documentId}`, data);
+    return response.data;
+  },
+  async deleteFacilityDocument(documentId: string): Promise<void> {
+    await api.delete(`/facilities/documents/${documentId}`);
+  },
+
   // Utility Readings
   async getUtilityReadings(accountId: string, params?: { skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
     const response = await api.get(`/facilities/utility-accounts/${accountId}/readings`, { params });
@@ -4184,6 +4218,10 @@ export const facilitiesService = {
   },
   async createUtilityReading(accountId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await api.post(`/facilities/utility-accounts/${accountId}/readings`, data);
+    return response.data;
+  },
+  async updateUtilityReading(readingId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/utility-readings/${readingId}`, data);
     return response.data;
   },
   async deleteUtilityReading(readingId: string): Promise<void> {
