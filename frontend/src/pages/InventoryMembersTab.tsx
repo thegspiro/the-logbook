@@ -182,17 +182,17 @@ const InventoryMembersTab: React.FC = () => {
         </div>
       ) : (
         /* Member list */
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
-          <table className="w-full">
+        <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
+          <table className="w-full min-w-[480px]">
             <thead className="bg-theme-input-bg border-b border-theme-surface-border">
               <tr>
-                <th className="w-8 px-4 py-3" />
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Member</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Assigned</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Checked Out</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Issued</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Total</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Actions</th>
+                <th className="w-8 px-2 sm:px-4 py-3" />
+                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Member</th>
+                <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Assigned</th>
+                <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Checked Out</th>
+                <th className="hidden lg:table-cell px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Issued</th>
+                <th className="px-2 sm:px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Total</th>
+                <th className="px-2 sm:px-4 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-theme-surface-border">
@@ -205,14 +205,14 @@ const InventoryMembersTab: React.FC = () => {
                       className="hover:bg-theme-surface-secondary transition-colors cursor-pointer"
                       onClick={() => handleExpand(member.user_id)}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-3">
                         {isExpanded ? (
                           <ChevronDown className="w-4 h-4 text-theme-text-muted" />
                         ) : (
                           <ChevronRight className="w-4 h-4 text-theme-text-muted" />
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-3">
                         <div>
                           <span className="text-theme-text-primary font-medium text-sm">
                             {member.full_name || member.username}
@@ -222,19 +222,19 @@ const InventoryMembersTab: React.FC = () => {
                               <span className="text-theme-text-muted text-xs">@{member.username}</span>
                             )}
                             {member.badge_number && (
-                              <span className="inline-flex items-center gap-1 text-xs text-theme-text-muted">
+                              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-theme-text-muted">
                                 <Shield className="w-3 h-3" /> {member.badge_number}
                               </span>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="hidden md:table-cell px-4 py-3 text-center">
                         <span className={`text-sm font-medium ${member.permanent_count > 0 ? 'text-blue-700 dark:text-blue-400' : 'text-theme-text-muted'}`}>
                           {member.permanent_count}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="hidden md:table-cell px-4 py-3 text-center">
                         <span className={`text-sm font-medium ${member.checkout_count > 0 ? 'text-yellow-700 dark:text-yellow-400' : 'text-theme-text-muted'}`}>
                           {member.checkout_count}
                         </span>
@@ -244,32 +244,32 @@ const InventoryMembersTab: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="hidden lg:table-cell px-4 py-3 text-center">
                         <span className={`text-sm font-medium ${member.issued_count > 0 ? 'text-purple-700 dark:text-purple-400' : 'text-theme-text-muted'}`}>
                           {member.issued_count}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-2 sm:px-4 py-3 text-center">
                         <span className={`text-sm font-bold ${member.total_items > 0 ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
                           {member.total_items}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-2 sm:px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1 sm:gap-2">
                           <button
                             onClick={() => openScanModal('checkout', member)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
                             title="Check out items to this member"
                           >
-                            <ArrowDownToLine className="w-3.5 h-3.5" /> Check Out
+                            <ArrowDownToLine className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Check Out</span><span className="sm:hidden">Out</span>
                           </button>
                           {member.total_items > 0 && (
                             <button
                               onClick={() => openScanModal('return', member)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
                               title="Return items from this member"
                             >
-                              <ArrowUpFromLine className="w-3.5 h-3.5" /> Return
+                              <ArrowUpFromLine className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Return</span><span className="sm:hidden">Ret</span>
                             </button>
                           )}
                         </div>

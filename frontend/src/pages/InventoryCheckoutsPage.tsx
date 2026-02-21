@@ -113,23 +113,23 @@ export const InventoryCheckoutsPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 rounded-lg p-2">
+          <div className="flex items-center space-x-3 min-w-0">
+            <div className="bg-blue-600 rounded-lg p-2 flex-shrink-0">
               <Package className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Inventory Checkouts</h1>
-              <p className="text-theme-text-secondary text-sm">
+            <div className="min-w-0">
+              <h1 className="text-theme-text-primary text-xl sm:text-2xl font-bold">Inventory Checkouts</h1>
+              <p className="text-theme-text-secondary text-sm hidden sm:block">
                 Manage active and overdue equipment checkouts
               </p>
             </div>
           </div>
           <button
             onClick={fetchCheckouts}
-            className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg border border-theme-surface-border transition-colors"
+            className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg border border-theme-surface-border transition-colors flex-shrink-0"
           >
             <RefreshCw className="w-4 h-4" aria-hidden="true" />
-            <span>Refresh</span>
+            <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
 
@@ -217,8 +217,8 @@ export const InventoryCheckoutsPage: React.FC = () => {
                   <thead>
                     <tr className="border-b border-theme-surface-border bg-theme-surface">
                       <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item Name</th>
-                      <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Checkout Date</th>
-                      <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Due Date</th>
+                      <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Checkout Date</th>
+                      <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Due Date</th>
                       <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
                       <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
                     </tr>
@@ -232,12 +232,12 @@ export const InventoryCheckoutsPage: React.FC = () => {
                         }`}
                       >
                         <td className="p-3">
-                          <p className="text-theme-text-primary font-medium">{checkout.item_name}</p>
+                          <p className="text-theme-text-primary font-medium text-sm">{checkout.item_name}</p>
                         </td>
-                        <td className="p-3 text-theme-text-secondary">
+                        <td className="hidden sm:table-cell p-3 text-theme-text-secondary text-sm">
                           {formatDate(checkout.checked_out_at)}
                         </td>
-                        <td className="p-3 text-theme-text-secondary">
+                        <td className="hidden sm:table-cell p-3 text-theme-text-secondary text-sm">
                           {checkout.expected_return_at
                             ? formatDate(checkout.expected_return_at)
                             : '--'}
@@ -288,7 +288,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
-                <div className="px-6 pt-5 pb-4">
+                <div className="px-4 sm:px-6 pt-5 pb-4">
                   <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">
                     Check In: {checkInModal.itemName}
                   </h3>
@@ -328,7 +328,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-3 sm:gap-0 rounded-b-lg">
                   <button
                     onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
                     className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
