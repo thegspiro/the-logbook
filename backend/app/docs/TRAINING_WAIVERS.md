@@ -193,6 +193,53 @@ through May 31.  The department requires 24 hours of training per rolling
    show as **compliant** in the compliance matrix, training reports, and
    their own My Training page.
 
+5. Smith's meeting attendance is also adjusted: any meetings held during
+   March–May are excluded from the attendance denominator, so Smith's
+   attendance percentage and voting eligibility are not penalised.
+
+---
+
+## Meeting Attendance
+
+A Leave of Absence also affects **meeting attendance** calculations.
+Meetings that fall within the leave period are automatically excluded from
+the attendance denominator so the member's attendance percentage is not
+penalised for meetings they could not attend.
+
+### How it works
+
+The attendance calculation is:
+
+    attendance_pct = meetings_attended / eligible_meetings × 100
+
+Where:
+
+    eligible_meetings = total_meetings − per-meeting_waivers − meetings_during_leave
+
+Any meeting whose `meeting_date` falls between a leave's `start_date` and
+`end_date` (inclusive) is excluded.
+
+### Where attendance is affected
+
+| View / Endpoint | Description |
+|----------------|-------------|
+| **Attendance Dashboard** (`GET /meetings/attendance/dashboard`) | Secretary's per-member attendance summary. |
+| **Voting Eligibility** (election service) | Uses attendance % to determine if a member can vote. |
+
+### Per-meeting waivers vs. Leave of Absence
+
+There are two ways a meeting can be excluded from a member's attendance:
+
+1. **Per-meeting waiver**: An officer grants a waiver for a specific meeting
+   (via the meeting detail page or `POST /meetings/{id}/attendance-waiver`).
+   This sets `waiver_reason` on the `MeetingAttendee` record.
+
+2. **Leave of Absence**: Created via Member Lifecycle. Automatically excludes
+   all meetings whose date falls within the leave period — no need to grant
+   individual per-meeting waivers.
+
+Both are subtracted from the denominator independently.
+
 ---
 
 ## FAQ
@@ -211,11 +258,18 @@ load.
 
 **Q: Can a leave cover only part of a month?**
 
-Yes, but a month is only excluded from calculations if the leave covers 15 or
-more days of that month.  Shorter partial-month leaves do not reduce the
-requirement.
+Yes, but for **training**, a month is only excluded from calculations if the
+leave covers 15 or more days of that month.  For **meeting attendance**, any
+meeting whose date falls within the leave period is excluded regardless of how
+many days the leave covers in that month.
 
 **Q: Does the leave affect shift scheduling?**
 
 The Member Leave of Absence is also read by the shift module to exclude the
 member from scheduling during the leave period.
+
+**Q: Do I need to grant per-meeting waivers for each meeting during a leave?**
+
+No.  The Leave of Absence automatically excludes all meetings during the leave
+period.  Per-meeting waivers are only needed for one-off absences outside a
+formal leave.
