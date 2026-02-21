@@ -98,7 +98,7 @@ class Event(Base):
     # Additional settings
     allow_guests = Column(Boolean, nullable=False, default=False)
     send_reminders = Column(Boolean, nullable=False, default=True)
-    reminder_hours_before = Column(Integer, nullable=False, default=24)  # Hours before event to send reminder
+    reminder_schedule = Column(JSON, nullable=False, default=lambda: [24])  # List of hours before event to send reminders
 
     # Check-in window settings
     check_in_window_type = Column(SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=CheckInWindowType.FLEXIBLE)
@@ -233,7 +233,7 @@ class EventTemplate(Base):
 
     # Notification defaults
     send_reminders = Column(Boolean, nullable=False, default=True)
-    reminder_hours_before = Column(Integer, nullable=False, default=24)
+    reminder_schedule = Column(JSON, nullable=False, default=lambda: [24])
 
     # Custom fields template (structure for custom data fields)
     custom_fields_template = Column(JSON, nullable=True)

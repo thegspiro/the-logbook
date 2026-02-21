@@ -29,7 +29,7 @@ class EventBase(BaseModel):
     is_mandatory: bool = Field(default=False)
     allow_guests: bool = Field(default=False)
     send_reminders: bool = Field(default=True)
-    reminder_hours_before: int = Field(default=24, ge=1, le=168)  # 1 hour to 1 week
+    reminder_schedule: List[int] = Field(default=[24], description="Hours before event to send reminders (e.g. [168, 24] for 1 week + 1 day)")
     check_in_window_type: Optional[str] = Field(default="flexible", description="Check-in window type: flexible, strict, window")
     check_in_minutes_before: Optional[int] = Field(default=30, description="Minutes before event start to allow check-in")
     check_in_minutes_after: Optional[int] = Field(default=15, description="For 'window' type: minutes after event start")
@@ -60,7 +60,7 @@ class EventUpdate(BaseModel):
     is_mandatory: Optional[bool] = None
     allow_guests: Optional[bool] = None
     send_reminders: Optional[bool] = None
-    reminder_hours_before: Optional[int] = Field(None, ge=1, le=168)
+    reminder_schedule: Optional[List[int]] = None
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = None
     check_in_minutes_after: Optional[int] = None
@@ -288,7 +288,7 @@ class EventTemplateCreate(BaseModel):
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
     require_checkout: bool = False
     send_reminders: bool = True
-    reminder_hours_before: int = Field(default=24, ge=1)
+    reminder_schedule: List[int] = Field(default=[24])
     custom_fields_template: Optional[Dict[str, Any]] = None
 
 
@@ -312,7 +312,7 @@ class EventTemplateUpdate(BaseModel):
     check_in_minutes_after: Optional[int] = Field(None, ge=0)
     require_checkout: Optional[bool] = None
     send_reminders: Optional[bool] = None
-    reminder_hours_before: Optional[int] = Field(None, ge=1)
+    reminder_schedule: Optional[List[int]] = None
     custom_fields_template: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
 
@@ -341,7 +341,7 @@ class EventTemplateResponse(BaseModel):
     check_in_minutes_after: Optional[int] = None
     require_checkout: bool
     send_reminders: bool
-    reminder_hours_before: int
+    reminder_schedule: List[int] = Field(default=[24])
     custom_fields_template: Optional[Dict[str, Any]] = None
     is_active: bool
     created_at: datetime
@@ -376,7 +376,7 @@ class RecurringEventCreate(BaseModel):
     is_mandatory: bool = False
     allow_guests: bool = False
     send_reminders: bool = True
-    reminder_hours_before: int = Field(default=24, ge=1)
+    reminder_schedule: List[int] = Field(default=[24])
     check_in_window_type: Optional[str] = Field(default="flexible")
     check_in_minutes_before: Optional[int] = Field(default=30, ge=0)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)

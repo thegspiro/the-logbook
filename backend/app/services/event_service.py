@@ -310,7 +310,7 @@ class EventService:
             is_mandatory=source_event.is_mandatory,
             allow_guests=source_event.allow_guests,
             send_reminders=source_event.send_reminders,
-            reminder_hours_before=source_event.reminder_hours_before,
+            reminder_schedule=source_event.reminder_schedule,
             check_in_window_type=source_event.check_in_window_type,
             check_in_minutes_before=source_event.check_in_minutes_before,
             check_in_minutes_after=source_event.check_in_minutes_after,

@@ -75,7 +75,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         is_mandatory=event.is_mandatory,
         allow_guests=event.allow_guests,
         send_reminders=event.send_reminders,
-        reminder_hours_before=event.reminder_hours_before,
+        reminder_schedule=event.reminder_schedule or [24],
         check_in_window_type=event.check_in_window_type.value if event.check_in_window_type else "flexible",
         check_in_minutes_before=event.check_in_minutes_before,
         check_in_minutes_after=event.check_in_minutes_after,
@@ -1592,7 +1592,7 @@ EVENT_SETTINGS_DEFAULTS = {
         "allow_guests": False,
         "is_mandatory": False,
         "send_reminders": True,
-        "reminder_hours_before": 24,
+        "reminder_schedule": [24],
         "default_duration_minutes": 60,
     },
     "qr_code": {

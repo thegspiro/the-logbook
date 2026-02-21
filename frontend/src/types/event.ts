@@ -35,7 +35,7 @@ export interface Event {
 
   allow_guests: boolean;
   send_reminders: boolean;
-  reminder_hours_before: number;
+  reminder_schedule: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -93,7 +93,7 @@ export interface EventCreate {
 
   allow_guests?: boolean;
   send_reminders?: boolean;
-  reminder_hours_before?: number;
+  reminder_schedule?: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -119,7 +119,7 @@ export interface EventUpdate {
 
   allow_guests?: boolean;
   send_reminders?: boolean;
-  reminder_hours_before?: number;
+  reminder_schedule?: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -261,7 +261,7 @@ export interface EventTemplate {
   check_in_minutes_after?: number;
   require_checkout: boolean;
   send_reminders: boolean;
-  reminder_hours_before: number;
+  reminder_schedule: number[];
   custom_fields_template?: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
@@ -288,7 +288,7 @@ export interface EventTemplateCreate {
   check_in_minutes_after?: number;
   require_checkout?: boolean;
   send_reminders?: boolean;
-  reminder_hours_before?: number;
+  reminder_schedule?: number[];
   custom_fields_template?: Record<string, unknown>;
 }
 
@@ -311,7 +311,7 @@ export interface RecurringEventCreate {
 
   allow_guests?: boolean;
   send_reminders?: boolean;
-  reminder_hours_before?: number;
+  reminder_schedule?: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -369,7 +369,7 @@ export interface EventModuleSettings {
     allow_guests: boolean;
     is_mandatory: boolean;
     send_reminders: boolean;
-    reminder_hours_before: number;
+    reminder_schedule: number[];
     default_duration_minutes: number;
   };
   // QR code page settings

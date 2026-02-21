@@ -110,7 +110,7 @@ class TrainingSessionService:
             is_mandatory=session_data.is_mandatory,
             allow_guests=False,  # Training sessions don't allow guests
             send_reminders=True,
-            reminder_hours_before=24,
+            reminder_schedule=[24],
             check_in_window_type=CheckInWindowType(session_data.check_in_window_type),
             check_in_minutes_before=session_data.check_in_minutes_before,
             check_in_minutes_after=session_data.check_in_minutes_after,

@@ -78,7 +78,7 @@ SCHEDULE = {
         "cron": "*/15 * * * *",
     },
     "event_reminders": {
-        "description": "Send email and in-app reminders for upcoming events based on each event's reminder_hours_before setting",
+        "description": "Send email and in-app reminders for upcoming events based on each event's reminder_schedule setting",
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
@@ -297,15 +297,12 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     """
     Send event reminders for upcoming events.
 
-    For each organization, finds events that:
-    - Have send_reminders=True
-    - Are not cancelled
-    - Start within the next reminder_hours_before window
-    - Haven't already had reminders sent (tracked via custom_fields)
+    Each event has a reminder_schedule (e.g. [168, 24] = 1 week + 1 day before).
+    For each scheduled interval, if the current time has passed the threshold
+    and we haven't already sent that interval's reminder, we send it.
 
-    Sends email + in-app notifications to all members who RSVP'd 'going'
-    or (for mandatory events) all org members. Respects user notification
-    preferences.
+    Tracks which intervals have been sent in custom_fields.reminders_sent (list
+    of hours already notified, e.g. [168]).
     """
     from datetime import timedelta, timezone as dt_timezone
     from sqlalchemy.orm import selectinload
@@ -329,9 +326,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         org_emails = 0
 
         try:
-            # Find upcoming events that need reminders
-            # Look ahead up to 168 hours (max reminder window) for events
-            # with send_reminders enabled
+            # Look ahead up to 168 hours (max reminder window)
             max_lookahead = now + timedelta(hours=168)
 
             events_result = await db.execute(
@@ -349,23 +344,25 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
             events = list(events_result.scalars().all())
 
             for event in events:
-                # Check if reminder is due: event starts within reminder_hours_before
-                reminder_threshold = event.start_datetime - timedelta(
-                    hours=event.reminder_hours_before or 24
-                )
-                if now < reminder_threshold:
-                    continue  # Too early for this event's reminder
-
-                # Check if reminder already sent (tracked in custom_fields)
+                schedule = event.reminder_schedule or [24]
                 custom = event.custom_fields or {}
-                if custom.get("reminder_sent"):
+                already_sent = set(custom.get("reminders_sent", []))
+
+                # Find which intervals are due now but not yet sent
+                due_intervals = []
+                for hours in schedule:
+                    if hours in already_sent:
+                        continue
+                    threshold = event.start_datetime - timedelta(hours=hours)
+                    if now >= threshold:
+                        due_intervals.append(hours)
+
+                if not due_intervals:
                     continue
 
-                # Determine who to notify
+                # Determine recipients once for all due intervals
                 recipients = []
-
                 if event.is_mandatory:
-                    # Mandatory events: notify all org members
                     users_result = await db.execute(
                         select(User)
                         .where(User.organization_id == str(org.id))
@@ -373,7 +370,6 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     )
                     recipients = list(users_result.scalars().all())
                 else:
-                    # Non-mandatory: notify members who RSVP'd going/maybe
                     going_user_ids = [
                         str(rsvp.user_id)
                         for rsvp in event.rsvps
@@ -386,66 +382,77 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                         recipients = list(users_result.scalars().all())
 
                 if not recipients:
-                    # Mark as sent even with no recipients to avoid re-processing
-                    event.custom_fields = {**custom, "reminder_sent": True}
+                    # Mark all due intervals as sent to avoid re-processing
+                    event.custom_fields = {
+                        **custom,
+                        "reminders_sent": sorted(already_sent | set(due_intervals)),
+                    }
                     continue
 
-                # Build location display name
+                # Build shared event info
                 location_name = None
                 if event.location_obj:
                     location_name = event.location_obj.name
                 elif event.location:
                     location_name = event.location
 
-                event_type_label = event.event_type.value.replace("_", " ").title() if event.event_type else "Event"
+                event_type_label = (
+                    event.event_type.value.replace("_", " ").title()
+                    if event.event_type else "Event"
+                )
                 event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
-
                 email_service = EmailService(organization=org)
 
-                for user in recipients:
-                    # Check user notification preferences
-                    prefs = user.notification_preferences or {}
-                    wants_reminders = prefs.get("event_reminders", True)
+                # Send one notification per due interval
+                for hours in due_intervals:
+                    for user in recipients:
+                        prefs = user.notification_preferences or {}
+                        wants_reminders = prefs.get("event_reminders", True)
+                        user_name = f"{user.first_name} {user.last_name}"
 
-                    user_name = f"{user.first_name} {user.last_name}"
-
-                    # Always create in-app notification
-                    try:
-                        in_app_log = NotificationLog(
-                            id=generate_uuid(),
-                            organization_id=str(org.id),
-                            recipient_id=str(user.id),
-                            channel=NotificationChannel.IN_APP,
-                            subject=f"Reminder: {event.title}",
-                            message=f"Your event \"{event.title}\" starts {_format_relative_time(event.start_datetime, now)}.",
-                        )
-                        db.add(in_app_log)
-                        org_reminders += 1
-                    except Exception as e:
-                        logger.error(f"Failed to create in-app reminder for user {user.id}: {e}")
-
-                    # Send email if user wants them and has an email
-                    wants_email = prefs.get("email_notifications", True)
-                    if wants_reminders and wants_email and user.email:
+                        # In-app notification
                         try:
-                            sent = await email_service.send_event_reminder(
-                                to_email=user.email,
-                                recipient_name=user_name,
-                                event_title=event.title,
-                                event_start=event.start_datetime,
-                                event_end=event.end_datetime,
-                                event_type=event_type_label,
-                                location_name=location_name,
-                                location_details=event.location_details,
-                                event_url=event_url,
+                            in_app_log = NotificationLog(
+                                id=generate_uuid(),
+                                organization_id=str(org.id),
+                                recipient_id=str(user.id),
+                                channel=NotificationChannel.IN_APP,
+                                subject=f"Reminder: {event.title}",
+                                message=(
+                                    f"Your event \"{event.title}\" starts "
+                                    f"{_format_relative_time(event.start_datetime, now)}."
+                                ),
                             )
-                            if sent:
-                                org_emails += 1
+                            db.add(in_app_log)
+                            org_reminders += 1
                         except Exception as e:
-                            logger.error(f"Failed to send reminder email to {user.email}: {e}")
+                            logger.error(f"Failed to create in-app reminder for user {user.id}: {e}")
 
-                # Mark reminder as sent
-                event.custom_fields = {**custom, "reminder_sent": True}
+                        # Email notification
+                        wants_email = prefs.get("email_notifications", True)
+                        if wants_reminders and wants_email and user.email:
+                            try:
+                                sent = await email_service.send_event_reminder(
+                                    to_email=user.email,
+                                    recipient_name=user_name,
+                                    event_title=event.title,
+                                    event_start=event.start_datetime,
+                                    event_end=event.end_datetime,
+                                    event_type=event_type_label,
+                                    location_name=location_name,
+                                    location_details=event.location_details,
+                                    event_url=event_url,
+                                )
+                                if sent:
+                                    org_emails += 1
+                            except Exception as e:
+                                logger.error(f"Failed to send reminder email to {user.email}: {e}")
+
+                # Mark all due intervals as sent
+                event.custom_fields = {
+                    **custom,
+                    "reminders_sent": sorted(already_sent | set(due_intervals)),
+                }
 
             await db.commit()
 

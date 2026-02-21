@@ -101,7 +101,7 @@ export const EventEditPage: React.FC = () => {
     is_mandatory: event.is_mandatory,
     allow_guests: event.allow_guests,
     send_reminders: event.send_reminders,
-    reminder_hours_before: event.reminder_hours_before,
+    reminder_schedule: event.reminder_schedule,
     check_in_window_type: event.check_in_window_type || 'flexible',
     check_in_minutes_before: event.check_in_minutes_before ?? 30,
     check_in_minutes_after: event.check_in_minutes_after ?? 15,

@@ -58,7 +58,7 @@ const DEFAULT_FORM_DATA: EventCreate = {
   is_mandatory: false,
   allow_guests: false,
   send_reminders: true,
-  reminder_hours_before: 24,
+  reminder_schedule: [24],
   check_in_window_type: 'flexible',
   check_in_minutes_before: 15,
   check_in_minutes_after: 15,
@@ -705,24 +705,73 @@ export const EventForm: React.FC<EventFormProps> = ({
         </div>
 
         {formData.send_reminders && (
-          <div className="pl-6 border-l-2 border-red-500/30">
-            <label htmlFor="reminder-hours" className={labelClass}>
-              Reminder hours before event
-            </label>
+          <div className="pl-6 border-l-2 border-red-500/30 space-y-3">
+            <label className={labelClass}>Reminder Schedule</label>
+
+            {/* Selected reminders as tags */}
+            {(formData.reminder_schedule || [24]).length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {[...(formData.reminder_schedule || [24])]
+                  .sort((a, b) => b - a)
+                  .map((hours) => (
+                    <span
+                      key={hours}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/30"
+                    >
+                      {hours >= 168
+                        ? `${Math.floor(hours / 168)} week${hours >= 336 ? 's' : ''}`
+                        : hours >= 24
+                          ? `${Math.floor(hours / 24)} day${hours >= 48 ? 's' : ''}`
+                          : `${hours} hour${hours !== 1 ? 's' : ''}`}{' '}
+                      before
+                      <button
+                        type="button"
+                        onClick={() =>
+                          update({
+                            reminder_schedule: (formData.reminder_schedule || [24]).filter(
+                              (h) => h !== hours
+                            ),
+                          })
+                        }
+                        className="ml-0.5 hover:text-red-900 dark:hover:text-red-100"
+                        aria-label={`Remove ${hours}-hour reminder`}
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+              </div>
+            )}
+
+            {/* Add reminder dropdown */}
             <select
-              id="reminder-hours"
-              value={formData.reminder_hours_before || 24}
-              onChange={(e) => update({ reminder_hours_before: parseInt(e.target.value) })}
+              id="add-reminder"
+              value=""
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                if (val && !(formData.reminder_schedule || []).includes(val)) {
+                  update({ reminder_schedule: [...(formData.reminder_schedule || []), val] });
+                }
+              }}
               className="w-full max-w-xs px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             >
-              <option value={1}>1 hour</option>
-              <option value={2}>2 hours</option>
-              <option value={4}>4 hours</option>
-              <option value={12}>12 hours</option>
-              <option value={24}>24 hours (1 day)</option>
-              <option value={48}>48 hours (2 days)</option>
-              <option value={72}>72 hours (3 days)</option>
-              <option value={168}>168 hours (1 week)</option>
+              <option value="">+ Add a reminder...</option>
+              {[
+                { value: 1, label: '1 hour before' },
+                { value: 2, label: '2 hours before' },
+                { value: 4, label: '4 hours before' },
+                { value: 12, label: '12 hours before' },
+                { value: 24, label: '1 day before' },
+                { value: 48, label: '2 days before' },
+                { value: 72, label: '3 days before' },
+                { value: 168, label: '1 week before' },
+              ]
+                .filter(({ value }) => !(formData.reminder_schedule || []).includes(value))
+                .map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
             </select>
           </div>
         )}

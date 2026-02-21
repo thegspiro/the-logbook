@@ -62,7 +62,7 @@ const DEFAULT_SETTINGS: EventModuleSettings = {
     allow_guests: false,
     is_mandatory: false,
     send_reminders: true,
-    reminder_hours_before: 24,
+    reminder_schedule: [24],
     default_duration_minutes: 120,
   },
   qr_code: {
@@ -651,14 +651,56 @@ export const EventsSettingsPage: React.FC = () => {
                 description="Automatically send reminders before events"
               />
               {settings.defaults.send_reminders && (
-                <div className="pl-4 mt-2">
-                  <label className="form-label-sm">Remind members before event</label>
+                <div className="pl-4 mt-2 space-y-2">
+                  <label className="form-label-sm">Default reminder schedule</label>
+                  {(settings.defaults.reminder_schedule || [24]).length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {[...(settings.defaults.reminder_schedule || [24])]
+                        .sort((a, b) => b - a)
+                        .map((hours) => {
+                          const opt = REMINDER_HOUR_OPTIONS.find((o) => o.value === hours);
+                          return (
+                            <span
+                              key={hours}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/30"
+                            >
+                              {opt ? opt.label : `${hours}h`} before
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateDefaults(
+                                    'reminder_schedule',
+                                    (settings.defaults.reminder_schedule || [24]).filter(
+                                      (h: number) => h !== hours
+                                    )
+                                  )
+                                }
+                                className="ml-0.5 hover:text-red-900 dark:hover:text-red-100"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          );
+                        })}
+                    </div>
+                  )}
                   <select
-                    value={settings.defaults.reminder_hours_before}
-                    onChange={(e) => updateDefaults('reminder_hours_before', Number(e.target.value))}
+                    value=""
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (val && !(settings.defaults.reminder_schedule || []).includes(val)) {
+                        updateDefaults('reminder_schedule', [
+                          ...(settings.defaults.reminder_schedule || []),
+                          val,
+                        ]);
+                      }
+                    }}
                     className="form-input-sm w-48"
                   >
-                    {REMINDER_HOUR_OPTIONS.map(({ value, label }) => (
+                    <option value="">+ Add reminder...</option>
+                    {REMINDER_HOUR_OPTIONS.filter(
+                      ({ value }) => !(settings.defaults.reminder_schedule || []).includes(value)
+                    ).map(({ value, label }) => (
                       <option key={value} value={value}>{label}</option>
                     ))}
                   </select>
