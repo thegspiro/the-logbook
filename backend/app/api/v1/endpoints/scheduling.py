@@ -45,11 +45,39 @@ from app.schemas.scheduling import (
     ShiftTimeOffReview,
     ShiftTimeOffResponse,
     TimeOffStatus,
+    ShiftSignupRequest,
+    BasicApparatusCreate,
+    BasicApparatusUpdate,
+    BasicApparatusResponse,
+    ShiftPosition,
+    ShiftComplianceResponse,
 )
 from app.services.scheduling_service import SchedulingService
 from app.api.dependencies import get_current_user, require_permission
+from app.models.training import BasicApparatus
+from sqlalchemy import select
 
 router = APIRouter()
+
+
+# ============================================
+# Apparatus enrichment helper
+# ============================================
+
+async def _enrich_shifts(
+    service: SchedulingService,
+    organization_id,
+    shifts: list,
+) -> list[dict]:
+    """Convert Shift ORM objects to dicts enriched with apparatus details."""
+    apparatus_ids = list({s.apparatus_id for s in shifts if s.apparatus_id})
+    apparatus_map = await service._get_apparatus_map(organization_id, apparatus_ids)
+    enriched = []
+    for s in shifts:
+        d = {c.key: getattr(s, c.key) for c in s.__table__.columns}
+        service._enrich_shift_dict(d, apparatus_map)
+        enriched.append(d)
+    return enriched
 
 
 # ============================================
@@ -82,8 +110,9 @@ async def list_shifts(
         limit=limit,
     )
 
+    enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
     return {
-        "shifts": shifts,
+        "shifts": enriched,
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -104,7 +133,8 @@ async def create_shift(
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to create shift. {error}")
-    return result
+    enriched = await _enrich_shifts(service, current_user.organization_id, [result])
+    return enriched[0]
 
 
 @router.get("/shifts/{shift_id}", response_model=ShiftDetailResponse)
@@ -120,8 +150,12 @@ async def get_shift(
         raise HTTPException(status_code=404, detail="Shift not found")
 
     attendance = await service.get_shift_attendance(shift_id, current_user.organization_id)
+    apparatus_ids = [shift.apparatus_id] if shift.apparatus_id else []
+    apparatus_map = await service._get_apparatus_map(current_user.organization_id, apparatus_ids)
+    d = {c.key: getattr(shift, c.key) for c in shift.__table__.columns}
+    service._enrich_shift_dict(d, apparatus_map)
     return {
-        **{c.key: getattr(shift, c.key) for c in shift.__table__.columns},
+        **d,
         "attendees": attendance,
         "attendee_count": len(attendance),
     }
@@ -142,7 +176,8 @@ async def update_shift(
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to update shift. {error}")
-    return result
+    enriched = await _enrich_shifts(service, current_user.organization_id, [result])
+    return enriched[0]
 
 
 @router.delete("/shifts/{shift_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -238,7 +273,7 @@ async def get_week_calendar(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     shifts = await service.get_week_shifts(current_user.organization_id, start)
-    return shifts
+    return await _enrich_shifts(service, current_user.organization_id, shifts)
 
 
 @router.get("/calendar/month", response_model=list[ShiftResponse])
@@ -254,7 +289,7 @@ async def get_month_calendar(
     y = year or today.year
     m = month or today.month
     shifts = await service.get_month_shifts(current_user.organization_id, y, m)
-    return shifts
+    return await _enrich_shifts(service, current_user.organization_id, shifts)
 
 
 # ============================================
@@ -851,7 +886,8 @@ async def get_my_shifts(
         skip=skip,
         limit=limit,
     )
-    return {"shifts": shifts, "total": total, "skip": skip, "limit": limit}
+    enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
+    return {"shifts": enriched, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/my-assignments", response_model=list[ShiftAssignmentResponse])
@@ -940,3 +976,208 @@ async def get_call_volume_report(
         current_user.organization_id, start, end, group_by=group_by
     )
     return report
+
+
+@router.get("/reports/compliance", response_model=ShiftComplianceResponse)
+async def get_shift_compliance_report(
+    reference_date: Optional[str] = Query(None, description="Reference date for compliance calculation (YYYY-MM-DD). Defaults to today."),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.report")),
+):
+    """
+    Get shift/hours compliance report.
+
+    Checks all active training requirements of type SHIFTS or HOURS
+    against actual shift attendance records. Returns per-member
+    compliance status for each requirement, respecting role/position
+    applicability filters.
+    """
+    service = SchedulingService(db)
+    ref_date = None
+    if reference_date:
+        try:
+            ref_date = date.fromisoformat(reference_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    compliance = await service.get_shift_compliance(
+        current_user.organization_id, reference_date=ref_date
+    )
+    actual_ref = ref_date or date.today()
+    return {
+        "requirements": compliance,
+        "reference_date": actual_ref.isoformat(),
+        "total_requirements": len(compliance),
+    }
+
+
+# ============================================
+# Shift Signup (Member Self-Service)
+# ============================================
+
+@router.post("/shifts/{shift_id}/signup", response_model=ShiftAssignmentResponse, status_code=status.HTTP_201_CREATED)
+async def signup_for_shift(
+    shift_id: UUID,
+    signup: ShiftSignupRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Member signs up for an open position on a shift.
+    Does not require scheduling.assign permission — any member can sign up.
+    """
+    service = SchedulingService(db)
+    assignment_data = {
+        "user_id": str(current_user.id),
+        "position": signup.position.value,
+    }
+    result, error = await service.create_assignment(
+        current_user.organization_id, shift_id, assignment_data, current_user.id
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to sign up for shift. {error}")
+    return result
+
+
+@router.delete("/shifts/{shift_id}/signup", status_code=status.HTTP_204_NO_CONTENT)
+async def withdraw_from_shift(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Member withdraws their signup from a shift.
+    Finds and deletes the current user's assignment for the specified shift.
+    """
+    service = SchedulingService(db)
+    assignments = await service.get_shift_assignments(shift_id, current_user.organization_id)
+    user_assignment = next(
+        (a for a in assignments if str(a.user_id) == str(current_user.id)),
+        None
+    )
+    if not user_assignment:
+        raise HTTPException(status_code=404, detail="You are not assigned to this shift.")
+    success, error = await service.delete_assignment(
+        UUID(user_assignment.id), current_user.organization_id
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Unable to withdraw. {error}")
+
+
+@router.get("/shifts/open", response_model=list[ShiftResponse])
+async def get_open_shifts(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    apparatus_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get upcoming shifts (optionally filtered by date range and apparatus).
+    Returns shifts that still have open positions.
+    """
+    service = SchedulingService(db)
+    try:
+        start = date.fromisoformat(start_date) if start_date else date.today()
+        end = date.fromisoformat(end_date) if end_date else start + timedelta(days=30)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    shifts_list, total = await service.get_shifts(
+        current_user.organization_id,
+        start_date=start,
+        end_date=end,
+        skip=0,
+        limit=50,
+    )
+    # Optionally filter by apparatus_id
+    if apparatus_id:
+        shifts_list = [s for s in shifts_list if s.apparatus_id == apparatus_id]
+    return await _enrich_shifts(service, current_user.organization_id, shifts_list)
+
+
+# ============================================
+# Basic Apparatus (Lightweight)
+# ============================================
+
+@router.get("/apparatus", response_model=list[BasicApparatusResponse])
+async def list_basic_apparatus(
+    is_active: Optional[bool] = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all basic apparatus for the organization"""
+    query = select(BasicApparatus).where(
+        BasicApparatus.organization_id == str(current_user.organization_id)
+    )
+    if is_active is not None:
+        query = query.where(BasicApparatus.is_active == is_active)
+    query = query.order_by(BasicApparatus.unit_number)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@router.post("/apparatus", response_model=BasicApparatusResponse, status_code=status.HTTP_201_CREATED)
+async def create_basic_apparatus(
+    apparatus: BasicApparatusCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Create a new basic apparatus entry"""
+    new_apparatus = BasicApparatus(
+        organization_id=str(current_user.organization_id),
+        unit_number=apparatus.unit_number,
+        name=apparatus.name,
+        apparatus_type=apparatus.apparatus_type,
+        min_staffing=apparatus.min_staffing,
+        positions=apparatus.positions,
+    )
+    db.add(new_apparatus)
+    await db.commit()
+    await db.refresh(new_apparatus)
+    return new_apparatus
+
+
+@router.patch("/apparatus/{apparatus_id}", response_model=BasicApparatusResponse)
+async def update_basic_apparatus(
+    apparatus_id: UUID,
+    apparatus: BasicApparatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Update a basic apparatus entry"""
+    result = await db.execute(
+        select(BasicApparatus).where(
+            BasicApparatus.id == str(apparatus_id),
+            BasicApparatus.organization_id == str(current_user.organization_id),
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Apparatus not found")
+    update_data = apparatus.model_dump(exclude_none=True)
+    for key, value in update_data.items():
+        setattr(existing, key, value)
+    await db.commit()
+    await db.refresh(existing)
+    return existing
+
+
+@router.delete("/apparatus/{apparatus_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_basic_apparatus(
+    apparatus_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Delete a basic apparatus entry"""
+    result = await db.execute(
+        select(BasicApparatus).where(
+            BasicApparatus.id == str(apparatus_id),
+            BasicApparatus.organization_id == str(current_user.organization_id),
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Apparatus not found")
+    await db.delete(existing)
+    await db.commit()

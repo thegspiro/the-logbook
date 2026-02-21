@@ -90,6 +90,7 @@ class InventoryItemBase(BaseModel):
     condition: str = "good"
     status: str = "available"
     status_notes: Optional[str] = None
+    tracking_type: str = "individual"  # "individual" or "pool"
     quantity: int = Field(default=1, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     inspection_interval_days: Optional[int] = Field(None, ge=0)
@@ -128,6 +129,7 @@ class InventoryItemUpdate(BaseModel):
     condition: Optional[str] = None
     status: Optional[str] = None
     status_notes: Optional[str] = None
+    tracking_type: Optional[str] = None
     quantity: Optional[int] = Field(None, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     last_inspection_date: Optional[date] = None
@@ -145,6 +147,7 @@ class InventoryItemResponse(InventoryItemBase):
     organization_id: UUID
     assigned_to_user_id: Optional[UUID] = None
     assigned_date: Optional[datetime] = None
+    quantity_issued: int = 0
     last_inspection_date: Optional[date] = None
     next_inspection_due: Optional[date] = None
     active: bool
@@ -205,6 +208,45 @@ class UnassignItemRequest(BaseModel):
     """Schema for unassigning an item"""
     return_condition: Optional[str] = None
     return_notes: Optional[str] = None
+
+
+# ============================================
+# Pool Item Issuance Schemas
+# ============================================
+
+class ItemIssuanceCreate(BaseModel):
+    """Schema for issuing units from a pool item to a member"""
+    user_id: UUID
+    quantity: int = Field(default=1, ge=1, description="Number of units to issue")
+    issue_reason: Optional[str] = None
+
+
+class ItemIssuanceReturnRequest(BaseModel):
+    """Schema for returning issued units back to the pool"""
+    return_condition: Optional[str] = None
+    return_notes: Optional[str] = None
+    quantity_returned: Optional[int] = Field(None, ge=1, description="Partial return; defaults to full issuance quantity")
+
+
+class ItemIssuanceResponse(BaseModel):
+    """Schema for issuance record response"""
+    id: UUID
+    organization_id: UUID
+    item_id: UUID
+    user_id: UUID
+    quantity_issued: int
+    issued_at: datetime
+    returned_at: Optional[datetime] = None
+    issued_by: Optional[UUID] = None
+    returned_by: Optional[UUID] = None
+    issue_reason: Optional[str] = None
+    return_condition: Optional[str] = None
+    return_notes: Optional[str] = None
+    is_returned: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
@@ -360,10 +402,42 @@ class UserCheckoutItem(BaseModel):
     is_overdue: bool
 
 
+class UserIssuedItem(BaseModel):
+    """Schema for a pool item issued to a user"""
+    issuance_id: UUID
+    item_id: UUID
+    item_name: str
+    quantity_issued: int
+    issued_at: datetime
+    size: Optional[str] = None
+
+
 class UserInventoryResponse(BaseModel):
     """Schema for user's complete inventory view"""
     permanent_assignments: List[UserInventoryItem]
     active_checkouts: List[UserCheckoutItem]
+    issued_items: List[UserIssuedItem] = []
+
+
+class MemberInventorySummary(BaseModel):
+    """Summary of a single member's inventory holdings"""
+    user_id: UUID
+    username: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    badge_number: Optional[str] = None
+    permanent_count: int = 0
+    checkout_count: int = 0
+    issued_count: int = 0
+    overdue_count: int = 0
+    total_items: int = 0
+
+
+class MembersInventoryListResponse(BaseModel):
+    """Response listing all members with inventory summary"""
+    members: List[MemberInventorySummary]
+    total: int
 
 
 class ItemRetireRequest(BaseModel):
@@ -390,3 +464,172 @@ class MaintenanceDueItem(BaseModel):
     days_until_due: int
     condition: str
     status: str
+
+
+# ============================================
+# Departure Clearance Schemas
+# ============================================
+
+class DepartureClearanceCreate(BaseModel):
+    """Schema for initiating a departure clearance"""
+    user_id: UUID
+    departure_type: Optional[str] = None  # "dropped_voluntary", "dropped_involuntary", "retired"
+    return_deadline_days: int = Field(default=14, ge=1, le=90)
+    notes: Optional[str] = None
+
+
+class ClearanceLineItemResponse(BaseModel):
+    """Schema for a single clearance line item"""
+    id: UUID
+    clearance_id: UUID
+    source_type: str  # "assignment", "checkout", "issuance"
+    source_id: UUID
+    item_id: Optional[UUID] = None
+    item_name: str
+    item_serial_number: Optional[str] = None
+    item_asset_tag: Optional[str] = None
+    item_value: Optional[float] = None
+    quantity: int
+    disposition: str  # "pending", "returned", "returned_damaged", "written_off", "waived"
+    return_condition: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[UUID] = None
+    resolution_notes: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DepartureClearanceResponse(BaseModel):
+    """Schema for departure clearance response"""
+    id: UUID
+    organization_id: UUID
+    user_id: UUID
+    status: str  # "initiated", "in_progress", "completed", "closed_incomplete"
+    total_items: int
+    items_cleared: int
+    items_outstanding: int
+    total_value: float
+    value_outstanding: float
+    initiated_at: datetime
+    completed_at: Optional[datetime] = None
+    return_deadline: Optional[datetime] = None
+    initiated_by: Optional[UUID] = None
+    completed_by: Optional[UUID] = None
+    departure_type: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    line_items: List[ClearanceLineItemResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DepartureClearanceSummaryResponse(BaseModel):
+    """Lightweight clearance summary (no line items)"""
+    id: UUID
+    user_id: UUID
+    member_name: Optional[str] = None
+    status: str
+    total_items: int
+    items_cleared: int
+    items_outstanding: int
+    total_value: float
+    value_outstanding: float
+    initiated_at: datetime
+    completed_at: Optional[datetime] = None
+    return_deadline: Optional[datetime] = None
+    departure_type: Optional[str] = None
+
+
+class ResolveClearanceItemRequest(BaseModel):
+    """Schema for resolving (returning/writing off) a clearance line item"""
+    disposition: str = Field(..., description="One of: returned, returned_damaged, written_off, waived")
+    return_condition: Optional[str] = None
+    resolution_notes: Optional[str] = None
+
+
+class CompleteClearanceRequest(BaseModel):
+    """Schema for completing/closing a clearance"""
+    force_close: bool = Field(
+        default=False,
+        description="If True, close with status 'closed_incomplete' even if items are outstanding",
+    )
+    notes: Optional[str] = None
+
+
+# ============================================
+# Barcode Scan & Quick-Action Schemas
+# ============================================
+
+class ScanLookupResponse(BaseModel):
+    """Response from scanning/looking up an item by barcode, serial, or asset tag"""
+    item: InventoryItemResponse
+    matched_field: str  # "barcode", "serial_number", or "asset_tag"
+    matched_value: str
+
+
+class BatchScanItem(BaseModel):
+    """A single scanned item in a batch operation"""
+    code: str = Field(..., description="Barcode, serial number, or asset tag that was scanned")
+    quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
+
+
+class BatchCheckoutRequest(BaseModel):
+    """Request to assign/checkout/issue multiple scanned items to a member at once"""
+    user_id: UUID
+    items: List[BatchScanItem] = Field(..., min_length=1)
+    reason: Optional[str] = None
+
+
+class BatchCheckoutResultItem(BaseModel):
+    """Result for a single item in a batch checkout"""
+    code: str
+    item_name: str
+    item_id: str
+    action: str  # "assigned", "checked_out", "issued"
+    success: bool
+    error: Optional[str] = None
+
+
+class BatchCheckoutResponse(BaseModel):
+    """Response from a batch checkout operation"""
+    user_id: UUID
+    total_scanned: int
+    successful: int
+    failed: int
+    results: List[BatchCheckoutResultItem]
+
+
+class BatchReturnItem(BaseModel):
+    """A single scanned item being returned"""
+    code: str = Field(..., description="Barcode, serial number, or asset tag")
+    return_condition: str = Field(default="good", description="Condition at return")
+    damage_notes: Optional[str] = None
+    quantity: int = Field(default=1, ge=1, description="Quantity returned (for pool items)")
+
+
+class BatchReturnRequest(BaseModel):
+    """Request to return multiple scanned items from a member at once"""
+    user_id: UUID
+    items: List[BatchReturnItem] = Field(..., min_length=1)
+    notes: Optional[str] = None
+
+
+class BatchReturnResultItem(BaseModel):
+    """Result for a single item in a batch return"""
+    code: str
+    item_name: str
+    item_id: str
+    action: str  # "unassigned", "checked_in", "returned_to_pool"
+    success: bool
+    error: Optional[str] = None
+
+
+class BatchReturnResponse(BaseModel):
+    """Response from a batch return operation"""
+    user_id: UUID
+    total_scanned: int
+    successful: int
+    failed: int
+    results: List[BatchReturnResultItem]

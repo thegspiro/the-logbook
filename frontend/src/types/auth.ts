@@ -32,12 +32,17 @@ export interface CurrentUser {
   full_name?: string;
   organization_id: string;
   timezone: string;
+  /** @deprecated Use `positions` instead. Kept for backward compatibility. */
   roles: string[];
+  positions: string[];
+  rank: string | null;
+  membership_type: string;
   permissions: string[];
   is_active: boolean;
   email_verified: boolean;
   mfa_enabled: boolean;
   password_expired: boolean;
+  must_change_password: boolean;
 }
 
 export interface PasswordChangeData {

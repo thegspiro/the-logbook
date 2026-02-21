@@ -169,6 +169,26 @@ export const ProspectiveMembersPage: React.FC = () => {
     }
     setIsCreating(true);
     try {
+      // Check for duplicate/existing members before creating
+      try {
+        const check = await applicantService.checkExisting(
+          newApplicant.email.trim(),
+          newApplicant.first_name.trim(),
+          newApplicant.last_name.trim()
+        );
+        if (check.has_matches) {
+          const proceed = window.confirm(
+            `This email or name matches ${check.match_count} existing member(s). Do you want to continue creating this applicant?`
+          );
+          if (!proceed) {
+            setIsCreating(false);
+            return;
+          }
+        }
+      } catch {
+        // If the check fails, continue with creation anyway
+      }
+
       await applicantService.createApplicant({
         pipeline_id: currentPipeline.id,
         ...newApplicant,
@@ -201,32 +221,34 @@ export const ProspectiveMembersPage: React.FC = () => {
   );
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="px-4 sm:px-6 py-6 max-w-[1600px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-3">
-            <Users className="w-7 h-7 text-red-700 dark:text-red-500" />
+          <h1 className="text-xl sm:text-2xl font-bold text-theme-text-primary flex items-center gap-3">
+            <Users className="w-6 sm:w-7 h-6 sm:h-7 text-red-700 dark:text-red-500" />
             Prospective Members
           </h1>
-          <p className="text-theme-text-muted mt-1">
+          <p className="text-theme-text-muted mt-1 text-sm">
             Manage your organization's applicant pipeline
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/prospective-members/settings')}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors"
           >
             <Settings className="w-4 h-4" />
-            Pipeline Settings
+            <span className="hidden sm:inline">Pipeline Settings</span>
+            <span className="sm:hidden">Settings</span>
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
           >
             <UserPlus className="w-4 h-4" />
-            Add Applicant
+            <span className="hidden sm:inline">Add Applicant</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
       </div>
@@ -234,7 +256,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Stats Bar */}
       {pipelineStats && !isLoadingStats && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-2">
             <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
               <div className="flex items-center gap-2 text-theme-text-muted text-xs mb-1">
                 <Users className="w-3.5 h-3.5" />
@@ -611,8 +633,8 @@ export const ProspectiveMembersPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden">
-              <table className="w-full">
+            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="border-b border-theme-surface-border">
                     <th className="w-10 p-3">
@@ -641,7 +663,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   {inactiveApplicants.map((applicant) => (
                     <tr
                       key={applicant.id}
-                      className="border-b border-white/5 hover:bg-theme-surface-secondary transition-colors"
+                      className="border-b border-theme-surface-border hover:bg-theme-surface-secondary transition-colors"
                     >
                       <td className="p-3">
                         <input
@@ -732,7 +754,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {/* Purge Note */}
           {inactiveApplicants.length > 0 && (
-            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-white/5 rounded-lg">
+            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-theme-surface-border rounded-lg">
               <Info className="w-3.5 h-3.5 text-theme-text-muted flex-shrink-0 mt-0.5" />
               <p className="text-xs text-theme-text-muted">
                 Inactive applications are excluded from pipeline statistics.
@@ -762,8 +784,8 @@ export const ProspectiveMembersPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden">
-              <table className="w-full">
+            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="border-b border-theme-surface-border">
                     <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
@@ -778,7 +800,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   {withdrawnApplicants.map((applicant) => (
                     <tr
                       key={applicant.id}
-                      className="border-b border-white/5 hover:bg-theme-surface-secondary transition-colors"
+                      className="border-b border-theme-surface-border hover:bg-theme-surface-secondary transition-colors"
                     >
                       <td className="p-3">
                         <div
@@ -864,7 +886,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {/* Info Note */}
           {withdrawnApplicants.length > 0 && (
-            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-white/5 rounded-lg">
+            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-theme-surface-border rounded-lg">
               <Info className="w-3.5 h-3.5 text-theme-text-muted flex-shrink-0 mt-0.5" />
               <p className="text-xs text-theme-text-muted">
                 Withdrawn applications are from prospective members who voluntarily left the pipeline process.
@@ -878,7 +900,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -943,7 +965,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Add Applicant Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-bold text-theme-text-primary">Add Applicant</h2>
               <button

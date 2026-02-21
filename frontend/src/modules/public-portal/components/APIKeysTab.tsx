@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { useAPIKeys } from '../hooks/usePublicPortal';
 import type { CreateAPIKeyRequest, PublicPortalAPIKey } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDateTime } from '../../../utils/dateFormatting';
+import { formatDateTime, localToUTC } from '../../../utils/dateFormatting';
 
 interface CreateKeyModalProps {
   isOpen: boolean;
@@ -18,6 +18,7 @@ interface CreateKeyModalProps {
 }
 
 const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCreate }) => {
+  const tz = useTimezone();
   const [formData, setFormData] = useState<CreateAPIKeyRequest>({
     name: '',
     rate_limit: undefined,
@@ -29,7 +30,11 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await onCreate(formData);
+      const submitData = {
+        ...formData,
+        expires_at: formData.expires_at ? localToUTC(formData.expires_at, tz) : undefined,
+      };
+      await onCreate(submitData);
       // Reset form and close
       setFormData({ name: '', rate_limit: undefined, expires_at: undefined });
       onClose();
@@ -50,12 +55,12 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
       aria-labelledby="create-api-key-title"
       onKeyDown={(e) => { if (e.key === 'Escape' && !isSubmitting) onClose(); }}
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+      <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 id="create-api-key-title" className="text-lg font-semibold">Create API Key</h3>
+          <h3 id="create-api-key-title" className="text-lg font-semibold text-theme-text-primary">Create API Key</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-theme-text-muted hover:text-theme-text-muted"
             disabled={isSubmitting}
             aria-label="Close dialog"
           >
@@ -69,7 +74,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
           <div className="space-y-4">
             {/* Name */}
             <div>
-              <label htmlFor="api-key-name" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="api-key-name" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Key Name <span aria-hidden="true">*</span>
               </label>
               <input
@@ -80,16 +85,16 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                 placeholder="e.g., Website Integration Key"
                 required
                 aria-required="true"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-theme-text-muted mt-1">
                 A descriptive name to identify this API key
               </p>
             </div>
 
             {/* Rate Limit Override */}
             <div>
-              <label htmlFor="api-key-rate-limit" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="api-key-rate-limit" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Rate Limit (requests/hour)
               </label>
               <input
@@ -103,29 +108,30 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                   rate_limit: e.target.value ? parseInt(e.target.value) : undefined
                 })}
                 placeholder="Leave blank for default (1000)"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-theme-text-muted mt-1">
                 Optional: Override the default rate limit for this key
               </p>
             </div>
 
             {/* Expiration Date */}
             <div>
-              <label htmlFor="api-key-expiration" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="api-key-expiration" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Expiration Date
               </label>
               <input
                 id="api-key-expiration"
                 type="datetime-local"
+                step="900"
                 value={formData.expires_at || ''}
                 onChange={(e) => setFormData({
                   ...formData,
                   expires_at: e.target.value || undefined
                 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-theme-text-muted mt-1">
                 Optional: Set when this key should expire
               </p>
             </div>
@@ -137,7 +143,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
+              className="px-4 py-2 text-theme-text-secondary bg-theme-surface-secondary rounded-md hover:bg-theme-surface-hover disabled:opacity-50"
             >
               Cancel
             </button>
@@ -180,9 +186,9 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
       aria-labelledby="api-key-created-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+      <div className="bg-theme-surface rounded-lg shadow-xl max-w-2xl w-full p-6">
         <div className="mb-4">
-          <h3 id="api-key-created-title" className="text-lg font-semibold text-gray-900">API Key Created Successfully</h3>
+          <h3 id="api-key-created-title" className="text-lg font-semibold text-theme-text-primary">API Key Created Successfully</h3>
         </div>
 
         {/* Warning Banner */}
@@ -203,9 +209,9 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
         </div>
 
         {/* API Key Display */}
-        <div className="bg-gray-50 border border-gray-200 rounded-md p-4 mb-4">
+        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-md p-4 mb-4">
           <div className="flex items-center justify-between">
-            <code className="text-sm font-mono text-gray-900 break-all flex-1">
+            <code className="text-sm font-mono text-theme-text-primary break-all flex-1">
               {apiKey}
             </code>
             <button
@@ -277,21 +283,21 @@ const RevokeConfirmModal: React.FC<RevokeConfirmModalProps> = ({
       aria-labelledby="revoke-api-key-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-        <h3 id="revoke-api-key-title" className="text-lg font-semibold text-gray-900 mb-4">Revoke API Key?</h3>
+      <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full p-6">
+        <h3 id="revoke-api-key-title" className="text-lg font-semibold text-theme-text-primary mb-4">Revoke API Key?</h3>
 
-        <p className="text-gray-700 mb-4">
+        <p className="text-theme-text-secondary mb-4">
           Are you sure you want to revoke the API key <strong>"{keyName}"</strong>?
         </p>
 
-        <p className="text-sm text-gray-600 mb-6">
+        <p className="text-sm text-theme-text-muted mb-6">
           This action will immediately stop all requests using this key. This cannot be undone.
         </p>
 
         <div className="flex justify-end space-x-3">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+            className="px-4 py-2 text-theme-text-secondary bg-theme-surface-secondary rounded-md hover:bg-theme-surface-hover"
           >
             Cancel
           </button>
@@ -327,12 +333,12 @@ export const APIKeysTab: React.FC = () => {
 
   const getStatusBadge = (key: PublicPortalAPIKey) => {
     if (!key.is_active) {
-      return <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">Revoked</span>;
+      return <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">Revoked</span>;
     }
     if (key.is_expired) {
-      return <span className="px-2 py-1 text-xs font-semibold rounded bg-orange-100 text-orange-800">Expired</span>;
+      return <span className="px-2 py-1 text-xs font-semibold rounded bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">Expired</span>;
     }
-    return <span className="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">Active</span>;
+    return <span className="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">Active</span>;
   };
 
   if (loading) {
@@ -357,8 +363,8 @@ export const APIKeysTab: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">API Keys</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="text-lg font-semibold text-theme-text-primary">API Keys</h3>
+          <p className="text-sm text-theme-text-muted mt-1">
             Manage API keys for external applications to access your public portal
           </p>
         </div>
@@ -375,12 +381,12 @@ export const APIKeysTab: React.FC = () => {
 
       {/* API Keys Table */}
       {apiKeys.length === 0 ? (
-        <div className="bg-gray-50 border border-gray-200 rounded-md p-8 text-center">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-md p-8 text-center">
+          <svg className="mx-auto h-12 w-12 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
           </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No API keys</h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <h3 className="mt-2 text-sm font-medium text-theme-text-primary">No API keys</h3>
+          <p className="mt-1 text-sm text-theme-text-muted">
             Get started by creating a new API key for your public portal
           </p>
           <button
@@ -391,54 +397,54 @@ export const APIKeysTab: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200" aria-label="API keys list">
-            <thead className="bg-gray-50">
+        <div className="bg-theme-surface border border-theme-surface-border rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-theme-surface-border" aria-label="API keys list">
+            <thead className="bg-theme-surface-secondary">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Name
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Key Prefix
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Status
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Rate Limit
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Last Used
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Created
                 </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-theme-surface divide-y divide-theme-surface-border">
               {apiKeys.map((key) => (
-                <tr key={key.id} className="hover:bg-gray-50">
+                <tr key={key.id} className="hover:bg-theme-surface-hover">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{key.name}</div>
+                    <div className="text-sm font-medium text-theme-text-primary">{key.name}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <code className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">
+                    <code className="text-xs font-mono bg-theme-surface-secondary px-2 py-1 rounded">
                       {key.key_prefix}...
                     </code>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(key)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                     {key.rate_limit || key.effective_rate_limit}/hour
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                     {formatDateTime(key.last_used_at, tz)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                     {formatDateTime(key.created_at, tz)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

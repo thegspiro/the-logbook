@@ -19,6 +19,7 @@ from app.services.auth_service import AuthService
 from app.core.config import settings
 from app.core.audit import log_audit_event
 from app.core.permissions import DEFAULT_ROLES
+from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 
 
 class OnboardingService:
@@ -447,15 +448,15 @@ class OnboardingService:
         return org
 
     async def _create_default_roles(self, organization_id: str):
-        """Create default roles for an organization.
+        """Create default positions for an organization.
 
-        Uses DEFAULT_ROLES from permissions.py as the single source of truth.
-        The it_administrator role (priority 100, all permissions) serves as
-        the top-level system role for the person who sets up the platform.
-        The user may later customize which roles to keep during the RoleSetup
+        Uses DEFAULT_POSITIONS from permissions.py as the single source of truth.
+        The it_manager position (priority 100, all permissions) serves as
+        the System Owner position for the person who sets up the platform.
+        The user may later customize which positions to keep during the PositionSetup
         onboarding step.
         """
-        # Create all roles from the central DEFAULT_ROLES registry
+        # Create all positions from the central DEFAULT_POSITIONS registry
         for slug, role_data in DEFAULT_ROLES.items():
             role = Role(
                 organization_id=organization_id,
@@ -470,7 +471,11 @@ class OnboardingService:
 
         await self.db.flush()
 
-    async def create_admin_user(
+    # Backward-compatible alias
+    async def create_admin_user(self, **kwargs) -> "User":
+        return await self.create_system_owner(**kwargs)
+
+    async def create_system_owner(
         self,
         organization_id: str,
         username: str,
@@ -481,7 +486,10 @@ class OnboardingService:
         badge_number: Optional[str] = None
     ) -> User:
         """
-        Create the first administrator user
+        Create the System Owner (IT Manager) user
+
+        This is the first user created during onboarding. They receive
+        the ``it_manager`` position with wildcard permissions.
 
         Args:
             organization_id: Organization UUID
@@ -509,23 +517,35 @@ class OnboardingService:
         )
 
         if error or not user:
-            raise ValueError(error or "Failed to create admin user")
+            raise ValueError(error or "Failed to create System Owner user")
 
-        # Assign IT Administrator role — the top-level system role for the
-        # person who sets up the platform (distinct from operational admin
-        # roles like Chief or Deputy Chief)
+        # Assign IT Manager position — the System Owner position for the
+        # person who sets up the platform.  This position carries wildcard
+        # "*" permissions granting full access.
         result = await self.db.execute(
             select(Role).where(
                 Role.organization_id == organization_id,
-                Role.slug == "it_administrator"
+                Role.slug == ROLE_IT_MANAGER
             )
         )
-        it_admin_role = result.scalar_one_or_none()
+        it_manager_position = result.scalar_one_or_none()
 
-        if it_admin_role:
-            # Refresh user with roles relationship loaded to avoid MissingGreenlet error
-            await self.db.refresh(user, ['roles'])
-            user.roles.append(it_admin_role)
+        if it_manager_position:
+            # Refresh user with positions relationship loaded to avoid MissingGreenlet error
+            await self.db.refresh(user, ['positions'])
+            user.positions.append(it_manager_position)
+            await self.db.flush()
+
+        # Also assign the default "member" position
+        member_result = await self.db.execute(
+            select(Role).where(
+                Role.organization_id == organization_id,
+                Role.slug == ROLE_MEMBER
+            )
+        )
+        member_position = member_result.scalar_one_or_none()
+        if member_position and member_position not in user.positions:
+            user.positions.append(member_position)
             await self.db.flush()
 
         # Update onboarding status
@@ -556,7 +576,11 @@ class OnboardingService:
         enabled_modules: List[str]
     ) -> Dict[str, bool]:
         """
-        Configure which modules are enabled
+        Configure which modules are enabled.
+
+        Writes to **both** OnboardingStatus.enabled_modules (for onboarding
+        state tracking) and Organization.settings.modules (the canonical
+        source of truth used by the rest of the application).
 
         Args:
             enabled_modules: List of module names to enable
@@ -599,6 +623,25 @@ class OnboardingService:
         if status:
             status.enabled_modules = final_modules
             await self._mark_step_completed(status, 9, "modules")  # Step 9 in new flow
+
+        # ── Also persist to Organization.settings.modules (canonical store) ──
+        # Configurable module keys that the Settings page manages
+        configurable_keys = [
+            "training", "inventory", "scheduling", "elections", "minutes",
+            "reports", "notifications", "mobile", "forms", "integrations",
+            "facilities",
+        ]
+        modules_dict = {k: k in final_modules for k in configurable_keys}
+
+        result = await self.db.execute(select(Organization).limit(1))
+        org = result.scalar_one_or_none()
+        if org:
+            settings_dict = dict(org.settings or {})
+            settings_dict["modules"] = modules_dict
+            org.settings = settings_dict
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(org, "settings")
+            await self.db.flush()
 
         return {module: module in final_modules for module in available_modules}
 

@@ -95,7 +95,9 @@ class EnrollmentStatus(str, enum.Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
     EXPIRED = "expired"
+    ON_HOLD = "on_hold"
     WITHDRAWN = "withdrawn"
+    FAILED = "failed"
 
 
 class RequirementProgressStatus(str, enum.Enum):
@@ -104,6 +106,7 @@ class RequirementProgressStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     VERIFIED = "verified"  # Completed and verified by officer
+    WAIVED = "waived"  # Requirement waived for this member
 
 
 class TrainingCategory(Base):
@@ -249,7 +252,11 @@ class TrainingRecord(Base):
 
     # Instructor and Location
     instructor = Column(String(255))
-    location = Column(String(255))
+    location_id = Column(String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
+    location = Column(String(255))  # Free-text fallback for "Other Location" or legacy records
+
+    # Cross-module link: which apparatus was used for this training
+    apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
 
     # Additional Information
     notes = Column(Text)
@@ -269,11 +276,13 @@ class TrainingRecord(Base):
 
     # Relationships
     course = relationship("TrainingCourse", back_populates="training_records")
+    location_obj = relationship("Location", foreign_keys=[location_id])
 
     __table_args__ = (
         Index('idx_record_user_status', 'user_id', 'status'),
         Index('idx_record_completion', 'completion_date'),
         Index('idx_record_expiration', 'expiration_date'),
+        Index('idx_record_location', 'location_id'),
     )
 
     def __repr__(self):
@@ -393,7 +402,12 @@ class TrainingSession(Base):
     course_code = Column(String(50))
     training_type = Column(Enum(TrainingType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     credit_hours = Column(Float, nullable=False)
-    instructor = Column(String(255))
+    instructor = Column(String(255))  # Legacy free-text instructor name
+
+    # Cross-module links for richer tracking
+    instructor_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    co_instructors = Column(JSON, nullable=True)  # List of user IDs for additional instructors
+    apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
 
     # Certification Details
     issues_certification = Column(Boolean, default=False)
@@ -836,6 +850,11 @@ class SkillCheckoff(Base):
     # Evaluation Details
     evaluator_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     status = Column(String(20), nullable=False)  # pending, passed, failed
+
+    # Training context — links checkoff to the session and apparatus used
+    session_id = Column(String(36), ForeignKey("training_sessions.id", ondelete="SET NULL"), nullable=True, index=True)
+    apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
+    conditions = Column(JSON, nullable=True)  # Environmental context: {"time_of_day", "weather", "road_conditions", etc.}
 
     # Results
     evaluation_results = Column(JSON)  # Detailed results for each criterion
@@ -1451,7 +1470,7 @@ class Shift(Base):
     station_id = Column(String(36))  # Link to station (future)
 
     # Leadership
-    shift_officer_id = Column(String(36), ForeignKey("users.id"))
+    shift_officer_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Notes
     notes = Column(Text)
@@ -1618,6 +1637,10 @@ class ShiftTemplate(Base):
     # Staffing
     positions = Column(JSON)  # [{"position": "officer", "count": 1}, {"position": "firefighter", "count": 3}]
     min_staffing = Column(Integer, default=1)
+
+    # Categorization
+    category = Column(String(20), default="standard")  # "standard", "specialty", "event"
+    apparatus_type = Column(String(50))  # Links template to a vehicle type (e.g., "engine", "ambulance")
 
     # Defaults
     is_default = Column(Boolean, default=False)
@@ -1803,3 +1826,94 @@ class ShiftTimeOff(Base):
 
     def __repr__(self):
         return f"<ShiftTimeOff(user={self.user_id}, {self.start_date} - {self.end_date})>"
+
+
+# ============================================
+# Basic Apparatus (Lightweight, for non-module departments)
+# ============================================
+
+class BasicApparatus(Base):
+    """
+    Lightweight apparatus/vehicle definition for shift scheduling.
+
+    Used when the full Apparatus module is not enabled. Provides basic
+    vehicle/unit definitions with crew positions for shift staffing.
+    """
+
+    __tablename__ = "basic_apparatus"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    unit_number = Column(String(20), nullable=False)
+    name = Column(String(100), nullable=False)
+    apparatus_type = Column(String(50), nullable=False, default="engine")
+    min_staffing = Column(Integer, default=1)
+    positions = Column(JSON)  # List of position strings e.g. ["officer", "driver", "firefighter"]
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_basic_apparatus_org', 'organization_id'),
+    )
+
+    def __repr__(self):
+        return f"<BasicApparatus(unit={self.unit_number}, name={self.name})>"
+
+
+class TrainingWaiverType(str, enum.Enum):
+    LEAVE_OF_ABSENCE = "leave_of_absence"
+    MEDICAL = "medical"
+    MILITARY = "military"
+    PERSONAL = "personal"
+    ADMINISTRATIVE = "administrative"
+    OTHER = "other"
+
+
+class TrainingWaiver(Base):
+    """
+    Training Waiver / Leave of Absence
+
+    Records periods where a member is excused from training requirements.
+    When a rolling-period requirement is calculated (e.g., average 6 hours
+    over 12 months), waived months are excluded from the denominator so the
+    member's required average is computed only over months they were active.
+    """
+
+    __tablename__ = "training_waivers"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    waiver_type = Column(Enum(TrainingWaiverType), nullable=False, default=TrainingWaiverType.LEAVE_OF_ABSENCE)
+    reason = Column(Text, nullable=True)
+
+    # The period the member is excused (inclusive)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    # Which requirements this waiver applies to (null = all requirements)
+    requirement_ids = Column(JSON, nullable=True)
+
+    # Approval
+    granted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    granted_at = Column(DateTime(timezone=True), nullable=True)
+
+    active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    grantor = relationship("User", foreign_keys=[granted_by])
+
+    __table_args__ = (
+        Index('idx_training_waivers_org_user', 'organization_id', 'user_id'),
+        Index('idx_training_waivers_dates', 'start_date', 'end_date'),
+    )

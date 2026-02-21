@@ -1,6 +1,6 @@
 # The Logbook Public API Documentation
 
-Version 1.1.0
+Version 1.2.0
 
 ## Introduction
 
@@ -584,6 +584,83 @@ app.get('/api/org-info', async (req, res) => {
 
 ---
 
+## Location Kiosk Display Endpoint
+
+The display endpoint is a special public endpoint designed for tablets left in rooms. Unlike the other public API endpoints above, it does **not** require an API key — it uses a non-guessable display code instead.
+
+**Base URL:** `https://your-logbook-instance.com/api/public/v1/display`
+
+### Get Location Display
+
+Retrieve current event information for a location kiosk display.
+
+**Endpoint:** `GET /display/{display_code}`
+
+**Authentication:** None required. The display code itself serves as the access token.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `display_code` | string (path) | 8-character alphanumeric display code assigned to the location |
+
+**Example Request:**
+```bash
+curl https://your-logbook-instance.com/api/public/v1/display/x7k9m2p3
+```
+
+**Example Response (active event):**
+```json
+{
+  "location_id": "uuid-string",
+  "location_name": "Station 1 — Training Room A",
+  "current_events": [
+    {
+      "event_id": "uuid-string",
+      "event_name": "Monthly Business Meeting",
+      "event_type": "meeting",
+      "start_datetime": "2026-02-18T19:00:00",
+      "end_datetime": "2026-02-18T21:00:00",
+      "check_in_start": "2026-02-18T18:00:00",
+      "check_in_end": "2026-02-18T21:00:00",
+      "is_valid": true,
+      "location_name": "Station 1 — Training Room A",
+      "require_checkout": false
+    }
+  ],
+  "has_overlap": false
+}
+```
+
+**Example Response (no active events):**
+```json
+{
+  "location_id": "uuid-string",
+  "location_name": "Station 1 — Training Room A",
+  "current_events": [],
+  "has_overlap": false
+}
+```
+
+**Error Responses:**
+
+| Status | Description |
+|--------|-------------|
+| 404 | Display code not found or location inactive |
+
+**Notes:**
+- Events appear in `current_events` when they are within the check-in window (1 hour before start until event end)
+- Event descriptions are intentionally excluded from the public response
+- The frontend kiosk page at `/display/{code}` polls this endpoint every 30 seconds
+- Display codes are generated automatically when locations are created and can be found on the Locations management page
+
+**Finding Display Codes:**
+- Navigate to **Locations** (or **Facilities**) in the admin interface
+- Each room card shows its display code and kiosk URL
+- Click the URL to copy it to clipboard, then bookmark it on the room's tablet
+
+---
+
 ## Support
 
 For API support:
@@ -592,6 +669,11 @@ For API support:
 - API Status: Check `/health` endpoint
 
 ## Changelog
+
+### Version 1.2.0 (2026-02-18)
+- Added location kiosk display endpoint (`GET /display/{code}`) — no API key required
+- Returns current events with QR check-in data for tablet displays in rooms
+- Display codes auto-generated for all locations (8-char, non-guessable)
 
 ### Version 1.1.0 (2026-02-12)
 - Added public form retrieval endpoint (`GET /forms/{slug}`)

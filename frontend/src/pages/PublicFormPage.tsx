@@ -55,8 +55,9 @@ const PublicFormPage = () => {
     e.preventDefault();
     if (!form) return;
 
-    // Validate required fields
+    // Validate required fields (skip hidden conditional fields)
     for (const field of form.fields) {
+      if (!isFieldVisible(field)) continue;
       if (field.required && !formData[field.id]?.trim()) {
         setError(`"${field.label}" is required.`);
         return;
@@ -85,6 +86,26 @@ const PublicFormPage = () => {
 
   const handleFieldChange = (fieldId: string, value: string) => {
     setFormData((prev) => ({ ...prev, [fieldId]: value }));
+  };
+
+  /** Evaluate conditional visibility for a field. */
+  const isFieldVisible = (field: PublicFormField): boolean => {
+    if (!field.condition_field_id || !field.condition_operator) return true;
+    const parentValue = (formData[field.condition_field_id] || '').trim();
+    switch (field.condition_operator) {
+      case 'equals':
+        return parentValue === (field.condition_value || '');
+      case 'not_equals':
+        return parentValue !== (field.condition_value || '');
+      case 'contains':
+        return parentValue.toLowerCase().includes((field.condition_value || '').toLowerCase());
+      case 'not_empty':
+        return parentValue.length > 0;
+      case 'is_empty':
+        return parentValue.length === 0;
+      default:
+        return true;
+    }
   };
 
   const renderField = (field: PublicFormField) => {
@@ -151,6 +172,7 @@ const PublicFormPage = () => {
         return (
           <input
             type="time"
+            step="900"
             className={baseInputClass}
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
@@ -162,6 +184,7 @@ const PublicFormPage = () => {
         return (
           <input
             type="datetime-local"
+            step="900"
             className={baseInputClass}
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
@@ -365,6 +388,8 @@ const PublicFormPage = () => {
           {/* Form Fields */}
           <div className="space-y-6">
             {form.fields.map((field) => {
+              if (!isFieldVisible(field)) return null;
+
               if (field.field_type === 'section_header') {
                 return (
                   <div key={field.id} className="pt-4">

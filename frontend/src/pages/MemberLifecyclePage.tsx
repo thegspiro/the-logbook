@@ -21,8 +21,11 @@ import {
   Trash2,
   Package,
   UserCheck,
+  Calendar,
+  X,
 } from 'lucide-react';
-import { memberStatusService } from '../services/api';
+import { memberStatusService, userService } from '../services/api';
+import type { LeaveOfAbsenceResponse } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import type {
   ArchivedMember,
@@ -33,7 +36,7 @@ import type {
   PropertyReturnReport,
 } from '../types/user';
 
-type TabView = 'archived' | 'overdue' | 'tiers';
+type TabView = 'archived' | 'overdue' | 'tiers' | 'leaves';
 
 // ==================== Archived Members Tab ====================
 
@@ -300,7 +303,7 @@ const OverdueReturnsPanel: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-            <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border max-h-[80vh] flex flex-col">
+            <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border max-h-[80vh] flex flex-col">
               <div className="px-6 pt-5 pb-3 border-b border-theme-surface-border flex justify-between items-center flex-shrink-0">
                 <h3 id="report-preview-title" className="text-lg font-medium text-theme-text-primary">
                   Property Return Report - {reportPreview.member_name}
@@ -635,6 +638,364 @@ const TierConfigPanel: React.FC = () => {
   );
 };
 
+// ==================== Leave of Absence Tab ====================
+
+const LEAVE_TYPE_LABELS: Record<string, string> = {
+  leave_of_absence: 'Leave of Absence',
+  medical: 'Medical',
+  military: 'Military',
+  personal: 'Personal',
+  administrative: 'Administrative',
+  other: 'Other',
+};
+
+interface MemberOption {
+  id: string;
+  first_name: string;
+  last_name: string;
+  username: string;
+}
+
+const LeavesOfAbsencePanel: React.FC = () => {
+  const [leaves, setLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showInactive, setShowInactive] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [members, setMembers] = useState<MemberOption[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    user_id: '',
+    leave_type: 'leave_of_absence',
+    reason: '',
+    start_date: '',
+    end_date: '',
+  });
+
+  useEffect(() => {
+    loadLeaves();
+  }, [showInactive]);
+
+  const loadLeaves = async () => {
+    setLoading(true);
+    try {
+      const data = await memberStatusService.listLeavesOfAbsence({
+        active_only: !showInactive,
+      });
+      setLeaves(data);
+    } catch {
+      toast.error('Failed to load leaves of absence');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMembers = async () => {
+    if (members.length > 0) return;
+    setMembersLoading(true);
+    try {
+      const data = await userService.getUsers();
+      setMembers(
+        data.map((u: Record<string, string>) => ({
+          id: u.id,
+          first_name: u.first_name,
+          last_name: u.last_name,
+          username: u.username,
+        }))
+      );
+    } catch {
+      toast.error('Failed to load members');
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const handleOpenForm = () => {
+    loadMembers();
+    setForm({ user_id: '', leave_type: 'leave_of_absence', reason: '', start_date: '', end_date: '' });
+    setShowForm(true);
+  };
+
+  const handleCreate = async () => {
+    if (!form.user_id || !form.start_date || !form.end_date) {
+      toast.error('Please fill in member, start date, and end date');
+      return;
+    }
+    if (form.end_date < form.start_date) {
+      toast.error('End date must be after start date');
+      return;
+    }
+    setSaving(true);
+    try {
+      await memberStatusService.createLeaveOfAbsence({
+        user_id: form.user_id,
+        leave_type: form.leave_type,
+        reason: form.reason || undefined,
+        start_date: form.start_date,
+        end_date: form.end_date,
+      });
+      toast.success('Leave of absence created');
+      setShowForm(false);
+      await loadLeaves();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to create leave'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (leaveId: string) => {
+    if (!confirm('Deactivate this leave of absence?')) return;
+    setDeletingId(leaveId);
+    try {
+      await memberStatusService.deleteLeaveOfAbsence(leaveId);
+      toast.success('Leave of absence deactivated');
+      await loadLeaves();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to deactivate leave'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const getMemberName = (userId: string) => {
+    const m = members.find((mem) => mem.id === userId);
+    return m ? `${m.first_name} ${m.last_name}` : userId;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12" role="status">
+        <RefreshCw className="w-8 h-8 text-theme-text-muted animate-spin" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Header Actions */}
+      <div className="flex flex-wrap items-center gap-4 mb-4">
+        <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            className="rounded border-theme-input-border"
+          />
+          Show inactive leaves
+        </label>
+        <div className="ml-auto">
+          <button
+            onClick={handleOpenForm}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg"
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            Add Leave of Absence
+          </button>
+        </div>
+      </div>
+
+      {/* Create Form Modal */}
+      {showForm && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="leave-form-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowForm(false); }}
+        >
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
+            <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="px-6 pt-5 pb-3 border-b border-theme-surface-border flex justify-between items-center">
+                <h3 id="leave-form-title" className="text-lg font-medium text-theme-text-primary">
+                  Add Leave of Absence
+                </h3>
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="text-theme-text-muted hover:text-theme-text-primary"
+                  aria-label="Close dialog"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                {/* Member Select */}
+                <div>
+                  <label className="block text-xs text-theme-text-muted mb-1">Member</label>
+                  {membersLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-theme-text-muted">
+                      <RefreshCw className="w-4 h-4 animate-spin" /> Loading members...
+                    </div>
+                  ) : (
+                    <select
+                      value={form.user_id}
+                      onChange={(e) => setForm((p) => ({ ...p, user_id: e.target.value }))}
+                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500"
+                    >
+                      <option value="">Select a member...</option>
+                      {members
+                        .sort((a, b) => a.last_name.localeCompare(b.last_name))
+                        .map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.last_name}, {m.first_name} ({m.username})
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Leave Type */}
+                <div>
+                  <label className="block text-xs text-theme-text-muted mb-1">Leave Type</label>
+                  <select
+                    value={form.leave_type}
+                    onChange={(e) => setForm((p) => ({ ...p, leave_type: e.target.value }))}
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500"
+                  >
+                    {Object.entries(LEAVE_TYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date Range */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={form.start_date}
+                      onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))}
+                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={form.end_date}
+                      onChange={(e) => setForm((p) => ({ ...p, end_date: e.target.value }))}
+                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Reason */}
+                <div>
+                  <label className="block text-xs text-theme-text-muted mb-1">Reason (optional)</label>
+                  <textarea
+                    value={form.reason}
+                    onChange={(e) => setForm((p) => ({ ...p, reason: e.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 resize-none"
+                    placeholder="Optional reason for the leave..."
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-3 border-t border-theme-surface-border flex justify-end gap-2">
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="px-4 py-2 border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={saving}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Create Leave'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave List */}
+      {leaves.length === 0 ? (
+        <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-8 text-center">
+          <Calendar className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
+          <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Leaves of Absence</h3>
+          <p className="text-theme-text-muted">
+            Leaves of absence will appear here. When a member takes leave, months within
+            the leave period are excluded from rolling-period requirement calculations.
+          </p>
+        </div>
+      ) : (
+        <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-theme-surface-border bg-theme-surface">
+                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
+                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Type</th>
+                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Start</th>
+                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">End</th>
+                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Reason</th>
+                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
+                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaves.map((leave) => (
+                  <tr key={leave.id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
+                    <td className="p-3 text-theme-text-primary font-medium">
+                      {getMemberName(leave.user_id)}
+                    </td>
+                    <td className="p-3 text-theme-text-secondary">
+                      {LEAVE_TYPE_LABELS[leave.leave_type] || leave.leave_type}
+                    </td>
+                    <td className="p-3 text-theme-text-secondary">
+                      {new Date(leave.start_date + 'T00:00:00').toLocaleDateString()}
+                    </td>
+                    <td className="p-3 text-theme-text-secondary">
+                      {new Date(leave.end_date + 'T00:00:00').toLocaleDateString()}
+                    </td>
+                    <td className="p-3 text-theme-text-secondary text-xs max-w-[200px] truncate" title={leave.reason || ''}>
+                      {leave.reason || '\u2014'}
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        leave.active
+                          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                          : 'bg-gray-500/10 text-gray-700 dark:text-gray-400'
+                      }`}>
+                        {leave.active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      {leave.active && (
+                        <button
+                          onClick={() => handleDelete(leave.id)}
+                          disabled={deletingId === leave.id}
+                          className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-500/10 text-xs rounded-lg disabled:opacity-50"
+                        >
+                          {deletingId === leave.id ? (
+                            <RefreshCw className="w-3 h-3 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" aria-hidden="true" />
+                          )}
+                          Deactivate
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-3 border-t border-theme-surface-border text-xs text-theme-text-muted">
+            {leaves.length} leave{leaves.length !== 1 ? 's' : ''} of absence
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ==================== Main Page ====================
 
 export const MemberLifecyclePage: React.FC = () => {
@@ -647,7 +1008,7 @@ export const MemberLifecyclePage: React.FC = () => {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-theme-text-primary">Member Lifecycle Management</h1>
           <p className="text-theme-text-muted mt-1">
-            Manage archived members, property returns, and membership tier configuration
+            Manage archived members, property returns, leaves of absence, and membership tier configuration
           </p>
         </div>
 
@@ -680,6 +1041,19 @@ export const MemberLifecyclePage: React.FC = () => {
             Overdue Returns
           </button>
           <button
+            onClick={() => setActiveTab('leaves')}
+            role="tab"
+            aria-selected={activeTab === 'leaves'}
+            className={`px-4 py-3 text-sm font-medium ${
+              activeTab === 'leaves'
+                ? 'text-red-700 dark:text-red-500 border-b-2 border-red-500'
+                : 'text-theme-text-muted hover:text-theme-text-primary'
+            }`}
+          >
+            <Calendar className="w-4 h-4 inline-block mr-2" aria-hidden="true" />
+            Leave of Absence
+          </button>
+          <button
             onClick={() => setActiveTab('tiers')}
             role="tab"
             aria-selected={activeTab === 'tiers'}
@@ -698,6 +1072,7 @@ export const MemberLifecyclePage: React.FC = () => {
         <div role="tabpanel">
           {activeTab === 'archived' && <ArchivedMembersPanel />}
           {activeTab === 'overdue' && <OverdueReturnsPanel />}
+          {activeTab === 'leaves' && <LeavesOfAbsencePanel />}
           {activeTab === 'tiers' && <TierConfigPanel />}
         </div>
       </div>

@@ -9,7 +9,7 @@ from uuid import UUID
 from datetime import datetime, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.orm import selectinload
 
 from app.models.event import Event, EventRSVP, EventTemplate, EventType, RSVPStatus, CheckInWindowType, RecurrencePattern
@@ -243,13 +243,16 @@ class EventService:
         event.cancelled_at = datetime.utcnow()
         event.updated_at = datetime.utcnow()
 
+        # Capture rsvps before commit expires the relationship
+        rsvps_to_notify = list(event.rsvps)
+
         await self.db.commit()
         await self.db.refresh(event)
 
         # Send cancellation notifications if requested
-        if send_notifications and event.rsvps:
+        if send_notifications and rsvps_to_notify:
             notifications_service = NotificationsService(self.db)
-            for rsvp in event.rsvps:
+            for rsvp in rsvps_to_notify:
                 if rsvp.status == RSVPStatus.GOING or rsvp.status == RSVPStatus.MAYBE:
                     await notifications_service.log_notification(
                         organization_id=organization_id,
@@ -406,7 +409,7 @@ class EventService:
             self.db.add(rsvp)
 
         # Check capacity if user is going
-        if rsvp_data.status == "going" and event.max_attendees:
+        if rsvp_data.status == RSVPStatus.GOING.value and event.max_attendees:
             # Count current "going" RSVPs, excluding this user's RSVP if updating
             capacity_query = (
                 select(func.count(EventRSVP.id))
@@ -723,7 +726,7 @@ class EventService:
             query = (
                 query
                 .join(user_roles, User.id == user_roles.c.user_id)
-                .join(Role, Role.id == user_roles.c.role_id)
+                .join(Role, Role.id == user_roles.c.position_id)
                 .where(Role.slug.in_(event.eligible_roles))
                 .distinct()
             )
@@ -752,7 +755,7 @@ class EventService:
                 EventRSVP.status,
                 func.count(EventRSVP.id),
                 func.sum(EventRSVP.guest_count),
-                func.count(EventRSVP.id).filter(EventRSVP.checked_in == True)
+                func.sum(case((EventRSVP.checked_in == True, 1), else_=0))
             )
             .where(EventRSVP.event_id == str(event_id))
             .group_by(EventRSVP.status)
@@ -880,11 +883,11 @@ class EventService:
             "event_name": event.title,
             "event_type": event.event_type.value if event.event_type else None,
             "event_description": event.description,
-            "start_datetime": event.start_datetime.isoformat(),
-            "end_datetime": event.end_datetime.isoformat(),
-            "actual_end_time": event.actual_end_time.isoformat() if event.actual_end_time else None,
-            "check_in_start": check_in_start.isoformat(),
-            "check_in_end": check_in_end.isoformat(),
+            "start_datetime": event.start_datetime.isoformat() + "Z",
+            "end_datetime": event.end_datetime.isoformat() + "Z",
+            "actual_end_time": (event.actual_end_time.isoformat() + "Z") if event.actual_end_time else None,
+            "check_in_start": check_in_start.isoformat() + "Z",
+            "check_in_end": check_in_end.isoformat() + "Z",
             "is_valid": is_valid,
             "location": event.location,
             "location_id": str(event.location_id) if event.location_id else None,
@@ -919,11 +922,15 @@ class EventService:
             check_in_end = event.end_datetime + timedelta(minutes=minutes_after)
 
         if now < check_in_start:
+            # Always convert UTC to local time for user-facing messages
+            utc_start = check_in_start.replace(tzinfo=dt_timezone.utc)
             if tz_name:
-                local_start = check_in_start.replace(tzinfo=dt_timezone.utc).astimezone(ZoneInfo(tz_name))
+                local_start = utc_start.astimezone(ZoneInfo(tz_name))
+                tz_label = local_start.strftime('%Z')
             else:
-                local_start = check_in_start
-            return False, f"Check-in is not available yet. Opens at {local_start.strftime('%I:%M %p')}."
+                local_start = utc_start
+                tz_label = "UTC"
+            return False, f"Check-in is not available yet. Opens at {local_start.strftime('%I:%M %p')} {tz_label}."
 
         if now > check_in_end:
             return False, "Check-in is no longer available. The event has ended."
@@ -1133,7 +1140,7 @@ class EventService:
             select(EventRSVP, User)
             .join(User, EventRSVP.user_id == User.id)
             .where(EventRSVP.event_id == str(event_id))
-            .order_by(EventRSVP.checked_in_at.desc().nullslast())
+            .order_by(EventRSVP.checked_in_at.desc())
         )
         rsvps_with_users = rsvp_result.all()
 

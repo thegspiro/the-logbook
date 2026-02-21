@@ -11,6 +11,7 @@ import { electionService, userService } from '../services/api';
 import type { Election, Candidate, CandidateCreate, CandidateUpdate } from '../types/election';
 import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
+import { UserStatus, ElectionStatus } from '../constants/enums';
 
 interface CandidateManagementProps {
   electionId: string;
@@ -59,7 +60,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
         userService.getUsers(),
       ]);
       setCandidates(candidateData);
-      setMembers(memberData.filter((m: User) => m.status === 'active' || m.status === 'probationary'));
+      setMembers(memberData.filter((m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY));
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load candidates'));
     } finally {
@@ -217,7 +218,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
     );
   }
 
-  const isClosed = election.status === 'closed' || election.status === 'cancelled';
+  const isClosed = election.status === ElectionStatus.CLOSED || election.status === ElectionStatus.CANCELLED;
 
   return (
     <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
@@ -260,7 +261,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                   type="text"
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   placeholder="Search members by name or badge number..."
                 />
                 {filteredMembers.length > 0 && (
@@ -272,7 +273,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                         onClick={() => selectMember(member)}
                         className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center justify-between text-sm"
                       >
-                        <span className="text-white">
+                        <span className="text-theme-text-primary">
                           {member.first_name} {member.last_name}
                         </span>
                         {member.badge_number && (
@@ -306,7 +307,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value, user_id: '' }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder={formData.user_id ? formData.name : 'Or type a name manually'}
               />
             </div>
@@ -317,7 +318,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 <select
                   value={formData.position}
                   onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
-                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 >
                   <option value="">Select position...</option>
                   {positions.map((pos) => (
@@ -335,7 +336,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 value={formData.statement}
                 onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                 rows={3}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="Candidate's statement or platform..."
               />
             </div>

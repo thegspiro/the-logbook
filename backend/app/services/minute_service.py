@@ -620,3 +620,87 @@ class MinuteService:
                     })
 
         return results
+
+    # ============================================
+    # Cross-module Bridges
+    # ============================================
+
+    async def create_from_meeting(
+        self, meeting_id: UUID, organization_id: UUID, created_by: UUID
+    ) -> Optional[MeetingMinutes]:
+        """
+        Create meeting minutes pre-populated from a Meeting record.
+        Bridges the Meeting module → Minutes module gap identified in architecture review.
+        Copies: title, date, attendees, meeting type, and location.
+        """
+        from app.models.meeting import Meeting, MeetingAttendee
+
+        result = await self.db.execute(
+            select(Meeting)
+            .options(selectinload(Meeting.attendees))
+            .where(
+                Meeting.id == str(meeting_id),
+                Meeting.organization_id == str(organization_id),
+            )
+        )
+        meeting = result.scalar_one_or_none()
+        if not meeting:
+            return None
+
+        # Map meeting type to minutes meeting type
+        type_map = {
+            "business": MinutesMeetingType.BUSINESS,
+            "special": MinutesMeetingType.SPECIAL,
+            "committee": MinutesMeetingType.COMMITTEE,
+            "board": MinutesMeetingType.BOARD,
+            "other": MinutesMeetingType.OTHER,
+        }
+        meeting_type_val = meeting.meeting_type.value if hasattr(meeting.meeting_type, 'value') else str(meeting.meeting_type)
+        minutes_type = type_map.get(meeting_type_val, MinutesMeetingType.BUSINESS)
+
+        # Build attendees JSON from meeting attendees
+        attendees_json = []
+        if meeting.attendees:
+            for att in meeting.attendees:
+                user_result = await self.db.execute(
+                    select(User).where(User.id == att.user_id)
+                )
+                user = user_result.scalar_one_or_none()
+                attendees_json.append({
+                    "user_id": att.user_id,
+                    "name": f"{user.first_name} {user.last_name}" if user and user.first_name else (user.username if user else "Unknown"),
+                    "present": att.present,
+                    "excused": att.excused,
+                })
+
+        # Build default sections based on meeting type
+        section_defaults = DEFAULT_BUSINESS_SECTIONS
+        if minutes_type == MinutesMeetingType.SPECIAL:
+            section_defaults = DEFAULT_SPECIAL_SECTIONS
+        elif minutes_type == MinutesMeetingType.COMMITTEE:
+            section_defaults = DEFAULT_COMMITTEE_SECTIONS
+
+        from app.core.utils import generate_uuid
+        meeting_date_dt = datetime.combine(meeting.meeting_date, meeting.start_time or datetime.min.time()) if meeting.meeting_date else datetime.utcnow()
+
+        minutes = MeetingMinutes(
+            id=generate_uuid(),
+            organization_id=str(organization_id),
+            title=f"Minutes: {meeting.title}",
+            meeting_type=minutes_type,
+            meeting_date=meeting_date_dt,
+            location=meeting.location,
+            called_by=meeting.called_by,
+            attendees=attendees_json,
+            sections=[{**s} for s in section_defaults],
+            agenda=meeting.agenda if hasattr(meeting, 'agenda') else None,
+            meeting_id=str(meeting_id),
+            event_id=meeting.event_id,
+            status=MinutesStatus.DRAFT,
+            created_by=str(created_by),
+        )
+
+        self.db.add(minutes)
+        await self.db.commit()
+        await self.db.refresh(minutes)
+        return minutes

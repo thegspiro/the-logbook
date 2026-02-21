@@ -15,6 +15,7 @@ from app.models.location import Location
 from app.models.event import Event
 from app.models.user import User
 from app.schemas.location import LocationCreate, LocationUpdate
+from app.core.utils import generate_display_code
 
 
 class LocationService:
@@ -27,20 +28,31 @@ class LocationService:
         self, location_data: LocationCreate, organization_id: str, created_by: str
     ) -> Location:
         """Create a new location"""
-        # Check if location with same name already exists
-        result = await self.db.execute(
+        # Check if location with same name already exists within the same
+        # building/station.  Rooms at different stations may share a name
+        # (e.g. "Bunk Room" at Station 1 and Station 2).
+        dup_query = (
             select(Location)
             .where(Location.organization_id == str(organization_id))
             .where(Location.name == location_data.name)
         )
+        if location_data.building:
+            dup_query = dup_query.where(Location.building == location_data.building)
+        else:
+            dup_query = dup_query.where(Location.building.is_(None))
+        result = await self.db.execute(dup_query)
         existing = result.scalar_one_or_none()
         if existing:
             raise ValueError(f"Location with name '{location_data.name}' already exists")
+
+        # Generate a unique display code for public kiosk URLs
+        display_code = await self._generate_unique_display_code()
 
         # Create location
         location = Location(
             organization_id=organization_id,
             created_by=created_by,
+            display_code=display_code,
             **location_data.model_dump()
         )
 
@@ -91,14 +103,21 @@ class LocationService:
         if not location:
             return None
 
-        # Check if name is being changed and already exists
+        # Check if name is being changed and already exists within the same
+        # building/station scope
         if location_data.name and location_data.name != location.name:
-            result = await self.db.execute(
+            building = location_data.building if location_data.building is not None else location.building
+            dup_query = (
                 select(Location)
                 .where(Location.organization_id == str(organization_id))
                 .where(Location.name == location_data.name)
                 .where(Location.id != str(location_id))
             )
+            if building:
+                dup_query = dup_query.where(Location.building == building)
+            else:
+                dup_query = dup_query.where(Location.building.is_(None))
+            result = await self.db.execute(dup_query)
             existing = result.scalar_one_or_none()
             if existing:
                 raise ValueError(f"Location with name '{location_data.name}' already exists")
@@ -121,8 +140,12 @@ class LocationService:
         """
         Delete a location
 
-        Returns True if deleted, False if not found
-        Raises ValueError if location has associated events
+        Hard-deletes the location if it has no events.  If events
+        reference this location, it is deactivated (is_active=False)
+        instead so existing events keep a valid FK while the location
+        no longer appears in pickers.
+
+        Returns True if deleted or deactivated, False if not found.
         """
         location = await self.get_location(location_id, organization_id)
         if not location:
@@ -135,10 +158,10 @@ class LocationService:
         )
         event_count = result.scalar()
         if event_count > 0:
-            raise ValueError(
-                f"Cannot delete location. {event_count} event(s) are associated with this location. "
-                "Please update or delete those events first, or deactivate the location instead."
-            )
+            # Soft-delete: deactivate so existing events keep their FK
+            location.is_active = False
+            await self.db.commit()
+            return True
 
         await self.db.delete(location)
         await self.db.commit()
@@ -249,3 +272,24 @@ class LocationService:
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    async def get_location_by_display_code(self, display_code: str) -> Optional[Location]:
+        """Look up a location by its public display code (for kiosk URLs)"""
+        result = await self.db.execute(
+            select(Location)
+            .where(Location.display_code == display_code)
+            .where(Location.is_active == True)
+        )
+        return result.scalar_one_or_none()
+
+    async def _generate_unique_display_code(self, max_attempts: int = 20) -> str:
+        """Generate a display code that doesn't collide with existing ones"""
+        for attempt in range(max_attempts):
+            length = 8 if attempt < 10 else 12
+            code = generate_display_code(length=length)
+            result = await self.db.execute(
+                select(Location.id).where(Location.display_code == code)
+            )
+            if result.scalar_one_or_none() is None:
+                return code
+        raise ValueError("Unable to generate a unique display code. Please try again.")

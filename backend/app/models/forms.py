@@ -73,12 +73,14 @@ class IntegrationTarget(str, enum.Enum):
     """Target module for form integrations"""
     MEMBERSHIP = "membership"
     INVENTORY = "inventory"
+    EVENTS = "events"
 
 
 class IntegrationType(str, enum.Enum):
     """Type of integration action"""
     MEMBERSHIP_INTEREST = "membership_interest"
     EQUIPMENT_ASSIGNMENT = "equipment_assignment"
+    EVENT_REGISTRATION = "event_registration"
 
 
 class Form(Base):
@@ -161,6 +163,12 @@ class FormField(Base):
 
     # Options (for select, multiselect, radio, checkbox)
     options = Column(JSON)  # List of {value, label} objects
+
+    # Conditional visibility
+    # When set, this field is only shown if the referenced field's value matches.
+    condition_field_id = Column(String(36), nullable=True)   # ID of the controlling field
+    condition_operator = Column(String(20), nullable=True)    # "equals", "not_equals", "contains", "not_empty", "is_empty"
+    condition_value = Column(String(500), nullable=True)      # Value to compare against
 
     # Layout
     sort_order = Column(Integer, default=0, nullable=False)

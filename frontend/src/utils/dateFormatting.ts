@@ -102,6 +102,67 @@ export const formatForDateTimeInput = (dateString?: string | Date | null, timezo
 };
 
 /**
+ * Convert a datetime-local input value to a UTC ISO string.
+ * This is the inverse of formatForDateTimeInput: it interprets the given
+ * "YYYY-MM-DDTHH:mm" string as a time in `timezone` and returns the
+ * equivalent UTC ISO-8601 string (e.g., "2024-01-15T19:30:00.000Z").
+ *
+ * @param localDateTimeStr - Value from a datetime-local input (e.g., "2024-01-15T14:30")
+ * @param timezone - IANA timezone the value should be interpreted in (e.g., "America/New_York")
+ * @returns UTC ISO string, or empty string if input is falsy
+ */
+export const localToUTC = (localDateTimeStr?: string | null, timezone?: string): string => {
+  if (!localDateTimeStr) return '';
+
+  const [datePart, timePart] = localDateTimeStr.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = (timePart || '00:00').split(':').map(Number);
+
+  if (!timezone) {
+    // No timezone specified — interpret as browser-local time
+    return new Date(year, month - 1, day, hour, minute).toISOString();
+  }
+
+  // Treat the local datetime components as if they were UTC to get a reference point
+  const refUtcMs = Date.UTC(year, month - 1, day, hour, minute);
+
+  // Determine what local time that UTC instant corresponds to in the target timezone
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(new Date(refUtcMs));
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+  const localAtRefMs = Date.UTC(+get('year'), +get('month') - 1, +get('day'), +get('hour'), +get('minute'));
+
+  // Offset = how far ahead the timezone is from UTC at this instant
+  const offsetMs = localAtRefMs - refUtcMs;
+
+  // The UTC time for our desired local time
+  const utcMs = refUtcMs - offsetMs;
+
+  // Verify the result handles DST transitions correctly: format the computed
+  // UTC time back in the target timezone and confirm it matches the input.
+  const checkParts = fmt.formatToParts(new Date(utcMs));
+  const cGet = (type: string) => checkParts.find(p => p.type === type)?.value ?? '';
+  const checkStr = `${cGet('year')}-${cGet('month')}-${cGet('day')}T${cGet('hour')}:${cGet('minute')}`;
+
+  if (checkStr !== localDateTimeStr) {
+    // DST edge case: recalculate with the offset at the computed UTC time
+    const checkLocalMs = Date.UTC(+cGet('year'), +cGet('month') - 1, +cGet('day'), +cGet('hour'), +cGet('minute'));
+    const correctedOffset = checkLocalMs - utcMs;
+    return new Date(refUtcMs - correctedOffset).toISOString();
+  }
+
+  return new Date(utcMs).toISOString();
+};
+
+/**
  * Get today's date as YYYY-MM-DD in the given timezone.
  * Use this instead of `new Date().toISOString().split('T')[0]`
  * which returns the UTC date and can be off by a day.

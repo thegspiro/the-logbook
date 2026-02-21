@@ -4,6 +4,7 @@ import { Home, LogOut, Menu, X, Sun, Moon, Monitor, ChevronDown } from 'lucide-r
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
+import { organizationService } from '../../services/api';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -22,6 +23,7 @@ interface NavItem {
   path: string;
   permission?: string;
   subItems?: SubNavItem[];
+  isSectionLabel?: boolean;
 }
 
 export const TopNavigation: React.FC<TopNavigationProps> = ({
@@ -38,6 +40,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [facilitiesModuleEnabled, setFacilitiesModuleEnabled] = useState(false);
+  const [apparatusModuleEnabled, setApparatusModuleEnabled] = useState(false);
+
+  useEffect(() => {
+    organizationService.getEnabledModules()
+      .then(res => {
+        setFacilitiesModuleEnabled(res.enabled_modules.includes('facilities'));
+        setApparatusModuleEnabled(res.enabled_modules.includes('apparatus'));
+      })
+      .catch(() => { /* default to false */ });
+  }, []);
 
   const cycleTheme = () => {
     const order = ['light', 'dark', 'system'] as const;
@@ -50,27 +63,22 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
   const ThemeIcon = themeIcon;
 
+  const hasAnyAdminPermission =
+    checkPermission('members.manage') ||
+    checkPermission('prospective_members.manage') ||
+    checkPermission('events.manage') ||
+    checkPermission('training.manage') ||
+    checkPermission('inventory.manage') ||
+    checkPermission('positions.manage_permissions') ||
+    checkPermission('settings.manage') ||
+    checkPermission('analytics.view');
+
   // Match the side navigation structure
   const navItems: NavItem[] = [
+    // ── Member-facing pages ──
     { label: 'Dashboard', path: '/dashboard' },
-    {
-      label: 'Members',
-      path: '/members',
-      subItems: [
-        { label: 'All Members', path: '/members' },
-        { label: 'Prospective', path: '/prospective-members', permission: 'prospective_members.manage' },
-        { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
-        { label: 'Members Admin', path: '/members/admin', permission: 'members.manage' },
-      ],
-    },
-    {
-      label: 'Events',
-      path: '/events',
-      subItems: [
-        { label: 'All Events', path: '/events' },
-        { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
-      ],
-    },
+    { label: 'Members', path: '/members' },
+    { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
     {
       label: 'Training',
@@ -80,49 +88,57 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Submit Training', path: '/training/submit' },
         { label: 'Course Library', path: '/training/courses' },
         { label: 'Programs', path: '/training/programs' },
-        { label: 'Training Admin', path: '/training/admin', permission: 'training.manage' },
       ],
     },
+    { label: 'Scheduling', path: '/scheduling' },
     {
       label: 'Operations',
       path: '/inventory',
       subItems: [
         { label: 'Inventory', path: '/inventory' },
-        { label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' },
-        { label: 'Scheduling', path: '/scheduling' },
-        { label: 'Apparatus', path: '/apparatus' },
+        ...(apparatusModuleEnabled
+          ? [{ label: 'Apparatus', path: '/apparatus' }]
+          : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
+        ...(facilitiesModuleEnabled ? [{ label: 'Facilities', path: '/facilities' }] : []),
       ],
     },
+    ...(facilitiesModuleEnabled ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
     {
       label: 'Governance',
       path: '/elections',
       subItems: [
         { label: 'Elections', path: '/elections' },
         { label: 'Minutes', path: '/minutes' },
+        { label: 'Action Items', path: '/action-items' },
+      ],
+    },
+    { label: 'Notifications', path: '/notifications' },
+
+    // ── Administration (only for admins) ──
+    ...(hasAnyAdminPermission ? [{
+      label: 'Admin',
+      path: '#',
+      subItems: [
+        { label: 'Department Setup', path: '/setup', permission: 'settings.manage' },
+        { label: 'Prospective Members', path: '/prospective-members', permission: 'prospective_members.manage' },
+        { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
+        { label: 'Member Management', path: '/members/admin', permission: 'members.manage' },
+        { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
+        { label: 'Training Admin', path: '/training/admin', permission: 'training.manage' },
+        { label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' },
+        { label: 'Forms', path: '/forms', permission: 'settings.manage' },
+        { label: 'Integrations', path: '/integrations', permission: 'settings.manage' },
         { label: 'Reports', path: '/reports' },
-      ],
-    },
-    {
-      label: 'Communication',
-      path: '/notifications',
-      subItems: [
-        { label: 'Notifications', path: '/notifications' },
-        { label: 'Forms', path: '/forms' },
-        { label: 'Integrations', path: '/integrations' },
-      ],
-    },
-    {
-      label: 'Settings',
-      path: '/settings',
-      subItems: [
-        { label: 'My Account', path: '/settings/account' },
-        { label: 'Organization', path: '/settings' },
-        { label: 'Role Management', path: '/settings/roles', permission: 'roles.manage' },
+        { label: 'Organization', path: '/settings', permission: 'settings.manage' },
+        { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
         { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
         { label: 'Analytics', path: '/admin/analytics', permission: 'analytics.view' },
         { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
       ],
-    },
+    } as NavItem] : []),
+
+    // ── Always-visible personal ──
+    { label: 'My Account', path: '/settings/account' },
   ];
 
   const isActive = (path: string) => {
@@ -195,8 +211,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               </div>
             )}
             <div className="ml-3 min-w-0">
-              <span className="text-white text-lg font-semibold break-words leading-tight">{departmentName}</span>
-              <p className="text-slate-300 text-xs">Dashboard</p>
+              <span className="text-theme-text-primary text-lg font-semibold break-words leading-tight">{departmentName}</span>
+              <p className="text-theme-text-muted text-xs">Dashboard</p>
             </div>
           </a>
 
@@ -224,8 +240,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       onClick={() => setOpenDropdown(openDropdown === item.label ? null : item.label)}
                       aria-expanded={openDropdown === item.label}
                       aria-haspopup="true"
-                      className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center gap-1 ${
-                        active ? 'text-white' : 'text-theme-text-secondary'
+                      className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center gap-1 ${
+                        active ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                       }`}
                     >
                       {item.label}
@@ -233,7 +249,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     </button>
 
                     {openDropdown === item.label && (
-                      <div className="absolute top-full left-0 mt-1 w-48 bg-slate-800 border border-white/10 rounded-lg shadow-xl py-1 z-50">
+                      <div className="absolute top-full left-0 mt-1 w-48 bg-theme-surface border border-theme-surface-border rounded-lg shadow-xl py-1 z-50">
                         {visibleSubItems.map((subItem) => {
                           const subActive = isSubItemActive(subItem.path, item.subItems || []);
                           return (
@@ -245,7 +261,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                             className={`block px-4 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-500 ${
                               subActive
                                 ? 'bg-red-600 text-white'
-                                : 'text-theme-text-secondary hover:bg-white/10 hover:text-white'
+                                : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                             }`}
                           >
                             {subItem.label}
@@ -264,8 +280,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                   href={item.path}
                   onClick={(e) => handleNavigation(item.path, e)}
                   aria-current={active ? 'page' : undefined}
-                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                    active ? 'text-white' : 'text-theme-text-secondary'
+                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                    active ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                   }`}
                 >
                   {item.label}
@@ -326,8 +342,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       <button
                         onClick={() => toggleMobileMenu(item.label)}
                         aria-expanded={isExpanded}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                          isParentActive(item) ? 'text-white' : 'text-theme-text-secondary'
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                          isParentActive(item) ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                         }`}
                       >
                         {item.label}
@@ -346,7 +362,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                               className={`block px-3 py-2 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                                 subActive
                                   ? 'bg-red-600 text-white'
-                                  : 'text-theme-text-secondary hover:bg-white/10 hover:text-white'
+                                  : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                               }`}
                             >
                               {subItem.label}
@@ -365,8 +381,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     href={item.path}
                     onClick={(e) => handleNavigation(item.path, e)}
                     aria-current={isActive(item.path) ? 'page' : undefined}
-                    className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                      isActive(item.path) ? 'text-white' : 'text-theme-text-secondary'
+                    className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                      isActive(item.path) ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                     }`}
                   >
                     {item.label}

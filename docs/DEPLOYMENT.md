@@ -260,6 +260,8 @@ Before going live, complete these security steps:
 - [ ] **Update `.env` file** with production values
 - [ ] **Set `DEBUG=false`** in `.env`
 - [ ] **Set `ENVIRONMENT=production`** in `.env`
+- [ ] **Set `ENCRYPTION_KEY` and `ENCRYPTION_SALT`** — required for credential encryption (external training providers, etc.)
+- [ ] **Set `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`** in `.env` if using the S3 storage profile (no insecure defaults)
 - [ ] **Configure backups** (see [BACKUP.md](./BACKUP.md))
 - [ ] **Set up monitoring** and error tracking
 - [ ] **Review CORS settings** in `.env`
@@ -366,7 +368,7 @@ See [BACKUP.md](./BACKUP.md) for detailed backup configuration.
 ### 3. Set Up Monitoring
 
 **Health Checks:**
-- Backend: `https://yourdomain.com/api/v1/health`
+- Backend: `https://yourdomain.com/health`
 - Database: `docker compose exec backend alembic current`
 
 **Monitoring Tools:**

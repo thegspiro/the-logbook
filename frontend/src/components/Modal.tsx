@@ -37,10 +37,10 @@ export const Modal: React.FC<ModalProps> = ({
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const sizeClasses = {
-    sm: 'sm:max-w-md',
-    md: 'sm:max-w-lg',
-    lg: 'sm:max-w-2xl',
-    xl: 'sm:max-w-4xl',
+    sm: 'max-w-[calc(100vw-2rem)] sm:max-w-md',
+    md: 'max-w-[calc(100vw-2rem)] sm:max-w-lg',
+    lg: 'max-w-[calc(100vw-2rem)] sm:max-w-2xl',
+    xl: 'max-w-[calc(100vw-2rem)] sm:max-w-4xl',
   };
 
   useEffect(() => {
@@ -111,7 +111,7 @@ export const Modal: React.FC<ModalProps> = ({
       aria-modal="true"
     >
       <div
-        className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0"
+        className="flex items-center justify-center min-h-screen px-4 py-4 text-center sm:block sm:p-0"
         onClick={handleBackdropClick}
       >
         {/* Background overlay */}
@@ -128,11 +128,11 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Modal panel */}
         <div
           ref={modalRef}
-          className={`inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} sm:w-full`}
+          className={`inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} w-full max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-y-auto`}
           tabIndex={-1}
         >
           {/* Header */}
-          <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+          <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="flex items-start justify-between mb-4">
               <h3
                 className="text-lg font-medium text-theme-text-primary"
@@ -143,7 +143,7 @@ export const Modal: React.FC<ModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="rounded-md bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 aria-label="Close modal"
               >
                 <X className="h-6 w-6" aria-hidden="true" />
@@ -156,7 +156,7 @@ export const Modal: React.FC<ModalProps> = ({
 
           {/* Footer */}
           {footer && (
-            <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 flex flex-col-reverse gap-2 sm:flex-row-reverse sm:gap-0">
               {footer}
             </div>
           )}

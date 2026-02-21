@@ -1,0 +1,491 @@
+/**
+ * Inventory Scan Modal
+ *
+ * A modal that lets the quartermaster scan barcodes (or type codes manually)
+ * to build a list of items, then submit them as a batch checkout or batch return.
+ *
+ * Flow:
+ *  1. Open modal from a member's profile ("Check-out Items" or "Return Items")
+ *  2. Scan/type a code → item appears in the list instantly
+ *  3. Repeat for all items
+ *  4. Review the list, then tap "Confirm" to submit the batch
+ *
+ * The modal uses the device camera for barcode scanning via the BarcodeDetector
+ * API (Chrome/Edge 83+, Android). Falls back to manual text entry on
+ * unsupported browsers.
+ */
+
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Modal } from './Modal';
+import { X, Camera, Keyboard, Check, AlertTriangle, Package, Trash2, Loader2 } from 'lucide-react';
+import {
+  inventoryService,
+  ScanLookupResponse,
+  BatchCheckoutResponse,
+  BatchReturnResponse,
+} from '../services/api';
+
+// ── Types ──────────────────────────────────────────────────────────
+
+interface ScannedItem {
+  code: string;
+  itemId: string;
+  itemName: string;
+  matchedField: string;
+  status: string;
+  trackingType: string;
+  quantity: number;
+  returnCondition: string;
+}
+
+type ResultItem = {
+  code: string;
+  item_name: string;
+  action: string;
+  success: boolean;
+  error?: string;
+};
+
+interface InventoryScanModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  mode: 'checkout' | 'return';
+  userId: string;
+  memberName: string;
+  onComplete?: (result: BatchCheckoutResponse | BatchReturnResponse) => void;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+
+const hasBarcodeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+
+// ── Component ──────────────────────────────────────────────────────
+
+export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
+  isOpen,
+  onClose,
+  mode,
+  userId,
+  memberName,
+  onComplete,
+}) => {
+  // State
+  const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
+  const [manualCode, setManualCode] = useState('');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [results, setResults] = useState<ResultItem[] | null>(null);
+
+  // Refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const detectorRef = useRef<BarcodeDetector | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // ── Camera scanning ──────────────────────────────────────────
+
+  const stopCamera = useCallback(() => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    if (!hasBarcodeDetector) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      detectorRef.current = new (window as any).BarcodeDetector({
+        formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'],
+      });
+
+      setCameraActive(true);
+
+      // Poll for barcodes every 300ms
+      const alreadyScanned = new Set<string>();
+      scanIntervalRef.current = setInterval(async () => {
+        if (!videoRef.current || !detectorRef.current) return;
+        try {
+          const barcodes = await detectorRef.current.detect(videoRef.current);
+          for (const barcode of barcodes) {
+            const value = barcode.rawValue;
+            if (value && !alreadyScanned.has(value)) {
+              alreadyScanned.add(value);
+              // Allow re-scan after 3 seconds
+              setTimeout(() => alreadyScanned.delete(value), 3000);
+              handleCodeScanned(value);
+            }
+          }
+        } catch {
+          // Detection can fail on individual frames; ignore
+        }
+      }, 300);
+    } catch {
+      setCameraActive(false);
+    }
+  }, []); // handleCodeScanned is stable via ref pattern below
+
+  // Cleanup camera on unmount or close
+  useEffect(() => {
+    if (!isOpen) {
+      stopCamera();
+      // Reset state when modal closes
+      setScannedItems([]);
+      setManualCode('');
+      setLookupError(null);
+      setResults(null);
+    }
+  }, [isOpen, stopCamera]);
+
+  // ── Code lookup ──────────────────────────────────────────────
+
+  const handleCodeScanned = async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+
+    // Don't add duplicates
+    if (scannedItems.some((si) => si.code === trimmed)) {
+      setLookupError(`"${trimmed}" is already in the list`);
+      setTimeout(() => setLookupError(null), 2000);
+      return;
+    }
+
+    setLookupLoading(true);
+    setLookupError(null);
+
+    try {
+      const result: ScanLookupResponse = await inventoryService.lookupByCode(trimmed);
+      setScannedItems((prev) => [
+        ...prev,
+        {
+          code: trimmed,
+          itemId: result.item.id,
+          itemName: result.item.name,
+          matchedField: result.matched_field,
+          status: result.item.status,
+          trackingType: result.item.tracking_type,
+          quantity: 1,
+          returnCondition: 'good',
+        },
+      ]);
+    } catch {
+      setLookupError(`No item found for "${trimmed}"`);
+      setTimeout(() => setLookupError(null), 3000);
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualCode.trim()) {
+      handleCodeScanned(manualCode);
+      setManualCode('');
+      inputRef.current?.focus();
+    }
+  };
+
+  const removeItem = (code: string) => {
+    setScannedItems((prev) => prev.filter((si) => si.code !== code));
+  };
+
+  const updateQuantity = (code: string, qty: number) => {
+    setScannedItems((prev) =>
+      prev.map((si) => (si.code === code ? { ...si, quantity: Math.max(1, qty) } : si))
+    );
+  };
+
+  const updateCondition = (code: string, condition: string) => {
+    setScannedItems((prev) =>
+      prev.map((si) => (si.code === code ? { ...si, returnCondition: condition } : si))
+    );
+  };
+
+  // ── Batch submit ─────────────────────────────────────────────
+
+  const handleSubmit = async () => {
+    if (scannedItems.length === 0) return;
+    setSubmitting(true);
+
+    try {
+      if (mode === 'checkout') {
+        const response = await inventoryService.batchCheckout({
+          user_id: userId,
+          items: scannedItems.map((si) => ({
+            code: si.code,
+            quantity: si.quantity,
+          })),
+        });
+        setResults(response.results);
+        onComplete?.(response);
+      } else {
+        const response = await inventoryService.batchReturn({
+          user_id: userId,
+          items: scannedItems.map((si) => ({
+            code: si.code,
+            return_condition: si.returnCondition,
+            quantity: si.quantity,
+          })),
+        });
+        setResults(response.results);
+        onComplete?.(response);
+      }
+    } catch {
+      setLookupError('Failed to process batch. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Render ───────────────────────────────────────────────────
+
+  const title = mode === 'checkout' ? 'Check-out Items' : 'Return Items';
+  const showResults = results !== null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg" closeOnClickOutside={false}>
+      <div className="space-y-4">
+        {/* Member info */}
+        <div className="bg-theme-surface-secondary rounded-lg p-3 flex items-center gap-3">
+          <Package className="h-5 w-5 text-theme-text-muted" />
+          <div>
+            <span className="text-sm text-theme-text-muted">
+              {mode === 'checkout' ? 'Checking out to' : 'Returning from'}:
+            </span>
+            <span className="ml-2 font-medium text-theme-text-primary">{memberName}</span>
+          </div>
+        </div>
+
+        {/* Results view */}
+        {showResults ? (
+          <div className="space-y-3">
+            <h4 className="font-medium text-theme-text-primary">Results</h4>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {results.map((r, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center justify-between p-3 rounded-lg border ${
+                    r.success
+                      ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
+                      : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {r.success ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-theme-text-primary">{r.item_name}</p>
+                      <p className="text-xs text-theme-text-muted">
+                        {r.success ? r.action.replace(/_/g, ' ') : r.error}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono text-theme-text-muted">{r.code}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Scan input area */}
+            <div className="space-y-3">
+              {/* Camera toggle + manual input */}
+              <div className="flex gap-2">
+                {hasBarcodeDetector && (
+                  <button
+                    type="button"
+                    onClick={cameraActive ? stopCamera : startCamera}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
+                      cameraActive
+                        ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-400'
+                        : 'border-theme-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary'
+                    }`}
+                  >
+                    <Camera className="h-4 w-4" />
+                    {cameraActive ? 'Stop Camera' : 'Start Camera'}
+                  </button>
+                )}
+                <form onSubmit={handleManualSubmit} className="flex-1 flex gap-2">
+                  <div className="relative flex-1">
+                    <Keyboard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" />
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={manualCode}
+                      onChange={(e) => setManualCode(e.target.value)}
+                      placeholder="Type or scan barcode / serial / asset tag..."
+                      className="w-full pl-9 pr-3 py-2 border border-theme-border rounded-lg bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!manualCode.trim() || lookupLoading}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Camera video preview */}
+              {cameraActive && (
+                <div className="relative rounded-lg overflow-hidden bg-black">
+                  <video
+                    ref={videoRef}
+                    className="w-full h-48 object-cover"
+                    playsInline
+                    muted
+                  />
+                  <div className="absolute inset-0 border-2 border-red-500/50 pointer-events-none" />
+                  <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white/80">
+                    Point camera at barcode
+                  </p>
+                </div>
+              )}
+
+              {/* Lookup error */}
+              {lookupError && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-yellow-50 border border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 shrink-0" />
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400">{lookupError}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Scanned items list */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium text-theme-text-primary">
+                  Scanned Items ({scannedItems.length})
+                </h4>
+              </div>
+
+              {scannedItems.length === 0 ? (
+                <div className="text-center py-8 text-theme-text-muted text-sm">
+                  {hasBarcodeDetector
+                    ? 'Scan a barcode or type a code to get started'
+                    : 'Type a barcode, serial number, or asset tag to get started'}
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {scannedItems.map((si) => (
+                    <div
+                      key={si.code}
+                      className="flex items-center justify-between p-3 rounded-lg border border-theme-border bg-theme-surface"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-theme-text-primary truncate">
+                          {si.itemName}
+                        </p>
+                        <p className="text-xs text-theme-text-muted">
+                          {si.matchedField.replace(/_/g, ' ')}: {si.code}
+                          {si.trackingType === 'pool' && ' (pool)'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-3">
+                        {/* Quantity for pool items */}
+                        {si.trackingType === 'pool' && (
+                          <input
+                            type="number"
+                            min={1}
+                            value={si.quantity}
+                            onChange={(e) => updateQuantity(si.code, parseInt(e.target.value) || 1)}
+                            className="w-16 px-2 py-1 border border-theme-border rounded text-sm text-center bg-theme-surface text-theme-text-primary"
+                            title="Quantity"
+                          />
+                        )}
+
+                        {/* Return condition for return mode */}
+                        {mode === 'return' && (
+                          <select
+                            value={si.returnCondition}
+                            onChange={(e) => updateCondition(si.code, e.target.value)}
+                            className="px-2 py-1 border border-theme-border rounded text-sm bg-theme-surface text-theme-text-primary"
+                            title="Return condition"
+                          >
+                            <option value="excellent">Excellent</option>
+                            <option value="good">Good</option>
+                            <option value="fair">Fair</option>
+                            <option value="poor">Poor</option>
+                            <option value="damaged">Damaged</option>
+                          </select>
+                        )}
+
+                        <button
+                          onClick={() => removeItem(si.code)}
+                          className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-red-600 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                          title="Remove"
+                          aria-label={`Remove item ${si.code}`}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Submit */}
+            {scannedItems.length > 0 && (
+              <div className="flex justify-end gap-3 pt-2 border-t border-theme-border">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 border border-theme-border rounded-lg text-theme-text-primary hover:bg-theme-surface-secondary text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm"
+                >
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  {mode === 'checkout'
+                    ? `Check Out ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`
+                    : `Return ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+};

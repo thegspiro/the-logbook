@@ -18,6 +18,7 @@ import type {
   ElectionPackageUpdate,
 } from '../types';
 import { pipelineService, applicantService } from '../services/api';
+import { StageType } from '../../../constants/enums';
 
 export type PipelineTab = 'active' | 'inactive' | 'withdrawn';
 
@@ -89,6 +90,7 @@ interface ProspectiveMembersState {
   fetchApplicant: (id: string) => Promise<void>;
   setCurrentApplicant: (applicant: Applicant | null) => void;
   advanceApplicant: (id: string, notes?: string) => Promise<void>;
+  completeStep: (id: string, stepId: string, notes?: string) => Promise<void>;
   rejectApplicant: (id: string, reason?: string) => Promise<void>;
   holdApplicant: (id: string, reason?: string) => Promise<void>;
   resumeApplicant: (id: string) => Promise<void>;
@@ -292,10 +294,10 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         // Auto-create election package if applicant landed on an election_vote stage
         const pipeline = get().currentPipeline;
         if (pipeline && advanced) {
-          const newStage = pipeline.stages.find(
+          const newStage = (pipeline.stages || []).find(
             (s) => s.id === advanced.current_stage_id
           );
-          if (newStage?.stage_type === 'election_vote') {
+          if (newStage?.stage_type === StageType.ELECTION_VOTE) {
             try {
               await applicantService.createElectionPackage(id, {
                 applicant_id: id,
@@ -315,6 +317,27 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
             error instanceof Error
               ? error.message
               : 'Failed to advance applicant',
+          isAdvancing: false,
+        });
+      }
+    },
+
+    completeStep: async (id: string, stepId: string, notes?: string) => {
+      set({ isAdvancing: true, error: null });
+      try {
+        await applicantService.completeStep(id, stepId, notes);
+        await get().fetchApplicants();
+        const currentApplicant = get().currentApplicant;
+        if (currentApplicant?.id === id) {
+          await get().fetchApplicant(id);
+        }
+        set({ isAdvancing: false });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to complete step',
           isAdvancing: false,
         });
       }

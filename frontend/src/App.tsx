@@ -72,6 +72,18 @@ const InventoryAdminHub = lazy(() => import('./pages/InventoryAdminHub').then(m 
 // Scheduling Module
 const SchedulingPage = lazy(() => import('./pages/SchedulingPage'));
 
+// Facilities Module
+const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage'));
+
+// Locations (lightweight alternative when Facilities module is off)
+const LocationsPage = lazy(() => import('./pages/LocationsPage'));
+
+// Public Location Kiosk Display (no auth required — for tablets in rooms)
+const LocationKioskPage = lazy(() => import('./pages/LocationKioskPage'));
+
+// Apparatus Basic (lightweight alternative when Apparatus module is off)
+const ApparatusBasicPage = lazy(() => import('./pages/ApparatusBasicPage'));
+
 // Elections Module
 const ElectionsPage = lazy(() => import('./pages/ElectionsPage').then(m => ({ default: m.ElectionsPage })));
 const ElectionDetailPage = lazy(() => import('./pages/ElectionDetailPage').then(m => ({ default: m.ElectionDetailPage })));
@@ -80,6 +92,9 @@ const BallotVotingPage = lazy(() => import('./pages/BallotVotingPage'));
 // Minutes Module
 const MinutesPage = lazy(() => import('./pages/MinutesPage'));
 const MinutesDetailPage = lazy(() => import('./pages/MinutesDetailPage'));
+
+// Action Items (unified cross-module)
+const ActionItemsPage = lazy(() => import('./pages/ActionItemsPage'));
 
 // Notifications Module
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
@@ -96,6 +111,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ defa
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage').then(m => ({ default: m.UserSettingsPage })));
 const RoleManagementPage = lazy(() => import('./pages/RoleManagementPage').then(m => ({ default: m.RoleManagementPage })));
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then(m => ({ default: m.ReportsPage })));
+const DepartmentSetupPage = lazy(() => import('./pages/DepartmentSetupPage'));
 
 /**
  * Main Application Component
@@ -187,6 +203,13 @@ function App() {
               {/* Scheduling Module */}
               <Route path="/scheduling" element={<SchedulingPage />} />
 
+              {/* Facilities Module (full) / Locations (lightweight) */}
+              <Route path="/facilities" element={<FacilitiesPage />} />
+              <Route path="/locations" element={<LocationsPage />} />
+
+              {/* Apparatus Basic (lightweight alternative when Apparatus module is off) */}
+              <Route path="/apparatus-basic" element={<ApparatusBasicPage />} />
+
               {/* Elections Module */}
               <Route path="/elections" element={<ElectionsPage />} />
               <Route path="/elections/:id" element={<ElectionDetailPage />} />
@@ -194,6 +217,9 @@ function App() {
               {/* Minutes Module */}
               <Route path="/minutes" element={<MinutesPage />} />
               <Route path="/minutes/:minutesId" element={<MinutesDetailPage />} />
+
+              {/* Action Items (unified) */}
+              <Route path="/action-items" element={<ActionItemsPage />} />
 
               {/* Notifications Module */}
               <Route path="/notifications" element={<NotificationsPage />} />
@@ -212,7 +238,8 @@ function App() {
               {/* Settings Module */}
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/account" element={<UserSettingsPage />} />
-              <Route path="/settings/roles" element={<ProtectedRoute requiredPermission="roles.manage"><RoleManagementPage /></ProtectedRoute>} />
+              <Route path="/settings/roles" element={<ProtectedRoute requiredPermission="positions.manage_permissions"><RoleManagementPage /></ProtectedRoute>} />
+              <Route path="/setup" element={<ProtectedRoute requiredPermission="settings.manage"><DepartmentSetupPage /></ProtectedRoute>} />
 
               {/* Reports */}
               <Route path="/reports" element={<ReportsPage />} />
@@ -223,6 +250,9 @@ function App() {
 
             {/* Public Ballot Voting Page (token-based, no auth required) */}
             <Route path="/ballot" element={<BallotVotingPage />} />
+
+            {/* Public Location Kiosk Display (no auth required — for tablets in rooms) */}
+            <Route path="/display/:code" element={<LocationKioskPage />} />
 
             {/* Login Page */}
             <Route path="/login" element={<LoginPage />} />
@@ -242,20 +272,20 @@ function App() {
           toastOptions={{
             duration: 4000,
             style: {
-              background: '#1e293b',
-              color: '#fff',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'var(--surface-bg)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--surface-border)',
             },
             success: {
               iconTheme: {
-                primary: '#10b981',
-                secondary: '#fff',
+                primary: 'var(--toast-success)',
+                secondary: 'var(--toast-icon-secondary)',
               },
             },
             error: {
               iconTheme: {
-                primary: '#ef4444',
-                secondary: '#fff',
+                primary: 'var(--toast-error)',
+                secondary: 'var(--toast-icon-secondary)',
               },
             },
           }}

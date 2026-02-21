@@ -48,6 +48,9 @@ class ShiftResponse(BaseModel):
     start_time: datetime
     end_time: Optional[datetime] = None
     apparatus_id: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    apparatus_unit_number: Optional[str] = None
+    apparatus_positions: Optional[List[str]] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[UUID] = None
     shift_officer_name: Optional[str] = None
@@ -226,6 +229,13 @@ class PatternType(str, PyEnum):
 # Shift Template Schemas
 # ============================================
 
+class TemplateCategory(str, PyEnum):
+    """Enum for shift template categories"""
+    STANDARD = "standard"
+    SPECIALTY = "specialty"
+    EVENT = "event"
+
+
 class ShiftTemplateCreate(BaseModel):
     """Schema for creating a shift template"""
     name: str
@@ -236,6 +246,8 @@ class ShiftTemplateCreate(BaseModel):
     color: Optional[str] = None
     positions: Optional[Any] = None
     min_staffing: int = 1
+    category: Optional[str] = "standard"
+    apparatus_type: Optional[str] = None
     is_default: bool = False
 
 
@@ -249,6 +261,8 @@ class ShiftTemplateUpdate(BaseModel):
     color: Optional[str] = None
     positions: Optional[Any] = None
     min_staffing: Optional[int] = None
+    category: Optional[str] = None
+    apparatus_type: Optional[str] = None
     is_default: Optional[bool] = None
 
 
@@ -264,6 +278,8 @@ class ShiftTemplateResponse(BaseModel):
     color: Optional[str] = None
     positions: Optional[Any] = None
     min_staffing: int = 1
+    category: Optional[str] = "standard"
+    apparatus_type: Optional[str] = None
     is_default: bool = False
     is_active: bool = True
     created_at: datetime
@@ -499,3 +515,91 @@ class MemberHoursListResponse(BaseModel):
     period_start: date
     period_end: date
     total_members: int
+
+
+# ============================================
+# Shift Signup (Member Self-Service)
+# ============================================
+
+class ShiftSignupRequest(BaseModel):
+    """Schema for a member signing up for an open shift position"""
+    position: ShiftPosition = ShiftPosition.FIREFIGHTER
+
+
+# ============================================
+# Basic Apparatus (Lightweight, for non-module departments)
+# ============================================
+
+class BasicApparatusCreate(BaseModel):
+    """Schema for creating a basic apparatus entry"""
+    unit_number: str = Field(..., min_length=1, max_length=20)
+    name: str = Field(..., min_length=1, max_length=100)
+    apparatus_type: str = Field(default="engine", max_length=50)
+    min_staffing: Optional[int] = Field(default=1, ge=1, le=50)
+    positions: Optional[List[str]] = None
+
+
+class BasicApparatusUpdate(BaseModel):
+    """Schema for updating a basic apparatus entry"""
+    unit_number: Optional[str] = Field(None, min_length=1, max_length=20)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    apparatus_type: Optional[str] = Field(None, max_length=50)
+    min_staffing: Optional[int] = Field(None, ge=1, le=50)
+    positions: Optional[List[str]] = None
+
+
+class BasicApparatusResponse(BaseModel):
+    """Schema for basic apparatus response"""
+    id: UUID
+    organization_id: UUID
+    unit_number: str
+    name: str
+    apparatus_type: str
+    min_staffing: Optional[int] = None
+    positions: Optional[List[str]] = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# Shift Compliance Schemas
+# ============================================
+
+class MemberComplianceRecord(BaseModel):
+    """Per-member compliance status for a single requirement"""
+    user_id: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    rank: Optional[str] = None
+    completed_value: float
+    percentage: float
+    compliant: bool
+    shift_count: int
+    total_hours: float
+
+
+class RequirementComplianceSummary(BaseModel):
+    """Compliance summary for a single shift/hours requirement"""
+    requirement_id: str
+    requirement_name: str
+    requirement_type: str
+    required_value: float
+    frequency: str
+    period_start: str
+    period_end: str
+    members: List[MemberComplianceRecord]
+    total_members: int
+    compliant_count: int
+    non_compliant_count: int
+    compliance_rate: float
+
+
+class ShiftComplianceResponse(BaseModel):
+    """Response for shift compliance endpoint"""
+    requirements: List[RequirementComplianceSummary]
+    reference_date: str
+    total_requirements: int

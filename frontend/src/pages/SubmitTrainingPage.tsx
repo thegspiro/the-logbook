@@ -14,8 +14,6 @@ import {
   Info,
 } from 'lucide-react';
 import { trainingSubmissionService, trainingService } from '../services/api';
-import { useTimezone } from '../hooks/useTimezone';
-import { getTodayLocalDate } from '../utils/dateFormatting';
 import type {
   TrainingSubmission,
   TrainingSubmissionCreate,
@@ -57,6 +55,24 @@ const StatusBadge: React.FC<{ status: SubmissionStatus }> = ({ status }) => {
 
 // ==================== Submission Form ====================
 
+/** Calculate the hour difference between two datetime-local strings */
+function calcHours(start: string, end: string): number {
+  if (!start || !end) return 0;
+  const diff = new Date(end).getTime() - new Date(start).getTime();
+  if (diff <= 0) return 0;
+  return Math.round((diff / (1000 * 60 * 60)) * 100) / 100; // round to 2 decimals
+}
+
+/** Format a number of hours into a readable label like "2h 30m" */
+function formatHours(h: number): string {
+  if (h <= 0) return '0h';
+  const hrs = Math.floor(h);
+  const mins = Math.round((h - hrs) * 60);
+  if (mins === 0) return `${hrs}h`;
+  if (hrs === 0) return `${mins}m`;
+  return `${hrs}h ${mins}m`;
+}
+
 const SubmissionForm: React.FC<{
   config: SelfReportConfig;
   categories: TrainingCategory[];
@@ -64,7 +80,6 @@ const SubmissionForm: React.FC<{
   editSubmission?: TrainingSubmission | null;
   onCancelEdit?: () => void;
 }> = ({ config, categories, onSuccess, editSubmission, onCancelEdit }) => {
-  const tz = useTimezone();
   const isEdit = !!editSubmission;
   const [formData, setFormData] = useState<TrainingSubmissionCreate>({
     course_name: '',
@@ -72,8 +87,13 @@ const SubmissionForm: React.FC<{
     completion_date: '',
     hours_completed: 0,
   });
+  // Start/end datetime state (drives the hours calculation)
+  const [startDatetime, setStartDatetime] = useState('');
+  const [endDatetime, setEndDatetime] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  const calculatedHours = calcHours(startDatetime, endDatetime);
 
   useEffect(() => {
     if (editSubmission) {
@@ -84,7 +104,6 @@ const SubmissionForm: React.FC<{
         description: editSubmission.description,
         completion_date: editSubmission.completion_date,
         hours_completed: editSubmission.hours_completed,
-        credit_hours: editSubmission.credit_hours,
         instructor: editSubmission.instructor,
         location: editSubmission.location,
         certification_number: editSubmission.certification_number,
@@ -92,6 +111,16 @@ const SubmissionForm: React.FC<{
         expiration_date: editSubmission.expiration_date,
         category_id: editSubmission.category_id,
       });
+      // Reconstruct start/end datetimes from completion_date + hours
+      if (editSubmission.completion_date && editSubmission.hours_completed) {
+        const startDt = `${editSubmission.completion_date}T09:00`;
+        const endMs = new Date(startDt).getTime() + editSubmission.hours_completed * 60 * 60 * 1000;
+        const endDt = new Date(endMs);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const endStr = `${endDt.getFullYear()}-${pad(endDt.getMonth() + 1)}-${pad(endDt.getDate())}T${pad(endDt.getHours())}:${pad(endDt.getMinutes())}`;
+        setStartDatetime(startDt);
+        setEndDatetime(endStr);
+      }
     }
   }, [editSubmission]);
 
@@ -105,9 +134,30 @@ const SubmissionForm: React.FC<{
     setIsSubmitting(true);
     setError('');
 
+    // Derive completion_date and hours from the datetime pickers
+    const hours = calcHours(startDatetime, endDatetime);
+    if (!startDatetime || !endDatetime || hours <= 0) {
+      setError('Please provide valid start and end times (end must be after start).');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validate max hours
+    if (config.max_hours_per_submission && hours > config.max_hours_per_submission) {
+      setError(`Hours (${hours}) exceed maximum of ${config.max_hours_per_submission} per submission.`);
+      setIsSubmitting(false);
+      return;
+    }
+
+    const completionDate = startDatetime.split('T')[0]; // YYYY-MM-DD
+
     try {
-      // Credit hours = hours completed (same concept for department training)
-      const submitData = { ...formData, credit_hours: formData.hours_completed };
+      const submitData = {
+        ...formData,
+        completion_date: completionDate,
+        hours_completed: hours,
+        credit_hours: hours, // credit hours = hours (unified)
+      };
       if (isEdit && editSubmission) {
         await trainingSubmissionService.updateSubmission(editSubmission.id, submitData);
         toast.success('Submission updated');
@@ -123,6 +173,8 @@ const SubmissionForm: React.FC<{
           completion_date: '',
           hours_completed: 0,
         });
+        setStartDatetime('');
+        setEndDatetime('');
       }
     } catch (err: unknown) {
       const msg =
@@ -175,85 +227,88 @@ const SubmissionForm: React.FC<{
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Training type */}
-        {isFieldVisible('training_type') && (
-          <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              {fieldLabel('training_type', 'Training Type')} {isFieldRequired('training_type') && <span className="text-red-700 dark:text-red-400">*</span>}
-            </label>
-            <select
-              value={formData.training_type}
-              onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              required={isFieldRequired('training_type')}
-            >
-              {allowedTypes.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-        )}
+      {/* Training type */}
+      {isFieldVisible('training_type') && (
+        <div>
+          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+            {fieldLabel('training_type', 'Training Type')} {isFieldRequired('training_type') && <span className="text-red-700 dark:text-red-400">*</span>}
+          </label>
+          <select
+            value={formData.training_type}
+            onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            required={isFieldRequired('training_type')}
+          >
+            {allowedTypes.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
-        {/* Completion date */}
-        {isFieldVisible('completion_date') && (
-          <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              {fieldLabel('completion_date', 'Date Completed')} {isFieldRequired('completion_date') && <span className="text-red-700 dark:text-red-400">*</span>}
-            </label>
-            <input
-              type="date"
-              value={formData.completion_date}
-              onChange={(e) => setFormData({ ...formData, completion_date: e.target.value })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              required={isFieldRequired('completion_date')}
-              max={getTodayLocalDate(tz)}
-            />
-          </div>
-        )}
+      {/* Start / End datetime pickers + calculated hours */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+            Start Date & Time <span className="text-red-700 dark:text-red-400">*</span>
+          </label>
+          <input
+            type="datetime-local"
+            step="900"
+            value={startDatetime}
+            onChange={(e) => {
+              const val = e.target.value;
+              setStartDatetime(val);
+              // Auto-populate end datetime to start + 1 hour if end is empty or before new start
+              if (val) {
+                const startMs = new Date(val).getTime();
+                const endMs = startMs + 60 * 60 * 1000; // +1 hour
+                const endDt = new Date(endMs);
+                const pad = (n: number) => String(n).padStart(2, '0');
+                const autoEnd = `${endDt.getFullYear()}-${pad(endDt.getMonth() + 1)}-${pad(endDt.getDate())}T${pad(endDt.getHours())}:${pad(endDt.getMinutes())}`;
+                if (!endDatetime || new Date(endDatetime).getTime() <= startMs) {
+                  setEndDatetime(autoEnd);
+                }
+              }
+            }}
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+            End Date & Time <span className="text-red-700 dark:text-red-400">*</span>
+          </label>
+          <input
+            type="datetime-local"
+            step="900"
+            value={endDatetime}
+            onChange={(e) => setEndDatetime(e.target.value)}
+            min={startDatetime || undefined}
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            required
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Hours completed */}
-        {isFieldVisible('hours_completed') && (
-          <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              {fieldLabel('hours_completed', 'Hours Completed')} {isFieldRequired('hours_completed') && <span className="text-red-700 dark:text-red-400">*</span>}
-              {config.max_hours_per_submission && (
-                <span className="text-theme-text-muted text-xs ml-1">(max {config.max_hours_per_submission})</span>
-              )}
-            </label>
-            <input
-              type="number"
-              value={formData.hours_completed || ''}
-              onChange={(e) => setFormData({ ...formData, hours_completed: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              required={isFieldRequired('hours_completed')}
-              min={0.5}
-              step={0.5}
-              max={config.max_hours_per_submission || undefined}
-            />
-          </div>
-        )}
-
-        {/* Credit hours */}
-        {isFieldVisible('credit_hours') && (
-          <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              {fieldLabel('credit_hours', 'Credit Hours')} {isFieldRequired('credit_hours') && <span className="text-red-700 dark:text-red-400">*</span>}
-            </label>
-            <input
-              type="number"
-              value={formData.credit_hours || ''}
-              onChange={(e) => setFormData({ ...formData, credit_hours: parseFloat(e.target.value) || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              required={isFieldRequired('credit_hours')}
-              min={0}
-              step={0.5}
-            />
-          </div>
-        )}
-      </div>
+      {/* Calculated hours display */}
+      {(startDatetime && endDatetime) && (
+        <div className={`flex items-center space-x-2 rounded-lg p-3 text-sm ${
+          calculatedHours > 0
+            ? 'bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-400'
+            : 'bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400'
+        }`}>
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span>
+            {calculatedHours > 0
+              ? `Training Hours: ${formatHours(calculatedHours)} (${calculatedHours} hours)`
+              : 'End time must be after start time'}
+          </span>
+          {config.max_hours_per_submission && calculatedHours > config.max_hours_per_submission && (
+            <span className="text-red-700 dark:text-red-400 ml-2">(exceeds max of {config.max_hours_per_submission}h)</span>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Instructor */}
@@ -358,6 +413,22 @@ const SubmissionForm: React.FC<{
             />
           </div>
         )}
+
+        {/* Expiration Date */}
+        {isFieldVisible('expiration_date') && (
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('expiration_date', 'Expiration Date')} {isFieldRequired('expiration_date') && <span className="text-red-700 dark:text-red-400">*</span>}
+            </label>
+            <input
+              type="date"
+              value={formData.expiration_date || ''}
+              onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value || undefined })}
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              required={isFieldRequired('expiration_date')}
+            />
+          </div>
+        )}
       </div>
 
       {/* Buttons */}
@@ -399,10 +470,12 @@ const SubmitTrainingPage: React.FC = () => {
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [submissions, setSubmissions] = useState<TrainingSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editingSubmission, setEditingSubmission] = useState<TrainingSubmission | null>(null);
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [configData, categoriesData, submissionsData] = await Promise.all([
         trainingSubmissionService.getConfig(),
@@ -413,6 +486,7 @@ const SubmitTrainingPage: React.FC = () => {
       setCategories(categoriesData);
       setSubmissions(submissionsData);
     } catch (_error) {
+      setLoadError('Failed to load submission form. Please try again.');
       toast.error('Failed to load submission form');
     } finally {
       setLoading(false);
@@ -432,12 +506,25 @@ const SubmitTrainingPage: React.FC = () => {
     }
   };
 
-  if (loading || !config) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
           <p className="text-theme-text-muted mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError || !config) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{loadError || 'Unable to load configuration.'}</p>
+          <button onClick={loadData} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+            Try Again
+          </button>
         </div>
       </div>
     );

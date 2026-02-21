@@ -14,7 +14,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
   const percentage = Math.round((currentStep / totalSteps) * 100);
 
   return (
-    <div className={className}>
+    <div className={`max-w-2xl mx-auto w-full ${className}`}>
       <div className="flex items-center justify-between text-sm text-theme-text-muted mb-2">
         <span>Setup Progress</span>
         <span>

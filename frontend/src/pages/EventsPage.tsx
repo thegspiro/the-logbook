@@ -78,9 +78,9 @@ export const EventsPage: React.FC = () => {
     <div className="min-h-screen">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-theme-text-primary">Events</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-theme-text-primary">Events</h1>
           <p className="mt-1 text-sm text-theme-text-secondary">
             Department events, meetings, training sessions, and more
           </p>
@@ -88,7 +88,7 @@ export const EventsPage: React.FC = () => {
         {canManage && (
           <div className="flex items-center gap-3">
             <Link
-              to="/events/settings"
+              to="/events/admin"
               className="inline-flex items-center px-3 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               title="Module Settings"
             >
@@ -111,8 +111,8 @@ export const EventsPage: React.FC = () => {
       </div>
 
       {/* Filter Tabs */}
-      <div className="border-b border-theme-surface-border mb-6">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+      <div className="border-b border-theme-surface-border mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-thin pb-px" aria-label="Tabs">
           {['all', 'business_meeting', 'public_education', 'training', 'social', 'fundraiser', 'ceremony', 'other'].map((filter) => (
             <button
               key={filter}
@@ -121,7 +121,7 @@ export const EventsPage: React.FC = () => {
                 typeFilter === filter
                   ? 'border-red-500 text-red-700 dark:text-red-400'
                   : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              } whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 font-medium text-sm flex-shrink-0`}
             >
               {filter === 'all' ? 'All Events' : getEventTypeLabel(filter as EventType)}
             </button>

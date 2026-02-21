@@ -2,6 +2,16 @@
 Permission System
 
 Defines the permission taxonomy and constants for the application.
+
+Terminology
+-----------
+- **Position**: A corporate/organisational position that carries
+  permissions (e.g., President, Treasurer, IT Manager).
+- **Operational Rank**: A fire-service rank (e.g., Fire Chief, Captain).
+  Ranks carry *default* permissions that are combined with position
+  permissions at runtime.
+- **Membership Type**: A classification with *no* permissions
+  (e.g., Active, Retired, Honorary, Administrative).
 """
 
 from typing import Dict, List
@@ -12,7 +22,7 @@ class PermissionCategory(str, Enum):
     """Categories of permissions"""
     ADMIN = "admin"
     USERS = "users"
-    ROLES = "roles"
+    POSITIONS = "positions"
     ORGANIZATION = "organization"
     SETTINGS = "settings"
     MEMBERS = "members"
@@ -35,6 +45,7 @@ class PermissionCategory(str, Enum):
     INTEGRATIONS = "integrations"
     NOTIFICATIONS = "notifications"
     REPORTS = "reports"
+    PROSPECTIVE_MEMBERS = "prospective_members"
 
 
 class Permission:
@@ -57,22 +68,25 @@ USERS_CREATE = Permission("users.create", "Create new users", PermissionCategory
 USERS_EDIT = Permission("users.edit", "Edit user information", PermissionCategory.USERS)
 USERS_DELETE = Permission("users.delete", "Delete users", PermissionCategory.USERS)
 USERS_VIEW_CONTACT = Permission("users.view_contact", "View user contact information", PermissionCategory.USERS)
-USERS_UPDATE_ROLES = Permission("users.update_roles", "Update user roles", PermissionCategory.USERS)
+USERS_UPDATE_POSITIONS = Permission("users.update_positions", "Update user positions", PermissionCategory.USERS)
 
 MEMBERS_VIEW = Permission("members.view", "View member list", PermissionCategory.MEMBERS)
 MEMBERS_MANAGE = Permission("members.manage", "Manage member profiles", PermissionCategory.MEMBERS)
-MEMBERS_ASSIGN_ROLES = Permission("members.assign_roles", "Assign roles to members", PermissionCategory.MEMBERS)
+MEMBERS_ASSIGN_POSITIONS = Permission("members.assign_positions", "Assign positions to members", PermissionCategory.MEMBERS)
+
+PROSPECTIVE_MEMBERS_VIEW = Permission("prospective_members.view", "View prospective member pipeline", PermissionCategory.PROSPECTIVE_MEMBERS)
+PROSPECTIVE_MEMBERS_MANAGE = Permission("prospective_members.manage", "Manage prospective members and pipeline", PermissionCategory.PROSPECTIVE_MEMBERS)
 
 # ============================================
-# Role Management Permissions
+# Position Management Permissions
 # ============================================
 
-ROLES_VIEW = Permission("roles.view", "View roles", PermissionCategory.ROLES)
-ROLES_CREATE = Permission("roles.create", "Create new roles", PermissionCategory.ROLES)
-ROLES_EDIT = Permission("roles.edit", "Edit roles", PermissionCategory.ROLES)
-ROLES_UPDATE = Permission("roles.update", "Update roles", PermissionCategory.ROLES)
-ROLES_DELETE = Permission("roles.delete", "Delete roles", PermissionCategory.ROLES)
-ROLES_MANAGE_PERMISSIONS = Permission("roles.manage_permissions", "Manage role permissions", PermissionCategory.ROLES)
+POSITIONS_VIEW = Permission("positions.view", "View positions", PermissionCategory.POSITIONS)
+POSITIONS_CREATE = Permission("positions.create", "Create new positions", PermissionCategory.POSITIONS)
+POSITIONS_EDIT = Permission("positions.edit", "Edit positions", PermissionCategory.POSITIONS)
+POSITIONS_UPDATE = Permission("positions.update", "Update positions", PermissionCategory.POSITIONS)
+POSITIONS_DELETE = Permission("positions.delete", "Delete positions", PermissionCategory.POSITIONS)
+POSITIONS_MANAGE_PERMISSIONS = Permission("positions.manage_permissions", "Manage position permissions", PermissionCategory.POSITIONS)
 
 # ============================================
 # Organization & Settings Permissions
@@ -84,6 +98,7 @@ ORGANIZATION_UPDATE_SETTINGS = Permission("organization.update_settings", "Updat
 
 SETTINGS_VIEW = Permission("settings.view", "View settings", PermissionCategory.SETTINGS)
 SETTINGS_EDIT = Permission("settings.edit", "Edit settings", PermissionCategory.SETTINGS)
+SETTINGS_MANAGE = Permission("settings.manage", "Full settings and admin management", PermissionCategory.SETTINGS)
 SETTINGS_MANAGE_CONTACT_VISIBILITY = Permission("settings.manage_contact_visibility", "Manage contact info visibility", PermissionCategory.SETTINGS)
 
 # ============================================
@@ -201,18 +216,18 @@ ALL_PERMISSIONS: List[Permission] = [
     USERS_EDIT,
     USERS_DELETE,
     USERS_VIEW_CONTACT,
-    USERS_UPDATE_ROLES,
+    USERS_UPDATE_POSITIONS,
     MEMBERS_VIEW,
     MEMBERS_MANAGE,
-    MEMBERS_ASSIGN_ROLES,
+    MEMBERS_ASSIGN_POSITIONS,
 
-    # Roles
-    ROLES_VIEW,
-    ROLES_CREATE,
-    ROLES_EDIT,
-    ROLES_UPDATE,
-    ROLES_DELETE,
-    ROLES_MANAGE_PERMISSIONS,
+    # Positions
+    POSITIONS_VIEW,
+    POSITIONS_CREATE,
+    POSITIONS_EDIT,
+    POSITIONS_UPDATE,
+    POSITIONS_DELETE,
+    POSITIONS_MANAGE_PERMISSIONS,
 
     # Organization & Settings
     ORGANIZATION_VIEW,
@@ -220,6 +235,7 @@ ALL_PERMISSIONS: List[Permission] = [
     ORGANIZATION_UPDATE_SETTINGS,
     SETTINGS_VIEW,
     SETTINGS_EDIT,
+    SETTINGS_MANAGE,
     SETTINGS_MANAGE_CONTACT_VISIBILITY,
 
     # Modules
@@ -316,7 +332,7 @@ def get_all_permissions() -> List[str]:
 
 def get_permissions_by_category() -> Dict[str, List[Permission]]:
     """Get permissions grouped by category"""
-    categorized = {}
+    categorized: Dict[str, List[Permission]] = {}
     for permission in ALL_PERMISSIONS:
         category = permission.category.value
         if category not in categorized:
@@ -338,188 +354,423 @@ def get_permission_details() -> List[Dict[str, str]]:
 
 
 # ============================================
-# Default Role Definitions
+# Backward-compatible permission name aliases
+# ============================================
+# During migration, code that references the old "roles.*" permission
+# names will still work via these aliases.  The canonical names are
+# now "positions.*".
+
+ROLES_VIEW = POSITIONS_VIEW
+ROLES_CREATE = POSITIONS_CREATE
+ROLES_EDIT = POSITIONS_EDIT
+ROLES_UPDATE = POSITIONS_UPDATE
+ROLES_DELETE = POSITIONS_DELETE
+ROLES_MANAGE_PERMISSIONS = POSITIONS_MANAGE_PERMISSIONS
+USERS_UPDATE_ROLES = USERS_UPDATE_POSITIONS
+MEMBERS_ASSIGN_ROLES = MEMBERS_ASSIGN_POSITIONS
+
+
+# ============================================
+# Membership Types (no permissions)
 # ============================================
 
-DEFAULT_ROLES = {
-    "it_administrator": {
-        "name": "IT Administrator",
-        "slug": "it_administrator",
-        "description": "Full system access for IT administration",
-        "is_system": True,
-        "priority": 100,
-        "permissions": ["*"],  # Wildcard grants all current and future permissions
-    },
-    "chief": {
-        "name": "Chief",
-        "slug": "chief",
-        "description": "Fire chief with full administrative access (equal to President)",
-        "is_system": True,
+MEMBERSHIP_TYPES = [
+    {"value": "prospective", "label": "Prospective", "description": "Interested/applying, no department ID or email yet (separate table)"},
+    {"value": "probationary", "label": "Probationary", "description": "Accepted but in trial period"},
+    {"value": "active", "label": "Active / Regular Member", "description": "Full department member"},
+    {"value": "life", "label": "Life Member", "description": "Lifetime membership status"},
+    {"value": "retired", "label": "Retired", "description": "No longer active duty"},
+    {"value": "honorary", "label": "Honorary Member", "description": "Ceremonial/recognition membership"},
+    {"value": "administrative", "label": "Administrative", "description": "Organisational/clerical classification, no special permissions"},
+]
+
+
+# ============================================
+# Operational Rank Definitions (with default permissions)
+# ============================================
+# Each rank carries default permissions that are combined with the
+# member's position permissions at runtime.  These are NOT positions —
+# they are stored in User.rank (one per member).
+
+_LEADERSHIP_VIEW_PERMISSIONS = [
+    USERS_VIEW.name,
+    USERS_VIEW_CONTACT.name,
+    MEMBERS_VIEW.name,
+    POSITIONS_VIEW.name,
+    ORGANIZATION_VIEW.name,
+    SETTINGS_VIEW.name,
+    TRAINING_VIEW.name,
+    TRAINING_VIEW_ALL.name,
+    COMPLIANCE_VIEW.name,
+    SCHEDULING_VIEW.name,
+    INVENTORY_VIEW.name,
+    MEETINGS_VIEW.name,
+    ELECTIONS_VIEW.name,
+    FUNDRAISING_VIEW.name,
+    AUDIT_VIEW.name,
+    EVENTS_VIEW.name,
+    LOCATIONS_VIEW.name,
+    FORMS_VIEW.name,
+    MINUTES_VIEW.name,
+    DOCUMENTS_VIEW.name,
+    APPARATUS_VIEW.name,
+    FACILITIES_VIEW.name,
+    ANALYTICS_VIEW.name,
+    NOTIFICATIONS_VIEW.name,
+    REPORTS_VIEW.name,
+    PROSPECTIVE_MEMBERS_VIEW.name,
+]
+
+OPERATIONAL_RANKS: Dict[str, dict] = {
+    "fire_chief": {
+        "label": "Fire Chief",
         "priority": 95,
-        "permissions": [
-            USERS_VIEW.name,
+        "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS + [
+            USERS_CREATE.name,
             USERS_EDIT.name,
-            USERS_VIEW_CONTACT.name,
-            USERS_UPDATE_ROLES.name,
-            MEMBERS_VIEW.name,
+            USERS_DELETE.name,
+            USERS_UPDATE_POSITIONS.name,
             MEMBERS_MANAGE.name,
-            MEMBERS_ASSIGN_ROLES.name,
-            ROLES_VIEW.name,
-            ROLES_CREATE.name,
-            ROLES_EDIT.name,
-            ROLES_UPDATE.name,
-            ROLES_MANAGE_PERMISSIONS.name,
-            ORGANIZATION_VIEW.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
+            MEMBERS_ASSIGN_POSITIONS.name,
+            MEMBERS_CREATE.name,
+            POSITIONS_CREATE.name,
+            POSITIONS_EDIT.name,
+            POSITIONS_UPDATE.name,
+            POSITIONS_DELETE.name,
+            POSITIONS_MANAGE_PERMISSIONS.name,
             ORGANIZATION_EDIT.name,
             ORGANIZATION_UPDATE_SETTINGS.name,
-            SETTINGS_VIEW.name,
             SETTINGS_EDIT.name,
+            SETTINGS_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
-            TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
-            COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
-            SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
-            INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
-            MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
-            FUNDRAISING_VIEW.name,
+            ELECTIONS_MANAGE.name,
             FUNDRAISING_MANAGE.name,
-            AUDIT_VIEW.name,
             AUDIT_EXPORT.name,
-            EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
-            LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
             LOCATIONS_DELETE.name,
             LOCATIONS_MANAGE.name,
-            FORMS_VIEW.name,
             FORMS_MANAGE.name,
-            MINUTES_VIEW.name,
             MINUTES_MANAGE.name,
-            DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
-            APPARATUS_VIEW.name,
             APPARATUS_CREATE.name,
             APPARATUS_EDIT.name,
             APPARATUS_DELETE.name,
             APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
-            FACILITIES_VIEW.name,
             FACILITIES_CREATE.name,
             FACILITIES_EDIT.name,
             FACILITIES_DELETE.name,
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
-            ANALYTICS_VIEW.name,
             INTEGRATIONS_MANAGE.name,
-            NOTIFICATIONS_VIEW.name,
             NOTIFICATIONS_MANAGE.name,
-            REPORTS_VIEW.name,
-            MEMBERS_CREATE.name,
-            TRAINING_VIEW_ALL.name,
+            ADMIN_ACCESS.name,
         ],
+    },
+    "deputy_chief": {
+        "label": "Deputy Chief",
+        "priority": 90,
+        "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS + [
+            USERS_CREATE.name,
+            USERS_EDIT.name,
+            USERS_UPDATE_POSITIONS.name,
+            MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
+            MEMBERS_ASSIGN_POSITIONS.name,
+            MEMBERS_CREATE.name,
+            TRAINING_MANAGE.name,
+            COMPLIANCE_MANAGE.name,
+            SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
+            INVENTORY_MANAGE.name,
+            MEETINGS_MANAGE.name,
+            ELECTIONS_MANAGE.name,
+            FUNDRAISING_MANAGE.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_DELETE.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_CREATE.name,
+            LOCATIONS_EDIT.name,
+            LOCATIONS_DELETE.name,
+            LOCATIONS_MANAGE.name,
+            FORMS_MANAGE.name,
+            MINUTES_MANAGE.name,
+            DOCUMENTS_MANAGE.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_DELETE.name,
+            APPARATUS_MAINTENANCE.name,
+            APPARATUS_MANAGE.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_DELETE.name,
+            FACILITIES_MAINTENANCE.name,
+            FACILITIES_MANAGE.name,
+            INTEGRATIONS_MANAGE.name,
+            NOTIFICATIONS_MANAGE.name,
+        ],
+    },
+    "assistant_chief": {
+        "label": "Assistant Chief",
+        "priority": 85,
+        "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS + [
+            USERS_CREATE.name,
+            USERS_EDIT.name,
+            USERS_UPDATE_POSITIONS.name,
+            MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
+            MEMBERS_ASSIGN_POSITIONS.name,
+            MEMBERS_CREATE.name,
+            TRAINING_MANAGE.name,
+            COMPLIANCE_MANAGE.name,
+            SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
+            INVENTORY_MANAGE.name,
+            MEETINGS_MANAGE.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_CREATE.name,
+            LOCATIONS_EDIT.name,
+            LOCATIONS_MANAGE.name,
+            FORMS_MANAGE.name,
+            MINUTES_MANAGE.name,
+            DOCUMENTS_MANAGE.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_MAINTENANCE.name,
+            APPARATUS_MANAGE.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_MAINTENANCE.name,
+            FACILITIES_MANAGE.name,
+            NOTIFICATIONS_MANAGE.name,
+        ],
+    },
+    "captain": {
+        "label": "Captain",
+        "priority": 70,
+        "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS + [
+            MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
+            TRAINING_MANAGE.name,
+            COMPLIANCE_MANAGE.name,
+            SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_MAINTENANCE.name,
+            FACILITIES_MAINTENANCE.name,
+        ],
+    },
+    "lieutenant": {
+        "label": "Lieutenant",
+        "priority": 60,
+        "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS + [
+            TRAINING_MANAGE.name,
+            SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            APPARATUS_MAINTENANCE.name,
+        ],
+    },
+    "engineer": {
+        "label": "Engineer",
+        "priority": 40,
+        "default_permissions": [
+            MEMBERS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            TRAINING_VIEW.name,
+            COMPLIANCE_VIEW.name,
+            SCHEDULING_VIEW.name,
+            SCHEDULING_SWAP.name,
+            INVENTORY_VIEW.name,
+            MEETINGS_VIEW.name,
+            ELECTIONS_VIEW.name,
+            EVENTS_VIEW.name,
+            FORMS_VIEW.name,
+            MINUTES_VIEW.name,
+            DOCUMENTS_VIEW.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_MAINTENANCE.name,
+            FACILITIES_VIEW.name,
+            LOCATIONS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+        ],
+    },
+    "firefighter": {
+        "label": "Firefighter",
+        "priority": 10,
+        "default_permissions": [
+            MEMBERS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            TRAINING_VIEW.name,
+            COMPLIANCE_VIEW.name,
+            SCHEDULING_VIEW.name,
+            SCHEDULING_SWAP.name,
+            INVENTORY_VIEW.name,
+            MEETINGS_VIEW.name,
+            ELECTIONS_VIEW.name,
+            EVENTS_VIEW.name,
+            FORMS_VIEW.name,
+            MINUTES_VIEW.name,
+            DOCUMENTS_VIEW.name,
+            APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
+            LOCATIONS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+        ],
+    },
+}
+
+
+def get_rank_default_permissions(rank: str) -> List[str]:
+    """
+    Get the default permissions for an operational rank.
+
+    Returns an empty list if the rank is not recognised.
+    """
+    rank_def = OPERATIONAL_RANKS.get(rank)
+    if rank_def:
+        return rank_def["default_permissions"]
+    return []
+
+
+# ============================================
+# Default Position Definitions (Corporate Positions)
+# ============================================
+# These are created for every new organisation during onboarding.
+
+DEFAULT_POSITIONS: Dict[str, dict] = {
+    # ------------------------------------------------------------------
+    # Operational rank positions (mirror OPERATIONAL_RANKS permissions)
+    # ------------------------------------------------------------------
+    "fire_chief": {
+        "name": "Fire Chief",
+        "slug": "fire_chief",
+        "description": "Highest-ranking officer with full operational and administrative authority",
+        "is_system": True,
+        "priority": 95,
+        "permissions": OPERATIONAL_RANKS["fire_chief"]["default_permissions"],
+    },
+    "deputy_chief": {
+        "name": "Deputy Chief",
+        "slug": "deputy_chief",
+        "description": "Second in command, oversees operations in the Chief's absence",
+        "is_system": True,
+        "priority": 90,
+        "permissions": OPERATIONAL_RANKS["deputy_chief"]["default_permissions"],
     },
     "assistant_chief": {
         "name": "Assistant Chief",
         "slug": "assistant_chief",
-        "description": "Assistant fire chief with broad administrative access",
+        "description": "Assists the Chief and Deputy Chief with operational oversight",
         "is_system": True,
-        "priority": 90,
-        "permissions": [
-            USERS_VIEW.name,
-            USERS_EDIT.name,
-            USERS_VIEW_CONTACT.name,
-            USERS_UPDATE_ROLES.name,
-            MEMBERS_VIEW.name,
-            MEMBERS_MANAGE.name,
-            MEMBERS_ASSIGN_ROLES.name,
-            ROLES_VIEW.name,
-            ORGANIZATION_VIEW.name,
-            SETTINGS_VIEW.name,
-            TRAINING_VIEW.name,
-            TRAINING_MANAGE.name,
-            COMPLIANCE_VIEW.name,
-            COMPLIANCE_MANAGE.name,
-            SCHEDULING_VIEW.name,
-            SCHEDULING_MANAGE.name,
-            SCHEDULING_ASSIGN.name,
-            SCHEDULING_SWAP.name,
-            SCHEDULING_REPORT.name,
-            INVENTORY_VIEW.name,
-            INVENTORY_MANAGE.name,
-            MEETINGS_VIEW.name,
-            MEETINGS_MANAGE.name,
-            AUDIT_VIEW.name,
-            EVENTS_VIEW.name,
-            EVENTS_CREATE.name,
-            EVENTS_EDIT.name,
-            EVENTS_MANAGE.name,
-            LOCATIONS_VIEW.name,
-            LOCATIONS_CREATE.name,
-            LOCATIONS_EDIT.name,
-            LOCATIONS_MANAGE.name,
-            FORMS_VIEW.name,
-            FORMS_MANAGE.name,
-            MINUTES_VIEW.name,
-            MINUTES_MANAGE.name,
-            DOCUMENTS_VIEW.name,
-            DOCUMENTS_MANAGE.name,
-            APPARATUS_VIEW.name,
-            APPARATUS_CREATE.name,
-            APPARATUS_EDIT.name,
-            APPARATUS_DELETE.name,
-            APPARATUS_MAINTENANCE.name,
-            APPARATUS_MANAGE.name,
-            FACILITIES_VIEW.name,
-            FACILITIES_CREATE.name,
-            FACILITIES_EDIT.name,
-            FACILITIES_DELETE.name,
-            FACILITIES_MAINTENANCE.name,
-            FACILITIES_MANAGE.name,
-            ANALYTICS_VIEW.name,
-            NOTIFICATIONS_VIEW.name,
-            NOTIFICATIONS_MANAGE.name,
-            REPORTS_VIEW.name,
-            TRAINING_VIEW_ALL.name,
-        ],
+        "priority": 85,
+        "permissions": OPERATIONAL_RANKS["assistant_chief"]["default_permissions"],
+    },
+    "captain": {
+        "name": "Captain",
+        "slug": "captain",
+        "description": "Company officer responsible for crew management and operations",
+        "is_system": True,
+        "priority": 70,
+        "permissions": OPERATIONAL_RANKS["captain"]["default_permissions"],
+    },
+    "lieutenant": {
+        "name": "Lieutenant",
+        "slug": "lieutenant",
+        "description": "Company officer assisting the Captain with crew supervision",
+        "is_system": True,
+        "priority": 60,
+        "permissions": OPERATIONAL_RANKS["lieutenant"]["default_permissions"],
+    },
+    "engineer": {
+        "name": "Engineer / Driver Operator",
+        "slug": "engineer",
+        "description": "Apparatus operator responsible for vehicle operations and maintenance",
+        "is_system": True,
+        "priority": 40,
+        "permissions": OPERATIONAL_RANKS["engineer"]["default_permissions"],
+    },
+    "firefighter": {
+        "name": "Firefighter",
+        "slug": "firefighter",
+        "description": "Line firefighter with standard operational access",
+        "is_system": True,
+        "priority": 15,
+        "permissions": OPERATIONAL_RANKS["firefighter"]["default_permissions"],
+    },
+    # ------------------------------------------------------------------
+    # Corporate / organisational positions
+    # ------------------------------------------------------------------
+    "it_manager": {
+        "name": "IT Manager",
+        "slug": "it_manager",
+        "description": "System Owner – full system access for IT administration",
+        "is_system": True,
+        "priority": 100,
+        "permissions": ["*"],  # Wildcard grants all current and future permissions
     },
     "president": {
         "name": "President",
         "slug": "president",
-        "description": "Organization president with full administrative access (equal to Chief)",
+        "description": "Organisation president with full administrative access",
         "is_system": True,
         "priority": 95,
         "permissions": [
             USERS_VIEW.name,
+            USERS_CREATE.name,
             USERS_EDIT.name,
+            USERS_DELETE.name,
             USERS_VIEW_CONTACT.name,
-            USERS_UPDATE_ROLES.name,
+            USERS_UPDATE_POSITIONS.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
-            MEMBERS_ASSIGN_ROLES.name,
-            ROLES_VIEW.name,
-            ROLES_CREATE.name,
-            ROLES_EDIT.name,
-            ROLES_UPDATE.name,
-            ROLES_MANAGE_PERMISSIONS.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
+            MEMBERS_ASSIGN_POSITIONS.name,
+            MEMBERS_CREATE.name,
+            POSITIONS_VIEW.name,
+            POSITIONS_CREATE.name,
+            POSITIONS_EDIT.name,
+            POSITIONS_UPDATE.name,
+            POSITIONS_DELETE.name,
+            POSITIONS_MANAGE_PERMISSIONS.name,
             ORGANIZATION_VIEW.name,
             ORGANIZATION_EDIT.name,
             ORGANIZATION_UPDATE_SETTINGS.name,
             SETTINGS_VIEW.name,
             SETTINGS_EDIT.name,
+            SETTINGS_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
+            TRAINING_VIEW_ALL.name,
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,
@@ -531,6 +782,8 @@ DEFAULT_ROLES = {
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
+            ELECTIONS_VIEW.name,
+            ELECTIONS_MANAGE.name,
             FUNDRAISING_VIEW.name,
             FUNDRAISING_MANAGE.name,
             AUDIT_VIEW.name,
@@ -568,14 +821,13 @@ DEFAULT_ROLES = {
             NOTIFICATIONS_VIEW.name,
             NOTIFICATIONS_MANAGE.name,
             REPORTS_VIEW.name,
-            MEMBERS_CREATE.name,
-            TRAINING_VIEW_ALL.name,
+            ADMIN_ACCESS.name,
         ],
     },
     "vice_president": {
         "name": "Vice President",
         "slug": "vice_president",
-        "description": "Organization vice president",
+        "description": "Organisation vice president",
         "is_system": True,
         "priority": 80,
         "permissions": [
@@ -583,58 +835,73 @@ DEFAULT_ROLES = {
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
-            MEMBERS_ASSIGN_ROLES.name,
-            ROLES_VIEW.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
+            MEMBERS_ASSIGN_POSITIONS.name,
+            POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
+            TRAINING_VIEW.name,
+            COMPLIANCE_VIEW.name,
+            SCHEDULING_VIEW.name,
+            INVENTORY_VIEW.name,
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
+            ELECTIONS_VIEW.name,
+            ELECTIONS_MANAGE.name,
             FUNDRAISING_VIEW.name,
             FUNDRAISING_MANAGE.name,
+            AUDIT_VIEW.name,
+            EVENTS_VIEW.name,
+            FORMS_VIEW.name,
             MINUTES_VIEW.name,
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
+            ANALYTICS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
         ],
     },
-    "quartermaster": {
-        "name": "Quartermaster",
-        "slug": "quartermaster",
-        "description": "Manages department inventory, equipment, and gear assignments",
+    "treasurer": {
+        "name": "Treasurer",
+        "slug": "treasurer",
+        "description": "Financial oversight, fundraising management, and budget reporting",
         "is_system": True,
-        "priority": 85,
+        "priority": 75,
         "permissions": [
             USERS_VIEW.name,
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
+            POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
-            INVENTORY_VIEW.name,
-            INVENTORY_MANAGE.name,
-            COMPLIANCE_VIEW.name,  # To see equipment certifications
-            APPARATUS_VIEW.name,
-            FACILITIES_VIEW.name,
+            FUNDRAISING_VIEW.name,
+            FUNDRAISING_MANAGE.name,
+            MEETINGS_VIEW.name,
+            DOCUMENTS_VIEW.name,
+            DOCUMENTS_MANAGE.name,
+            REPORTS_VIEW.name,
+            AUDIT_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
         ],
     },
     "secretary": {
         "name": "Secretary",
         "slug": "secretary",
-        "description": "Organization secretary with record-keeping access",
+        "description": "Organisation secretary with record-keeping access",
         "is_system": True,
         "priority": 75,
         "permissions": [
             USERS_VIEW.name,
             USERS_CREATE.name,
             USERS_VIEW_CONTACT.name,
-            USERS_UPDATE_ROLES.name,
+            USERS_UPDATE_POSITIONS.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
-            MEMBERS_ASSIGN_ROLES.name,
-            ROLES_VIEW.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
+            MEMBERS_ASSIGN_POSITIONS.name,
+            POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
@@ -660,47 +927,184 @@ DEFAULT_ROLES = {
             MEMBERS_CREATE.name,
         ],
     },
-    "assistant_secretary": {
-        "name": "Assistant Secretary",
-        "slug": "assistant_secretary",
-        "description": "Assistant to the secretary",
+    "board_of_directors": {
+        "name": "Board of Directors",
+        "slug": "board_of_directors",
+        "description": "Board member with governance oversight",
         "is_system": True,
         "priority": 70,
         "permissions": [
             USERS_VIEW.name,
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
+            POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
             MEETINGS_VIEW.name,
-            MEETINGS_MANAGE.name,
-            COMPLIANCE_VIEW.name,
-            TRAINING_VIEW.name,
+            ELECTIONS_VIEW.name,
+            FUNDRAISING_VIEW.name,
+            AUDIT_VIEW.name,
             MINUTES_VIEW.name,
-            MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
+            REPORTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],
     },
-    "member": {
-        "name": "Member",
-        "slug": "member",
-        "description": "Regular department member",
+    "quartermaster": {
+        "name": "Quartermaster",
+        "slug": "quartermaster",
+        "description": "Manages department inventory, equipment, and gear assignments",
         "is_system": True,
-        "priority": 10,
+        "priority": 85,
         "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            SETTINGS_VIEW.name,
+            INVENTORY_VIEW.name,
+            INVENTORY_MANAGE.name,
+            COMPLIANCE_VIEW.name,
+            APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
+        ],
+    },
+    "public_outreach": {
+        "name": "Public Outreach",
+        "slug": "public_outreach",
+        "description": "Manages public education and outreach events",
+        "is_system": True,
+        "priority": 55,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_VIEW.name,
+            LOCATIONS_CREATE.name,
+            LOCATIONS_EDIT.name,
+            LOCATIONS_MANAGE.name,
+        ],
+    },
+    "communications_officer": {
+        "name": "Communications Officer / PIO",
+        "slug": "communications_officer",
+        "description": "Website, social media, newsletters, and notification management",
+        "is_system": True,
+        "priority": 55,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_VIEW.name,
+            DOCUMENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+            NOTIFICATIONS_MANAGE.name,
+        ],
+    },
+    "historian": {
+        "name": "Historian",
+        "slug": "historian",
+        "description": "Preserves department history, photos, and records",
+        "is_system": True,
+        "priority": 50,
+        "permissions": [
+            USERS_VIEW.name,
             MEMBERS_VIEW.name,
             ORGANIZATION_VIEW.name,
-            TRAINING_VIEW.name,
-            COMPLIANCE_VIEW.name,
-            SCHEDULING_VIEW.name,
-            SCHEDULING_SWAP.name,
             MEETINGS_VIEW.name,
-            EVENTS_VIEW.name,
-            FORMS_VIEW.name,
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
+            DOCUMENTS_MANAGE.name,
+            EVENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+        ],
+    },
+    "apparatus_officer": {
+        "name": "Apparatus Officer",
+        "slug": "apparatus_officer",
+        "description": "Day-to-day fleet tracking, maintenance logging, and equipment checks",
+        "is_system": True,
+        "priority": 50,
+        "permissions": [
+            USERS_VIEW.name,
+            MEMBERS_VIEW.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            INVENTORY_VIEW.name,
+            INVENTORY_MANAGE.name,
+            COMPLIANCE_VIEW.name,
+            LOCATIONS_VIEW.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_MAINTENANCE.name,
+        ],
+    },
+    "membership_committee_chair": {
+        "name": "Membership Committee Chair",
+        "slug": "membership_committee_chair",
+        "description": "Manages member records, applications, and onboarding/offboarding",
+        "is_system": True,
+        "priority": 55,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_CREATE.name,
+            USERS_EDIT.name,
+            USERS_VIEW_CONTACT.name,
+            USERS_UPDATE_POSITIONS.name,
+            MEMBERS_VIEW.name,
+            MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
+            MEMBERS_ASSIGN_POSITIONS.name,
+            MEMBERS_CREATE.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            SETTINGS_VIEW.name,
+            COMPLIANCE_VIEW.name,
+            EVENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+        ],
+    },
+    "safety_officer": {
+        "name": "Safety Officer",
+        "slug": "safety_officer",
+        "description": "Safety compliance, regulatory oversight, and department rule enforcement",
+        "is_system": True,
+        "priority": 65,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            TRAINING_VIEW.name,
+            TRAINING_MANAGE.name,
+            TRAINING_VIEW_ALL.name,
+            COMPLIANCE_VIEW.name,
+            COMPLIANCE_MANAGE.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            INVENTORY_VIEW.name,
+            LOCATIONS_VIEW.name,
+            FORMS_VIEW.name,
+            FORMS_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            DOCUMENTS_MANAGE.name,
+            REPORTS_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
             NOTIFICATIONS_VIEW.name,
@@ -716,11 +1120,14 @@ DEFAULT_ROLES = {
             USERS_VIEW.name,
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
+            POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
+            TRAINING_VIEW_ALL.name,
             COMPLIANCE_VIEW.name,
+            COMPLIANCE_MANAGE.name,
+            SCHEDULING_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
             EVENTS_VIEW.name,
@@ -731,28 +1138,73 @@ DEFAULT_ROLES = {
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
             LOCATIONS_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+            REPORTS_VIEW.name,
         ],
     },
-    "public_outreach_coordinator": {
-        "name": "Public Outreach Coordinator",
-        "slug": "public_outreach_coordinator",
-        "description": "Manages public education and outreach events",
+    "fundraising_chair": {
+        "name": "Fundraising Chair",
+        "slug": "fundraising_chair",
+        "description": "Organises and manages department fundraising activities",
         "is_system": True,
-        "priority": 65,
+        "priority": 55,
         "permissions": [
             USERS_VIEW.name,
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
             ORGANIZATION_VIEW.name,
+            FUNDRAISING_VIEW.name,
+            FUNDRAISING_MANAGE.name,
             EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
-            EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
-            LOCATIONS_CREATE.name,
-            LOCATIONS_EDIT.name,
-            LOCATIONS_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+        ],
+    },
+    "assistant_secretary": {
+        "name": "Assistant Secretary",
+        "slug": "assistant_secretary",
+        "description": "Assists the secretary with records, minutes, and communications",
+        "is_system": True,
+        "priority": 70,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            MEMBERS_MANAGE.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            SETTINGS_VIEW.name,
+            MEETINGS_VIEW.name,
+            MEETINGS_MANAGE.name,
+            EVENTS_VIEW.name,
+            MINUTES_VIEW.name,
+            MINUTES_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            DOCUMENTS_MANAGE.name,
+            NOTIFICATIONS_VIEW.name,
+        ],
+    },
+    "scheduling_officer": {
+        "name": "Scheduling Officer",
+        "slug": "scheduling_officer",
+        "description": "Manages duty rosters and shift scheduling",
+        "is_system": True,
+        "priority": 55,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            SCHEDULING_VIEW.name,
+            SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            EVENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
         ],
     },
     "meeting_hall_coordinator": {
@@ -763,113 +1215,19 @@ DEFAULT_ROLES = {
         "priority": 60,
         "permissions": [
             USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
             ORGANIZATION_VIEW.name,
             EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
+            EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
             LOCATIONS_MANAGE.name,
-        ],
-    },
-    "officers": {
-        "name": "Officers",
-        "slug": "officers",
-        "description": "General officer role with broad operational access",
-        "is_system": True,
-        "priority": 70,
-        "permissions": [
-            USERS_VIEW.name,
-            USERS_EDIT.name,
-            USERS_VIEW_CONTACT.name,
-            MEMBERS_VIEW.name,
-            MEMBERS_MANAGE.name,
-            MEMBERS_ASSIGN_ROLES.name,
-            ROLES_VIEW.name,
-            ORGANIZATION_VIEW.name,
-            SETTINGS_VIEW.name,
-            TRAINING_VIEW.name,
-            COMPLIANCE_VIEW.name,
             SCHEDULING_VIEW.name,
-            SCHEDULING_MANAGE.name,
-            SCHEDULING_ASSIGN.name,
-            SCHEDULING_SWAP.name,
-            SCHEDULING_REPORT.name,
-            INVENTORY_VIEW.name,
-            INVENTORY_MANAGE.name,
-            MEETINGS_VIEW.name,
-            EVENTS_VIEW.name,
-            EVENTS_CREATE.name,
-            EVENTS_EDIT.name,
-            EVENTS_MANAGE.name,
-            LOCATIONS_VIEW.name,
-            FORMS_VIEW.name,
-            FORMS_MANAGE.name,
-            APPARATUS_VIEW.name,
-            FACILITIES_VIEW.name,
-        ],
-    },
-    "apparatus_manager": {
-        "name": "Apparatus Manager",
-        "slug": "apparatus_manager",
-        "description": "Day-to-day fleet tracking, maintenance logging, and equipment checks",
-        "is_system": True,
-        "priority": 50,
-        "permissions": [
-            USERS_VIEW.name,
-            MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
-            ORGANIZATION_VIEW.name,
-            INVENTORY_VIEW.name,
-            INVENTORY_MANAGE.name,
-            COMPLIANCE_VIEW.name,
-            LOCATIONS_VIEW.name,
-            APPARATUS_VIEW.name,
-            APPARATUS_CREATE.name,
-            APPARATUS_EDIT.name,
-            APPARATUS_MAINTENANCE.name,
-        ],
-    },
-    "membership_coordinator": {
-        "name": "Membership Coordinator",
-        "slug": "membership_coordinator",
-        "description": "Manages member records, applications, and onboarding/offboarding",
-        "is_system": True,
-        "priority": 55,
-        "permissions": [
-            USERS_VIEW.name,
-            USERS_CREATE.name,
-            USERS_EDIT.name,
-            USERS_VIEW_CONTACT.name,
-            MEMBERS_VIEW.name,
-            MEMBERS_MANAGE.name,
-            MEMBERS_ASSIGN_ROLES.name,
-            ROLES_VIEW.name,
-            ORGANIZATION_VIEW.name,
-            SETTINGS_VIEW.name,
-            EVENTS_VIEW.name,
-        ],
-    },
-    "communications_officer": {
-        "name": "Communications Officer",
-        "slug": "communications_officer",
-        "description": "Website, social media, newsletters, and notification management",
-        "is_system": True,
-        "priority": 55,
-        "permissions": [
-            USERS_VIEW.name,
-            USERS_VIEW_CONTACT.name,
-            MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
-            ORGANIZATION_VIEW.name,
-            EVENTS_VIEW.name,
-            EVENTS_CREATE.name,
-            EVENTS_EDIT.name,
-            EVENTS_MANAGE.name,
-            LOCATIONS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
         ],
     },
     "facilities_manager": {
@@ -881,114 +1239,68 @@ DEFAULT_ROLES = {
         "permissions": [
             USERS_VIEW.name,
             MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
+            POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
-            COMPLIANCE_VIEW.name,
-            LOCATIONS_VIEW.name,
             FACILITIES_VIEW.name,
             FACILITIES_CREATE.name,
             FACILITIES_EDIT.name,
             FACILITIES_MAINTENANCE.name,
-        ],
-    },
-    "scheduling_officer": {
-        "name": "Scheduling Officer",
-        "slug": "scheduling_officer",
-        "description": "Manages shift schedules, duty rosters, and staffing assignments",
-        "is_system": True,
-        "priority": 55,
-        "permissions": [
-            USERS_VIEW.name,
-            USERS_VIEW_CONTACT.name,
-            MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
-            ORGANIZATION_VIEW.name,
-            SCHEDULING_VIEW.name,
-            SCHEDULING_MANAGE.name,
-            SCHEDULING_ASSIGN.name,
-            SCHEDULING_SWAP.name,
-            SCHEDULING_REPORT.name,
-        ],
-    },
-    "admin": {
-        "name": "Administrator",
-        "slug": "admin",
-        "description": "Full system access for platform administration",
-        "is_system": True,
-        "priority": 100,
-        "permissions": ["*"],  # Wildcard grants all current and future permissions
-    },
-    "treasurer": {
-        "name": "Treasurer",
-        "slug": "treasurer",
-        "description": "Financial oversight, fundraising management, and budget reporting",
-        "is_system": True,
-        "priority": 75,
-        "permissions": [
-            USERS_VIEW.name,
-            USERS_VIEW_CONTACT.name,
-            MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
-            ORGANIZATION_VIEW.name,
-            SETTINGS_VIEW.name,
-            FUNDRAISING_VIEW.name,
-            FUNDRAISING_MANAGE.name,
-            MEETINGS_VIEW.name,
-            DOCUMENTS_VIEW.name,
-            DOCUMENTS_MANAGE.name,
-            REPORTS_VIEW.name,
-            AUDIT_VIEW.name,
+            FACILITIES_MANAGE.name,
+            LOCATIONS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],
     },
-    "safety_officer": {
-        "name": "Safety Officer",
-        "slug": "safety_officer",
-        "description": "Safety compliance, regulatory oversight, and department rule enforcement",
+    "member": {
+        "name": "Member",
+        "slug": "member",
+        "description": "Default position assigned to every department member for baseline access",
         "is_system": True,
-        "priority": 65,
+        "priority": 10,
         "permissions": [
-            USERS_VIEW.name,
-            USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
-            ROLES_VIEW.name,
             ORGANIZATION_VIEW.name,
             TRAINING_VIEW.name,
-            TRAINING_MANAGE.name,
             COMPLIANCE_VIEW.name,
-            COMPLIANCE_MANAGE.name,
-            EVENTS_VIEW.name,
-            EVENTS_CREATE.name,
-            EVENTS_EDIT.name,
+            SCHEDULING_VIEW.name,
+            SCHEDULING_SWAP.name,
             INVENTORY_VIEW.name,
+            MEETINGS_VIEW.name,
+            ELECTIONS_VIEW.name,
+            EVENTS_VIEW.name,
             FORMS_VIEW.name,
-            FORMS_MANAGE.name,
+            MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
-            DOCUMENTS_MANAGE.name,
-            REPORTS_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
+            LOCATIONS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
         ],
     },
 }
 
+# Backward-compatible alias
+DEFAULT_ROLES = DEFAULT_POSITIONS
 
-def get_admin_role_slugs() -> List[str]:
+
+def get_admin_position_slugs() -> List[str]:
     """
-    Get list of role slugs that should have access to the Members admin page
+    Get list of position slugs that should have access to the Members admin page.
     """
     return [
-        "admin",
-        "it_administrator",
-        "chief",
+        "it_manager",
+        "fire_chief",
+        "deputy_chief",
         "assistant_chief",
+        "captain",
         "president",
-        "quartermaster",
         "vice_president",
         "secretary",
-        "assistant_secretary",
-        "officers",
-        "membership_coordinator",
+        "quartermaster",
+        "membership_committee_chair",
     ]
+
+
+# Backward-compatible alias
+get_admin_role_slugs = get_admin_position_slugs

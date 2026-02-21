@@ -17,6 +17,7 @@ import { userService, roleService } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
 import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
+import { validatePasswordStrength } from '../utils/passwordValidation';
 
 type ViewMode = 'by-member' | 'by-role';
 
@@ -32,7 +33,7 @@ interface EditProfileForm {
 }
 
 export const MembersAdminPage: React.FC = () => {
-  const { checkPermission } = useAuthStore();
+  const { checkPermission, user: currentUser } = useAuthStore();
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -60,6 +61,13 @@ export const MembersAdminPage: React.FC = () => {
     station: '',
   });
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // Reset password state
+  const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRoles | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [resetForceChange, setResetForceChange] = useState(true);
+  const [savingReset, setSavingReset] = useState(false);
 
   const canCreateMembers = checkPermission('users.create');
 
@@ -294,12 +302,56 @@ export const MembersAdminPage: React.FC = () => {
     }
   };
 
+  const handleDeleteUser = async (user: UserWithRoles) => {
+    if (!confirm(`Are you sure you want to delete ${user.full_name || user.username}? This action cannot be easily undone.`)) {
+      return;
+    }
+
+    try {
+      setError(null);
+      await userService.deleteUser(user.id);
+      await fetchData();
+    } catch (_err) {
+      setError('Unable to delete the member. Please check your connection and try again.');
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPasswordUser) return;
+
+    if (resetNewPassword !== resetConfirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    const validation = validatePasswordStrength(resetNewPassword);
+    if (!validation.isValid) {
+      setError('Password does not meet strength requirements');
+      return;
+    }
+
+    try {
+      setSavingReset(true);
+      setError(null);
+      await userService.adminResetPassword(resetPasswordUser.id, resetNewPassword, resetForceChange);
+      setResetPasswordUser(null);
+      setResetNewPassword('');
+      setResetConfirmPassword('');
+      setResetForceChange(true);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || 'Unable to reset password. Please try again.');
+    } finally {
+      setSavingReset(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64">
-            <div className="text-slate-400" role="status" aria-live="polite">Loading...</div>
+            <div className="text-theme-text-muted" role="status" aria-live="polite">Loading...</div>
           </div>
         </div>
       </div>
@@ -310,10 +362,10 @@ export const MembersAdminPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
             <div className="flex">
               <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
+                <p className="text-sm text-red-400">{error}</p>
               </div>
             </div>
           </div>
@@ -327,8 +379,8 @@ export const MembersAdminPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-white">Members Administration</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Members Administration</h2>
+          <p className="mt-1 text-sm text-theme-text-muted">
             Manage member roles, permissions, and contact information
           </p>
         </div>
@@ -356,8 +408,8 @@ export const MembersAdminPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <p className="text-sm text-red-400">{error}</p>
         </div>
       )}
 
@@ -370,7 +422,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-member'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-white/10 text-slate-300 border-white/30 hover:bg-white/5'
+                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
             } rounded-l-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Member
@@ -381,7 +433,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-role'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-white/10 text-slate-300 border-white/30 hover:bg-white/5'
+                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
             } rounded-r-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Role
@@ -391,60 +443,60 @@ export const MembersAdminPage: React.FC = () => {
 
       {/* View by Member */}
       {viewMode === 'by-member' && (
-        <div className="bg-white/10 backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
-          <table className="min-w-full divide-y divide-white/10" aria-label="Members and their roles">
-            <thead className="bg-slate-900/50">
+        <div className="bg-theme-surface backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
+          <table className="min-w-full divide-y divide-theme-surface-border" aria-label="Members and their roles">
+            <thead className="bg-theme-surface-secondary">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Member
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Badge
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Roles
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Status
                 </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-theme-surface-border">
               {users.map((user) => (
-                <tr key={user.id} className="hover:bg-white/5">
+                <tr key={user.id} className="hover:bg-theme-surface-hover">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-slate-300 font-medium">
+                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-theme-surface flex items-center justify-center">
+                        <span className="text-theme-text-secondary font-medium">
                           {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                         </span>
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-theme-text-primary">
                           {user.full_name || user.username}
                         </div>
-                        <div className="text-sm text-slate-400">@{user.username}</div>
+                        <div className="text-sm text-theme-text-muted">@{user.username}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                     {user.badge_number || '-'}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
                       {user.roles.length === 0 ? (
-                        <span className="text-sm text-slate-500">No roles</span>
+                        <span className="text-sm text-theme-text-muted">No roles</span>
                       ) : (
                         user.roles.map((role) => (
                           <span
                             key={role.id}
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               role.is_system
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-white/10 text-slate-200'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                : 'bg-theme-surface text-theme-text-secondary'
                             }`}
                           >
                             {role.name}
@@ -464,8 +516,8 @@ export const MembersAdminPage: React.FC = () => {
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
                       }`}
                     >
                       {user.status}
@@ -485,6 +537,22 @@ export const MembersAdminPage: React.FC = () => {
                       >
                         Manage Roles
                       </button>
+                      {currentUser?.id !== user.id && (
+                        <button
+                          onClick={() => setResetPasswordUser(user)}
+                          className="text-yellow-400 hover:text-yellow-300"
+                        >
+                          Reset Password
+                        </button>
+                      )}
+                      {currentUser?.id !== user.id && (
+                        <button
+                          onClick={() => handleDeleteUser(user)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -503,28 +571,28 @@ export const MembersAdminPage: React.FC = () => {
             );
 
             return (
-              <div key={role.id} className="bg-white/10 backdrop-blur-sm shadow sm:rounded-lg">
-                <div className="px-6 py-4 border-b border-white/20">
+              <div key={role.id} className="bg-theme-surface backdrop-blur-sm shadow sm:rounded-lg">
+                <div className="px-6 py-4 border-b border-theme-surface-border">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-medium text-white">{role.name}</h3>
+                        <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
                         {role.is_system && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                             System
                           </span>
                         )}
                       </div>
                       {role.description && (
-                        <p className="mt-1 text-sm text-slate-400">{role.description}</p>
+                        <p className="mt-1 text-sm text-theme-text-muted">{role.description}</p>
                       )}
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-theme-text-muted">
                         {role.permissions.length} permissions • {usersWithRole.length} members
                       </p>
                     </div>
                     <button
                       onClick={() => handleEditMembers(role)}
-                      className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-400 rounded-md hover:bg-white/5"
+                      className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-400 rounded-md hover:bg-theme-surface-hover"
                     >
                       Manage Members
                     </button>
@@ -532,32 +600,32 @@ export const MembersAdminPage: React.FC = () => {
                 </div>
                 <div className="px-6 py-4">
                   {usersWithRole.length === 0 ? (
-                    <p className="text-sm text-slate-500 italic">No members assigned to this role</p>
+                    <p className="text-sm text-theme-text-muted italic">No members assigned to this role</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {usersWithRole.map((user) => (
                         <div
                           key={user.id}
-                          className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg hover:bg-white/10"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-theme-surface-secondary rounded-lg hover:bg-theme-surface-hover"
                         >
                           <div className="flex items-center gap-2">
-                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
-                              <span className="text-xs text-slate-400 font-medium">
+                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
+                              <span className="text-xs text-theme-text-muted font-medium">
                                 {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                               </span>
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-white">
+                              <div className="text-sm font-medium text-theme-text-primary">
                                 {user.full_name || user.username}
                               </div>
                               {user.badge_number && (
-                                <div className="text-xs text-slate-400">#{user.badge_number}</div>
+                                <div className="text-xs text-theme-text-muted">#{user.badge_number}</div>
                               )}
                             </div>
                           </div>
                           <button
                             onClick={() => handleQuickRemoveUser(user.id, role)}
-                            className="ml-2 text-slate-500 hover:text-red-600"
+                            className="ml-2 text-theme-text-muted hover:text-red-600"
                             aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
                           >
                             ×
@@ -576,15 +644,15 @@ export const MembersAdminPage: React.FC = () => {
       {/* Edit Profile Modal */}
       {editingProfile && profileUser && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-profile-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingProfile(false); setProfileUser(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="edit-profile-title" className="text-lg font-medium text-white">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="edit-profile-title" className="text-lg font-medium text-theme-text-primary">
                 Edit Information for {profileUser.full_name || profileUser.username}
               </h3>
             </div>
@@ -593,32 +661,32 @@ export const MembersAdminPage: React.FC = () => {
               {/* Name Fields */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">First Name</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">First Name</label>
                   <input
                     type="text"
                     value={profileForm.first_name}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Middle Name</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Middle Name</label>
                   <input
                     type="text"
                     value={profileForm.middle_name}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, middle_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Last Name</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Last Name</label>
                   <input
                     type="text"
                     value={profileForm.last_name}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
@@ -627,22 +695,22 @@ export const MembersAdminPage: React.FC = () => {
               {/* Contact Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Phone</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Phone</label>
                   <input
                     type="tel"
                     value={profileForm.phone}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Mobile</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Mobile</label>
                   <input
                     type="tel"
                     value={profileForm.mobile}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, mobile: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
@@ -651,32 +719,32 @@ export const MembersAdminPage: React.FC = () => {
               {/* Department Fields */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Badge #</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Badge #</label>
                   <input
                     type="text"
                     value={profileForm.badge_number}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, badge_number: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Rank</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Rank</label>
                   <input
                     type="text"
                     value={profileForm.rank}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Station</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Station</label>
                   <input
                     type="text"
                     value={profileForm.station}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, station: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
@@ -687,7 +755,7 @@ export const MembersAdminPage: React.FC = () => {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingProfile(false);
@@ -695,7 +763,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={savingProfile}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -711,24 +779,113 @@ export const MembersAdminPage: React.FC = () => {
         </div>
       )}
 
+      {/* Reset Password Modal */}
+      {resetPasswordUser && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-password-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setResetPasswordUser(null); setResetNewPassword(''); setResetConfirmPassword(''); setError(null); } }}
+        >
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="reset-password-title" className="text-lg font-medium text-theme-text-primary">
+                Reset Password for {resetPasswordUser.full_name || resetPasswordUser.username}
+              </h3>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={resetNewPassword}
+                  onChange={(e) => setResetNewPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Minimum 12 characters"
+                  disabled={savingReset}
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  value={resetConfirmPassword}
+                  onChange={(e) => setResetConfirmPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Re-enter password"
+                  disabled={savingReset}
+                  autoComplete="new-password"
+                />
+                {resetConfirmPassword && resetNewPassword !== resetConfirmPassword && (
+                  <p className="mt-1 text-xs text-red-400">Passwords do not match</p>
+                )}
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={resetForceChange}
+                  onChange={(e) => setResetForceChange(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
+                  disabled={savingReset}
+                />
+                <span className="text-sm text-theme-text-secondary">
+                  Require user to change password on next login
+                </span>
+              </label>
+
+              {error && (
+                <div className="text-sm text-red-400">{error}</div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setResetPasswordUser(null);
+                  setResetNewPassword('');
+                  setResetConfirmPassword('');
+                  setError(null);
+                }}
+                disabled={savingReset}
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetPassword}
+                disabled={savingReset || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
+                className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
+              >
+                {savingReset ? 'Resetting...' : 'Reset Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Role Assignment Modal (for View by Member) */}
       {editingRoles && selectedUser && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="manage-roles-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingRoles(false); setSelectedUser(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="manage-roles-title" className="text-lg font-medium text-white">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="manage-roles-title" className="text-lg font-medium text-theme-text-primary">
                 Manage Roles for {selectedUser.full_name || selectedUser.username}
               </h3>
             </div>
 
             <div className="px-6 py-4">
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-theme-text-muted mb-4">
                 Select the roles to assign to this member
               </p>
 
@@ -736,27 +893,27 @@ export const MembersAdminPage: React.FC = () => {
                 {roles.map((role) => (
                   <label
                     key={role.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-white/5 cursor-pointer"
+                    className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedRoleIds.includes(role.id)}
                       onChange={() => handleToggleRole(role.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                     />
                     <div className="ml-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-white">
+                        <span className="text-sm font-medium text-theme-text-primary">
                           {role.name}
                         </span>
                         {role.is_system && (
-                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                          <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 px-2 py-0.5 rounded">
                             System
                           </span>
                         )}
                       </div>
                       {role.description && (
-                        <p className="text-xs text-slate-400 mt-1">{role.description}</p>
+                        <p className="text-xs text-theme-text-muted mt-1">{role.description}</p>
                       )}
                     </div>
                   </label>
@@ -764,7 +921,7 @@ export const MembersAdminPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingRoles(false);
@@ -772,7 +929,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -791,21 +948,21 @@ export const MembersAdminPage: React.FC = () => {
       {/* Member Assignment Modal (for View by Role) */}
       {editingMembers && selectedRole && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="manage-members-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingMembers(false); setSelectedRole(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="manage-members-title" className="text-lg font-medium text-white">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="manage-members-title" className="text-lg font-medium text-theme-text-primary">
                 Manage Members for {selectedRole.name}
               </h3>
             </div>
 
             <div className="px-6 py-4">
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-theme-text-muted mb-4">
                 Select the members to assign to this role
               </p>
 
@@ -813,25 +970,25 @@ export const MembersAdminPage: React.FC = () => {
                 {users.map((user) => (
                   <label
                     key={user.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-white/5 cursor-pointer"
+                    className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedUserIds.includes(user.id)}
                       onChange={() => handleToggleUser(user.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                     />
                     <div className="ml-3 flex items-center gap-2">
-                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-xs text-slate-400 font-medium">
+                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
+                        <span className="text-xs text-theme-text-muted font-medium">
                           {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                         </span>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-theme-text-primary">
                           {user.full_name || user.username}
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-theme-text-muted">
                           @{user.username}
                           {user.badge_number && ` • Badge #${user.badge_number}`}
                         </div>
@@ -842,7 +999,7 @@ export const MembersAdminPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingMembers(false);
@@ -850,7 +1007,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>

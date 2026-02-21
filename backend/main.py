@@ -8,7 +8,9 @@ connects to the database, and configures routes.
 
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
-from fastapi import FastAPI
+import traceback
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from loguru import logger
@@ -21,6 +23,7 @@ from app.core.cache import cache_manager
 from app.api.v1.api import api_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.forms import router as public_forms_router
+from app.api.public.display import router as public_display_router
 
 
 # Configure logging
@@ -371,6 +374,9 @@ def _cleanup_duplicate_revisions(versions_dir):
                 )
                 try:
                     os.rename(fp, stale_path)
+                except FileNotFoundError:
+                    # Another worker already renamed it — harmless race
+                    logger.info(f"Duplicate migration {fn} already handled by another worker")
                 except Exception as rename_err:
                     logger.error(f"Failed to rename {fn}: {rename_err}")
 
@@ -462,8 +468,9 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
             logger.info(f"Dropped {len(tables_to_drop)} existing tables")
 
             # 3. Create ALL tables from current model definitions.
-            #    checkfirst=False skips 100+ existence-check round-trips since
-            #    we just dropped everything. FK_CHECKS=0 (set above) skips FK
+            #    checkfirst=True is used because multiple uvicorn workers may
+            #    run this concurrently, and another worker may have already
+            #    created some tables. FK_CHECKS=0 (set above) skips FK
             #    validation during CREATE TABLE.
             #    Iterates sorted_tables individually for progress logging so
             #    slow environments don't look hung during long create runs.
@@ -471,7 +478,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
             total_tables = len(sorted_tables)
             logger.info(f"Creating {total_tables} tables from model definitions...")
             for i, table in enumerate(sorted_tables, 1):
-                table.create(conn, checkfirst=False)
+                table.create(conn, checkfirst=True)
                 if i % 25 == 0 or i == total_tables:
                     logger.info(f"  Tables created: {i}/{total_tables}")
             logger.info(f"All {total_tables} model-based tables created")
@@ -573,62 +580,172 @@ def run_migrations():
         logger.info("Database schema is already up to date")
         return
 
-    # Check for revision mismatch (renamed migration files)
-    if current_rev and current_rev != INITIAL_SQL_REVISION:
-        try:
-            script_dir.get_revision(current_rev)
-        except Exception:
-            startup_status.set_phase("migrations", "Fixing migration version mismatch...")
-            logger.warning(
-                f"Migration revision '{current_rev}' not found. "
-                "Clearing invalid version..."
+    # === ADVISORY LOCK: Serialize migrations across workers ===
+    # Multiple uvicorn workers start simultaneously and all try to run
+    # migrations. Use a MySQL advisory lock so only ONE worker performs
+    # DDL; the others wait then re-check and skip.
+    import time as _time
+    MIGRATION_LOCK_NAME = "the_logbook_migrations"
+    MIGRATION_LOCK_TIMEOUT = 300  # seconds to wait for the lock
+
+    lock_conn = engine.connect()
+    try:
+        startup_status.set_phase("migrations", "Acquiring migration lock...")
+        result = lock_conn.execute(
+            text("SELECT GET_LOCK(:name, :timeout)"),
+            {"name": MIGRATION_LOCK_NAME, "timeout": MIGRATION_LOCK_TIMEOUT}
+        )
+        got_lock = result.scalar()
+        if not got_lock:
+            raise RuntimeError(
+                f"Could not acquire migration lock within {MIGRATION_LOCK_TIMEOUT}s. "
+                "Another process may be stuck. Check for long-running DDL queries."
             )
-            with engine.connect() as conn:
-                conn.execute(text("DELETE FROM alembic_version"))
-                conn.commit()
-            current_rev = None
-            logger.info("Cleared invalid migration version")
+        logger.info("Acquired migration lock - this worker will run migrations")
 
-    # === FAST-PATH: Fresh database initialization ===
-    # On first boot, the SQL init script stamps to INITIAL_SQL_REVISION.
-    # Instead of running 39+ individual migrations (~20 min), create all
-    # tables from model definitions in one batch (seconds).
-    #
-    # Self-healing: retries once on failure. Because MySQL auto-commits DDL,
-    # a partial failure leaves orphaned tables. The retry drops everything
-    # and starts from a clean slate, recovering without manual intervention.
-    if current_rev == INITIAL_SQL_REVISION or current_rev is None:
-        max_attempts = 2
-        for attempt in range(1, max_attempts + 1):
+        # Re-check revision after acquiring lock - another worker may have
+        # already completed migrations while we were waiting.
+        current_rev = None
+        try:
+            with engine.connect() as check_conn:
+                result = check_conn.execute(text(
+                    "SELECT version_num FROM alembic_version LIMIT 1"
+                ))
+                row = result.fetchone()
+                if row:
+                    current_rev = row[0]
+        except Exception:
+            pass
+
+        if current_rev == head_revision:
+            startup_status.migrations_completed = total_migrations
+            startup_status.set_phase("migrations", "Database schema is up to date")
+            logger.info(
+                "Database already at head after acquiring lock "
+                "(another worker completed migrations)"
+            )
+            return
+
+        # Check for revision mismatch (renamed migration files)
+        if current_rev and current_rev != INITIAL_SQL_REVISION:
             try:
-                with timeout_context(1200, "Fast-path database initialization"):
-                    _fast_path_init(engine, alembic_cfg, base_dir)
-                break  # Success
-            except Exception as init_error:
-                if attempt < max_attempts:
-                    logger.warning(
-                        f"Fast-path attempt {attempt} failed: {init_error}. "
-                        "Retrying (the retry will drop all tables and start clean)..."
-                    )
-                    startup_status.set_phase(
-                        "migrations",
-                        "Retrying database initialization...",
-                        "First attempt failed. Retrying with a clean slate."
-                    )
-                    import time
-                    time.sleep(2)
-                else:
-                    raise
+                script_dir.get_revision(current_rev)
+            except Exception:
+                startup_status.set_phase("migrations", "Fixing migration version mismatch...")
+                logger.warning(
+                    f"Migration revision '{current_rev}' not found. "
+                    "Clearing invalid version..."
+                )
+                with engine.connect() as conn:
+                    conn.execute(text("DELETE FROM alembic_version"))
+                    conn.commit()
+                current_rev = None
+                logger.info("Cleared invalid migration version")
 
-        startup_status.migrations_completed = total_migrations
+        # === FAST-PATH: Fresh database initialization ===
+        # On first boot, the SQL init script stamps to INITIAL_SQL_REVISION.
+        # Instead of running 39+ individual migrations (~20 min), create all
+        # tables from model definitions in one batch (seconds).
+        #
+        # Self-healing: retries once on failure. Because MySQL auto-commits DDL,
+        # a partial failure leaves orphaned tables. The retry drops everything
+        # and starts from a clean slate, recovering without manual intervention.
+        if current_rev == INITIAL_SQL_REVISION or current_rev is None:
+            max_attempts = 2
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    with timeout_context(1200, "Fast-path database initialization"):
+                        _fast_path_init(engine, alembic_cfg, base_dir)
+                    break  # Success
+                except Exception as init_error:
+                    if attempt < max_attempts:
+                        logger.warning(
+                            f"Fast-path attempt {attempt} failed: {init_error}. "
+                            "Retrying (the retry will drop all tables and start clean)..."
+                        )
+                        startup_status.set_phase(
+                            "migrations",
+                            "Retrying database initialization...",
+                            "First attempt failed. Retrying with a clean slate."
+                        )
+                        _time.sleep(2)
+                    else:
+                        raise
+
+            startup_status.migrations_completed = total_migrations
+            startup_status.set_phase("migrations", "Validating database schema...")
+
+            # Validate schema after fast-path init
+            schema_valid, schema_errors = validate_schema(engine)
+
+            # Self-healing: if validation fails, attempt to repair missing tables
+            # before giving up. This handles edge cases like partial create_all()
+            # where most tables were created but a few failed.
+            if not schema_valid:
+                schema_valid, schema_errors = _attempt_schema_repair(
+                    engine, base_dir, schema_errors
+                )
+
+            if not schema_valid:
+                error_msg = (
+                    "DATABASE SCHEMA INCONSISTENCY DETECTED after fast-path init!\n"
+                    "Issues found:\n" + "\n".join(f"  - {e}" for e in schema_errors) + "\n\n"
+                    "Automatic repair was attempted but could not resolve all issues.\n"
+                    "TO FIX: docker compose down -v && docker compose up --build"
+                )
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+
+            logger.info("Database schema validated successfully")
+            startup_status.set_phase("migrations", "Database initialization complete")
+            return
+
+        # === NORMAL PATH: Run pending Alembic migrations ===
+        # For existing installations being upgraded
+        startup_status.set_phase("migrations", "Running database migrations...")
+        logger.info("Running database migrations...")
+
+        schema_was_stamped = False
+
+        try:
+            with timeout_context(1800, "Database migrations"):
+                command.upgrade(alembic_cfg, "head")
+
+            startup_status.migrations_completed = total_migrations
+            startup_status.set_phase("migrations", "Database migrations complete")
+            logger.info("Database migrations complete")
+        except TimeoutError as timeout_error:
+            logger.error(f"{timeout_error}")
+            startup_status.add_error(str(timeout_error))
+            startup_status.phase = "error"
+            startup_status.message = "Database migrations timed out"
+            raise RuntimeError(
+                "Database migrations timed out after 30 minutes. "
+                "Check database logs for locked tables or stuck queries."
+            )
+        except Exception as upgrade_error:
+            error_str = str(upgrade_error).lower()
+            if "already exists" in error_str or "duplicate" in error_str:
+                logger.warning(
+                    f"Migration failed ({upgrade_error}). Stamping to head..."
+                )
+                try:
+                    command.stamp(alembic_cfg, "head")
+                    schema_was_stamped = True
+                    startup_status.migrations_completed = total_migrations
+                    logger.info("Stamped database to head")
+                except Exception as stamp_error:
+                    logger.warning(f"Could not stamp database: {stamp_error}")
+                    startup_status.add_error(f"Migration stamp failed: {stamp_error}")
+            else:
+                startup_status.add_error(f"Migration failed: {upgrade_error}")
+                raise
+
+        # Validate schema after migrations
         startup_status.set_phase("migrations", "Validating database schema...")
-
-        # Validate schema after fast-path init
         schema_valid, schema_errors = validate_schema(engine)
 
-        # Self-healing: if validation fails, attempt to repair missing tables
-        # before giving up. This handles edge cases like partial create_all()
-        # where most tables were created but a few failed.
+        # Self-healing: attempt repair before crashing
         if not schema_valid:
             schema_valid, schema_errors = _attempt_schema_repair(
                 engine, base_dir, schema_errors
@@ -636,88 +753,36 @@ def run_migrations():
 
         if not schema_valid:
             error_msg = (
-                "DATABASE SCHEMA INCONSISTENCY DETECTED after fast-path init!\n"
+                "DATABASE SCHEMA INCONSISTENCY DETECTED!\n"
+                "The database schema does not match the expected structure.\n\n"
                 "Issues found:\n" + "\n".join(f"  - {e}" for e in schema_errors) + "\n\n"
                 "Automatic repair was attempted but could not resolve all issues.\n"
                 "TO FIX: docker compose down -v && docker compose up --build"
             )
             logger.error(error_msg)
+
+            if schema_was_stamped:
+                logger.critical(
+                    "CRITICAL: Schema stamped to head but validation failed. "
+                    "Database must be reset with 'docker compose down -v'"
+                )
+
             raise RuntimeError(error_msg)
-
-        logger.info("Database schema validated successfully")
-        startup_status.set_phase("migrations", "Database initialization complete")
-        return
-
-    # === NORMAL PATH: Run pending Alembic migrations ===
-    # For existing installations being upgraded
-    startup_status.set_phase("migrations", "Running database migrations...")
-    logger.info("Running database migrations...")
-
-    schema_was_stamped = False
-
-    try:
-        with timeout_context(1800, "Database migrations"):
-            command.upgrade(alembic_cfg, "head")
-
-        startup_status.migrations_completed = total_migrations
-        startup_status.set_phase("migrations", "Database migrations complete")
-        logger.info("Database migrations complete")
-    except TimeoutError as timeout_error:
-        logger.error(f"{timeout_error}")
-        startup_status.add_error(str(timeout_error))
-        startup_status.phase = "error"
-        startup_status.message = "Database migrations timed out"
-        raise RuntimeError(
-            "Database migrations timed out after 30 minutes. "
-            "Check database logs for locked tables or stuck queries."
-        )
-    except Exception as upgrade_error:
-        error_str = str(upgrade_error).lower()
-        if "already exists" in error_str or "duplicate" in error_str:
-            logger.warning(
-                f"Migration failed ({upgrade_error}). Stamping to head..."
-            )
-            try:
-                command.stamp(alembic_cfg, "head")
-                schema_was_stamped = True
-                startup_status.migrations_completed = total_migrations
-                logger.info("Stamped database to head")
-            except Exception as stamp_error:
-                logger.warning(f"Could not stamp database: {stamp_error}")
-                startup_status.add_error(f"Migration stamp failed: {stamp_error}")
         else:
-            startup_status.add_error(f"Migration failed: {upgrade_error}")
-            raise
-
-    # Validate schema after migrations
-    startup_status.set_phase("migrations", "Validating database schema...")
-    schema_valid, schema_errors = validate_schema(engine)
-
-    # Self-healing: attempt repair before crashing
-    if not schema_valid:
-        schema_valid, schema_errors = _attempt_schema_repair(
-            engine, base_dir, schema_errors
-        )
-
-    if not schema_valid:
-        error_msg = (
-            "DATABASE SCHEMA INCONSISTENCY DETECTED!\n"
-            "The database schema does not match the expected structure.\n\n"
-            "Issues found:\n" + "\n".join(f"  - {e}" for e in schema_errors) + "\n\n"
-            "Automatic repair was attempted but could not resolve all issues.\n"
-            "TO FIX: docker compose down -v && docker compose up --build"
-        )
-        logger.error(error_msg)
-
-        if schema_was_stamped:
-            logger.critical(
-                "CRITICAL: Schema stamped to head but validation failed. "
-                "Database must be reset with 'docker compose down -v'"
+            logger.info("Database schema validated successfully")
+    finally:
+        # Always release the advisory lock, even on error
+        try:
+            lock_conn.execute(
+                text("SELECT RELEASE_LOCK(:name)"),
+                {"name": MIGRATION_LOCK_NAME}
             )
-
-        raise RuntimeError(error_msg)
-    else:
-        logger.info("Database schema validated successfully")
+        except Exception:
+            pass
+        try:
+            lock_conn.close()
+        except Exception:
+            pass
 
 
 def validate_security_configuration():
@@ -876,11 +941,11 @@ async def lifespan(app: FastAPI):
     # Defer audit log verification to background (only in production, don't block startup)
     if settings.ENVIRONMENT == "production":
         async def verify_audit_logs_background():
-            """Verify audit log integrity in background"""
+            """Verify audit log integrity in background, rehash if needed"""
             try:
                 await asyncio.sleep(5)  # Give server time to fully start
                 logger.info("Starting background audit log verification...")
-                from app.core.audit import verify_audit_log_integrity
+                from app.core.audit import verify_audit_log_integrity, audit_logger
                 from app.core.database import async_session_factory
 
                 async with async_session_factory() as db:
@@ -888,9 +953,18 @@ async def lifespan(app: FastAPI):
                     if integrity_result["verified"]:
                         logger.info(f"✓ Audit log integrity verified ({integrity_result['total_checked']} entries)")
                     else:
-                        logger.critical(
-                            f"⚠ AUDIT LOG INTEGRITY FAILURE: {len(integrity_result.get('errors', []))} issues detected!"
+                        error_count = len(integrity_result.get('errors', []))
+                        logger.warning(
+                            f"Audit log hash mismatches detected ({error_count} entries) — rehashing chain..."
                         )
+                        rehashed = await audit_logger.rehash_chain(db)
+                        await db.commit()
+                        if rehashed > 0:
+                            logger.info(f"✓ Rehashed {rehashed} audit log entries, chain is now consistent")
+                        else:
+                            logger.critical(
+                                f"⚠ AUDIT LOG INTEGRITY FAILURE: {error_count} issues could not be resolved!"
+                            )
             except Exception as e:
                 logger.warning(f"Could not verify audit log integrity: {e}")
 
@@ -972,6 +1046,74 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # ============================================
+# Global Exception Handler
+# ============================================
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """
+    Catch unhandled backend exceptions and log them to the error_logs table
+    so they appear on the Error Monitoring page.
+    """
+    # Build error details
+    error_type = type(exc).__name__
+    error_message = str(exc)
+    tb = traceback.format_exc()
+
+    # Try to extract user/org context from the JWT token
+    user_id = None
+    org_id = None
+    try:
+        from app.core.security import decode_token
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1]
+            payload = decode_token(token)
+            user_id = payload.get("sub")
+            org_id = payload.get("org_id")
+    except Exception:
+        pass  # Token extraction is best-effort
+
+    # Persist to error_logs table
+    if org_id:
+        try:
+            from app.core.database import database_manager
+            from app.models.error_log import ErrorLog
+            async for session in database_manager.get_session():
+                error_log = ErrorLog(
+                    organization_id=org_id,
+                    error_type=f"BACKEND_{error_type.upper()}",
+                    error_message=error_message,
+                    user_message=f"An internal server error occurred: {error_type}",
+                    troubleshooting_steps=[
+                        "This error has been automatically logged",
+                        "Check the Error Monitoring page for details",
+                        "Contact your system administrator if the issue persists",
+                    ],
+                    context={
+                        "method": request.method,
+                        "path": str(request.url.path),
+                        "query": str(request.url.query),
+                        "traceback": tb,
+                        "source": "backend",
+                    },
+                    user_id=user_id,
+                )
+                session.add(error_log)
+                await session.commit()
+                break
+        except Exception as log_exc:
+            logger.error(f"Failed to persist error log: {log_exc}")
+
+    logger.exception(f"Unhandled {error_type} on {request.method} {request.url.path}: {error_message}")
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
+# ============================================
 # Routes
 # ============================================
 
@@ -983,6 +1125,9 @@ app.include_router(public_portal_router, prefix="/api")
 
 # Include public forms API (no auth required - uses /api/public/v1/forms)
 app.include_router(public_forms_router, prefix="/api")
+
+# Include public display API (no auth required - uses /api/public/v1/display)
+app.include_router(public_display_router, prefix="/api")
 
 
 # Health check endpoint

@@ -48,6 +48,12 @@ const ImportMembers: React.FC = () => {
       const text = await file.text();
       const rows = text.split('\n').map((row) => row.split(','));
 
+      if (!rows[0] || rows[0].length === 0) {
+        toast.error('The file is empty or has no header row.');
+        setValidating(false);
+        return;
+      }
+
       // Check headers
       const headers = rows[0].map((h) => h.trim().toLowerCase());
       const requiredHeaders = [
@@ -129,6 +135,14 @@ const ImportMembers: React.FC = () => {
     try {
       const text = await file.text();
       const rows = text.split('\n').map((row) => row.split(','));
+
+      if (!rows[0] || rows[0].length === 0) {
+        result.errors.push({ row: 0, error: 'The file is empty or has no header row.', data: null });
+        setImportResult(result);
+        setImporting(false);
+        return;
+      }
+
       const headers = rows[0].map((h) => h.trim().toLowerCase());
 
       // Process each row (skip header)
@@ -352,7 +366,7 @@ const ImportMembers: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Instructions */}
         <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-6 mb-8">
           <h2 className="text-theme-text-primary font-bold mb-3 flex items-center space-x-2">

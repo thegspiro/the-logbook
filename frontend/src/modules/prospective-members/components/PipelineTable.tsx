@@ -242,7 +242,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   return (
                     <tr
                       key={applicant.id}
-                      className={`border-b border-white/5 hover:bg-theme-surface-secondary transition-colors cursor-pointer ${
+                      className={`border-b border-theme-surface-border hover:bg-theme-surface-secondary transition-colors cursor-pointer ${
                         isSelected ? 'bg-red-500/5' : ''
                       }`}
                     >

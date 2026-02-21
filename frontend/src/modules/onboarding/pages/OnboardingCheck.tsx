@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Database, Server, Shield, Wrench, Clock, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../services/api-client';
+import { HealthStatus, ConnectionStatus } from '../../../constants/enums';
 
 interface ServiceStatus {
   name: string;
@@ -32,9 +33,9 @@ const SKIP_AVAILABLE_AFTER = 5; // Show skip option after 5 attempts (~5 minutes
 const OnboardingCheck: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [services, setServices] = useState<ServiceStatus[]>([
-    { name: 'Backend API', status: 'checking' },
-    { name: 'Database', status: 'checking' },
-    { name: 'Cache (Redis)', status: 'checking', optional: true },
+    { name: 'Backend API', status: ConnectionStatus.CHECKING },
+    { name: 'Database', status: ConnectionStatus.CHECKING },
+    { name: 'Cache (Redis)', status: ConnectionStatus.CHECKING, optional: true },
   ]);
   const [retryCount, setRetryCount] = useState(0);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -264,9 +265,9 @@ const OnboardingCheck: React.FC = () => {
     const healthResponse = await apiClient.checkHealth();
 
     if (healthResponse.error || !healthResponse.data) {
-      updateServiceStatus('Backend API', 'disconnected', healthResponse.error || 'Not responding');
-      updateServiceStatus('Database', 'checking');
-      updateServiceStatus('Cache (Redis)', 'checking');
+      updateServiceStatus('Backend API', ConnectionStatus.DISCONNECTED, healthResponse.error || 'Not responding');
+      updateServiceStatus('Database', ConnectionStatus.CHECKING);
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.CHECKING);
       // Don't clear startupInfo - preserve last known state for user visibility
       return false;
     }
@@ -301,29 +302,29 @@ const OnboardingCheck: React.FC = () => {
     }
 
     // Update Backend API status
-    updateServiceStatus('Backend API', 'connected', `v${health.version}`);
+    updateServiceStatus('Backend API', ConnectionStatus.CONNECTED, `v${health.version}`);
 
     // Update Database status
-    if (health.checks.database === 'connected') {
-      updateServiceStatus('Database', 'connected');
-    } else if (health.checks.database === 'disconnected') {
-      updateServiceStatus('Database', 'disconnected', 'Starting up...');
+    if (health.checks.database === ConnectionStatus.CONNECTED) {
+      updateServiceStatus('Database', ConnectionStatus.CONNECTED);
+    } else if (health.checks.database === ConnectionStatus.DISCONNECTED) {
+      updateServiceStatus('Database', ConnectionStatus.DISCONNECTED, 'Starting up...');
       return false;
     } else {
-      updateServiceStatus('Database', 'error', health.checks.database);
+      updateServiceStatus('Database', ConnectionStatus.ERROR, health.checks.database);
       return false;
     }
 
     // Update Redis status (non-critical)
-    if (health.checks.redis === 'connected') {
-      updateServiceStatus('Cache (Redis)', 'connected');
-    } else if (health.checks.redis === 'disconnected') {
-      updateServiceStatus('Cache (Redis)', 'disconnected', 'Optional - skipped');
+    if (health.checks.redis === ConnectionStatus.CONNECTED) {
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.CONNECTED);
+    } else if (health.checks.redis === ConnectionStatus.DISCONNECTED) {
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.DISCONNECTED, 'Optional - skipped');
     } else {
-      updateServiceStatus('Cache (Redis)', 'error', 'Optional - failed');
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.ERROR, 'Optional - failed');
     }
 
-    return health.status !== 'unhealthy' && health.checks.database === 'connected';
+    return health.status !== HealthStatus.UNHEALTHY && health.checks.database === ConnectionStatus.CONNECTED;
   }, [updateServiceStatus]);
 
   const checkOnboardingStatus = useCallback(async () => {
@@ -409,9 +410,9 @@ const OnboardingCheck: React.FC = () => {
     setElapsedTime(0);
     setShowSkipOption(false);
     setServices([
-      { name: 'Backend API', status: 'checking' },
-      { name: 'Database', status: 'checking' },
-      { name: 'Cache (Redis)', status: 'checking', optional: true },
+      { name: 'Backend API', status: ConnectionStatus.CHECKING },
+      { name: 'Database', status: ConnectionStatus.CHECKING },
+      { name: 'Cache (Redis)', status: ConnectionStatus.CHECKING, optional: true },
     ]);
     runCheck();
   };
@@ -422,28 +423,28 @@ const OnboardingCheck: React.FC = () => {
 
   const getStatusIcon = (status: ServiceStatus['status']) => {
     switch (status) {
-      case 'connected':
-        return <span className="text-green-700 dark:text-green-400 text-xl">✓</span>;
-      case 'disconnected':
-        return <span className="text-yellow-700 dark:text-yellow-400 text-xl animate-pulse">●</span>;
-      case 'error':
-        return <span className="text-red-700 dark:text-red-400 text-xl">✗</span>;
-      case 'checking':
+      case ConnectionStatus.CONNECTED:
+        return <span className="text-theme-accent-green text-xl">✓</span>;
+      case ConnectionStatus.DISCONNECTED:
+        return <span className="text-theme-accent-yellow text-xl animate-pulse">●</span>;
+      case ConnectionStatus.ERROR:
+        return <span className="text-theme-accent-red text-xl">✗</span>;
+      case ConnectionStatus.CHECKING:
       default:
         return (
-          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-theme-text-primary border-t-transparent"></span>
         );
     }
   };
 
   const getStatusColor = (status: ServiceStatus['status']) => {
     switch (status) {
-      case 'connected':
-        return 'text-green-700 dark:text-green-400';
-      case 'disconnected':
-        return 'text-yellow-700 dark:text-yellow-400';
-      case 'error':
-        return 'text-red-700 dark:text-red-400';
+      case ConnectionStatus.CONNECTED:
+        return 'text-theme-accent-green';
+      case ConnectionStatus.DISCONNECTED:
+        return 'text-theme-accent-yellow';
+      case ConnectionStatus.ERROR:
+        return 'text-theme-accent-red';
       default:
         return 'text-theme-text-secondary';
     }
@@ -451,15 +452,15 @@ const OnboardingCheck: React.FC = () => {
 
   // Calculate progress percentage
   const progressPercent = Math.min((retryCount / MAX_RETRIES) * 100, 100);
-  const connectedCount = services.filter(s => s.status === 'connected').length;
+  const connectedCount = services.filter(s => s.status === ConnectionStatus.CONNECTED).length;
   const requiredServices = services.filter(s => !s.optional);
-  const requiredConnected = requiredServices.filter(s => s.status === 'connected').length;
+  const requiredConnected = requiredServices.filter(s => s.status === ConnectionStatus.CONNECTED).length;
 
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-theme-surface backdrop-blur-sm rounded-lg p-8 text-center border border-theme-surface-border">
-          <div className="text-red-700 dark:text-red-400 text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
+          <div className="text-theme-accent-red text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
           <h2 className="text-2xl font-bold text-theme-text-primary mb-4">
             {schemaError ? 'Database Reset Required' : 'Connection Error'}
           </h2>
@@ -467,22 +468,22 @@ const OnboardingCheck: React.FC = () => {
 
           {/* Schema error specific instructions */}
           {schemaError && (
-            <div className="mb-6 text-left bg-black/30 rounded-lg p-4 border border-orange-500/30">
-              <p className="text-orange-700 dark:text-orange-300 text-sm font-semibold mb-2">To Fix This Issue:</p>
+            <div className="mb-6 text-left alert-warning">
+              <p className="text-theme-alert-warning-title text-sm font-semibold mb-2">To Fix This Issue:</p>
               <ol className="text-theme-text-secondary text-sm space-y-2 list-decimal list-inside">
                 <li>Stop all containers:
-                  <code className="block mt-1 bg-black/40 rounded px-2 py-1 text-orange-200 font-mono text-xs">
+                  <code className="block mt-1 bg-theme-alert-warning-bg rounded px-2 py-1 text-theme-alert-warning-title font-mono text-xs">
                     docker compose down -v
                   </code>
                 </li>
                 <li>Rebuild and start:
-                  <code className="block mt-1 bg-black/40 rounded px-2 py-1 text-orange-200 font-mono text-xs">
+                  <code className="block mt-1 bg-theme-alert-warning-bg rounded px-2 py-1 text-theme-alert-warning-title font-mono text-xs">
                     docker compose up --build
                   </code>
                 </li>
               </ol>
               <p className="text-theme-text-muted text-xs mt-3">
-                The <code className="text-orange-200">-v</code> flag removes database volumes for a fresh start.
+                The <code className="text-theme-alert-warning-text">-v</code> flag removes database volumes for a fresh start.
                 Since onboarding hasn't completed, no data will be lost.
               </p>
             </div>
@@ -492,7 +493,7 @@ const OnboardingCheck: React.FC = () => {
           <div className="mb-6 text-left bg-black/20 rounded-lg p-4">
             <p className="text-sm text-theme-text-muted mb-3">Service Status:</p>
             {services.map((service) => (
-              <div key={service.name} className="flex items-center justify-between py-2 border-b border-theme-surface-border last:border-0">
+              <div key={service.name} className="flex items-center justify-between py-2 border-b border-theme-nav-border last:border-0">
                 <div className="flex items-center gap-2">
                   <span className="text-theme-text-secondary">{service.name}</span>
                   {service.optional && <span className="text-xs text-theme-text-muted">(optional)</span>}
@@ -517,7 +518,7 @@ const OnboardingCheck: React.FC = () => {
             {requiredConnected === requiredServices.length && (
               <button
                 onClick={handleSkip}
-                className="flex-1 px-6 py-3 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary font-semibold rounded-lg transition-all duration-300"
+                className="flex-1 px-6 py-3 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary font-semibold rounded-lg transition-all duration-300"
               >
                 Continue Anyway
               </button>
@@ -548,7 +549,7 @@ const OnboardingCheck: React.FC = () => {
           {services.map((service) => (
             <div
               key={service.name}
-              className="flex items-center justify-between py-3 border-b border-theme-surface-border last:border-0"
+              className="flex items-center justify-between py-3 border-b border-theme-nav-border last:border-0"
             >
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
@@ -563,10 +564,10 @@ const OnboardingCheck: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-sm ${getStatusColor(service.status)}`}>
-                  {service.status === 'connected' && 'Ready'}
-                  {service.status === 'disconnected' && 'Waiting...'}
-                  {service.status === 'error' && 'Error'}
-                  {service.status === 'checking' && 'Checking...'}
+                  {service.status === ConnectionStatus.CONNECTED && 'Ready'}
+                  {service.status === ConnectionStatus.DISCONNECTED && 'Waiting...'}
+                  {service.status === ConnectionStatus.ERROR && 'Error'}
+                  {service.status === ConnectionStatus.CHECKING && 'Checking...'}
                 </span>
                 {getStatusIcon(service.status)}
               </div>
@@ -575,17 +576,17 @@ const OnboardingCheck: React.FC = () => {
 
           {/* Startup Progress Details */}
           {!startupInfo && isWaiting && (
-            <div className="mt-4 pt-4 border-t border-theme-surface-border">
+            <div className="mt-4 pt-4 border-t border-theme-nav-border">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 mt-0.5">
-                  <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                    <div className="text-blue-700 dark:text-blue-400 animate-pulse">
+                  <div className="p-2 bg-theme-alert-info-bg rounded-lg border border-theme-alert-info-border">
+                    <div className="text-theme-alert-info-icon animate-pulse">
                       <Server className="h-5 w-5" />
                     </div>
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-blue-700 dark:text-blue-400 font-semibold text-base mb-1">
+                  <h3 className="text-theme-alert-info-title font-semibold text-base mb-1">
                     Waiting for Backend
                   </h3>
                   <p className="text-theme-text-secondary text-sm mb-1">
@@ -599,7 +600,7 @@ const OnboardingCheck: React.FC = () => {
             </div>
           )}
           {startupInfo && !startupInfo.ready && (
-            <div className="mt-4 pt-4 border-t border-theme-surface-border">
+            <div className="mt-4 pt-4 border-t border-theme-nav-border">
               {(() => {
                 const phaseDetails = getPhaseDetails(startupInfo.phase);
                 return (
@@ -607,14 +608,14 @@ const OnboardingCheck: React.FC = () => {
                     {/* Current Phase with Icon */}
                     <div className="flex items-start gap-3 mb-3">
                       <div className="flex-shrink-0 mt-0.5">
-                        <div className="p-2 bg-orange-500/10 rounded-lg border border-orange-500/30">
-                          <div className="text-orange-700 dark:text-orange-400 animate-pulse">
+                        <div className="p-2 bg-theme-alert-warning-bg rounded-lg border border-theme-alert-warning-border">
+                          <div className="text-theme-alert-warning-icon animate-pulse">
                             {phaseDetails.icon}
                           </div>
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-orange-700 dark:text-orange-400 font-semibold text-base mb-1">
+                        <h3 className="text-theme-alert-warning-icon font-semibold text-base mb-1">
                           {phaseDetails.title}
                         </h3>
                         <p className="text-theme-text-secondary text-sm mb-1">
@@ -630,16 +631,16 @@ const OnboardingCheck: React.FC = () => {
 
                     {/* Migration progress bar */}
                     {startupInfo.migrations && startupInfo.migrations.total > 0 && (
-                      <div className="mt-3 p-3 bg-theme-input-bg rounded-lg border border-theme-surface-border">
+                      <div className="mt-3 p-3 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
                         <div className="flex items-center justify-between text-xs text-theme-text-muted mb-2">
                           <span className="font-medium">Database Migrations</span>
-                          <span className="text-orange-700 dark:text-orange-400 font-semibold">
+                          <span className="text-theme-alert-warning-icon font-semibold">
                             {startupInfo.migrations.completed}/{startupInfo.migrations.total}
                           </span>
                         </div>
                         {startupInfo.migrations.completed === 0 && startupInfo.migrations.total > 0 && (
                           <div className="text-xs text-theme-text-muted mb-2 space-y-1">
-                            <p className="font-medium text-orange-700 dark:text-orange-400">
+                            <p className="font-medium text-theme-alert-warning-icon">
                               Creating {startupInfo.migrations.total} database tables...
                             </p>
                             <p className="text-theme-text-muted">
@@ -648,7 +649,7 @@ const OnboardingCheck: React.FC = () => {
                             </p>
                           </div>
                         )}
-                        <div className="w-full bg-theme-surface-hover rounded-full h-2.5 mb-2">
+                        <div className="w-full bg-theme-surface rounded-full h-2.5 mb-2">
                           <div
                             className="bg-gradient-to-r from-orange-500 to-yellow-500 h-2.5 rounded-full transition-all duration-300"
                             style={{ width: `${(startupInfo.migrations.completed / startupInfo.migrations.total) * 100}%` }}
@@ -657,7 +658,7 @@ const OnboardingCheck: React.FC = () => {
 
                         {/* Current feature being set up and ETA */}
                         <div className="space-y-1">
-                          <p className="text-orange-700 dark:text-orange-300 text-sm font-medium">
+                          <p className="text-theme-alert-warning-text text-sm font-medium">
                             {getMigrationFeatureMessage(startupInfo.migrations.current)}
                           </p>
                           {getEstimatedTimeRemaining() && (
@@ -676,12 +677,12 @@ const OnboardingCheck: React.FC = () => {
 
           {/* Educational Tips - shown while waiting */}
           {(isWaiting || (startupInfo && !startupInfo.ready)) && (
-            <div className="mt-4 pt-4 border-t border-theme-surface-border">
-              <div className="bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-lg p-4 border border-blue-500/30">
+            <div className="mt-4 pt-4 border-t border-theme-nav-border">
+              <div className="bg-theme-alert-info-bg rounded-lg p-4 border border-theme-alert-info-border">
                 <div className="flex items-start gap-3">
                   <div className="text-3xl flex-shrink-0">{educationalTips[currentTipIndex].icon}</div>
                   <div className="flex-1">
-                    <h4 className="text-blue-700 dark:text-blue-300 font-semibold text-sm mb-1">
+                    <h4 className="text-theme-alert-info-title font-semibold text-sm mb-1">
                       {educationalTips[currentTipIndex].title}
                     </h4>
                     <p className="text-theme-text-secondary text-xs">
@@ -694,7 +695,7 @@ const OnboardingCheck: React.FC = () => {
                     <div
                       key={index}
                       className={`h-1 rounded-full transition-all duration-300 ${
-                        index === currentTipIndex ? 'w-6 bg-blue-400' : 'w-1 bg-theme-surface-hover'
+                        index === currentTipIndex ? 'w-6 bg-theme-alert-info-icon' : 'w-1 bg-theme-surface-border'
                       }`}
                     />
                   ))}
@@ -704,9 +705,9 @@ const OnboardingCheck: React.FC = () => {
           )}
 
           {isWaiting && (
-            <div className="mt-4 pt-4 border-t border-theme-surface-border">
+            <div className="mt-4 pt-4 border-t border-theme-nav-border">
               {/* Retry progress bar */}
-              <div className="w-full bg-theme-surface-hover rounded-full h-2 mb-3">
+              <div className="w-full bg-theme-surface rounded-full h-2 mb-3">
                 <div
                   className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
                   style={{ width: `${progressPercent}%` }}
@@ -731,7 +732,7 @@ const OnboardingCheck: React.FC = () => {
         <div className="mt-4">
           <button
             onClick={() => setShowWhatsHappening(!showWhatsHappening)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-theme-input-bg hover:bg-theme-surface-hover border border-theme-surface-border rounded-lg transition-all duration-300"
+            className="w-full flex items-center justify-between px-4 py-3 bg-theme-surface-secondary hover:bg-theme-surface-hover border border-theme-surface-border rounded-lg transition-all duration-300"
           >
             <span className="text-theme-text-secondary text-sm font-medium">What's happening?</span>
             <span className={`text-theme-text-muted transition-transform duration-300 ${showWhatsHappening ? 'rotate-180' : ''}`}>
@@ -740,33 +741,33 @@ const OnboardingCheck: React.FC = () => {
           </button>
 
           {showWhatsHappening && (
-            <div className="mt-2 bg-theme-input-bg border border-theme-surface-border rounded-lg p-4 space-y-3 text-sm">
+            <div className="mt-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4 space-y-3 text-sm">
               <div>
-                <h4 className="text-theme-text-primary font-semibold mb-1">🔍 Preflight Checks</h4>
+                <h4 className="text-theme-text-secondary font-semibold mb-1">🔍 Preflight Checks</h4>
                 <p className="text-theme-text-muted text-xs">
                   Verifying that all required environment variables are set and the system has enough resources.
                 </p>
               </div>
               <div>
-                <h4 className="text-theme-text-primary font-semibold mb-1">🗄️ Database Connection</h4>
+                <h4 className="text-theme-text-secondary font-semibold mb-1">🗄️ Database Connection</h4>
                 <p className="text-theme-text-muted text-xs">
                   Connecting to MySQL. On first startup, MySQL needs to initialize its system tables, which can take 1-2 minutes.
                 </p>
               </div>
               <div>
-                <h4 className="text-theme-text-primary font-semibold mb-1">🔧 Database Migrations</h4>
+                <h4 className="text-theme-text-secondary font-semibold mb-1">🔧 Database Migrations</h4>
                 <p className="text-theme-text-muted text-xs">
                   Creating 37 database tables for users, training, events, elections, inventory, and more. This only happens once during initial setup.
                 </p>
               </div>
               <div>
-                <h4 className="text-theme-text-primary font-semibold mb-1">⚡ Service Initialization</h4>
+                <h4 className="text-theme-text-secondary font-semibold mb-1">⚡ Service Initialization</h4>
                 <p className="text-theme-text-muted text-xs">
                   Starting Redis cache, GeoIP service, and running database validations in parallel to speed up startup.
                 </p>
               </div>
               <div>
-                <h4 className="text-theme-text-primary font-semibold mb-1">⏱️ Expected Timeline</h4>
+                <h4 className="text-theme-text-secondary font-semibold mb-1">⏱️ Expected Timeline</h4>
                 <p className="text-theme-text-muted text-xs">
                   • Fresh install: 25-30 minutes (~6 min MySQL init + ~23 min migrations)<br />
                   • Subsequent restarts: 10-30 seconds<br />
@@ -774,11 +775,11 @@ const OnboardingCheck: React.FC = () => {
                 </p>
               </div>
               <div className="pt-2 border-t border-theme-surface-border">
-                <h4 className="text-theme-text-primary font-semibold mb-1">🔧 Troubleshooting</h4>
+                <h4 className="text-theme-text-secondary font-semibold mb-1">🔧 Troubleshooting</h4>
                 <p className="text-theme-text-muted text-xs mb-2">
                   If startup is taking too long, check the logs:
                 </p>
-                <code className="block bg-theme-input-bg text-green-700 dark:text-green-400 text-xs p-2 rounded font-mono">
+                <code className="block bg-theme-surface-secondary text-theme-accent-green text-xs p-2 rounded font-mono">
                   docker compose logs backend
                 </code>
               </div>
@@ -788,13 +789,13 @@ const OnboardingCheck: React.FC = () => {
 
         {/* Skip option - shown after several attempts */}
         {showSkipOption && requiredConnected >= 1 && (
-          <div className="mt-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-            <p className="text-yellow-700 dark:text-yellow-300 text-sm mb-3">
+          <div className="mt-4 alert-warning">
+            <p className="text-theme-alert-warning-title text-sm mb-3">
               Taking longer than expected? If the Backend API is connected, you can try to continue.
             </p>
             <button
               onClick={handleSkip}
-              className="w-full px-4 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/50 text-yellow-700 dark:text-yellow-300 font-medium rounded-lg transition-all duration-300 text-sm"
+              className="w-full px-4 py-2 bg-theme-alert-warning-bg hover:opacity-80 border border-theme-alert-warning-border text-theme-alert-warning-title font-medium rounded-lg transition-all duration-300 text-sm"
             >
               Skip Wait & Continue
             </button>

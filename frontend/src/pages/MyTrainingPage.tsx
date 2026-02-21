@@ -29,32 +29,32 @@ import {
 import { trainingModuleConfigService } from '../services/api';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
-import type { MyTrainingSummary, TrainingModuleConfig as TMConfig } from '../types/training';
+import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
 
 // ==================== Helpers ====================
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'completed': return 'bg-green-500/20 text-green-400';
-    case 'approved': return 'bg-green-500/20 text-green-400';
-    case 'active': return 'bg-blue-500/20 text-blue-400';
-    case 'in_progress': return 'bg-blue-500/20 text-blue-400';
-    case 'pending_review': return 'bg-yellow-500/20 text-yellow-400';
-    case 'rejected': return 'bg-red-500/20 text-red-400';
-    case 'revision_requested': return 'bg-orange-500/20 text-orange-400';
-    default: return 'bg-gray-500/20 text-gray-400';
+    case 'completed': return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
+    case 'approved': return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
+    case 'active': return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
+    case 'in_progress': return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
+    case 'pending_review': return 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
+    case 'rejected': return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
+    case 'revision_requested': return 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400';
+    default: return 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400';
   }
 };
 
 // ==================== Stat Card ====================
 
 const StatCard: React.FC<{ icon: React.ElementType; label: string; value: string | number; color?: string }> = ({
-  icon: Icon, label, value, color = 'text-white',
+  icon: Icon, label, value, color = 'text-theme-text-primary',
 }) => (
-  <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+  <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
     <div className="flex items-center space-x-2 mb-1">
-      <Icon className="w-4 h-4 text-slate-400" />
-      <span className="text-xs text-slate-400">{label}</span>
+      <Icon className="w-4 h-4 text-theme-text-muted" />
+      <span className="text-xs text-theme-text-muted">{label}</span>
     </div>
     <p className={`text-xl font-bold ${color}`}>{value}</p>
   </div>
@@ -67,16 +67,17 @@ const Section: React.FC<{ title: string; icon: React.ElementType; children: Reac
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+    <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/5 transition-colors"
+        aria-expanded={open}
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-theme-surface-hover transition-colors"
       >
         <div className="flex items-center space-x-3">
           <Icon className="w-5 h-5 text-red-500" />
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
+          <h2 className="text-lg font-semibold text-theme-text-primary">{title}</h2>
         </div>
-        {open ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+        {open ? <ChevronUp className="w-5 h-5 text-theme-text-muted" /> : <ChevronDown className="w-5 h-5 text-theme-text-muted" />}
       </button>
       {open && <div className="px-5 pb-5">{children}</div>}
     </div>
@@ -130,26 +131,26 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-theme-text-muted">
         Control what training data members can see on their personal training page.
         Officers and administrators always see the full dataset regardless of these settings.
       </p>
 
       {groups.map((group) => (
         <div key={group}>
-          <h4 className="text-sm font-semibold text-slate-300 mb-3">{group}</h4>
+          <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">{group}</h4>
           <div className="space-y-2">
             {VISIBILITY_FIELDS.filter((f) => f.group === group).map((field) => (
-              <label key={field.key} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3 cursor-pointer hover:bg-slate-800/70 transition-colors">
+              <label key={field.key} className="flex items-center justify-between bg-theme-surface rounded-lg p-3 cursor-pointer hover:bg-theme-surface-hover transition-colors">
                 <div>
-                  <p className="text-sm font-medium text-white">{field.label}</p>
-                  <p className="text-xs text-slate-500">{field.description}</p>
+                  <p className="text-sm font-medium text-theme-text-primary">{field.label}</p>
+                  <p className="text-xs text-theme-text-muted">{field.description}</p>
                 </div>
                 <input
                   type="checkbox"
                   checked={getCurrentValue(field.key)}
                   onChange={(e) => setDraft({ ...draft, [field.key]: e.target.checked })}
-                  className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-red-600 focus:ring-red-500"
+                  className="w-5 h-5 rounded bg-theme-input-bg border-theme-input-border text-red-600 focus:ring-red-500"
                 />
               </label>
             ))}
@@ -246,11 +247,11 @@ const MyTrainingPage: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center space-x-3">
+            <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
               <GraduationCap className="w-8 h-8 text-red-500" />
               <span>My Training</span>
             </h1>
-            <p className="text-slate-400 mt-1">
+            <p className="text-theme-text-muted mt-1">
               Your training records, certifications, pipeline progress, and shift experience
             </p>
           </div>
@@ -272,7 +273,7 @@ const MyTrainingPage: React.FC = () => {
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'overview' ? 'bg-red-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+              activeTab === 'overview' ? 'bg-red-600 text-white' : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
           >
             My Training
@@ -280,7 +281,7 @@ const MyTrainingPage: React.FC = () => {
           <button
             onClick={() => setActiveTab('settings')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'settings' ? 'bg-red-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+              activeTab === 'settings' ? 'bg-red-600 text-white' : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
           >
             <Settings className="w-4 h-4" />
@@ -315,7 +316,7 @@ const MyTrainingPage: React.FC = () => {
             />
             <StatCard
               icon={BarChart3}
-              label="Annual Requirements"
+              label="Requirements"
               value={
                 data.requirements_summary?.avg_compliance != null
                   ? `${data.requirements_summary.avg_compliance}%`
@@ -325,12 +326,116 @@ const MyTrainingPage: React.FC = () => {
             />
           </div>
 
-          {/* Additional Stats Row */}
-          {v?.show_shift_stats && data.shift_stats && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard icon={ClipboardList} label="Shifts" value={data.shift_stats.total_shifts} color="text-purple-400" />
-              <StatCard icon={Star} label="Avg Rating" value={data.shift_stats.avg_rating ?? '-'} color="text-yellow-400" />
-            </div>
+
+
+          {/* Outstanding Requirements */}
+          {data.requirements_detail && data.requirements_detail.length > 0 && (
+            <Section title="Training Requirements" icon={ClipboardList}>
+              <div className="space-y-3">
+                {/* Outstanding (not met) first, then met */}
+                {[...data.requirements_detail]
+                  .sort((a: RequirementDetail, b: RequirementDetail) => {
+                    // Outstanding first, then by days until due (soonest first)
+                    if (a.is_met !== b.is_met) return a.is_met ? 1 : -1;
+                    if (a.days_until_due != null && b.days_until_due != null) return a.days_until_due - b.days_until_due;
+                    return 0;
+                  })
+                  .map((req: RequirementDetail) => {
+                    const isOverdue = req.days_until_due != null && req.days_until_due < 0 && !req.is_met;
+                    const isDueSoon = req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
+
+                    return (
+                      <div
+                        key={req.id}
+                        className={`bg-theme-surface rounded-lg p-4 border ${
+                          isOverdue ? 'border-red-500/40' :
+                          isDueSoon ? 'border-yellow-500/30' :
+                          req.is_met ? 'border-green-500/20' :
+                          'border-theme-surface-border'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            {req.is_met ? (
+                              <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+                            ) : isOverdue ? (
+                              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                            ) : (
+                              <Clock className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+                            )}
+                            <div>
+                              <p className="text-sm font-medium text-theme-text-primary">{req.name}</p>
+                              {req.description && (
+                                <p className="text-xs text-theme-text-muted mt-0.5">{req.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-4">
+                            <span className={`text-sm font-bold ${
+                              req.is_met ? 'text-green-400' :
+                              isOverdue ? 'text-red-400' :
+                              'text-theme-text-primary'
+                            }`}>
+                              {req.completed_hours}/{req.required_hours} hrs
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              req.is_met ? 'bg-green-500' :
+                              isOverdue ? 'bg-red-500' :
+                              req.progress_percentage >= 50 ? 'bg-blue-500' :
+                              'bg-yellow-500'
+                            }`}
+                            style={{ width: `${Math.min(req.progress_percentage, 100)}%` }}
+                          />
+                        </div>
+
+                        {/* Expired certification / blocks activity warning */}
+                        {req.blocks_activity && (
+                          <div className="bg-red-500/10 border border-red-500/30 rounded px-2 py-1.5 mb-2">
+                            <p className="text-xs text-red-400 font-medium">
+                              Certification expired — renew ASAP. This may prevent you from signing up for shifts.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Waiver adjustment notice */}
+                        {req.waived_months != null && req.waived_months > 0 && (
+                          <div className="bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1 mb-2">
+                            <p className="text-xs text-blue-300">
+                              Adjusted for {req.waived_months} waived month{req.waived_months > 1 ? 's' : ''} of leave
+                              {req.original_required_hours != null && req.original_required_hours !== req.required_hours && (
+                                <> (originally {req.original_required_hours} hrs, adjusted to {req.required_hours} hrs for {req.active_months} active month{req.active_months !== 1 ? 's' : ''})</>
+                              )}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-xs text-theme-text-muted">
+                          <span className="capitalize">{req.frequency.replace('_', ' ')}{req.training_type ? ` (${req.training_type.replace('_', ' ')})` : ''}</span>
+                          <div className="flex items-center space-x-2">
+                            {req.is_met ? (
+                              <span className="text-green-400">Complete</span>
+                            ) : req.cert_expired ? (
+                              <span className="text-red-400 font-medium">Expired — Renew ASAP</span>
+                            ) : isOverdue ? (
+                              <span className="text-red-400 font-medium">Overdue by {Math.abs(req.days_until_due!)} days</span>
+                            ) : req.days_until_due != null ? (
+                              <span className={isDueSoon ? 'text-yellow-400' : ''}>
+                                Due: {formatDate(req.due_date, tz)} ({req.days_until_due} days)
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </Section>
           )}
 
           {/* Certifications */}
@@ -338,11 +443,11 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Certifications" icon={Award}>
               <div className="space-y-2">
                 {data.certifications.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                  <div key={c.id} className="flex items-center justify-between bg-theme-surface rounded-lg p-3">
                     <div>
-                      <p className="text-sm font-medium text-white">{c.course_name}</p>
+                      <p className="text-sm font-medium text-theme-text-primary">{c.course_name}</p>
                       {c.certification_number && (
-                        <p className="text-xs text-slate-500">#{c.certification_number}</p>
+                        <p className="text-xs text-theme-text-muted">#{c.certification_number}</p>
                       )}
                     </div>
                     <div className="text-right">
@@ -361,7 +466,7 @@ const MyTrainingPage: React.FC = () => {
                           <span>Valid</span>
                         </span>
                       )}
-                      <p className="text-xs text-slate-500">{formatDate(c.expiration_date, tz)}</p>
+                      <p className="text-xs text-theme-text-muted">{formatDate(c.expiration_date, tz)}</p>
                     </div>
                   </div>
                 ))}
@@ -374,14 +479,14 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Pipeline Progress" icon={TrendingUp}>
               <div className="space-y-4">
                 {data.enrollments.map((e) => (
-                  <div key={e.id} className="bg-slate-800/50 rounded-lg p-4">
+                  <div key={e.id} className="bg-theme-surface rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className={`text-xs px-2 py-1 rounded ${getStatusColor(e.status)}`}>
                         {e.status.replace('_', ' ')}
                       </span>
-                      <span className="text-sm text-white font-semibold">{Math.round(e.progress_percentage)}%</span>
+                      <span className="text-sm text-theme-text-primary font-semibold">{Math.round(e.progress_percentage)}%</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-2">
                       <div
                         className={`h-2 rounded-full transition-all ${
                           e.progress_percentage >= 75 ? 'bg-green-500' :
@@ -391,7 +496,7 @@ const MyTrainingPage: React.FC = () => {
                         style={{ width: `${e.progress_percentage}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
+                    <div className="flex items-center justify-between text-xs text-theme-text-muted">
                       <span>Enrolled: {formatDate(e.enrolled_at, tz)}</span>
                       {e.target_completion_date && <span>Target: {formatDate(e.target_completion_date, tz)}</span>}
                     </div>
@@ -403,9 +508,9 @@ const MyTrainingPage: React.FC = () => {
                               {r.status === 'completed' ? (
                                 <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
                               ) : (
-                                <div className="w-3.5 h-3.5 rounded-full border border-slate-600" />
+                                <div className="w-3.5 h-3.5 rounded-full border border-theme-surface-border" />
                               )}
-                              <span className="text-slate-300">{Math.round(r.progress_percentage)}%</span>
+                              <span className="text-theme-text-secondary">{Math.round(r.progress_percentage)}%</span>
                             </div>
                             <span className={`px-1.5 py-0.5 rounded ${getStatusColor(r.status)}`}>
                               {r.status.replace('_', ' ')}
@@ -425,7 +530,7 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Training History" icon={FileText} defaultOpen={false}>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                  <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary">
                     <tr>
                       <th className="px-4 py-2">Course</th>
                       <th className="px-4 py-2">Type</th>
@@ -436,7 +541,7 @@ const MyTrainingPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {data.training_records.map((r) => (
-                      <tr key={r.id} className="text-slate-200">
+                      <tr key={r.id} className="text-theme-text-secondary">
                         <td className="px-4 py-2 whitespace-nowrap">{r.course_name}</td>
                         <td className="px-4 py-2 whitespace-nowrap capitalize">{r.training_type.replace('_', ' ')}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
@@ -459,10 +564,10 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Shift Completion Reports" icon={ClipboardList} defaultOpen={false}>
               <div className="space-y-3">
                 {data.shift_reports.map((sr) => (
-                  <div key={sr.id} className="bg-slate-800/50 rounded-lg p-4">
+                  <div key={sr.id} className="bg-theme-surface rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-medium text-white">{formatDate(sr.shift_date, tz)}</p>
-                      <div className="flex items-center space-x-3 text-xs text-slate-400">
+                      <p className="text-sm font-medium text-theme-text-primary">{formatDate(sr.shift_date, tz)}</p>
+                      <div className="flex items-center space-x-3 text-xs text-theme-text-muted">
                         <span>{sr.hours_on_shift}h</span>
                         <span>{sr.calls_responded} calls</span>
                         {v?.show_performance_rating && sr.performance_rating && (
@@ -480,12 +585,12 @@ const MyTrainingPage: React.FC = () => {
                       <p className="text-xs text-yellow-400 mb-1"><span className="font-medium">Improvement:</span> {sr.areas_for_improvement}</p>
                     )}
                     {v?.show_officer_narrative && sr.officer_narrative && (
-                      <p className="text-xs text-slate-300 mb-1"><span className="font-medium">Narrative:</span> {sr.officer_narrative}</p>
+                      <p className="text-xs text-theme-text-secondary mb-1"><span className="font-medium">Narrative:</span> {sr.officer_narrative}</p>
                     )}
                     {v?.show_skills_observed && sr.skills_observed && (sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {(sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).map((s, i) => (
-                          <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
+                          <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-theme-text-muted'}`}>
                             {s.skill_name}
                           </span>
                         ))}
@@ -502,7 +607,7 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Self-Reported Training" icon={Send} defaultOpen={false}>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                  <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary">
                     <tr>
                       <th className="px-4 py-2">Course</th>
                       <th className="px-4 py-2">Date</th>
@@ -513,7 +618,7 @@ const MyTrainingPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {data.submissions.map((s) => (
-                      <tr key={s.id} className="text-slate-200">
+                      <tr key={s.id} className="text-theme-text-secondary">
                         <td className="px-4 py-2 whitespace-nowrap">{s.course_name}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date, tz)}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{s.hours_completed}</td>
@@ -522,7 +627,7 @@ const MyTrainingPage: React.FC = () => {
                             {s.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-500">{formatDate(s.submitted_at, tz)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap text-xs text-theme-text-muted">{formatDate(s.submitted_at, tz)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -533,8 +638,8 @@ const MyTrainingPage: React.FC = () => {
 
           {/* Empty State (only for detailed sections, stats always show above) */}
           {!data.training_records?.length && !data.enrollments?.length && !data.shift_reports?.length && !data.submissions?.length && !data.certifications?.length && (
-            <div className="text-center py-8 bg-white/5 border border-white/10 rounded-lg">
-              <p className="text-slate-400 mb-4">
+            <div className="text-center py-8 bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
+              <p className="text-theme-text-muted mb-4">
                 No detailed training records yet. Submit external training to get started.
               </p>
               <button

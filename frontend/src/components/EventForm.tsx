@@ -7,13 +7,23 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import {
+  FileText,
+  Clock,
+  MapPin,
+  Users,
+  Mail,
+  QrCode,
+  Bell,
+} from 'lucide-react';
 import type { EventCreate, EventType, RSVPStatus } from '../types/event';
 import type { Role } from '../types/role';
 import { roleService, locationsService } from '../services/api';
+import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatForDateTimeInput } from '../utils/dateFormatting';
+import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
 interface EventFormProps {
   initialData?: Partial<EventCreate>;
@@ -57,6 +67,18 @@ const DEFAULT_FORM_DATA: EventCreate = {
   require_checkout: false,
 };
 
+/* Shared Tailwind classes for consistency */
+const inputClass =
+  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500';
+
+const selectClass =
+  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500';
+
+const labelClass = 'block text-sm font-semibold text-theme-text-primary mb-2';
+
+const checkboxClass =
+  'w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500';
+
 export const EventForm: React.FC<EventFormProps> = ({
   initialData,
   onSubmit,
@@ -91,7 +113,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [locations, setLocations] = useState<Location[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>(
-    initialData?.location_id ? 'select' : initialData?.location ? 'other' : 'select'
+    initialData?.location ? 'other' : 'select'
   );
 
   useEffect(() => {
@@ -131,7 +153,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     if (!formData.end_datetime && startDate) {
       const start = new Date(startDate);
       const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
-      changes.end_datetime = end.toISOString().slice(0, 16);
+      changes.end_datetime = formatForDateTimeInput(end);
     }
     update(changes);
   };
@@ -143,7 +165,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
     const start = new Date(formData.start_datetime);
     const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
-    update({ end_datetime: end.toISOString().slice(0, 16) });
+    update({ end_datetime: formatForDateTimeInput(end) });
   };
 
   const toggleRsvpStatus = (status: RSVPStatus, checked: boolean) => {
@@ -165,13 +187,39 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
   };
 
-  const handleLocationModeChange = (mode: 'select' | 'other') => {
-    setLocationMode(mode);
-    if (mode === 'select') {
-      update({ location: '', location_id: undefined });
+  const handleLocationSelect = (value: string) => {
+    if (value === '__other__') {
+      setLocationMode('other');
+      update({ location_id: undefined, location: '' });
+    } else if (value === '') {
+      setLocationMode('select');
+      update({ location_id: undefined, location: undefined });
     } else {
-      update({ location_id: undefined });
+      setLocationMode('select');
+      update({ location_id: value, location: undefined });
     }
+  };
+
+  const selectedLocation = locations.find((l) => l.id === formData.location_id);
+
+  const formatLocationAddress = (loc: Location) => {
+    const parts: string[] = [];
+    if (loc.address) parts.push(loc.address);
+    if (loc.city) parts.push(loc.city);
+    if (loc.state && loc.zip) {
+      parts.push(`${loc.state} ${loc.zip}`);
+    } else if (loc.state) {
+      parts.push(loc.state);
+    }
+    return parts.join(', ');
+  };
+
+  const formatLocationLabel = (loc: Location) => {
+    const parts = [loc.name];
+    if (loc.building) parts.push(`(${loc.building})`);
+    const addr = [loc.address, loc.city].filter(Boolean).join(', ');
+    if (addr) parts.push(`— ${addr}`);
+    return parts.join(' ');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -215,6 +263,13 @@ export const EventForm: React.FC<EventFormProps> = ({
     if (!submitData.location_details) submitData.location_details = undefined;
     if (!submitData.rsvp_deadline) submitData.rsvp_deadline = undefined;
 
+    // Convert local datetime-local values to UTC before sending to backend
+    submitData.start_datetime = localToUTC(submitData.start_datetime, tz);
+    submitData.end_datetime = localToUTC(submitData.end_datetime, tz);
+    if (submitData.rsvp_deadline) {
+      submitData.rsvp_deadline = localToUTC(submitData.rsvp_deadline, tz);
+    }
+
     try {
       await onSubmit(submitData);
     } catch (err: unknown) {
@@ -226,443 +281,496 @@ export const EventForm: React.FC<EventFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-800">{error}</p>
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
 
-      {/* === Basics === */}
-      <section>
-        <h3 className="text-lg font-medium text-theme-text-primary mb-4">Event Details</h3>
-        <div className="space-y-4">
-          {/* Title */}
-          <div>
-            <label htmlFor="event-title" className="block text-sm font-medium text-theme-text-primary">
-              Title <span className="text-red-700 dark:text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="event-title"
-              required
-              maxLength={200}
-              value={formData.title}
-              onChange={(e) => update({ title: e.target.value })}
-              className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-              placeholder="e.g., Monthly Business Meeting"
-            />
-          </div>
+      {/* === Event Details === */}
+      <section className="space-y-6">
+        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
+          <FileText className="w-5 h-5 text-red-700" />
+          <span>Event Details</span>
+        </h2>
 
-          {/* Description */}
-          <div>
-            <label htmlFor="event-description" className="block text-sm font-medium text-theme-text-primary">
-              Description
-            </label>
-            <textarea
-              id="event-description"
-              rows={3}
-              value={formData.description || ''}
-              onChange={(e) => update({ description: e.target.value })}
-              className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-              placeholder="What is this event about?"
-            />
-          </div>
+        {/* Title */}
+        <div>
+          <label htmlFor="event-title" className={labelClass}>
+            Title <span className="text-red-700 dark:text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            id="event-title"
+            required
+            maxLength={200}
+            value={formData.title}
+            onChange={(e) => update({ title: e.target.value })}
+            className={inputClass}
+            placeholder="e.g., Monthly Business Meeting"
+          />
+        </div>
 
-          {/* Event Type */}
-          <div>
-            <label htmlFor="event-type" className="block text-sm font-medium text-theme-text-primary">
-              Event Type <span className="text-red-700 dark:text-red-500">*</span>
-            </label>
-            <select
-              id="event-type"
-              required
-              value={formData.event_type}
-              onChange={(e) => update({ event_type: e.target.value as EventType })}
-              className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-            >
-              {EVENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {getEventTypeLabel(type)}
-                </option>
-              ))}
-            </select>
-            {formData.event_type === 'training' && (
-              <p className="mt-1 text-xs text-purple-600">
+        {/* Description */}
+        <div>
+          <label htmlFor="event-description" className={labelClass}>
+            Description
+          </label>
+          <textarea
+            id="event-description"
+            rows={4}
+            value={formData.description || ''}
+            onChange={(e) => update({ description: e.target.value })}
+            className={inputClass}
+            placeholder="What is this event about?"
+          />
+        </div>
+
+        {/* Event Type */}
+        <div>
+          <label htmlFor="event-type" className={labelClass}>
+            Event Type <span className="text-red-700 dark:text-red-500">*</span>
+          </label>
+          <select
+            id="event-type"
+            required
+            value={formData.event_type}
+            onChange={(e) => update({ event_type: e.target.value as EventType })}
+            className={selectClass}
+          >
+            {EVENT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {getEventTypeLabel(type)}
+              </option>
+            ))}
+          </select>
+          {formData.event_type === EventTypeEnum.TRAINING && (
+            <div className="mt-2 bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+              <p className="text-sm text-purple-700 dark:text-purple-300">
                 For training events with course tracking, use "Create Training Session" instead.
               </p>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </section>
+
+      <hr className="border-theme-surface-border" />
 
       {/* === Schedule === */}
-      <section>
-        <h3 className="text-lg font-medium text-theme-text-primary mb-4">Schedule</h3>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="start-datetime" className="block text-sm font-medium text-theme-text-primary">
-                Start Date & Time <span className="text-red-700 dark:text-red-500">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                id="start-datetime"
-                required
-                value={formData.start_datetime}
-                onChange={(e) => handleStartDateChange(e.target.value)}
-                className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="end-datetime" className="block text-sm font-medium text-theme-text-primary">
-                End Date & Time <span className="text-red-700 dark:text-red-500">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                id="end-datetime"
-                required
-                value={formData.end_datetime}
-                onChange={(e) => update({ end_datetime: e.target.value })}
-                className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-              />
-            </div>
-          </div>
+      <section className="space-y-6">
+        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
+          <Clock className="w-5 h-5 text-red-700" />
+          <span>Schedule</span>
+        </h2>
 
-          {/* Quick Duration */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <span className="block text-sm font-medium text-theme-text-primary mb-2">Quick Duration</span>
-            <div className="flex flex-wrap gap-2">
-              {[1, 2, 4, 8].map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  onClick={() => setDuration(h)}
-                  className="px-3 py-1.5 text-sm text-theme-text-secondary border border-theme-surface-border rounded-md hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
-                >
-                  {h} {h === 1 ? 'hour' : 'hours'}
-                </button>
-              ))}
-            </div>
+            <label htmlFor="start-datetime" className={labelClass}>
+              Start Date & Time <span className="text-red-700 dark:text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              step="900"
+              id="start-datetime"
+              required
+              value={formData.start_datetime}
+              onChange={(e) => handleStartDateChange(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="end-datetime" className={labelClass}>
+              End Date & Time <span className="text-red-700 dark:text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              step="900"
+              id="end-datetime"
+              required
+              value={formData.end_datetime}
+              onChange={(e) => update({ end_datetime: e.target.value })}
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        {/* Quick Duration */}
+        <div>
+          <span className={labelClass}>Quick Duration</span>
+          <div className="flex flex-wrap gap-2">
+            {[1, 2, 4, 8].map((h) => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => setDuration(h)}
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+              >
+                {h} {h === 1 ? 'hour' : 'hours'}
+              </button>
+            ))}
           </div>
         </div>
       </section>
 
+      <hr className="border-theme-surface-border" />
+
       {/* === Location === */}
-      <section>
-        <h3 className="text-lg font-medium text-theme-text-primary mb-4">Location</h3>
-        <div className="space-y-4">
-          {locations.length > 0 && (
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="location-mode"
-                  checked={locationMode === 'select'}
-                  onChange={() => handleLocationModeChange('select')}
-                  className="text-red-600 focus:ring-red-500"
-                />
-                Choose a location
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="location-mode"
-                  checked={locationMode === 'other'}
-                  onChange={() => handleLocationModeChange('other')}
-                  className="text-red-600 focus:ring-red-500"
-                />
-                Other / Enter manually
-              </label>
-            </div>
-          )}
+      <section className="space-y-6">
+        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
+          <MapPin className="w-5 h-5 text-red-700" />
+          <span>Location</span>
+        </h2>
 
-          {locationMode === 'select' && locations.length > 0 ? (
-            <div>
-              <label htmlFor="location-select" className="block text-sm font-medium text-theme-text-primary">
-                Location
-              </label>
-              <select
-                id="location-select"
-                value={formData.location_id || ''}
-                onChange={(e) => update({ location_id: e.target.value || undefined })}
-                className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-              >
-                <option value="">-- Select a location --</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div>
+          <label htmlFor="location-select" className={labelClass}>
+            Location
+          </label>
+          {locations.length > 0 ? (
+            <select
+              id="location-select"
+              value={locationMode === 'other' ? '__other__' : (formData.location_id || '')}
+              onChange={(e) => handleLocationSelect(e.target.value)}
+              className={selectClass}
+            >
+              <option value="">-- Select a location --</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {formatLocationLabel(loc)}
+                </option>
+              ))}
+              <option value="__other__">Other (off-site / enter manually)</option>
+            </select>
           ) : (
-            <div>
-              <label htmlFor="location-text" className="block text-sm font-medium text-theme-text-primary">
-                Location
-              </label>
-              <input
-                type="text"
-                id="location-text"
-                maxLength={300}
-                value={formData.location || ''}
-                onChange={(e) => update({ location: e.target.value })}
-                className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-                placeholder="e.g., Station 1 Conference Room"
-              />
-            </div>
+            <input
+              type="text"
+              id="location-text-fallback"
+              maxLength={300}
+              value={formData.location || ''}
+              onChange={(e) => update({ location: e.target.value })}
+              className={inputClass}
+              placeholder="e.g., Station 1 Conference Room"
+            />
           )}
+        </div>
 
+        {/* Show selected location details */}
+        {locationMode === 'select' && selectedLocation && (
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <MapPin className="w-5 h-5 text-blue-700 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold text-theme-text-primary">{selectedLocation.name}</p>
+                {selectedLocation.building && (
+                  <p className="text-sm text-theme-text-secondary mt-0.5">Building: {selectedLocation.building}</p>
+                )}
+                {formatLocationAddress(selectedLocation) && (
+                  <p className="text-sm text-theme-text-secondary mt-0.5">{formatLocationAddress(selectedLocation)}</p>
+                )}
+                <div className="flex flex-wrap gap-4 mt-2">
+                  {selectedLocation.room_number && (
+                    <span className="inline-flex items-center text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2.5 py-1 rounded-full">
+                      Room {selectedLocation.room_number}
+                    </span>
+                  )}
+                  {selectedLocation.capacity && (
+                    <span className="inline-flex items-center text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2.5 py-1 rounded-full">
+                      Capacity: {selectedLocation.capacity}
+                    </span>
+                  )}
+                  {selectedLocation.floor && (
+                    <span className="inline-flex items-center text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2.5 py-1 rounded-full">
+                      Floor {selectedLocation.floor}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Free-text location when "Other" is selected */}
+        {locationMode === 'other' && locations.length > 0 && (
           <div>
-            <label htmlFor="location-details" className="block text-sm font-medium text-theme-text-primary">
-              Additional Directions
+            <label htmlFor="location-text" className={labelClass}>
+              Location Name / Address
             </label>
             <input
               type="text"
-              id="location-details"
-              value={formData.location_details || ''}
-              onChange={(e) => update({ location_details: e.target.value })}
-              className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-              placeholder="e.g., Enter through side door, Room 204"
+              id="location-text"
+              maxLength={300}
+              value={formData.location || ''}
+              onChange={(e) => update({ location: e.target.value })}
+              className={inputClass}
+              placeholder="e.g., City Hall — 123 Main St, Anytown"
             />
           </div>
+        )}
+
+        <div>
+          <label htmlFor="location-details" className={labelClass}>
+            Additional Directions
+          </label>
+          <input
+            type="text"
+            id="location-details"
+            value={formData.location_details || ''}
+            onChange={(e) => update({ location_details: e.target.value })}
+            className={inputClass}
+            placeholder="e.g., Enter through side door, Room 204"
+          />
         </div>
       </section>
 
-      {/* === Attendance === */}
-      <section>
-        <h3 className="text-lg font-medium text-theme-text-primary mb-4">Attendance</h3>
-        <div className="space-y-4">
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="is-mandatory"
-              checked={formData.is_mandatory}
-              onChange={(e) => update({ is_mandatory: e.target.checked })}
-              className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
-            />
-            <label htmlFor="is-mandatory" className="ml-2 block text-sm text-theme-text-primary">
-              Mandatory attendance
-            </label>
-          </div>
+      <hr className="border-theme-surface-border" />
 
-          {/* Eligible Roles */}
-          {roles.length > 0 && (
-            <div>
-              <span className="block text-sm font-medium text-theme-text-primary mb-2">
-                Eligible Roles
-              </span>
-              <p className="text-xs text-theme-text-muted mb-2">
-                Leave all unchecked to allow all members. Check specific roles to restrict attendance.
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {roles.map((role) => (
-                  <label key={role.id} className="flex items-center gap-2 text-sm">
+      {/* === Attendance === */}
+      <section className="space-y-6">
+        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
+          <Users className="w-5 h-5 text-red-700" />
+          <span>Attendance</span>
+        </h2>
+
+        <div className="flex items-center space-x-3">
+          <input
+            type="checkbox"
+            id="is-mandatory"
+            checked={formData.is_mandatory}
+            onChange={(e) => update({ is_mandatory: e.target.checked })}
+            className={checkboxClass}
+          />
+          <label htmlFor="is-mandatory" className="text-sm text-theme-text-secondary">
+            Mandatory attendance
+          </label>
+        </div>
+
+        {/* Eligible Roles */}
+        {roles.length > 0 && (
+          <div>
+            <span className={labelClass}>Eligible Roles</span>
+            <p className="text-xs text-theme-text-muted mb-3">
+              Leave all unchecked to allow all members. Check specific roles to restrict attendance.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {roles.map((role) => (
+                <label key={role.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.eligible_roles?.includes(role.slug) || false}
+                    onChange={(e) => toggleEligibleRole(role.slug, e.target.checked)}
+                    className={checkboxClass}
+                  />
+                  <span className="text-theme-text-secondary">{role.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <hr className="border-theme-surface-border" />
+
+      {/* === RSVP Settings === */}
+      <section className="space-y-6">
+        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
+          <Mail className="w-5 h-5 text-red-700" />
+          <span>RSVP Settings</span>
+        </h2>
+
+        <div className="flex items-center space-x-3">
+          <input
+            type="checkbox"
+            id="requires-rsvp"
+            checked={formData.requires_rsvp}
+            onChange={(e) => update({ requires_rsvp: e.target.checked })}
+            className={checkboxClass}
+          />
+          <label htmlFor="requires-rsvp" className="text-sm text-theme-text-secondary">
+            Require RSVP
+          </label>
+        </div>
+
+        {formData.requires_rsvp && (
+          <div className="space-y-4 pl-6 border-l-2 border-red-500/30">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="rsvp-deadline" className={labelClass}>
+                  RSVP Deadline
+                </label>
+                <input
+                  type="datetime-local"
+                  step="900"
+                  id="rsvp-deadline"
+                  value={formData.rsvp_deadline || ''}
+                  onChange={(e) => update({ rsvp_deadline: e.target.value })}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="max-attendees" className={labelClass}>
+                  Max Attendees
+                </label>
+                <input
+                  type="number"
+                  id="max-attendees"
+                  min="1"
+                  value={formData.max_attendees || ''}
+                  onChange={(e) => update({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
+                  className={inputClass}
+                  placeholder="Unlimited"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                id="allow-guests"
+                checked={formData.allow_guests}
+                onChange={(e) => update({ allow_guests: e.target.checked })}
+                className={checkboxClass}
+              />
+              <label htmlFor="allow-guests" className="text-sm text-theme-text-secondary">
+                Allow guests
+              </label>
+            </div>
+
+            <fieldset>
+              <legend className={labelClass}>RSVP Status Options</legend>
+              <div className="flex gap-4">
+                {(['going', 'not_going', 'maybe'] as RSVPStatus[]).map((status) => (
+                  <label key={status} className="flex items-center gap-2 text-sm cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={formData.eligible_roles?.includes(role.slug) || false}
-                      onChange={(e) => toggleEligibleRole(role.slug, e.target.checked)}
-                      className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
+                      checked={formData.allowed_rsvp_statuses?.includes(status) || false}
+                      onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
+                      className={checkboxClass}
                     />
-                    {role.name}
+                    <span className="text-theme-text-secondary">
+                      {status === RSVPStatusEnum.GOING ? 'Going' : status === RSVPStatusEnum.NOT_GOING ? 'Not Going' : 'Maybe'}
+                    </span>
                   </label>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* === RSVP Settings === */}
-      <section>
-        <h3 className="text-lg font-medium text-theme-text-primary mb-4">RSVP Settings</h3>
-        <div className="space-y-4 p-4 bg-theme-surface-secondary rounded-lg">
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="requires-rsvp"
-              checked={formData.requires_rsvp}
-              onChange={(e) => update({ requires_rsvp: e.target.checked })}
-              className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
-            />
-            <label htmlFor="requires-rsvp" className="ml-2 block text-sm text-theme-text-primary">
-              Require RSVP
-            </label>
+            </fieldset>
           </div>
-
-          {formData.requires_rsvp && (
-            <div className="space-y-4 pl-6 border-l-2 border-theme-surface-border">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="rsvp-deadline" className="block text-sm font-medium text-theme-text-primary">
-                    RSVP Deadline
-                  </label>
-                  <input
-                    type="datetime-local"
-                    id="rsvp-deadline"
-                    value={formData.rsvp_deadline || ''}
-                    onChange={(e) => update({ rsvp_deadline: e.target.value })}
-                    className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="max-attendees" className="block text-sm font-medium text-theme-text-primary">
-                    Max Attendees
-                  </label>
-                  <input
-                    type="number"
-                    id="max-attendees"
-                    min="1"
-                    value={formData.max_attendees || ''}
-                    onChange={(e) => update({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
-                    className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-                    placeholder="Unlimited"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="allow-guests"
-                  checked={formData.allow_guests}
-                  onChange={(e) => update({ allow_guests: e.target.checked })}
-                  className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
-                />
-                <label htmlFor="allow-guests" className="ml-2 block text-sm text-theme-text-primary">
-                  Allow guests
-                </label>
-              </div>
-
-              <fieldset>
-                <legend className="block text-sm font-medium text-theme-text-primary mb-2">
-                  RSVP Status Options
-                </legend>
-                <div className="flex gap-4">
-                  {(['going', 'not_going', 'maybe'] as RSVPStatus[]).map((status) => (
-                    <label key={status} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={formData.allowed_rsvp_statuses?.includes(status) || false}
-                        onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
-                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
-                      />
-                      {status === 'going' ? 'Going' : status === 'not_going' ? 'Not Going' : 'Maybe'}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            </div>
-          )}
-        </div>
+        )}
       </section>
+
+      <hr className="border-theme-surface-border" />
 
       {/* === Check-In Settings === */}
-      <section>
-        <h3 className="text-lg font-medium text-theme-text-primary mb-4">Check-In Settings</h3>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="checkin-window" className="block text-sm font-medium text-theme-text-primary">
-              Check-In Window
-            </label>
-            <select
-              id="checkin-window"
-              value={formData.check_in_window_type || 'flexible'}
-              onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
-              className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-            >
-              <option value="flexible">Flexible - Anytime before event ends</option>
-              <option value="strict">Strict - Only during actual event time</option>
-              <option value="window">Window - Custom minutes before/after start</option>
-            </select>
-          </div>
+      <section className="space-y-6">
+        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
+          <QrCode className="w-5 h-5 text-red-700" />
+          <span>Check-In Settings</span>
+        </h2>
 
-          {formData.check_in_window_type === 'window' && (
-            <div className="grid grid-cols-2 gap-4 pl-6 border-l-2 border-theme-surface-border">
-              <div>
-                <label htmlFor="checkin-before" className="block text-sm font-medium text-theme-text-primary">
-                  Minutes before start
-                </label>
-                <input
-                  type="number"
-                  id="checkin-before"
-                  min="0"
-                  max="120"
-                  value={formData.check_in_minutes_before || 15}
-                  onChange={(e) => update({ check_in_minutes_before: parseInt(e.target.value) || 15 })}
-                  className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor="checkin-after" className="block text-sm font-medium text-theme-text-primary">
-                  Minutes after start
-                </label>
-                <input
-                  type="number"
-                  id="checkin-after"
-                  min="0"
-                  max="120"
-                  value={formData.check_in_minutes_after || 15}
-                  onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
-                  className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-                />
-              </div>
+        <div>
+          <label htmlFor="checkin-window" className={labelClass}>
+            Check-In Window
+          </label>
+          <select
+            id="checkin-window"
+            value={formData.check_in_window_type || 'flexible'}
+            onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
+            className={selectClass}
+          >
+            <option value="flexible">Flexible - Anytime before event ends</option>
+            <option value="strict">Strict - Only during actual event time</option>
+            <option value="window">Window - Custom minutes before/after start</option>
+          </select>
+        </div>
+
+        {formData.check_in_window_type === CheckInWindowType.WINDOW && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 border-l-2 border-red-500/30">
+            <div>
+              <label htmlFor="checkin-before" className={labelClass}>
+                Minutes before start
+              </label>
+              <input
+                type="number"
+                id="checkin-before"
+                min="0"
+                max="120"
+                value={formData.check_in_minutes_before || 15}
+                onChange={(e) => update({ check_in_minutes_before: parseInt(e.target.value) || 15 })}
+                className={inputClass}
+              />
             </div>
-          )}
-
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="require-checkout"
-              checked={formData.require_checkout}
-              onChange={(e) => update({ require_checkout: e.target.checked })}
-              className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
-            />
-            <label htmlFor="require-checkout" className="ml-2 block text-sm text-theme-text-primary">
-              Require manual check-out
-            </label>
+            <div>
+              <label htmlFor="checkin-after" className={labelClass}>
+                Minutes after start
+              </label>
+              <input
+                type="number"
+                id="checkin-after"
+                min="0"
+                max="120"
+                value={formData.check_in_minutes_after || 15}
+                onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
+                className={inputClass}
+              />
+            </div>
           </div>
+        )}
+
+        <div className="flex items-center space-x-3">
+          <input
+            type="checkbox"
+            id="require-checkout"
+            checked={formData.require_checkout}
+            onChange={(e) => update({ require_checkout: e.target.checked })}
+            className={checkboxClass}
+          />
+          <label htmlFor="require-checkout" className="text-sm text-theme-text-secondary">
+            Require manual check-out
+          </label>
         </div>
       </section>
 
-      {/* === Notifications === */}
-      <section>
-        <h3 className="text-lg font-medium text-theme-text-primary mb-4">Notifications</h3>
-        <div className="space-y-4">
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="send-reminders"
-              checked={formData.send_reminders}
-              onChange={(e) => update({ send_reminders: e.target.checked })}
-              className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
-            />
-            <label htmlFor="send-reminders" className="ml-2 block text-sm text-theme-text-primary">
-              Send event reminders
-            </label>
-          </div>
+      <hr className="border-theme-surface-border" />
 
-          {formData.send_reminders && (
-            <div className="pl-6 border-l-2 border-theme-surface-border">
-              <label htmlFor="reminder-hours" className="block text-sm font-medium text-theme-text-primary">
-                Reminder hours before event
-              </label>
-              <select
-                id="reminder-hours"
-                value={formData.reminder_hours_before || 24}
-                onChange={(e) => update({ reminder_hours_before: parseInt(e.target.value) })}
-                className="mt-1 block w-48 bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-              >
-                <option value={1}>1 hour</option>
-                <option value={2}>2 hours</option>
-                <option value={4}>4 hours</option>
-                <option value={12}>12 hours</option>
-                <option value={24}>24 hours (1 day)</option>
-                <option value={48}>48 hours (2 days)</option>
-                <option value={72}>72 hours (3 days)</option>
-                <option value={168}>168 hours (1 week)</option>
-              </select>
-            </div>
-          )}
+      {/* === Notifications === */}
+      <section className="space-y-6">
+        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
+          <Bell className="w-5 h-5 text-red-700" />
+          <span>Notifications</span>
+        </h2>
+
+        <div className="flex items-center space-x-3">
+          <input
+            type="checkbox"
+            id="send-reminders"
+            checked={formData.send_reminders}
+            onChange={(e) => update({ send_reminders: e.target.checked })}
+            className={checkboxClass}
+          />
+          <label htmlFor="send-reminders" className="text-sm text-theme-text-secondary">
+            Send event reminders
+          </label>
         </div>
+
+        {formData.send_reminders && (
+          <div className="pl-6 border-l-2 border-red-500/30">
+            <label htmlFor="reminder-hours" className={labelClass}>
+              Reminder hours before event
+            </label>
+            <select
+              id="reminder-hours"
+              value={formData.reminder_hours_before || 24}
+              onChange={(e) => update({ reminder_hours_before: parseInt(e.target.value) })}
+              className="w-full max-w-xs px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+            >
+              <option value={1}>1 hour</option>
+              <option value={2}>2 hours</option>
+              <option value={4}>4 hours</option>
+              <option value={12}>12 hours</option>
+              <option value={24}>24 hours (1 day)</option>
+              <option value={48}>48 hours (2 days)</option>
+              <option value={72}>72 hours (3 days)</option>
+              <option value={168}>168 hours (1 week)</option>
+            </select>
+          </div>
+        )}
       </section>
 
       {/* === Actions === */}
@@ -670,14 +778,14 @@ export const EventForm: React.FC<EventFormProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-8 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSubmitting ? 'Saving...' : submitLabel}
         </button>

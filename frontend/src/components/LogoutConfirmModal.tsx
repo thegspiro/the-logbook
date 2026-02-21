@@ -57,7 +57,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
         aria-labelledby="logout-modal-title"
         aria-describedby="logout-modal-description"
       >
-        <div className="bg-theme-surface border border-theme-surface-border rounded-lg shadow-xl max-w-md w-full p-6 relative">
+        <div className="bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-xl max-w-md w-full p-6 relative">
           {/* Close button */}
           <button
             onClick={onCancel}

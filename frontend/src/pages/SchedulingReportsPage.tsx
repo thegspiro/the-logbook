@@ -19,8 +19,13 @@ import {
   Search,
   Download,
   AlertCircle,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
+import type { RequirementComplianceSummary, MemberComplianceRecord } from '../services/api';
 
 // ============================================
 // Interfaces
@@ -66,7 +71,7 @@ interface AvailabilityRecord {
   time_off_days: number;
 }
 
-type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability';
+type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability' | 'compliance';
 
 // ============================================
 // Date Range Filter Component
@@ -191,6 +196,12 @@ export const SchedulingReportsPage: React.FC = () => {
   // Availability state
   const [availabilityData, setAvailabilityData] = useState<AvailabilityRecord[]>([]);
 
+  // Compliance state
+  const [complianceData, setComplianceData] = useState<RequirementComplianceSummary[]>([]);
+  const [complianceRefDate, setComplianceRefDate] = useState('');
+  const [expandedRequirements, setExpandedRequirements] = useState<Set<string>>(new Set());
+  const [complianceFilter, setComplianceFilter] = useState<'all' | 'non-compliant'>('all');
+
   // Reset when tab changes
   const handleTabChange = (tab: TabView) => {
     setActiveTab(tab);
@@ -199,6 +210,8 @@ export const SchedulingReportsPage: React.FC = () => {
     setCoverageData([]);
     setCallVolumeData([]);
     setAvailabilityData([]);
+    setComplianceData([]);
+    setExpandedRequirements(new Set());
   };
 
   // Load Member Hours
@@ -260,6 +273,34 @@ export const SchedulingReportsPage: React.FC = () => {
     }
   }, [startDate, endDate]);
 
+  // Load Compliance
+  const loadCompliance = useCallback(async () => {
+    setLoading(true);
+    setHasSearched(true);
+    try {
+      const params: Record<string, string> = {};
+      if (complianceRefDate) params.reference_date = complianceRefDate;
+      const data = await schedulingService.getComplianceReport(params);
+      setComplianceData(data.requirements || []);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to load compliance report'));
+    } finally {
+      setLoading(false);
+    }
+  }, [complianceRefDate]);
+
+  const toggleRequirement = (reqId: string) => {
+    setExpandedRequirements(prev => {
+      const next = new Set(prev);
+      if (next.has(reqId)) {
+        next.delete(reqId);
+      } else {
+        next.add(reqId);
+      }
+      return next;
+    });
+  };
+
   const handleSearch = () => {
     switch (activeTab) {
       case 'member-hours':
@@ -273,6 +314,9 @@ export const SchedulingReportsPage: React.FC = () => {
         break;
       case 'availability':
         loadAvailability();
+        break;
+      case 'compliance':
+        loadCompliance();
         break;
     }
   };
@@ -355,6 +399,19 @@ export const SchedulingReportsPage: React.FC = () => {
         >
           <Users className="w-4 h-4 inline-block mr-2" aria-hidden="true" />
           Availability
+        </button>
+        <button
+          onClick={() => handleTabChange('compliance')}
+          role="tab"
+          aria-selected={activeTab === 'compliance'}
+          className={`px-4 py-3 text-sm font-medium ${
+            activeTab === 'compliance'
+              ? 'text-red-700 dark:text-red-500 border-b-2 border-red-500'
+              : 'text-theme-text-muted hover:text-theme-text-primary'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4 inline-block mr-2" aria-hidden="true" />
+          Shift Compliance
         </button>
       </div>
 
@@ -771,6 +828,260 @@ export const SchedulingReportsPage: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============================== */}
+      {/* Shift Compliance Tab */}
+      {/* ============================== */}
+      {activeTab === 'compliance' && (
+        <div role="tabpanel">
+          {/* Compliance filter bar */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
+            className="flex flex-wrap items-end gap-3 mb-6 p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border"
+          >
+            <div>
+              <label htmlFor="compliance-ref-date" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                Reference Date (optional)
+              </label>
+              <input
+                id="compliance-ref-date"
+                type="date"
+                value={complianceRefDate}
+                onChange={(e) => setComplianceRefDate(e.target.value)}
+                className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+            >
+              {loading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Search className="w-4 h-4" aria-hidden="true" />
+              )}
+              {loading ? 'Loading...' : 'Check Compliance'}
+            </button>
+          </form>
+
+          {!hasSearched ? (
+            <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+              <CheckCircle2 className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
+              <h3 className="text-lg font-semibold text-theme-text-primary mb-2">Shift Compliance</h3>
+              <p className="text-theme-text-muted">
+                Check member compliance against shift and hours requirements.
+                <br />
+                Leave the reference date blank to use today.
+              </p>
+            </div>
+          ) : loading ? (
+            <div className="flex justify-center items-center py-12" role="status" aria-live="polite">
+              <RefreshCw className="w-8 h-8 text-theme-text-muted animate-spin" aria-hidden="true" />
+              <span className="sr-only">Loading compliance...</span>
+            </div>
+          ) : complianceData.length === 0 ? (
+            <div className="text-center py-8 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+              <AlertCircle className="w-10 h-10 text-theme-text-muted mx-auto mb-3" aria-hidden="true" />
+              <p className="text-theme-text-muted">
+                No active shift or hours requirements found.
+                <br />
+                Create training requirements with type &quot;Shifts&quot; or &quot;Hours&quot; to track compliance.
+              </p>
+            </div>
+          ) : (
+            <div>
+              {/* Overall Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <StatCard
+                  label="Requirements"
+                  value={complianceData.length}
+                  icon={<Shield className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
+                />
+                <StatCard
+                  label="Total Members"
+                  value={complianceData.reduce((sum, r) => sum + r.total_members, 0)}
+                  icon={<Users className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
+                />
+                <StatCard
+                  label="Compliant"
+                  value={complianceData.reduce((sum, r) => sum + r.compliant_count, 0)}
+                  icon={<CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" aria-hidden="true" />}
+                />
+                <StatCard
+                  label="Non-Compliant"
+                  value={complianceData.reduce((sum, r) => sum + r.non_compliant_count, 0)}
+                  icon={<XCircle className="w-5 h-5 text-red-600 dark:text-red-400" aria-hidden="true" />}
+                />
+              </div>
+
+              {/* Filter toggle */}
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => setComplianceFilter('all')}
+                  className={`px-3 py-1.5 text-sm rounded-lg border ${
+                    complianceFilter === 'all'
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'bg-theme-surface border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
+                  }`}
+                >
+                  All Members
+                </button>
+                <button
+                  onClick={() => setComplianceFilter('non-compliant')}
+                  className={`px-3 py-1.5 text-sm rounded-lg border ${
+                    complianceFilter === 'non-compliant'
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'bg-theme-surface border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
+                  }`}
+                >
+                  Non-Compliant Only
+                </button>
+              </div>
+
+              {/* Requirement cards */}
+              <div className="space-y-4">
+                {complianceData.map((req) => {
+                  const isExpanded = expandedRequirements.has(req.requirement_id);
+                  const filteredMembers = complianceFilter === 'non-compliant'
+                    ? req.members.filter(m => !m.compliant)
+                    : req.members;
+
+                  return (
+                    <div
+                      key={req.requirement_id}
+                      className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden"
+                    >
+                      {/* Requirement header */}
+                      <button
+                        onClick={() => toggleRequirement(req.requirement_id)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-theme-surface-hover transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          {isExpanded ? (
+                            <ChevronDown className="w-5 h-5 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+                          )}
+                          <div>
+                            <h3 className="font-semibold text-theme-text-primary">{req.requirement_name}</h3>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+                                {req.requirement_type === 'shifts' ? 'Shifts' : 'Hours'}
+                              </span>
+                              <span className="text-xs text-theme-text-muted capitalize">
+                                {req.frequency.replace('_', ' ')}
+                              </span>
+                              <span className="text-xs text-theme-text-muted">
+                                {new Date(req.period_start).toLocaleDateString()} — {new Date(req.period_end).toLocaleDateString()}
+                              </span>
+                              <span className="text-xs text-theme-text-secondary font-medium">
+                                Required: {req.required_value} {req.requirement_type === 'shifts' ? 'shifts' : 'hours'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 flex-shrink-0 ml-4">
+                          {/* Compliance rate badge */}
+                          <div className="text-right">
+                            <div className={`text-lg font-bold ${
+                              req.compliance_rate >= 80
+                                ? 'text-green-700 dark:text-green-400'
+                                : req.compliance_rate >= 50
+                                  ? 'text-yellow-700 dark:text-yellow-400'
+                                  : 'text-red-700 dark:text-red-400'
+                            }`}>
+                              {req.compliance_rate}%
+                            </div>
+                            <div className="text-xs text-theme-text-muted">
+                              {req.compliant_count}/{req.total_members} compliant
+                            </div>
+                          </div>
+                          {/* Progress bar */}
+                          <div className="w-24 h-2 bg-theme-surface-secondary rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                req.compliance_rate >= 80
+                                  ? 'bg-green-500'
+                                  : req.compliance_rate >= 50
+                                    ? 'bg-yellow-500'
+                                    : 'bg-red-500'
+                              }`}
+                              style={{ width: `${req.compliance_rate}%` }}
+                            />
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Expanded member list */}
+                      {isExpanded && (
+                        <div className="border-t border-theme-surface-border">
+                          {filteredMembers.length === 0 ? (
+                            <div className="p-4 text-center text-theme-text-muted text-sm">
+                              {complianceFilter === 'non-compliant' ? 'All members are compliant!' : 'No members found'}
+                            </div>
+                          ) : (
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
+                                  <th className="text-left py-2 px-4 text-theme-text-secondary font-medium">Member</th>
+                                  <th className="text-left py-2 px-4 text-theme-text-secondary font-medium">Rank</th>
+                                  <th className="text-right py-2 px-4 text-theme-text-secondary font-medium">Shifts</th>
+                                  <th className="text-right py-2 px-4 text-theme-text-secondary font-medium">Hours</th>
+                                  <th className="text-right py-2 px-4 text-theme-text-secondary font-medium">Progress</th>
+                                  <th className="text-center py-2 px-4 text-theme-text-secondary font-medium">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredMembers.map((member) => (
+                                  <tr key={member.user_id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
+                                    <td className="py-2 px-4">
+                                      <span className="text-theme-text-primary font-medium">{member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.user_id}</span>
+                                    </td>
+                                    <td className="py-2 px-4">
+                                      <span className="text-theme-text-secondary text-xs capitalize">{member.rank?.replace('_', ' ') || '-'}</span>
+                                    </td>
+                                    <td className="py-2 px-4 text-right text-theme-text-primary">{member.shift_count}</td>
+                                    <td className="py-2 px-4 text-right text-theme-text-primary">{member.total_hours}</td>
+                                    <td className="py-2 px-4 text-right">
+                                      <div className="flex items-center justify-end gap-2">
+                                        <div className="w-16 h-1.5 bg-theme-surface-secondary rounded-full overflow-hidden">
+                                          <div
+                                            className={`h-full rounded-full ${member.compliant ? 'bg-green-500' : 'bg-red-500'}`}
+                                            style={{ width: `${member.percentage}%` }}
+                                          />
+                                        </div>
+                                        <span className="text-xs text-theme-text-muted w-10 text-right">{member.percentage}%</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-4 text-center">
+                                      {member.compliant ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                                          <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                                          Compliant
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                                          <XCircle className="w-3 h-3" aria-hidden="true" />
+                                          Behind
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

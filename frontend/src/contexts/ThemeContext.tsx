@@ -36,7 +36,7 @@ function getSavedTheme(): Theme {
   if (saved === 'light' || saved === 'dark' || saved === 'system') {
     return saved;
   }
-  return 'light';
+  return 'system';
 }
 
 function applyThemeToDocument(resolved: ResolvedTheme): void {

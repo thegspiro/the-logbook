@@ -140,7 +140,7 @@ export const ApparatusListPage: React.FC = () => {
         )}
 
         {/* Fleet Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-8">
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Fleet</p>
             <p className="text-theme-text-primary text-2xl font-bold mt-1">
@@ -219,7 +219,7 @@ export const ApparatusListPage: React.FC = () => {
 
           {/* Expanded Filters */}
           {showFilters && (
-            <div className="mt-4 pt-4 border-t border-theme-surface-border grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="mt-4 pt-4 border-t border-theme-surface-border grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               {/* Type Filter */}
               <div>
                 <label className="block text-sm text-theme-text-muted mb-1">Type</label>

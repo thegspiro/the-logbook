@@ -145,7 +145,7 @@ const IntegrationsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
@@ -280,7 +280,7 @@ const IntegrationsPage: React.FC = () => {
             <div className="fixed inset-0 z-50 overflow-y-auto">
               <div className="flex items-center justify-center min-h-screen px-4">
                 <div className="fixed inset-0 bg-black/60" onClick={() => setShowConnectModal(null)} />
-                <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+                <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                   <div className="px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
                       <div className="flex items-center space-x-3">

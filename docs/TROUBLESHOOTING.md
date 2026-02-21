@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-16 (includes database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements; plus system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-20 (includes hardcoded value elimination across 43 files, centralized constants for role groups/event types/folder slugs, CSS variable consolidation for toast/status colors, dependency version bumps; comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique badge number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
 
 ---
 
@@ -14,7 +14,8 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 2. [Onboarding Issues](#onboarding-issues)
 3. [Email & SMTP Configuration](#email--smtp-configuration)
 4. [User Account Issues](#user-account-issues)
-5. [Network & Connection Problems](#network--connection-problems)
+5. [Member Management Issues](#member-management-issues)
+6. [Network & Connection Problems](#network--connection-problems)
 6. [Image Upload Issues](#image-upload-issues)
 7. [Database & Migration Issues](#database--migration-issues)
 8. [Startup Sequence Issues](#startup-sequence-issues)
@@ -24,12 +25,16 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 12. [Documents Module Issues](#documents-module-issues)
 13. [Events Module Issues](#events-module-issues)
 14. [Facilities Module](#facilities-module)
-15. [Theme & Display Issues](#theme--display-issues)
-16. [Dashboard Issues](#dashboard-issues)
-17. [TypeScript Build Issues](#typescript-build-issues)
-18. [Error Message Reference](#error-message-reference)
+15. [Locations & Kiosk Display](#locations--kiosk-display)
+16. [Theme & Display Issues](#theme--display-issues)
+17. [Dashboard Issues](#dashboard-issues)
+18. [TypeScript Build Issues](#typescript-build-issues)
+19. [Error Message Reference](#error-message-reference)
 19. [Error Handling Patterns](#error-handling-patterns)
-20. [Getting Help](#getting-help)
+20. [Centralized Constants & Enum Usage Issues](#centralized-constants--enum-usage-issues)
+21. [CSS Variable & Theming Issues](#css-variable--theming-issues)
+22. [Dependency Version Management](#dependency-version-management)
+23. [Getting Help](#getting-help)
 
 ---
 
@@ -480,6 +485,65 @@ docker compose up --build
 - Keep browser tab open during onboarding
 - Complete each step promptly
 - Save work frequently (most steps auto-save)
+
+---
+
+## Member Management Issues
+
+### Cannot Delete a Member
+
+**Symptom**: The trash can icon on the Members page does nothing when clicked, or there is no visible way to delete a member.
+
+**Cause (Fixed 2026-02-20)**: The trash can icon buttons were rendered without an `onClick` handler — they were non-functional placeholders. Additionally, no backend `DELETE /users/{user_id}` endpoint existed.
+
+**Resolution**: This is now fully implemented:
+- The trash can buttons on the Members page (both mobile and desktop views) now trigger a soft-delete with a confirmation prompt
+- The Members Admin page has a "Delete" text button in the actions column
+- The backend `DELETE /users/{user_id}` endpoint sets the `deleted_at` timestamp (soft-delete)
+- The button is hidden for your own row to prevent self-deletion
+- Requires `members.manage` permission
+
+**Note**: Deletion is a soft-delete — the member's data is preserved in the database but they are filtered out of all queries. To restore a soft-deleted member, a database administrator can set `deleted_at = NULL` on the user record.
+
+---
+
+### Member Profile Page Crashes
+
+**Symptom**: White screen or JavaScript error when viewing a member's profile page.
+
+**Cause (Fixed 2026-02-20)**: The member profile avatar tried to access `user.first_name[0]` (first character of first name) without checking if `first_name` was null or empty. Members imported without a first name would crash the page.
+
+**Resolution**: Added optional chaining (`user.first_name?.[0]`) with a fallback to the username initial.
+
+---
+
+### Duplicate Badge Number Error
+
+**Symptom**: Error when creating a member: "A member with badge number 'XXX' already exists in this organization."
+
+**Cause**: As of 2026-02-20, badge numbers are enforced as unique per organization. Previously, duplicates could be silently created, leading to data confusion.
+
+**Resolution**: Use a different badge number, or check with your administrator if the existing badge was assigned incorrectly.
+
+---
+
+### Dashboard Shows 0 Members
+
+**Symptom**: The admin dashboard summary shows "0 Active Members" even though members exist.
+
+**Cause (Fixed 2026-02-20)**: The admin summary queries were joining across all organizations instead of filtering to the current user's organization.
+
+**Resolution**: Update to the latest version. The queries now properly isolate results to the current organization.
+
+---
+
+### Login Returns 500 Internal Server Error
+
+**Symptom**: Login fails with a 500 error after a taxonomy update or fresh deployment.
+
+**Cause (Fixed 2026-02-20)**: The taxonomy refactor renamed the `roles` relationship to `positions` on the User model. Code referencing `User.roles` during authentication would crash with an `AttributeError`.
+
+**Resolution**: A backward-compatible `roles` synonym was added to the User model. Update to the latest version.
 
 ---
 
@@ -1016,6 +1080,57 @@ All form submissions are automatically sanitized with DOMPurify to strip HTML/sc
 #### Password Requirements
 
 Login passwords must be at least **8 characters** (schema validation). New passwords during registration or reset must meet the full strength requirements (12+ characters, mixed case, numbers, special characters).
+
+#### Event Attachment Download: "Access denied"
+
+**Message**: `"Access denied"` (HTTP 403)
+
+**Cause**: The stored file path for the attachment resolved outside the allowed upload directory. This is a security safeguard against path traversal attacks.
+
+**Solutions**:
+- This error indicates data integrity issue — the `file_path` in the event's attachments JSON does not point to a file within `/app/uploads/event-attachments/`
+- Re-upload the attachment through the normal upload flow
+- If this occurs on previously uploaded files, check that the `ATTACHMENT_UPLOAD_DIR` path has not changed between deployments
+
+#### External Training Provider: Credentials Not Working After Update
+
+**Symptoms**: External training provider sync fails with authentication errors after upgrading to the latest version
+
+**Cause**: Provider API credentials (api_key, api_secret, client_secret) are now encrypted at rest using AES-256. Pre-existing plaintext credentials in the database should be handled transparently (the service falls back to plaintext if decryption fails), but if issues persist:
+
+**Solutions**:
+1. Re-save the provider credentials through the UI or API — this will encrypt them with the current key
+2. Verify `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables have not changed since the credentials were last saved
+3. Test the connection: `POST /api/v1/external-training/providers/{id}/test`
+
+#### Document Upload: "File type not allowed"
+
+**Message**: `"File type not allowed. Detected type: <mime-type>."`
+
+**Cause**: Document uploads are now validated using magic-byte detection (inspecting actual file content) rather than trusting the HTTP `Content-Type` header. The detected MIME type is not in the allowed list.
+
+**Allowed types**: PDF, Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), text, CSV, images (JPEG, PNG, GIF, WebP), ZIP archives.
+
+**Solutions**:
+- Verify the file is a genuinely supported format (not just renamed with a supported extension)
+- If the file is a valid format but being rejected, the file may be corrupted — try re-exporting or re-saving it
+- For uncommon but legitimate file types, contact your administrator to request the type be added to the allowlist
+
+#### MinIO: Container Fails to Start
+
+**Message**: `MINIO_ROOT_USER must be set in .env` or `MINIO_ROOT_PASSWORD must be set in .env`
+
+**Cause**: MinIO credentials are no longer provided as insecure defaults in docker-compose.yml. They must be explicitly set in your `.env` file.
+
+**Solutions**:
+```bash
+# Add to your .env file:
+MINIO_ROOT_USER=your_minio_admin_user
+MINIO_ROOT_PASSWORD=your_secure_minio_password
+
+# Generate a secure password:
+openssl rand -hex 24
+```
 
 ---
 
@@ -1580,6 +1695,35 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 
 **For full configuration documentation, see [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md).**
 
+#### Pool Items vs. Individual Items
+
+**Understanding `tracking_type`**: Inventory items have two tracking modes:
+- **`individual`** (default): Each item is a unique, serialized record assigned 1:1 to a member (e.g., a specific radio with serial number). Use `POST /inventory/items/{id}/assign` and `/unassign`.
+- **`pool`**: A quantity-tracked pool (e.g., "Dept T-Shirt Medium, qty: 20"). Units are issued to members and the on-hand count decrements automatically. Use `POST /inventory/items/{id}/issue` and `POST /inventory/issuances/{id}/return`.
+
+**Common Scenario**: "I have 20 t-shirts and want to give one to a member"
+1. Create the item with `tracking_type: "pool"` and `quantity: 20`
+2. Issue to a member: `POST /inventory/items/{id}/issue` with `{ "user_id": "...", "quantity": 1 }`
+3. On-hand quantity becomes 19, `quantity_issued` becomes 1
+4. When the member returns it: `POST /inventory/issuances/{issuance_id}/return`
+
+#### Pool Issue: "Item is not a pool-tracked item"
+
+**Cause**: You tried to issue from an item with `tracking_type: "individual"`. The `/issue` endpoint only works for pool items.
+
+**Solutions**:
+- Change the item's tracking type: `PATCH /inventory/items/{id}` with `{ "tracking_type": "pool" }`
+- If the item has a serial number and should be tracked individually, use `POST /inventory/items/{id}/assign` instead
+
+#### Pool Issue: "Insufficient stock"
+
+**Cause**: The requested quantity exceeds the item's current on-hand `quantity`.
+
+**Solutions**:
+- Check current stock: `GET /inventory/items/{id}` — the `quantity` field shows available on-hand units
+- To see who has issued units: `GET /inventory/items/{id}/issuances`
+- Collect returns from members or increase the pool quantity via `PATCH /inventory/items/{id}` with `{ "quantity": <new_total> }`
+
 #### Membership Tier: Member Not Auto-Advancing
 
 **Symptoms**: A member has enough years of service but is still at a lower tier
@@ -1995,6 +2139,30 @@ Only explicitly named users can evaluate.
 ---
 
 ## Training Module
+
+### Training Officers See Wrong Requirements (Fixed 2026-02-20)
+
+**Symptom**: Training officers using the "My Training" page only see requirements marked `applies_to_all = True`. Role-scoped requirements never appear, and the officer is treated as a regular member.
+
+**Root Cause**: The `GET /my-training` endpoint accessed `current_user.roles` via lazy loading in an async context, which triggered `MissingGreenlet`. The broad `try/except: pass` silently caught the error, so `is_officer` was always `False` and `user_role_ids` was always empty.
+
+**Fix Applied**: Replaced the lazy `current_user.roles` access with an explicit `selectinload(User.roles)` query.
+
+### Training Record Creation / Updates Were Unprotected (Fixed 2026-02-20)
+
+**Symptom**: Any authenticated user could create or modify training records for any member via `POST /records` or `PATCH /records/{id}`.
+
+**Root Cause**: These endpoints only required basic authentication (`get_current_user`) and accepted a `user_id` field in the request body without ownership or permission checks.
+
+**Fix Applied**: Both endpoints now require `training.manage` permission via `require_permission("training.manage")`.
+
+### Event Cancellation Notifications Not Sending (Fixed 2026-02-20)
+
+**Symptom**: When an event is cancelled, attendees who RSVP'd "Going" or "Maybe" do not receive cancellation notifications.
+
+**Root Cause**: After `db.commit()`, the `event.rsvps` relationship was expired. Accessing it in the notification loop triggered `MissingGreenlet` (silently caught), so the loop never executed.
+
+**Fix Applied**: Captured `event.rsvps` into a local `rsvps_to_notify` list before the commit.
 
 ### Overview
 
@@ -2974,6 +3142,109 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 
 ---
 
+## Locations & Kiosk Display
+
+### Overview
+
+The Locations system serves as the universal "place picker" across all modules (Events, Training, Meetings). Each location gets a unique display code for public kiosk/tablet URLs. When the Facilities module is enabled, locations can optionally link to Facility records via `facility_id` for deep building management data.
+
+**API Endpoints**: `/api/v1/locations/` (authenticated), `/api/public/v1/display/{code}` (public)
+**Permissions**: `locations.create`, `locations.edit`, `locations.delete`, `locations.manage`
+
+### Setting Up a Tablet Kiosk Display
+
+1. **Create locations** via the Locations page or the Setup Wizard (Settings > Locations).
+2. **Find the display code** — each room card shows its kiosk URL (e.g., `/display/x7k9m2p3`). Click it to copy.
+3. **Bookmark on the tablet** — open the URL in the tablet's browser and add to home screen. No login required.
+4. **Create events at that location** — when events are scheduled in that room, the QR code appears automatically within the check-in window (1 hour before start until event end).
+
+### Common Issues
+
+#### Kiosk Display Shows "Display Not Found"
+
+**Causes**:
+1. The display code in the URL is incorrect
+2. The location has been deactivated (`is_active = false`)
+3. Migration `20260218_0900` has not been applied (display codes not backfilled)
+
+**Solutions**:
+- Verify the display code on the Locations page — check the room card for the correct URL
+- Re-activate the location if it was deactivated
+- Run migrations: `docker exec the-logbook-backend-1 alembic upgrade head`
+
+---
+
+#### Kiosk Display Shows "No Active Events" When Event Is Scheduled
+
+**Causes**:
+1. The event is not assigned to this location (different `location_id` or uses free-text location)
+2. The event's check-in window hasn't opened yet (opens 1 hour before start)
+3. The event has been cancelled
+4. The event has ended (or was ended early by an admin)
+
+**Solutions**:
+- Verify the event's location is set to this room (not "Other Location" free-text)
+- Wait until 1 hour before the event start time
+- Check that the event is not cancelled in the Events list
+
+---
+
+#### Kiosk Display Shows "Unable to Connect"
+
+**Causes**:
+1. Tablet has lost Wi-Fi connectivity
+2. Backend server is down or unreachable
+
+**Solutions**:
+- Check the tablet's Wi-Fi connection
+- The display auto-retries every 30 seconds — it will reconnect when connectivity is restored
+- The red pulsing Wi-Fi icon in the header indicates a connection problem
+
+---
+
+#### Training Sessions Don't Show QR Codes on Kiosk
+
+**Causes**:
+1. Training session was created with "Other Location" (free-text) instead of selecting from the dropdown
+2. Training session location doesn't match the kiosk room
+
+**Solutions**:
+- When creating a training session, select the room from the location dropdown instead of typing manually
+- Edit the training event and update its location to the correct room
+
+---
+
+#### Display Code Missing for Existing Locations
+
+**Causes**:
+1. Location was created before migration `20260218_0900`
+2. Migration didn't run successfully
+
+**Solutions**:
+```bash
+# Run the migration to backfill display codes
+docker exec the-logbook-backend-1 alembic upgrade head
+
+# Verify display codes exist
+docker exec the-logbook-db-1 mysql -u root -p the_logbook \
+  -e "SELECT name, display_code FROM locations;"
+```
+
+---
+
+#### Locations Don't Appear in Training Session Dropdown
+
+**Causes**:
+1. No active locations exist (all deactivated)
+2. Locations haven't been set up yet
+
+**Solutions**:
+- Set up locations via the Setup Wizard (Settings > Locations)
+- Ensure locations are active (`is_active = true`)
+- The dropdown falls back to free-text input when no locations are available
+
+---
+
 ## Theme & Display Issues
 
 ### Theme Not Switching
@@ -3017,6 +3288,22 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 
 ## Dashboard Issues
 
+### Admin Summary Shows All Zeros (Fixed 2026-02-20)
+
+**Symptom**: Chiefs and admins see all zeros for member counts, upcoming events, and action items on the dashboard admin summary panel.
+
+**Root Cause**: The dashboard used raw `axios.get()` instead of the configured `api` instance. The auth token was never attached to the request, so the backend returned 401 (caught silently), and all stats defaulted to 0.
+
+**Fix Applied**: Replaced raw `axios` import with `dashboardService.getAdminSummary()` which uses the configured API instance with proper auth headers.
+
+### Action Items Count Includes Other Organizations (Fixed 2026-02-20)
+
+**Symptom**: In a multi-tenant deployment, the admin summary shows inflated overdue/open action item counts because minutes action items were not scoped to the current organization.
+
+**Root Cause**: The `ActionItem` (minutes_action_items) table does not have an `organization_id` column directly. The query was counting ALL action items across all organizations.
+
+**Fix Applied**: Added a `JOIN` through `MeetingMinutes` to scope the count query by `MeetingMinutes.organization_id == org_id`.
+
 ### Dashboard Shows Admin Content Instead of Member Content
 
 **Symptom**: Dashboard shows "Getting Started", "Setup Status", or other admin-oriented content.
@@ -3044,9 +3331,92 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 2. **Scheduling permissions**: The `/scheduling/summary` endpoint requires `scheduling.view` permission.
 3. **Detailed hour breakdown**: Training and administrative hours require shift completion reports to be filed. The standby hours come from the scheduling summary.
 
+### Training Admin Compliance Matrix Not Showing Requirement Completion (Fixed 2026-02-18)
+
+**Symptom**: Members have completed training (hours logged, training records exist), but the Compliance Matrix and Training Officer Dashboard show them as "not started" or 0% compliant.
+
+**Root Cause**: The compliance matrix endpoint (`/api/v1/training/compliance-matrix`) used broken matching logic:
+1. It tried to match training records to requirements using `course_id` (which doesn't exist on the `TrainingRequirement` model)
+2. It fell back to exact `course_name == requirement.name` matching, which never works for hours-based requirements (e.g., a requirement named "Annual Training" won't match a record for "CPR Refresher")
+3. It didn't filter to active requirements only
+4. It didn't use frequency-based date windows
+
+**Fix Applied**: Rewrote the compliance matrix with requirement-type-aware evaluation:
+- **HOURS** requirements: Sums hours by `training_type` within the frequency date window, compares to `required_hours`
+- **COURSES** requirements: Checks if all required `course_id`s have completed records
+- **CERTIFICATION** requirements: Matches by `training_type`, name substring, or certification number
+- All evaluations use frequency-aware date windows (annual, biannual, quarterly, monthly, one-time)
+
+**Also fixed**: The competency matrix heat map (`/api/v1/training/competency-matrix`), the `check_requirement_progress()` service method, and the Training Officer Dashboard frontend compliance calculation.
+
 ---
 
 ## TypeScript Build Issues
+
+### Missing `rank` on User Type / Missing `BookOpen` Import (Fixed 2026-02-18)
+
+**Status**: Fixed
+
+**Symptoms**: Docker frontend build fails with:
+```
+src/pages/CreateTrainingSessionPage.tsx(462,58): error TS2339: Property 'rank' does not exist on type 'User'.
+src/pages/CreateTrainingSessionPage.tsx(462,72): error TS2339: Property 'rank' does not exist on type 'User'.
+src/pages/MinutesPage.tsx(378,26): error TS2304: Cannot find name 'BookOpen'.
+```
+
+**Cause**: Two separate issues:
+1. The `User` interface in `types/user.ts` was missing the `rank` field, even though the backend User model includes it. The `CreateTrainingSessionPage` displays rank next to instructor names.
+2. The `MinutesPage` used the `BookOpen` icon from lucide-react but it wasn't included in the import statement.
+
+**Fix**: Pull latest changes and rebuild:
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+**What was added**:
+- `rank?: string` field to the `User` interface in `types/user.ts`
+- `BookOpen` to the lucide-react import in `MinutesPage.tsx`
+
+---
+
+### Missing API Service Methods (Fixed 2026-02-18)
+
+**Status**: Fixed in commit `5b38fed`
+
+**Symptoms**: Docker frontend build fails with 70+ TypeScript errors like:
+```
+Property 'getShiftCalls' does not exist on type schedulingService
+Property 'getModuleSettings' does not exist on type eventService
+Module '"../services/api"' has no exported member 'memberStatusService'
+Module '"../types/user"' has no exported member 'ArchivedMember'
+```
+
+**Cause**: New page components (ShiftCallsPanel, EventsSettingsPage, MemberLifecyclePage, ShiftAssignmentsPage, ShiftTemplatesPage, etc.) were added referencing API service methods and types that hadn't been implemented yet in `services/api.ts` and `types/user.ts`.
+
+**Fix**: Pull the latest changes which add all missing methods and types:
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+**What was added**:
+- 30+ methods to `schedulingService` (calls, assignments, swaps, time-off, attendance, templates, patterns, reports)
+- `getModuleSettings`/`updateModuleSettings` to `eventService`
+- OAuth URL methods to `authService`
+- `previewNextMembershipId` to `organizationService`
+- `getUserPermissions` to `roleService`
+- Approval methods to `trainingSessionService`
+- New services: `memberStatusService`, `prospectiveMemberService`, `scheduledTasksService`
+- 6 new types in `types/user.ts`: `ArchivedMember`, `OverdueMember`, `MembershipTier`, `MembershipTierBenefits`, `MembershipTierConfig`, `PropertyReturnReport`
+- `membership_number` field on `User` interface
+- `membership_id` field on `createMember` type
+
+**Prevention**: Always ensure new page components have corresponding API service methods before committing. Run `npx tsc --noEmit` locally before pushing.
+
+---
 
 ### All Build Errors (Fixed 2026-02-14)
 
@@ -3100,7 +3470,212 @@ If you find new `as any` assertions, replace them with proper types following th
 
 ---
 
+## Centralized Constants & Enum Usage Issues
+
+### Import Errors After Constants Refactor (2026-02-20)
+
+**Symptom**: Backend raises `ImportError` or `ModuleNotFoundError` referencing `app.core.constants`.
+
+**Cause**: The `backend/app/core/constants.py` module was introduced to centralize role group slugs, folder names, analytics event types, and audit categories. If your local branch predates this change, the import target won't exist.
+
+**Fix**:
+```bash
+git pull origin main
+docker compose build --no-cache backend
+docker compose up -d
+```
+
+**What changed**: 20 backend service files now import constants from `app.core.constants` instead of using inline string arrays. See `docs/ENUM_CONVENTIONS.md` Rule 7 for the full list of available constants.
+
+---
+
+### Frontend Enum Constants Not Found (2026-02-20)
+
+**Symptom**: TypeScript build errors referencing missing exports from `constants/enums`:
+```
+Module '"../constants/enums"' has no exported member 'UserStatus'
+```
+
+**Cause**: The new `frontend/src/constants/enums.ts` file provides centralized `as const` objects for all backend enums (UserStatus, ElectionStatus, RSVPStatus, TrainingStatus, etc.). If you're on an older branch, this file won't exist.
+
+**Fix**:
+```bash
+git pull origin main
+cd frontend && npm install
+npm run typecheck
+```
+
+**What changed**: 17 frontend component files now import enum constants from `constants/enums.ts` instead of using hardcoded string literals. See `docs/ENUM_CONVENTIONS.md` Rule 6 for usage patterns.
+
+---
+
+### Hardcoded String Comparison Still in Use
+
+**Symptom**: A comparison like `if record.status == "completed"` silently fails to match because the column stores an enum member, not a raw string.
+
+**Diagnosis**: Search for raw string comparisons that should use enum constants:
+```bash
+# Backend — look for status string comparisons
+grep -rn '"completed"\|"active"\|"pending"\|"going"\|"not_going"' backend/app/ --include="*.py"
+
+# Frontend — look for status string comparisons
+grep -rn "'active'\|'completed'\|'going'\|'closed'" frontend/src/ --include="*.ts" --include="*.tsx"
+```
+
+**Fix**: Replace raw strings with the appropriate constant:
+
+| Layer | Wrong | Right |
+|-------|-------|-------|
+| Backend (SQLAlchemy column) | `record.status == "completed"` | `record.status == TrainingStatus.COMPLETED` |
+| Backend (plain string/dict) | `data["status"] == "completed"` | `data["status"] == TrainingStatus.COMPLETED.value` |
+| Frontend | `status === 'active'` | `status === UserStatus.ACTIVE` |
+
+See `docs/ENUM_CONVENTIONS.md` Rule 6 for full guidance.
+
+---
+
+### Role Group Arrays Out of Sync
+
+**Symptom**: A notification or permission check silently skips roles because an inline array doesn't match the canonical list.
+
+**Diagnosis**: Search for inline role arrays:
+```bash
+grep -rn '\["admin".*"chief"\]\|\["chief".*"admin"\]' backend/app/ --include="*.py"
+```
+
+**Fix**: Replace inline arrays with the centralized constant from `app.core.constants`:
+
+| Constant | Roles | Purpose |
+|----------|-------|---------|
+| `ADMIN_NOTIFY_ROLE_SLUGS` | admin, quartermaster, chief | Drop/archive CC notifications |
+| `LEADERSHIP_ROLE_SLUGS` | chief, president, VP, secretary | Critical event alerts |
+| `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief | Training module checks |
+| `OPERATIONAL_ROLE_SLUGS` | chief, asst_chief, captain, … | Election eligibility |
+| `ADMINISTRATIVE_ROLE_SLUGS` | president, VP, secretary, … | Election eligibility |
+
+---
+
+## CSS Variable & Theming Issues
+
+### Toast Colors Not Matching Theme (Fixed 2026-02-20)
+
+**Symptom**: Toast notifications show hardcoded colors that don't adapt when switching between light and dark themes.
+
+**Cause**: `App.tsx` and `useIdleTimer.ts` previously used hex color literals (`#10b981`, `#ef4444`, `#fbbf24`) for toast icon and background colors.
+
+**Fix Applied**: Toast colors now reference CSS custom properties:
+
+| Old (hardcoded) | New (CSS variable) | Purpose |
+|---|---|---|
+| `#10b981` | `var(--toast-success)` | Success toast icon |
+| `#ef4444` | `var(--toast-error)` | Error toast icon |
+| `#fff` | `var(--toast-icon-secondary)` | Secondary toast icon |
+| `#fbbf24` | `var(--toast-warning-bg)` | Warning toast background |
+| `#1a1a2e` | `var(--toast-warning-text)` | Warning toast text |
+
+These variables are defined in `frontend/src/styles/index.css` under `:root` (light) and `.dark` (dark) selectors, and registered in `tailwind.config.js`.
+
+---
+
+### Status Indicator Colors Not Theme-Aware
+
+**Symptom**: Training status badges (passed/failed/pending) display hardcoded colors that may have poor contrast in one theme mode.
+
+**Fix Applied**: Status colors are now CSS variables:
+
+| Variable | Light Mode | Dark Mode | Usage |
+|---|---|---|---|
+| `--status-passed` | `#16a34a` | `#22c55e` | Passed/complete indicators |
+| `--status-failed` | `#dc2626` | `#ef4444` | Failed/overdue indicators |
+| `--status-pending` | `#d97706` | `#f59e0b` | Pending/in-progress indicators |
+
+Use the Tailwind utilities `text-theme-status-passed`, `text-theme-status-failed`, `text-theme-status-pending` or reference the CSS variables directly.
+
+---
+
+## Dependency Version Management
+
+### After Dependency Bump: Backend Startup Fails
+
+**Symptom**: Backend fails to start after pulling dependency updates with import or compatibility errors.
+
+**Diagnosis**:
+```bash
+docker compose logs backend | head -50
+```
+
+**Common causes after the 2026-02-20 bump**:
+1. **Stale Docker image**: Rebuild with `docker compose build --no-cache backend`
+2. **pip cache**: Add `--no-cache-dir` to the Dockerfile `pip install` line
+3. **Version conflict**: Check `requirements.txt` for pinned versions that conflict
+
+**Versions bumped (2026-02-20)**:
+| Package | From | To |
+|---|---|---|
+| fastapi | 0.115.6 | 0.129.0 |
+| uvicorn | 0.34.0 | 0.41.0 |
+| pydantic | 2.10.5 | 2.12.5 |
+| sqlalchemy | 2.0.36 | 2.0.46 |
+| sentry-sdk | 2.20.0 | 2.53.0 |
+| celery | 5.4.0 | 5.6.2 |
+
+All bumps are minor/patch within the same major version — no breaking API changes.
+
+---
+
+### After Dependency Bump: Frontend Build Fails
+
+**Symptom**: Frontend `npm run build` or `npm run typecheck` fails after pulling updates.
+
+**Fix**:
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm run typecheck
+npm run build
+```
+
+**Versions bumped (2026-02-20)**:
+| Package | From | To |
+|---|---|---|
+| lucide-react | ^0.469.0 | ^0.575.0 |
+| @vitejs/plugin-react | ^4.3.4 | ^5.1.4 |
+| typescript | ^5.7.3 | ^5.9.3 |
+
+**Note**: `@vitejs/plugin-react` jumped to v5 which requires `vite` v7 (already in use). If you're on an older vite version, update vite first.
+
+---
+
+### Major Versions Intentionally Skipped
+
+The following major version upgrades were **not** applied because they require migration work:
+
+| Package | Current | Available | Migration Needed |
+|---|---|---|---|
+| React | 18.x | 19.x | New hook patterns, ref changes |
+| React Router | 6.x | 7.x | Loader/action API rewrite |
+| Tailwind CSS | 3.x | 4.x | Config format change |
+| ESLint | 8.x | 10.x | Flat config migration |
+| Zod | 3.x | 4.x | Schema API changes |
+
+These can be upgraded individually when the team is ready to handle the migration.
+
+---
+
 ## Version History
+
+**v2.0** - 2026-02-20
+- Added centralized constants and enum usage troubleshooting (4 new entries)
+- Added CSS variable and theming issues section (2 new entries for toast/status colors)
+- Added dependency version management section (3 entries covering backend, frontend, skipped majors)
+- Documents new files: `backend/app/core/constants.py`, `frontend/src/constants/enums.ts`
+
+**v1.9** - 2026-02-18
+- Added missing API service methods troubleshooting (70+ TS build errors from missing service methods/types)
+- Documents fix for missing `schedulingService`, `eventService`, `authService`, `organizationService`, `roleService`, `trainingSessionService` methods
+- Documents new exported services: `memberStatusService`, `prospectiveMemberService`, `scheduledTasksService`
+- Documents missing types in `user.ts` and `api.ts`
 
 **v1.8** - 2026-02-14
 - Expanded Scheduling module section with 10 new troubleshooting entries (templates, patterns, assignments, swaps, time-off, calls, reports, permissions)

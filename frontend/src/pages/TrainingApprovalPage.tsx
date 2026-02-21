@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { trainingSessionService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 interface AttendeeData {
   user_id: string;
@@ -54,6 +56,7 @@ interface ApprovalData {
 }
 
 export const TrainingApprovalPage: React.FC = () => {
+  const tz = useTimezone();
   const { token } = useParams<{ token: string }>();
   const [approvalData, setApprovalData] = useState<ApprovalData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,7 +83,7 @@ export const TrainingApprovalPage: React.FC = () => {
       const data = await trainingSessionService.getApprovalData(token) as unknown as ApprovalData;
       setApprovalData(data);
       setAttendees(
-        data.attendees.map((a) => ({
+        (data.attendees || []).map((a) => ({
           ...a,
           approved: true, // Default all to approved
         }))
@@ -148,8 +151,7 @@ export const TrainingApprovalPage: React.FC = () => {
 
   const formatDateTimeForInput = (dateString: string | null) => {
     if (!dateString) return '';
-    const d = new Date(dateString);
-    return d.toISOString().slice(0, 16);
+    return formatForDateTimeInput(dateString, tz);
   };
 
   if (loading) {
@@ -345,8 +347,9 @@ export const TrainingApprovalPage: React.FC = () => {
                       <input
                         id={`override-in-${attendee.user_id}`}
                         type="datetime-local"
+                        step="900"
                         value={formatDateTimeForInput(attendee.override_check_in_at)}
-                        onChange={(e) => handleOverrideTime(attendee.user_id, 'override_check_in_at', e.target.value ? new Date(e.target.value).toISOString() : '')}
+                        onChange={(e) => handleOverrideTime(attendee.user_id, 'override_check_in_at', e.target.value ? localToUTC(e.target.value, tz) : '')}
                         className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-purple-500"
                       />
                     </div>
@@ -357,8 +360,9 @@ export const TrainingApprovalPage: React.FC = () => {
                       <input
                         id={`override-out-${attendee.user_id}`}
                         type="datetime-local"
+                        step="900"
                         value={formatDateTimeForInput(attendee.override_check_out_at)}
-                        onChange={(e) => handleOverrideTime(attendee.user_id, 'override_check_out_at', e.target.value ? new Date(e.target.value).toISOString() : '')}
+                        onChange={(e) => handleOverrideTime(attendee.user_id, 'override_check_out_at', e.target.value ? localToUTC(e.target.value, tz) : '')}
                         className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-purple-500"
                       />
                     </div>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Shield } from 'lucide-react';
+import { Shield, Sun, Moon, Monitor } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 interface OnboardingHeaderProps {
   departmentName: string;
@@ -10,13 +11,25 @@ interface OnboardingHeaderProps {
 const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
   departmentName,
   logoPreview,
-  icon = <Shield className="w-6 h-6 text-theme-text-primary" />,
+  icon = <Shield aria-hidden="true" className="w-6 h-6 text-white" />,
 }) => {
+  const { theme, setTheme } = useTheme();
+
+  const cycleTheme = () => {
+    const order = ['light', 'dark', 'system'] as const;
+    const currentIndex = order.indexOf(theme as typeof order[number]);
+    const nextIndex = (currentIndex + 1) % order.length;
+    setTheme(order[nextIndex]);
+  };
+
+  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
+  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
+
   return (
-    <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
+    <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
       <div className="max-w-7xl mx-auto flex items-center">
         {logoPreview ? (
-          <div className="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden mr-4">
+          <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
             <img
               src={logoPreview}
               alt={`${departmentName} logo`}
@@ -28,10 +41,18 @@ const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
             {icon}
           </div>
         )}
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
           <p className="text-theme-text-muted text-sm">Setup in Progress</p>
         </div>
+        <button
+          onClick={cycleTheme}
+          className="ml-4 text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+          title={`Theme: ${themeLabel}`}
+          aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
+        >
+          <ThemeIcon className="w-5 h-5" aria-hidden="true" />
+        </button>
       </div>
     </header>
   );

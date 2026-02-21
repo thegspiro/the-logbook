@@ -10,10 +10,10 @@ import {
   FileStorageChoice,
   AuthenticationChoice,
   ITTeamBackupAccess,
-  RoleSetup,
+  PositionSetup,
   ModuleOverview,
   ModuleConfigTemplate,
-  AdminUserCreation,
+  SystemOwnerCreation,
 } from './pages';
 import { useOnboardingStore } from './store';
 
@@ -37,7 +37,7 @@ const FileStorageConfigPlaceholder: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
       <div className="max-w-2xl w-full bg-theme-surface backdrop-blur-sm rounded-lg p-8 text-center border border-theme-surface-border">
-        <div className="text-green-700 dark:text-green-400 text-5xl mb-4">✓</div>
+        <div className="text-green-400 text-5xl mb-4">✓</div>
         <h2 className="text-3xl font-bold text-theme-text-primary mb-4">
           File Storage Selected
         </h2>
@@ -48,7 +48,7 @@ const FileStorageConfigPlaceholder: React.FC = () => {
           Detailed configuration can be done later in Settings → File Storage.
         </p>
         <div className="flex items-center justify-center gap-2 text-theme-text-muted">
-          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-theme-input-border border-t-transparent"></span>
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
           <span>Continuing to authentication...</span>
         </div>
       </div>
@@ -74,7 +74,7 @@ const SecurityCheckPlaceholder: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
       <div className="max-w-2xl w-full bg-theme-surface backdrop-blur-sm rounded-lg p-8 text-center border border-theme-surface-border">
-        <div className="text-blue-700 dark:text-blue-400 text-5xl mb-4">🔒</div>
+        <div className="text-blue-400 text-5xl mb-4">🔒</div>
         <h2 className="text-3xl font-bold text-theme-text-primary mb-4">
           Security Configuration
         </h2>
@@ -83,7 +83,7 @@ const SecurityCheckPlaceholder: React.FC = () => {
           You can customize security options later in Settings → Security.
         </p>
         <div className="flex items-center justify-center gap-2 text-theme-text-muted">
-          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-theme-input-border border-t-transparent"></span>
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
           <span>Redirecting to module selection...</span>
         </div>
       </div>
@@ -134,8 +134,10 @@ export const getOnboardingRoutes = () => {
     {/* Onboarding wizard - IT Team & Backup Access */}
     <Route path="/onboarding/it-team" element={<ITTeamBackupAccess />} />
 
-    {/* Onboarding wizard - Role Setup */}
-    <Route path="/onboarding/roles" element={<RoleSetup />} />
+    {/* Onboarding wizard - Position Setup */}
+    <Route path="/onboarding/positions" element={<PositionSetup />} />
+    {/* Legacy route redirect for roles */}
+    <Route path="/onboarding/roles" element={<Navigate to="/onboarding/positions" replace />} />
 
     {/* Onboarding wizard - Module Overview */}
     <Route path="/onboarding/modules" element={<ModuleOverview />} />
@@ -146,8 +148,10 @@ export const getOnboardingRoutes = () => {
     {/* Legacy route redirect */}
     <Route path="/onboarding/module-selection" element={<ModuleOverview />} />
 
-    {/* Onboarding wizard - Admin User Creation */}
-    <Route path="/onboarding/admin-user" element={<AdminUserCreation />} />
+    {/* Onboarding wizard - System Owner Creation */}
+    <Route path="/onboarding/system-owner" element={<SystemOwnerCreation />} />
+    {/* Legacy route redirect for admin-user */}
+    <Route path="/onboarding/admin-user" element={<Navigate to="/onboarding/system-owner" replace />} />
 
     {/* Security Check - Placeholder */}
     <Route path="/onboarding/security-check" element={<SecurityCheckPlaceholder />} />

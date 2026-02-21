@@ -19,6 +19,8 @@ import {
 import { schedulingService } from '../services/api';
 import type { ShiftAttendanceRecord } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 interface ShiftAttendancePageProps {
   /** If provided as a prop, uses this shift ID instead of URL param */
@@ -38,6 +40,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftId: propShiftId }) => {
+  const tz = useTimezone();
   const { shiftId: paramShiftId } = useParams<{ shiftId: string }>();
   const shiftId = propShiftId || paramShiftId;
 
@@ -76,8 +79,8 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
 
   const openEditModal = (record: ShiftAttendanceRecord) => {
     setEditModal({ open: true, record });
-    setEditCheckedInAt(record.checked_in_at ? formatDateTimeForInput(record.checked_in_at) : '');
-    setEditCheckedOutAt(record.checked_out_at ? formatDateTimeForInput(record.checked_out_at) : '');
+    setEditCheckedInAt(record.checked_in_at ? formatDateTimeForInputLocal(record.checked_in_at) : '');
+    setEditCheckedOutAt(record.checked_out_at ? formatDateTimeForInputLocal(record.checked_out_at) : '');
     setEditDurationMinutes(record.duration_minutes != null ? String(record.duration_minutes) : '');
   };
 
@@ -93,8 +96,8 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
     setSaving(true);
     try {
       const updates: Record<string, unknown> = {};
-      if (editCheckedInAt) updates.checked_in_at = new Date(editCheckedInAt).toISOString();
-      if (editCheckedOutAt) updates.checked_out_at = new Date(editCheckedOutAt).toISOString();
+      if (editCheckedInAt) updates.checked_in_at = localToUTC(editCheckedInAt, tz);
+      if (editCheckedOutAt) updates.checked_out_at = localToUTC(editCheckedOutAt, tz);
       if (editDurationMinutes) updates.duration_minutes = parseInt(editDurationMinutes);
 
       await schedulingService.updateAttendance(editModal.record.id, updates);
@@ -130,9 +133,8 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
       minute: '2-digit',
     });
 
-  const formatDateTimeForInput = (dateString: string) => {
-    const d = new Date(dateString);
-    return d.toISOString().slice(0, 16);
+  const formatDateTimeForInputLocal = (dateString: string) => {
+    return formatForDateTimeInput(dateString, tz);
   };
 
   if (!shiftId) {
@@ -156,26 +158,26 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="bg-emerald-600 rounded-lg p-2">
+          <div className="flex items-center space-x-3 min-w-0">
+            <div className="bg-emerald-600 rounded-lg p-2 flex-shrink-0">
               <Users className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-theme-text-primary">Shift Attendance</h1>
-              <p className="text-theme-text-secondary text-sm">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-theme-text-primary">Shift Attendance</h1>
+              <p className="text-theme-text-secondary text-sm hidden sm:block">
                 Manage attendance records for this shift
               </p>
             </div>
           </div>
           <button
             onClick={fetchAttendance}
-            className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg border border-theme-surface-border transition-colors"
+            className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg border border-theme-surface-border transition-colors flex-shrink-0"
           >
             <RefreshCw className="w-4 h-4" aria-hidden="true" />
-            <span>Refresh</span>
+            <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
 
@@ -247,7 +249,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => openEditModal(record)}
-                            className="p-1.5 text-theme-text-muted hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded"
+                            className="p-2 sm:p-1.5 text-theme-text-muted hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
                             aria-label={`Edit attendance for ${record.user_name || 'member'}`}
                           >
                             <Pencil className="w-4 h-4" aria-hidden="true" />
@@ -271,7 +273,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
                           ) : (
                             <button
                               onClick={() => setDeleteConfirm(record.id)}
-                              className="p-1.5 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 transition-colors rounded"
+                              className="p-2 sm:p-1.5 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 transition-colors rounded min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
                               aria-label={`Delete attendance for ${record.user_name || 'member'}`}
                             >
                               <Trash2 className="w-4 h-4" aria-hidden="true" />
@@ -303,8 +305,8 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
-                <div className="px-6 pt-5 pb-1 flex justify-between items-center">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border mx-4 sm:mx-auto">
+                <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-1 flex justify-between items-center">
                   <h3 id="edit-attendance-title" className="text-lg font-medium text-theme-text-primary">
                     Edit Attendance
                   </h3>
@@ -317,7 +319,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
                   </button>
                 </div>
 
-                <div className="px-6 py-4 space-y-4">
+                <div className="px-4 sm:px-6 py-4 space-y-4">
                   <p className="text-sm text-theme-text-secondary">
                     Editing attendance for <strong className="text-theme-text-primary">{editModal.record.user_name || 'Member'}</strong>
                   </p>
@@ -329,6 +331,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
                     <input
                       id="edit-checkin"
                       type="datetime-local"
+                      step="900"
                       value={editCheckedInAt}
                       onChange={(e) => setEditCheckedInAt(e.target.value)}
                       className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -342,6 +345,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
                     <input
                       id="edit-checkout"
                       type="datetime-local"
+                      step="900"
                       value={editCheckedOutAt}
                       onChange={(e) => setEditCheckedOutAt(e.target.value)}
                       className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -364,7 +368,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
                   </div>
                 </div>
 
-                <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-3 sm:gap-0 rounded-b-lg">
                   <button
                     onClick={closeEditModal}
                     className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"

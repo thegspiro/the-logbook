@@ -21,7 +21,19 @@ class AuditLogger:
     """
     Tamper-proof audit logger with cryptographic hash chains
     """
-    
+
+    @staticmethod
+    def _normalize_timestamp(ts) -> str:
+        """Normalize a timestamp to a consistent ISO format string for hashing."""
+        if isinstance(ts, str):
+            return ts
+        if isinstance(ts, datetime):
+            # Always produce UTC with +00:00 suffix for consistency
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+            return ts.astimezone(UTC).isoformat()
+        return str(ts)
+
     @staticmethod
     def calculate_hash(log_data: Dict[str, Any], previous_hash: str) -> str:
         """
@@ -85,7 +97,7 @@ class AuditLogger:
                 timestamp_nanos = time.time_ns()
 
                 log_data = {
-                    "timestamp": timestamp.isoformat(),
+                    "timestamp": self._normalize_timestamp(timestamp),
                     "timestamp_nanos": timestamp_nanos,
                     "event_type": event_type,
                     "event_category": event_category,
@@ -176,11 +188,11 @@ class AuditLogger:
         for i, log in enumerate(logs):
             # Recalculate hash
             log_data = {
-                "timestamp": log.timestamp.isoformat(),
+                "timestamp": self._normalize_timestamp(log.timestamp),
                 "timestamp_nanos": log.timestamp_nanos,
                 "event_type": log.event_type,
-                "user_id": str(log.user_id) if log.user_id else "",
-                "ip_address": str(log.ip_address) if log.ip_address else "",
+                "user_id": log.user_id,
+                "ip_address": log.ip_address,
                 "event_data": log.event_data,
             }
             
@@ -210,6 +222,48 @@ class AuditLogger:
         
         return results
     
+    async def rehash_chain(self, db: AsyncSession) -> int:
+        """
+        Recompute and store correct hashes for the entire audit log chain.
+
+        This is needed when a bug caused creation-time hashes to differ from
+        verification-time hashes (e.g. timestamp timezone or None handling).
+        The log data itself is unchanged — only the stored hashes are corrected.
+
+        Returns the number of entries rehashed.
+        """
+        result = await db.execute(
+            select(AuditLog).order_by(AuditLog.id)
+        )
+        logs = result.scalars().all()
+
+        if not logs:
+            return 0
+
+        previous_hash = "0" * 64
+        count = 0
+        for log in logs:
+            log_data = {
+                "timestamp": self._normalize_timestamp(log.timestamp),
+                "timestamp_nanos": log.timestamp_nanos,
+                "event_type": log.event_type,
+                "user_id": log.user_id,
+                "ip_address": log.ip_address,
+                "event_data": log.event_data,
+            }
+            correct_hash = self.calculate_hash(log_data, previous_hash)
+            if log.previous_hash != previous_hash or log.current_hash != correct_hash:
+                log.previous_hash = previous_hash
+                log.current_hash = correct_hash
+                count += 1
+            previous_hash = correct_hash
+
+        if count > 0:
+            await db.flush()
+            logger.info(f"Rehashed {count} audit log entries to fix hash chain")
+
+        return count
+
     async def create_checkpoint(
         self,
         db: AsyncSession,

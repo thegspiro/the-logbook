@@ -18,6 +18,7 @@ from uuid import UUID
 
 from app.models.document import Document, DocumentFolder, DocumentStatus, FolderVisibility
 from app.models.user import User
+from app.core.constants import FOLDER_FACILITIES, FOLDER_EVENTS
 
 logger = logging.getLogger(__name__)
 
@@ -539,14 +540,14 @@ class DocumentsService:
         result = await self.db.execute(
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.slug == "facilities")
+            .where(DocumentFolder.slug == FOLDER_FACILITIES)
             .where(DocumentFolder.is_system.is_(True))
         )
         facilities_root = result.scalar_one_or_none()
 
         if not facilities_root:
             from app.models.document import SYSTEM_FOLDERS
-            facilities_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "facilities")
+            facilities_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == FOLDER_FACILITIES)
             facilities_root = DocumentFolder(
                 organization_id=organization_id,
                 name=facilities_def["name"],
@@ -619,7 +620,7 @@ class DocumentsService:
         result = await self.db.execute(
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.slug == "facilities")
+            .where(DocumentFolder.slug == FOLDER_FACILITIES)
             .where(DocumentFolder.is_system.is_(True))
         )
         facilities_root = result.scalar_one_or_none()
@@ -673,14 +674,14 @@ class DocumentsService:
         result = await self.db.execute(
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.slug == "events")
+            .where(DocumentFolder.slug == FOLDER_EVENTS)
             .where(DocumentFolder.is_system.is_(True))
         )
         events_root = result.scalar_one_or_none()
 
         if not events_root:
             from app.models.document import SYSTEM_FOLDERS
-            events_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "events")
+            events_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == FOLDER_EVENTS)
             events_root = DocumentFolder(
                 organization_id=organization_id,
                 name=events_def["name"],

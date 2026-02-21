@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, CheckCircle, Info, Key, Mail, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
@@ -128,7 +128,7 @@ const AuthenticationChoice: React.FC = () => {
       id: 'local',
       name: 'Local Passwords',
       description: 'Secure password-based authentication',
-      icon: <Lock className="w-10 h-10 text-theme-text-primary" />,
+      icon: <Lock className="w-10 h-10 text-white" />,
       color: 'from-slate-600 to-slate-800',
       features: [
         'Passwords hashed with Argon2id (military-grade)',
@@ -174,28 +174,7 @@ const AuthenticationChoice: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
-      {/* Header with Logo */}
-      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center">
-          {logoPreview ? (
-            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
-              <img
-                src={logoPreview}
-                alt={`${departmentName} logo`}
-                className="max-w-full max-h-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
-            </div>
-          )}
-          <div>
-            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
-            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
-          </div>
-        </div>
-      </header>
+      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-5xl w-full">
@@ -208,7 +187,7 @@ const AuthenticationChoice: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
-              <Key className="w-8 h-8 text-theme-text-primary" />
+              <Key aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               User Authentication
@@ -223,14 +202,14 @@ const AuthenticationChoice: React.FC = () => {
 
           {/* Smart Recommendation Notice */}
           {emailPlatform && (emailPlatform === 'gmail' || emailPlatform === 'microsoft') && (
-            <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4 mb-6 max-w-3xl mx-auto">
+            <div className="alert-success mb-6 max-w-3xl mx-auto">
               <div className="flex items-start space-x-3">
-                <CheckCircle className="w-5 h-5 text-green-700 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                <CheckCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-success-icon flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-green-700 dark:text-green-300 text-sm font-medium mb-1">
+                  <p className="text-theme-alert-success-title text-sm font-medium mb-1">
                     Smart Recommendation
                   </p>
-                  <p className="text-green-200 text-sm">
+                  <p className="text-theme-alert-success-text text-sm">
                     Based on your {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} setup,
                     we recommend {emailPlatform === 'gmail' ? 'Google OAuth' : 'Microsoft Azure AD'} for
                     seamless integration with your existing accounts.
@@ -241,14 +220,14 @@ const AuthenticationChoice: React.FC = () => {
           )}
 
           {/* Security Notice */}
-          <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-4 mb-6 max-w-3xl mx-auto">
+          <div className="alert-info mb-6 max-w-3xl mx-auto">
             <div className="flex items-start space-x-3">
-              <Shield className="w-5 h-5 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <Shield aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-blue-700 dark:text-blue-300 text-sm font-medium mb-1">
+                <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                   Enterprise Security
                 </p>
-                <p className="text-blue-200 text-sm">
+                <p className="text-theme-alert-info-text text-sm">
                   All authentication methods support multi-factor authentication (MFA) and are
                   HIPAA compliant when properly configured.
                 </p>
@@ -264,7 +243,7 @@ const AuthenticationChoice: React.FC = () => {
                 onClick={() => setAuthPlatform(platform.id)}
                 className={`relative bg-theme-surface backdrop-blur-sm rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
                   authPlatform === platform.id
-                    ? 'border-red-500 shadow-lg shadow-red-500/50'
+                    ? 'border-theme-accent-red shadow-lg'
                     : 'border-theme-surface-border hover:border-white/40'
                 }`}
                 aria-pressed={authPlatform === platform.id}
@@ -273,7 +252,7 @@ const AuthenticationChoice: React.FC = () => {
                 {platform.recommended && (
                   <div className="absolute -top-2 -right-2">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-500 text-white shadow-lg">
-                      <CheckCircle className="w-3 h-3 mr-1" />
+                      <CheckCircle aria-hidden="true" className="w-3 h-3 mr-1" />
                       Recommended
                     </span>
                   </div>
@@ -282,7 +261,7 @@ const AuthenticationChoice: React.FC = () => {
                 {/* Selected Indicator */}
                 {authPlatform === platform.id && (
                   <div className="absolute top-4 left-4">
-                    <CheckCircle className="w-6 h-6 text-red-700 dark:text-red-500" />
+                    <CheckCircle aria-hidden="true" className="w-6 h-6 text-theme-accent-red" />
                   </div>
                 )}
 
@@ -305,15 +284,15 @@ const AuthenticationChoice: React.FC = () => {
                     <ul className="space-y-1.5 mb-4">
                       {platform.features.map((feature, index) => (
                         <li key={index} className="flex items-start text-xs text-theme-text-secondary">
-                          <CheckCircle className="w-3.5 h-3.5 text-green-700 dark:text-green-400 mr-2 flex-shrink-0 mt-0.5" />
+                          <CheckCircle aria-hidden="true" className="w-3.5 h-3.5 text-theme-accent-green mr-2 flex-shrink-0 mt-0.5" />
                           <span>{feature}</span>
                         </li>
                       ))}
                     </ul>
 
                     {/* Setup Info */}
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded px-3 py-2">
-                      <p className="text-blue-200 text-xs flex items-start">
+                    <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded px-3 py-2">
+                      <p className="text-theme-alert-info-text text-xs flex items-start">
                         <Info className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" />
                         <span>{platform.setupInfo}</span>
                       </p>
@@ -344,24 +323,25 @@ const AuthenticationChoice: React.FC = () => {
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 authPlatform && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                  : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
               {isSaving ? 'Saving...' : 'Continue'}
             </button>
 
-            {/* Progress Indicator */}
-            <ProgressIndicator currentStep={6} totalSteps={10} className="mt-6 pt-6 border-t border-theme-surface-border" />
-
-            {/* Auto-Save Notification */}
-            <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
+
+          {/* Progress Indicator */}
+          <ProgressIndicator currentStep={6} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
+
+          {/* Auto-Save Notification */}
+          <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.

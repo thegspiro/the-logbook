@@ -84,6 +84,7 @@ export interface TrainingSessionCreate {
   // Event details
   title: string;
   description?: string;
+  location_id?: string;
   location?: string;
   location_details?: string;
   start_datetime: string;
@@ -414,9 +415,9 @@ export type RequirementSource = 'department' | 'state' | 'national';
 
 export type ProgramStructureType = 'sequential' | 'phases' | 'flexible';
 
-export type EnrollmentStatus = 'active' | 'completed' | 'on_hold' | 'withdrawn' | 'failed';
+export type EnrollmentStatus = 'active' | 'completed' | 'expired' | 'on_hold' | 'withdrawn' | 'failed';
 
-export type RequirementProgressStatus = 'not_started' | 'in_progress' | 'completed' | 'waived';
+export type RequirementProgressStatus = 'not_started' | 'in_progress' | 'completed' | 'verified' | 'waived';
 
 // Enhanced Training Requirement (with all requirement types)
 export interface TrainingRequirementEnhanced {
@@ -1122,8 +1123,28 @@ export interface MemberVisibility {
   allow_member_report_export: boolean;
 }
 
+export interface RequirementDetail {
+  id: string;
+  name: string;
+  description?: string;
+  frequency: string;
+  training_type?: string;
+  required_hours: number;
+  original_required_hours?: number;
+  completed_hours: number;
+  progress_percentage: number;
+  is_met: boolean;
+  due_date?: string;
+  days_until_due?: number;
+  waived_months?: number;
+  active_months?: number;
+  cert_expired?: boolean;
+  blocks_activity?: boolean;
+}
+
 export interface MyTrainingSummary {
   visibility: MemberVisibility;
+  requirements_detail?: RequirementDetail[];
   training_records?: Array<{
     id: string;
     course_name: string;
@@ -1193,4 +1214,74 @@ export interface MyTrainingSummary {
     submitted_at: string | null;
     reviewed_at: string | null;
   }>;
+}
+
+
+// ==================== Historical Training Import ====================
+
+export interface HistoricalImportParsedRow {
+  row_number: number;
+  email?: string;
+  badge_number?: string;
+  member_name?: string;
+  user_id?: string;
+  matched_member_name?: string;
+  member_matched: boolean;
+  course_name: string;
+  course_code?: string;
+  course_matched: boolean;
+  matched_course_id?: string;
+  training_type?: string;
+  completion_date?: string;
+  expiration_date?: string;
+  hours_completed?: number;
+  credit_hours?: number;
+  certification_number?: string;
+  issuing_agency?: string;
+  instructor?: string;
+  location?: string;
+  score?: number;
+  passed?: boolean;
+  notes?: string;
+  errors: string[];
+}
+
+export interface UnmatchedCourse {
+  csv_course_name: string;
+  csv_course_code?: string;
+  occurrences: number;
+}
+
+export interface HistoricalImportParseResponse {
+  total_rows: number;
+  valid_rows: number;
+  members_matched: number;
+  members_unmatched: number;
+  courses_matched: number;
+  unmatched_courses: UnmatchedCourse[];
+  column_headers: string[];
+  rows: HistoricalImportParsedRow[];
+  parse_errors: string[];
+}
+
+export interface CourseMappingEntry {
+  csv_course_name: string;
+  action: 'map_existing' | 'create_new' | 'skip';
+  existing_course_id?: string;
+  new_training_type?: string;
+}
+
+export interface HistoricalImportConfirmRequest {
+  rows: HistoricalImportParsedRow[];
+  course_mappings: CourseMappingEntry[];
+  default_training_type: TrainingType;
+  default_status: string;
+}
+
+export interface HistoricalImportResult {
+  total: number;
+  imported: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
 }

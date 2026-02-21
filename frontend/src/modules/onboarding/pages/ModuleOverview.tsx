@@ -9,10 +9,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
-import { ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { getUserFacingModules, type ModuleDefinition } from '../config';
+import { FeatureStatus } from '../../../constants/enums';
 
 const ModuleOverview: React.FC = () => {
   const navigate = useNavigate();
@@ -60,7 +61,7 @@ const ModuleOverview: React.FC = () => {
       async () => {
         const response = await apiClient.saveModuleConfig({
           modules: Object.entries(moduleStatuses)
-            .filter(([_, status]) => status === 'enabled')
+            .filter(([_, status]) => status === FeatureStatus.ENABLED)
             .map(([id]) => id),
         });
 
@@ -69,7 +70,7 @@ const ModuleOverview: React.FC = () => {
         }
 
         toast.success('Module configuration saved!');
-        navigate('/onboarding/admin-user');
+        navigate('/onboarding/system-owner');
         return response;
       },
       {
@@ -85,18 +86,18 @@ const ModuleOverview: React.FC = () => {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'essential': return 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/30';
-      case 'recommended': return 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/30';
-      case 'optional': return 'text-theme-text-muted bg-slate-500/10 border-theme-input-border/30';
-      default: return 'text-theme-text-muted bg-slate-500/10 border-theme-input-border/30';
+      case 'essential': return 'text-theme-alert-danger-text bg-theme-alert-danger-bg border-theme-alert-danger-border';
+      case 'recommended': return 'text-theme-alert-info-text bg-theme-alert-info-bg border-theme-alert-info-border';
+      case 'optional': return 'text-theme-text-muted bg-theme-surface-secondary border-theme-surface-border';
+      default: return 'text-theme-text-muted bg-theme-surface-secondary border-theme-surface-border';
     }
   };
 
   const getStatusIcon = (status?: string) => {
     switch (status) {
-      case 'enabled': return <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400" />;
-      case 'skipped': return <Clock4 className="w-4 h-4 text-yellow-700 dark:text-yellow-400" />;
-      case 'ignored': return <XCircle className="w-4 h-4 text-theme-text-muted" />;
+      case 'enabled': return <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green" />;
+      case 'skipped': return <Clock4 aria-hidden="true" className="w-4 h-4 text-theme-accent-yellow" />;
+      case 'ignored': return <XCircle aria-hidden="true" className="w-4 h-4 text-theme-text-muted" />;
       default: return null;
     }
   };
@@ -107,41 +108,25 @@ const ModuleOverview: React.FC = () => {
     optional: modules.filter(m => m.priority === 'optional'),
   };
 
-  const enabledCount = Object.values(moduleStatuses).filter(s => s === 'enabled').length;
+  const enabledCount = Object.values(moduleStatuses).filter(s => s === FeatureStatus.ENABLED).length;
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg via-red-900 to-theme-bg flex flex-col">
-      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center">
-          {logoPreview ? (
-            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
-              <img src={logoPreview} alt={`${departmentName} logo`} className="max-w-full max-h-full object-contain" />
-            </div>
-          ) : (
-            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
-            </div>
-          )}
-          <div>
-            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
-            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       <main className="flex-1 p-4 py-8">
         <div className="max-w-6xl w-full mx-auto">
           {/* Navigation Buttons */}
           <div className="flex justify-between items-center mb-6">
-            <BackButton to="/onboarding/roles" />
+            <BackButton to="/onboarding/positions" />
             <ResetProgressButton />
           </div>
 
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-              <Package className="w-8 h-8 text-theme-text-primary" />
+              <Package aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Choose Your Modules
@@ -169,7 +154,7 @@ const ModuleOverview: React.FC = () => {
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                 enabledCount > 0 && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
-                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                  : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
             >
               {isSaving ? 'Saving...' : 'Continue to Admin Setup'}
@@ -185,9 +170,9 @@ const ModuleOverview: React.FC = () => {
           {/* Essential Modules */}
           <div className="mb-8">
             <div className="flex items-center mb-4">
-              <div className="flex-1 h-px bg-red-500/30"></div>
-              <h2 className="px-4 text-lg font-bold text-red-700 dark:text-red-400">ESSENTIAL MODULES</h2>
-              <div className="flex-1 h-px bg-red-500/30"></div>
+              <div className="flex-1 h-px bg-theme-alert-danger-border"></div>
+              <h2 className="px-4 text-lg font-bold text-theme-alert-danger-text">ESSENTIAL MODULES</h2>
+              <div className="flex-1 h-px bg-theme-alert-danger-border"></div>
             </div>
             <p className="text-center text-theme-text-muted text-sm mb-6">
               These core modules are recommended for all departments and are enabled by default
@@ -245,9 +230,9 @@ const ModuleOverview: React.FC = () => {
           {/* Recommended Modules */}
           <div className="mb-8">
             <div className="flex items-center mb-4">
-              <div className="flex-1 h-px bg-blue-500/30"></div>
-              <h2 className="px-4 text-lg font-bold text-blue-700 dark:text-blue-400">RECOMMENDED MODULES</h2>
-              <div className="flex-1 h-px bg-blue-500/30"></div>
+              <div className="flex-1 h-px bg-theme-alert-info-border"></div>
+              <h2 className="px-4 text-lg font-bold text-theme-alert-info-text">RECOMMENDED MODULES</h2>
+              <div className="flex-1 h-px bg-theme-alert-info-border"></div>
             </div>
             <p className="text-center text-theme-text-muted text-sm mb-6">
               Popular modules that enhance operations - configure what fits your workflow
@@ -319,11 +304,11 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
-                    className="bg-theme-surface-secondary backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-theme-input-border/50 transition-all"
+                    className="bg-theme-surface-secondary backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-theme-surface-hover transition-all"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center space-x-2">
-                        <div className="w-10 h-10 bg-theme-surface-hover rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-theme-surface rounded-lg flex items-center justify-center">
                           <Icon className="w-5 h-5 text-theme-text-secondary" />
                         </div>
                         {status && getStatusIcon(status)}
@@ -334,7 +319,7 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        className="w-full px-3 py-2 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg text-sm font-medium transition-colors"
+                        className="w-full px-3 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg text-sm font-medium transition-colors"
                       >
                         Enable
                       </button>
@@ -359,7 +344,7 @@ const ModuleOverview: React.FC = () => {
         </div>
       </main>
 
-      <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
           <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>

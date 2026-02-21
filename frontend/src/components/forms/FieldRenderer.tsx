@@ -12,6 +12,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, User, Upload, FileText, X, Trash2 } from 'lucide-react';
 import { formsService } from '../../services/api';
 import type { MemberLookupResult } from '../../services/api';
+import { FieldType } from '../../constants/enums';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -154,6 +155,9 @@ export interface FieldDefinition {
   max_value?: number;
   validation_pattern?: string;
   options?: { value: string; label: string }[];
+  condition_field_id?: string;
+  condition_operator?: string;
+  condition_value?: string;
   sort_order: number;
   width: string;
 }
@@ -212,7 +216,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
   };
 
   // Section headers are purely visual dividers
-  if (field.field_type === 'section_header') {
+  if (field.field_type === FieldType.SECTION_HEADER) {
     return (
       <div className={`pt-2 ${isDark ? 'border-b border-theme-surface-border' : 'border-b border-theme-surface-border'} pb-2`}>
         <h3 className={`text-lg font-semibold ${sectionHeaderClass}`}>{field.label}</h3>
@@ -228,7 +232,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
       case 'phone':
         return (
           <input
-            type={field.field_type === 'phone' ? 'tel' : field.field_type}
+            type={field.field_type === FieldType.PHONE ? 'tel' : field.field_type}
             className={inputClass}
             placeholder={field.placeholder || ''}
             value={value}
@@ -286,6 +290,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
         return (
           <input
             type="time"
+            step="900"
             className={inputClass}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}
@@ -298,6 +303,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
         return (
           <input
             type="datetime-local"
+            step="900"
             className={inputClass}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}

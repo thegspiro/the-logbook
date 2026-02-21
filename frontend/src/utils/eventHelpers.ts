@@ -34,9 +34,9 @@ export const getEventTypeBadgeColor = (type: string): string => {
     social: 'bg-pink-100 text-pink-800 dark:bg-pink-500/20 dark:text-pink-400',
     fundraiser: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
     ceremony: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
-    other: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+    other: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
   };
-  return colors[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+  return colors[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
 };
 
 /**

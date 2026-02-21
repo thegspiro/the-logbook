@@ -13,6 +13,7 @@ interface ApiResponse<T> {
 interface OnboardingSession {
   session_id: string;
   expires_at: string;
+  csrf_token?: string;
 }
 
 interface RateLimitError {
@@ -184,13 +185,20 @@ class SecureApiClient {
   }
 
   /**
-   * Make API request
+   * Make API request.
+   *
+   * If the server returns 401 (stale/missing session) and we thought we
+   * had a valid session, automatically start a fresh session and retry
+   * the request once.  This handles the case where the backend database
+   * was re-initialized but the browser still has a stale session ID in
+   * localStorage.
    */
   private async request<T>(
     method: string,
     endpoint: string,
     body?: Record<string, unknown>,
-    requiresCSRF: boolean = false
+    requiresCSRF: boolean = false,
+    _isRetry: boolean = false,
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${endpoint}`;
@@ -216,6 +224,18 @@ class SecureApiClient {
       }
 
       if (!response.ok) {
+        // Auto-recover from stale session: if the server says 401 and we
+        // had a session, the server-side session was likely wiped (e.g.
+        // database reset).  Clear the stale credentials, create a fresh
+        // session, and retry the original request exactly once.
+        if (response.status === 401 && this.sessionId && !_isRetry) {
+          this.clearSession();
+          const startResp = await this.startSession();
+          if (startResp.data) {
+            return this.request<T>(method, endpoint, body, requiresCSRF, true);
+          }
+        }
+
         const errorData = await response.json().catch(() => ({}));
         return this.handleHttpError(response.status, errorData);
       }
@@ -237,7 +257,7 @@ class SecureApiClient {
     const response = await this.request<OnboardingSession>('POST', '/onboarding/start');
 
     if (response.data) {
-      this.saveSession(response.data.session_id);
+      this.saveSession(response.data.session_id, response.data.csrf_token);
     }
 
     return response;
@@ -367,9 +387,29 @@ class SecureApiClient {
   }
 
   /**
-   * Save role configuration
-   * Creates roles with their permissions for the organization
+   * Save position configuration
+   * Creates positions with their permissions for the organization
    */
+  async savePositionsConfig(data: {
+    positions: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      priority: number;
+      permissions: Record<string, { view: boolean; manage: boolean }>;
+      is_custom?: boolean;
+    }>;
+  }): Promise<ApiResponse<{
+    success: boolean;
+    message: string;
+    created: string[];
+    updated: string[];
+    total_positions: number;
+  }>> {
+    return this.request('POST', '/onboarding/session/positions', data, true);
+  }
+
+  /** @deprecated Use savePositionsConfig instead */
   async saveRolesConfig(data: {
     roles: Array<{
       id: string;
@@ -386,7 +426,7 @@ class SecureApiClient {
     updated: string[];
     total_roles: number;
   }>> {
-    return this.request('POST', '/onboarding/session/roles', data, true);
+    return this.request('POST', '/onboarding/session/positions', { positions: data.roles }, true);
   }
 
   /**
@@ -461,11 +501,11 @@ class SecureApiClient {
   }
 
   /**
-   * Create admin user
+   * Create system owner (IT Manager) account
    * SECURITY CRITICAL: Password sent once via HTTPS, never stored client-side
    * Returns authentication token to log user in automatically
    */
-  async createAdminUser(data: {
+  async createSystemOwner(data: {
     username: string;
     email: string;
     password: string;
@@ -474,7 +514,7 @@ class SecureApiClient {
     last_name: string;
     badge_number?: string;
   }): Promise<ApiResponse<{ access_token?: string; refresh_token?: string }>> {
-    const response = await this.request<{ access_token?: string; refresh_token?: string }>('POST', '/onboarding/admin-user', data, true);
+    const response = await this.request<{ access_token?: string; refresh_token?: string }>('POST', '/onboarding/system-owner', data, true);
 
     // SECURITY: Clear password from memory immediately
     data.password = '';
@@ -491,6 +531,19 @@ class SecureApiClient {
     }
 
     return response;
+  }
+
+  /** @deprecated Use createSystemOwner instead */
+  async createAdminUser(data: {
+    username: string;
+    email: string;
+    password: string;
+    password_confirm: string;
+    first_name: string;
+    last_name: string;
+    badge_number?: string;
+  }): Promise<ApiResponse<{ access_token?: string; refresh_token?: string }>> {
+    return this.createSystemOwner(data);
   }
 
   /**

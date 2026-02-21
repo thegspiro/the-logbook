@@ -24,9 +24,10 @@ import {
   BadgeCheck,
   Megaphone,
   Building2,
+  Flame,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
+import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
 import { MODULE_REGISTRY, type ModuleDefinition } from '../config';
 import { apiClient } from '../services/api-client';
@@ -34,7 +35,7 @@ import { getErrorMessage } from '@/utils/errorHandling';
 
 /**
  * Build permission categories dynamically from the module registry.
- * This ensures new modules automatically appear in role configuration.
+ * This ensures new modules automatically appear in position configuration.
  */
 const buildPermissionCategories = (modules: ModuleDefinition[]) => {
   const categories: Record<
@@ -128,44 +129,101 @@ const generateRolePermissions = (
 };
 
 /**
- * Build role templates dynamically using the module registry.
- * This ensures new modules are included in role permissions automatically.
+ * Build position templates dynamically using the module registry.
+ * This ensures new modules are included in position permissions automatically.
  */
-const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
-  administrative: {
-    name: 'Administrative',
-    description: 'System and IT administration roles',
-    roles: [
+const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
+  system: {
+    name: 'System / Special',
+    description: 'System administration and IT management positions',
+    positions: [
       {
-        id: 'admin',
-        name: 'Administrator',
-        description: 'Full system access - IT and system administrators',
-        icon: Shield,
-        priority: 100,
-        permissions: generateRolePermissions(modules, 'full_access'),
-      },
-      {
-        id: 'it_administrator',
-        name: 'IT Administrator',
-        description: 'Manages integrations, notifications, and system settings',
+        id: 'it_manager',
+        name: 'IT Manager',
+        description: 'Full system access - manages integrations, settings, and technical administration',
         icon: Monitor,
         priority: 100,
         permissions: generateRolePermissions(modules, 'full_access'),
       },
     ],
   },
-  leadership: {
-    name: 'Leadership',
-    description: 'Executive and operational leadership roles',
-    roles: [
+  operational_ranks: {
+    name: 'Operational Ranks',
+    description: 'Fire/EMS command and line positions',
+    positions: [
       {
-        id: 'chief',
-        name: 'Chief',
-        description: 'Top operational leader of the department',
-        icon: Crown,
+        id: 'fire_chief',
+        name: 'Fire Chief',
+        description: 'Highest-ranking officer with full operational and administrative authority',
+        icon: Flame,
         priority: 95,
         permissions: generateRolePermissions(modules, 'full_access'),
       },
+      {
+        id: 'deputy_chief',
+        name: 'Deputy Chief',
+        description: 'Second in command, oversees operations in the Chief\'s absence',
+        icon: Flame,
+        priority: 90,
+        permissions: generateRolePermissions(modules, 'leadership'),
+      },
+      {
+        id: 'assistant_chief',
+        name: 'Assistant Chief',
+        description: 'Assists the Chief and Deputy Chief with operational oversight',
+        icon: Flame,
+        priority: 85,
+        permissions: generateRolePermissions(modules, 'leadership'),
+      },
+      {
+        id: 'captain',
+        name: 'Captain',
+        description: 'Company officer responsible for crew management and operations',
+        icon: Star,
+        priority: 70,
+        permissions: generateRolePermissions(modules, 'officer', [
+          'members',
+          'training',
+          'scheduling',
+          'events',
+          'apparatus',
+        ]),
+      },
+      {
+        id: 'lieutenant',
+        name: 'Lieutenant',
+        description: 'Company officer assisting the Captain with crew supervision',
+        icon: Star,
+        priority: 60,
+        permissions: generateRolePermissions(modules, 'officer', [
+          'training',
+          'scheduling',
+          'events',
+          'apparatus',
+        ]),
+      },
+      {
+        id: 'engineer',
+        name: 'Engineer / Driver Operator',
+        description: 'Apparatus operator responsible for vehicle operations and maintenance',
+        icon: Wrench,
+        priority: 40,
+        permissions: generateRolePermissions(modules, 'specialist', ['apparatus']),
+      },
+      {
+        id: 'firefighter',
+        name: 'Firefighter',
+        description: 'Line firefighter with standard operational access',
+        icon: Shield,
+        priority: 15,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+    ],
+  },
+  leadership: {
+    name: 'Leadership',
+    description: 'Executive leadership positions',
+    positions: [
       {
         id: 'president',
         name: 'President',
@@ -175,14 +233,6 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         permissions: generateRolePermissions(modules, 'full_access'),
       },
       {
-        id: 'assistant_chief',
-        name: 'Assistant Chief',
-        description: 'Second in command, supports the Chief',
-        icon: Star,
-        priority: 90,
-        permissions: generateRolePermissions(modules, 'leadership'),
-      },
-      {
         id: 'vice_president',
         name: 'Vice President',
         description: 'Second in command, supports the President',
@@ -190,12 +240,20 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         priority: 80,
         permissions: generateRolePermissions(modules, 'leadership'),
       },
+      {
+        id: 'board_of_directors',
+        name: 'Board of Directors',
+        description: 'Governing board with oversight of organizational operations',
+        icon: Building2,
+        priority: 85,
+        permissions: generateRolePermissions(modules, 'leadership'),
+      },
     ],
   },
   officers: {
     name: 'Officers',
     description: 'Elected or appointed officers with specific duties',
-    roles: [
+    positions: [
       {
         id: 'secretary',
         name: 'Secretary',
@@ -261,27 +319,24 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         ]),
       },
       {
-        id: 'officers',
-        name: 'Officers',
-        description: 'General officer role with broad operational access',
-        icon: BadgeCheck,
-        priority: 70,
-        permissions: generateRolePermissions(modules, 'officer', [
-          'members',
+        id: 'communications_officer',
+        name: 'Communications Officer / PIO',
+        description: 'Public information, website, social media, newsletters, and notification management',
+        icon: Megaphone,
+        priority: 55,
+        permissions: generateRolePermissions(modules, 'specialist', [
+          'notifications',
+          'mobile',
           'events',
           'documents',
-          'inventory',
-          'scheduling',
-          'reports',
-          'forms',
         ]),
       },
     ],
   },
   support: {
-    name: 'Support Roles',
-    description: 'Specialized support and operational roles',
-    roles: [
+    name: 'Support Positions',
+    description: 'Specialized support and operational positions',
+    positions: [
       {
         id: 'quartermaster',
         name: 'Quartermaster',
@@ -299,41 +354,44 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         permissions: generateRolePermissions(modules, 'specialist', ['scheduling']),
       },
       {
-        id: 'public_outreach_coordinator',
-        name: 'Public Outreach Coordinator',
+        id: 'public_outreach',
+        name: 'Public Outreach',
         description: 'Community events and public education',
         icon: Users,
         priority: 55,
         permissions: generateRolePermissions(modules, 'specialist', ['events', 'documents']),
       },
       {
-        id: 'communications_officer',
-        name: 'Communications Officer',
-        description: 'Website, social media, newsletters, and notification management',
-        icon: Megaphone,
-        priority: 55,
-        permissions: generateRolePermissions(modules, 'specialist', [
-          'notifications',
-          'mobile',
-          'events',
-          'documents',
-        ]),
+        id: 'historian',
+        name: 'Historian',
+        description: 'Maintains organizational history, archives, and records',
+        icon: ClipboardList,
+        priority: 45,
+        permissions: generateRolePermissions(modules, 'specialist', ['documents', 'events']),
       },
       {
-        id: 'apparatus_manager',
-        name: 'Apparatus Manager',
+        id: 'apparatus_officer',
+        name: 'Apparatus Officer',
         description: 'Day-to-day fleet tracking, maintenance logging, and equipment checks',
         icon: Truck,
         priority: 50,
         permissions: generateRolePermissions(modules, 'specialist', ['apparatus', 'inventory']),
       },
       {
-        id: 'membership_coordinator',
-        name: 'Membership Coordinator',
+        id: 'membership_committee_chair',
+        name: 'Membership Committee Chair',
         description: 'Manages member records, applications, and onboarding/offboarding',
         icon: UserPlus,
         priority: 55,
         permissions: generateRolePermissions(modules, 'specialist', ['members', 'prospective_members']),
+      },
+      {
+        id: 'fundraising_chair',
+        name: 'Fundraising Chair',
+        description: 'Coordinates fundraising activities and campaigns',
+        icon: BadgeCheck,
+        priority: 50,
+        permissions: generateRolePermissions(modules, 'specialist', ['events', 'documents', 'reports']),
       },
       {
         id: 'meeting_hall_coordinator',
@@ -349,21 +407,69 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Day-to-day building management, maintenance logging, and inspections',
         icon: Building2,
         priority: 50,
-        permissions: generateRolePermissions(modules, 'specialist', ['inventory']),
+        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'facilities']),
       },
     ],
   },
   members: {
-    name: 'Member Roles',
-    description: 'Standard member access level',
-    roles: [
+    name: 'Member Positions',
+    description: 'Standard and special member access levels',
+    positions: [
       {
         id: 'member',
-        name: 'Member',
+        name: 'Regular Member',
         description: 'Regular department member',
         icon: Users,
         priority: 10,
         permissions: generateRolePermissions(modules, 'member'),
+      },
+      {
+        id: 'probationary_member',
+        name: 'Probationary Member',
+        description: 'New members with limited access during their trial period',
+        icon: UserPlus,
+        priority: 5,
+        permissions: generateRolePermissions(modules, 'probationary'),
+      },
+      {
+        id: 'junior_member',
+        name: 'Junior Member',
+        description: 'Youth or junior participants with restricted access',
+        icon: Users,
+        priority: 5,
+        permissions: generateRolePermissions(modules, 'probationary'),
+      },
+      {
+        id: 'life_member',
+        name: 'Life Member',
+        description: 'Long-serving members with honorary status',
+        icon: BadgeCheck,
+        priority: 10,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+      {
+        id: 'administrative_member',
+        name: 'Administrative Member',
+        description: 'Members focused on administrative and support duties',
+        icon: Briefcase,
+        priority: 8,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+      {
+        id: 'social_member',
+        name: 'Social / Associate Member',
+        description: 'Non-operational members involved socially',
+        icon: Users,
+        priority: 5,
+        permissions: generateRolePermissions(modules, 'probationary'),
+      },
+      {
+        id: 'exempt_member',
+        name: 'Exempt / Retired Member',
+        description: 'Former active members with limited access',
+        icon: BadgeCheck,
+        priority: 5,
+        permissions: generateRolePermissions(modules, 'probationary'),
       },
     ],
   },
@@ -372,7 +478,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
 // Icon lookup map for serialization/deserialization
 const ICON_MAP: Record<string, React.ElementType> = {
   Shield, Crown, Star, Briefcase, GraduationCap, ClipboardList, Wrench, Users, UserCog,
-  Truck, Monitor, UserPlus, BadgeCheck, Megaphone, Building2,
+  Truck, Monitor, UserPlus, BadgeCheck, Megaphone, Building2, Flame,
 };
 
 const getIconName = (icon: React.ElementType): string => {
@@ -392,26 +498,26 @@ interface RoleConfig {
   isCustom?: boolean;
 }
 
-const RoleSetup: React.FC = () => {
+const PositionSetup: React.FC = () => {
   const navigate = useNavigate();
   const departmentName = useOnboardingStore(state => state.departmentName);
   const logoPreview = useOnboardingStore(state => state.logoData);
   const lastSaved = useOnboardingStore(state => state.lastSaved);
-  const savedRolesConfig = useOnboardingStore(state => state.rolesConfig);
-  const setRolesConfig = useOnboardingStore(state => state.setRolesConfig);
+  const savedPositionsConfig = useOnboardingStore(state => state.positionsConfig);
+  const setPositionsConfig = useOnboardingStore(state => state.setPositionsConfig);
 
-  // Build permission categories and role templates from the module registry
-  // This ensures new modules automatically appear in role configuration
+  // Build permission categories and position templates from the module registry
+  // This ensures new modules automatically appear in position configuration
   const permissionCategories = useMemo(() => buildPermissionCategories(MODULE_REGISTRY), []);
-  const roleTemplates = useMemo(() => buildRoleTemplates(MODULE_REGISTRY), []);
+  const positionTemplates = useMemo(() => buildPositionTemplates(MODULE_REGISTRY), []);
 
-  // Selected roles - restore from Zustand store if available, otherwise use defaults
-  const [selectedRoles, setSelectedRoles] = useState<Record<string, RoleConfig>>(() => {
+  // Selected positions - restore from Zustand store if available, otherwise use defaults
+  const [selectedPositions, setSelectedPositions] = useState<Record<string, RoleConfig>>(() => {
     // Restore from persisted store if available
-    if (savedRolesConfig) {
+    if (savedPositionsConfig) {
       const restored: Record<string, RoleConfig> = {};
-      for (const [roleId, saved] of Object.entries(savedRolesConfig)) {
-        restored[roleId] = {
+      for (const [posId, saved] of Object.entries(savedPositionsConfig)) {
+        restored[posId] = {
           ...saved,
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,
         };
@@ -420,15 +526,15 @@ const RoleSetup: React.FC = () => {
     }
 
     // Build templates for initial state
-    const templates = buildRoleTemplates(MODULE_REGISTRY);
+    const templates = buildPositionTemplates(MODULE_REGISTRY);
 
-    // Pre-select essential roles (admin, chief, secretary, training_officer, member)
+    // Pre-select essential positions
     const initial: Record<string, RoleConfig> = {};
-    ['admin', 'chief', 'secretary', 'training_officer', 'member'].forEach(roleId => {
+    ['it_manager', 'fire_chief', 'president', 'secretary', 'training_officer', 'member'].forEach(posId => {
       Object.values(templates).forEach(category => {
-        const role = category.roles.find(r => r.id === roleId);
-        if (role) {
-          initial[roleId] = { ...role };
+        const position = category.positions.find(p => p.id === posId);
+        if (position) {
+          initial[posId] = { ...position };
         }
       });
     });
@@ -436,34 +542,34 @@ const RoleSetup: React.FC = () => {
   });
 
   // Expanded categories
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(['administrative', 'leadership', 'officers']);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>(['system', 'operational_ranks', 'leadership', 'officers']);
 
-  // Role being edited
-  const [editingRole, setEditingRole] = useState<string | null>(null);
+  // Position being edited
+  const [editingPosition, setEditingPosition] = useState<string | null>(null);
 
-  // Custom role modal
+  // Custom position modal
   const [showCustomModal, setShowCustomModal] = useState(false);
-  const [customRoleName, setCustomRoleName] = useState('');
-  const [customRoleDescription, setCustomRoleDescription] = useState('');
+  const [customPositionName, setCustomPositionName] = useState('');
+  const [customPositionDescription, setCustomPositionDescription] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
 
-  // Persist role changes to Zustand store (survives navigation)
+  // Persist position changes to Zustand store (survives navigation)
   useEffect(() => {
     const serializable: Record<string, any> = {};
-    for (const [roleId, role] of Object.entries(selectedRoles)) {
-      serializable[roleId] = {
-        id: role.id,
-        name: role.name,
-        description: role.description,
-        icon: getIconName(role.icon),
-        priority: role.priority,
-        permissions: role.permissions,
-        isCustom: role.isCustom,
+    for (const [posId, position] of Object.entries(selectedPositions)) {
+      serializable[posId] = {
+        id: position.id,
+        name: position.name,
+        description: position.description,
+        icon: getIconName(position.icon),
+        priority: position.priority,
+        permissions: position.permissions,
+        isCustom: position.isCustom,
       };
     }
-    setRolesConfig(serializable);
-  }, [selectedRoles, setRolesConfig]);
+    setPositionsConfig(serializable);
+  }, [selectedPositions, setPositionsConfig]);
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories(prev =>
@@ -473,30 +579,30 @@ const RoleSetup: React.FC = () => {
     );
   };
 
-  const toggleRole = (role: RoleConfig) => {
-    if (role.id === 'admin') return; // Admin cannot be removed
+  const togglePosition = (position: RoleConfig) => {
+    if (position.id === 'it_manager') return; // IT Manager cannot be removed
 
-    setSelectedRoles(prev => {
-      if (prev[role.id]) {
-        const { [role.id]: removed, ...rest } = prev;
+    setSelectedPositions(prev => {
+      if (prev[position.id]) {
+        const { [position.id]: removed, ...rest } = prev;
         return rest;
       } else {
-        return { ...prev, [role.id]: { ...role } };
+        return { ...prev, [position.id]: { ...position } };
       }
     });
   };
 
-  const updateRolePermission = (roleId: string, category: string, type: 'view' | 'manage', value: boolean) => {
-    if (roleId === 'admin') return; // Admin always has all permissions
+  const updatePositionPermission = (positionId: string, category: string, type: 'view' | 'manage', value: boolean) => {
+    if (positionId === 'it_manager') return; // IT Manager always has all permissions
 
-    setSelectedRoles(prev => ({
+    setSelectedPositions(prev => ({
       ...prev,
-      [roleId]: {
-        ...prev[roleId],
+      [positionId]: {
+        ...prev[positionId],
         permissions: {
-          ...prev[roleId].permissions,
+          ...prev[positionId].permissions,
           [category]: {
-            ...prev[roleId].permissions[category],
+            ...prev[positionId].permissions[category],
             [type]: value,
             // If manage is enabled, view must be enabled too
             ...(type === 'manage' && value ? { view: true } : {}),
@@ -508,36 +614,36 @@ const RoleSetup: React.FC = () => {
     }));
   };
 
-  const createCustomRole = () => {
-    if (!customRoleName.trim()) {
-      toast.error('Please enter a role name');
+  const createCustomPosition = () => {
+    if (!customPositionName.trim()) {
+      toast.error('Please enter a position name');
       return;
     }
 
-    const roleId = customRoleName.toLowerCase().replace(/\s+/g, '_');
+    const posId = customPositionName.toLowerCase().replace(/\s+/g, '_');
 
-    if (selectedRoles[roleId]) {
-      toast.error('A role with this name already exists');
+    if (selectedPositions[posId]) {
+      toast.error('A position with this name already exists');
       return;
     }
 
     // Use registry to generate permissions for all modules
-    const newRole: RoleConfig = {
-      id: roleId,
-      name: customRoleName,
-      description: customRoleDescription || 'Custom role',
+    const newPosition: RoleConfig = {
+      id: posId,
+      name: customPositionName,
+      description: customPositionDescription || 'Custom position',
       icon: UserCog,
       priority: 50,
       isCustom: true,
       permissions: generateDefaultPermissions(MODULE_REGISTRY, { view: true, manage: false }),
     };
 
-    setSelectedRoles(prev => ({ ...prev, [roleId]: newRole }));
-    setCustomRoleName('');
-    setCustomRoleDescription('');
+    setSelectedPositions(prev => ({ ...prev, [posId]: newPosition }));
+    setCustomPositionName('');
+    setCustomPositionDescription('');
     setShowCustomModal(false);
-    setEditingRole(roleId);
-    toast.success(`Created custom role: ${customRoleName}`);
+    setEditingPosition(posId);
+    toast.success(`Created custom position: ${customPositionName}`);
   };
 
   const handleContinue = async () => {
@@ -551,17 +657,17 @@ const RoleSetup: React.FC = () => {
     setIsSaving(true);
 
     try {
-      // Convert selected roles to API format
-      const rolesPayload = Object.values(selectedRoles).map((role) => ({
-        id: role.id,
-        name: role.name,
-        description: role.description,
-        priority: role.priority,
-        permissions: role.permissions,
-        is_custom: role.isCustom || false,
+      // Convert selected positions to API format
+      const positionsPayload = Object.values(selectedPositions).map((position) => ({
+        id: position.id,
+        name: position.name,
+        description: position.description,
+        priority: position.priority,
+        permissions: position.permissions,
+        is_custom: position.isCustom || false,
       }));
 
-      const response = await apiClient.saveRolesConfig({ roles: rolesPayload });
+      const response = await apiClient.savePositionsConfig({ positions: positionsPayload });
 
       if (response.error) {
         toast.error(response.error);
@@ -570,40 +676,24 @@ const RoleSetup: React.FC = () => {
       }
 
       toast.success(
-        `Roles configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}`
+        `Positions configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}`
       );
       navigate('/onboarding/modules');
     } catch (error: unknown) {
       // Show specific error message from backend
-      const errorMessage = getErrorMessage(error, 'Failed to save role configuration. Please try again.');
+      const errorMessage = getErrorMessage(error, 'Failed to save position configuration. Please try again.');
       toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const selectedCount = Object.keys(selectedRoles).length;
+  const selectedCount = Object.keys(selectedPositions).length;
   const currentYear = new Date().getFullYear();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
-      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center">
-          {logoPreview ? (
-            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
-              <img src={logoPreview} alt={`${departmentName} logo`} className="max-w-full max-h-full object-contain" />
-            </div>
-          ) : (
-            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Shield className="w-6 h-6 text-white" aria-hidden="true" />
-            </div>
-          )}
-          <div>
-            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
-            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
-          </div>
-        </div>
-      </header>
+      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
 
       <main className="flex-1 p-4 py-8">
         <div className="max-w-6xl w-full mx-auto">
@@ -612,43 +702,43 @@ const RoleSetup: React.FC = () => {
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-              <Users className="w-8 h-8 text-theme-text-primary" aria-hidden="true" />
+              <Users className="w-8 h-8 text-white" aria-hidden="true" />
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
-              Set Up Roles & Permissions
+              Set Up Positions & Permissions
             </h1>
             <p className="text-xl text-theme-text-secondary mb-2">
-              Choose which roles your organization needs
+              Choose which positions your organization needs
             </p>
             <p className="text-sm text-theme-text-muted max-w-2xl mx-auto">
-              Select from common fire department roles or create your own. Each role determines what members can view and manage.
+              Select from common fire department positions or create your own. Each position determines what members can view and manage.
             </p>
           </div>
 
           {/* Info Banners */}
           <div className="space-y-4 mb-6">
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+            <div className="alert-info">
               <div className="flex items-start">
-                <Info className="w-5 h-5 text-blue-700 dark:text-blue-400 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
+                <Info className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
                 <div>
-                  <p className="text-blue-700 dark:text-blue-400 font-semibold mb-1">How Permissions Work</p>
+                  <p className="text-theme-alert-info-title font-semibold mb-1">How Permissions Work</p>
                   <p className="text-theme-text-secondary text-sm">
-                    Each role has <strong className="text-green-700 dark:text-green-400">View</strong> (see content) and{' '}
-                    <strong className="text-orange-700 dark:text-orange-400">Manage</strong> (create/edit/delete) permissions per module.
-                    Click on a selected role to customize its permissions.
+                    Each position has <strong className="text-theme-alert-success-text">View</strong> (see content) and{' '}
+                    <strong className="text-theme-alert-warning-icon">Manage</strong> (create/edit/delete) permissions per module.
+                    Click on a selected position to customize its permissions.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+            <div className="alert-success">
               <div className="flex items-start">
-                <CheckCircle className="w-5 h-5 text-green-700 dark:text-green-400 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
+                <CheckCircle className="w-5 h-5 text-theme-alert-success-icon mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
                 <div>
-                  <p className="text-green-700 dark:text-green-400 font-semibold mb-1">Don't Worry - You Can Change These Later</p>
+                  <p className="text-theme-alert-success-title font-semibold mb-1">Don't Worry - You Can Change These Later</p>
                   <p className="text-theme-text-secondary text-sm">
-                    Roles and permissions can be updated anytime in <strong>Settings → Roles & Permissions</strong>.
-                    You can add new roles, modify permissions, or remove roles as your organization's needs evolve.
+                    Positions and permissions can be updated anytime in <strong>Settings → Positions & Permissions</strong>.
+                    You can add new positions, modify permissions, or remove positions as your organization's needs evolve.
                   </p>
                 </div>
               </div>
@@ -660,16 +750,16 @@ const RoleSetup: React.FC = () => {
             <div className="flex items-center space-x-4">
               <div className="text-theme-text-primary">
                 <span className="text-2xl font-bold">{selectedCount}</span>
-                <span className="text-theme-text-muted ml-2">roles selected</span>
+                <span className="text-theme-text-muted ml-2">positions selected</span>
               </div>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCustomModal(true)}
-                className="px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg font-medium transition-colors flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" aria-hidden="true" />
-                Create Custom Role
+                Create Custom Position
               </button>
               <button
                 onClick={handleContinue}
@@ -677,7 +767,7 @@ const RoleSetup: React.FC = () => {
                 className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                   selectedCount >= 2 && !isSaving
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
-                    : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                    : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
               >
                 {isSaving ? 'Saving...' : 'Continue to Modules'}
@@ -686,15 +776,15 @@ const RoleSetup: React.FC = () => {
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
-            {/* Left: Role Templates */}
+            {/* Left: Position Templates */}
             <div className="space-y-4">
-              <h2 className="text-theme-text-primary font-bold text-lg mb-4">Available Role Templates</h2>
+              <h2 className="text-theme-text-primary font-bold text-lg mb-4">Available Position Templates</h2>
 
-              {Object.entries(roleTemplates).map(([categoryId, category]) => (
+              {Object.entries(positionTemplates).map(([categoryId, category]) => (
                 <div key={categoryId} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border overflow-hidden">
                   <button
                     onClick={() => toggleCategory(categoryId)}
-                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-theme-surface-secondary transition-colors"
+                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-theme-surface-hover transition-colors"
                   >
                     <div>
                       <h3 className="text-theme-text-primary font-semibold">{category.name}</h3>
@@ -709,41 +799,41 @@ const RoleSetup: React.FC = () => {
 
                   {expandedCategories.includes(categoryId) && (
                     <div className="px-4 pb-4 space-y-2">
-                      {category.roles.map(role => {
-                        const isSelected = !!selectedRoles[role.id];
-                        const Icon = role.icon;
+                      {category.positions.map(position => {
+                        const isSelected = !!selectedPositions[position.id];
+                        const Icon = position.icon;
 
                         return (
                           <div
-                            key={role.id}
+                            key={position.id}
                             className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
                               isSelected
-                                ? 'border-green-500 bg-green-500/10'
-                                : 'border-theme-input-border hover:border-theme-input-border'
+                                ? 'border-theme-accent-green bg-theme-accent-green-muted'
+                                : 'border-theme-surface-border hover:border-theme-surface-hover'
                             }`}
-                            onClick={() => toggleRole(role)}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleRole(role); } }}
+                            onClick={() => togglePosition(position)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePosition(position); } }}
                             tabIndex={0}
                             role="checkbox"
                             aria-checked={isSelected}
-                            aria-label={`${role.name} - ${role.description}`}
+                            aria-label={`${position.name} - ${position.description}`}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                  isSelected ? 'bg-green-600' : 'bg-theme-surface-hover'
+                                  isSelected ? 'bg-green-600' : 'bg-theme-surface'
                                 }`}>
-                                  <Icon className="w-5 h-5 text-theme-text-primary" aria-hidden="true" />
+                                  <Icon className="w-5 h-5 text-white" aria-hidden="true" />
                                 </div>
                                 <div>
-                                  <p className={`font-semibold ${isSelected ? 'text-green-700 dark:text-green-400' : 'text-theme-text-primary'}`}>
-                                    {role.name}
+                                  <p className={`font-semibold ${isSelected ? 'text-theme-accent-green' : 'text-theme-text-primary'}`}>
+                                    {position.name}
                                   </p>
-                                  <p className="text-theme-text-muted text-xs">{role.description}</p>
+                                  <p className="text-theme-text-muted text-xs">{position.description}</p>
                                 </div>
                               </div>
                               {isSelected && (
-                                <CheckCircle className="w-5 h-5 text-green-700 dark:text-green-400 flex-shrink-0" aria-hidden="true" />
+                                <CheckCircle className="w-5 h-5 text-theme-accent-green flex-shrink-0" aria-hidden="true" />
                               )}
                             </div>
                           </div>
@@ -755,72 +845,72 @@ const RoleSetup: React.FC = () => {
               ))}
             </div>
 
-            {/* Right: Selected Roles & Permissions */}
+            {/* Right: Selected Positions & Permissions */}
             <div>
-              <h2 className="text-theme-text-primary font-bold text-lg mb-4">Selected Roles & Permissions</h2>
+              <h2 className="text-theme-text-primary font-bold text-lg mb-4">Selected Positions & Permissions</h2>
 
               <div className="space-y-3">
-                {Object.values(selectedRoles)
+                {Object.values(selectedPositions)
                   .sort((a, b) => b.priority - a.priority)
-                  .map(role => {
-                    const Icon = role.icon;
-                    const isEditing = editingRole === role.id;
-                    const isAdmin = role.id === 'admin';
+                  .map(position => {
+                    const Icon = position.icon;
+                    const isEditing = editingPosition === position.id;
+                    const isITManager = position.id === 'it_manager';
 
                     return (
                       <div
-                        key={role.id}
+                        key={position.id}
                         className={`bg-theme-surface rounded-lg border transition-all ${
-                          isEditing ? 'border-orange-500' : 'border-theme-surface-border'
+                          isEditing ? 'border-theme-accent-orange' : 'border-theme-surface-border'
                         }`}
                       >
                         <div
                           className="p-4 flex items-center justify-between cursor-pointer"
-                          onClick={() => setEditingRole(isEditing ? null : role.id)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingRole(isEditing ? null : role.id); } }}
+                          onClick={() => setEditingPosition(isEditing ? null : position.id)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingPosition(isEditing ? null : position.id); } }}
                           tabIndex={0}
                           role="button"
                           aria-expanded={isEditing}
-                          aria-label={`${role.name} - click to ${isEditing ? 'collapse' : 'expand'} permissions`}
+                          aria-label={`${position.name} - click to ${isEditing ? 'collapse' : 'expand'} permissions`}
                         >
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                              isAdmin ? 'bg-purple-600' : role.isCustom ? 'bg-blue-600' : 'bg-green-600'
+                              isITManager ? 'bg-purple-600' : position.isCustom ? 'bg-blue-600' : 'bg-green-600'
                             }`}>
-                              <Icon className="w-5 h-5 text-theme-text-primary" aria-hidden="true" />
+                              <Icon className="w-5 h-5 text-white" aria-hidden="true" />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="text-theme-text-primary font-semibold">{role.name}</p>
-                                {isAdmin && (
-                                  <span className="text-xs bg-purple-500/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded">
+                                <p className="text-theme-text-primary font-semibold">{position.name}</p>
+                                {isITManager && (
+                                  <span className="text-xs bg-theme-alert-purple-bg text-theme-alert-purple-text px-2 py-0.5 rounded">
                                     System
                                   </span>
                                 )}
-                                {role.isCustom && (
-                                  <span className="text-xs bg-blue-500/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
+                                {position.isCustom && (
+                                  <span className="text-xs bg-theme-alert-info-bg text-theme-alert-info-text px-2 py-0.5 rounded">
                                     Custom
                                   </span>
                                 )}
                               </div>
-                              <p className="text-theme-text-muted text-xs">{role.description}</p>
+                              <p className="text-theme-text-muted text-xs">{position.description}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {!isAdmin && (
+                            {!isITManager && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleRole(role);
+                                  togglePosition(position);
                                 }}
-                                className="p-1 hover:bg-red-500/20 rounded text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
-                                aria-label={`Remove ${role.name} role`}
+                                className="p-1 hover:bg-theme-accent-orange-muted rounded text-theme-text-muted hover:text-theme-accent-red transition-colors"
+                                aria-label={`Remove ${position.name} position`}
                               >
                                 <X className="w-4 h-4" aria-hidden="true" />
                               </button>
                             )}
                             {isEditing ? (
-                              <ChevronDown className="w-5 h-5 text-orange-700 dark:text-orange-400" aria-hidden="true" />
+                              <ChevronDown className="w-5 h-5 text-theme-accent-orange" aria-hidden="true" />
                             ) : (
                               <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                             )}
@@ -829,45 +919,45 @@ const RoleSetup: React.FC = () => {
 
                         {/* Expanded permissions editor */}
                         {isEditing && (
-                          <div className="px-4 pb-4 border-t border-theme-surface-border pt-4">
+                          <div className="px-4 pb-4 border-t border-theme-nav-border pt-4">
                             <p className="text-theme-text-muted text-sm mb-3">
-                              {isAdmin
-                                ? 'Administrator has full access to all features.'
+                              {isITManager
+                                ? 'IT Manager has full access to all features.'
                                 : 'Click to toggle permissions for each module:'}
                             </p>
                             <div className="grid grid-cols-1 gap-2">
                               {Object.entries(permissionCategories).map(([catId, cat]) => {
-                                const perms = role.permissions[catId] || { view: false, manage: false };
+                                const perms = position.permissions[catId] || { view: false, manage: false };
 
                                 return (
                                   <div
                                     key={catId}
-                                    className="flex items-center justify-between py-2 px-3 bg-theme-input-bg rounded"
+                                    className="flex items-center justify-between py-2 px-3 bg-theme-surface-secondary rounded"
                                   >
                                     <span className="text-theme-text-secondary text-sm">{cat.name}</span>
                                     <div className="flex items-center gap-2">
                                       <button
-                                        onClick={() => updateRolePermission(role.id, catId, 'view', !perms.view)}
-                                        disabled={isAdmin}
+                                        onClick={() => updatePositionPermission(position.id, catId, 'view', !perms.view)}
+                                        disabled={isITManager}
                                         aria-label={`${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`}
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.view
-                                            ? 'bg-green-500/20 text-green-700 dark:text-green-400'
-                                            : 'bg-theme-surface-hover text-theme-text-muted'
-                                        } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
+                                            ? 'bg-theme-accent-green-muted text-theme-accent-green'
+                                            : 'bg-theme-surface text-theme-text-muted'
+                                        } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
                                         <Eye className="w-3 h-3" aria-hidden="true" />
                                         View
                                       </button>
                                       <button
-                                        onClick={() => updateRolePermission(role.id, catId, 'manage', !perms.manage)}
-                                        disabled={isAdmin}
+                                        onClick={() => updatePositionPermission(position.id, catId, 'manage', !perms.manage)}
+                                        disabled={isITManager}
                                         aria-label={`${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`}
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.manage
-                                            ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400'
-                                            : 'bg-theme-surface-hover text-theme-text-muted'
-                                        } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
+                                            ? 'bg-theme-accent-orange-muted text-theme-accent-orange'
+                                            : 'bg-theme-surface text-theme-text-muted'
+                                        } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
                                         <Edit3 className="w-3 h-3" aria-hidden="true" />
                                         Manage
@@ -894,46 +984,46 @@ const RoleSetup: React.FC = () => {
         </div>
       </main>
 
-      {/* Custom Role Modal */}
+      {/* Custom Position Modal */}
       {showCustomModal && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="custom-role-modal-title"
+          aria-labelledby="custom-position-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCustomModal(false); }}
         >
-          <div className="bg-theme-surface rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
-            <h3 id="custom-role-modal-title" className="text-theme-text-primary font-bold text-xl mb-4">Create Custom Role</h3>
+          <div className="bg-theme-surface-modal rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
+            <h3 id="custom-position-modal-title" className="text-theme-text-primary font-bold text-xl mb-4">Create Custom Position</h3>
 
             <div className="space-y-4">
               <div>
-                <label htmlFor="custom-role-name" className="block text-sm font-semibold text-theme-text-primary mb-2">
-                  Role Name <span aria-hidden="true">*</span>
+                <label htmlFor="custom-position-name" className="block text-sm font-semibold text-theme-text-secondary mb-2">
+                  Position Name <span aria-hidden="true">*</span>
                 </label>
                 <input
-                  id="custom-role-name"
+                  id="custom-position-name"
                   type="text"
-                  value={customRoleName}
-                  onChange={(e) => setCustomRoleName(e.target.value)}
+                  value={customPositionName}
+                  onChange={(e) => setCustomPositionName(e.target.value)}
                   placeholder="e.g., Social Media Manager"
                   required
                   aria-required="true"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
 
               <div>
-                <label htmlFor="custom-role-description" className="block text-sm font-semibold text-theme-text-primary mb-2">
+                <label htmlFor="custom-position-description" className="block text-sm font-semibold text-theme-text-secondary mb-2">
                   Description
                 </label>
                 <input
-                  id="custom-role-description"
+                  id="custom-position-description"
                   type="text"
-                  value={customRoleDescription}
-                  onChange={(e) => setCustomRoleDescription(e.target.value)}
-                  placeholder="Brief description of this role"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                  value={customPositionDescription}
+                  onChange={(e) => setCustomPositionDescription(e.target.value)}
+                  placeholder="Brief description of this position"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -941,22 +1031,22 @@ const RoleSetup: React.FC = () => {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowCustomModal(false)}
-                className="flex-1 px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={createCustomRole}
+                onClick={createCustomPosition}
                 className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-colors"
               >
-                Create Role
+                Create Position
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
           <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
@@ -966,4 +1056,7 @@ const RoleSetup: React.FC = () => {
   );
 };
 
-export default RoleSetup;
+// Backward-compatible alias
+export const RoleSetup = PositionSetup;
+
+export default PositionSetup;

@@ -4,6 +4,7 @@ Training Service
 Business logic for training management including courses, records, requirements, and reporting.
 """
 
+import calendar
 from typing import List, Optional, Dict, Tuple
 from datetime import datetime, date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,7 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
     TrainingType,
+    RequirementFrequency,
 )
 from app.models.user import User
 from app.schemas.training import (
@@ -50,12 +52,12 @@ class TrainingService:
         )
         records = result.scalars().all()
 
-        # Calculate total hours
-        total_hours = sum(r.hours_completed for r in records)
+        # Calculate total hours (guard against None values)
+        total_hours = sum(r.hours_completed or 0 for r in records)
 
         # Calculate this year's hours
         hours_this_year = sum(
-            r.hours_completed
+            r.hours_completed or 0
             for r in records
             if r.completion_date and r.completion_date.year == current_year
         )
@@ -165,8 +167,8 @@ class TrainingService:
         result = await self.db.execute(query)
         records = result.scalars().all()
 
-        # Calculate total hours
-        total_hours = sum(r.hours_completed for r in records)
+        # Calculate total hours (guard against None values)
+        total_hours = sum(r.hours_completed or 0 for r in records)
 
         # Get hours by type
         hours_by_type = await self.get_training_hours_by_type(
@@ -264,13 +266,35 @@ class TrainingService:
 
         # Determine date range based on frequency
         today = date.today()
-        if requirement.frequency == "annual":
-            start_date = date(requirement.year, 1, 1) if requirement.year else date(today.year, 1, 1)
-            end_date = date(requirement.year, 12, 31) if requirement.year else date(today.year, 12, 31)
+        freq = requirement.frequency.value if hasattr(requirement.frequency, 'value') else str(requirement.frequency)
+        current_year = today.year
+
+        if freq == RequirementFrequency.ONE_TIME.value:
+            start_date = None
+            end_date = None
+        elif freq == RequirementFrequency.BIANNUAL.value:
+            # Biannual: no date window — compliance is based on having a
+            # non-expired certification
+            start_date = None
+            end_date = None
+        elif freq == RequirementFrequency.QUARTERLY.value:
+            quarter_month = ((today.month - 1) // 3) * 3 + 1
+            start_date = date(current_year, quarter_month, 1)
+            end_month = quarter_month + 2
+            end_year = current_year
+            if end_month > 12:
+                end_month -= 12
+                end_year += 1
+            end_day = calendar.monthrange(end_year, end_month)[1]
+            end_date = date(end_year, end_month, end_day)
+        elif freq == RequirementFrequency.MONTHLY.value:
+            start_date = date(current_year, today.month, 1)
+            end_day = calendar.monthrange(current_year, today.month)[1]
+            end_date = date(current_year, today.month, end_day)
         else:
-            # For other frequencies, use requirement dates or default to current year
-            start_date = requirement.start_date or date(today.year, 1, 1)
-            end_date = requirement.due_date or today
+            # Annual (default)
+            start_date = date(requirement.year, 1, 1) if requirement.year else date(current_year, 1, 1)
+            end_date = date(requirement.year, 12, 31) if requirement.year else date(current_year, 12, 31)
 
         # Get completed hours in the date range
         query = (
@@ -278,9 +302,12 @@ class TrainingService:
             .where(TrainingRecord.user_id == str(user_id))
             .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-            .where(TrainingRecord.completion_date >= start_date)
-            .where(TrainingRecord.completion_date <= end_date)
         )
+        if start_date and end_date:
+            query = query.where(
+                TrainingRecord.completion_date >= start_date,
+                TrainingRecord.completion_date <= end_date,
+            )
 
         # Filter by training type if specified
         if requirement.training_type:
@@ -370,7 +397,8 @@ class TrainingService:
         self, organization_id: UUID, days_ahead: int = 90
     ) -> List[TrainingRecord]:
         """
-        Get certifications that are expiring within the specified number of days
+        Get certifications that are expiring within the specified number of days,
+        including those that have already expired.
         """
         today = date.today()
         future_date = today + timedelta(days=days_ahead)
@@ -379,9 +407,7 @@ class TrainingService:
             select(TrainingRecord)
             .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-            .where(TrainingRecord.certification_number.isnot(None))
             .where(TrainingRecord.expiration_date.isnot(None))
-            .where(TrainingRecord.expiration_date > today)
             .where(TrainingRecord.expiration_date <= future_date)
             .order_by(TrainingRecord.expiration_date)
         )

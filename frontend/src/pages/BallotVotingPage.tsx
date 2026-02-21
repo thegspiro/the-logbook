@@ -26,6 +26,7 @@ import type {
   BallotSubmissionResponse,
 } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import { VoteType } from '../constants/enums';
 
 type ItemChoice = {
   choice: string; // 'approve' | 'deny' | 'write_in' | 'abstain' | candidate UUID
@@ -261,7 +262,7 @@ export const BallotVotingPage: React.FC = () => {
           {ballotItems.map((item, index) => {
             const itemChoice = choices[item.id];
             const itemCandidates = getCandidatesForItem(item);
-            const isApprovalType = item.vote_type === 'approval';
+            const isApprovalType = item.vote_type === VoteType.APPROVAL;
 
             return (
               <div
@@ -271,7 +272,7 @@ export const BallotVotingPage: React.FC = () => {
                 {/* Item Header */}
                 <div className="bg-theme-surface-secondary px-6 py-4 border-b border-theme-surface-border">
                   <div className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center text-sm font-bold">
+                    <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold">
                       {index + 1}
                     </span>
                     <div>
@@ -417,7 +418,7 @@ export const BallotVotingPage: React.FC = () => {
           aria-labelledby="confirm-ballot-title"
           onKeyDown={(e) => { if (e.key === 'Escape' && !submitting) setShowConfirmation(false); }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-theme-surface-border bg-theme-surface-secondary">
               <h3 id="confirm-ballot-title" className="text-lg font-bold text-theme-text-primary">Confirm Your Ballot</h3>
               <p className="text-sm text-theme-text-muted mt-1">

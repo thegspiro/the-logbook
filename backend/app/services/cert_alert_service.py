@@ -20,6 +20,11 @@ from loguru import logger
 
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import User, UserStatus, Organization
+from app.core.constants import (
+    DEFAULT_TRAINING_OFFICER_ROLES,
+    DEFAULT_COMPLIANCE_OFFICER_ROLES,
+    ROLE_CHIEF,
+)
 from app.services.email_service import EmailService
 
 
@@ -130,8 +135,8 @@ class CertAlertService:
             return {"alerts_sent": 0, "escalations_sent": 0, "errors": 0}
 
         email_service = EmailService(org)
-        training_roles = config.get("training_officer_roles", ["training_officer"])
-        compliance_roles = config.get("compliance_officer_roles", ["compliance_officer"])
+        training_roles = config.get("training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES)
+        compliance_roles = config.get("compliance_officer_roles", DEFAULT_COMPLIANCE_OFFICER_ROLES)
 
         alerts_sent = 0
         escalations_sent = 0
@@ -226,7 +231,7 @@ class CertAlertService:
             cc_emails = await self._get_officer_emails(organization_id, training_roles)
             cc_emails.extend(await self._get_officer_emails(organization_id, compliance_roles))
             if config.get("cc_chief_on_escalation"):
-                cc_emails.extend(await self._get_officer_emails(organization_id, ["chief"]))
+                cc_emails.extend(await self._get_officer_emails(organization_id, [ROLE_CHIEF]))
 
             try:
                 days_expired = (today - record.expiration_date).days

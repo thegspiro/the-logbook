@@ -15,6 +15,7 @@ import logging
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
+from app.core.security import encrypt_data
 from app.services.external_training_service import ExternalTrainingSyncService
 from app.models.training import (
     ExternalTrainingProvider,
@@ -94,7 +95,7 @@ async def create_provider(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    # Create provider (note: in production, api_key and api_secret should be encrypted)
+    # Encrypt sensitive credentials before storing
     new_provider = ExternalTrainingProvider(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
@@ -102,10 +103,10 @@ async def create_provider(
         provider_type=provider.provider_type,
         description=provider.description,
         api_base_url=provider.api_base_url,
-        api_key=provider.api_key,  # Should be encrypted in production
-        api_secret=provider.api_secret,  # Should be encrypted in production
+        api_key=encrypt_data(provider.api_key) if provider.api_key else None,
+        api_secret=encrypt_data(provider.api_secret) if provider.api_secret else None,
         client_id=provider.client_id,
-        client_secret=provider.client_secret,  # Should be encrypted in production
+        client_secret=encrypt_data(provider.client_secret) if provider.client_secret else None,
         auth_type=provider.auth_type,
         config=provider.config.model_dump() if provider.config else None,
         auto_sync_enabled=provider.auto_sync_enabled,
@@ -198,6 +199,12 @@ async def update_provider(
     # Handle UUID conversion
     if 'default_category_id' in update_data:
         update_data['default_category_id'] = str(update_data['default_category_id']) if update_data['default_category_id'] else None
+
+    # Encrypt sensitive credential fields before storing
+    _secret_fields = ('api_key', 'api_secret', 'client_secret')
+    for field in _secret_fields:
+        if field in update_data and update_data[field]:
+            update_data[field] = encrypt_data(update_data[field])
 
     for field, value in update_data.items():
         setattr(provider, field, value)

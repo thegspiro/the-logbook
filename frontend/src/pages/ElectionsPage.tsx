@@ -11,7 +11,7 @@ import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition }
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatForDateTimeInput } from '../utils/dateFormatting';
+import { formatDate, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -109,7 +109,13 @@ export const ElectionsPage: React.FC = () => {
     setCreateError(null);
 
     try {
-      await electionService.createElection(formData);
+      // Convert local datetime-local values to UTC before sending to backend
+      const submitData = {
+        ...formData,
+        start_date: localToUTC(formData.start_date, tz),
+        end_date: localToUTC(formData.end_date, tz),
+      };
+      await electionService.createElection(submitData);
       setShowCreateModal(false);
       setFormData({
         title: '',
@@ -302,7 +308,7 @@ export const ElectionsPage: React.FC = () => {
           aria-labelledby="create-election-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="create-election-title" className="text-lg font-medium text-theme-text-primary">Create New Election</h3>
             </div>
@@ -350,6 +356,7 @@ export const ElectionsPage: React.FC = () => {
                     </label>
                     <input
                       type="datetime-local"
+                      step="900"
                       id="election-start-date"
                       required
                       aria-required="true"
@@ -365,6 +372,7 @@ export const ElectionsPage: React.FC = () => {
                     </label>
                     <input
                       type="datetime-local"
+                      step="900"
                       id="election-end-date"
                       required
                       aria-required="true"
@@ -401,7 +409,7 @@ export const ElectionsPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setEndOfDay()}
-                            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
                           >
                             End of Day (Default)
                           </button>
@@ -492,7 +500,7 @@ export const ElectionsPage: React.FC = () => {
                 </div>
 
                 {formData.victory_condition === 'threshold' && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="election-num-threshold" className="block text-sm font-medium text-theme-text-primary">
                         Numerical Threshold

@@ -132,15 +132,15 @@ interface CertificationExpiryBadgeProps {
 
 function getExpiryStyle(daysRemaining: number): { classes: string; label: string } {
   if (daysRemaining < 0) {
-    return { classes: 'bg-red-200 text-red-900', label: 'Expired' };
+    return { classes: 'bg-red-200 text-red-900 dark:bg-red-500/30 dark:text-red-400', label: 'Expired' };
   }
   if (daysRemaining < 30) {
-    return { classes: 'bg-red-100 text-red-800', label: 'Expiring Soon' };
+    return { classes: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400', label: 'Expiring Soon' };
   }
   if (daysRemaining <= 90) {
-    return { classes: 'bg-yellow-100 text-yellow-800', label: 'Expiring' };
+    return { classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400', label: 'Expiring' };
   }
-  return { classes: 'bg-green-100 text-green-800', label: 'Valid' };
+  return { classes: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400', label: 'Valid' };
 }
 
 export const CertificationExpiryBadge: React.FC<CertificationExpiryBadgeProps> = ({
@@ -235,12 +235,12 @@ interface TrainingTypeBadgeProps {
 }
 
 const trainingTypeConfig: Record<TrainingType, { label: string; classes: string }> = {
-  certification: { label: 'Certification', classes: 'bg-purple-100 text-purple-800' },
-  continuing_education: { label: 'CE', classes: 'bg-blue-100 text-blue-800' },
-  skills_practice: { label: 'Skills', classes: 'bg-orange-100 text-orange-800' },
-  orientation: { label: 'Orientation', classes: 'bg-teal-100 text-teal-800' },
-  refresher: { label: 'Refresher', classes: 'bg-cyan-100 text-cyan-800' },
-  specialty: { label: 'Specialty', classes: 'bg-indigo-100 text-indigo-800' },
+  certification: { label: 'Certification', classes: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400' },
+  continuing_education: { label: 'CE', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
+  skills_practice: { label: 'Skills', classes: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400' },
+  orientation: { label: 'Orientation', classes: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400' },
+  refresher: { label: 'Refresher', classes: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400' },
+  specialty: { label: 'Specialty', classes: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400' },
 };
 
 export const TrainingTypeBadge: React.FC<TrainingTypeBadgeProps> = ({ type, size = 'md' }) => {
@@ -263,11 +263,12 @@ interface EnrollmentStatusBadgeProps {
 }
 
 const enrollmentStatusConfig: Record<EnrollmentStatus, { label: string; classes: string }> = {
-  active: { label: 'Active', classes: 'bg-blue-100 text-blue-800' },
-  completed: { label: 'Completed', classes: 'bg-green-100 text-green-800' },
-  on_hold: { label: 'On Hold', classes: 'bg-yellow-100 text-yellow-800' },
+  active: { label: 'Active', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
+  completed: { label: 'Completed', classes: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
+  expired: { label: 'Expired', classes: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
+  on_hold: { label: 'On Hold', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400' },
   withdrawn: { label: 'Withdrawn', classes: 'bg-theme-surface-secondary text-theme-text-primary' },
-  failed: { label: 'Failed', classes: 'bg-red-100 text-red-800' },
+  failed: { label: 'Failed', classes: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
 };
 
 export const EnrollmentStatusBadge: React.FC<EnrollmentStatusBadgeProps> = ({ status }) => {

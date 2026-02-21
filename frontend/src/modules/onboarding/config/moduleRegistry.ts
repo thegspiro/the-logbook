@@ -3,7 +3,7 @@
  *
  * This is the single source of truth for all application modules.
  * When adding a new module, add it here and it will automatically
- * appear in ModuleOverview, ModuleConfigTemplate, and RoleSetup pages.
+ * appear in ModuleOverview, ModuleConfigTemplate, and PositionSetup pages.
  */
 
 import {
@@ -24,6 +24,7 @@ import {
   UserCog,
   Truck,
   UserPlus,
+  Building2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -46,7 +47,9 @@ export interface ModuleDefinition {
     manageDescription: string;
     view: string[];
     manage: string[];
-    defaultManageRoles: string[];
+    defaultManagePositions: string[];
+    /** @deprecated Use defaultManagePositions */
+    defaultManageRoles?: string[];
   };
 }
 
@@ -62,17 +65,17 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     id: 'members',
     name: 'Member Management',
     description:
-      'Manage your department roster, roles, contact information, and member profiles. Core functionality for any organization.',
+      'Manage your department roster, positions, contact information, and member profiles. Core functionality for any organization.',
     icon: Users,
     priority: 'essential',
     category: 'Core',
     configRoute: '/onboarding/modules/members/config',
     permissions: {
       viewDescription: 'View member directory, contact information, and profiles',
-      manageDescription: 'Add/edit members, assign roles, update member status',
+      manageDescription: 'Add/edit members, assign positions, update member status',
       view: ['View member directory', 'See contact information', 'View member profiles'],
-      manage: ['Add new members', 'Edit member information', 'Assign roles', 'Manage member status'],
-      defaultManageRoles: ['admin', 'officers', 'membership_coordinator'],
+      manage: ['Add new members', 'Edit member information', 'Assign positions', 'Manage member status'],
+      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'membership_committee_chair', 'training_officer', 'captain', 'secretary', 'assistant_secretary'],
     },
   },
   {
@@ -89,7 +92,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create events, manage RSVPs, record attendance',
       view: ['View all events', 'RSVP to events', "See who's attending", 'Check in to events'],
       manage: ['Create new events', 'Edit/cancel events', 'Manage RSVPs', 'Override attendance'],
-      defaultManageRoles: ['admin', 'officers', 'secretary'],
+      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'secretary', 'training_officer', 'meeting_hall_coordinator', 'public_outreach', 'scheduling_officer', 'facilities_manager'],
     },
   },
   {
@@ -106,7 +109,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Upload documents, manage folders, set visibility',
       view: ['Browse documents', 'Download files', 'View document history'],
       manage: ['Upload documents', 'Create folders', 'Edit/delete files', 'Set document visibility'],
-      defaultManageRoles: ['admin', 'officers'],
+      defaultManagePositions: ['it_manager', 'secretary'],
     },
   },
   {
@@ -123,7 +126,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create forms, design fields, view submissions, export data',
       view: ['View available forms', 'Submit forms', 'See personal submissions'],
       manage: ['Create form templates', 'Design form fields', 'View all submissions', 'Export responses', 'Manage form settings'],
-      defaultManageRoles: ['admin', 'officers'],
+      defaultManagePositions: ['it_manager', 'secretary'],
     },
   },
 
@@ -144,7 +147,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create courses, record completions, manage requirements',
       view: ['View personal training records', 'See available courses', 'Track certification status'],
       manage: ['Create training courses', 'Record completions', 'Set requirements', 'Approve certifications'],
-      defaultManageRoles: ['admin', 'training_officer'],
+      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'training_officer', 'safety_officer'],
     },
   },
   {
@@ -161,7 +164,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Add equipment, track maintenance, manage assignments',
       view: ['View equipment list', 'Check item status', 'Request equipment'],
       manage: ['Add/edit equipment', 'Assign items', 'Record maintenance', 'Manage inventory levels'],
-      defaultManageRoles: ['admin', 'quartermaster', 'officers'],
+      defaultManagePositions: ['it_manager', 'quartermaster', 'president', 'fire_chief'],
     },
   },
   {
@@ -178,7 +181,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create schedules, approve swaps, manage coverage',
       view: ['View shift schedules', 'See personal assignments', 'Request shift swaps'],
       manage: ['Create schedules', 'Assign shifts', 'Approve swap requests', 'Override assignments'],
-      defaultManageRoles: ['admin', 'officers', 'scheduling_officer'],
+      defaultManagePositions: ['it_manager', 'president', 'secretary', 'vice_president', 'training_officer', 'scheduling_officer', 'fire_chief'],
     },
   },
 
@@ -196,7 +199,25 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Add/edit apparatus, log maintenance, manage operators and equipment',
       view: ['View fleet roster', 'See apparatus details', 'Check maintenance schedules', 'View fuel logs'],
       manage: ['Add/edit apparatus', 'Log maintenance and fuel', 'Manage operators', 'Change apparatus status'],
-      defaultManageRoles: ['admin', 'apparatus_manager', 'officers'],
+      defaultManagePositions: ['it_manager', 'apparatus_officer'],
+    },
+  },
+
+  {
+    id: 'facilities',
+    name: 'Facilities Management',
+    description:
+      'Manage buildings, schedule maintenance, log inspections, and track facility systems. Keep your stations mission-ready.',
+    icon: Building2,
+    priority: 'recommended',
+    category: 'Operations',
+    configRoute: '/onboarding/modules/facilities/config',
+    permissions: {
+      viewDescription: 'View facilities, buildings, and maintenance schedules',
+      manageDescription: 'Add facilities, log maintenance, manage inspections and systems',
+      view: ['View facility list', 'See building details', 'Check maintenance schedules'],
+      manage: ['Add/edit facilities', 'Log maintenance', 'Manage inspections', 'Track facility systems'],
+      defaultManagePositions: ['it_manager', 'facilities_manager'],
     },
   },
 
@@ -217,7 +238,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create elections, manage candidates, certify results',
       view: ['View active elections', 'Cast votes (if eligible)', 'See published results'],
       manage: ['Create elections', 'Manage candidates', 'Configure voting rules', 'Certify results'],
-      defaultManageRoles: ['admin', 'secretary', 'president'],
+      defaultManagePositions: ['it_manager', 'secretary', 'president'],
     },
   },
   {
@@ -234,7 +255,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Record minutes, publish drafts, manage archives',
       view: ['Read published minutes', 'Search meeting history', 'View action items'],
       manage: ['Record minutes', 'Edit drafts', 'Publish minutes', 'Manage archives'],
-      defaultManageRoles: ['admin', 'secretary'],
+      defaultManagePositions: ['it_manager', 'secretary', 'assistant_secretary'],
     },
   },
   {
@@ -251,7 +272,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create custom reports, export data, configure analytics',
       view: ['View dashboards', 'See personal statistics', 'Access standard reports'],
       manage: ['Create custom reports', 'Export data', 'Configure analytics', 'Share reports'],
-      defaultManageRoles: ['admin', 'officers'],
+      defaultManagePositions: ['it_manager', 'safety_officer', 'training_officer', 'president', 'fire_chief'],
     },
   },
 
@@ -272,7 +293,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Configure notification templates and triggers',
       view: ['Receive notifications', 'Set personal preferences', 'View notification history'],
       manage: ['Configure templates', 'Set notification triggers', 'Manage global settings'],
-      defaultManageRoles: ['admin', 'it_administrator', 'communications_officer'],
+      defaultManagePositions: ['it_manager', 'communications_officer'],
     },
   },
   {
@@ -289,7 +310,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Configure mobile-specific features and settings',
       view: ['Use mobile app', 'Receive push notifications', 'Access mobile features'],
       manage: ['Configure mobile settings', 'Manage push notifications', 'Set mobile policies'],
-      defaultManageRoles: ['admin', 'it_administrator', 'communications_officer'],
+      defaultManagePositions: ['it_manager', 'communications_officer'],
     },
   },
 
@@ -310,7 +331,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Configure and manage external service connections',
       view: ['Use integrated features', 'Connect personal accounts'],
       manage: ['Configure integrations', 'Manage API connections', 'Set sync settings'],
-      defaultManageRoles: ['admin', 'it_administrator'],
+      defaultManagePositions: ['it_manager'],
     },
   },
 
@@ -331,26 +352,26 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Manage applicants, configure pipeline stages, and convert members',
       view: ['View applicant pipeline', 'See applicant progress', 'View pipeline statistics'],
       manage: ['Add/edit applicants', 'Advance or reject applicants', 'Configure pipeline stages', 'Convert applicants to members'],
-      defaultManageRoles: ['admin', 'secretary', 'membership_coordinator'],
+      defaultManagePositions: ['it_manager', 'president', 'fire_chief', 'membership_committee_chair'],
     },
   },
 
   // ============================================
-  // SYSTEM MODULES (Always available, admin-only config)
+  // SYSTEM MODULES (Always available, System Owner config only)
   // ============================================
   {
-    id: 'roles',
-    name: 'Role Management',
-    description: 'Create and manage roles, assign permissions, and control access across the organization.',
+    id: 'positions',
+    name: 'Position Management',
+    description: 'Create and manage positions, assign permissions, and control access across the organization.',
     icon: Shield,
     priority: 'essential',
     category: 'System',
     permissions: {
-      viewDescription: 'View roles and role assignments',
-      manageDescription: 'Create/edit roles, assign roles, set permissions',
-      view: ['View roles', 'See role assignments'],
-      manage: ['Create/edit roles', 'Assign roles', 'Set permissions'],
-      defaultManageRoles: ['admin'],
+      viewDescription: 'View positions and position assignments',
+      manageDescription: 'Create/edit positions, assign positions, set permissions',
+      view: ['View positions', 'See position assignments'],
+      manage: ['Create/edit positions', 'Assign positions', 'Set permissions'],
+      defaultManagePositions: ['it_manager'],
     },
   },
   {
@@ -365,7 +386,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Edit settings, manage integrations, configure modules',
       view: ['View settings'],
       manage: ['Edit settings', 'Manage integrations', 'Configure modules'],
-      defaultManageRoles: ['admin', 'it_administrator'],
+      defaultManagePositions: ['it_manager'],
     },
   },
 ];
@@ -414,7 +435,7 @@ export const getUserFacingModules = (): ModuleDefinition[] => {
 
 /**
  * Get modules that have configurable permissions
- * Use this for RoleSetup and ModuleConfigTemplate pages
+ * Use this for PositionSetup and ModuleConfigTemplate pages
  */
 export const getConfigurableModules = (): ModuleDefinition[] => {
   return MODULE_REGISTRY;
@@ -422,7 +443,7 @@ export const getConfigurableModules = (): ModuleDefinition[] => {
 
 /**
  * Get a map of module IDs to their permission config
- * Useful for initializing role permissions
+ * Useful for initializing position permissions
  */
 export const getModulePermissionMap = (): Record<string, { view: boolean; manage: boolean }> => {
   const map: Record<string, { view: boolean; manage: boolean }> = {};

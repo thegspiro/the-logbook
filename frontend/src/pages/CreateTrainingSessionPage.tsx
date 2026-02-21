@@ -8,12 +8,16 @@ import {
   CheckCircle,
   QrCode,
   ArrowLeft,
+  MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { TrainingSessionCreate, TrainingType, TrainingCourse } from '../types/training';
+import type { User } from '../types/user';
+import type { Location } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDateTime, formatForDateTimeInput } from '../utils/dateFormatting';
+import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { userService, schedulingService, locationsService, trainingSessionService, trainingService } from '../services/api';
 
 /**
  * Create Training Session Page
@@ -28,12 +32,19 @@ const CreateTrainingSessionPage: React.FC = () => {
   const tz = useTimezone();
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [availableCourses] = useState<TrainingCourse[]>([]);
+  const [availableCourses, setAvailableCourses] = useState<TrainingCourse[]>([]);
+  const [members, setMembers] = useState<User[]>([]);
+  const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string }>>([]);
+  const [instructorId, setInstructorId] = useState('');
+  const [apparatusId, setApparatusId] = useState('');
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [locationMode, setLocationMode] = useState<'select' | 'other'>('select');
 
   // Form data
   const [formData, setFormData] = useState<TrainingSessionCreate>({
     title: '',
     description: '',
+    location_id: undefined,
     location: '',
     location_details: '',
     start_datetime: '',
@@ -61,15 +72,25 @@ const CreateTrainingSessionPage: React.FC = () => {
   });
 
   useEffect(() => {
-    // Load available courses from API
-    // trainingService.getCourses().then(setAvailableCourses);
+    // Load available courses, members, apparatus, and locations from API
+    trainingService.getCourses().then(setAvailableCourses).catch(() => {});
+    userService.getUsers().then(setMembers).catch(() => {});
+    schedulingService.getBasicApparatus({ is_active: true }).then((data) => {
+      setApparatusList(data.map((a: Record<string, unknown>) => ({ id: a.id as string, name: (a.name || a.unit_number || 'Unknown') as string })));
+    }).catch(() => {});
+    locationsService.getLocations({ is_active: true }).then((data) => {
+      setLocations(data);
+      if (data.length === 0) setLocationMode('other');
+    }).catch(() => {
+      setLocationMode('other');
+    });
   }, []);
 
   const updateField = (field: keyof TrainingSessionCreate, value: any) => {
     setFormData({ ...formData, [field]: value });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validation
     if (!formData.title || !formData.start_datetime || !formData.end_datetime) {
       toast.error('Please fill in all required fields');
@@ -84,14 +105,24 @@ const CreateTrainingSessionPage: React.FC = () => {
     setSaving(true);
 
     try {
+      // Convert local datetime-local values to UTC before sending to backend
+      const submitData = {
+        ...formData,
+        start_datetime: localToUTC(formData.start_datetime, tz),
+        end_datetime: localToUTC(formData.end_datetime, tz),
+      };
+
       // Create training session (creates Event + TrainingCourse link)
-      // const response = await trainingService.createSession(formData);
+      const response = await trainingSessionService.createSession(submitData);
 
       toast.success('Training session created successfully!');
 
       // Navigate to the event page to view QR code
-      // navigate(`/events/${response.event_id}`);
-      navigate('/training/officer');
+      if (response.event_id) {
+        navigate(`/events/${response.event_id}`);
+      } else {
+        navigate('/training/officer');
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to create training session'));
       setSaving(false);
@@ -212,6 +243,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </label>
                   <input
                     type="datetime-local"
+                    step="900"
                     value={formatForDateTimeInput(formData.start_datetime, tz)}
                     onChange={(e) => updateField('start_datetime', e.target.value)}
                     className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -223,6 +255,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </label>
                   <input
                     type="datetime-local"
+                    step="900"
                     value={formatForDateTimeInput(formData.end_datetime, tz)}
                     onChange={(e) => updateField('end_datetime', e.target.value)}
                     className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -231,31 +264,94 @@ const CreateTrainingSessionPage: React.FC = () => {
               </div>
 
               {/* Location */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                    Location
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={(e) => updateField('location', e.target.value)}
-                    placeholder="e.g., Station 1 Training Room"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      Location
+                    </label>
+                    {locations.length > 0 ? (
+                      <select
+                        value={locationMode === 'other' ? '__other__' : (formData.location_id || '')}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '__other__') {
+                            setLocationMode('other');
+                            updateField('location_id', undefined);
+                            updateField('location', '');
+                          } else if (val) {
+                            setLocationMode('select');
+                            updateField('location_id', val);
+                            updateField('location', undefined);
+                          } else {
+                            setLocationMode('select');
+                            updateField('location_id', undefined);
+                            updateField('location', undefined);
+                          }
+                        }}
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      >
+                        <option value="">-- Select a location --</option>
+                        {locations.map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.name}{loc.building ? ` (${loc.building})` : ''}{loc.room_number ? ` #${loc.room_number}` : ''}
+                          </option>
+                        ))}
+                        <option value="__other__">Other (off-site / enter manually)</option>
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={formData.location || ''}
+                        onChange={(e) => updateField('location', e.target.value)}
+                        placeholder="e.g., Station 1 Training Room"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      {locationMode === 'other' ? 'Location Name / Address' : 'Location Details'}
+                    </label>
+                    {locationMode === 'other' && locations.length > 0 ? (
+                      <input
+                        type="text"
+                        value={formData.location || ''}
+                        onChange={(e) => updateField('location', e.target.value)}
+                        placeholder="e.g., City Hall — 123 Main St"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={formData.location_details || ''}
+                        onChange={(e) => updateField('location_details', e.target.value)}
+                        placeholder="Additional directions or room info"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                    Location Details
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.location_details}
-                    onChange={(e) => updateField('location_details', e.target.value)}
-                    placeholder="Additional location info"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
-                </div>
+                {/* Selected location details */}
+                {locationMode === 'select' && formData.location_id && (() => {
+                  const selected = locations.find(l => l.id === formData.location_id);
+                  if (!selected) return null;
+                  const address = [selected.address, selected.city, selected.state, selected.zip].filter(Boolean).join(', ');
+                  return (
+                    <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                      <MapPin className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm">
+                        <p className="font-medium text-theme-text-primary">{selected.name}</p>
+                        {address && <p className="text-theme-text-secondary">{address}</p>}
+                        <div className="flex flex-wrap gap-3 mt-1">
+                          {selected.building && <span className="text-xs text-theme-text-muted">Building: {selected.building}</span>}
+                          {selected.floor && <span className="text-xs text-theme-text-muted">Floor {selected.floor}</span>}
+                          {selected.capacity && <span className="text-xs text-theme-text-muted">Capacity: {selected.capacity}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* RSVP Settings */}
@@ -294,6 +390,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     </label>
                     <input
                       type="datetime-local"
+                      step="900"
                       value={formatForDateTimeInput(formData.rsvp_deadline, tz)}
                       onChange={(e) => updateField('rsvp_deadline', e.target.value)}
                       className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -435,15 +532,43 @@ const CreateTrainingSessionPage: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                      Instructor
+                      Lead Instructor
                     </label>
-                    <input
-                      type="text"
-                      value={formData.instructor}
-                      onChange={(e) => updateField('instructor', e.target.value)}
-                      placeholder="Instructor name"
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
+                    <select
+                      value={instructorId}
+                      onChange={(e) => {
+                        setInstructorId(e.target.value);
+                        const member = members.find(m => m.id === e.target.value);
+                        updateField('instructor', member ? `${member.first_name} ${member.last_name}` : '');
+                      }}
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                      <option value="">Select instructor...</option>
+                      {members.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.first_name} {m.last_name}{m.rank ? ` (${m.rank})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      Apparatus
+                    </label>
+                    <select
+                      value={apparatusId}
+                      onChange={(e) => setApparatusId(e.target.value)}
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                      <option value="">No apparatus</option>
+                      {apparatusList.map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-theme-text-muted mt-1">
+                      Apparatus used during this training session
+                    </p>
                   </div>
                 </>
               )}
@@ -577,7 +702,16 @@ const CreateTrainingSessionPage: React.FC = () => {
                   <ReviewItem label="Title" value={formData.title} />
                   <ReviewItem label="Start" value={formatDateTime(formData.start_datetime, tz)} />
                   <ReviewItem label="End" value={formatDateTime(formData.end_datetime, tz)} />
-                  {formData.location && <ReviewItem label="Location" value={formData.location} />}
+                  {(formData.location_id || formData.location) && (
+                    <ReviewItem
+                      label="Location"
+                      value={
+                        formData.location_id
+                          ? locations.find(l => l.id === formData.location_id)?.name || 'Selected location'
+                          : formData.location || ''
+                      }
+                    />
+                  )}
                   <ReviewItem label="RSVP Required" value={formData.requires_rsvp ? 'Yes' : 'No'} />
                   <ReviewItem label="Mandatory" value={formData.is_mandatory ? 'Yes' : 'No'} />
                 </ReviewSection>

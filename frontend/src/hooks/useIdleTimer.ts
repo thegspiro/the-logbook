@@ -59,8 +59,8 @@ export function useIdleTimer() {
           duration: WARNING_SECONDS * 1000,
           icon: '\u26A0\uFE0F',
           style: {
-            background: '#fbbf24',
-            color: '#1e293b',
+            background: 'var(--toast-warning-bg)',
+            color: 'var(--toast-warning-text)',
             fontWeight: '500',
           },
         }

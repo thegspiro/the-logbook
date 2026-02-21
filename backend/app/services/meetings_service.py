@@ -298,7 +298,7 @@ class MeetingsService:
             # Handle status changes
             if "status" in update_data:
                 new_status = update_data["status"]
-                if new_status == "completed" and item.status != ActionItemStatus.COMPLETED:
+                if new_status == ActionItemStatus.COMPLETED.value and item.status != ActionItemStatus.COMPLETED:
                     item.completed_at = datetime.now()
 
             for key, value in update_data.items():
@@ -345,7 +345,7 @@ class MeetingsService:
         if assigned_to:
             query = query.where(MeetingActionItem.assigned_to == assigned_to)
 
-        query = query.order_by(MeetingActionItem.due_date.asc().nullslast())
+        query = query.order_by(MeetingActionItem.due_date.asc())
         result = await self.db.execute(query)
         return result.scalars().all()
 
@@ -393,3 +393,83 @@ class MeetingsService:
             "open_action_items": open_action_items,
             "pending_approval": pending_approval,
         }
+
+    # ============================================
+    # Cross-module Bridges
+    # ============================================
+
+    async def create_from_event(
+        self, event_id: UUID, organization_id: UUID, created_by: UUID
+    ) -> Tuple[Optional[Meeting], Optional[str]]:
+        """
+        Create a Meeting record from a completed Event (type: business_meeting).
+        Bridges Event check-in attendance → Meeting attendance.
+        Pre-populates attendees from EventRSVP check-in data.
+        """
+        from app.models.event import Event, EventRSVP, RSVPStatus
+        from app.core.utils import generate_uuid
+
+        # Get the event
+        result = await self.db.execute(
+            select(Event).where(
+                Event.id == str(event_id),
+                Event.organization_id == str(organization_id),
+            )
+        )
+        event = result.scalar_one_or_none()
+        if not event:
+            return None, "Event not found"
+
+        # Check if meeting already exists for this event
+        existing = await self.db.execute(
+            select(Meeting).where(
+                Meeting.event_id == str(event_id),
+                Meeting.organization_id == str(organization_id),
+            )
+        )
+        if existing.scalar_one_or_none():
+            return None, "Meeting already exists for this event"
+
+        try:
+            meeting = Meeting(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                title=event.title,
+                meeting_type=MeetingType.BUSINESS,
+                meeting_date=event.start_datetime.date() if event.start_datetime else date.today(),
+                start_time=event.actual_start_time.time() if event.actual_start_time else (event.start_datetime.time() if event.start_datetime else None),
+                end_time=event.actual_end_time.time() if event.actual_end_time else (event.end_datetime.time() if event.end_datetime else None),
+                location=event.location,
+                location_id=event.location_id,
+                event_id=str(event_id),
+                status=MeetingStatus.DRAFT,
+                created_by=str(created_by),
+            )
+            self.db.add(meeting)
+            await self.db.flush()
+
+            # Import attendees from EventRSVP check-ins
+            rsvps_result = await self.db.execute(
+                select(EventRSVP).where(
+                    EventRSVP.event_id == str(event_id),
+                    EventRSVP.organization_id == str(organization_id),
+                )
+            )
+            for rsvp in rsvps_result.scalars().all():
+                attendee = MeetingAttendee(
+                    id=generate_uuid(),
+                    organization_id=str(organization_id),
+                    meeting_id=meeting.id,
+                    user_id=rsvp.user_id,
+                    present=rsvp.checked_in,
+                    excused=not rsvp.checked_in and rsvp.status == RSVPStatus.NOT_GOING if hasattr(rsvp.status, 'value') else False,
+                )
+                self.db.add(attendee)
+
+            await self.db.commit()
+            await self.db.refresh(meeting)
+            return meeting, None
+
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)

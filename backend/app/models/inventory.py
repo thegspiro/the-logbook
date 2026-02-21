@@ -81,6 +81,12 @@ class AssignmentType(str, enum.Enum):
     TEMPORARY = "temporary"  # Temporary checkout
 
 
+class TrackingType(str, enum.Enum):
+    """How inventory items are tracked"""
+    INDIVIDUAL = "individual"  # Unique item with serial number, assigned 1:1 to a member
+    POOL = "pool"  # Quantity-tracked pool; units are issued to members and returned
+
+
 class InventoryCategory(Base):
     """
     Inventory Category model
@@ -178,8 +184,17 @@ class InventoryItem(Base):
     status = Column(Enum(ItemStatus, values_callable=lambda x: [e.value for e in x]), default=ItemStatus.AVAILABLE, nullable=False, index=True)
     status_notes = Column(Text)
 
-    # Quantity (for consumables or bulk items)
-    quantity = Column(Integer, default=1)
+    # Tracking mode: "individual" (serial-numbered, 1:1 assignment) or "pool" (quantity-tracked, issue/return)
+    tracking_type = Column(
+        Enum(TrackingType, values_callable=lambda x: [e.value for e in x]),
+        default=TrackingType.INDIVIDUAL,
+        nullable=False,
+        server_default="individual",
+    )
+
+    # Quantity (for pool items)
+    quantity = Column(Integer, default=1)  # On-hand / available count
+    quantity_issued = Column(Integer, default=0)  # Currently issued to members
     unit_of_measure = Column(String(50))  # "each", "pair", "box", etc.
 
     # Maintenance
@@ -210,6 +225,7 @@ class InventoryItem(Base):
     checkout_records = relationship("CheckOutRecord", back_populates="item", cascade="all, delete-orphan")
     maintenance_records = relationship("MaintenanceRecord", back_populates="item", cascade="all, delete-orphan")
     assignment_history = relationship("ItemAssignment", back_populates="item", cascade="all, delete-orphan")
+    issuance_records = relationship("ItemIssuance", back_populates="item", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_inventory_items_org_category", "organization_id", "category_id"),
@@ -217,6 +233,7 @@ class InventoryItem(Base):
         Index("idx_inventory_items_org_active", "organization_id", "active"),
         Index("idx_inventory_items_assigned_to", "assigned_to_user_id"),
         Index("idx_inventory_items_next_inspection", "next_inspection_due"),
+        Index("idx_inventory_items_tracking_type", "organization_id", "tracking_type"),
     )
 
 
@@ -264,6 +281,59 @@ class ItemAssignment(Base):
         Index("idx_item_assignments_org_item", "organization_id", "item_id"),
         Index("idx_item_assignments_org_user", "organization_id", "user_id"),
         Index("idx_item_assignments_org_active", "organization_id", "is_active"),
+    )
+
+
+class ItemIssuance(Base):
+    """
+    Item Issuance model
+
+    Tracks units issued from a pool-tracked inventory item.
+    For example: "Dept T-Shirt (Medium)" has quantity=20; issuing 1 to
+    a member creates an ItemIssuance, decrements the pool's quantity,
+    and increments quantity_issued.  Returning reverses the operation.
+    """
+
+    __tablename__ = "item_issuances"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Which pool item and who received the issuance
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # How many units were issued (usually 1)
+    quantity_issued = Column(Integer, nullable=False, default=1)
+
+    # Dates
+    issued_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    returned_at = Column(DateTime(timezone=True))
+
+    # Audit trail
+    issued_by = Column(String(36), ForeignKey("users.id"))
+    returned_by = Column(String(36), ForeignKey("users.id"))
+
+    # Context
+    issue_reason = Column(Text)
+    return_condition = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]))
+    return_notes = Column(Text)
+
+    # Status
+    is_returned = Column(Boolean, default=False, index=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    item = relationship("InventoryItem", back_populates="issuance_records", foreign_keys=[item_id])
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        Index("idx_item_issuances_org_item", "organization_id", "item_id"),
+        Index("idx_item_issuances_org_user", "organization_id", "user_id"),
+        Index("idx_item_issuances_org_returned", "organization_id", "is_returned"),
     )
 
 
@@ -378,6 +448,193 @@ class MaintenanceRecord(Base):
         Index("idx_maintenance_records_org_scheduled", "organization_id", "scheduled_date"),
         Index("idx_maintenance_records_org_next_due", "organization_id", "next_due_date"),
         Index("idx_maintenance_records_org_completed", "organization_id", "is_completed"),
+    )
+
+
+class ClearanceStatus(str, enum.Enum):
+    """Status of a departure clearance"""
+    INITIATED = "initiated"        # Clearance created, items being collected
+    IN_PROGRESS = "in_progress"    # Some items returned, some outstanding
+    COMPLETED = "completed"        # All items returned or accounted for
+    CLOSED_INCOMPLETE = "closed_incomplete"  # Closed with outstanding items (write-off)
+
+
+class ClearanceLineDisposition(str, enum.Enum):
+    """How an individual clearance line item was resolved"""
+    PENDING = "pending"            # Not yet returned
+    RETURNED = "returned"          # Physically returned in acceptable condition
+    RETURNED_DAMAGED = "returned_damaged"  # Returned but damaged
+    WRITTEN_OFF = "written_off"    # Lost/unreturnable, written off by leadership
+    WAIVED = "waived"              # Department chose not to require return
+
+
+class DepartureClearance(Base):
+    """
+    Departure Clearance model
+
+    Tracks the overall clearance process when a member leaves the department.
+    Created when a member is dropped; completed when all outstanding items
+    are returned or accounted for. Serves as the single record of the
+    member's departure property pipeline.
+    """
+
+    __tablename__ = "departure_clearances"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # Clearance status
+    status = Column(
+        Enum(ClearanceStatus, values_callable=lambda x: [e.value for e in x]),
+        default=ClearanceStatus.INITIATED,
+        nullable=False,
+    )
+
+    # Summary counts (denormalized for quick dashboard reads)
+    total_items = Column(Integer, nullable=False, default=0)
+    items_cleared = Column(Integer, nullable=False, default=0)
+    items_outstanding = Column(Integer, nullable=False, default=0)
+    total_value = Column(Numeric(10, 2), nullable=False, default=0)
+    value_outstanding = Column(Numeric(10, 2), nullable=False, default=0)
+
+    # Dates
+    initiated_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+    return_deadline = Column(DateTime(timezone=True))
+
+    # Who initiated and who signed off
+    initiated_by = Column(String(36), ForeignKey("users.id"))
+    completed_by = Column(String(36), ForeignKey("users.id"))
+
+    # Notes / context
+    departure_type = Column(String(30))  # "dropped_voluntary", "dropped_involuntary", "retired"
+    notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    initiated_by_user = relationship("User", foreign_keys=[initiated_by])
+    completed_by_user = relationship("User", foreign_keys=[completed_by])
+    line_items = relationship("DepartureClearanceItem", back_populates="clearance", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_departure_clearance_org_user", "organization_id", "user_id"),
+        Index("idx_departure_clearance_org_status", "organization_id", "status"),
+    )
+
+
+class DepartureClearanceItem(Base):
+    """
+    Departure Clearance Line Item
+
+    One row per outstanding item (assignment, checkout, or pool issuance)
+    that a departing member must return. Tracks the disposition of each
+    line — returned, damaged, written off, or waived.
+    """
+
+    __tablename__ = "departure_clearance_items"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    clearance_id = Column(String(36), ForeignKey("departure_clearances.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+
+    # What type of record this line refers to
+    source_type = Column(String(20), nullable=False)  # "assignment", "checkout", "issuance"
+    source_id = Column(String(36), nullable=False)     # ID of the ItemAssignment / CheckOutRecord / ItemIssuance
+
+    # Snapshot of item info at clearance creation (so it remains readable even if item is later retired)
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"))
+    item_name = Column(String(255), nullable=False)
+    item_serial_number = Column(String(255))
+    item_asset_tag = Column(String(255))
+    item_value = Column(Numeric(10, 2))
+    quantity = Column(Integer, nullable=False, default=1)
+
+    # Resolution
+    disposition = Column(
+        Enum(ClearanceLineDisposition, values_callable=lambda x: [e.value for e in x]),
+        default=ClearanceLineDisposition.PENDING,
+        nullable=False,
+    )
+    return_condition = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]))
+    resolved_at = Column(DateTime(timezone=True))
+    resolved_by = Column(String(36), ForeignKey("users.id"))
+    resolution_notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    clearance = relationship("DepartureClearance", back_populates="line_items", foreign_keys=[clearance_id])
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+    resolved_by_user = relationship("User", foreign_keys=[resolved_by])
+
+    __table_args__ = (
+        Index("idx_clearance_item_clearance", "clearance_id"),
+        Index("idx_clearance_item_disposition", "clearance_id", "disposition"),
+    )
+
+
+class InventoryActionType(str, enum.Enum):
+    """Types of inventory actions that generate notifications"""
+    ASSIGNED = "assigned"          # Individual item permanently assigned
+    UNASSIGNED = "unassigned"      # Individual item returned / unassigned
+    ISSUED = "issued"              # Pool item units issued to member
+    RETURNED = "returned"          # Pool item units returned to pool
+    CHECKED_OUT = "checked_out"    # Individual item temporarily checked out
+    CHECKED_IN = "checked_in"     # Individual item checked back in
+
+
+class InventoryNotificationQueue(Base):
+    """
+    Queues inventory change events for delayed, consolidated email
+    notifications.  A scheduled task processes records older than 1 hour,
+    groups them per member, nets out offsetting actions (e.g. issue + return
+    of the same item cancel out), and sends a single email per member
+    summarising the net changes.
+    """
+
+    __tablename__ = "inventory_notification_queue"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # What happened
+    action_type = Column(
+        Enum(InventoryActionType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+
+    # Item snapshot (readable even if item is later retired)
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"))
+    item_name = Column(String(255), nullable=False)
+    item_serial_number = Column(String(255))
+    item_asset_tag = Column(String(255))
+    quantity = Column(Integer, nullable=False, default=1)
+
+    # Who performed the action
+    performed_by = Column(String(36), ForeignKey("users.id"))
+
+    # Processing state
+    processed = Column(Boolean, default=False, nullable=False, index=True)
+    processed_at = Column(DateTime(timezone=True))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+
+    __table_args__ = (
+        Index("idx_inv_notif_queue_pending", "processed", "created_at"),
+        Index("idx_inv_notif_queue_org_user", "organization_id", "user_id"),
     )
 
 

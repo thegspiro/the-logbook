@@ -118,12 +118,16 @@ class CurrentUser(BaseModel):
     full_name: Optional[str] = None
     organization_id: UUID
     timezone: str = Field(default="America/New_York", description="Organization timezone")
-    roles: list[str] = []  # List of role names
-    permissions: list[str] = []  # List of permission names
+    roles: list[str] = []  # List of role/position names (backward-compatible alias)
+    positions: list[str] = []  # List of position names (same as roles)
+    rank: Optional[str] = None  # Operational rank, e.g. "captain", "firefighter"
+    membership_type: Optional[str] = None  # Membership tier, e.g. "active", "reserve"
+    permissions: list[str] = []  # List of permission names (includes rank defaults)
     is_active: bool
     email_verified: bool
     mfa_enabled: bool
     password_expired: bool = False  # True when password age exceeds HIPAA max
+    must_change_password: bool = False  # True when admin requires password change on next login
 
 
 class PasswordChange(BaseModel):

@@ -18,11 +18,14 @@ import {
   Plus, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown,
   Eye, EyeOff, RefreshCw, AlertCircle, Type, Hash, Mail, Phone,
   Calendar, Clock, List, CheckSquare, CircleDot, Users, Minus, FileText, PenTool,
+  GitBranch,
 } from 'lucide-react';
 import FieldEditor from './FieldEditor';
+import type { SiblingField } from './FieldEditor';
 import { formsService } from '../../services/api';
 import type { FormField, FormFieldCreate } from '../../services/api';
 import type { FieldDefinition } from './FieldRenderer';
+import { FieldType } from '../../constants/enums';
 
 const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
   text: <Type className="w-4 h-4" />,
@@ -121,6 +124,9 @@ const FormBuilder = ({
       min_length: field.min_length || undefined,
       max_length: field.max_length || undefined,
       options: field.options || undefined,
+      condition_field_id: field.condition_field_id || undefined,
+      condition_operator: field.condition_operator || undefined,
+      condition_value: field.condition_value || undefined,
       sort_order: field.sort_order,
       width: field.width,
     });
@@ -325,6 +331,12 @@ const FormBuilder = ({
                   {field.width !== 'full' && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-theme-surface text-theme-text-muted">{field.width}</span>
                   )}
+                  {field.condition_field_id && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-700 dark:text-purple-400 font-medium flex items-center gap-0.5">
+                      <GitBranch className="w-2.5 h-2.5" />
+                      Conditional
+                    </span>
+                  )}
                 </div>
                 <span className="text-xs text-theme-text-muted">{field.field_type}</span>
               </div>
@@ -377,7 +389,7 @@ const FormBuilder = ({
           <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-4">Preview</p>
           <div className="space-y-4">
             {sortedFields.map((field) => {
-              if (field.field_type === 'section_header') {
+              if (field.field_type === FieldType.SECTION_HEADER) {
                 return (
                   <div key={field.id} className="border-b border-theme-surface-border pb-2 pt-2">
                     <h3 className="text-lg font-semibold text-theme-text-primary">{field.label}</h3>
@@ -413,6 +425,13 @@ const FormBuilder = ({
             setEditingFieldId(null);
           }}
           nextSortOrder={fields.length}
+          siblingFields={fields.map((f) => ({
+            id: f.id,
+            label: f.label,
+            field_type: f.field_type,
+            options: f.options || undefined,
+          } as SiblingField))}
+          editingFieldId={editingFieldId || undefined}
         />
       )}
     </div>

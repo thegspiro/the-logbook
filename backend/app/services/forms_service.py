@@ -79,9 +79,9 @@ class FormsService:
 
             # Enforce length limits by field type
             field_type = field.field_type if isinstance(field.field_type, str) else field.field_type.value
-            if field_type == "textarea":
+            if field_type == FieldType.TEXTAREA.value:
                 max_len = field.max_length or FormsService.MAX_TEXTAREA_LENGTH
-            elif field_type == "email":
+            elif field_type == FieldType.EMAIL.value:
                 max_len = FormsService.MAX_EMAIL_LENGTH
             else:
                 max_len = field.max_length or FormsService.MAX_TEXT_LENGTH
@@ -94,7 +94,7 @@ class FormsService:
                 return {}, f"Value for '{field.label}' must be at least {field.min_length} characters"
 
             # Type-specific validation
-            if field_type == "email" and str_value.strip():
+            if field_type == FieldType.EMAIL.value and str_value.strip():
                 email_pattern = r'^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$'
                 raw_value = html_lib.unescape(str_value)
                 if not re.match(email_pattern, raw_value):
@@ -103,13 +103,13 @@ class FormsService:
                 if '\n' in raw_value or '\r' in raw_value:
                     return {}, f"Invalid email format for '{field.label}'"
 
-            if field_type == "phone" and str_value.strip():
+            if field_type == FieldType.PHONE.value and str_value.strip():
                 raw_value = html_lib.unescape(str_value)
                 digits_only = re.sub(r'[^\d+\-() ]', '', raw_value)
                 if digits_only != raw_value:
                     return {}, f"Invalid phone number for '{field.label}'"
 
-            if field_type == "number" and str_value.strip():
+            if field_type == FieldType.NUMBER.value and str_value.strip():
                 try:
                     num_val = float(html_lib.unescape(str_value))
                     if field.min_value is not None and num_val < field.min_value:
@@ -119,7 +119,7 @@ class FormsService:
                 except ValueError:
                     return {}, f"Invalid number for '{field.label}'"
 
-            if field_type in ("select", "radio") and str_value.strip():
+            if field_type in (FieldType.SELECT.value, FieldType.RADIO.value) and str_value.strip():
                 # Validate against allowed options
                 if field.options:
                     allowed = {opt.value if hasattr(opt, 'value') else opt.get('value', '') for opt in field.options}
@@ -127,7 +127,7 @@ class FormsService:
                     if raw_value not in allowed:
                         return {}, f"Invalid option for '{field.label}'"
 
-            if field_type == "checkbox" and str_value.strip():
+            if field_type == FieldType.CHECKBOX.value and str_value.strip():
                 # Validate each comma-separated value against allowed options
                 if field.options:
                     allowed = {opt.value if hasattr(opt, 'value') else opt.get('value', '') for opt in field.options}
@@ -298,7 +298,7 @@ class FormsService:
             # Handle status changes
             if "status" in update_data:
                 new_status = update_data["status"]
-                if new_status == "published" and form.status != FormStatus.PUBLISHED:
+                if new_status == FormStatus.PUBLISHED.value and form.status != FormStatus.PUBLISHED:
                     update_data["published_at"] = datetime.now()
 
             for key, value in update_data.items():
@@ -727,6 +727,11 @@ class FormsService:
                         submission, integration
                     )
                     results["equipment_assignment"] = result
+                elif integration.integration_type == IntegrationType.EVENT_REGISTRATION:
+                    result = await self._process_event_registration(
+                        submission, integration
+                    )
+                    results["event_registration"] = result
             except Exception as e:
                 results[integration.integration_type] = {
                     "success": False,
@@ -815,6 +820,59 @@ class FormsService:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    async def _process_event_registration(
+        self, submission: FormSubmission, integration: FormIntegration
+    ) -> Dict[str, Any]:
+        """
+        Process a public event registration form submission.
+        Creates an EventRSVP (if the submitter is a member) or stores
+        registration data for admin review.
+        """
+        mappings = integration.field_mappings or {}
+        mapped_data = {}
+
+        for field_id, target_field in mappings.items():
+            if field_id in submission.data:
+                mapped_data[target_field] = submission.data[field_id]
+
+        event_id = mapped_data.get("event_id")
+        if not event_id:
+            return {
+                "success": False,
+                "error": "event_id mapping is required for event registration",
+            }
+
+        # If the submitter is an authenticated member, create an RSVP
+        if submission.submitted_by:
+            try:
+                from app.models.event import EventRSVP, RSVPStatus
+                from app.core.utils import generate_uuid
+
+                rsvp = EventRSVP(
+                    id=generate_uuid(),
+                    organization_id=submission.organization_id,
+                    event_id=event_id,
+                    user_id=submission.submitted_by,
+                    status=RSVPStatus.GOING,
+                    notes=mapped_data.get("notes", "Registered via form"),
+                )
+                self.db.add(rsvp)
+                await self.db.flush()
+                return {
+                    "success": True,
+                    "rsvp_id": rsvp.id,
+                    "message": "Member RSVP created via form registration",
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        else:
+            # Public/anonymous submission — store for admin review
+            return {
+                "success": True,
+                "mapped_data": mapped_data,
+                "message": "Event registration recorded for admin review",
+            }
 
     # ============================================
     # Member Lookup

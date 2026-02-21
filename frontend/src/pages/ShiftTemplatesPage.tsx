@@ -6,7 +6,7 @@
  * Patterns define recurring shift schedules and can generate shifts.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
 import {
@@ -20,14 +20,170 @@ import {
   Repeat,
   Play,
   X,
-  AlertCircle,
   CheckCircle,
+  Users,
+  Minus,
+  Truck,
+  PartyPopper,
+  Filter,
+  Zap,
+  Heart,
+  Bike,
+  ShieldCheck,
+  Megaphone,
+  Home,
+  Trophy,
+  Flag,
+  Copy,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
 
 // ============================================
 // Interfaces
 // ============================================
+
+type TemplateCategory = 'standard' | 'specialty' | 'event';
+
+const TEMPLATE_CATEGORIES: { value: TemplateCategory; label: string; icon: React.ElementType; description: string }[] = [
+  { value: 'standard', label: 'Standard', icon: Clock, description: 'Regular day, night, or rotating shifts' },
+  { value: 'specialty', label: 'Specialty Vehicle', icon: Truck, description: 'Templates for specialty apparatus (Hazmat, Tower, etc.)' },
+  { value: 'event', label: 'Event / Special', icon: PartyPopper, description: 'Parades, SantaMobile, community events, details' },
+];
+
+const APPARATUS_TYPES = [
+  'engine', 'ladder', 'ambulance', 'rescue', 'tanker', 'brush',
+  'tower', 'hazmat', 'boat', 'chief', 'utility',
+];
+
+// ============================================
+// Event types and resource types
+// ============================================
+
+type EventType = 'parade' | 'sporting' | 'community' | 'racing' | 'open_house' | 'detail' | 'other';
+
+const EVENT_TYPES: { value: EventType; label: string; icon: React.ElementType; description: string }[] = [
+  { value: 'parade', label: 'Parade', icon: Flag, description: 'Parades, processions, SantaMobile' },
+  { value: 'sporting', label: 'Sporting Event', icon: Trophy, description: 'School games, tournaments, athletic events' },
+  { value: 'community', label: 'Community Event', icon: Megaphone, description: 'Festivals, block parties, fundraisers' },
+  { value: 'racing', label: 'Racing Event', icon: Zap, description: 'Marathons, triathlons, car/bike races' },
+  { value: 'open_house', label: 'Open House', icon: Home, description: 'Station tours, Fire Prevention Week' },
+  { value: 'detail', label: 'Detail / Standby', icon: ShieldCheck, description: 'Standby coverage, fire watch, inspections' },
+  { value: 'other', label: 'Other', icon: PartyPopper, description: 'Any other special event' },
+];
+
+interface ResourceUnit {
+  type: string;
+  label: string;
+  quantity: number;
+  positions: string[];
+}
+
+const RESOURCE_TYPE_OPTIONS: { value: string; label: string; icon: React.ElementType; defaultPositions: string[]; defaultQty: number }[] = [
+  { value: 'engine', label: 'Engine', icon: Truck, defaultPositions: ['officer', 'driver', 'firefighter', 'firefighter'], defaultQty: 1 },
+  { value: 'ambulance', label: 'Ambulance', icon: Truck, defaultPositions: ['driver', 'ems', 'ems'], defaultQty: 1 },
+  { value: 'ladder', label: 'Ladder / Tower', icon: Truck, defaultPositions: ['officer', 'driver', 'firefighter', 'firefighter'], defaultQty: 1 },
+  { value: 'rescue', label: 'Rescue', icon: Truck, defaultPositions: ['officer', 'driver', 'firefighter'], defaultQty: 1 },
+  { value: 'first_aid_station', label: 'First Aid Station', icon: Heart, defaultPositions: ['ems', 'ems'], defaultQty: 1 },
+  { value: 'bicycle_team', label: 'Bicycle Team', icon: Bike, defaultPositions: ['ems', 'ems'], defaultQty: 1 },
+  { value: 'command_post', label: 'Command Post', icon: ShieldCheck, defaultPositions: ['officer', 'captain'], defaultQty: 1 },
+  { value: 'rehab_station', label: 'Rehab Station', icon: Heart, defaultPositions: ['ems', 'firefighter'], defaultQty: 1 },
+  { value: 'utility_vehicle', label: 'Utility / Support', icon: Truck, defaultPositions: ['driver'], defaultQty: 1 },
+  { value: 'tanker', label: 'Tanker', icon: Truck, defaultPositions: ['driver', 'firefighter'], defaultQty: 1 },
+  { value: 'hazmat', label: 'HazMat Unit', icon: Truck, defaultPositions: ['officer', 'driver', 'firefighter', 'firefighter'], defaultQty: 1 },
+  { value: 'chief_vehicle', label: 'Chief / Battalion', icon: Truck, defaultPositions: ['officer'], defaultQty: 1 },
+  { value: 'boat', label: 'Boat', icon: Truck, defaultPositions: ['officer', 'driver'], defaultQty: 1 },
+];
+
+// Pre-built event template starters
+interface EventTemplateStarter {
+  name: string;
+  eventType: EventType;
+  description: string;
+  duration_hours: string;
+  start_time_of_day: string;
+  end_time_of_day: string;
+  color: string;
+  resources: ResourceUnit[];
+}
+
+const EVENT_TEMPLATE_STARTERS: EventTemplateStarter[] = [
+  {
+    name: 'Parade Detail',
+    eventType: 'parade',
+    description: 'Standard parade standby with engine and ambulance coverage',
+    duration_hours: '4', start_time_of_day: '09:00', end_time_of_day: '13:00', color: '#7c3aed',
+    resources: [
+      { type: 'engine', label: 'Engine', quantity: 1, positions: ['officer', 'driver', 'firefighter', 'firefighter'] },
+      { type: 'ambulance', label: 'Ambulance', quantity: 1, positions: ['driver', 'ems', 'ems'] },
+    ],
+  },
+  {
+    name: 'SantaMobile',
+    eventType: 'parade',
+    description: 'Holiday SantaMobile community event with engine escort',
+    duration_hours: '5', start_time_of_day: '17:00', end_time_of_day: '22:00', color: '#dc2626',
+    resources: [
+      { type: 'engine', label: 'Engine (Santa)', quantity: 1, positions: ['officer', 'driver', 'firefighter', 'firefighter'] },
+      { type: 'utility_vehicle', label: 'Utility / Lead', quantity: 1, positions: ['driver'] },
+    ],
+  },
+  {
+    name: 'School Sporting Event',
+    eventType: 'sporting',
+    description: 'High school football/soccer game standby with first aid',
+    duration_hours: '4', start_time_of_day: '16:00', end_time_of_day: '20:00', color: '#2563eb',
+    resources: [
+      { type: 'ambulance', label: 'Ambulance', quantity: 1, positions: ['driver', 'ems', 'ems'] },
+      { type: 'first_aid_station', label: 'First Aid Station', quantity: 1, positions: ['ems', 'ems'] },
+    ],
+  },
+  {
+    name: 'Marathon / Road Race',
+    eventType: 'racing',
+    description: 'Full marathon or road race coverage with bicycle EMS teams and aid stations',
+    duration_hours: '8', start_time_of_day: '05:00', end_time_of_day: '13:00', color: '#f59e0b',
+    resources: [
+      { type: 'ambulance', label: 'Ambulance', quantity: 2, positions: ['driver', 'ems', 'ems'] },
+      { type: 'first_aid_station', label: 'First Aid Station', quantity: 3, positions: ['ems', 'ems'] },
+      { type: 'bicycle_team', label: 'Bicycle Team', quantity: 2, positions: ['ems', 'ems'] },
+      { type: 'command_post', label: 'Command Post', quantity: 1, positions: ['officer', 'captain'] },
+      { type: 'rehab_station', label: 'Rehab Station', quantity: 1, positions: ['ems', 'firefighter'] },
+    ],
+  },
+  {
+    name: 'Community Festival',
+    eventType: 'community',
+    description: 'Block party, festival, or large community gathering',
+    duration_hours: '6', start_time_of_day: '10:00', end_time_of_day: '16:00', color: '#10b981',
+    resources: [
+      { type: 'engine', label: 'Engine', quantity: 1, positions: ['officer', 'driver', 'firefighter', 'firefighter'] },
+      { type: 'ambulance', label: 'Ambulance', quantity: 1, positions: ['driver', 'ems', 'ems'] },
+      { type: 'first_aid_station', label: 'First Aid Station', quantity: 1, positions: ['ems', 'ems'] },
+    ],
+  },
+  {
+    name: 'Open House',
+    eventType: 'open_house',
+    description: 'Station open house, Fire Prevention Week, public tours',
+    duration_hours: '4', start_time_of_day: '10:00', end_time_of_day: '14:00', color: '#ef4444',
+    resources: [
+      { type: 'engine', label: 'Engine (Demo)', quantity: 1, positions: ['officer', 'driver', 'firefighter', 'firefighter'] },
+    ],
+  },
+  {
+    name: 'Triathlon',
+    eventType: 'racing',
+    description: 'Triathlon coverage with water and land EMS teams',
+    duration_hours: '8', start_time_of_day: '06:00', end_time_of_day: '14:00', color: '#f59e0b',
+    resources: [
+      { type: 'ambulance', label: 'Ambulance', quantity: 2, positions: ['driver', 'ems', 'ems'] },
+      { type: 'first_aid_station', label: 'First Aid Station', quantity: 2, positions: ['ems', 'ems'] },
+      { type: 'bicycle_team', label: 'Bicycle Team', quantity: 1, positions: ['ems', 'ems'] },
+      { type: 'boat', label: 'Boat (Water Rescue)', quantity: 1, positions: ['officer', 'driver'] },
+      { type: 'command_post', label: 'Command Post', quantity: 1, positions: ['officer', 'captain'] },
+    ],
+  },
+];
 
 interface ShiftTemplate {
   id: string;
@@ -40,6 +196,8 @@ interface ShiftTemplate {
   color?: string;
   positions?: unknown;
   min_staffing: number;
+  category?: string;
+  apparatus_type?: string;
   is_default: boolean;
   is_active: boolean;
   created_at: string;
@@ -67,6 +225,35 @@ interface ShiftPattern {
   created_by?: string;
 }
 
+const BUILTIN_POSITION_OPTIONS: { value: string; label: string }[] = [
+  { value: 'officer', label: 'Officer' },
+  { value: 'driver', label: 'Driver/Operator' },
+  { value: 'firefighter', label: 'Firefighter' },
+  { value: 'ems', label: 'EMS' },
+  { value: 'probationary', label: 'Probationary' },
+  { value: 'volunteer', label: 'Volunteer' },
+  { value: 'other', label: 'Other' },
+];
+
+// Load custom positions from settings (shared with ShiftSettingsPanel)
+const getPositionOptions = (): { value: string; label: string }[] => {
+  try {
+    const stored = localStorage.getItem('scheduling_settings');
+    if (stored) {
+      const settings = JSON.parse(stored);
+      const custom = (settings.customPositions || []) as { value: string; label: string }[];
+      const merged = [...BUILTIN_POSITION_OPTIONS];
+      for (const cp of custom) {
+        if (!merged.some(p => p.value === cp.value)) {
+          merged.push(cp);
+        }
+      }
+      return merged;
+    }
+  } catch { /* ignore */ }
+  return BUILTIN_POSITION_OPTIONS;
+};
+
 interface TemplateFormData {
   name: string;
   description: string;
@@ -76,6 +263,11 @@ interface TemplateFormData {
   color: string;
   min_staffing: string;
   is_default: boolean;
+  positions: string[];
+  category: TemplateCategory;
+  apparatus_type: string;
+  event_type: EventType | '';
+  resources: ResourceUnit[];
 }
 
 interface PatternFormData {
@@ -108,6 +300,11 @@ const emptyTemplateForm: TemplateFormData = {
   color: '#dc2626',
   min_staffing: '1',
   is_default: false,
+  positions: [],
+  category: 'standard',
+  apparatus_type: '',
+  event_type: '',
+  resources: [],
 };
 
 const emptyPatternForm: PatternFormData = {
@@ -143,25 +340,117 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<TemplateFormData>(initialData || emptyTemplateForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const positionOptions = getPositionOptions();
 
   useEffect(() => {
     setFormData(initialData || emptyTemplateForm);
   }, [initialData, isOpen]);
 
+  // Load apparatus-type defaults from settings when apparatus_type changes
+  const loadApparatusTypeDefaults = (type: string) => {
+    if (!type) return;
+    try {
+      const stored = localStorage.getItem('scheduling_settings');
+      if (stored) {
+        const settings = JSON.parse(stored);
+        const defaults = settings.apparatusTypeDefaults?.[type];
+        if (defaults) {
+          setFormData(prev => ({
+            ...prev,
+            positions: defaults.positions || prev.positions,
+            min_staffing: String(defaults.minStaffing || prev.min_staffing),
+          }));
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+  };
+
+  // Compute total staffing from resources
+  const totalResourceStaffing = useMemo(() => {
+    return formData.resources.reduce((sum, r) => sum + (r.positions.length * r.quantity), 0);
+  }, [formData.resources]);
+
+  // Apply an event template starter
+  const applyStarter = (starter: EventTemplateStarter) => {
+    setFormData(prev => ({
+      ...prev,
+      name: starter.name,
+      description: starter.description,
+      start_time_of_day: starter.start_time_of_day,
+      end_time_of_day: starter.end_time_of_day,
+      duration_hours: starter.duration_hours,
+      color: starter.color,
+      event_type: starter.eventType,
+      resources: starter.resources.map(r => ({ ...r, positions: [...r.positions] })),
+      min_staffing: String(starter.resources.reduce((s, r) => s + r.positions.length * r.quantity, 0)),
+    }));
+  };
+
+  const addResource = (typeValue: string) => {
+    const opt = RESOURCE_TYPE_OPTIONS.find(o => o.value === typeValue);
+    if (!opt) return;
+    setFormData(prev => ({
+      ...prev,
+      resources: [...prev.resources, { type: opt.value, label: opt.label, quantity: opt.defaultQty, positions: [...opt.defaultPositions] }],
+    }));
+  };
+
+  const removeResource = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      resources: prev.resources.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateResourceQuantity = (index: number, qty: number) => {
+    setFormData(prev => {
+      const updated = [...prev.resources];
+      updated[index] = { ...updated[index], quantity: Math.max(1, qty) };
+      return { ...prev, resources: updated };
+    });
+  };
+
+  const updateResourcePositions = (index: number, positions: string[]) => {
+    setFormData(prev => {
+      const updated = [...prev.resources];
+      updated[index] = { ...updated[index], positions };
+      return { ...prev, resources: updated };
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      // For event templates, flatten resource positions into the positions array
+      const effectivePositions = formData.category === 'event' && formData.resources.length > 0
+        ? formData.resources.flatMap(r => Array.from({ length: r.quantity }, () => r.positions).flat())
+        : formData.positions;
       const payload: Record<string, unknown> = {
         name: formData.name,
         start_time_of_day: formData.start_time_of_day,
         end_time_of_day: formData.end_time_of_day,
         duration_hours: parseFloat(formData.duration_hours),
-        min_staffing: parseInt(formData.min_staffing, 10),
+        min_staffing: formData.category === 'event' && totalResourceStaffing > 0
+          ? totalResourceStaffing
+          : parseInt(formData.min_staffing, 10),
         is_default: formData.is_default,
+        positions: effectivePositions.length > 0 ? effectivePositions : null,
+        category: formData.category,
       };
       if (formData.description) payload.description = formData.description;
       if (formData.color) payload.color = formData.color;
+      if (formData.apparatus_type) payload.apparatus_type = formData.apparatus_type;
+      // Store event metadata in description as JSON-serializable format
+      if (formData.category === 'event') {
+        const eventMeta = {
+          event_type: formData.event_type || 'other',
+          resources: formData.resources,
+        };
+        // Store in positions field as structured data for backend compatibility
+        payload.positions = eventMeta;
+      }
       await onSubmit(payload);
       onClose();
     } catch (err) {
@@ -181,7 +470,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
       aria-labelledby="template-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="template-modal-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
@@ -220,6 +509,231 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
             />
           </div>
 
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1.5">Category</label>
+            <div className="grid grid-cols-3 gap-2">
+              {TEMPLATE_CATEGORIES.map(cat => {
+                const CatIcon = cat.icon;
+                const isSelected = formData.category === cat.value;
+                return (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        category: cat.value,
+                        apparatus_type: cat.value !== 'specialty' ? '' : prev.apparatus_type,
+                      }));
+                    }}
+                    className={`p-2.5 rounded-lg border text-left transition-colors ${
+                      isSelected
+                        ? 'border-red-500/40 bg-red-500/5'
+                        : 'border-theme-surface-border bg-theme-surface-hover/30 hover:border-theme-surface-border/80'
+                    }`}
+                  >
+                    <CatIcon className={`w-4 h-4 mb-1 ${isSelected ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted'}`} />
+                    <p className={`text-xs font-medium ${isSelected ? 'text-red-700 dark:text-red-400' : 'text-theme-text-primary'}`}>{cat.label}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Apparatus Type (for specialty templates) */}
+          {formData.category === 'specialty' && (
+            <div>
+              <label htmlFor="template-apparatus-type" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                <span className="flex items-center gap-1.5"><Truck className="w-4 h-4" /> Vehicle Type</span>
+              </label>
+              <select
+                id="template-apparatus-type"
+                value={formData.apparatus_type}
+                onChange={(e) => {
+                  const newType = e.target.value;
+                  setFormData(prev => ({ ...prev, apparatus_type: newType }));
+                  loadApparatusTypeDefaults(newType);
+                }}
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              >
+                <option value="">Select vehicle type...</option>
+                {APPARATUS_TYPES.map(t => (
+                  <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                ))}
+              </select>
+              <p className="text-xs text-theme-text-muted mt-1">
+                Selecting a vehicle type will load default positions from your department settings.
+              </p>
+            </div>
+          )}
+
+          {/* Event-specific fields */}
+          {formData.category === 'event' && (
+            <>
+              {/* Event Type */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1.5">Event Type</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {EVENT_TYPES.map(et => {
+                    const ETIcon = et.icon;
+                    const isSelected = formData.event_type === et.value;
+                    return (
+                      <button
+                        key={et.value}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, event_type: et.value }))}
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-colors ${
+                          isSelected
+                            ? 'border-purple-500/40 bg-purple-500/5'
+                            : 'border-theme-surface-border bg-theme-surface-hover/20 hover:bg-theme-surface-hover/40'
+                        }`}
+                      >
+                        <ETIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-purple-600 dark:text-purple-400' : 'text-theme-text-muted'}`} />
+                        <span className={`text-xs font-medium truncate ${isSelected ? 'text-purple-700 dark:text-purple-400' : 'text-theme-text-primary'}`}>{et.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quick-start from pre-built templates */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-medium text-theme-text-secondary">
+                    <span className="flex items-center gap-1.5"><Copy className="w-4 h-4" /> Quick Start</span>
+                  </label>
+                </div>
+                <p className="text-xs text-theme-text-muted mb-2">
+                  Start from a pre-built template, then customize. Or build from scratch below.
+                </p>
+                <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
+                  {EVENT_TEMPLATE_STARTERS
+                    .filter(s => !formData.event_type || s.eventType === formData.event_type)
+                    .map((starter, i) => {
+                      const evType = EVENT_TYPES.find(e => e.value === starter.eventType);
+                      const EvIcon = evType?.icon || PartyPopper;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => applyStarter(starter)}
+                          className="flex items-start gap-2 p-2 rounded-lg border border-theme-surface-border bg-theme-surface-hover/20 hover:bg-theme-surface-hover/50 text-left transition-colors"
+                        >
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: starter.color }} />
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-theme-text-primary truncate flex items-center gap-1">
+                              <EvIcon className="w-3 h-3 text-theme-text-muted flex-shrink-0" />
+                              {starter.name}
+                            </p>
+                            <p className="text-[10px] text-theme-text-muted truncate">{starter.resources.length} resource{starter.resources.length !== 1 ? 's' : ''}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  {formData.event_type && EVENT_TEMPLATE_STARTERS.filter(s => s.eventType === formData.event_type).length === 0 && (
+                    <p className="col-span-2 text-xs text-theme-text-muted py-2 text-center">No starters for this event type — build from scratch below.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Resources / Units */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                  <span className="flex items-center gap-1.5"><Users className="w-4 h-4" /> Resources &amp; Staffing</span>
+                </label>
+                <p className="text-xs text-theme-text-muted mb-2">
+                  Add vehicles, first aid stations, bicycle teams, and other resources needed for this event.
+                </p>
+
+                {formData.resources.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {formData.resources.map((res, ri) => {
+                      const resOpt = RESOURCE_TYPE_OPTIONS.find(o => o.value === res.type);
+                      const ResIcon = resOpt?.icon || Truck;
+                      return (
+                        <div key={ri} className="p-2.5 border border-theme-surface-border rounded-lg bg-theme-surface-hover/20">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <ResIcon className="w-4 h-4 text-theme-text-muted" />
+                              <span className="text-sm font-medium text-theme-text-primary">{res.label}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] text-theme-text-muted">Qty:</label>
+                              <input
+                                type="number" min={1} max={20} value={res.quantity}
+                                onChange={(e) => updateResourceQuantity(ri, parseInt(e.target.value, 10) || 1)}
+                                className="w-14 px-1.5 py-0.5 text-xs bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-center"
+                              />
+                              <button onClick={() => removeResource(ri)} className="p-0.5 text-red-500 hover:bg-red-500/10 rounded" title="Remove resource">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          {/* Positions for this resource */}
+                          <div className="flex flex-wrap gap-1 items-center">
+                            {res.positions.map((pos, pi) => (
+                              <span key={pi} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 rounded capitalize">
+                                {positionOptions.find(o => o.value === pos)?.label || pos}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newPos = res.positions.filter((_, idx) => idx !== pi);
+                                    updateResourcePositions(ri, newPos);
+                                  }}
+                                  className="ml-0.5 text-purple-400 hover:text-red-500"
+                                >
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              </span>
+                            ))}
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) updateResourcePositions(ri, [...res.positions, e.target.value]);
+                                e.target.value = '';
+                              }}
+                              className="px-1.5 py-0.5 text-[10px] bg-theme-input-bg border border-theme-input-border rounded text-theme-text-muted"
+                            >
+                              <option value="">+ position</option>
+                              {positionOptions.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {res.quantity > 1 && (
+                            <p className="text-[10px] text-theme-text-muted mt-1">{res.quantity} units x {res.positions.length} positions = {res.quantity * res.positions.length} personnel</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div className="flex items-center justify-between p-2 bg-purple-500/5 border border-purple-500/20 rounded-lg">
+                      <span className="text-xs text-purple-700 dark:text-purple-400 font-medium">Total staffing: {totalResourceStaffing} personnel</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Add resource button */}
+                <div className="flex flex-wrap gap-1.5">
+                  {RESOURCE_TYPE_OPTIONS.map(opt => {
+                    const ResIcon = opt.icon;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => addResource(opt.value)}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-theme-text-muted bg-theme-surface-hover/50 hover:bg-theme-surface-hover border border-theme-surface-border rounded-lg transition-colors"
+                      >
+                        <ResIcon className="w-3 h-3" />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label htmlFor="template-start" className="block text-sm font-medium text-theme-text-secondary mb-1">
@@ -228,6 +742,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               <input
                 id="template-start"
                 type="time"
+                step="900"
                 value={formData.start_time_of_day}
                 onChange={(e) => setFormData(prev => ({ ...prev, start_time_of_day: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
@@ -241,6 +756,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               <input
                 id="template-end"
                 type="time"
+                step="900"
                 value={formData.end_time_of_day}
                 onChange={(e) => setFormData(prev => ({ ...prev, end_time_of_day: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
@@ -264,7 +780,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="template-color" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Color
@@ -295,6 +811,55 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Required Positions (not shown for event templates — they use resources editor) */}
+          {formData.category !== 'event' && <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              <span className="flex items-center gap-1.5"><Users className="w-4 h-4" aria-hidden="true" /> Required Positions</span>
+            </label>
+            <p className="text-xs text-theme-text-muted mb-2">
+              Define the crew structure for shifts created from this template.
+            </p>
+            {formData.positions.length > 0 && (
+              <div className="space-y-2 mb-2">
+                {formData.positions.map((pos, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <select
+                      value={pos}
+                      onChange={(e) => {
+                        const updated = [...formData.positions];
+                        updated[i] = e.target.value;
+                        setFormData(prev => ({ ...prev, positions: updated }));
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500"
+                    >
+                      {positionOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = formData.positions.filter((_, idx) => idx !== i);
+                        setFormData(prev => ({ ...prev, positions: updated }));
+                      }}
+                      className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                      aria-label={`Remove position ${i + 1}`}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, positions: [...prev.positions, 'firefighter'] }))}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Position
+            </button>
+          </div>}
 
           <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
             <input
@@ -390,7 +955,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
       aria-labelledby="pattern-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="pattern-modal-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
@@ -510,7 +1075,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="pattern-start-date" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Start Date <span aria-hidden="true">*</span>
@@ -592,7 +1157,7 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
         start_date: startDate,
         end_date: endDate,
       });
-      toast.success(`Generated ${result.shifts_created} shifts`);
+      toast.success(`Generated ${String(result.shifts_created)} shifts`);
       onClose();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to generate shifts'));
@@ -611,7 +1176,7 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
       aria-labelledby="generate-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-md w-full">
+      <div className="bg-theme-surface-modal rounded-lg max-w-md w-full">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="generate-modal-title" className="text-xl font-bold text-theme-text-primary">Generate Shifts</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
@@ -692,6 +1257,7 @@ export const ShiftTemplatesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabView>('templates');
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [patterns, setPatterns] = useState<ShiftPattern[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | 'all'>('all');
   const [loading, setLoading] = useState(true);
 
   // Template modals
@@ -789,16 +1355,36 @@ export const ShiftTemplatesPage: React.FC = () => {
     }
   };
 
-  const templateToForm = (t: ShiftTemplate): TemplateFormData => ({
-    name: t.name,
-    description: t.description || '',
-    start_time_of_day: t.start_time_of_day,
-    end_time_of_day: t.end_time_of_day,
-    duration_hours: String(t.duration_hours),
-    color: t.color || '#dc2626',
-    min_staffing: String(t.min_staffing),
-    is_default: t.is_default,
-  });
+  const templateToForm = (t: ShiftTemplate): TemplateFormData => {
+    // Parse event metadata from positions field if it's an event template
+    let eventType: EventType | '' = '';
+    let resources: ResourceUnit[] = [];
+    let positions: string[] = [];
+
+    if ((t.category || 'standard') === 'event' && t.positions && !Array.isArray(t.positions)) {
+      const meta = t.positions as { event_type?: string; resources?: ResourceUnit[] };
+      eventType = (meta.event_type as EventType) || '';
+      resources = meta.resources || [];
+    } else if (Array.isArray(t.positions)) {
+      positions = t.positions as string[];
+    }
+
+    return {
+      name: t.name,
+      description: t.description || '',
+      start_time_of_day: t.start_time_of_day,
+      end_time_of_day: t.end_time_of_day,
+      duration_hours: String(t.duration_hours),
+      color: t.color || '#dc2626',
+      min_staffing: String(t.min_staffing),
+      is_default: t.is_default,
+      positions,
+      category: (t.category as TemplateCategory) || 'standard',
+      apparatus_type: t.apparatus_type || '',
+      event_type: eventType,
+      resources,
+    };
+  };
 
   const patternToForm = (p: ShiftPattern): PatternFormData => ({
     name: p.name,
@@ -870,6 +1456,41 @@ export const ShiftTemplatesPage: React.FC = () => {
         </div>
       ) : activeTab === 'templates' ? (
         <div role="tabpanel">
+          {/* Category filter */}
+          {templates.length > 0 && (
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <Filter className="w-4 h-4 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+              <button
+                onClick={() => setCategoryFilter('all')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  categoryFilter === 'all'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                All ({templates.length})
+              </button>
+              {TEMPLATE_CATEGORIES.map(cat => {
+                const count = templates.filter(t => (t.category || 'standard') === cat.value).length;
+                if (count === 0) return null;
+                const CatIcon = cat.icon;
+                return (
+                  <button
+                    key={cat.value}
+                    onClick={() => setCategoryFilter(cat.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5 ${
+                      categoryFilter === cat.value
+                        ? 'bg-red-600 text-white'
+                        : 'bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary'
+                    }`}
+                  >
+                    <CatIcon className="w-3.5 h-3.5" aria-hidden="true" />
+                    {cat.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {templates.length === 0 ? (
             <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
               <LayoutTemplate className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
@@ -885,7 +1506,7 @@ export const ShiftTemplatesPage: React.FC = () => {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {templates.map(template => (
+              {templates.filter(t => categoryFilter === 'all' || (t.category || 'standard') === categoryFilter).map(template => (
                 <div
                   key={template.id}
                   className="bg-theme-surface-secondary rounded-lg p-5 border border-theme-surface-border"
@@ -901,7 +1522,24 @@ export const ShiftTemplatesPage: React.FC = () => {
                       )}
                       <h3 className="text-lg font-semibold text-theme-text-primary">{template.name}</h3>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                      {(() => {
+                        const cat = TEMPLATE_CATEGORIES.find(c => c.value === (template.category || 'standard'));
+                        if (cat && cat.value !== 'standard') {
+                          const CatIcon = cat.icon;
+                          return (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                              cat.value === 'specialty'
+                                ? 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400'
+                                : 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400'
+                            }`}>
+                              <CatIcon className="w-3 h-3 mr-1" aria-hidden="true" />
+                              {cat.label}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                       {template.is_default && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
                           <CheckCircle className="w-3 h-3 mr-1" aria-hidden="true" />
@@ -920,7 +1558,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                     <p className="text-sm text-theme-text-muted mb-3">{template.description}</p>
                   )}
 
-                  <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                     <div className="bg-theme-surface rounded-lg p-2">
                       <p className="text-xs text-theme-text-muted flex items-center gap-1">
                         <Clock className="w-3 h-3" aria-hidden="true" />
@@ -937,6 +1575,75 @@ export const ShiftTemplatesPage: React.FC = () => {
                       </p>
                     </div>
                   </div>
+
+                  {/* Apparatus type (for specialty) */}
+                  {template.apparatus_type && (
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Truck className="w-3.5 h-3.5 text-orange-500" aria-hidden="true" />
+                      <span className="text-xs text-theme-text-secondary capitalize font-medium">{template.apparatus_type}</span>
+                    </div>
+                  )}
+
+                  {/* Event resources (for event templates) */}
+                  {(template.category || 'standard') === 'event' && template.positions != null && !Array.isArray(template.positions) && (() => {
+                    const meta = template.positions as { event_type?: string; resources?: ResourceUnit[] };
+                    const evType = EVENT_TYPES.find(e => e.value === meta.event_type);
+                    return (
+                      <div className="mb-4 space-y-2">
+                        {evType && (
+                          <div className="flex items-center gap-1.5">
+                            {(() => { const EvIcon = evType.icon; return <EvIcon className="w-3.5 h-3.5 text-purple-500" />; })()}
+                            <span className="text-xs text-purple-700 dark:text-purple-400 font-medium">{evType.label}</span>
+                          </div>
+                        )}
+                        {meta.resources && meta.resources.length > 0 && (
+                          <div>
+                            <p className="text-xs text-theme-text-muted flex items-center gap-1 mb-1.5">
+                              <Users className="w-3 h-3" aria-hidden="true" />
+                              Resources ({meta.resources.length})
+                            </p>
+                            <div className="space-y-1">
+                              {meta.resources.map((res, ri) => {
+                                const resOpt = RESOURCE_TYPE_OPTIONS.find(o => o.value === res.type);
+                                const ResIcon = resOpt?.icon || Truck;
+                                return (
+                                  <div key={ri} className="flex items-center gap-1.5 text-xs">
+                                    <ResIcon className="w-3 h-3 text-theme-text-muted flex-shrink-0" />
+                                    <span className="text-theme-text-secondary">{res.label}</span>
+                                    {res.quantity > 1 && <span className="text-theme-text-muted">x{res.quantity}</span>}
+                                    <span className="text-theme-text-muted">({res.positions.length} pos)</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[10px] text-theme-text-muted mt-1">
+                              Total: {meta.resources.reduce((s, r) => s + r.positions.length * r.quantity, 0)} personnel
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Positions (for standard/specialty templates) */}
+                  {Array.isArray(template.positions) && (template.positions as string[]).length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs text-theme-text-muted flex items-center gap-1 mb-1.5">
+                        <Users className="w-3 h-3" aria-hidden="true" />
+                        Positions ({(template.positions as string[]).length})
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {(template.positions as string[]).map((pos, i) => {
+                          const allOpts = getPositionOptions();
+                          return (
+                            <span key={i} className="px-2 py-0.5 text-xs bg-red-500/10 text-red-700 dark:text-red-400 rounded capitalize">
+                              {allOpts.find(o => o.value === pos)?.label || pos}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2 pt-3 border-t border-theme-surface-border">
                     <button

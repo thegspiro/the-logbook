@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, PanelLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ProgressIndicator, BackButton, ResetProgressButton, AutoSaveNotification, ErrorAlert } from '../components';
+import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, AutoSaveNotification, ErrorAlert } from '../components';
 import { useOnboardingStore } from '../store';
 import { useApiRequest } from '../hooks';
 import { apiClient } from '../services/api-client';
@@ -59,7 +59,7 @@ const NavigationChoice: React.FC = () => {
 
     if (data) {
       // Store navigation preference (backward compatibility)
-      localStorage.setItem('navigationLayout', navigationLayout);
+      sessionStorage.setItem('navigationLayout', navigationLayout);
 
       toast.success('Department information saved');
       // Navigate to email platform choice
@@ -74,28 +74,7 @@ const NavigationChoice: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
-      {/* Header with Logo */}
-      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center">
-          {logoPreview ? (
-            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
-              <img
-                src={logoPreview}
-                alt={`${departmentName} logo`}
-                className="max-w-full max-h-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <LayoutDashboard className="w-6 h-6 text-white" />
-            </div>
-          )}
-          <div>
-            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
-            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
-          </div>
-        </div>
-      </header>
+      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<LayoutDashboard aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4">
@@ -123,8 +102,8 @@ const NavigationChoice: React.FC = () => {
               onClick={() => setNavigationLayout('top')}
               className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'top'
-                  ? 'border-red-500 shadow-lg shadow-red-500/50'
-                  : 'border-theme-surface-border hover:border-red-400/50'
+                  ? 'border-theme-accent-red shadow-lg'
+                  : 'border-theme-surface-border hover:border-theme-accent-red'
               }`}
               aria-pressed={navigationLayout === 'top'}
               aria-label="Top navigation layout"
@@ -140,7 +119,7 @@ const NavigationChoice: React.FC = () => {
                 >
                   <LayoutDashboard
                     className={`w-8 h-8 transition-colors ${
-                      navigationLayout === 'top' ? 'text-theme-text-primary' : 'text-theme-text-muted'
+                      navigationLayout === 'top' ? 'text-white' : 'text-theme-text-muted'
                     }`}
                   />
                 </div>
@@ -154,18 +133,18 @@ const NavigationChoice: React.FC = () => {
                 </p>
 
                 {/* Preview */}
-                <div className="bg-theme-input-bg rounded-lg p-4 border border-theme-surface-border">
+                <div className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-input-border">
                   <div className="space-y-2">
                     {/* Header bar */}
                     <div className="bg-theme-surface rounded h-8 flex items-center px-2 space-x-1">
                       <div className="bg-red-500 rounded h-4 w-12"></div>
-                      <div className="bg-theme-surface-hover rounded h-4 w-16"></div>
-                      <div className="bg-theme-surface-hover rounded h-4 w-16"></div>
-                      <div className="bg-theme-surface-hover rounded h-4 w-16"></div>
-                      <div className="bg-theme-surface-hover rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
                     </div>
                     {/* Content area */}
-                    <div className="bg-theme-surface-hover rounded h-32"></div>
+                    <div className="bg-theme-surface rounded h-32"></div>
                   </div>
                   <p className="text-xs text-theme-text-muted mt-3 text-center">
                     Horizontal menu bar
@@ -175,15 +154,15 @@ const NavigationChoice: React.FC = () => {
                 {/* Benefits */}
                 <ul className="mt-4 space-y-2 text-sm text-theme-text-secondary">
                   <li className="flex items-start">
-                    <span className="text-green-700 dark:text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>More horizontal screen space</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-green-700 dark:text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>Familiar website layout</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-green-700 dark:text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>Better for wide screens</span>
                   </li>
                 </ul>
@@ -193,7 +172,7 @@ const NavigationChoice: React.FC = () => {
               {navigationLayout === 'top' && (
                 <div className="absolute top-4 right-4 w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
                   <svg
-                    className="w-5 h-5 text-theme-text-primary"
+                    className="w-5 h-5 text-white"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -214,8 +193,8 @@ const NavigationChoice: React.FC = () => {
               onClick={() => setNavigationLayout('left')}
               className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'left'
-                  ? 'border-red-500 shadow-lg shadow-red-500/50'
-                  : 'border-theme-surface-border hover:border-red-400/50'
+                  ? 'border-theme-accent-red shadow-lg'
+                  : 'border-theme-surface-border hover:border-theme-accent-red'
               }`}
               aria-pressed={navigationLayout === 'left'}
               aria-label="Left sidebar navigation layout"
@@ -231,7 +210,7 @@ const NavigationChoice: React.FC = () => {
                 >
                   <PanelLeft
                     className={`w-8 h-8 transition-colors ${
-                      navigationLayout === 'left' ? 'text-theme-text-primary' : 'text-theme-text-muted'
+                      navigationLayout === 'left' ? 'text-white' : 'text-theme-text-muted'
                     }`}
                   />
                 </div>
@@ -245,18 +224,18 @@ const NavigationChoice: React.FC = () => {
                 </p>
 
                 {/* Preview */}
-                <div className="bg-theme-input-bg rounded-lg p-4 border border-theme-surface-border">
+                <div className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-input-border">
                   <div className="flex space-x-2">
                     {/* Sidebar */}
                     <div className="bg-theme-surface rounded w-16 flex flex-col space-y-1 p-1">
                       <div className="bg-red-500 rounded h-4 w-full"></div>
-                      <div className="bg-theme-surface-hover rounded h-4 w-full"></div>
-                      <div className="bg-theme-surface-hover rounded h-4 w-full"></div>
-                      <div className="bg-theme-surface-hover rounded h-4 w-full"></div>
-                      <div className="bg-theme-surface-hover rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
                     </div>
                     {/* Content area */}
-                    <div className="bg-theme-surface-hover rounded flex-1 h-32"></div>
+                    <div className="bg-theme-surface rounded flex-1 h-32"></div>
                   </div>
                   <p className="text-xs text-theme-text-muted mt-3 text-center">
                     Vertical sidebar menu
@@ -266,15 +245,15 @@ const NavigationChoice: React.FC = () => {
                 {/* Benefits */}
                 <ul className="mt-4 space-y-2 text-sm text-theme-text-secondary">
                   <li className="flex items-start">
-                    <span className="text-green-700 dark:text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>More vertical navigation space</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-green-700 dark:text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>App-like experience</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-green-700 dark:text-green-400 mr-2">✓</span>
+                    <span className="text-theme-accent-green mr-2">✓</span>
                     <span>Better for many menu items</span>
                   </li>
                 </ul>
@@ -284,7 +263,7 @@ const NavigationChoice: React.FC = () => {
               {navigationLayout === 'left' && (
                 <div className="absolute top-4 right-4 w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
                   <svg
-                    className="w-5 h-5 text-theme-text-primary"
+                    className="w-5 h-5 text-white"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -314,14 +293,14 @@ const NavigationChoice: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="max-w-md mx-auto sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-from via-theme-bg-from to-transparent md:bg-none pb-4 md:pb-0">
+          <div className="max-w-md mx-auto sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0">
             <button
               onClick={handleContinue}
               disabled={!navigationLayout || isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 navigationLayout && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                  : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -333,17 +312,18 @@ const NavigationChoice: React.FC = () => {
               Don't worry, you can change this later in settings
             </p>
 
+          </div>
+
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={2} totalSteps={10} className="pt-6 border-t border-theme-surface-border" />
+          <ProgressIndicator currentStep={2} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
 
           {/* Auto-save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
-          </div>
         </div>
       </main>
 
       {/* Footer with Department Name and Copyright */}
-      <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.

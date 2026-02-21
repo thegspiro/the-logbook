@@ -94,8 +94,8 @@ class OrganizationResponse(BaseModel):
         from_attributes = True
 
 
-class AdminUserCreate(BaseModel):
-    """Request model for creating admin user"""
+class SystemOwnerCreate(BaseModel):
+    """Request model for creating the System Owner (IT Manager) user"""
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=12)
@@ -131,8 +131,8 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-class AdminUserResponse(BaseModel):
-    """Response model for admin user creation with access token"""
+class SystemOwnerResponse(BaseModel):
+    """Response model for System Owner creation with access token"""
     id: str
     username: str
     email: str
@@ -314,6 +314,24 @@ class RolesSetupResponse(BaseModel):
     created: List[str] = Field(default_factory=list)
     updated: List[str] = Field(default_factory=list)
     total_roles: int
+
+
+class PositionsSetupRequest(BaseModel):
+    """Request model for position setup during onboarding (frontend uses 'positions' key)"""
+    positions: List[RoleSetupItem] = Field(
+        ...,
+        min_length=1,
+        description="List of positions to create for the organization"
+    )
+
+
+class PositionsSetupResponse(BaseModel):
+    """Response model for position setup"""
+    success: bool
+    message: str
+    created: List[str] = Field(default_factory=list)
+    updated: List[str] = Field(default_factory=list)
+    total_positions: int
 
 
 class SessionDataResponse(BaseModel):
@@ -709,16 +727,16 @@ async def create_organization(
         )
 
 
-@router.post("/admin-user", response_model=AdminUserResponse)
-async def create_admin_user(
+@router.post("/system-owner", response_model=SystemOwnerResponse)
+async def create_system_owner(
     request: Request,
-    user_data: AdminUserCreate,
+    user_data: SystemOwnerCreate,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Create the first administrator user
+    Create the System Owner (IT Manager) user
 
-    Creates admin user with IT Administrator role.
+    Creates the first user with the IT Manager position (full system access).
     Requires organization to be created first.
     Returns access token for automatic login.
     """
@@ -761,7 +779,7 @@ async def create_admin_user(
         )
 
     try:
-        user = await service.create_admin_user(
+        user = await service.create_system_owner(
             organization_id=str(org.id),
             username=user_data.username,
             email=user_data.email,
@@ -786,7 +804,7 @@ async def create_admin_user(
             user_agent=request.headers.get("user-agent"),
         )
 
-        return AdminUserResponse(
+        return SystemOwnerResponse(
             id=str(user.id),
             username=user.username,
             email=user.email,
@@ -1264,7 +1282,7 @@ async def save_session_modules(
         # Core modules (always enabled)
         "members", "events", "documents", "forms",
         # Operations modules
-        "training", "inventory", "scheduling", "apparatus",
+        "training", "inventory", "scheduling", "apparatus", "facilities",
         # Governance modules
         "elections", "minutes", "reports",
         # Communication modules
@@ -1465,6 +1483,7 @@ async def save_session_roles(
     # Backend stores: ["module.view", "module.manage", ...]
     from app.models.user import Role
     from sqlalchemy import delete
+    from app.core.permissions import DEFAULT_ROLES
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
     await db.execute(
@@ -1500,6 +1519,31 @@ async def save_session_roles(
         if role_data.id in existing_system_roles:
             # Update existing system role permissions
             existing_role = existing_system_roles[role_data.id]
+
+            default_perms = DEFAULT_ROLES.get(role_data.id, {}).get("permissions", [])
+
+            # Preserve the wildcard permission for positions that have it in
+            # DEFAULT_POSITIONS (e.g. it_manager). The frontend position editor
+            # only knows about module-scoped view/manage permissions and cannot
+            # represent the backend wildcard "*". Without this guard the
+            # it_manager's ["*"] gets overwritten with a granular list
+            # that is missing action-specific permissions (users.create,
+            # audit.view, etc.), causing 403 errors on System Owner operations.
+            if "*" in default_perms:
+                permission_list = ["*"]
+            else:
+                # The frontend module registry doesn't cover every backend
+                # permission module (e.g. audit, organization, users,
+                # locations, meetings).  Preserve the default permissions
+                # for any modules the frontend submission doesn't include,
+                # so roles like Chief keep audit.view, users.create, etc.
+                submitted_modules = set(role_data.permissions.keys())
+                for perm in default_perms:
+                    if "." in perm:
+                        module_prefix = perm.split(".")[0]
+                        if module_prefix not in submitted_modules:
+                            permission_list.append(perm)
+
             existing_role.permissions = permission_list
             existing_role.priority = role_data.priority
             if role_data.description:
@@ -1536,6 +1580,32 @@ async def save_session_roles(
         created=created_roles,
         updated=updated_roles,
         total_roles=len(data.roles)
+    )
+
+
+@router.post("/session/positions", response_model=PositionsSetupResponse)
+async def save_session_positions(
+    request: Request,
+    data: PositionsSetupRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Save position configuration during onboarding.
+
+    This is the canonical endpoint used by the frontend PositionSetup page.
+    It accepts a ``positions`` key and delegates to the same role-creation
+    logic used by ``/session/roles``.
+    """
+    # Delegate to save_session_roles by converting positions -> roles
+    roles_request = RolesSetupRequest(roles=data.positions)
+    roles_response = await save_session_roles(request, roles_request, db)
+
+    return PositionsSetupResponse(
+        success=roles_response.success,
+        message=roles_response.message.replace("Roles", "Positions"),
+        created=roles_response.created,
+        updated=roles_response.updated,
+        total_positions=roles_response.total_roles,
     )
 
 
@@ -1660,10 +1730,10 @@ async def reset_onboarding(
             OnboardingStatus.__table__.delete()
         )
 
-        # 4. Delete user_roles associations (if table exists)
+        # 4. Delete user_positions associations (junction table for user-role/position mapping)
         try:
             from sqlalchemy import text
-            await db.execute(text("DELETE FROM user_roles"))
+            await db.execute(text("DELETE FROM user_positions"))
         except Exception:
             pass  # Table might not exist yet
 

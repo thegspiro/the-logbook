@@ -74,6 +74,10 @@ import type {
   ImportRecordRequest,
   BulkImportRequest,
   BulkImportResponse,
+  // Historical Training Import types
+  HistoricalImportParseResponse,
+  HistoricalImportConfirmRequest,
+  HistoricalImportResult,
 } from '../types/training';
 import type {
   Event,
@@ -259,6 +263,13 @@ export const userService = {
   /**
    * Create a new member (admin/secretary only)
    */
+  /**
+   * Delete (soft-delete) a member
+   */
+  async deleteUser(userId: string): Promise<void> {
+    await api.delete(`/users/${userId}`);
+  },
+
   async createMember(memberData: {
     username: string;
     email: string;
@@ -266,6 +277,7 @@ export const userService = {
     middle_name?: string;
     last_name: string;
     badge_number?: string;
+    membership_id?: string;
     phone?: string;
     mobile?: string;
     date_of_birth?: string;
@@ -284,10 +296,22 @@ export const userService = {
       email?: string;
       is_primary: boolean;
     }>;
+    password?: string;
     role_ids?: string[];
     send_welcome_email?: boolean;
   }): Promise<UserWithRoles> {
     const response = await api.post<UserWithRoles>('/users', memberData);
+    return response.data;
+  },
+
+  /**
+   * Reset a user's password (admin only)
+   */
+  async adminResetPassword(userId: string, newPassword: string, forceChange: boolean = true): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/users/${userId}/reset-password`, {
+      new_password: newPassword,
+      force_change: forceChange,
+    });
     return response.data;
   },
 
@@ -317,8 +341,23 @@ export const userService = {
   },
 };
 
+export interface ModuleSettingsData {
+  training: boolean;
+  inventory: boolean;
+  scheduling: boolean;
+  elections: boolean;
+  minutes: boolean;
+  reports: boolean;
+  notifications: boolean;
+  mobile: boolean;
+  forms: boolean;
+  integrations: boolean;
+  facilities: boolean;
+}
+
 export interface EnabledModulesResponse {
   enabled_modules: string[];
+  module_settings: ModuleSettingsData;
 }
 
 export const organizationService = {
@@ -355,13 +394,59 @@ export const organizationService = {
   },
 
   /**
+   * Update module settings (enable/disable modules)
+   */
+  async updateModuleSettings(updates: Partial<ModuleSettingsData>): Promise<EnabledModulesResponse> {
+    const response = await api.patch<EnabledModulesResponse>('/organization/modules', updates);
+    return response.data;
+  },
+
+  /**
    * Check if a specific module is enabled
    */
   async isModuleEnabled(moduleId: string): Promise<boolean> {
     const response = await this.getEnabledModules();
     return response.enabled_modules.includes(moduleId);
   },
+
+  async previewNextMembershipId(): Promise<{ enabled: boolean; next_id?: string }> {
+    const response = await api.get<{ enabled: boolean; next_id?: string }>('/organization/settings/membership-id/preview');
+    return response.data;
+  },
+
+  async getSetupChecklist(): Promise<SetupChecklistResponse> {
+    const response = await api.get<SetupChecklistResponse>('/organization/setup-checklist');
+    return response.data;
+  },
+
+  async updateSettings(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch('/organization/settings', updates);
+    return response.data;
+  },
+
+  async getAddress(): Promise<{ address: string; city: string; state: string; zip: string }> {
+    const response = await api.get<{ address: string; city: string; state: string; zip: string }>('/organization/address');
+    return response.data;
+  },
 };
+
+export interface SetupChecklistItem {
+  key: string;
+  title: string;
+  description: string;
+  path: string;
+  category: string;
+  is_complete: boolean;
+  count: number;
+  required: boolean;
+}
+
+export interface SetupChecklistResponse {
+  items: SetupChecklistItem[];
+  completed_count: number;
+  total_count: number;
+  enabled_modules: string[];
+}
 
 export const roleService = {
   /**
@@ -440,6 +525,26 @@ export const roleService = {
     const response = await api.post<Role>(`/roles/${roleId}/clone`);
     return response.data;
   },
+
+  async getUserPermissions(userId: string): Promise<{ user_id: string; permissions: string[]; roles: string[] }> {
+    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>(`/users/${userId}/permissions`);
+    return response.data;
+  },
+
+  async getMyRoles(): Promise<Role[]> {
+    const response = await api.get<Role[]>('/roles/my/roles');
+    return response.data;
+  },
+
+  async getMyPermissions(): Promise<{ user_id: string; permissions: string[]; roles: string[] }> {
+    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>('/roles/my/permissions');
+    return response.data;
+  },
+
+  async checkAdminAccess(): Promise<{ has_access: boolean; admin_roles: string[]; user_roles: string[]; admin_permissions: string[] }> {
+    const response = await api.get<{ has_access: boolean; admin_roles: string[]; user_roles: string[]; admin_permissions: string[] }>('/roles/admin-access/check');
+    return response.data;
+  },
 };
 
 export const authService = {
@@ -516,6 +621,16 @@ export const authService = {
       return false;
     }
   },
+
+  getGoogleOAuthUrl(): string {
+    const baseUrl = api.defaults.baseURL || '';
+    return `${baseUrl}/auth/oauth/google`;
+  },
+
+  getMicrosoftOAuthUrl(): string {
+    const baseUrl = api.defaults.baseURL || '';
+    return `${baseUrl}/auth/oauth/microsoft`;
+  },
 };
 
 export const trainingService = {
@@ -571,6 +686,18 @@ export const trainingService = {
    */
   async createRecord(record: TrainingRecordCreate): Promise<TrainingRecord> {
     const response = await api.post<TrainingRecord>('/training/records', record);
+    return response.data;
+  },
+
+  /**
+   * Import training records from a CSV file
+   */
+  async importCSV(file: File): Promise<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/training/records/import-csv', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   },
 
@@ -714,6 +841,39 @@ export const trainingService = {
     const response = await api.get<TrainingRecord[]>('/training/certifications/expiring', {
       params: { days_ahead: daysAhead },
     });
+    return response.data;
+  },
+
+  async getComplianceMatrix(): Promise<ComplianceMatrix> {
+    const response = await api.get<ComplianceMatrix>('/training/compliance-matrix');
+    return response.data;
+  },
+
+  async getExpiringCertificationsDetailed(days: number = 90): Promise<ExpiringCertification[]> {
+    const response = await api.get<ExpiringCertification[]>('/training/expiring-certifications', {
+      params: { days },
+    });
+    return response.data;
+  },
+
+  // ==================== Historical Training Import ====================
+
+  async parseHistoricalImport(file: File, matchBy: 'email' | 'badge_number' = 'badge_number'): Promise<HistoricalImportParseResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<HistoricalImportParseResponse>(
+      '/training/import/parse',
+      formData,
+      { params: { match_by: matchBy }, headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  async confirmHistoricalImport(request: HistoricalImportConfirmRequest): Promise<HistoricalImportResult> {
+    const response = await api.post<HistoricalImportResult>(
+      '/training/import/confirm',
+      request
+    );
     return response.data;
   },
 };
@@ -1526,6 +1686,21 @@ export const eventService = {
     const response = await api.post<import('../types/event').Event[]>('/events/recurring', data);
     return response.data;
   },
+
+  // Module Settings
+  async getModuleSettings(): Promise<import('../types/event').EventModuleSettings> {
+    const response = await api.get<import('../types/event').EventModuleSettings>('/events/settings');
+    return response.data;
+  },
+  async updateModuleSettings(data: Partial<import('../types/event').EventModuleSettings>): Promise<import('../types/event').EventModuleSettings> {
+    const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
+    return response.data;
+  },
+
+  async getEventFolder(eventId: string): Promise<DocumentFolder> {
+    const response = await api.get<DocumentFolder>(`/events/${eventId}/folder`);
+    return response.data;
+  },
 };
 
 export interface UserInventoryItem {
@@ -1547,9 +1722,19 @@ export interface UserCheckoutItem {
   is_overdue: boolean;
 }
 
+export interface UserIssuedItem {
+  issuance_id: string;
+  item_id: string;
+  item_name: string;
+  quantity_issued: number;
+  issued_at: string;
+  size?: string;
+}
+
 export interface UserInventoryResponse {
   permanent_assignments: UserInventoryItem[];
   active_checkouts: UserCheckoutItem[];
+  issued_items: UserIssuedItem[];
 }
 
 export interface InventoryCategory {
@@ -1588,7 +1773,9 @@ export interface InventoryItem {
   condition: string;
   status: string;
   status_notes?: string;
+  tracking_type: string;  // "individual" or "pool"
   quantity: number;
+  quantity_issued: number;
   unit_of_measure?: string;
   last_inspection_date?: string;
   next_inspection_due?: string;
@@ -1609,17 +1796,44 @@ export interface InventoryItemCreate {
   model_number?: string;
   serial_number?: string;
   asset_tag?: string;
+  barcode?: string;
   purchase_date?: string;
   purchase_price?: number;
+  purchase_order?: string;
   vendor?: string;
+  warranty_expiration?: string;
+  expected_lifetime_years?: number;
+  current_value?: number;
+  size?: string;
+  color?: string;
+  weight?: number;
   storage_location?: string;
   station?: string;
   condition?: string;
   status?: string;
+  tracking_type?: string;
   quantity?: number;
   unit_of_measure?: string;
   inspection_interval_days?: number;
   notes?: string;
+}
+
+export interface ItemIssuance {
+  id: string;
+  organization_id: string;
+  item_id: string;
+  user_id: string;
+  quantity_issued: number;
+  issued_at: string;
+  returned_at?: string;
+  issued_by?: string;
+  returned_by?: string;
+  issue_reason?: string;
+  return_condition?: string;
+  return_notes?: string;
+  is_returned: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface InventoryItemsListResponse {
@@ -1649,7 +1863,98 @@ export interface InventoryCategoryCreate {
   low_stock_threshold?: number;
 }
 
+// Scan / Quick-Action Types
+export interface ScanLookupResponse {
+  item: InventoryItem;
+  matched_field: string;
+  matched_value: string;
+}
+
+export interface BatchScanItem {
+  code: string;
+  quantity?: number;
+}
+
+export interface BatchCheckoutRequest {
+  user_id: string;
+  items: BatchScanItem[];
+  reason?: string;
+}
+
+export interface BatchCheckoutResultItem {
+  code: string;
+  item_name: string;
+  item_id: string;
+  action: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface BatchCheckoutResponse {
+  user_id: string;
+  total_scanned: number;
+  successful: number;
+  failed: number;
+  results: BatchCheckoutResultItem[];
+}
+
+export interface BatchReturnItem {
+  code: string;
+  return_condition?: string;
+  damage_notes?: string;
+  quantity?: number;
+}
+
+export interface BatchReturnRequest {
+  user_id: string;
+  items: BatchReturnItem[];
+  notes?: string;
+}
+
+export interface BatchReturnResultItem {
+  code: string;
+  item_name: string;
+  item_id: string;
+  action: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface BatchReturnResponse {
+  user_id: string;
+  total_scanned: number;
+  successful: number;
+  failed: number;
+  results: BatchReturnResultItem[];
+}
+
+export interface MemberInventorySummary {
+  user_id: string;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  badge_number?: string;
+  permanent_count: number;
+  checkout_count: number;
+  issued_count: number;
+  overdue_count: number;
+  total_items: number;
+}
+
+export interface MembersInventoryListResponse {
+  members: MemberInventorySummary[];
+  total: number;
+}
+
 export const inventoryService = {
+  async getMembersSummary(search?: string): Promise<MembersInventoryListResponse> {
+    const response = await api.get<MembersInventoryListResponse>('/inventory/members-summary', {
+      params: search ? { search } : undefined,
+    });
+    return response.data;
+  },
+
   async getUserInventory(userId: string): Promise<UserInventoryResponse> {
     const response = await api.get<UserInventoryResponse>(`/inventory/users/${userId}/inventory`);
     return response.data;
@@ -1744,6 +2049,57 @@ export const inventoryService = {
     const response = await api.get<InventoryItem[]>('/inventory/low-stock');
     return response.data;
   },
+
+  // Pool item issuance
+  async issueFromPool(itemId: string, userId: string, quantity: number = 1, issueReason?: string): Promise<ItemIssuance> {
+    const response = await api.post<ItemIssuance>(`/inventory/items/${itemId}/issue`, {
+      user_id: userId,
+      quantity,
+      issue_reason: issueReason,
+    });
+    return response.data;
+  },
+
+  async returnToPool(issuanceId: string, options?: { return_condition?: string; return_notes?: string; quantity_returned?: number }): Promise<{ message: string }> {
+    const response = await api.post(`/inventory/issuances/${issuanceId}/return`, {
+      return_condition: options?.return_condition,
+      return_notes: options?.return_notes,
+      quantity_returned: options?.quantity_returned,
+    });
+    return response.data;
+  },
+
+  async getItemIssuances(itemId: string, activeOnly: boolean = true): Promise<ItemIssuance[]> {
+    const response = await api.get<ItemIssuance[]>(`/inventory/items/${itemId}/issuances`, {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  async getUserIssuances(userId: string, activeOnly: boolean = true): Promise<ItemIssuance[]> {
+    const response = await api.get<ItemIssuance[]>(`/inventory/users/${userId}/issuances`, {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  // Barcode scan / quick-action methods
+  async lookupByCode(code: string): Promise<ScanLookupResponse> {
+    const response = await api.get<ScanLookupResponse>('/inventory/lookup', {
+      params: { code },
+    });
+    return response.data;
+  },
+
+  async batchCheckout(data: BatchCheckoutRequest): Promise<BatchCheckoutResponse> {
+    const response = await api.post<BatchCheckoutResponse>('/inventory/batch-checkout', data);
+    return response.data;
+  },
+
+  async batchReturn(data: BatchReturnRequest): Promise<BatchReturnResponse> {
+    const response = await api.post<BatchReturnResponse>('/inventory/batch-return', data);
+    return response.data;
+  },
 };
 
 // ============================================
@@ -1770,6 +2126,9 @@ export interface FormField {
   max_value?: number;
   validation_pattern?: string;
   options?: FormFieldOption[];
+  condition_field_id?: string;
+  condition_operator?: string;
+  condition_value?: string;
   sort_order: number;
   width: string;
   created_at: string;
@@ -1786,6 +2145,9 @@ export interface FormFieldCreate {
   min_length?: number;
   max_length?: number;
   options?: FormFieldOption[];
+  condition_field_id?: string;
+  condition_operator?: string;
+  condition_value?: string;
   sort_order?: number;
   width?: string;
 }
@@ -1929,6 +2291,9 @@ export interface PublicFormField {
   min_value?: number;
   max_value?: number;
   options?: FormFieldOption[];
+  condition_field_id?: string;
+  condition_operator?: string;
+  condition_value?: string;
   sort_order: number;
   width: string;
 }
@@ -1964,7 +2329,7 @@ export const formsService = {
     skip?: number;
     limit?: number;
   }): Promise<FormsListResponse> {
-    const response = await api.get<FormsListResponse>('/forms/', { params });
+    const response = await api.get<FormsListResponse>('/forms', { params });
     return response.data;
   },
 
@@ -1974,7 +2339,7 @@ export const formsService = {
   },
 
   async createForm(data: FormCreate): Promise<FormDetailDef> {
-    const response = await api.post<FormDetailDef>('/forms/', data);
+    const response = await api.post<FormDetailDef>('/forms', data);
     return response.data;
   },
 
@@ -2149,7 +2514,7 @@ export const documentsService = {
   },
 
   async getDocuments(params?: { folder_id?: string; search?: string; skip?: number; limit?: number }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/documents/', { params });
+    const response = await api.get('/documents', { params });
     return response.data;
   },
 
@@ -2176,6 +2541,11 @@ export const documentsService = {
 
   async getSummary(): Promise<DocumentsSummary> {
     const response = await api.get<DocumentsSummary>('/documents/stats/summary');
+    return response.data;
+  },
+
+  async getMyFolder(): Promise<DocumentFolder> {
+    const response = await api.get<DocumentFolder>('/documents/my-folder');
     return response.data;
   },
 };
@@ -2245,12 +2615,12 @@ export interface MeetingsSummary {
 
 export const meetingsService = {
   async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/meetings/', { params });
+    const response = await api.get('/meetings', { params });
     return response.data;
   },
 
   async createMeeting(data: Record<string, unknown>): Promise<MeetingRecord> {
-    const response = await api.post<MeetingRecord>('/meetings/', data);
+    const response = await api.post<MeetingRecord>('/meetings', data);
     return response.data;
   },
 
@@ -2320,6 +2690,11 @@ export const meetingsService = {
     const response = await api.get(`/meetings/${meetingId}/attendance-waivers`);
     return response.data;
   },
+
+  async createFromEvent(eventId: string): Promise<MeetingRecord> {
+    const response = await api.post<MeetingRecord>(`/meetings/from-event/${eventId}`);
+    return response.data;
+  },
 };
 
 // Minutes Detail Service — uses the /minutes-records API
@@ -2380,6 +2755,11 @@ export const minutesService = {
   async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
     await api.delete(`/minutes-records/${minutesId}/action-items/${itemId}`);
   },
+
+  async createFromMeeting(meetingId: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/from-meeting/${meetingId}`);
+    return response.data;
+  },
 };
 
 // ============================================
@@ -2393,6 +2773,9 @@ export interface ShiftRecord {
   start_time: string;
   end_time?: string;
   apparatus_id?: string;
+  apparatus_name?: string;
+  apparatus_unit_number?: string;
+  apparatus_positions?: string[];
   station_id?: string;
   shift_officer_id?: string;
   shift_officer_name?: string;
@@ -2421,6 +2804,40 @@ export interface SchedulingSummary {
   shifts_this_week: number;
   shifts_this_month: number;
   total_hours_this_month: number;
+}
+
+export interface MemberComplianceRecord {
+  user_id: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  rank?: string;
+  completed_value: number;
+  percentage: number;
+  compliant: boolean;
+  shift_count: number;
+  total_hours: number;
+}
+
+export interface RequirementComplianceSummary {
+  requirement_id: string;
+  requirement_name: string;
+  requirement_type: string;
+  required_value: number;
+  frequency: string;
+  period_start: string;
+  period_end: string;
+  members: MemberComplianceRecord[];
+  total_members: number;
+  compliant_count: number;
+  non_compliant_count: number;
+  compliance_rate: number;
+}
+
+export interface ShiftComplianceResponse {
+  requirements: RequirementComplianceSummary[];
+  reference_date: string;
+  total_requirements: number;
 }
 
 export const schedulingService = {
@@ -2485,6 +2902,205 @@ export const schedulingService = {
       ...a,
       status: a.assignment_status ?? a.status,
     }));
+  },
+
+  // Shift Calls
+  async getShiftCalls(shiftId: string): Promise<Record<string, unknown>[]> {
+    const response = await api.get(`/scheduling/shifts/${shiftId}/calls`);
+    return response.data;
+  },
+  async getCall(callId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/calls/${callId}`);
+    return response.data;
+  },
+  async createCall(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/scheduling/shifts/${shiftId}/calls`, data);
+    return response.data;
+  },
+  async updateCall(callId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/scheduling/calls/${callId}`, data);
+    return response.data;
+  },
+  async deleteCall(callId: string): Promise<void> {
+    await api.delete(`/scheduling/calls/${callId}`);
+  },
+
+  // Shift Assignments
+  async getShiftAssignments(shiftId: string): Promise<Record<string, unknown>[]> {
+    const response = await api.get(`/scheduling/shifts/${shiftId}/assignments`);
+    return response.data;
+  },
+  async createAssignment(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/scheduling/shifts/${shiftId}/assignments`, data);
+    return response.data;
+  },
+  async updateAssignment(assignmentId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/scheduling/assignments/${assignmentId}`, data);
+    return response.data;
+  },
+  async deleteAssignment(assignmentId: string): Promise<void> {
+    await api.delete(`/scheduling/assignments/${assignmentId}`);
+  },
+  async confirmAssignment(assignmentId: string): Promise<Record<string, unknown>> {
+    const response = await api.post(`/scheduling/assignments/${assignmentId}/confirm`);
+    return response.data;
+  },
+
+  // Swap Requests
+  async getSwapRequests(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
+    const response = await api.get('/scheduling/swap-requests', { params });
+    return response.data;
+  },
+  async getSwapRequest(requestId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/swap-requests/${requestId}`);
+    return response.data;
+  },
+  async createSwapRequest(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/scheduling/swap-requests', data);
+    return response.data;
+  },
+  async reviewSwapRequest(requestId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/scheduling/swap-requests/${requestId}/review`, data);
+    return response.data;
+  },
+  async cancelSwapRequest(requestId: string): Promise<void> {
+    await api.delete(`/scheduling/swap-requests/${requestId}`);
+  },
+
+  // Time Off
+  async getTimeOffRequests(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
+    const response = await api.get('/scheduling/time-off', { params });
+    return response.data;
+  },
+  async getTimeOff(requestId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/time-off/${requestId}`);
+    return response.data;
+  },
+  async createTimeOff(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/scheduling/time-off', data);
+    return response.data;
+  },
+  async reviewTimeOff(requestId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/scheduling/time-off/${requestId}/review`, data);
+    return response.data;
+  },
+  async cancelTimeOff(requestId: string): Promise<void> {
+    await api.delete(`/scheduling/time-off/${requestId}`);
+  },
+
+  // Shift Attendance
+  async getShiftAttendance(shiftId: string): Promise<ShiftAttendanceRecord[]> {
+    const response = await api.get<ShiftAttendanceRecord[]>(`/scheduling/shifts/${shiftId}/attendance`);
+    return response.data;
+  },
+  async updateAttendance(attendanceId: string, data: Record<string, unknown>): Promise<ShiftAttendanceRecord> {
+    const response = await api.patch<ShiftAttendanceRecord>(`/scheduling/attendance/${attendanceId}`, data);
+    return response.data;
+  },
+  async deleteAttendance(attendanceId: string): Promise<void> {
+    await api.delete(`/scheduling/attendance/${attendanceId}`);
+  },
+
+  // Templates
+  async getTemplates(params?: { active_only?: boolean }): Promise<Record<string, unknown>[]> {
+    const response = await api.get('/scheduling/templates', { params });
+    return response.data;
+  },
+  async getTemplate(templateId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/templates/${templateId}`);
+    return response.data;
+  },
+  async createTemplate(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/scheduling/templates', data);
+    return response.data;
+  },
+  async updateTemplate(templateId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/scheduling/templates/${templateId}`, data);
+    return response.data;
+  },
+  async deleteTemplate(templateId: string): Promise<void> {
+    await api.delete(`/scheduling/templates/${templateId}`);
+  },
+
+  // Patterns
+  async getPatterns(params?: { active_only?: boolean }): Promise<Record<string, unknown>[]> {
+    const response = await api.get('/scheduling/patterns', { params });
+    return response.data;
+  },
+  async getPattern(patternId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/patterns/${patternId}`);
+    return response.data;
+  },
+  async createPattern(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/scheduling/patterns', data);
+    return response.data;
+  },
+  async updatePattern(patternId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/scheduling/patterns/${patternId}`, data);
+    return response.data;
+  },
+  async deletePattern(patternId: string): Promise<void> {
+    await api.delete(`/scheduling/patterns/${patternId}`);
+  },
+  async generateShiftsFromPattern(patternId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/scheduling/patterns/${patternId}/generate`, data);
+    return response.data;
+  },
+
+  // Reports
+  async getMemberHoursReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
+    const response = await api.get('/scheduling/reports/member-hours', { params });
+    return response.data;
+  },
+  async getCoverageReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
+    const response = await api.get('/scheduling/reports/coverage', { params });
+    return response.data;
+  },
+  async getCallVolumeReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
+    const response = await api.get('/scheduling/reports/call-volume', { params });
+    return response.data;
+  },
+  async getAvailability(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
+    const response = await api.get('/scheduling/availability', { params });
+    return response.data;
+  },
+
+  // --- Basic Apparatus (lightweight, for departments without full Apparatus module) ---
+  async getBasicApparatus(params?: { is_active?: boolean }): Promise<Record<string, unknown>[]> {
+    const response = await api.get('/scheduling/apparatus', { params });
+    return response.data;
+  },
+  async createBasicApparatus(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/scheduling/apparatus', data);
+    return response.data;
+  },
+  async updateBasicApparatus(apparatusId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/scheduling/apparatus/${apparatusId}`, data);
+    return response.data;
+  },
+  async deleteBasicApparatus(apparatusId: string): Promise<void> {
+    await api.delete(`/scheduling/apparatus/${apparatusId}`);
+  },
+
+  // --- Shift Signup (member self-service) ---
+  async signupForShift(shiftId: string, data: { position: string }): Promise<Record<string, unknown>> {
+    const response = await api.post(`/scheduling/shifts/${shiftId}/signup`, data);
+    return response.data;
+  },
+  async withdrawSignup(shiftId: string): Promise<void> {
+    await api.delete(`/scheduling/shifts/${shiftId}/signup`);
+  },
+
+  // --- Open Shifts ---
+  async getOpenShifts(params?: { start_date?: string; end_date?: string; apparatus_id?: string }): Promise<Record<string, unknown>[]> {
+    const response = await api.get('/scheduling/shifts/open', { params });
+    return response.data;
+  },
+
+  // --- Shift Compliance ---
+  async getComplianceReport(params?: { reference_date?: string }): Promise<ShiftComplianceResponse> {
+    const response = await api.get<ShiftComplianceResponse>('/scheduling/reports/compliance', { params });
+    return response.data;
   },
 };
 
@@ -2604,12 +3220,85 @@ export interface DashboardStats {
   pending_tasks_count: number;
 }
 
+export interface AdminSummary {
+  active_members: number;
+  inactive_members: number;
+  total_members: number;
+  training_completion_pct: number;
+  upcoming_events_count: number;
+  overdue_action_items: number;
+  open_action_items: number;
+  recent_training_hours: number;
+}
+
+export interface ActionItemSummary {
+  id: string;
+  source: string;
+  source_id: string;
+  description: string;
+  assignee_id?: string;
+  assignee_name?: string;
+  due_date?: string;
+  status: string;
+  priority?: string;
+  created_at: string;
+}
+
+export interface CommunityEngagement {
+  total_public_events: number;
+  total_member_attendees: number;
+  total_external_attendees: number;
+  upcoming_public_events: number;
+}
+
+export interface ComplianceMatrixMember {
+  user_id: string;
+  member_name: string;
+  requirements: Array<{
+    requirement_id: string;
+    requirement_name: string;
+    status: string;
+    completion_date?: string;
+    expiry_date?: string;
+  }>;
+  completion_pct: number;
+}
+
+export interface ComplianceMatrix {
+  members: ComplianceMatrixMember[];
+  requirements: Array<{ id: string; name: string; recurrence_months?: number }>;
+  generated_at: string;
+}
+
+export interface ExpiringCertification {
+  user_id: string;
+  member_name: string;
+  requirement_id: string;
+  requirement_name: string;
+  expiry_date: string;
+  days_until_expiry: number;
+  status: string;
+}
+
 export const dashboardService = {
-  /**
-   * Get dashboard statistics
-   */
   async getStats(): Promise<DashboardStats> {
     const response = await api.get<DashboardStats>('/dashboard/stats');
+    return response.data;
+  },
+  async getAdminSummary(): Promise<AdminSummary> {
+    const response = await api.get<AdminSummary>('/dashboard/admin-summary');
+    return response.data;
+  },
+  async getActionItems(params?: { status_filter?: string; assigned_to_me?: boolean }): Promise<ActionItemSummary[]> {
+    const response = await api.get<ActionItemSummary[]>('/dashboard/action-items', { params });
+    return response.data;
+  },
+  async getCommunityEngagement(): Promise<CommunityEngagement> {
+    const response = await api.get<CommunityEngagement>('/dashboard/community-engagement');
+    return response.data;
+  },
+  async getBranding(): Promise<{ name?: string }> {
+    const response = await api.get<{ name?: string }>('/auth/branding');
     return response.data;
   },
 };
@@ -2703,12 +3392,19 @@ export interface Location {
   id: string;
   organization_id: string;
   name: string;
+  description?: string;
   address?: string;
   city?: string;
   state?: string;
   zip?: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: string;
+  longitude?: string;
+  building?: string;
+  floor?: string;
+  room_number?: string;
+  capacity?: number;
+  facility_id?: string;
+  display_code?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -2716,12 +3412,17 @@ export interface Location {
 
 export interface LocationCreate {
   name: string;
+  description?: string;
   address?: string;
   city?: string;
   state?: string;
   zip?: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: string;
+  longitude?: string;
+  building?: string;
+  floor?: string;
+  room_number?: string;
+  capacity?: number;
 }
 
 export const locationsService = {
@@ -2885,6 +3586,16 @@ export const trainingSessionService = {
 
   async finalizeSession(sessionId: string): Promise<{ message: string; approval_id: string }> {
     const response = await api.post<{ message: string; approval_id: string }>(`/training/sessions/${sessionId}/finalize`);
+    return response.data;
+  },
+
+  async getApprovalData(token: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/training/sessions/approve/${token}`);
+    return response.data;
+  },
+
+  async submitApproval(token: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/training/sessions/approve/${token}`, data);
     return response.data;
   },
 };
@@ -3295,6 +4006,10 @@ export const facilitiesService = {
     const response = await api.get('/facilities/rooms', { params });
     return response.data;
   },
+  async getRoom(roomId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/rooms/${roomId}`);
+    return response.data;
+  },
   async createRoom(data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await api.post('/facilities/rooms', data);
     return response.data;
@@ -3305,5 +4020,516 @@ export const facilitiesService = {
   },
   async deleteRoom(roomId: string): Promise<void> {
     await api.delete(`/facilities/rooms/${roomId}`);
+  },
+
+  // Maintenance Types
+  async getMaintenanceTypes(params?: { skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/maintenance-types', { params });
+    return response.data;
+  },
+  async createMaintenanceType(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/maintenance-types', data);
+    return response.data;
+  },
+  async updateMaintenanceType(typeId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/maintenance-types/${typeId}`, data);
+    return response.data;
+  },
+  async deleteMaintenanceType(typeId: string): Promise<void> {
+    await api.delete(`/facilities/maintenance-types/${typeId}`);
+  },
+
+  // Building Systems
+  async getSystems(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/systems', { params });
+    return response.data;
+  },
+  async getSystem(systemId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/systems/${systemId}`);
+    return response.data;
+  },
+  async createSystem(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/systems', data);
+    return response.data;
+  },
+  async updateSystem(systemId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/systems/${systemId}`, data);
+    return response.data;
+  },
+  async deleteSystem(systemId: string): Promise<void> {
+    await api.delete(`/facilities/systems/${systemId}`);
+  },
+
+  // Emergency Contacts
+  async getEmergencyContacts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/emergency-contacts', { params });
+    return response.data;
+  },
+  async createEmergencyContact(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/emergency-contacts', data);
+    return response.data;
+  },
+  async updateEmergencyContact(contactId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/emergency-contacts/${contactId}`, data);
+    return response.data;
+  },
+  async deleteEmergencyContact(contactId: string): Promise<void> {
+    await api.delete(`/facilities/emergency-contacts/${contactId}`);
+  },
+
+  // Shutoff Locations
+  async getShutoffLocations(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/shutoff-locations', { params });
+    return response.data;
+  },
+  async createShutoffLocation(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/shutoff-locations', data);
+    return response.data;
+  },
+  async updateShutoffLocation(locationId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/shutoff-locations/${locationId}`, data);
+    return response.data;
+  },
+  async deleteShutoffLocation(locationId: string): Promise<void> {
+    await api.delete(`/facilities/shutoff-locations/${locationId}`);
+  },
+
+  // Capital Projects
+  async getCapitalProjects(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/capital-projects', { params });
+    return response.data;
+  },
+  async getCapitalProject(projectId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/capital-projects/${projectId}`);
+    return response.data;
+  },
+  async createCapitalProject(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/capital-projects', data);
+    return response.data;
+  },
+  async updateCapitalProject(projectId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/capital-projects/${projectId}`, data);
+    return response.data;
+  },
+  async deleteCapitalProject(projectId: string): Promise<void> {
+    await api.delete(`/facilities/capital-projects/${projectId}`);
+  },
+
+  // Insurance Policies
+  async getInsurancePolicies(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/insurance-policies', { params });
+    return response.data;
+  },
+  async getInsurancePolicy(policyId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/insurance-policies/${policyId}`);
+    return response.data;
+  },
+  async createInsurancePolicy(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/insurance-policies', data);
+    return response.data;
+  },
+  async updateInsurancePolicy(policyId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/insurance-policies/${policyId}`, data);
+    return response.data;
+  },
+  async deleteInsurancePolicy(policyId: string): Promise<void> {
+    await api.delete(`/facilities/insurance-policies/${policyId}`);
+  },
+
+  // Occupants
+  async getOccupants(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/occupants', { params });
+    return response.data;
+  },
+  async getOccupant(occupantId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/occupants/${occupantId}`);
+    return response.data;
+  },
+  async createOccupant(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/occupants', data);
+    return response.data;
+  },
+  async updateOccupant(occupantId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/occupants/${occupantId}`, data);
+    return response.data;
+  },
+  async deleteOccupant(occupantId: string): Promise<void> {
+    await api.delete(`/facilities/occupants/${occupantId}`);
+  },
+
+  // Utility Accounts
+  async getUtilityAccounts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/utility-accounts', { params });
+    return response.data;
+  },
+  async getUtilityAccount(accountId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/utility-accounts/${accountId}`);
+    return response.data;
+  },
+  async createUtilityAccount(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/utility-accounts', data);
+    return response.data;
+  },
+  async updateUtilityAccount(accountId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/utility-accounts/${accountId}`, data);
+    return response.data;
+  },
+  async deleteUtilityAccount(accountId: string): Promise<void> {
+    await api.delete(`/facilities/utility-accounts/${accountId}`);
+  },
+
+  // Utility Readings
+  async getUtilityReadings(accountId: string, params?: { skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get(`/facilities/utility-accounts/${accountId}/readings`, { params });
+    return response.data;
+  },
+  async createUtilityReading(accountId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/facilities/utility-accounts/${accountId}/readings`, data);
+    return response.data;
+  },
+  async deleteUtilityReading(readingId: string): Promise<void> {
+    await api.delete(`/facilities/utility-readings/${readingId}`);
+  },
+
+  // Access Keys
+  async getAccessKeys(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/access-keys', { params });
+    return response.data;
+  },
+  async getAccessKey(keyId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/access-keys/${keyId}`);
+    return response.data;
+  },
+  async createAccessKey(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/access-keys', data);
+    return response.data;
+  },
+  async updateAccessKey(keyId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/access-keys/${keyId}`, data);
+    return response.data;
+  },
+  async deleteAccessKey(keyId: string): Promise<void> {
+    await api.delete(`/facilities/access-keys/${keyId}`);
+  },
+
+  // Compliance Checklists
+  async getComplianceChecklists(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/compliance-checklists', { params });
+    return response.data;
+  },
+  async getComplianceChecklist(checklistId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/compliance-checklists/${checklistId}`);
+    return response.data;
+  },
+  async createComplianceChecklist(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/compliance-checklists', data);
+    return response.data;
+  },
+  async updateComplianceChecklist(checklistId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/compliance-checklists/${checklistId}`, data);
+    return response.data;
+  },
+  async deleteComplianceChecklist(checklistId: string): Promise<void> {
+    await api.delete(`/facilities/compliance-checklists/${checklistId}`);
+  },
+
+  // Compliance Items
+  async getComplianceItems(checklistId: string): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get(`/facilities/compliance-checklists/${checklistId}/items`);
+    return response.data;
+  },
+  async createComplianceItem(checklistId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/facilities/compliance-checklists/${checklistId}/items`, data);
+    return response.data;
+  },
+  async updateComplianceItem(itemId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/compliance-items/${itemId}`, data);
+    return response.data;
+  },
+  async deleteComplianceItem(itemId: string): Promise<void> {
+    await api.delete(`/facilities/compliance-items/${itemId}`);
+  },
+};
+
+// ============================================
+// Member Status Service
+// ============================================
+
+export interface LeaveOfAbsenceResponse {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  leave_type: string;
+  reason: string | null;
+  start_date: string;
+  end_date: string;
+  granted_by: string | null;
+  granted_at: string | null;
+  active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export const memberStatusService = {
+  async getArchivedMembers(): Promise<{ members: import('../types/user').ArchivedMember[] }> {
+    const response = await api.get('/users/archived');
+    return response.data;
+  },
+
+  async reactivateMember(userId: string, data: { reason: string }): Promise<Record<string, unknown>> {
+    const response = await api.post(`/users/${userId}/reactivate`, data);
+    return response.data;
+  },
+
+  async getOverduePropertyReturns(): Promise<{ members: import('../types/user').OverdueMember[] }> {
+    const response = await api.get('/users/property-return-reminders/overdue');
+    return response.data;
+  },
+
+  async processPropertyReturnReminders(): Promise<Record<string, unknown>> {
+    const response = await api.post('/users/property-return-reminders/process');
+    return response.data;
+  },
+
+  async getPropertyReturnPreview(userId: string): Promise<import('../types/user').PropertyReturnReport> {
+    const response = await api.get(`/users/${userId}/property-return-report`);
+    return response.data;
+  },
+
+  async getTierConfig(): Promise<import('../types/user').MembershipTierConfig> {
+    const response = await api.get('/users/membership-tiers/config');
+    return response.data;
+  },
+
+  async updateTierConfig(config: import('../types/user').MembershipTierConfig): Promise<import('../types/user').MembershipTierConfig> {
+    const response = await api.put('/users/membership-tiers/config', config);
+    return response.data;
+  },
+
+  async advanceMembershipTiers(): Promise<Record<string, unknown>> {
+    const response = await api.post('/users/advance-membership-tiers');
+    return response.data;
+  },
+
+  // Leave of Absence
+  async listLeavesOfAbsence(params?: { user_id?: string; active_only?: boolean }): Promise<LeaveOfAbsenceResponse[]> {
+    const response = await api.get('/users/leaves-of-absence', { params });
+    return response.data;
+  },
+
+  async getMemberLeaves(userId: string, activeOnly = true): Promise<LeaveOfAbsenceResponse[]> {
+    const response = await api.get(`/users/${userId}/leaves-of-absence`, { params: { active_only: activeOnly } });
+    return response.data;
+  },
+
+  async getMyLeaves(): Promise<LeaveOfAbsenceResponse[]> {
+    const response = await api.get('/users/leaves-of-absence/me');
+    return response.data;
+  },
+
+  async createLeaveOfAbsence(data: {
+    user_id: string;
+    leave_type: string;
+    reason?: string;
+    start_date: string;
+    end_date: string;
+  }): Promise<LeaveOfAbsenceResponse> {
+    const response = await api.post('/users/leaves-of-absence', data);
+    return response.data;
+  },
+
+  async updateLeaveOfAbsence(leaveId: string, data: {
+    leave_type?: string;
+    reason?: string;
+    start_date?: string;
+    end_date?: string;
+    active?: boolean;
+  }): Promise<LeaveOfAbsenceResponse> {
+    const response = await api.patch(`/users/leaves-of-absence/${leaveId}`, data);
+    return response.data;
+  },
+
+  async deleteLeaveOfAbsence(leaveId: string): Promise<void> {
+    await api.delete(`/users/leaves-of-absence/${leaveId}`);
+  },
+};
+
+// ============================================
+// Prospective Member Service
+// ============================================
+
+export const prospectiveMemberService = {
+  async listPipelines(activeOnly?: boolean): Promise<{ pipelines: Record<string, unknown>[] }> {
+    const params = activeOnly ? { active_only: true } : undefined;
+    const response = await api.get('/prospective-members/pipelines', { params });
+    return response.data;
+  },
+  async createPipeline(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/prospective-members/pipelines', data);
+    return response.data;
+  },
+  async updatePipeline(pipelineId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/prospective-members/pipelines/${pipelineId}`, data);
+    return response.data;
+  },
+  async deletePipeline(pipelineId: string): Promise<void> {
+    await api.delete(`/prospective-members/pipelines/${pipelineId}`);
+  },
+  async duplicatePipeline(pipelineId: string, name: string): Promise<Record<string, unknown>> {
+    const response = await api.post(`/prospective-members/pipelines/${pipelineId}/duplicate`, { name });
+    return response.data;
+  },
+  async seedTemplates(pipelineId: string): Promise<{ message?: string }> {
+    const response = await api.post<{ message?: string }>(`/prospective-members/pipelines/${pipelineId}/seed-templates`);
+    return response.data;
+  },
+  async listProspects(params?: Record<string, unknown>): Promise<{ prospects: Record<string, unknown>[]; total: number }> {
+    const response = await api.get('/prospective-members/prospects', { params: params as Record<string, string> });
+    return response.data;
+  },
+  async createProspect(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/prospective-members/prospects', data);
+    return response.data;
+  },
+  async listElectionPackages(params?: Record<string, unknown>): Promise<{ packages: Record<string, unknown>[]; total: number }> {
+    const response = await api.get('/prospective-members/election-packages', { params: params as Record<string, string> });
+    return response.data;
+  },
+};
+
+// ============================================
+// Scheduled Tasks Service
+// ============================================
+
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  description?: string;
+  frequency: string;
+  recommended_time?: string;
+  last_run_at?: string;
+  next_run_at?: string;
+  is_running: boolean;
+  enabled: boolean;
+}
+
+export const scheduledTasksService = {
+  async listTasks(): Promise<{ tasks: ScheduledTask[] }> {
+    const response = await api.get('/scheduled/tasks');
+    return response.data;
+  },
+  async runTask(taskId: string): Promise<Record<string, unknown>> {
+    const response = await api.post('/scheduled/run-task', null, { params: { task: taskId } });
+    return response.data;
+  },
+};
+
+// ============================================
+// Department Messages Service
+// ============================================
+
+export interface DepartmentMessageRecord {
+  id: string;
+  organization_id: string;
+  title: string;
+  body: string;
+  priority: 'normal' | 'important' | 'urgent';
+  target_type: 'all' | 'roles' | 'statuses' | 'members';
+  target_roles?: string[];
+  target_statuses?: string[];
+  target_member_ids?: string[];
+  is_pinned: boolean;
+  is_active: boolean;
+  requires_acknowledgment: boolean;
+  posted_by?: string;
+  expires_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InboxMessage {
+  id: string;
+  title: string;
+  body: string;
+  priority: 'normal' | 'important' | 'urgent';
+  target_type: string;
+  is_pinned: boolean;
+  requires_acknowledgment: boolean;
+  posted_by?: string;
+  author_name?: string;
+  created_at?: string;
+  expires_at?: string;
+  is_read: boolean;
+  read_at?: string;
+  is_acknowledged: boolean;
+  acknowledged_at?: string;
+}
+
+export interface MessageStats {
+  message_id: string;
+  total_reads: number;
+  total_acknowledged: number;
+}
+
+export interface RoleOption {
+  name: string;
+  slug: string;
+}
+
+export const messagesService = {
+  // Admin CRUD
+  async getMessages(params?: { include_inactive?: boolean; skip?: number; limit?: number }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
+    const response = await api.get('/messages', { params });
+    return response.data;
+  },
+  async createMessage(data: {
+    title: string;
+    body: string;
+    priority?: string;
+    target_type?: string;
+    target_roles?: string[];
+    target_statuses?: string[];
+    target_member_ids?: string[];
+    is_pinned?: boolean;
+    requires_acknowledgment?: boolean;
+    expires_at?: string;
+  }): Promise<DepartmentMessageRecord> {
+    const response = await api.post<DepartmentMessageRecord>('/messages', data);
+    return response.data;
+  },
+  async getMessage(messageId: string): Promise<DepartmentMessageRecord> {
+    const response = await api.get<DepartmentMessageRecord>(`/messages/${messageId}`);
+    return response.data;
+  },
+  async updateMessage(messageId: string, data: Record<string, unknown>): Promise<DepartmentMessageRecord> {
+    const response = await api.patch<DepartmentMessageRecord>(`/messages/${messageId}`, data);
+    return response.data;
+  },
+  async deleteMessage(messageId: string): Promise<void> {
+    await api.delete(`/messages/${messageId}`);
+  },
+  async getAvailableRoles(): Promise<RoleOption[]> {
+    const response = await api.get<RoleOption[]>('/messages/roles');
+    return response.data;
+  },
+  async getMessageStats(messageId: string): Promise<MessageStats> {
+    const response = await api.get<MessageStats>(`/messages/${messageId}/stats`);
+    return response.data;
+  },
+
+  // Member inbox
+  async getInbox(params?: { include_read?: boolean; skip?: number; limit?: number }): Promise<InboxMessage[]> {
+    const response = await api.get<InboxMessage[]>('/messages/inbox', { params });
+    return response.data;
+  },
+  async getUnreadCount(): Promise<{ unread_count: number }> {
+    const response = await api.get<{ unread_count: number }>('/messages/inbox/unread-count');
+    return response.data;
+  },
+  async markAsRead(messageId: string): Promise<void> {
+    await api.post(`/messages/${messageId}/read`);
+  },
+  async acknowledge(messageId: string): Promise<void> {
+    await api.post(`/messages/${messageId}/acknowledge`);
   },
 };

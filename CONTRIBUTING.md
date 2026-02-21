@@ -70,6 +70,8 @@ cd the-logbook
 make setup
 
 # Copy environment variables
+# Use .env.example for quick setup (~30 vars)
+# Use .env.example.full for all options (~100+ vars, includes OAuth, LDAP, S3, HIPAA tuning, etc.)
 cp .env.example .env
 
 # Edit .env with your local settings

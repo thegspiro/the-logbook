@@ -4,6 +4,7 @@ Users API Endpoints
 Endpoints for user management and listing.
 """
 
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from loguru import logger
@@ -20,13 +21,14 @@ from app.schemas.user import (
     ContactInfoUpdate,
     UserProfileResponse,
     AdminUserCreate,
+    AdminPasswordReset,
     UserUpdate,
 )
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.services.user_service import UserService
 from app.services.organization_service import OrganizationService
 from app.models.user import User, Role, UserStatus, user_roles
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import get_current_user, require_permission, _collect_user_permissions, _has_permission
 from app.core.config import settings
 # NOTE: Authentication is now implemented
 # from app.api.dependencies import get_current_active_user, get_user_organization
@@ -36,7 +38,7 @@ from app.core.config import settings
 router = APIRouter()
 
 
-@router.get("/", response_model=List[UserListResponse])
+@router.get("", response_model=List[UserListResponse])
 async def list_users(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -84,7 +86,7 @@ async def list_users(
     return users
 
 
-@router.post("/", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
 async def create_member(
     user_data: AdminUserCreate,
     background_tasks: BackgroundTasks,
@@ -102,9 +104,7 @@ async def create_member(
     **Authentication required**
     """
     from uuid import uuid4
-    from app.core.security import hash_password
-    import secrets
-    import string
+    from app.core.security import hash_password, generate_temporary_password
 
     # Check if username already exists
     result = await db.execute(
@@ -118,6 +118,20 @@ async def create_member(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already exists"
         )
+
+    # Check if badge number already exists in the organization
+    if user_data.badge_number:
+        result = await db.execute(
+            select(User)
+            .where(User.badge_number == user_data.badge_number)
+            .where(User.organization_id == str(current_user.organization_id))
+            .where(User.deleted_at.is_(None))
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member with this Department ID / badge number already exists"
+            )
 
     # Check if email already exists (including archived members)
     result = await db.execute(
@@ -148,8 +162,22 @@ async def create_member(
             detail="Email already exists"
         )
 
-    # Generate temporary password
-    temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*") for _ in range(16))
+    # Use admin-provided password or generate a temporary one
+    password_was_generated = False
+    if user_data.password:
+        from app.core.security import validate_password_strength
+        is_valid, error_msg = validate_password_strength(user_data.password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+        initial_password = user_data.password
+        password_hash = hash_password(initial_password)
+    else:
+        initial_password = generate_temporary_password()
+        password_hash = hash_password(initial_password)
+        password_was_generated = True
 
     # Create new user
     new_user = User(
@@ -157,11 +185,12 @@ async def create_member(
         organization_id=current_user.organization_id,
         username=user_data.username,
         email=user_data.email,
-        password_hash=hash_password(temp_password),
+        password_hash=password_hash,
         first_name=user_data.first_name,
         middle_name=user_data.middle_name,
         last_name=user_data.last_name,
         badge_number=user_data.badge_number,
+        membership_number=user_data.membership_id,
         phone=user_data.phone,
         mobile=user_data.mobile,
         date_of_birth=user_data.date_of_birth,
@@ -179,6 +208,8 @@ async def create_member(
         emergency_contacts=[ec.model_dump() for ec in user_data.emergency_contacts],
         email_verified=False,
         status=UserStatus.ACTIVE,
+        must_change_password=True,
+        password_changed_at=datetime.now(timezone.utc),
     )
 
     db.add(new_user)
@@ -189,7 +220,7 @@ async def create_member(
         # Verify all role IDs exist and belong to the organization
         result = await db.execute(
             select(Role)
-            .where(Role.id.in_(user_data.role_ids))
+            .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
@@ -200,10 +231,29 @@ async def create_member(
                 detail="One or more role IDs are invalid"
             )
 
-        new_user.roles = roles
+        for role in roles:
+            await db.execute(
+                user_roles.insert().values(
+                    user_id=new_user.id,
+                    position_id=role.id,
+                    assigned_by=current_user.id,
+                )
+            )
+
+    # Capture assigned role IDs before commit expires the relationship
+    assigned_role_ids = [str(r.id) for r in roles] if user_data.role_ids else []
 
     await db.commit()
-    await db.refresh(new_user, ["roles"])
+
+    # Re-query with eager loading so Pydantic can serialize roles without lazy loading
+    result = await db.execute(
+        select(User)
+        .where(User.id == new_user.id)
+        .options(selectinload(User.positions))
+    )
+    new_user = result.scalar_one_or_none()
+    if not new_user:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="User disappeared after creation")
 
     await log_audit_event(
         db=db,
@@ -214,7 +264,7 @@ async def create_member(
             "new_user_id": str(new_user.id),
             "username": new_user.username,
             "email": new_user.email,
-            "roles_assigned": [str(r.id) for r in new_user.roles],
+            "roles_assigned": assigned_role_ids,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -237,25 +287,37 @@ async def create_member(
         org_name = organization.name if organization else "The Logbook"
         login_url = f"{settings.FRONTEND_URL}/login" if hasattr(settings, 'FRONTEND_URL') and settings.FRONTEND_URL else "/login"
 
+        # Capture scalar values before they expire after the response returns
+        welcome_email = new_user.email
+        welcome_first = new_user.first_name
+        welcome_last = new_user.last_name
+        welcome_username = new_user.username
+        welcome_org_id = str(current_user.organization_id)
+
         async def _send_welcome():
             try:
                 email_svc = EmailService(organization)
                 await email_svc.send_welcome_email(
-                    to_email=new_user.email,
-                    first_name=new_user.first_name,
-                    last_name=new_user.last_name,
-                    username=new_user.username,
-                    temp_password=temp_password,
+                    to_email=welcome_email,
+                    first_name=welcome_first,
+                    last_name=welcome_last,
+                    username=welcome_username,
+                    temp_password=initial_password,
                     organization_name=org_name,
                     login_url=login_url,
-                    organization_id=str(current_user.organization_id),
+                    organization_id=welcome_org_id,
                 )
             except Exception as e:
-                logger.error(f"Failed to send welcome email to {new_user.email}: {e}")
+                logger.error(f"Failed to send welcome email to {welcome_email}: {e}")
 
         background_tasks.add_task(_send_welcome)
 
-    return new_user
+    # Build response — include the temporary password so the admin can
+    # communicate it to the user even if the welcome email fails or was skipped.
+    response = UserWithRolesResponse.model_validate(new_user)
+    if password_was_generated:
+        response.temporary_password = initial_password
+    return response
 
 
 @router.get("/contact-info-enabled")
@@ -346,7 +408,7 @@ async def assign_user_roles(
     user_id: UUID,
     role_assignment: UserRoleAssignment,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
+    current_user: User = Depends(require_permission("users.update_positions", "members.assign_positions", "users.update_roles", "members.assign_roles")),
 ):
     """
     Assign roles to a user (replaces all existing roles)
@@ -375,7 +437,7 @@ async def assign_user_roles(
     if role_assignment.role_ids:
         result = await db.execute(
             select(Role)
-            .where(Role.id.in_(role_assignment.role_ids))
+            .where(Role.id.in_([str(rid) for rid in role_assignment.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
@@ -396,7 +458,16 @@ async def assign_user_roles(
     # Assign new roles
     user.roles = roles
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after role assignment")
 
     await log_audit_event(
         db=db,
@@ -425,7 +496,7 @@ async def add_role_to_user(
     user_id: UUID,
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
+    current_user: User = Depends(require_permission("users.update_positions", "members.assign_positions", "users.update_roles", "members.assign_roles")),
 ):
     """
     Add a single role to a user (keeps existing roles)
@@ -471,10 +542,22 @@ async def add_role_to_user(
             detail="User already has this role"
         )
 
+    # Capture role name before commit expires the ORM object
+    added_role_name = role.name
+
     # Add role
     user.roles.append(role)
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after role addition")
 
     await log_audit_event(
         db=db,
@@ -484,7 +567,7 @@ async def add_role_to_user(
         event_data={
             "target_user_id": str(user_id),
             "role_id": str(role_id),
-            "role_name": role.name,
+            "role_name": added_role_name,
             "action": "role_added",
         },
         user_id=str(current_user.id),
@@ -504,7 +587,7 @@ async def remove_role_from_user(
     user_id: UUID,
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
+    current_user: User = Depends(require_permission("users.update_positions", "members.assign_positions", "users.update_roles", "members.assign_roles")),
 ):
     """
     Remove a role from a user
@@ -529,10 +612,10 @@ async def remove_role_from_user(
             detail="User not found"
         )
 
-    # Find and remove role
+    # Find and remove role (cast to str since role.id is String, role_id is UUID)
     role_to_remove = None
     for role in user.roles:
-        if role.id == role_id:
+        if str(role.id) == str(role_id):
             role_to_remove = role
             break
 
@@ -542,9 +625,19 @@ async def remove_role_from_user(
             detail="User does not have this role"
         )
 
+    role_removed_name = role_to_remove.name
     user.roles.remove(role_to_remove)
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after role removal")
 
     await log_audit_event(
         db=db,
@@ -554,7 +647,7 @@ async def remove_role_from_user(
         event_data={
             "target_user_id": str(user_id),
             "role_id": str(role_id),
-            "role_name": role_to_remove.name,
+            "role_name": role_removed_name,
             "action": "role_removed",
         },
         user_id=str(current_user.id),
@@ -629,12 +722,10 @@ async def update_contact_info(
     **Authentication required**
     """
     # Check if user is updating their own profile or has admin permissions
-    if current_user.id != user_id:
-        # Admins with users.update or members.manage can update other users
-        user_permissions = []
-        for role in current_user.roles:
-            user_permissions.extend(role.permissions or [])
-        if "users.update" not in user_permissions and "members.manage" not in user_permissions:
+    if current_user.id != str(user_id):
+        # Admins with users.edit or members.manage can update other users
+        user_perms = _collect_user_permissions(current_user)
+        if not _has_permission("users.edit", user_perms) and not _has_permission("members.manage", user_perms):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only update your own contact information"
@@ -682,7 +773,16 @@ async def update_contact_info(
         user.notification_preferences = contact_update.notification_preferences.model_dump()
 
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after contact update")
 
     await log_audit_event(
         db=db,
@@ -710,7 +810,7 @@ async def update_user_profile(
     """
     Update user profile information (name, address, emergency contacts, etc.)
 
-    Users can update their own profile. Admins with users.update or members.manage
+    Users can update their own profile. Admins with users.edit or members.manage
     permission can update any user's profile.
 
     **Authentication required**
@@ -718,11 +818,15 @@ async def update_user_profile(
     # Check if user is updating their own profile or has admin permissions
     is_self = str(current_user.id) == str(user_id)
     if not is_self:
-        user_permissions = []
-        for role in current_user.roles:
-            user_permissions.extend(role.permissions or [])
-        has_wildcard = "*" in user_permissions
-        if not has_wildcard and "users.update" not in user_permissions and "members.manage" not in user_permissions:
+        # Eagerly load positions so _collect_user_permissions can iterate safely
+        perm_result = await db.execute(
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.positions))
+        )
+        perm_user = perm_result.scalar_one()
+        user_permissions = _collect_user_permissions(perm_user)
+        if not _has_permission("users.update", user_permissions) and not _has_permission("members.manage", user_permissions):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to update this user's profile"
@@ -746,18 +850,57 @@ async def update_user_profile(
     # Update only provided fields
     update_data = profile_update.model_dump(exclude_unset=True)
 
+    # Check badge_number uniqueness within the organization
+    if "badge_number" in update_data and update_data["badge_number"]:
+        existing = await db.execute(
+            select(User)
+            .where(User.badge_number == update_data["badge_number"])
+            .where(User.organization_id == str(current_user.organization_id))
+            .where(User.id != str(user_id))
+            .where(User.deleted_at.is_(None))
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member with this Department ID / badge number already exists"
+            )
+
+    # Rank changes restricted to Chief / membership coordinator
+    if "rank" in update_data:
+        rank_perm_result = await db.execute(
+            select(User).where(User.id == current_user.id).options(selectinload(User.positions))
+        )
+        rank_perm_user = rank_perm_result.scalar_one_or_none()
+        if not rank_perm_user or not _has_permission("members.manage", _collect_user_permissions(rank_perm_user)):
+            update_data.pop("rank")
+
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
         ec_list = update_data.pop("emergency_contacts")
         if ec_list is not None:
             user.emergency_contacts = [ec.model_dump() if hasattr(ec, 'model_dump') else ec for ec in profile_update.emergency_contacts]
 
+    # Allowlist of safe fields to prevent mass-assignment of sensitive columns
+    ALLOWED_PROFILE_FIELDS = {
+        "first_name", "middle_name", "last_name", "badge_number", "phone", "mobile",
+        "date_of_birth", "hire_date", "rank", "station", "membership_number",
+        "address_street", "address_city", "address_state", "address_zip", "address_country",
+    }
     for field, value in update_data.items():
-        if hasattr(user, field):
+        if field in ALLOWED_PROFILE_FIELDS and hasattr(user, field):
             setattr(user, field, value)
 
     await db.commit()
-    await db.refresh(user)
+
+    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after profile update")
 
     await log_audit_event(
         db=db,
@@ -775,3 +918,133 @@ async def update_user_profile(
     )
 
     return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Soft-delete a member by setting their deleted_at timestamp.
+
+    Requires `members.manage` permission.
+
+    **Authentication required**
+    """
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account",
+        )
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Capture values before commit expires the ORM object
+    deleted_username = user.username
+    deleted_full_name = user.full_name
+
+    user.deleted_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="user_deleted",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "deleted_user_id": str(user_id),
+            "deleted_username": deleted_username,
+            "deleted_full_name": deleted_full_name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
+@router.post("/{user_id}/reset-password", status_code=status.HTTP_200_OK)
+async def admin_reset_password(
+    user_id: UUID,
+    reset_data: AdminPasswordReset,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("users.create", "members.manage")),
+):
+    """
+    Reset a user's password (IT Lead / Admin only)
+
+    Allows administrators to set a new password for any member.
+    By default the user is required to change the password on next login.
+
+    Requires `users.create` or `members.manage` permission.
+
+    **Authentication required**
+    """
+    from app.core.security import hash_password, validate_password_strength
+
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use the change-password endpoint to change your own password",
+        )
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Validate the new password
+    is_valid, error_msg = validate_password_strength(reset_data.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
+    # Capture username before commit
+    target_username = user.username
+
+    user.password_hash = hash_password(reset_data.new_password)
+    user.must_change_password = reset_data.force_change
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.password_changed_at = datetime.now(timezone.utc)
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="admin_password_reset",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user_id),
+            "target_username": target_username,
+            "force_change": reset_data.force_change,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {"message": f"Password has been reset for {target_username}"}

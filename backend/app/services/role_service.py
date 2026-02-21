@@ -83,7 +83,7 @@ class RoleManagementService:
                 count_result = await db.execute(
                     select(func.count())
                     .select_from(user_roles)
-                    .where(user_roles.c.role_id == role.id)
+                    .where(user_roles.c.position_id == role.id)
                 )
                 role_dict["user_count"] = count_result.scalar() or 0
 
@@ -326,7 +326,7 @@ class RoleManagementService:
         count_result = await db.execute(
             select(func.count())
             .select_from(user_roles)
-            .where(user_roles.c.role_id == str(role_id))
+            .where(user_roles.c.position_id == str(role_id))
         )
         affected_users = count_result.scalar() or 0
 
@@ -410,7 +410,7 @@ class RoleManagementService:
             select(User)
             .join(user_roles, User.id == user_roles.c.user_id)
             .where(
-                user_roles.c.role_id == role_id,
+                user_roles.c.position_id == role_id,
                 User.organization_id == organization_id
             )
             .order_by(User.last_name, User.first_name)
@@ -425,7 +425,7 @@ class RoleManagementService:
         """Get all roles assigned to a user."""
         result = await db.execute(
             select(Role)
-            .join(user_roles, Role.id == user_roles.c.role_id)
+            .join(user_roles, Role.id == user_roles.c.position_id)
             .where(user_roles.c.user_id == str(user_id))
             .order_by(Role.priority.desc(), Role.name)
         )
@@ -454,7 +454,7 @@ class RoleManagementService:
             select(user_roles)
             .where(
                 user_roles.c.user_id == user_id,
-                user_roles.c.role_id == role_id
+                user_roles.c.position_id == role_id
             )
         )
         if result.first():
@@ -463,9 +463,8 @@ class RoleManagementService:
         # Insert assignment
         await db.execute(
             insert(user_roles).values(
-                id=str(uuid4()),
                 user_id=user_id,
-                role_id=role_id,
+                position_id=role_id,
                 assigned_by=assigned_by,
             )
         )
@@ -520,7 +519,7 @@ class RoleManagementService:
             delete(user_roles)
             .where(
                 user_roles.c.user_id == user_id,
-                user_roles.c.role_id == role_id
+                user_roles.c.position_id == role_id
             )
         )
         await db.commit()

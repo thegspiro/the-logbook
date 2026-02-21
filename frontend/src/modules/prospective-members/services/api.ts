@@ -525,6 +525,29 @@ export const applicantService = {
     await api.delete(`/prospective-members/prospects/${applicantId}`);
   },
 
+  async checkExisting(email: string, firstName?: string, lastName?: string): Promise<{ has_matches: boolean; match_count: number; matches: Array<Record<string, unknown>> }> {
+    const params: Record<string, string> = { email };
+    if (firstName) params.first_name = firstName;
+    if (lastName) params.last_name = lastName;
+    const response = await api.post('/prospective-members/prospects/check-existing', null, { params });
+    return response.data;
+  },
+
+  async getActivity(applicantId: string, limit?: number): Promise<Array<{ id: string; prospect_id: string; action: string; details: Record<string, unknown>; performed_by: string; performer_name: string; created_at: string }>> {
+    const params: Record<string, unknown> = {};
+    if (limit) params.limit = limit;
+    const response = await api.get(`/prospective-members/prospects/${applicantId}/activity`, { params });
+    return response.data;
+  },
+
+  async completeStep(applicantId: string, stepId: string, notes?: string): Promise<Applicant> {
+    const response = await api.post(
+      `/prospective-members/prospects/${applicantId}/complete-step`,
+      { step_id: stepId, notes }
+    );
+    return mapProspectToApplicant(response.data);
+  },
+
   async advanceStage(
     applicantId: string,
     data?: AdvanceStageRequest

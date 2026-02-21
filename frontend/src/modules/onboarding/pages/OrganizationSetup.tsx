@@ -6,7 +6,7 @@ import {
   MapPin,
   Phone,
   Mail,
-  Clock,
+
   FileText,
   ChevronDown,
   ChevronUp,
@@ -25,6 +25,7 @@ import {
   LoadingOverlay,
   ErrorAlert,
   BackButton,
+  ThemeToggle,
 } from '../components';
 import { HelpLink } from '../../../components/HelpLink';
 import { useOnboardingStore } from '../store';
@@ -62,9 +63,6 @@ interface OrganizationFormData {
   fdid: string;
   stateId: string;
   departmentId: string;
-  // Additional Info
-  county: string;
-  foundedYear: string;
   logo: string | null;
 }
 
@@ -159,8 +157,6 @@ const initialFormData: OrganizationFormData = {
   fdid: '',
   stateId: '',
   departmentId: '',
-  county: '',
-  foundedYear: '',
   logo: null,
 };
 
@@ -176,13 +172,14 @@ const SectionHeader: React.FC<{
   <button
     type="button"
     onClick={onToggle}
-    className="w-full flex items-center justify-between p-4 bg-theme-input-bg hover:bg-theme-input-bg rounded-lg transition-colors"
+    aria-expanded={expanded}
+    className="w-full flex items-center justify-between p-4 bg-theme-surface hover:bg-theme-surface-hover rounded-lg transition-colors"
   >
     <div className="flex items-center gap-3">
-      <span className="text-red-700 dark:text-red-400">{icon}</span>
+      <span className="text-theme-accent-red">{icon}</span>
       <span className="text-theme-text-primary font-semibold">{title}</span>
-      {required && !isComplete && <span className="text-red-700 dark:text-red-400 text-sm">*</span>}
-      {isComplete && <Check className="w-5 h-5 text-green-700 dark:text-green-400 ml-2" />}
+      {required && !isComplete && <span className="text-theme-accent-red text-sm">*</span>}
+      {isComplete && <Check aria-hidden="true" className="w-5 h-5 text-theme-accent-green ml-2" />}
     </div>
     {expanded ? (
       <ChevronUp className="w-5 h-5 text-theme-text-muted" />
@@ -219,8 +216,8 @@ const InputField: React.FC<{
   onBlur,
 }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-theme-text-primary mb-1">
-      {label} {required && <span className="text-red-700 dark:text-red-400">*</span>}
+    <label htmlFor={id} className="block text-sm font-medium text-theme-text-secondary mb-1">
+      {label} {required && <span className="text-theme-accent-red">*</span>}
     </label>
     <input
       type={type}
@@ -230,14 +227,14 @@ const InputField: React.FC<{
       onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`w-full px-3 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
-        error ? 'border-red-500' : 'border-theme-input-border'
+      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
+        error ? 'border-theme-accent-red' : 'border-theme-surface-border'
       }`}
       aria-required={required}
       aria-invalid={!!error}
     />
     {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
-    {error && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{error}</p>}
+    {error && <p className="mt-1 text-xs text-theme-accent-red">{error}</p>}
   </div>
 );
 
@@ -253,15 +250,15 @@ const SelectField: React.FC<{
   error?: string;
 }> = ({ label, id, value, onChange, options, required, helpText, error }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-theme-text-primary mb-1">
-      {label} {required && <span className="text-red-700 dark:text-red-400">*</span>}
+    <label htmlFor={id} className="block text-sm font-medium text-theme-text-secondary mb-1">
+      {label} {required && <span className="text-theme-accent-red">*</span>}
     </label>
     <select
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full px-3 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
-        error ? 'border-red-500' : 'border-theme-input-border'
+      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
+        error ? 'border-theme-accent-red' : 'border-theme-surface-border'
       }`}
       aria-required={required}
       aria-invalid={!!error}
@@ -273,7 +270,7 @@ const SelectField: React.FC<{
       ))}
     </select>
     {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
-    {error && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{error}</p>}
+    {error && <p className="mt-1 text-xs text-theme-accent-red">{error}</p>}
   </div>
 );
 
@@ -387,7 +384,7 @@ const OrganizationSetup: React.FC = () => {
     mailing: true,
     physical: false,
     identifiers: false,
-    additional: false,
+
     logo: true, // Logo is important and small, show by default
   });
 
@@ -660,8 +657,6 @@ const OrganizationSetup: React.FC = () => {
         fdid: formData.fdid || undefined,
         state_id: formData.stateId || undefined,
         department_id: formData.departmentId || undefined,
-        county: formData.county || undefined,
-        founded_year: formData.foundedYear ? parseInt(formData.foundedYear, 10) : undefined,
         logo: formData.logo || undefined,
       };
 
@@ -695,7 +690,8 @@ const OrganizationSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4 relative">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-3xl mx-auto">
         {/* Back Button */}
         <div className="mb-4">
@@ -705,7 +701,7 @@ const OrganizationSetup: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-            <Building2 className="w-8 h-8 text-theme-text-primary" />
+            <Building2 aria-hidden="true" className="w-8 h-8 text-white" />
           </div>
           <div className="flex items-center justify-center space-x-3 mb-3">
             <h1 className="text-3xl md:text-4xl font-bold text-theme-text-primary">
@@ -729,14 +725,14 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Basic Information"
-              icon={<Building2 className="w-5 h-5" />}
+              icon={<Building2 aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.basic}
               onToggle={() => toggleSection('basic')}
               required
               isComplete={isSectionComplete.basic}
             />
             {expandedSections.basic && (
-              <div className="p-4 space-y-4 bg-theme-input-bg">
+              <div className="p-4 space-y-4 bg-theme-surface-secondary">
                 <InputField
                   label="Organization Name"
                   id="org-name"
@@ -787,12 +783,12 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Contact Information"
-              icon={<Phone className="w-5 h-5" />}
+              icon={<Phone aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.contact}
               onToggle={() => toggleSection('contact')}
             />
             {expandedSections.contact && (
-              <div className="p-4 space-y-4 bg-theme-input-bg">
+              <div className="p-4 space-y-4 bg-theme-surface-secondary">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputField
                     label="Phone Number"
@@ -848,19 +844,19 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Mailing Address"
-              icon={<Mail className="w-5 h-5" />}
+              icon={<Mail aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.mailing}
               onToggle={() => toggleSection('mailing')}
               required
               isComplete={isSectionComplete.mailing}
             />
             {expandedSections.mailing && (
-              <div className="p-4 bg-theme-input-bg space-y-4">
+              <div className="p-4 bg-theme-surface-secondary space-y-4">
                 {/* Info banner explaining why mailing address is required */}
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-3">
                   <div className="flex items-start space-x-2">
-                    <AlertCircle className="w-4 h-4 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-blue-200">
+                    <AlertCircle aria-hidden="true" className="w-4 h-4 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-theme-alert-info-text">
                       <strong>Why is this required?</strong> Your mailing address is used for official correspondence,
                       certifications, and legal documentation. If your physical location differs (e.g., PO Box vs. station address),
                       you can specify that separately below.
@@ -882,20 +878,20 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Physical Address"
-              icon={<MapPin className="w-5 h-5" />}
+              icon={<MapPin aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.physical}
               onToggle={() => toggleSection('physical')}
             />
             {expandedSections.physical && (
-              <div className="p-4 space-y-4 bg-theme-input-bg">
+              <div className="p-4 space-y-4 bg-theme-surface-secondary">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.physicalAddressSame}
                     onChange={(e) => updateFormData('physicalAddressSame', e.target.checked)}
-                    className="w-5 h-5 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-red-500 focus:ring-offset-0"
+                    className="w-5 h-5 rounded border-theme-surface-border bg-theme-surface-secondary text-theme-accent-red focus:ring-theme-focus-ring focus:ring-offset-0"
                   />
-                  <span className="text-theme-text-primary">Same as mailing address</span>
+                  <span className="text-theme-text-secondary">Same as mailing address</span>
                 </label>
 
                 {!formData.physicalAddressSame && (
@@ -915,12 +911,12 @@ const OrganizationSetup: React.FC = () => {
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Department Identifiers"
-              icon={<FileText className="w-5 h-5" />}
+              icon={<FileText aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.identifiers}
               onToggle={() => toggleSection('identifiers')}
             />
             {expandedSections.identifiers && (
-              <div className="p-4 space-y-4 bg-theme-input-bg">
+              <div className="p-4 space-y-4 bg-theme-surface-secondary">
                 <p className="text-sm text-theme-text-muted mb-4">
                   Select the primary identifier your department uses for official reporting.
                 </p>
@@ -949,8 +945,8 @@ const OrganizationSetup: React.FC = () => {
                         key={option.value}
                         className={`flex flex-col p-4 rounded-lg border cursor-pointer transition-all ${
                           formData.identifierType === option.value
-                            ? 'border-red-500 bg-red-500/10'
-                            : 'border-theme-input-border hover:border-theme-input-border'
+                            ? 'border-theme-accent-red bg-theme-accent-orange-muted'
+                            : 'border-theme-surface-border hover:border-theme-surface-hover'
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -962,7 +958,7 @@ const OrganizationSetup: React.FC = () => {
                             onChange={(e) =>
                               updateFormData('identifierType', e.target.value as IdentifierType)
                             }
-                            className="text-red-700 dark:text-red-500 focus:ring-red-500"
+                            className="text-theme-accent-red focus:ring-theme-focus-ring"
                           />
                           <span className="text-theme-text-primary font-medium">{option.label}</span>
                         </div>
@@ -1018,49 +1014,16 @@ const OrganizationSetup: React.FC = () => {
             )}
           </div>
 
-          {/* Additional Information */}
-          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
-            <SectionHeader
-              title="Additional Information"
-              icon={<Clock className="w-5 h-5" />}
-              expanded={expandedSections.additional}
-              onToggle={() => toggleSection('additional')}
-            />
-            {expandedSections.additional && (
-              <div className="p-4 space-y-4 bg-theme-input-bg">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <InputField
-                    label="County/Jurisdiction"
-                    id="org-county"
-                    value={formData.county}
-                    onChange={(v) => updateFormData('county', v)}
-                    placeholder="e.g., Jefferson County"
-                    maxLength={100}
-                  />
-                  <InputField
-                    label="Year Founded"
-                    id="org-founded"
-                    value={formData.foundedYear}
-                    onChange={(v) => updateFormData('foundedYear', v.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="e.g., 1920"
-                    type="text"
-                    maxLength={4}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Logo Upload */}
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Organization Logo"
-              icon={<ImageIcon className="w-5 h-5" />}
+              icon={<ImageIcon aria-hidden="true" className="w-5 h-5" />}
               expanded={expandedSections.logo}
               onToggle={() => toggleSection('logo')}
             />
             {expandedSections.logo && (
-              <div className="p-4 bg-theme-input-bg">
+              <div className="p-4 bg-theme-surface-secondary">
                 <div className="relative">
                   <LoadingOverlay isVisible={isProcessingFile} message="Processing image..." />
 
@@ -1072,8 +1035,8 @@ const OrganizationSetup: React.FC = () => {
                       onDrop={handleDrop}
                       className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer ${
                         dragActive
-                          ? 'border-red-500 bg-red-500/10'
-                          : 'border-theme-input-border hover:border-red-500 hover:bg-theme-surface-secondary'
+                          ? 'border-theme-accent-red bg-theme-accent-orange-muted'
+                          : 'border-theme-surface-border hover:border-theme-accent-red hover:bg-theme-surface-hover'
                       }`}
                       onClick={() => fileInputRef.current?.click()}
                       role="button"
@@ -1095,7 +1058,7 @@ const OrganizationSetup: React.FC = () => {
                       />
                       <div className="flex flex-col items-center space-y-3">
                         <div className="w-16 h-16 bg-theme-surface rounded-full flex items-center justify-center">
-                          <Upload className="w-8 h-8 text-theme-text-muted" />
+                          <Upload aria-hidden="true" className="w-8 h-8 text-theme-text-muted" />
                         </div>
                         <div>
                           <p className="text-theme-text-primary font-medium mb-1">
@@ -1106,7 +1069,7 @@ const OrganizationSetup: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="border-2 border-theme-input-border rounded-lg p-6 bg-theme-input-bg">
+                    <div className="border-2 border-theme-surface-border rounded-lg p-6 bg-theme-surface-secondary">
                       <div className="flex items-start space-x-4">
                         <div className="flex-shrink-0 w-24 h-24 bg-white rounded-lg flex items-center justify-center overflow-hidden">
                           <img
@@ -1132,16 +1095,16 @@ const OrganizationSetup: React.FC = () => {
                                   fileInputRef.current.value = '';
                                 }
                               }}
-                              className="flex-shrink-0 ml-4 p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                              className="flex-shrink-0 ml-4 p-2 hover:bg-theme-accent-orange-muted rounded-lg transition-colors"
                               aria-label="Remove logo"
                             >
-                              <X className="w-5 h-5 text-red-700 dark:text-red-400" />
+                              <X aria-hidden="true" className="w-5 h-5 text-theme-accent-red" />
                             </button>
                           </div>
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="mt-3 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors"
+                            className="mt-3 text-sm text-theme-accent-red hover:text-theme-accent-red font-medium transition-colors"
                           >
                             Change logo
                           </button>
@@ -1151,7 +1114,7 @@ const OrganizationSetup: React.FC = () => {
                   )}
                 </div>
                 <p className="mt-2 text-xs text-theme-text-muted flex items-start">
-                  <ImageIcon className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
+                  <ImageIcon aria-hidden="true" className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
                   <span>
                     Your logo will be displayed in the header and on reports. You can change it
                     later in settings.
@@ -1173,12 +1136,12 @@ const OrganizationSetup: React.FC = () => {
 
           {/* Validation Errors Summary - Only show after first submit attempt */}
           {hasAttemptedSubmit && Object.keys(validationErrors).length > 0 && (
-            <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4">
+            <div className="bg-red-900/30 border border-theme-accent-red/50 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-accent-red flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-red-700 dark:text-red-400 font-medium">Please fix the following errors:</p>
-                  <ul className="mt-2 text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+                  <p className="text-theme-accent-red font-medium">Please fix the following errors:</p>
+                  <ul className="mt-2 text-sm text-theme-accent-red list-disc list-inside">
                     {Object.entries(validationErrors).map(([key, msg]) => (
                       <li key={key}>{msg}</li>
                     ))}
@@ -1189,14 +1152,14 @@ const OrganizationSetup: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-from via-theme-bg-from to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
+          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
             <button
               onClick={handleContinue}
               disabled={isSaving}
               className={`w-full px-6 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
-                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                  : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -1208,7 +1171,7 @@ const OrganizationSetup: React.FC = () => {
               ) : (
                 <span className="flex items-center justify-center gap-2">
                   Continue
-                  <Check className="w-5 h-5" />
+                  <Check aria-hidden="true" className="w-5 h-5" />
                 </span>
               )}
             </button>
@@ -1218,7 +1181,7 @@ const OrganizationSetup: React.FC = () => {
           <ProgressIndicator
             currentStep={1}
             totalSteps={10}
-            className="pt-4 border-t border-theme-surface-border"
+            className="pt-4 border-t border-theme-nav-border"
           />
         </div>
 
@@ -1228,7 +1191,7 @@ const OrganizationSetup: React.FC = () => {
             Need help?{' '}
             <a
               href="/docs"
-              className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
+              className="text-theme-accent-red hover:text-theme-accent-red underline"
               target="_blank"
               rel="noopener noreferrer"
             >

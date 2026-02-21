@@ -7,6 +7,415 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dependency Updates & Hardcoded Value Elimination (2026-02-20)
+
+#### Dependency Version Bumps (minor/patch only)
+
+Safe, non-breaking upgrades to current stable versions.
+
+**Backend (requirements.txt):**
+- fastapi 0.115.6 → 0.129.0
+- uvicorn 0.34.0 → 0.41.0
+- pydantic 2.10.5 → 2.12.5
+- pydantic-settings 2.7.1 → 2.13.1
+- sqlalchemy 2.0.36 → 2.0.46
+- alembic 1.14.0 → 1.18.4
+- greenlet 3.1.1 → 3.3.1
+- PyJWT 2.10.1 → 2.11.0
+- jinja2 3.1.5 → 3.1.6
+- sentry-sdk 2.20.0 → 2.53.0
+- celery 5.4.0 → 5.6.2
+- mypy 1.14.0 → 1.19.1
+
+**Frontend (package.json):**
+- lucide-react ^0.469.0 → ^0.575.0
+- @vitejs/plugin-react ^4.3.4 → ^5.1.4 (Vite 7 alignment)
+- typescript ^5.7.3 → ^5.9.3
+
+**Intentionally skipped** (need dedicated migration effort):
+React 19, React Router 7, ESLint 10, Tailwind 4, Zod 4, redis 7, bcrypt 5,
+cryptography 46, Pillow 12, pytest 9, pytest-asyncio 1.3, black 26.
+
+#### Centralized Constants — Eliminate Hardcoded Strings
+
+Created single-source-of-truth constant files to replace ~110 hardcoded string
+literals scattered across 43 files.
+
+**New files:**
+- `backend/app/core/constants.py` — centralized role group slugs, folder slugs,
+  analytics event types, audit event types
+- `frontend/src/constants/enums.ts` — 15 TypeScript const objects mirroring all
+  backend Python enums (UserStatus, ElectionStatus, RSVPStatus, EventType,
+  FormStatus, FieldType, TrainingStatus, VoteType, ConnectionStatus,
+  FeatureStatus, HealthStatus, MembershipType, StageType, ApplicantStatus,
+  CheckInWindowType)
+
+**Backend changes (20 files):**
+- Replaced scattered `["admin", "quartermaster", "chief"]` arrays (appeared in
+  4 files) with `ADMIN_NOTIFY_ROLE_SLUGS` constant
+- Replaced `["chief", "president", "vice_president", "secretary"]` (2 files)
+  with `LEADERSHIP_ROLE_SLUGS`
+- Replaced operational/administrative role arrays with `OPERATIONAL_ROLE_SLUGS`
+  and `ADMINISTRATIVE_ROLE_SLUGS`
+- Replaced ~50 string literal comparisons with Python enum members
+  (e.g. `"completed"` → `TrainingStatus.COMPLETED.value`,
+  `"going"` → `RSVPStatus.GOING`, `"section_header"` → `FieldType.SECTION_HEADER.value`)
+- Replaced hardcoded folder slugs (`"facilities"`, `"events"`) with
+  `FOLDER_FACILITIES`, `FOLDER_EVENTS`
+- Replaced hardcoded analytics/audit event types with named constants
+
+**Frontend changes (17 files):**
+- Replaced ~60 string literal comparisons with constant references
+  (e.g. `'active'` → `UserStatus.ACTIVE`, `'closed'` → `ElectionStatus.CLOSED`,
+  `'approval'` → `VoteType.APPROVAL`, `'section_header'` → `FieldType.SECTION_HEADER`)
+
+#### CSS Variable Cleanup — Eliminate Hardcoded Colors
+
+**New CSS variables** (light + dark mode):
+- `--toast-success`, `--toast-error`, `--toast-icon-secondary`
+- `--toast-warning-bg`, `--toast-warning-text`
+- `--status-passed`, `--status-failed`, `--status-pending`
+
+**Components updated:**
+- `App.tsx` — toast icon colors now use CSS variables
+- `useIdleTimer.ts` — idle warning toast now uses CSS variables
+- `tailwind.config.js` — new variables registered as theme colors
+
+### Security & Stability Audit (2026-02-20)
+
+Full codebase audit of all changes from 2026-02-19/20 identified and fixed 63 issues
+across security, data integrity, accessibility, and reliability.
+
+#### Critical Fixes — Security
+- **Training records authorization**: `POST /records` and `PATCH /records/{id}` now require `training.manage` permission. Previously any authenticated user could fabricate training records for any member.
+- **IDOR in scheduling requests**: Cancel button on swap/time-off requests now checks `req.user_id === currentUser.id`. Previously any member could cancel any other member's pending requests.
+- **Permission enumeration**: `GET /permissions` and `GET /permissions/by-category` now require authentication. Previously exposed all permission names to anonymous users.
+- **Mass-assignment prevention**: `PATCH /users/{id}/profile` now uses an explicit allowlist of safe fields instead of blind `setattr()` loop. Prevents potential overwrite of `password_hash`, `organization_id`, or `deleted_at`.
+
+#### Critical Fixes — Data Integrity
+- **Dashboard admin summary auth bypass**: Replaced raw `axios.get()` with authenticated `api` instance. Admin summary was always failing silently because the auth token was never sent.
+- **Multi-tenant data leak in dashboard**: Minutes action items queries now filter by `organization_id` via `MeetingMinutes` join. Previously counted action items across all organizations.
+- **Onboarding reset wrong table**: Changed `DELETE FROM user_roles` to `DELETE FROM user_positions` (the actual physical table name). Reset was silently failing, leaving stale junction rows.
+- **str vs UUID comparison always False**: `remove_role_from_user` now uses `str(role.id) == str(role_id)`. Previously the endpoint always returned 404.
+- **str vs UUID comparison always True**: `update_contact_info` self-check now uses `str(current_user.id) == str(user_id)`. Previously regular users could never update their own contact info.
+
+#### Critical Fixes — MissingGreenlet / Async ORM
+- **Training dashboard officer detection**: Replaced `current_user.roles` lazy access with eagerly-loaded `selectinload(User.roles)` query. Officers were silently treated as regular members; role-scoped requirements were never matched.
+- **Welcome emails**: Captured `new_user.email`, `first_name`, `last_name`, `username` into local variables before commit. Background task was accessing expired ORM attributes.
+- **Event cancellation notifications**: Captured `event.rsvps` into local list before `db.commit()`. Attendees were never notified of cancellations.
+- **Training session finalization**: Captured `event.title`, `event.start_datetime`, `training_session.course_name` before commit and updated `_notify_training_officers` to accept scalar values instead of ORM objects.
+- **Audit logging after commits**: Captured `role.name`, `user.username`, `user.full_name`, `member.full_name`, `program.name` before `db.commit()` across `add_role_to_user`, `delete_user`, and `enroll_member` endpoints.
+- **Rank permission check**: Replaced lazy `current_user.roles` access with eagerly-loaded query in `update_user_profile`.
+
+#### High — Reliability Fixes
+- **Historical import savepoints**: Wrapped individual row `db.add()` in `async with db.begin_nested()` (savepoint). Previously one failed row poisoned the entire session.
+- **hours_completed sum None guard**: Added `or 0` to all `sum(r.hours_completed ...)` generators in `training_service.py`. Previously crashed with `TypeError` when any record had `NULL` hours.
+- **Biannual cert matching**: Added fallback `course_name.ilike()` filter when `training_type` is None. Previously any unrelated cert could falsely satisfy a requirement.
+- **SubmitTrainingPage error state**: Added `loadError` state so the page shows a "Try Again" button instead of an eternal loading spinner when config API fails.
+- **MemberProfilePage null guards**: Added `?.` and `?? []` guards on `response.enabled_modules` and `response.permanent_assignments` to prevent crashes when API returns unexpected shape.
+
+#### Infrastructure
+- **Nginx CSP header**: Added `Content-Security-Policy` header with restrictive defaults (`default-src 'self'`, `frame-ancestors 'none'`).
+- **Nginx header inheritance**: Re-added security headers in `/api` and `/docs` location blocks (nginx doesn't inherit `add_header` from parent).
+- **Migration MySQL compatibility**: Wrapped `DROP TYPE IF EXISTS` statements in try/except for MySQL compatibility in departure clearance and inventory notification migrations.
+
+#### Accessibility (WCAG 2.1)
+- **ShiftDetailPanel**: Added Escape key listener to close the panel.
+- **MyTrainingPage**: Added `aria-expanded` to section toggle buttons.
+- **ModuleSelection**: Added `role="button"`, `tabIndex={0}`, and keyboard handlers to module cards.
+- **OrganizationSetup**: Added `aria-expanded` to SectionHeader buttons.
+
+#### Theme / Dark Mode
+- **MemberProfilePage**: Replaced light-mode-only badge colors (`bg-green-100 text-green-800`, `bg-red-50 text-red-700`) with dark-compatible variants (`bg-green-500/10 text-green-400`, `bg-red-500/10 text-red-400`).
+- **MembersAdminPage**: Fixed role badges and error banners using light-mode-only colors.
+
+### UI Improvements (2026-02-20)
+
+#### Login Page
+- **Larger logo**: Increased logo container from 96px to 144px tall (50% larger) for better visibility on the login page. Fallback icon scaled proportionally.
+
+#### Member Deletion
+- **New `DELETE /users/{user_id}` endpoint**: Soft-deletes a member by setting `deleted_at` timestamp. Requires `members.manage` permission. Prevents self-deletion. Audit-logged.
+- **Delete button on Members page**: The existing trash can icon buttons (mobile and desktop) are now wired to the new delete endpoint with a confirmation prompt. Hidden for the current user's own row.
+- **Delete button on Members Admin page**: Text "Delete" action button added alongside "Edit Info" and "Manage Roles".
+- **Frontend service method**: Added `userService.deleteUser()` for the new endpoint.
+
+### Fixed - Runtime Error Guards (2026-02-20)
+
+#### Comprehensive Frontend Audit
+Full audit of all frontend pages, components, hooks, stores, and services identified and fixed potential JavaScript runtime crashes from unguarded property access on API response data.
+
+#### Pages Fixed
+- **ImportMembers.tsx**: `rows[0].map()` now guards against empty CSV file uploads — previously crashed with "Cannot read property 'map' of undefined"
+- **SchedulingPage.tsx**: `template.start_time_of_day` now checks template exists before access — previously crashed when no shift templates were configured
+- **TrainingApprovalPage.tsx**: `data.attendees.map()` now falls back to empty array — previously crashed if API returned missing attendees
+- **AnalyticsDashboardPage.tsx**: `metrics.deviceBreakdown`, `.hourlyActivity`, and `.checkInTrends` now use `|| {}` / `|| []` fallbacks — previously crashed if API returned partial metrics data
+- **ElectionDetailPage.tsx**: `forensicsReport.anomaly_detection`, `.voting_timeline`, and `.audit_log` nested access now guarded with null checks — previously crashed if forensics report had missing sections
+- **DocumentsPage.tsx**: `d.name.toLowerCase()` now checks `d.name` exists — previously crashed on documents with null name field
+
+#### Components Fixed
+- **ElectionResults.tsx**: `positionResult.candidates.map()` now uses `|| []` fallback — previously crashed if candidates array was missing from API response
+
+#### Stores Fixed
+- **prospectiveMembersStore.ts**: `pipeline.stages.find()` now uses `|| []` fallback — previously crashed if pipeline had no stages array
+
+#### Member Profile Crash Fix
+- **MemberProfilePage.tsx**: Fixed crash caused by `user.first_name[0]` when `first_name` was null/empty — added optional chaining and fallback to username initial
+- **Nginx proxy buffer warning**: Increased `proxy_buffer_size` to 8k for `/api/v1/branding` to eliminate upstream response header warnings
+
+### Fixed - Data Integrity & Backend Errors (2026-02-20)
+
+#### Unique Badge Number Enforcement
+- **Database constraint**: Added unique badge number per organization (`idx_user_org_badge_number`). Previously duplicate badge numbers could be silently created.
+- **API validation**: Member creation endpoint now returns 409 Conflict for duplicate badge numbers with a clear error message.
+
+#### Training Session Creation
+- **Fixed broken training session creation**: The `POST /api/v1/training/sessions` endpoint was failing due to missing foreign key cascade on `training_attendees.session_id`
+- **Removed dead nav link**: The "Certifications" link in navigation pointed to a non-existent route
+- **Fixed TypeScript errors**: Resolved build errors in `CreateTrainingSessionPage.tsx`
+
+#### Role/Position Endpoint Crash
+- **Fixed `GET /api/v1/roles` crash**: `AttributeError: role_id` caused by incorrect column reference in the roles query
+
+#### Data Connection Fixes
+- **Locations**: Location dropdown in member creation now properly loads and saves location assignments
+- **Roles**: Role assignment during member creation now correctly maps role IDs
+- **Member creation**: Fixed field mapping mismatches between frontend form and backend API
+
+#### Dashboard Zero-Member Fix
+- **Fixed dashboard showing 0 members**: Admin summary queries were joining across organizations, causing count mismatches. Isolated queries to current organization.
+
+#### Login & Authentication Fixes
+- **Fixed login 500 error**: Added `User.roles` as synonym for `positions` relationship after taxonomy refactor, preventing `AttributeError` on login
+- **Fixed 401 on organization save**: Stale session after database reset caused authentication failures
+
+### Fixed - Scheduling Module (2026-02-20)
+
+#### Shift Template Improvements
+- **Auto-generated shift labels**: Shift names are now auto-generated from apparatus + shift type (e.g., "Engine 1 — Day Shift") instead of requiring manual entry
+- **Day/Night/24hr defaults**: Default shift templates updated to Day Shift (07:00–19:00), Night Shift (19:00–07:00), and 24-Hour Shift (07:00–07:00)
+- **Auto-computed end dates**: End date automatically calculates based on shift times (next day for overnight shifts)
+- **Removed rank-based positions**: Captain/Lieutenant removed from shift position options since they are ranks, not staffing seats
+
+#### Member Form & Location Fixes
+- **Fixed member form dropdowns**: Status, rank, and membership type dropdowns now populate correctly
+- **Fixed location wizard auto-fill**: Address fields in the location creation wizard now auto-populate when editing
+
+### Added - Expanded Scheduling & Events (2026-02-20)
+
+#### Event System Enhancement
+- **Resource types**: Events can now specify required resources (apparatus, equipment, facilities)
+- **Pre-built templates**: Added event templates for common event types (training, meetings, drills, community events)
+
+#### Shift Templates & Positions
+- **Configurable shift templates**: New settings tab for managing shift templates with custom positions per template
+- **Vehicle-type staffing defaults**: Templates auto-populate position requirements based on apparatus type (engine, ladder, ambulance, etc.)
+- **Template categories**: Shift templates organized by category for easier management
+
+### Improved - Mobile & Accessibility (2026-02-20)
+
+#### Mobile Optimization
+- **Responsive table views**: Major pages optimized for mobile and tablet with card-based layouts on small screens
+- **Scheduling module UX**: Calendar views, shift forms, and assignment panels redesigned for touch-friendly mobile use
+- **Rendering performance**: Reduced unnecessary re-renders in scheduling components
+
+#### Onboarding Accessibility
+- **Section 508 compliance**: Improved across all onboarding pages (ARIA labels, keyboard navigation, focus management, screen reader support)
+- **Dark mode toggle**: Enabled on all onboarding pages
+- **Progress indicator width**: Fixed inconsistent width across onboarding steps
+- **Color contrast fixes**: Amber/yellow info boxes and labels updated for light background readability
+- **Alert colors**: Refactored to use CSS theme system instead of hardcoded Tailwind classes
+
+### Added - Taxonomy Refactor (2026-02-20)
+
+#### Role → Position Rename
+- **Renamed `roles` to `positions`** throughout the system with backward-compatible `roles` synonym on the User model
+- **Operational ranks**: Added Fire Chief, Assistant Chief, Deputy Chief, Battalion Chief, Captain, Lieutenant, Engineer/Driver, Firefighter
+- **Membership types**: Added member, associate, honorary, life, probationary, retired, social, volunteer, prospect
+- **Prospect model**: New model for prospective member tracking
+- **Position templates**: Added Administrative Member, Regular Member, and expanded onboarding position list
+
+### Infrastructure & DevOps (2026-02-20)
+
+#### Database Reliability
+- **MySQL advisory lock**: Serializes Alembic migrations across multiple workers to prevent race conditions
+- **Race condition fix**: Fast-path DB init no longer fails when multiple workers start simultaneously
+- **Migration chain fixes**: Corrected broken Alembic `down_revision` references that caused "multiple heads" errors
+
+#### Docker & Deployment
+- **Unraid compose fixes**: Removed hardcoded subnet to avoid network conflicts; fixed build context paths to match installation docs
+- **MinIO env vars**: Fixed MinIO environment variables breaking `docker compose` for users with simple `.env` files
+- **`.env.example` documentation**: Documented differences between `.env.example` (minimal) and `.env.example.full` (all options)
+
+#### Build Fixes
+- **LocationsPage**: Fixed stray closing `</div>` tag that broke the production build
+- **Login page inputs**: Fixed white-on-white text in input fields
+- **Select dropdowns**: Fixed unreadable white-on-white text in native `<select>` elements
+
+### Added - Pool Item Issuance for Inventory (2026-02-19)
+
+#### Two Tracking Modes
+- **New `tracking_type` field on inventory items**: Items can now be `"individual"` (serial-numbered, assigned 1:1 to a member — existing behavior) or `"pool"` (quantity-tracked, units issued/returned from a shared pool)
+- **New `quantity_issued` field**: Tracks how many units from a pool item are currently issued to members, separate from the on-hand `quantity`
+
+#### Pool Issuance Model & Endpoints
+- **New `item_issuances` table**: Tracks who received units from a pool item, when, how many, and whether they've been returned — parallel to `item_assignments` for individual items
+- **`POST /api/v1/inventory/items/{item_id}/issue`**: Issue units from a pool item to a member; decrements on-hand quantity, creates an issuance record
+- **`POST /api/v1/inventory/issuances/{issuance_id}/return`**: Return issued units; increments on-hand quantity, supports partial returns
+- **`GET /api/v1/inventory/items/{item_id}/issuances`**: List who currently has units from a pool item (or full history with `?active_only=false`)
+- **`GET /api/v1/inventory/users/{user_id}/issuances`**: List all pool items issued to a specific member
+
+#### User Dashboard Integration
+- The user inventory endpoint (`GET /api/v1/inventory/users/{user_id}/inventory`) now includes an `issued_items` array alongside existing `permanent_assignments` and `active_checkouts`
+
+#### Frontend API Support
+- Added `inventoryService.issueFromPool()`, `.returnToPool()`, `.getItemIssuances()`, `.getUserIssuances()` methods
+- Added `ItemIssuance`, `UserIssuedItem` TypeScript interfaces
+- Updated `InventoryItem` and `InventoryItemCreate` interfaces with `tracking_type` and `quantity_issued` fields
+
+### Security Hardening (2026-02-18)
+
+#### Path Traversal Fix in Event Attachments (Critical)
+- **Fixed path traversal vulnerability** in `GET /api/v1/events/{id}/attachments/{id}/download`: file paths from the database are now resolved with `os.path.realpath()` and validated against the expected `ATTACHMENT_UPLOAD_DIR` before serving via `FileResponse` — prevents arbitrary file access if database data is ever compromised
+
+#### External Training Provider Credential Encryption (High)
+- **API keys and secrets now encrypted at rest** using AES-256 (Fernet) for external training providers (Vector Solutions, Target Solutions, Lexipol, etc.)
+- Credentials are encrypted on create (`POST /api/v1/external-training/providers`) and update (`PATCH /api/v1/external-training/providers/{id}`) before storage
+- Credentials are decrypted transparently when building API request headers in `ExternalTrainingSyncService`
+- Backward-compatible: if decryption fails (pre-existing plaintext values), the service falls back to using the raw value
+
+#### Document Upload MIME Validation (High)
+- **Added magic-byte MIME type validation** for document uploads (`POST /api/v1/documents/upload`) using `python-magic` to detect the true file type from content bytes, rather than trusting the HTTP `Content-Type` header
+- Allowed types: PDF, Word, Excel, PowerPoint, text, CSV, images (JPEG/PNG/GIF/WebP), and ZIP archives
+- The stored `file_type` in the database now reflects the detected MIME type instead of the client-supplied header
+
+#### MinIO Default Credentials Removed (Medium)
+- **Removed insecure default credentials** for MinIO in `docker-compose.yml` — `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` now require explicit configuration via `.env` (will error on startup if not set)
+
+### Added - Location Kiosk Display for Tablets (2026-02-18)
+
+#### Public Kiosk Display System
+- **New page: Location Kiosk Display (`/display/:code`)**: Public, unauthenticated page designed for tablets left in rooms. Automatically shows the current event's QR code for member check-in and cycles to the next event when it starts.
+- **Display codes**: Each location gets a unique, non-guessable 8-character display code (alphanumeric, ambiguous chars removed). Codes are auto-generated on location creation and backfilled for existing locations.
+- **Auto-refresh**: Kiosk page polls the backend every 30 seconds for event updates. Shows connection status indicator and live clock.
+- **Multi-event support**: When multiple events overlap in the same room, the display auto-rotates between them every 10 seconds with dot indicators.
+- **Idle state**: When no events are active, shows a clean "No Active Events" screen with messaging that QR codes will appear automatically.
+- **New public API endpoint**: `GET /api/public/v1/display/{code}` — returns location name and current events with QR check-in data. No authentication required. Only exposes non-sensitive data (event name, type, time — no descriptions or member data).
+- **Kiosk URL on Locations page**: Each room card now shows its kiosk display URL (`/display/{code}`) with one-click copy to clipboard.
+
+#### Security Model
+- The display page is intentionally public — it shows the same information you'd see on a printed flyer taped to a door (event name, room, time, QR code).
+- Authentication happens on the **scanning member's device** when they check in via `POST /events/{id}/self-check-in`.
+- Display codes use `secrets.choice()` for cryptographic randomness. The 8-character code space (32^8 = ~1.1 trillion combinations) makes brute-force enumeration impractical.
+
+### Added - Unified Location Architecture (2026-02-18)
+
+#### Location ↔ Facility Bridge
+- **`facility_id` FK on Location model**: When the Facilities module is enabled, each Location record can optionally reference a Facility for deep building management data (maintenance, inspections, utilities, etc.). The `locations` table becomes the universal "place picker" for all modules regardless of which module is active.
+- **Locations as single source of truth**: Events, Training, and Meetings all reference `locations.id` — turning Facilities on or off doesn't break any location references.
+
+#### Training Location Integration
+- **`location_id` FK on TrainingRecord model**: Training records can now reference wizard-created locations instead of relying on free-text strings. The existing `location` text field is preserved as a fallback for "Other Location" entries.
+- **Location dropdown on Create Training Session page**: Replaces the free-text location input with a proper dropdown that loads from `locationsService.getLocations()`, matching the pattern used by EventForm. Includes "Other (off-site / enter manually)" option for non-standard venues.
+- **Selected location details**: When a location is selected, shows address, building, floor, and capacity information below the dropdown.
+- **Review step updated**: The training session review step now shows the selected location name from the dropdown instead of raw text.
+
+#### Location Setup Wizard Enhancement
+- **Address fields in list endpoint**: The `GET /locations` API now returns `address`, `city`, `state`, `zip`, and `facility_id` in the list response, enabling richer display in dropdowns and cards.
+
+### Fixed - Training Admin Dashboard Disconnect (2026-02-18)
+
+#### Compliance Matrix Rewrite
+- **Root cause**: The compliance matrix endpoint used broken matching logic — it tried to match training records to requirements by `course_id` (which doesn't exist on requirements) or exact `course_name == requirement.name` (which never matches for hours-based requirements like "Annual Training Requirement")
+- **Requirement-type-aware matching**: The compliance matrix now evaluates each member × requirement using the correct strategy per requirement type:
+  - **HOURS**: Sums completed training hours matching `training_type` within the frequency date window, compares to `required_hours`
+  - **COURSES**: Checks if all required `course_id`s have completed records
+  - **CERTIFICATION**: Matches by `training_type`, name substring, or certification number
+  - **SHIFTS/CALLS**: Counts matching records within the date window
+  - **Others**: Falls back to `training_type` or name-based matching
+- **Frequency-aware date windows**: All compliance evaluations now use proper date windows (annual, biannual, quarterly, monthly, one-time) instead of ignoring the requirement's frequency
+- **Active-only filtering**: The compliance matrix now only shows active requirements (previously showed all, including inactive ones)
+
+#### Competency Matrix (Heat Map) Fix
+- **Same fixes applied**: The competency matrix service (`CompetencyMatrixService`) now uses the same frequency-aware, type-aware evaluation logic
+- **Hours requirements properly evaluated**: Previously just checked for any matching record; now sums hours and compares to `required_hours`
+
+#### Training Service Consistency
+- **`check_requirement_progress()` fixed**: Now uses proper frequency-aware date windows for biannual, quarterly, monthly, and one-time requirements (previously fell back to `start_date`/`due_date` which may not be set)
+
+#### Officer Dashboard Compliance
+- **Improved compliance calculation**: The Training Officer Dashboard now calculates member compliance based on actual requirement completion (hours against requirements) rather than only checking for expired certifications
+
+### Fixed - My Training Page & Build Errors (2026-02-18)
+
+#### My Training Page Cleanup
+- **Removed "Average Rating" stat card**: The Avg Rating box on the My Training overview was not useful for members and has been removed
+- **Removed "Shifts" stat card**: The Shifts count (shift completion reports) was not relevant to the My Training overview and has been removed
+- **Renamed "Annual Requirements" to "Requirements"**: Label is now generic since the system supports all requirement frequencies
+
+#### Requirements Compliance Fix
+- **Fixed requirements showing N/A**: The My Training requirements compliance calculation was filtering to annual-frequency requirements only. Biannual, quarterly, monthly, and one-time requirements were excluded, causing the stat to show "N/A" when only non-annual requirements existed
+- **All frequencies now included**: The backend requirements query now includes all active requirements with frequency-appropriate evaluation windows (annual=calendar year, biannual=2-year window, quarterly=current quarter, monthly=current month, one-time=all-time)
+
+#### Rank Permission Restriction
+- **Rank changes restricted**: Member rank can now only be changed by users with `members.manage` permission (Chief, membership coordinator) or admin wildcard. Regular members can no longer change their own rank through profile editing
+- **Added `rank` field to User type**: The frontend `User` interface was missing the `rank` field, causing TypeScript build errors in `CreateTrainingSessionPage.tsx`
+
+#### Additional Build Fixes
+- **Missing `BookOpen` import**: Added missing `BookOpen` lucide-react icon import in `MinutesPage.tsx` that caused TypeScript build failure
+
+### Fixed - TypeScript Build Errors (2026-02-18)
+
+#### API Service Layer Completeness
+- **Missing scheduling methods**: Added 30+ methods to `schedulingService` including shift calls (CRUD), shift assignments (CRUD + confirm), swap requests (CRUD + review), time-off requests (CRUD + review), shift attendance (get/update/delete), templates (CRUD), patterns (CRUD + generate), and reports (member hours, coverage, call volume, availability)
+- **Missing event settings methods**: Added `getModuleSettings()` and `updateModuleSettings()` to `eventService` for the Events Settings page
+- **Missing OAuth methods**: Added `getGoogleOAuthUrl()` and `getMicrosoftOAuthUrl()` to `authService` for SSO login flows
+- **Missing organization method**: Added `previewNextMembershipId()` to `organizationService` for membership ID preview during member creation
+- **Missing role method**: Added `getUserPermissions()` to `roleService` for the User Permissions page
+- **Missing training approval methods**: Added `getApprovalData()` and `submitApproval()` to `trainingSessionService`
+- **Missing member creation field**: Added `membership_id` to `createMember` type parameter
+- **New service exports**: Added `memberStatusService` (archived members, property returns, tier management), `prospectiveMemberService` (pipelines, prospects, election packages), and `scheduledTasksService` (list/run background tasks) with `ScheduledTask` type
+
+#### Type Definitions
+- **Missing user types**: Added `ArchivedMember`, `OverdueMember`, `MembershipTier`, `MembershipTierBenefits`, `MembershipTierConfig`, `PropertyReturnReport` to `types/user.ts`
+- **Missing user field**: Added `membership_number` to `User` interface for member list display
+
+### Fixed - CSS Accessibility & Theme Consistency (2026-02-17)
+
+#### Onboarding Module Theme Migration
+- **23 onboarding files refactored**: Converted all hardcoded Tailwind color classes to CSS theme variables across the entire onboarding module
+- **Converted patterns**: `bg-slate-900` → `bg-theme-bg-from`, `text-white` → `text-theme-text-primary`, `bg-white/10` → `bg-theme-surface`, `border-white/20` → `border-theme-surface-border`, `text-slate-300` → `text-theme-text-secondary`, `text-slate-400` → `text-theme-text-muted`, `bg-slate-800/50` → `bg-theme-surface-secondary`, input styling standardized to `bg-theme-input-bg border-theme-input-border`
+- **Preserved semantic colors**: All accent/status colors (red, green, blue, purple, amber, etc.) for buttons, badges, alerts, and interactive states left intentionally unchanged
+
+### Added - New Application Pages (2026-02-17)
+
+#### Scheduling Module
+- **ShiftCallsPanel**: Component for managing calls attached to shifts with create/update/delete
+- **ShiftAssignmentsPage**: Full shift assignment management with swap requests and time-off handling
+- **ShiftAttendancePage**: Shift attendance tracking with bulk update support
+- **ShiftTemplatesPage**: Shift template and pattern management with auto-generation from patterns
+- **SchedulingReportsPage**: Scheduling reports including member hours, coverage, call volume, and availability
+
+#### Member & Admin Pages
+- **MemberLifecyclePage**: Archived member management, overdue property returns, membership tier configuration, and property return report previews
+- **EventsSettingsPage**: Event module configuration (event types, defaults, QR codes, cancellation policies)
+- **UserPermissionsPage**: Individual user permission and role assignment viewer
+- **TrainingApprovalPage**: Token-based training session approval workflow
+- **ScheduledTasksPage**: View and manually trigger scheduled background tasks
+- **ProspectiveMembersPage** (standalone): Pipeline management, prospect creation, election packages
+
+### Changed - Navigation & Structure (2026-02-17)
+- **Module restructuring**: Admin hubs with clean member/admin navigation separation
+- **User profile editing**: Self-service and admin profile editing capabilities
+- **Training navigation**: Training sub-items added to sidebar and top navigation; `/training` routes to `MyTrainingPage`
+- **Pipeline settings nav**: Added Pipeline Settings entry for prospective members
+- **Full nav coverage**: All missing pages added to navigation menus
+- **Membership ID settings**: Added Membership ID Number settings to Organization Settings
+- **Department timezone**: All date/time displays now use department's local timezone instead of UTC
+- **Dashboard training hours**: Fixed Dashboard showing 0 training hours despite completed courses
+- **Role assignment fix**: Fixed role assignment permissions for Officers and Vice President roles
+- **Training pipeline fix**: Fixed save error, added knowledge tests and milestone reorder
+
 ### Added - System-Wide Theme Support (2026-02-15)
 
 #### Theme System

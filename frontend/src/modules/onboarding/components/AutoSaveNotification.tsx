@@ -42,9 +42,9 @@ export const AutoSaveNotification: React.FC<AutoSaveNotificationProps> = ({
   return (
     <div className={`flex items-center gap-2 text-sm text-theme-text-muted ${className}`}>
       <div className="flex items-center gap-1.5">
-        <Cloud className="w-4 h-4 text-green-700 dark:text-green-400" />
+        <Cloud className="w-4 h-4 text-green-400" />
         <span className="text-theme-text-secondary">
-          <CheckCircle className="w-3 h-3 inline mr-1 text-green-700 dark:text-green-400" />
+          <CheckCircle className="w-3 h-3 inline mr-1 text-green-400" />
           Settings saved after each step
         </span>
       </div>

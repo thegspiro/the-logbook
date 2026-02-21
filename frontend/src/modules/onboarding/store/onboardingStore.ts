@@ -10,6 +10,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { FeatureStatus } from '../../../constants/enums';
 
 export interface OnboardingError {
   timestamp: string;
@@ -50,8 +51,8 @@ export interface OnboardingState {
   backupPhone: string;
   secondaryAdminEmail: string;
 
-  // Role Configuration
-  rolesConfig: Record<string, {
+  // Position Configuration
+  positionsConfig: Record<string, {
     id: string;
     name: string;
     description: string;
@@ -65,7 +66,7 @@ export interface OnboardingState {
   selectedModules: string[];
   moduleStatuses: Record<string, 'enabled' | 'skipped' | 'ignored'>;
 
-  // Module Permission Configs (which roles can manage each module)
+  // Module Permission Configs (which positions can manage each module)
   modulePermissionConfigs: Record<string, string[]>;
 
   // Session
@@ -108,15 +109,17 @@ export interface OnboardingActions {
   setBackupPhone: (phone: string) => void;
   setSecondaryAdminEmail: (email: string) => void;
 
-  // Role Actions
-  setRolesConfig: (roles: OnboardingState['rolesConfig']) => void;
+  // Position Actions
+  setPositionsConfig: (positions: OnboardingState['positionsConfig']) => void;
+  /** @deprecated Use setPositionsConfig */
+  setRolesConfig: (positions: OnboardingState['positionsConfig']) => void;
 
   // Module Actions
   setSelectedModules: (modules: string[]) => void;
   toggleModule: (moduleId: string) => void;
   setModuleStatus: (moduleId: string, status: 'enabled' | 'skipped' | 'ignored') => void;
   setModuleStatuses: (statuses: Record<string, 'enabled' | 'skipped' | 'ignored'>) => void;
-  setModulePermissionConfig: (moduleId: string, manageRoles: string[]) => void;
+  setModulePermissionConfig: (moduleId: string, managePositions: string[]) => void;
 
   // Session Actions
   setSessionId: (id: string) => void;
@@ -152,7 +155,7 @@ const initialState: OnboardingState = {
   backupEmail: '',
   backupPhone: '',
   secondaryAdminEmail: '',
-  rolesConfig: null,
+  positionsConfig: null,
   selectedModules: [],
   moduleStatuses: {},
   modulePermissionConfigs: {},
@@ -261,9 +264,15 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         get().triggerAutoSave();
       },
 
-      // Role Actions
-      setRolesConfig: (roles) => {
-        set({ rolesConfig: roles });
+      // Position Actions
+      setPositionsConfig: (positions) => {
+        set({ positionsConfig: positions });
+        get().triggerAutoSave();
+      },
+
+      // Backward-compatible alias
+      setRolesConfig: (positions) => {
+        set({ positionsConfig: positions });
         get().triggerAutoSave();
       },
 
@@ -289,9 +298,9 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
 
         // Update selectedModules based on status
         let newSelectedModules = [...selectedModules];
-        if (status === 'enabled' && !newSelectedModules.includes(moduleId)) {
+        if (status === FeatureStatus.ENABLED && !newSelectedModules.includes(moduleId)) {
           newSelectedModules.push(moduleId);
-        } else if (status !== 'enabled') {
+        } else if (status !== FeatureStatus.ENABLED) {
           newSelectedModules = newSelectedModules.filter(id => id !== moduleId);
         }
 
@@ -302,17 +311,17 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
       setModuleStatuses: (statuses) => {
         // Update selectedModules based on all statuses
         const enabledModules = Object.entries(statuses)
-          .filter(([_, status]) => status === 'enabled')
+          .filter(([_, status]) => status === FeatureStatus.ENABLED)
           .map(([id]) => id);
 
         set({ moduleStatuses: statuses, selectedModules: enabledModules });
         get().triggerAutoSave();
       },
 
-      setModulePermissionConfig: (moduleId, manageRoles) => {
+      setModulePermissionConfig: (moduleId, managePositions) => {
         const { modulePermissionConfigs } = get();
         set({
-          modulePermissionConfigs: { ...modulePermissionConfigs, [moduleId]: manageRoles },
+          modulePermissionConfigs: { ...modulePermissionConfigs, [moduleId]: managePositions },
         });
         get().triggerAutoSave();
       },
@@ -379,14 +388,12 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
       triggerAutoSave: () => {
         if (get().autoSaveEnabled) {
           set({ lastSaved: new Date().toISOString() });
-          console.info('💾 Onboarding progress auto-saved to localStorage');
         }
       },
 
       // Reset Actions
       resetOnboarding: () => {
         set(initialState);
-        console.info('🔄 Onboarding state reset');
       },
 
       clearSensitiveData: () => {
@@ -394,7 +401,6 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
           csrfToken: null,
           sessionId: null,
         });
-        console.info('🔒 Sensitive onboarding data cleared');
       },
     }),
     {
@@ -414,7 +420,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         backupEmail: state.backupEmail,
         backupPhone: state.backupPhone,
         secondaryAdminEmail: state.secondaryAdminEmail,
-        rolesConfig: state.rolesConfig,
+        positionsConfig: state.positionsConfig,
         selectedModules: state.selectedModules,
         moduleStatuses: state.moduleStatuses,
         modulePermissionConfigs: state.modulePermissionConfigs,

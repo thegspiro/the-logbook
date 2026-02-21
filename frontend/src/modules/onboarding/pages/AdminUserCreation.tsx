@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Eye, EyeOff, CheckCircle, XCircle, Info, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { OnboardingHeader, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail } from '../utils/validation';
 
-const AdminUserCreation: React.FC = () => {
+const SystemOwnerCreation: React.FC = () => {
   const navigate = useNavigate();
   const departmentName = useOnboardingStore(state => state.departmentName);
   const logoPreview = useOnboardingStore(state => state.logoData);
@@ -161,7 +161,7 @@ const AdminUserCreation: React.FC = () => {
       async () => {
         // SECURITY CRITICAL: Send password to server (NEVER sessionStorage!)
         // Password will be hashed with Argon2id server-side
-        const response = await apiClient.createAdminUser({
+        const response = await apiClient.createSystemOwner({
           username: formData.username,
           email: formData.email,
           password: formData.password,
@@ -198,7 +198,7 @@ const AdminUserCreation: React.FC = () => {
           confirmPassword: '',
         });
 
-        toast.success('Admin account created! Setting up your dashboard...');
+        toast.success('System Owner account created! Setting up your dashboard...');
 
         // Complete onboarding and finalize setup
         const completeResponse = await apiClient.completeOnboarding();
@@ -221,8 +221,8 @@ const AdminUserCreation: React.FC = () => {
         return response;
       },
       {
-        step: 'Admin User Creation',
-        action: 'Create admin user and complete onboarding',
+        step: 'System Owner Creation',
+        action: 'Create system owner and complete onboarding',
         userContext: `Username: ${formData.username}, Email: ${formData.email}`,
       }
     );
@@ -246,28 +246,7 @@ const AdminUserCreation: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
-      {/* Header with Logo */}
-      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center">
-          {logoPreview ? (
-            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
-              <img
-                src={logoPreview}
-                alt={`${departmentName} logo`}
-                className="max-w-full max-h-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Mail className="w-6 h-6 text-white" />
-            </div>
-          )}
-          <div>
-            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
-            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
-          </div>
-        </div>
-      </header>
+      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 py-8">
@@ -281,48 +260,48 @@ const AdminUserCreation: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
-              <Shield className="w-8 h-8 text-theme-text-primary" />
+              <Shield aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
-              Create IT Administrator Account
+              Create System Owner Account
             </h2>
             <p className="text-xl text-theme-text-secondary mb-2">
-              Set up the primary IT administrator account
+              Set up the IT Manager / System Owner account
             </p>
             <p className="text-sm text-theme-text-muted">
               This account will have full access to all system settings and configurations
             </p>
           </div>
 
-          {/* Administrator Type Clarification */}
-          <div className="bg-purple-500/10 border border-purple-500/50 rounded-lg p-4 mb-6">
+          {/* System Owner Clarification */}
+          <div className="alert-purple mb-6">
             <div className="flex items-start space-x-3">
-              <Info className="w-5 h-5 text-purple-700 dark:text-purple-400 flex-shrink-0 mt-0.5" />
+              <Info className="w-5 h-5 text-theme-alert-purple-icon flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-purple-700 dark:text-purple-300 text-sm font-medium mb-1">
-                  IT Administrator vs. Administrative Member
+                <p className="text-theme-alert-purple-title text-sm font-medium mb-1">
+                  System Owner / IT Manager
                 </p>
-                <p className="text-purple-200 text-sm mb-2">
-                  This creates an <strong>IT Administrator</strong> account for system and technical administration.
-                  This is different from members who have an "Administrative" membership type.
+                <p className="text-theme-alert-purple-text text-sm mb-2">
+                  This creates the <strong>System Owner</strong> account -- the IT Manager responsible for system and technical administration.
+                  This is different from members who hold organizational positions.
                 </p>
-                <ul className="text-purple-200 text-sm space-y-1 list-disc list-inside ml-2">
-                  <li><strong>IT Administrator:</strong> System admin role with full technical access (what you're creating now)</li>
-                  <li><strong>Administrative Member:</strong> A member with administrative membership type (managed separately in the Members module)</li>
+                <ul className="text-theme-alert-purple-text text-sm space-y-1 list-disc list-inside ml-2">
+                  <li><strong>System Owner (IT Manager):</strong> Full technical access to all system settings (what you're creating now)</li>
+                  <li><strong>Organizational Positions:</strong> President, Secretary, and other positions are managed separately in the Members module</li>
                 </ul>
               </div>
             </div>
           </div>
 
           {/* Security Notice */}
-          <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-4 mb-6">
+          <div className="alert-info mb-6">
             <div className="flex items-start space-x-3">
-              <Info className="w-5 h-5 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <Info className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-blue-700 dark:text-blue-300 text-sm font-medium mb-1">
+                <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                   Security Requirements
                 </p>
-                <p className="text-blue-200 text-sm">
+                <p className="text-theme-alert-info-text text-sm">
                   Your password will be encrypted using Argon2id hashing and
                   stored securely. Choose a strong password that meets all
                   requirements below.
@@ -336,7 +315,7 @@ const AdminUserCreation: React.FC = () => {
             {/* Personal Information */}
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
               <h3 className="text-xl font-bold text-theme-text-primary mb-4">
-                IT Administrator Information
+                System Owner Information
               </h3>
               <div className="grid md:grid-cols-2 gap-4">
                 {/* First Name */}
@@ -345,7 +324,7 @@ const AdminUserCreation: React.FC = () => {
                     htmlFor="firstName"
                     className="block text-sm font-medium text-theme-text-secondary mb-2"
                   >
-                    First Name <span className="text-red-700 dark:text-red-400">*</span>
+                    First Name <span className="text-theme-accent-red">*</span>
                   </label>
                   <input
                     type="text"
@@ -356,15 +335,15 @@ const AdminUserCreation: React.FC = () => {
                     onBlur={handleBlur}
                     className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.firstName && touched.firstName
-                        ? 'border-red-500 focus:ring-red-500/50'
-                        : 'border-theme-surface-border focus:ring-red-600'
+                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                        : 'border-theme-input-border focus:ring-theme-focus-ring'
                     }`}
                     placeholder="John"
                     aria-invalid={errors.firstName && touched.firstName ? 'true' : 'false'}
                     aria-describedby={errors.firstName && touched.firstName ? 'firstName-error' : undefined}
                   />
                   {errors.firstName && touched.firstName && (
-                    <p id="firstName-error" className="mt-1 text-sm text-red-700 dark:text-red-400 flex items-center">
+                    <p id="firstName-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
                       <XCircle className="w-4 h-4 mr-1" />
                       {errors.firstName}
                     </p>
@@ -377,7 +356,7 @@ const AdminUserCreation: React.FC = () => {
                     htmlFor="lastName"
                     className="block text-sm font-medium text-theme-text-secondary mb-2"
                   >
-                    Last Name <span className="text-red-700 dark:text-red-400">*</span>
+                    Last Name <span className="text-theme-accent-red">*</span>
                   </label>
                   <input
                     type="text"
@@ -388,15 +367,15 @@ const AdminUserCreation: React.FC = () => {
                     onBlur={handleBlur}
                     className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.lastName && touched.lastName
-                        ? 'border-red-500 focus:ring-red-500/50'
-                        : 'border-theme-surface-border focus:ring-red-600'
+                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                        : 'border-theme-input-border focus:ring-theme-focus-ring'
                     }`}
                     placeholder="Doe"
                     aria-invalid={errors.lastName && touched.lastName ? 'true' : 'false'}
                     aria-describedby={errors.lastName && touched.lastName ? 'lastName-error' : undefined}
                   />
                   {errors.lastName && touched.lastName && (
-                    <p id="lastName-error" className="mt-1 text-sm text-red-700 dark:text-red-400 flex items-center">
+                    <p id="lastName-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
                       <XCircle className="w-4 h-4 mr-1" />
                       {errors.lastName}
                     </p>
@@ -418,7 +397,7 @@ const AdminUserCreation: React.FC = () => {
                   name="badgeNumber"
                   value={formData.badgeNumber}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-600 transition-all"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring transition-all"
                   placeholder="e.g., FF-1234"
                 />
               </div>
@@ -436,7 +415,7 @@ const AdminUserCreation: React.FC = () => {
                   htmlFor="username"
                   className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
-                  Username <span className="text-red-700 dark:text-red-400">*</span>
+                  Username <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
                   type="text"
@@ -447,8 +426,8 @@ const AdminUserCreation: React.FC = () => {
                   onBlur={handleBlur}
                   className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                     errors.username && touched.username
-                      ? 'border-red-500 focus:ring-red-500/50'
-                      : 'border-theme-surface-border focus:ring-red-600'
+                      ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                      : 'border-theme-input-border focus:ring-theme-focus-ring'
                   }`}
                   placeholder="johndoe"
                   autoComplete="username"
@@ -456,7 +435,7 @@ const AdminUserCreation: React.FC = () => {
                   aria-describedby={errors.username && touched.username ? 'username-error' : undefined}
                 />
                 {errors.username && touched.username && (
-                  <p id="username-error" className="mt-1 text-sm text-red-700 dark:text-red-400 flex items-center">
+                  <p id="username-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
                     <XCircle className="w-4 h-4 mr-1" />
                     {errors.username}
                   </p>
@@ -469,7 +448,7 @@ const AdminUserCreation: React.FC = () => {
                   htmlFor="email"
                   className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
-                  Email Address <span className="text-red-700 dark:text-red-400">*</span>
+                  Email Address <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
                   type="email"
@@ -480,16 +459,16 @@ const AdminUserCreation: React.FC = () => {
                   onBlur={handleBlur}
                   className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                     errors.email && touched.email
-                      ? 'border-red-500 focus:ring-red-500/50'
-                      : 'border-theme-surface-border focus:ring-red-600'
+                      ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                      : 'border-theme-input-border focus:ring-theme-focus-ring'
                   }`}
-                  placeholder="admin@example.com"
+                  placeholder="itmanager@example.com"
                   autoComplete="email"
                   aria-invalid={errors.email && touched.email ? 'true' : 'false'}
                   aria-describedby={errors.email && touched.email ? 'email-error' : undefined}
                 />
                 {errors.email && touched.email && (
-                  <p id="email-error" className="mt-1 text-sm text-red-700 dark:text-red-400 flex items-center">
+                  <p id="email-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
                     <XCircle className="w-4 h-4 mr-1" />
                     {errors.email}
                   </p>
@@ -502,7 +481,7 @@ const AdminUserCreation: React.FC = () => {
                   htmlFor="password"
                   className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
-                  Password <span className="text-red-700 dark:text-red-400">*</span>
+                  Password <span className="text-theme-accent-red">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -514,8 +493,8 @@ const AdminUserCreation: React.FC = () => {
                     onBlur={handleBlur}
                     className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.password && touched.password
-                        ? 'border-red-500 focus:ring-red-500/50'
-                        : 'border-theme-surface-border focus:ring-red-600'
+                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                        : 'border-theme-input-border focus:ring-theme-focus-ring'
                     }`}
                     placeholder="Enter a strong password"
                     autoComplete="new-password"
@@ -536,7 +515,7 @@ const AdminUserCreation: React.FC = () => {
                   </button>
                 </div>
                 {errors.password && touched.password && (
-                  <p id="password-error" className="mt-1 text-sm text-red-700 dark:text-red-400 flex items-center">
+                  <p id="password-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
                     <XCircle className="w-4 h-4 mr-1" />
                     {errors.password}
                   </p>
@@ -546,14 +525,14 @@ const AdminUserCreation: React.FC = () => {
                 <div id="password-requirements" className="mt-3 space-y-2">
                     <div className="flex items-center text-sm">
                       {passwordStrength.checks.length ? (
-                        <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
+                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
                       ) : (
                         <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
                           passwordStrength.checks.length
-                            ? 'text-green-700 dark:text-green-400'
+                            ? 'text-theme-accent-green'
                             : 'text-theme-text-muted'
                         }
                       >
@@ -562,14 +541,14 @@ const AdminUserCreation: React.FC = () => {
                     </div>
                     <div className="flex items-center text-sm">
                       {passwordStrength.checks.uppercase ? (
-                        <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
+                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
                       ) : (
                         <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
                           passwordStrength.checks.uppercase
-                            ? 'text-green-700 dark:text-green-400'
+                            ? 'text-theme-accent-green'
                             : 'text-theme-text-muted'
                         }
                       >
@@ -578,14 +557,14 @@ const AdminUserCreation: React.FC = () => {
                     </div>
                     <div className="flex items-center text-sm">
                       {passwordStrength.checks.lowercase ? (
-                        <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
+                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
                       ) : (
                         <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
                           passwordStrength.checks.lowercase
-                            ? 'text-green-700 dark:text-green-400'
+                            ? 'text-theme-accent-green'
                             : 'text-theme-text-muted'
                         }
                       >
@@ -594,14 +573,14 @@ const AdminUserCreation: React.FC = () => {
                     </div>
                     <div className="flex items-center text-sm">
                       {passwordStrength.checks.number ? (
-                        <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
+                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
                       ) : (
                         <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
                           passwordStrength.checks.number
-                            ? 'text-green-700 dark:text-green-400'
+                            ? 'text-theme-accent-green'
                             : 'text-theme-text-muted'
                         }
                       >
@@ -610,14 +589,14 @@ const AdminUserCreation: React.FC = () => {
                     </div>
                     <div className="flex items-center text-sm">
                       {passwordStrength.checks.special ? (
-                        <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
+                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
                       ) : (
                         <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
                           passwordStrength.checks.special
-                            ? 'text-green-700 dark:text-green-400'
+                            ? 'text-theme-accent-green'
                             : 'text-theme-text-muted'
                         }
                       >
@@ -633,7 +612,7 @@ const AdminUserCreation: React.FC = () => {
                   htmlFor="confirmPassword"
                   className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
-                  Confirm Password <span className="text-red-700 dark:text-red-400">*</span>
+                  Confirm Password <span className="text-theme-accent-red">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -645,8 +624,8 @@ const AdminUserCreation: React.FC = () => {
                     onBlur={handleBlur}
                     className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.confirmPassword && touched.confirmPassword
-                        ? 'border-red-500 focus:ring-red-500/50'
-                        : 'border-theme-surface-border focus:ring-red-600'
+                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                        : 'border-theme-input-border focus:ring-theme-focus-ring'
                     }`}
                     placeholder="Re-enter your password"
                     autoComplete="new-password"
@@ -667,7 +646,7 @@ const AdminUserCreation: React.FC = () => {
                   </button>
                 </div>
                 {errors.confirmPassword && touched.confirmPassword && (
-                  <p id="confirmPassword-error" className="mt-1 text-sm text-red-700 dark:text-red-400 flex items-center">
+                  <p id="confirmPassword-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
                     <XCircle className="w-4 h-4 mr-1" />
                     {errors.confirmPassword}
                   </p>
@@ -675,7 +654,7 @@ const AdminUserCreation: React.FC = () => {
                 {!errors.confirmPassword &&
                   formData.confirmPassword &&
                   formData.password === formData.confirmPassword && (
-                    <p className="mt-1 text-sm text-green-700 dark:text-green-400 flex items-center">
+                    <p className="mt-1 text-sm text-theme-accent-green flex items-center">
                       <CheckCircle className="w-4 h-4 mr-1" />
                       Passwords match
                     </p>
@@ -697,11 +676,11 @@ const AdminUserCreation: React.FC = () => {
                 className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                   isFormValid && !isSaving
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                    : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                    : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
-                aria-label="Create IT administrator account and access dashboard"
+                aria-label="Create System Owner account and access dashboard"
               >
-                {isSaving ? 'Creating IT Admin Account & Finalizing Setup...' : 'Create IT Admin Account & Access Dashboard'}
+                {isSaving ? 'Creating System Owner Account & Finalizing Setup...' : 'Create System Owner Account & Access Dashboard'}
               </button>
 
               {/* Help Text */}
@@ -710,7 +689,7 @@ const AdminUserCreation: React.FC = () => {
               </p>
 
               {/* Progress Indicator */}
-              <div className="mt-6 pt-6 border-t border-theme-surface-border">
+              <div className="mt-6 pt-6 border-t border-theme-nav-border">
                 <div className="flex items-center justify-between text-sm text-theme-text-muted mb-2">
                   <span>Setup Progress</span>
                   <span>Step 10 of 10</span>
@@ -734,7 +713,7 @@ const AdminUserCreation: React.FC = () => {
       </main>
 
       {/* Footer with Department Name and Copyright */}
-      <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
@@ -748,4 +727,7 @@ const AdminUserCreation: React.FC = () => {
   );
 };
 
-export default AdminUserCreation;
+// Backward-compatible alias
+export const AdminUserCreation = SystemOwnerCreation;
+
+export default SystemOwnerCreation;

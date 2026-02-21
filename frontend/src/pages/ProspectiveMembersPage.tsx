@@ -82,7 +82,7 @@ const statusStyles: Record<string, string> = {
   withdrawn: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
   approved: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
   rejected: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
-  draft: 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
+  draft: 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
   submitted: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
   completed: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
 };
@@ -163,7 +163,7 @@ const PipelineModal: React.FC<PipelineModalProps> = ({ isOpen, onClose, onSucces
       aria-labelledby="pipeline-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="pipeline-modal-title" className="text-xl font-bold text-theme-text-primary">
             {pipeline ? 'Edit Pipeline' : 'Create Pipeline'}
@@ -348,7 +348,7 @@ const DuplicateModal: React.FC<DuplicateModalProps> = ({ isOpen, onClose, onSucc
       aria-labelledby="duplicate-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-md w-full">
+      <div className="bg-theme-surface-modal rounded-lg max-w-md w-full">
         <div className="p-6 border-b border-theme-surface-border">
           <h2 id="duplicate-modal-title" className="text-xl font-bold text-theme-text-primary">Duplicate Pipeline</h2>
         </div>
@@ -466,7 +466,7 @@ const CreateProspectModal: React.FC<CreateProspectModalProps> = ({ isOpen, onClo
       aria-labelledby="create-prospect-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="create-prospect-title" className="text-xl font-bold text-theme-text-primary">Add Prospect</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">

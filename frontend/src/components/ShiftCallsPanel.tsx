@@ -19,6 +19,8 @@ import {
   X,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
+import { localToUTC } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 // ============================================
 // Interfaces
@@ -99,6 +101,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
   initialData,
   title,
 }) => {
+  const tz = useTimezone();
   const [formData, setFormData] = useState<ShiftCallFormData>(initialData || emptyFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -120,9 +123,9 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
         medical_refusal: formData.medical_refusal,
       };
       if (formData.incident_number) payload.incident_number = formData.incident_number;
-      if (formData.dispatched_at) payload.dispatched_at = formData.dispatched_at;
-      if (formData.on_scene_at) payload.on_scene_at = formData.on_scene_at;
-      if (formData.cleared_at) payload.cleared_at = formData.cleared_at;
+      if (formData.dispatched_at) payload.dispatched_at = localToUTC(formData.dispatched_at, tz);
+      if (formData.on_scene_at) payload.on_scene_at = localToUTC(formData.on_scene_at, tz);
+      if (formData.cleared_at) payload.cleared_at = localToUTC(formData.cleared_at, tz);
       if (formData.notes) payload.notes = formData.notes;
       if (formData.responding_members.trim()) {
         payload.responding_members = formData.responding_members.split(',').map(m => m.trim()).filter(Boolean);
@@ -146,16 +149,16 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
       aria-labelledby="call-form-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="call-form-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
-          <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
+          <button onClick={onClose} className="p-1 rounded text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500" aria-label="Close">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="call-incident-number" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Incident Number
@@ -195,6 +198,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
               <input
                 id="call-dispatched"
                 type="datetime-local"
+                step="900"
                 value={formData.dispatched_at}
                 onChange={(e) => setFormData(prev => ({ ...prev, dispatched_at: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
@@ -207,6 +211,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
               <input
                 id="call-on-scene"
                 type="datetime-local"
+                step="900"
                 value={formData.on_scene_at}
                 onChange={(e) => setFormData(prev => ({ ...prev, on_scene_at: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
@@ -219,6 +224,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
               <input
                 id="call-cleared"
                 type="datetime-local"
+                step="900"
                 value={formData.cleared_at}
                 onChange={(e) => setFormData(prev => ({ ...prev, cleared_at: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
@@ -232,7 +238,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
                 type="checkbox"
                 checked={formData.cancelled_en_route}
                 onChange={(e) => setFormData(prev => ({ ...prev, cancelled_en_route: e.target.checked }))}
-                className="rounded border-theme-input-border"
+                className="rounded border-theme-input-border focus:ring-2 focus:ring-blue-500"
               />
               Cancelled En Route
             </label>
@@ -241,7 +247,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
                 type="checkbox"
                 checked={formData.medical_refusal}
                 onChange={(e) => setFormData(prev => ({ ...prev, medical_refusal: e.target.checked }))}
-                className="rounded border-theme-input-border"
+                className="rounded border-theme-input-border focus:ring-2 focus:ring-blue-500"
               />
               Medical Refusal
             </label>
@@ -279,7 +285,7 @@ const CallFormModal: React.FC<CallFormModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary"
+              className="px-4 py-2 rounded text-theme-text-secondary hover:text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             >
               Cancel
             </button>
@@ -443,7 +449,7 @@ export const ShiftCallsPanel: React.FC<ShiftCallsPanelProps> = ({ shiftId }) => 
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => setEditingCall(call)}
-                        className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded"
+                        className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                         aria-label={`Edit call ${call.incident_number || call.id}`}
                       >
                         <Edit2 className="w-4 h-4" aria-hidden="true" />
@@ -451,7 +457,7 @@ export const ShiftCallsPanel: React.FC<ShiftCallsPanelProps> = ({ shiftId }) => 
                       <button
                         onClick={() => handleDelete(call.id)}
                         disabled={deletingId === call.id}
-                        className="p-1 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 rounded disabled:opacity-50"
+                        className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                         aria-label={`Delete call ${call.incident_number || call.id}`}
                       >
                         {deletingId === call.id ? (

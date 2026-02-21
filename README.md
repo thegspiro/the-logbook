@@ -1,70 +1,113 @@
 # The Logbook
 
-An open-source, highly flexible, secure, and modular intranet platform designed for fire departments, emergency services, healthcare organizations, and other institutions requiring HIPAA-compliant, secure internal communication and management systems.
+An open-source, modular intranet platform designed for fire departments, emergency services, healthcare organizations, and other institutions requiring HIPAA-compliant internal communication and management systems.
 
-## 🌟 Features
+## Features
 
-- **Modular Architecture**: Enable only the modules you need
-- **HIPAA Compliant**: Built with healthcare privacy and security standards in mind
-- **Flexible Configuration**: Customize workflows, rules, and policies to match your organization
-- **Tamper-Proof Logging**: Cryptographic audit trails with integrity verification
-- **Multi-Tenancy Ready**: Host multiple organizations on a single installation
-- **Integration Framework**: Connect with Microsoft 365, Google Workspace, LDAP, and more
-- **Role-Based Access Control**: Granular permissions system
-- **Mobile Responsive**: Progressive Web App (PWA) support
+- **Modular Architecture** — Enable only the modules you need
+- **HIPAA Compliant** — Built with healthcare privacy and security standards in mind
+- **Flexible Configuration** — Customize workflows, rules, and policies to match your organization
+- **Tamper-Proof Logging** — Cryptographic audit trails with integrity verification
+- **Multi-Tenancy Ready** — Host multiple organizations on a single installation
+- **Integration Framework** — Connect with Microsoft 365, Google Workspace, LDAP, and more
+- **Role-Based Access Control** — Granular permissions with 16 system roles
+- **Mobile Responsive** — Progressive Web App (PWA) support
+- **Public Kiosk Displays** — Tablet-friendly pages for room QR code check-in, no login required
+- **Unified Location System** — Single source of truth for all rooms, buildings, and venues across every module
 
-## 📦 Core Modules
+## Core Modules
 
-- User Management & Authentication
-- Document Management
-- Communication Tools (Announcements, Messaging, Notifications)
-- Calendar & Scheduling
+| Module | Description |
+|--------|-------------|
+| **User Management & Authentication** | Member profiles, roles, permissions, OAuth 2.0 / SAML / LDAP, MFA |
+| **Document Management** | 7 system folders (SOPs, Policies, Forms, Reports, Training Materials, Meeting Minutes, General), custom folders, grid/list views, document viewer |
+| **Communication Tools** | Announcements, messaging, notifications |
+| **Calendar & Scheduling** | Week/month views, shift templates (day, night, morning), staffing requirements |
+| **Dashboard** | Organization stats, training progress widget, member overview |
 
-## 🔌 Optional Modules
+## Modules
 
-- **Training & Certification Tracking** ([Documentation](docs/TRAINING_PROGRAMS.md))
-  - Multi-type requirements (hours, shifts, calls, skills, checklists)
-  - Phase-based program progression with manual and automatic advancement
-  - NFPA, NREMT, and Pro Board registry integration
-  - Member progress tracking and dashboard widgets
-  - Template system with duplication and versioning
-  - Prerequisite programs and concurrent enrollment controls
-  - Training session creation with approval workflow
-  - Check-in/check-out tracking integrated with events
-  - Milestone system with conditional reminders
-  - Officer dashboard, requirements management, and external training integration pages
-- **Compliance Management** - Compliance tracking and auditing
-- **Scheduling & Shift Management** - Week/month calendar views, shift templates (day, night, morning), staffing requirements
-- **Inventory Management** - Full CRUD with item types, status/condition tracking, category management, search and filtering
-- **Member Directory & Tracking** - Member list, profiles, add/import, training history per member, configurable drop notifications with CC recipients, personal email support, editable email templates, membership tiers (Probationary/Active/Senior/Life) with auto-advancement, tier-based training exemptions, and voting eligibility gated by meeting attendance
-- **Meeting Minutes** ([Documentation](docs/MEETING_MINUTES_MODULE.md))
-  - 8 meeting types (business, special, committee, board, trustee, executive, annual, other)
-  - Template system with configurable default sections per meeting type
-  - Dynamic sections with reordering, add/remove
-  - Draft → Review → Approved lifecycle with edit protection
-  - Publish approved minutes to Documents module as styled HTML
-  - Event linking and full-text search
-- **Elections & Voting** - Full election system with ballots and candidate management
-- Incident Reporting
-- Equipment Maintenance
-- Fundraising & Donations
-- Vehicle/Apparatus Management
-- Budget & Finance Tracking
-- **Event Management** - Event creation/editing/duplication, type filtering, RSVP with admin overrides, recurring events (daily/weekly/monthly/yearly), event templates, file attachments, location booking prevention, cancel notifications, organization timezone support, QR code check-in, self-check-in pages, check-out, analytics
-- **Reports** - Reports catalog with member, training, event, and compliance report categories
-- **Documents** - Folder-based document management with 7 system folders (SOPs, Policies, Forms & Templates, Reports, Training Materials, Meeting Minutes, General Documents), custom folders, grid/list views, document viewer
-- **Custom Forms** ([Documentation](docs/FORMS_MODULE.md))
-  - Drag-and-drop form builder with 15+ field types
-  - Public-facing forms via unique URL slugs with QR code generation
-  - Cross-module integrations (Membership interest, Equipment assignment)
-  - Submission management with filtering and export
-  - Member lookup fields for internal workflows
-  - Bot protection (honeypot), rate limiting, and input sanitization
-- **Module Configuration** - Priority-based module overview system
-- **Navigation Options** - Configurable top and side navigation layouts
-- **Dashboard** - Organization stats (members, events, documents), training progress widget
+### Event Management
 
-## 🚀 Quick Start
+Event creation, editing, and duplication with type filtering. RSVP with admin overrides, recurring events (daily/weekly/monthly/yearly), event templates, file attachments, location booking conflict prevention, cancel notifications, organization timezone support, QR code check-in, self-check-in pages, check-out tracking, and analytics.
+
+### Locations & Kiosk Display
+
+Unified location management that serves as the single source of truth for rooms, buildings, and venues across all modules. Location Setup Wizard with address, building, floor, room, and capacity fields.
+
+- **Kiosk Display** — Each location gets a non-guessable display URL (`/display/{code}`) designed for tablets left in rooms. The page automatically shows the current event's QR code and cycles to the next event. No authentication required on the display — auth happens on the scanning member's device.
+- **Facility Bridge** — When the Facilities module is enabled, locations can optionally link to a Facility record for deep building management data (maintenance, inspections, utilities).
+- **Universal Picker** — Events, Training, and Meetings all reference the same `locations` table. Turning Facilities on or off never breaks location references.
+
+### Training & Certification Tracking ([Documentation](docs/TRAINING_PROGRAMS.md))
+
+- Multi-type requirements (hours, shifts, calls, skills, checklists)
+- Phase-based program progression with manual and automatic advancement
+- NFPA, NREMT, and Pro Board registry integration
+- Member progress tracking and dashboard widgets
+- Template system with duplication and versioning
+- Prerequisite programs and concurrent enrollment controls
+- Training session creation with approval workflow and location dropdown
+- Check-in/check-out tracking integrated with events
+- Milestone system with conditional reminders
+- Officer dashboard, requirements management, and external training integration pages
+- Compliance and competency matrix with frequency-aware evaluation
+
+### Member Directory & Tracking
+
+Member list, profiles, add/import, training history per member. Configurable drop notifications with CC recipients, personal email support, and editable email templates. Membership tiers (Probationary, Active, Senior, Life) with auto-advancement, tier-based training exemptions, and voting eligibility gated by meeting attendance.
+
+### Meeting Minutes ([Documentation](docs/MEETING_MINUTES_MODULE.md))
+
+- 8 meeting types (business, special, committee, board, trustee, executive, annual, other)
+- Template system with configurable default sections per meeting type
+- Dynamic sections with reordering, add/remove
+- Draft, Review, Approved lifecycle with edit protection
+- Publish approved minutes to Documents module as styled HTML
+- Event linking and full-text search
+
+### Custom Forms ([Documentation](docs/FORMS_MODULE.md))
+
+- Drag-and-drop form builder with 15+ field types
+- Public-facing forms via unique URL slugs with QR code generation
+- Cross-module integrations (membership interest, equipment assignment)
+- Submission management with filtering and export
+- Member lookup fields for internal workflows
+- Bot protection (honeypot), rate limiting, and input sanitization
+
+### Elections & Voting
+
+Full election system with ballots and candidate management.
+
+### Inventory Management
+
+Full CRUD with item types, status/condition tracking, category management, search and filtering.
+
+### Compliance Management
+
+Compliance tracking and auditing across training requirements, certifications, and member records.
+
+### Facilities Management
+
+Building and property management including maintenance tracking, inspections, and utilities. Links to Locations for room-level data.
+
+### Reports
+
+Reports catalog with member, training, event, and compliance report categories.
+
+### Additional Modules
+
+| Module | Description |
+|--------|-------------|
+| **Module Configuration** | Priority-based module overview system |
+| **Navigation Options** | Configurable top and side navigation layouts |
+| Vehicle/Apparatus Management | Vehicle and apparatus tracking |
+| Incident Reporting | *Planned* |
+| Equipment Maintenance | *Planned* |
+| Fundraising & Donations | *Planned* |
+| Budget & Finance Tracking | *Planned* |
+
+## Quick Start
 
 ### One-Line Install (Any Platform)
 
@@ -121,6 +164,8 @@ openssl rand -hex 16  # ENCRYPTION_SALT
 
 docker compose up -d
 ```
+
+> **Which `.env` file?** `.env.example` is the quick-start config (~30 variables) — fill in your secrets and go. If you need cloud storage (S3, Azure, GCS), OAuth/SSO (Google, Microsoft, LDAP), SMS (Twilio), HIPAA tuning, or advanced security settings, copy `.env.example.full` instead. See [Choosing Your Configuration File](#choosing-your-configuration-file) below for details.
 </details>
 
 <details>
@@ -215,6 +260,39 @@ cd the-logbook
 Installs directly with systemd services (Ubuntu/Debian only).
 </details>
 
+### Choosing Your Configuration File
+
+Two environment templates are provided. Choose the one that fits your deployment:
+
+| | `.env.example` | `.env.example.full` |
+|---|---|---|
+| **Best for** | Quick setup, most deployments | Production hardening, advanced integrations |
+| **Variables** | ~30 | ~100+ |
+| **Default env** | `production` | `development` |
+| **Setup time** | 5 minutes | 15–30 minutes |
+
+**Use `.env.example` (recommended start)** if you want to get running quickly with sensible defaults. It covers security keys, database, Redis, CORS, ports, timezone, basic module toggles, email, and backups. This is sufficient for most single-server deployments.
+
+```bash
+cp .env.example .env
+```
+
+**Use `.env.example.full`** if you need any of the following:
+- Cloud file storage (AWS S3, Azure Blob, Google Cloud Storage)
+- OAuth / SSO providers (Microsoft Azure AD, Google OAuth, LDAP/Active Directory)
+- SMS notifications (Twilio)
+- Fine-grained HIPAA controls (session timeout, password age, audit retention)
+- Advanced security (IP whitelisting, geofencing, account lockout tuning, cookie settings)
+- Feature flags, compliance toggles (GDPR, CCPA, Section 508)
+- Infrastructure ports (Nginx, Elasticsearch, MinIO, MailHog)
+- Development tools (database seeding, profiling, mock email/SMS)
+
+```bash
+cp .env.example.full .env
+```
+
+Both files include inline comments explaining every variable and commands to generate required secrets. You can always start with `.env.example` and add variables from `.env.example.full` later as your needs grow — they are fully compatible.
+
 ### First Time Setup
 
 After starting the containers:
@@ -222,13 +300,14 @@ After starting the containers:
 1. Open `http://localhost:3000` in your browser
 2. Complete the onboarding wizard (organization setup, admin account)
 3. Configure modules and settings as needed
-4. Set up email notifications (optional)
+4. Add locations via the Location Setup Wizard (enables kiosk displays)
+5. Set up email notifications (optional)
 
 For API access: `http://localhost:3001/docs`
 
 See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 
-## 🖥️ Supported Platforms
+## Supported Platforms
 
 | Platform | Architecture | Profile | Status |
 |----------|--------------|---------|--------|
@@ -246,111 +325,84 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 | **Unraid** | x86_64 | standard | ✅ Optimized |
 | **Kubernetes** | x86_64, ARM64 | standard, full | ✅ Helm chart available |
 
-## 📚 Documentation
+## Documentation
 
-### 📖 GitHub Wiki (Comprehensive Documentation)
-
-**Visit our complete documentation wiki:** **[The Logbook Wiki](https://github.com/thegspiro/the-logbook/wiki)**
-
-The wiki includes:
-- 📖 **[Installation Guide](https://github.com/thegspiro/the-logbook/wiki/Installation)** - All installation methods
-- 🚀 **[Unraid Quick Start](https://github.com/thegspiro/the-logbook/wiki/Unraid-Quick-Start)** - One-command setup
-- 🔧 **[Configuration](https://github.com/thegspiro/the-logbook/wiki/Configuration-Environment)** - All settings explained
-- 🛠️ **[Troubleshooting](https://github.com/thegspiro/the-logbook/wiki/Troubleshooting)** - Common issues & solutions
-- 💻 **[Development Guides](https://github.com/thegspiro/the-logbook/wiki/Development-Backend)** - Backend & frontend
-- 🔐 **[Security](https://github.com/thegspiro/the-logbook/wiki/Security-Overview)** - Security & compliance
-- 📦 **[Modules](https://github.com/thegspiro/the-logbook/wiki/Module-Training)** - Feature documentation
-- 📋 **[Quick Reference](https://github.com/thegspiro/the-logbook/wiki/Quick-Reference)** - Common commands
+**[The Logbook Wiki](https://github.com/thegspiro/the-logbook/wiki)** — Comprehensive documentation including installation, configuration, troubleshooting, and development guides.
 
 ### Getting Started
-- [Unraid Quick Start](UNRAID-QUICKSTART.md) - One-command Unraid installation
-- [GitHub Setup Guide](docs/setup/github.md) - Complete GitHub configuration
-- [Onboarding Guide](ONBOARDING.md) - First-time setup wizard
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute
+- [Quick Start Guide](QUICK_START_GITHUB.md) — Detailed first-run instructions
+- [Onboarding Guide](ONBOARDING.md) — First-time setup wizard
+- [Contributing Guide](CONTRIBUTING.md) — How to contribute
 
 ### Deployment
-- [AWS Deployment Guide](docs/deployment/aws.md) - EC2, RDS, and ElastiCache deployment on AWS
-- [Unraid Deployment Guide](docs/deployment/unraid.md) - Complete Unraid guide
-- [Unraid Updated Quick Start](unraid/QUICK-START-UPDATED.md) - Latest Unraid instructions
-- [Proxmox Deployment Guide](docs/deployment/proxmox.md) - LXC and VM deployment on Proxmox VE
-- [Synology NAS Deployment Guide](docs/deployment/synology.md) - Docker deployment on Synology DS+/XS+ series
-- [General Deployment Guide](docs/DEPLOYMENT.md) - Deployment instructions
-- [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) - Docker image management
-- [Docker Build Verification](scripts/verify-docker-build.sh) - Validate Docker configuration before deploying
-
-### Backend
-- [Python Backend Guide](docs/backend/python-backend.md) - Backend development
-- [Training Module Backend](backend/app/docs/TRAINING_MODULE.md) - Backend API documentation
+- [General Deployment Guide](docs/DEPLOYMENT.md) — Overview of all deployment methods
+- [AWS Deployment](docs/deployment/aws.md) — EC2, RDS, and ElastiCache
+- [Proxmox Deployment](docs/deployment/proxmox.md) — LXC and VM
+- [Synology NAS Deployment](docs/deployment/synology.md) — Docker on Synology DS+/XS+
+- [Unraid Quick Start](unraid/QUICK-START-UPDATED.md) — One-command Unraid setup
+- [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) — Docker image management
 
 ### Modules & Features
-- [Training Programs Module](docs/TRAINING_PROGRAMS.md) - Comprehensive training management system
-- [Meeting Minutes Module](docs/MEETING_MINUTES_MODULE.md) - Minutes management, templates, dynamic sections, document publishing
-- [Custom Forms Module](docs/FORMS_MODULE.md) - Form builder, public forms, cross-module integrations
-- [Drop Notifications & Email Templates](docs/DROP_NOTIFICATIONS.md) - Configurable drop notification messages, CC recipients, personal email, editable templates
-- [Role System](ROLE_SYSTEM_README.md) - Role-based access control (16 system roles)
-- [Onboarding Flow](docs/ONBOARDING_FLOW.md) - Onboarding process details
+- [Training Programs](docs/TRAINING_PROGRAMS.md) — Training management, requirements, certifications
+- [Training Module Backend](backend/app/docs/TRAINING_MODULE.md) — Backend API for training
+- [Meeting Minutes](docs/MEETING_MINUTES_MODULE.md) — Minutes management, templates, document publishing
+- [Custom Forms](docs/FORMS_MODULE.md) — Form builder, public forms, cross-module integrations
+- [Public API](docs/PUBLIC_API_DOCUMENTATION.md) — Public forms and kiosk display endpoints
+- [Drop Notifications](docs/DROP_NOTIFICATIONS.md) — Configurable notifications, CC recipients, email templates
+- [Application Pages](APPLICATION_PAGES.md) — Complete page inventory and route map
+- [Role System](ROLE_SYSTEM_README.md) — Role-based access control (16 system roles)
 
-### Development & Quality
-- [TypeScript Safeguards](docs/TYPESCRIPT_SAFEGUARDS.md) - Multi-layer TypeScript build protection, `as any` elimination
-- [Testing Guide](TESTING.md) - Test suites for onboarding and event components
+### Development
+- [Python Backend Guide](docs/backend/python-backend.md) — Backend development
+- [TypeScript Safeguards](docs/TYPESCRIPT_SAFEGUARDS.md) — Multi-layer build protection
+- [Testing Guide](TESTING.md) — Test suites for onboarding and event components
+- [Architecture Review](ARCHITECTURE_REVIEW_AND_IMPROVEMENT_PLAN.md) — Architecture decisions and improvement plan
 
 ### Security & Troubleshooting
-- [Security Guide](SECURITY.md) - Security policy and compliance
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Comprehensive troubleshooting for all modules
-- [Deployment Troubleshooting](docs/troubleshooting/README.md) - Docker and deployment issues
+- [Security Guide](SECURITY.md) — Security policy and compliance
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) — All modules including locations, kiosk, and training
+- [Deployment Troubleshooting](docs/troubleshooting/README.md) — Docker and deployment issues
 
-## 🛠️ Technology Stack
+## Technology Stack
 
-- **Backend**: Python 3.11+, FastAPI, SQLAlchemy
-- **Frontend**: React, TypeScript, Tailwind CSS
-- **Database**: MySQL 8.0+
-- **Cache**: Redis 7+
-- **Search**: Elasticsearch (optional)
-- **File Storage**: Local, S3, Azure Blob, Google Cloud Storage
-- **Authentication**: OAuth 2.0, SAML, LDAP, Multi-Factor Authentication (TOTP)
+| Layer | Technologies |
+|-------|-------------|
+| **Backend** | Python 3.11+, FastAPI, SQLAlchemy (async), Alembic |
+| **Frontend** | React 18, TypeScript, Tailwind CSS |
+| **Database** | MySQL 8.0+ |
+| **Cache** | Redis 7+ |
+| **Search** | Elasticsearch (optional) |
+| **File Storage** | Local, S3, Azure Blob, Google Cloud Storage |
+| **Authentication** | OAuth 2.0, SAML, LDAP, TOTP-based MFA |
 
-## 🔒 Security
+## Security & Compliance
 
-- **Password Security**: Argon2id hashing (OWASP recommended)
-- **Encryption**: AES-256 encryption at rest for sensitive data
-- **Transport Security**: TLS 1.3 for data in transit
-- **Multi-Factor Authentication**: TOTP-based 2FA
-- **Tamper-Proof Audit Logs**: Blockchain-inspired hash chain
-- **Session Security**: JWT with automatic timeout
-- **Rate Limiting**: Brute force protection (5 attempts = 30min lockout)
-- **Input Sanitization**: XSS and SQL injection prevention
-- **HIPAA Compliant**: 7-year audit retention, PHI encryption
-- **Section 508 Accessible**: WCAG 2.1 Level AA compliance
-- **Zero Plain Text Passwords**: All passwords securely hashed
+- **Password Security** — Argon2id hashing (OWASP recommended)
+- **Encryption** — AES-256 at rest for sensitive data, TLS 1.3 in transit
+- **Multi-Factor Authentication** — TOTP-based 2FA
+- **Tamper-Proof Audit Logs** — Blockchain-inspired hash chain with 7-year retention
+- **Session Security** — JWT with automatic timeout
+- **Rate Limiting** — Brute force protection (5 attempts = 30 min lockout)
+- **Input Sanitization** — XSS and SQL injection prevention
+- **HIPAA Compliant** — PHI encryption, audit retention, access controls
+- **Section 508 Accessible** — WCAG 2.1 Level AA compliance
+- **Public Endpoints** — Kiosk displays and public forms use non-guessable codes; no sensitive data exposed
 
 See [SECURITY.md](SECURITY.md) for comprehensive security documentation.
 
-## 📄 License
+**Important**: While this software provides security features, organizations are responsible for proper configuration, staff training, and ongoing compliance with applicable regulations.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## License
 
-## 🤝 Contributing
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
-## 💬 Support
+## Support
 
-- **Documentation**: See docs/ directory
+- **Documentation**: [The Logbook Wiki](https://github.com/thegspiro/the-logbook/wiki)
 - **Issues**: https://github.com/thegspiro/the-logbook/issues
 - **Discussions**: https://github.com/thegspiro/the-logbook/discussions
-- **Security**: See [SECURITY.md](SECURITY.md)
-
-## 🔐 Security & Compliance
-
-This platform is designed with security and compliance as top priorities:
-
-- **HIPAA Compliance Features**: See [SECURITY.md](SECURITY.md#hipaa-compliance)
-- **Section 508 Accessibility**: See [SECURITY.md](SECURITY.md#section-508-accessibility)
-- **Audit Logging**: Tamper-proof logs with 7-year retention
-- **Regular Security Updates**: Keep your installation up to date
-
-**Important**: While this software provides security features, organizations are responsible for proper configuration, staff training, and ongoing compliance with applicable regulations.
-
-## 🙏 Acknowledgments
-
-Built with ❤️ for emergency services and healthcare organizations worldwide.
+- **Security**: [SECURITY.md](SECURITY.md)

@@ -11,6 +11,8 @@ from uuid import UUID
 from enum import Enum
 import re
 
+from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
+
 
 class OrganizationTypeEnum(str, Enum):
     """Organization/Department type"""
@@ -89,7 +91,7 @@ class MemberDropNotificationSettings(BaseModel):
     personal email is included in drop/property-return notifications.
     """
     cc_roles: List[str] = Field(
-        default_factory=lambda: ["admin", "quartermaster", "chief"],
+        default_factory=lambda: list(ADMIN_NOTIFY_ROLE_SLUGS),
         description="Role names whose holders are automatically CC'd on drop notifications",
     )
     cc_emails: List[str] = Field(
@@ -294,6 +296,7 @@ class ModuleSettings(BaseModel):
     mobile: bool = Field(default=False, description="Mobile App Access module")
     forms: bool = Field(default=False, description="Custom Forms module")
     integrations: bool = Field(default=False, description="External Integrations module")
+    facilities: bool = Field(default=False, description="Facilities Management module (maintenance, inspections, systems)")
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
@@ -321,6 +324,8 @@ class ModuleSettings(BaseModel):
             enabled.append('forms')
         if self.integrations:
             enabled.append('integrations')
+        if self.facilities:
+            enabled.append('facilities')
 
         return enabled
 
@@ -341,6 +346,7 @@ class ModuleSettingsUpdate(BaseModel):
     mobile: Optional[bool] = None
     forms: Optional[bool] = None
     integrations: Optional[bool] = None
+    facilities: Optional[bool] = None
 
 
 class OrganizationSettings(BaseModel):
@@ -594,6 +600,26 @@ class OrganizationSetupCreate(BaseModel):
             v = 'https://' + v
         return v
 
+
+
+class SetupChecklistItem(BaseModel):
+    """A single item on the department setup checklist"""
+    key: str
+    title: str
+    description: str
+    path: str
+    category: str
+    is_complete: bool = False
+    count: int = 0
+    required: bool = True
+
+
+class SetupChecklistResponse(BaseModel):
+    """Department setup checklist with completion status for each step"""
+    items: List[SetupChecklistItem]
+    completed_count: int = 0
+    total_count: int = 0
+    enabled_modules: List[str] = Field(default_factory=list)
 
 
 class OrganizationSetupResponse(BaseModel):

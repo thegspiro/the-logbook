@@ -9,13 +9,27 @@ import {
   Phone,
   Calendar,
   AlertCircle,
+  Lock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
-import { userService, organizationService } from '../services/api';
+import { userService, organizationService, roleService, locationsService } from '../services/api';
+import type { Location } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
+
+const OPERATIONAL_RANKS = [
+  { value: 'fire_chief', label: 'Fire Chief' },
+  { value: 'deputy_chief', label: 'Deputy Chief' },
+  { value: 'assistant_chief', label: 'Assistant Chief' },
+  { value: 'captain', label: 'Captain' },
+  { value: 'lieutenant', label: 'Lieutenant' },
+  { value: 'engineer', label: 'Engineer' },
+  { value: 'firefighter', label: 'Firefighter' },
+];
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
@@ -55,6 +69,16 @@ const AddMember: React.FC = () => {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Password fields
+  const [useCustomPassword, setUseCustomPassword] = useState(false);
+  const [initialPassword, setInitialPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Dropdown data
+  const [availablePositions, setAvailablePositions] = useState<{ id: string; name: string }[]>([]);
+  const [availableStations, setAvailableStations] = useState<Location[]>([]);
+
   useEffect(() => {
     organizationService.previewNextMembershipId().then((data) => {
       if (data.enabled && data.next_id) {
@@ -63,6 +87,17 @@ const AddMember: React.FC = () => {
     }).catch(() => {
       // Silently ignore - membership ID may not be configured
     });
+
+    // Load positions (roles) for dropdown
+    roleService.getRoles().then((roles) => {
+      setAvailablePositions(roles.map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
+    }).catch(() => {});
+
+    // Load stations for dropdown (only top-level locations with an address)
+    locationsService.getLocations({ is_active: true }).then((locs) => {
+      const stations = locs.filter((l: Location) => l.address && !l.room_number);
+      setAvailableStations(stations);
+    }).catch(() => {});
   }, []);
 
   const handleInputChange = (
@@ -105,6 +140,18 @@ const AddMember: React.FC = () => {
     if (!formData.emergencyName1.trim()) newErrors.emergencyName1 = 'Emergency contact name is required';
     if (!formData.emergencyRelationship1.trim()) newErrors.emergencyRelationship1 = 'Relationship is required';
     if (!formData.emergencyPhone1.trim()) newErrors.emergencyPhone1 = 'Emergency phone is required';
+
+    // Password (if custom password is set)
+    if (useCustomPassword) {
+      if (!initialPassword) {
+        newErrors.password = 'Password is required when setting a custom password';
+      } else if (initialPassword.length < 12) {
+        newErrors.password = 'Password must be at least 12 characters';
+      }
+      if (initialPassword !== confirmPassword) {
+        newErrors.confirmPassword = 'Passwords do not match';
+      }
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -176,7 +223,9 @@ const AddMember: React.FC = () => {
         address_zip: formData.zipCode || undefined,
         address_country: 'USA',
         emergency_contacts: emergencyContacts,
-        send_welcome_email: true,
+        password: useCustomPassword && initialPassword ? initialPassword : undefined,
+        role_ids: formData.role ? [formData.role] : undefined,
+        send_welcome_email: !useCustomPassword,
       });
 
       toast.success('Member added successfully!');
@@ -184,6 +233,12 @@ const AddMember: React.FC = () => {
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Failed to add member. Please try again.');
       toast.error(errorMessage);
+
+      // Highlight the specific field if it's a duplicate badge number error
+      if (errorMessage.toLowerCase().includes('badge number') || errorMessage.toLowerCase().includes('department id')) {
+        setErrors((prev) => ({ ...prev, departmentId: errorMessage }));
+      }
+
       setIsSaving(false);
     }
   };
@@ -223,7 +278,7 @@ const AddMember: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Personal Information */}
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
@@ -232,7 +287,7 @@ const AddMember: React.FC = () => {
               <h2 className="text-xl font-bold text-theme-text-primary">Personal Information</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   First Name <span className="text-red-700 dark:text-red-400">*</span>
@@ -369,7 +424,7 @@ const AddMember: React.FC = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-primary mb-2">
                     City <span className="text-red-700 dark:text-red-400">*</span>
@@ -504,6 +559,108 @@ const AddMember: React.FC = () => {
             </div>
           </div>
 
+          {/* Account Password */}
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+            <div className="flex items-center space-x-2 mb-4">
+              <Lock className="w-5 h-5 text-yellow-700 dark:text-yellow-400" />
+              <h2 className="text-xl font-bold text-theme-text-primary">Account Password</h2>
+            </div>
+
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useCustomPassword}
+                  onChange={(e) => {
+                    setUseCustomPassword(e.target.checked);
+                    if (!e.target.checked) {
+                      setInitialPassword('');
+                      setConfirmPassword('');
+                      setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.password;
+                        delete next.confirmPassword;
+                        return next;
+                      });
+                    }
+                  }}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <div>
+                  <span className="text-sm font-medium text-theme-text-primary">Set initial password</span>
+                  <p className="text-xs text-theme-text-muted">
+                    If unchecked, a temporary password will be generated and emailed to the member.
+                  </p>
+                </div>
+              </label>
+
+              {useCustomPassword && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                      Password <span className="text-red-700 dark:text-red-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={initialPassword}
+                        onChange={(e) => {
+                          setInitialPassword(e.target.value);
+                          if (errors.password) {
+                            setErrors((prev) => { const n = { ...prev }; delete n.password; return n; });
+                          }
+                        }}
+                        className={`w-full px-4 py-2 pr-10 bg-theme-input-bg border ${
+                          errors.password ? 'border-red-500' : 'border-theme-input-border'
+                        } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                        placeholder="Minimum 12 characters"
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.password}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                      Confirm Password <span className="text-red-700 dark:text-red-400">*</span>
+                    </label>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (errors.confirmPassword) {
+                          setErrors((prev) => { const n = { ...prev }; delete n.confirmPassword; return n; });
+                        }
+                      }}
+                      className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                        errors.confirmPassword ? 'border-red-500' : 'border-theme-input-border'
+                      } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                      placeholder="Re-enter password"
+                      autoComplete="new-password"
+                    />
+                    {errors.confirmPassword && (
+                      <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.confirmPassword}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-theme-text-muted">
+                The member will be required to change their password on first login regardless of how it is set.
+              </p>
+            </div>
+          </div>
+
           {/* Department Information */}
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
             <div className="flex items-center space-x-2 mb-4">
@@ -560,39 +717,48 @@ const AddMember: React.FC = () => {
                 <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Rank
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Firefighter"
-                />
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Rank</option>
+                  {OPERATIONAL_RANKS.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-theme-text-primary mb-2">
-                  Role
+                  Position
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.role}
                   onChange={(e) => handleInputChange('role', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Engine Operator"
-                />
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Position</option>
+                  {availablePositions.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Station
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.station}
                   onChange={(e) => handleInputChange('station', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Station 1"
-                />
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Station</option>
+                  {availableStations.map((s) => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

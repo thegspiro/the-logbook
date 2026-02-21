@@ -22,6 +22,7 @@ import FieldRenderer from './FieldRenderer';
 import { formsService } from '../../services/api';
 import type { FieldDefinition } from './FieldRenderer';
 import type { FormDetailDef, FormSubmission } from '../../services/api';
+import { FieldType } from '../../constants/enums';
 
 export interface FormRendererProps {
   /** Fetch and render a form by ID */
@@ -139,11 +140,37 @@ const FormRenderer = ({
     });
   }, []);
 
+  /** Evaluate whether a field's visibility condition is satisfied. */
+  const isFieldVisible = useCallback(
+    (field: FieldDefinition): boolean => {
+      if (!field.condition_field_id || !field.condition_operator) return true;
+      const parentValue = (formData[field.condition_field_id] || '').trim();
+
+      switch (field.condition_operator) {
+        case 'equals':
+          return parentValue === (field.condition_value || '');
+        case 'not_equals':
+          return parentValue !== (field.condition_value || '');
+        case 'contains':
+          return parentValue.toLowerCase().includes((field.condition_value || '').toLowerCase());
+        case 'not_empty':
+          return parentValue.length > 0;
+        case 'is_empty':
+          return parentValue.length === 0;
+        default:
+          return true;
+      }
+    },
+    [formData],
+  );
+
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
 
     for (const field of fields) {
-      if (field.field_type === 'section_header') continue;
+      if (field.field_type === FieldType.SECTION_HEADER) continue;
+      // Skip validation for fields hidden by conditions
+      if (!isFieldVisible(field)) continue;
       const val = formData[field.id]?.trim() || '';
 
       if (field.required && !val) {
@@ -158,7 +185,7 @@ const FormRenderer = ({
         errors[field.id] = `Maximum ${field.max_length} characters`;
       }
 
-      if (val && field.field_type === 'number') {
+      if (val && field.field_type === FieldType.NUMBER) {
         const num = Number(val);
         if (isNaN(num)) {
           errors[field.id] = 'Must be a number';
@@ -172,7 +199,7 @@ const FormRenderer = ({
         }
       }
 
-      if (val && field.field_type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      if (val && field.field_type === FieldType.EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
         errors[field.id] = 'Invalid email address';
       }
 
@@ -305,17 +332,21 @@ const FormRenderer = ({
       <div className={`space-y-${compact ? '3' : '5'}`}>
         {fields
           .sort((a, b) => a.sort_order - b.sort_order)
-          .map((field) => (
-            <FieldRenderer
-              key={field.id}
-              field={field}
-              value={formData[field.id] || ''}
-              onChange={handleFieldChange}
-              theme={theme}
-              disabled={readOnly}
-              error={fieldErrors[field.id]}
-            />
-          ))}
+          .map((field) => {
+            const visible = isFieldVisible(field);
+            if (!visible) return null;
+            return (
+              <FieldRenderer
+                key={field.id}
+                field={field}
+                value={formData[field.id] || ''}
+                onChange={handleFieldChange}
+                theme={theme}
+                disabled={readOnly}
+                error={fieldErrors[field.id]}
+              />
+            );
+          })}
       </div>
 
       {/* Actions */}

@@ -24,6 +24,7 @@ class LocationBase(BaseModel):
     floor: Optional[str] = Field(None, max_length=20, description="Floor number or name")
     room_number: Optional[str] = Field(None, max_length=50, description="Room number or identifier")
     capacity: Optional[int] = Field(None, ge=1, description="Maximum occupancy")
+    facility_id: Optional[UUID] = Field(None, description="Link to Facility when Facilities module is enabled")
     is_active: bool = Field(default=True, description="Whether location is available for events")
 
 
@@ -53,6 +54,7 @@ class LocationResponse(LocationBase):
     """Schema for location response"""
     id: UUID
     organization_id: UUID
+    display_code: Optional[str] = None
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -63,12 +65,22 @@ class LocationResponse(LocationBase):
 class LocationListItem(BaseModel):
     """Schema for location list items"""
     id: UUID
+    organization_id: UUID
     name: str
+    description: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip: Optional[str] = None
     building: Optional[str] = None
     floor: Optional[str] = None
     room_number: Optional[str] = None
     capacity: Optional[int] = None
     is_active: bool
+    facility_id: Optional[UUID] = None
+    display_code: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

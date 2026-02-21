@@ -517,7 +517,7 @@ const PipelineSettingsPage: React.FC = () => {
       {/* Create Pipeline Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg">
+          <div className="bg-theme-surface-modal rounded-xl border border-theme-surface-border w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-semibold text-theme-text-primary">Create Pipeline</h2>
               <button onClick={() => setShowCreateModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
@@ -591,7 +591,7 @@ const PipelineSettingsPage: React.FC = () => {
       {/* Add Step Modal */}
       {showAddStepModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg">
+          <div className="bg-theme-surface-modal rounded-xl border border-theme-surface-border w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-semibold text-theme-text-primary">Add Pipeline Step</h2>
               <button onClick={() => setShowAddStepModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">

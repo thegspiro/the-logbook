@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventService } from '../services/api';
 import type { QRCheckInData } from '../types/event';
@@ -17,35 +17,39 @@ import { formatShortDateTime } from '../utils/dateFormatting';
  */
 const EventQRCodePage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const tz = useTimezone();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qrData, setQrData] = useState<QRCheckInData | null>(null);
 
-  useEffect(() => {
-    if (!eventId) return;
-    fetchQRData();
-
-    // Refresh QR data every 30 seconds to update validity status
-    const interval = setInterval(fetchQRData, 30000);
-    return () => clearInterval(interval);
-  }, [eventId]);
-
-  const fetchQRData = async () => {
+  const fetchQRData = useCallback(async (isRefresh = false) => {
     if (!eventId) return;
 
     try {
-      setError(null);
+      if (!isRefresh) setError(null);
       const data = await eventService.getQRCheckInData(eventId);
       setQrData(data);
+      setError(null);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to load QR code'));
+      // On refresh, keep existing data and only update error
+      // On initial load, set the error
+      if (!isRefresh || !qrData) {
+        setError(getErrorMessage(err, 'Failed to load QR code'));
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [eventId, qrData]);
+
+  useEffect(() => {
+    if (!eventId) return;
+    fetchQRData(false);
+
+    // Refresh QR data every 30 seconds to update validity status
+    const interval = setInterval(() => fetchQRData(true), 30000);
+    return () => clearInterval(interval);
+  }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getCheckInUrl = () => {
     if (!eventId) return '';
@@ -56,23 +60,23 @@ const EventQRCodePage: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-slate-300">Loading QR code...</div>
+        <div className="text-theme-text-secondary">Loading QR code...</div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !qrData) {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
-          <p className="text-red-300">{error}</p>
+          <p className="text-red-400">{error}</p>
         </div>
-        <button
-          onClick={() => navigate(`/events/${eventId}`)}
-          className="text-blue-600 hover:text-blue-300"
+        <Link
+          to={eventId ? `/events/${eventId}` : '/events'}
+          className="text-blue-600 hover:text-blue-400"
         >
-          ← Back to Event
-        </button>
+          &larr; {eventId ? 'Back to Event' : 'Back to Events'}
+        </Link>
       </div>
     );
   }
@@ -83,15 +87,17 @@ const EventQRCodePage: React.FC = () => {
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
           <p className="text-yellow-300">No QR code data available</p>
         </div>
-        <button
-          onClick={() => navigate(`/events/${eventId}`)}
-          className="text-blue-600 hover:text-blue-300"
+        <Link
+          to={eventId ? `/events/${eventId}` : '/events'}
+          className="text-blue-600 hover:text-blue-400"
         >
-          ← Back to Event
-        </button>
+          &larr; {eventId ? 'Back to Event' : 'Back to Events'}
+        </Link>
       </div>
     );
   }
+
+  const checkInUrl = getCheckInUrl();
 
   return (
     <div className="min-h-screen max-w-4xl mx-auto p-6">
@@ -99,18 +105,18 @@ const EventQRCodePage: React.FC = () => {
       <div className="mb-6">
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 hover:text-blue-300 mb-4 inline-block"
+          className="text-blue-600 hover:text-blue-400 mb-4 inline-block"
         >
-          ← Back to Event
+          &larr; Back to Event
         </Link>
-        <h1 className="text-3xl font-bold text-white">Event Check-In QR Code</h1>
+        <h1 className="text-3xl font-bold text-theme-text-primary">Event Check-In QR Code</h1>
       </div>
 
       {/* Event Info */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-2xl font-semibold text-white mb-2">{qrData.event_name}</h2>
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-2xl font-semibold text-theme-text-primary mb-2">{qrData.event_name}</h2>
 
-        <div className="space-y-2 text-slate-200">
+        <div className="space-y-2 text-theme-text-secondary">
           {qrData.event_type && (
             <p className="capitalize">
               <span className="font-medium">Type:</span> {qrData.event_type.replace('_', ' ')}
@@ -136,11 +142,11 @@ const EventQRCodePage: React.FC = () => {
       </div>
 
       {/* QR Code Section */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-8">
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-8">
         {qrData.is_valid ? (
           <div className="text-center">
             <div className="mb-6">
-              <div className="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-full">
+              <div className="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400 rounded-full">
                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
@@ -148,25 +154,27 @@ const EventQRCodePage: React.FC = () => {
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-white mb-4">
+            <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
               Scan to Check In
             </h3>
 
-            <p className="text-slate-300 mb-6">
+            <p className="text-theme-text-secondary mb-6">
               Members can scan this QR code to check themselves in to the event
             </p>
 
             {/* QR Code */}
-            <div className="flex justify-center mb-6">
-              <div className="bg-white p-8 rounded-lg border-4 border-white/20">
-                <QRCodeSVG
-                  value={getCheckInUrl()}
-                  size={300}
-                  level="H"
-                  includeMargin={true}
-                />
+            {checkInUrl && (
+              <div className="flex justify-center mb-6">
+                <div className="bg-white p-8 rounded-lg border-4 border-theme-surface-border">
+                  <QRCodeSVG
+                    value={checkInUrl}
+                    size={300}
+                    level="H"
+                    includeMargin={true}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Instructions */}
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-left">
@@ -182,7 +190,7 @@ const EventQRCodePage: React.FC = () => {
         ) : (
           <div className="text-center">
             <div className="mb-6">
-              <div className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 rounded-full">
+              <div className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 rounded-full">
                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
@@ -190,11 +198,11 @@ const EventQRCodePage: React.FC = () => {
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-white mb-4">
+            <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
               QR Code Check-In Window
             </h3>
 
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6">
               <p className="text-yellow-300 mb-2">
                 Check-in is only available during the following time window:
               </p>
@@ -207,6 +215,23 @@ const EventQRCodePage: React.FC = () => {
                 </p>
               )}
             </div>
+
+            {/* Still show the QR code (greyed out) so the page is ready when the window opens */}
+            {checkInUrl && (
+              <div className="flex justify-center mb-4">
+                <div className="bg-white p-8 rounded-lg border-4 border-theme-surface-border opacity-40">
+                  <QRCodeSVG
+                    value={checkInUrl}
+                    size={250}
+                    level="H"
+                    includeMargin={true}
+                  />
+                </div>
+              </div>
+            )}
+            <p className="text-sm text-theme-text-muted">
+              The QR code will become active when the check-in window opens. This page refreshes automatically.
+            </p>
           </div>
         )}
       </div>

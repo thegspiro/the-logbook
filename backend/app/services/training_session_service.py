@@ -13,10 +13,11 @@ from sqlalchemy.orm import selectinload
 import secrets
 
 from app.models.event import Event, EventRSVP, EventType, CheckInWindowType
+from app.core.constants import ROLE_TRAINING_OFFICER
 from app.models.training import (
     TrainingSession, TrainingCourse, TrainingApproval, ApprovalStatus,
     TrainingType, TrainingRecord, ProgramEnrollment, RequirementProgress,
-    EnrollmentStatus,
+    EnrollmentStatus, RequirementProgressStatus,
 )
 from app.models.user import User, Role
 from app.schemas.training_session import TrainingSessionCreate, AttendeeApprovalData
@@ -270,14 +271,20 @@ class TrainingSessionService:
         training_session.finalized_at = now
         training_session.finalized_by = finalized_by
 
+        # Capture values before commit expires the relationships
+        event_title = event.title
+        event_start = event.start_datetime
+        session_course = training_session.course_name
+
         await self.db.commit()
         await self.db.refresh(training_approval)
 
         # Send email notification to training officers
         await self._notify_training_officers(
             organization_id=organization_id,
-            event=event,
-            training_session=training_session,
+            event_title=event_title,
+            event_start=event_start,
+            course_name=session_course,
             approval_token=approval_token,
             attendee_count=len(attendee_data),
             approval_deadline=approval_deadline,
@@ -289,8 +296,9 @@ class TrainingSessionService:
     async def _notify_training_officers(
         self,
         organization_id: UUID,
-        event: Event,
-        training_session: TrainingSession,
+        event_title: str,
+        event_start: datetime,
+        course_name: str,
         approval_token: str,
         attendee_count: int,
         approval_deadline: datetime,
@@ -306,7 +314,7 @@ class TrainingSessionService:
             # Get training officer role
             role_result = await self.db.execute(
                 select(Role)
-                .where(Role.slug == "training_officer")
+                .where(Role.slug == ROLE_TRAINING_OFFICER)
                 .where(Role.organization_id == str(organization_id))
             )
             training_officer_role = role_result.scalar_one_or_none()
@@ -319,7 +327,7 @@ class TrainingSessionService:
             users_result = await self.db.execute(
                 select(User)
                 .join(user_roles, User.id == user_roles.c.user_id)
-                .where(user_roles.c.role_id == training_officer_role.id)
+                .where(user_roles.c.position_id == training_officer_role.id)
                 .where(User.organization_id == str(organization_id))
             )
             training_officers = list(users_result.scalars().all())
@@ -350,9 +358,9 @@ class TrainingSessionService:
             email_service = EmailService()
             await email_service.send_training_approval_request(
                 to_emails=to_emails,
-                event_title=event.title,
-                course_name=training_session.course_name,
-                event_date=event.start_datetime,
+                event_title=event_title,
+                course_name=course_name,
+                event_date=event_start,
                 approval_url=approval_url,
                 attendee_count=attendee_count,
                 approval_deadline=approval_deadline,
@@ -638,8 +646,8 @@ class TrainingSessionService:
             progress.progress_value = current_value + hours_completed
 
             # Update status if not already completed
-            if progress.status == "not_started":
-                progress.status = "in_progress"
+            if progress.status == RequirementProgressStatus.NOT_STARTED:
+                progress.status = RequirementProgressStatus.IN_PROGRESS
 
             logger.info(
                 f"Updated enrollment progress: user={user_id}, "
