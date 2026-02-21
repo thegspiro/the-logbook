@@ -832,7 +832,7 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
+              <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
@@ -939,7 +939,7 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
+              <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
@@ -1033,7 +1033,7 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
+              <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
@@ -1175,7 +1175,7 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
+              <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
@@ -1233,8 +1233,8 @@ export const EventDetailPage: React.FC = () => {
                     </div>
 
                     {actualStartTime && actualEndTime && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <p className="text-sm text-blue-800">
+                      <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                        <p className="text-sm text-blue-800 dark:text-blue-300">
                           <strong>Duration:</strong>{' '}
                           {Math.round((new Date(actualEndTime).getTime() - new Date(actualStartTime).getTime()) / 60000)} minutes
                         </p>
@@ -1279,7 +1279,7 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
+              <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
@@ -1373,7 +1373,7 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
+              <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">

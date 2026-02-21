@@ -30,6 +30,9 @@ Recommended crontab (add to host or container cron):
 
 # Every 30 minutes — post-event validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_event_validation
+
+# Every 30 minutes — post-shift validation notifications
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_shift_validation
 -----------------------------------------------------
 """
 
@@ -88,6 +91,12 @@ SCHEDULE = {
     },
     "post_event_validation": {
         "description": "Notify event organizers to validate attendance and timing after their event ends",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
+    "post_shift_validation": {
+        "description": "Notify shift officers to validate attendance and timing after their shift ends",
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
@@ -705,6 +714,172 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send a notification to shift officers after their shift ends,
+    asking them to validate attendance records and timing.
+
+    Runs every 30 minutes. Looks for shifts that ended within the last
+    2 hours and haven't already had a validation notification sent.
+    Sends an in-app notification (and optionally email) to the shift
+    officer with a link to the scheduling page.
+
+    Tracks sent status via a custom JSON field on the Shift model (activities).
+    """
+    from datetime import timedelta, timezone as dt_timezone
+    from app.models.training import Shift, ShiftAttendance
+    from app.models.user import User
+    from app.models.notification import NotificationLog, NotificationChannel
+    from app.services.email_service import EmailService
+    from app.core.utils import generate_uuid
+    from app.core.config import settings
+
+    now = datetime.now(dt_timezone.utc)
+    lookback = now - timedelta(hours=2)
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_notifications = 0
+    total_emails = 0
+    results = []
+
+    for org in organizations:
+        org_notifications = 0
+        org_emails = 0
+
+        try:
+            shifts_result = await db.execute(
+                select(Shift)
+                .where(Shift.organization_id == str(org.id))
+                .where(Shift.end_time.isnot(None))
+                .where(Shift.end_time <= now)
+                .where(Shift.end_time >= lookback)
+                .where(Shift.shift_officer_id.isnot(None))
+            )
+            shifts = list(shifts_result.scalars().all())
+
+            for shift in shifts:
+                activities = shift.activities or {}
+                if activities.get("validation_notification_sent"):
+                    continue
+
+                # Find the shift officer
+                officer_result = await db.execute(
+                    select(User).where(
+                        User.id == shift.shift_officer_id,
+                        User.is_active == True,
+                    )
+                )
+                officer = officer_result.scalar_one_or_none()
+                if not officer:
+                    shift.activities = {**activities, "validation_notification_sent": True}
+                    continue
+
+                # Count attendance
+                att_result = await db.execute(
+                    select(ShiftAttendance).where(
+                        ShiftAttendance.shift_id == str(shift.id)
+                    )
+                )
+                attendance_records = list(att_result.scalars().all())
+                att_count = len(attendance_records)
+
+                shift_date_str = shift.shift_date.strftime("%b %d, %Y") if shift.shift_date else "Unknown"
+                subject = f"Action Required: Validate attendance for shift on {shift_date_str}"
+                message = (
+                    f"Your shift on {shift_date_str} has ended. "
+                    f"{att_count} member{'s' if att_count != 1 else ''} recorded. "
+                    f"Please review and confirm the attendance records and "
+                    f"shift timing before finalizing."
+                )
+
+                # In-app notification
+                try:
+                    in_app_log = NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=str(org.id),
+                        recipient_id=str(officer.id),
+                        channel=NotificationChannel.IN_APP,
+                        category="shift_validation",
+                        subject=subject,
+                        message=message,
+                        action_url="/scheduling",
+                    )
+                    db.add(in_app_log)
+                    org_notifications += 1
+                except Exception as e:
+                    logger.error(
+                        f"Failed to create post-shift validation notification "
+                        f"for officer {officer.id}, shift {shift.id}: {e}"
+                    )
+
+                # Email notification
+                prefs = officer.notification_preferences or {}
+                wants_email = prefs.get("email_notifications", True)
+                if wants_email and officer.email:
+                    try:
+                        full_url = f"{settings.FRONTEND_URL}/scheduling"
+                        email_service = EmailService(organization=org)
+                        sent_count, _ = await email_service.send_email(
+                            to_emails=[officer.email],
+                            subject=subject,
+                            html_body=(
+                                f"<p>Hi {officer.first_name},</p>"
+                                f"<p>Your shift on <strong>{shift_date_str}</strong> has ended. "
+                                f"{att_count} member{'s' if att_count != 1 else ''} recorded.</p>"
+                                f"<p>Please review and confirm the attendance records and "
+                                f"shift timing before finalizing.</p>"
+                                f'<p><a href="{full_url}">Review Shift</a></p>'
+                            ),
+                            text_body=(
+                                f"Hi {officer.first_name},\n\n"
+                                f"Your shift on {shift_date_str} has ended. "
+                                f"{att_count} member{'s' if att_count != 1 else ''} recorded.\n\n"
+                                f"Please review and confirm the attendance records and "
+                                f"shift timing before finalizing.\n\n"
+                                f"Review Shift: {full_url}"
+                            ),
+                        )
+                        if sent_count > 0:
+                            org_emails += 1
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to send post-shift validation email "
+                            f"to {officer.email}: {e}"
+                        )
+
+                # Mark as sent
+                shift.activities = {**activities, "validation_notification_sent": True}
+
+            await db.commit()
+
+        except Exception as e:
+            logger.error(f"Post-shift validation failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+            continue
+
+        total_notifications += org_notifications
+        total_emails += org_emails
+        if org_notifications > 0 or org_emails > 0:
+            results.append({
+                "org_id": str(org.id),
+                "notifications": org_notifications,
+                "emails_sent": org_emails,
+            })
+
+    logger.info(
+        f"Post-shift validation complete: {total_notifications} in-app, "
+        f"{total_emails} emails across {len(organizations)} orgs"
+    )
+    return {
+        "task": "post_shift_validation",
+        "total_notifications": total_notifications,
+        "total_emails_sent": total_emails,
+        "organizations": results,
+    }
+
+
 def _format_relative_time(event_time: datetime, now: datetime) -> str:
     """Format a future time as a relative description."""
     delta = event_time - now
@@ -729,4 +904,5 @@ TASK_RUNNERS = {
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
+    "post_shift_validation": run_post_shift_validation,
 }

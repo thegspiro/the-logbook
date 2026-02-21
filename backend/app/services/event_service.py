@@ -378,8 +378,11 @@ class EventService:
         if not event.requires_rsvp:
             return None, "Event does not require RSVP"
 
-        # Check RSVP deadline
-        if event.rsvp_deadline and datetime.now(dt_timezone.utc) > event.rsvp_deadline:
+        # Check RSVP deadline — ensure deadline is timezone-aware before comparing
+        rsvp_deadline = event.rsvp_deadline
+        if rsvp_deadline and rsvp_deadline.tzinfo is None:
+            rsvp_deadline = rsvp_deadline.replace(tzinfo=dt_timezone.utc)
+        if rsvp_deadline and datetime.now(dt_timezone.utc) > rsvp_deadline:
             return None, "RSVP deadline has passed"
 
         # Validate RSVP status against allowed statuses
@@ -876,10 +879,15 @@ class EventService:
 
         # Check time window
         now = datetime.now(dt_timezone.utc)
-        check_in_start = event.start_datetime - timedelta(hours=1)
+        # Database datetimes may be naive (stored as UTC without tzinfo), so
+        # attach UTC tzinfo to avoid "can't compare offset-naive and
+        # offset-aware datetimes" errors.
+        start_dt = event.start_datetime.replace(tzinfo=dt_timezone.utc) if event.start_datetime.tzinfo is None else event.start_datetime
+        check_in_start = start_dt - timedelta(hours=1)
 
         # Use actual_end_time if set (early end), otherwise use scheduled end_datetime
-        check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
+        end_dt = event.actual_end_time if event.actual_end_time else event.end_datetime
+        check_in_end = end_dt.replace(tzinfo=dt_timezone.utc) if end_dt.tzinfo is None else end_dt
 
         is_valid = check_in_start <= now <= check_in_end
 
@@ -912,23 +920,27 @@ class EventService:
         """
         check_in_window_type = event.check_in_window_type or CheckInWindowType.FLEXIBLE
 
+        def _ensure_utc(dt: datetime) -> datetime:
+            """Attach UTC tzinfo to naive datetimes from the database."""
+            return dt.replace(tzinfo=dt_timezone.utc) if dt.tzinfo is None else dt
+
         if check_in_window_type == CheckInWindowType.FLEXIBLE:
             # Allow check-in within configurable window before event starts, until event ends
             minutes_before = event.check_in_minutes_before if event.check_in_minutes_before is not None else 30
-            check_in_start = event.start_datetime - timedelta(minutes=minutes_before)
-            check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
+            check_in_start = _ensure_utc(event.start_datetime) - timedelta(minutes=minutes_before)
+            check_in_end = _ensure_utc(event.actual_end_time if event.actual_end_time else event.end_datetime)
 
         elif check_in_window_type == CheckInWindowType.STRICT:
             # Only between actual start and end times
-            check_in_start = event.actual_start_time if event.actual_start_time else event.start_datetime
-            check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
+            check_in_start = _ensure_utc(event.actual_start_time if event.actual_start_time else event.start_datetime)
+            check_in_end = _ensure_utc(event.actual_end_time if event.actual_end_time else event.end_datetime)
 
         else:  # WINDOW type
             # Configurable window before/after start
             minutes_before = event.check_in_minutes_before if event.check_in_minutes_before is not None else 15
             minutes_after = event.check_in_minutes_after if event.check_in_minutes_after is not None else 15
-            check_in_start = event.start_datetime - timedelta(minutes=minutes_before)
-            check_in_end = event.end_datetime + timedelta(minutes=minutes_after)
+            check_in_start = _ensure_utc(event.start_datetime) - timedelta(minutes=minutes_before)
+            check_in_end = _ensure_utc(event.end_datetime) + timedelta(minutes=minutes_after)
 
         if now < check_in_start:
             # Always convert UTC to local time for user-facing messages
@@ -1138,10 +1150,12 @@ class EventService:
         if event.organization_id != organization_id:
             return None, "Event not found in your organization"
 
-        # Calculate check-in window
+        # Calculate check-in window — ensure datetimes are timezone-aware
         now = datetime.now(dt_timezone.utc)
-        check_in_start = event.start_datetime - timedelta(hours=1)
-        check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
+        start_dt = event.start_datetime.replace(tzinfo=dt_timezone.utc) if event.start_datetime.tzinfo is None else event.start_datetime
+        check_in_start = start_dt - timedelta(hours=1)
+        end_dt = event.actual_end_time if event.actual_end_time else event.end_datetime
+        check_in_end = end_dt.replace(tzinfo=dt_timezone.utc) if end_dt.tzinfo is None else end_dt
         is_check_in_active = check_in_start <= now <= check_in_end
 
         # Get all RSVPs with user details
