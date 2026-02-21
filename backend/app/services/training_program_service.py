@@ -25,6 +25,7 @@ from app.schemas.training_program import (
     ProgramRequirementCreate, ProgramMilestoneCreate, ProgramEnrollmentCreate,
     RequirementProgressUpdate, SkillEvaluationCreate, SkillCheckoffCreate
 )
+from app.services.training_waiver_service import fetch_user_waivers, adjust_required
 
 
 class TrainingProgramService:
@@ -621,14 +622,35 @@ class TrainingProgramService:
         if updates.progress_value is not None:
             progress.progress_value = updates.progress_value
 
-            # Calculate percentage based on requirement type
+            # Fetch waivers to adjust required values
+            enrollment = progress.enrollment
+            user_waivers = await fetch_user_waivers(
+                self.db,
+                str(enrollment.program.organization_id),
+                str(enrollment.user_id),
+            )
+
+            # Determine evaluation window from enrollment period
+            enroll_start = enrollment.enrolled_at.date() if enrollment.enrolled_at else date.today()
+            enroll_end = enrollment.target_completion_date or date.today()
+
+            # Calculate percentage based on requirement type (with waiver adjustment)
             requirement = progress.requirement
             if requirement.requirement_type == RequirementType.HOURS and requirement.required_hours:
-                progress.progress_percentage = min(100.0, (updates.progress_value / requirement.required_hours) * 100)
+                adj_required, _, _ = adjust_required(
+                    requirement.required_hours, enroll_start, enroll_end, user_waivers, str(requirement.id),
+                ) if user_waivers else (requirement.required_hours, 0, 0)
+                progress.progress_percentage = min(100.0, (updates.progress_value / adj_required) * 100)
             elif requirement.requirement_type == RequirementType.SHIFTS and requirement.required_shifts:
-                progress.progress_percentage = min(100.0, (updates.progress_value / requirement.required_shifts) * 100)
+                adj_required, _, _ = adjust_required(
+                    requirement.required_shifts, enroll_start, enroll_end, user_waivers, str(requirement.id),
+                ) if user_waivers else (requirement.required_shifts, 0, 0)
+                progress.progress_percentage = min(100.0, (updates.progress_value / adj_required) * 100)
             elif requirement.requirement_type == RequirementType.CALLS and requirement.required_calls:
-                progress.progress_percentage = min(100.0, (updates.progress_value / requirement.required_calls) * 100)
+                adj_required, _, _ = adjust_required(
+                    requirement.required_calls, enroll_start, enroll_end, user_waivers, str(requirement.id),
+                ) if user_waivers else (requirement.required_calls, 0, 0)
+                progress.progress_percentage = min(100.0, (updates.progress_value / adj_required) * 100)
 
             # Auto-complete if reached 100%
             if progress.progress_percentage >= 100.0 and progress.status != RequirementProgressStatus.COMPLETED:

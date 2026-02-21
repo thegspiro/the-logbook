@@ -46,6 +46,9 @@ from app.schemas.training import (
     HistoricalImportConfirmRequest,
 )
 from app.services.training_service import TrainingService
+from app.services.training_waiver_service import (
+    WaiverPeriod, fetch_org_waivers, adjust_required,
+)
 from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
@@ -1400,11 +1403,14 @@ def _get_requirement_date_window(req, today: date):
         return date(yr, 1, 1), date(yr, 12, 31)
 
 
-def _evaluate_member_requirement(req, member_records, today: date):
+def _evaluate_member_requirement(req, member_records, today: date, waivers=None):
     """
     Evaluate a single member's status for a single requirement.
 
     Returns (status, latest_completion_date, latest_expiry_date).
+
+    When *waivers* is provided, required hours/shifts/calls are adjusted
+    for waived months so members on leave are not penalised.
 
     Matching strategy depends on requirement_type:
     - HOURS:          Sum hours of completed records matching training_type within date window
@@ -1416,6 +1422,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
     req_type = req.requirement_type.value if hasattr(req.requirement_type, 'value') else str(req.requirement_type)
     freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
     start_date, end_date = _get_requirement_date_window(req, today)
+    _waivers = waivers or []
 
     # Filter completed records within the date window
     completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
@@ -1438,6 +1445,10 @@ def _evaluate_member_requirement(req, member_records, today: date):
 
         total_hours = sum(r.hours_completed or 0 for r in type_matched)
         required = req.required_hours or 0
+
+        # Adjust required hours for waived months
+        if required > 0 and start_date and end_date and _waivers:
+            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
 
         latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
@@ -1519,6 +1530,10 @@ def _evaluate_member_requirement(req, member_records, today: date):
         count = len(type_matched)
         required = req.required_shifts or 0
 
+        # Adjust required shifts for waived months
+        if required > 0 and start_date and end_date and _waivers:
+            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
+
         latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
         latest_exp = None
@@ -1536,6 +1551,10 @@ def _evaluate_member_requirement(req, member_records, today: date):
             type_matched = [r for r in windowed if r.training_type == req.training_type]
         count = len(type_matched)
         required = req.required_calls or 0
+
+        # Adjust required calls for waived months
+        if required > 0 and start_date and end_date and _waivers:
+            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
 
         latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
@@ -1631,17 +1650,21 @@ async def get_compliance_matrix(
     for r in all_records:
         records_by_user.setdefault(r.user_id, []).append(r)
 
+    # Batch-fetch all active waivers / leaves for the org
+    waivers_by_user = await fetch_org_waivers(db, str(org_id))
+
     today = date.today()
     matrix = []
 
     for member in members:
         member_records = records_by_user.get(member.id, [])
+        member_waivers = waivers_by_user.get(str(member.id), [])
         req_statuses = []
         completed_count = 0
 
         for req in requirements:
             req_status, comp_date, exp_date = _evaluate_member_requirement(
-                req, member_records, today
+                req, member_records, today, waivers=member_waivers
             )
 
             if req_status == TrainingStatus.COMPLETED.value:

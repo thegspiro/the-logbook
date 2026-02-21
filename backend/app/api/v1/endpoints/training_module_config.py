@@ -24,7 +24,9 @@ from app.models.training import (
     ProgramEnrollment, RequirementProgress,
     ShiftCompletionReport, TrainingSubmission,
     SubmissionStatus,
-    TrainingWaiver,
+)
+from app.services.training_waiver_service import (
+    fetch_user_waivers, adjust_required,
 )
 from app.schemas.training_module_config import (
     TrainingModuleConfigResponse,
@@ -177,84 +179,8 @@ async def get_my_training_summary(
         elif req.required_roles and any(rid in user_role_ids for rid in req.required_roles):
             applicable.append(req)
 
-    # --- Fetch active training waivers for this user ---
-    waiver_result = await db.execute(
-        select(TrainingWaiver)
-        .where(
-            TrainingWaiver.organization_id == org_id,
-            TrainingWaiver.user_id == user_id,
-            TrainingWaiver.active == True,  # noqa: E712
-        )
-    )
-    user_waivers = waiver_result.scalars().all()
-
-    def _count_waived_months(
-        waivers: list, period_start: date, period_end: date,
-        req_id: Optional[str] = None,
-    ) -> int:
-        """Count how many full months within [period_start, period_end] are covered by waivers."""
-        if not waivers or not period_start or not period_end:
-            return 0
-
-        waived_months = set()
-        for w in waivers:
-            # Check if waiver applies to this specific requirement
-            if w.requirement_ids and req_id and str(req_id) not in w.requirement_ids:
-                continue
-
-            # Find overlap with the evaluation period
-            overlap_start = max(w.start_date, period_start)
-            overlap_end = min(w.end_date, period_end)
-            if overlap_start > overlap_end:
-                continue
-
-            # Mark each month in the overlap as waived
-            y, m = overlap_start.year, overlap_start.month
-            while date(y, m, 1) <= overlap_end:
-                # A month is waived if the waiver covers most of it (>= 15 days)
-                month_start = date(y, m, 1)
-                month_end_day = calendar.monthrange(y, m)[1]
-                month_end = date(y, m, month_end_day)
-
-                cov_start = max(overlap_start, month_start)
-                cov_end = min(overlap_end, month_end)
-                covered_days = (cov_end - cov_start).days + 1
-                if covered_days >= 15:
-                    waived_months.add((y, m))
-
-                m += 1
-                if m > 12:
-                    m = 1
-                    y += 1
-
-        return len(waived_months)
-
-    def _total_months_in_period(period_start: date, period_end: date) -> int:
-        """Count total months spanned by [period_start, period_end]."""
-        if not period_start or not period_end:
-            return 0
-        months = (period_end.year - period_start.year) * 12 + (period_end.month - period_start.month) + 1
-        return max(months, 1)
-
-    def _adjust_required_hours(
-        base_required: float, period_start: date, period_end: date,
-        waivers: list, req_id: Optional[str] = None,
-    ) -> tuple:
-        """
-        Adjust required hours based on waived months.
-        Returns (adjusted_required_hours, waived_months_count, active_months_count).
-        """
-        if not period_start or not period_end or base_required <= 0:
-            return base_required, 0, 0
-
-        total_months = _total_months_in_period(period_start, period_end)
-        waived = _count_waived_months(waivers, period_start, period_end, req_id)
-        active_months = max(total_months - waived, 1)
-
-        # Adjust: if requirement is X hours over N months, and member was active
-        # for M months, the adjusted requirement is X * (M / N)
-        adjusted = base_required * (active_months / total_months)
-        return round(adjusted, 2), waived, active_months
+    # --- Fetch active waivers + leaves of absence for this user ---
+    user_waivers = await fetch_user_waivers(db, org_id, user_id)
 
     # Check progress for each applicable requirement
     today = date.today()
@@ -321,7 +247,7 @@ async def get_my_training_summary(
         required = req.required_hours or 0
         # Adjust required hours for waived months
         if required > 0 and start_date and end_date and user_waivers:
-            adjusted_required, _, _ = _adjust_required_hours(
+            adjusted_required, _, _ = adjust_required(
                 required, start_date, end_date, user_waivers, str(req.id)
             )
         else:
@@ -432,7 +358,7 @@ async def get_my_training_summary(
         rq_waived = 0
         rq_active = 0
         if rq_base_required > 0 and r_start_date and r_end_date and user_waivers:
-            rq_adjusted, rq_waived, rq_active = _adjust_required_hours(
+            rq_adjusted, rq_waived, rq_active = adjust_required(
                 rq_base_required, r_start_date, r_end_date, user_waivers, str(req.id)
             )
         else:
