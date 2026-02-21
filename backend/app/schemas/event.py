@@ -4,7 +4,7 @@ Event Pydantic Schemas
 Request and response schemas for event-related endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -87,6 +87,7 @@ class EventResponse(EventBase):
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
     created_by: Optional[UUID] = None
+    updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
@@ -163,6 +164,8 @@ class RSVPResponse(RSVPBase):
     override_check_in_at: Optional[datetime] = None
     override_check_out_at: Optional[datetime] = None
     override_duration_minutes: Optional[int] = None
+    overridden_by: Optional[UUID] = None
+    overridden_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -385,3 +388,9 @@ class RecurringEventCreate(BaseModel):
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
     require_checkout: bool = False
     template_id: Optional[UUID] = None  # Created from a template
+
+    @model_validator(mode="after")
+    def validate_custom_days(self):
+        if self.recurrence_pattern == "custom" and not self.recurrence_custom_days:
+            raise ValueError("recurrence_custom_days is required when recurrence_pattern is 'custom'")
+        return self

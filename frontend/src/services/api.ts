@@ -1700,6 +1700,27 @@ export const eventService = {
     const response = await api.get<DocumentFolder>(`/events/${eventId}/folder`);
     return response.data;
   },
+
+  // External Attendees
+  async getExternalAttendees(eventId: string): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get(`/events/${eventId}/external-attendees`);
+    return response.data;
+  },
+  async addExternalAttendee(eventId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/events/${eventId}/external-attendees`, data);
+    return response.data;
+  },
+  async updateExternalAttendee(eventId: string, attendeeId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/events/${eventId}/external-attendees/${attendeeId}`, data);
+    return response.data;
+  },
+  async checkInExternalAttendee(eventId: string, attendeeId: string): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/events/${eventId}/external-attendees/${attendeeId}/check-in`);
+    return response.data;
+  },
+  async removeExternalAttendee(eventId: string, attendeeId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/external-attendees/${attendeeId}`);
+  },
 };
 
 export interface UserInventoryItem {
