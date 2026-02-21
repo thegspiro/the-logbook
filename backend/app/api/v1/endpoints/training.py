@@ -46,6 +46,9 @@ from app.schemas.training import (
     HistoricalImportConfirmRequest,
 )
 from app.services.training_service import TrainingService
+from app.services.training_waiver_service import (
+    WaiverPeriod, fetch_org_waivers, adjust_required,
+)
 from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
@@ -928,8 +931,8 @@ async def enroll_member_in_program(
 @router.post("/import/parse")
 async def parse_historical_import(
     file: UploadFile = File(...),
-    match_by: str = Query("badge_number", pattern=r'^(email|badge_number)$',
-                          description="How to match CSV rows to members: badge_number or email"),
+    match_by: str = Query("membership_number", pattern=r'^(email|membership_number)$',
+                          description="How to match CSV rows to members: membership_number or email"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -937,7 +940,7 @@ async def parse_historical_import(
     Parse a CSV file of historical training records and return a preview.
 
     Matches members using the strategy specified by `match_by`:
-    - **badge_number**: Match by badge/employee number (default, most reliable)
+    - **membership_number**: Match by membership number (default, most reliable)
     - **email**: Match by email address (checks both primary and personal email)
 
     Also matches courses by name/code.
@@ -979,7 +982,7 @@ async def parse_historical_import(
         return None
 
     col_email = find_col(['email', 'member_email', 'user_email', 'e-mail', 'e_mail'])
-    col_badge = find_col(['badge_number', 'badge', 'badge_no', 'employee_id', 'employee_number', 'member_id', 'id_number'])
+    col_membership = find_col(['membership_number', 'badge_number', 'badge', 'badge_no', 'employee_id', 'employee_number', 'member_id', 'id_number'])
     col_name = find_col(['name', 'member_name', 'full_name', 'member', 'employee_name'])
     col_course = find_col(['course_name', 'course', 'training', 'training_name', 'class', 'class_name'])
     col_course_code = find_col(['course_code', 'code', 'class_code'])
@@ -1003,10 +1006,10 @@ async def parse_historical_import(
             detail="CSV must contain an 'email' column for email matching. "
                    f"Found columns: {', '.join(column_headers)}"
         )
-    if match_by == "badge_number" and not col_badge:
+    if match_by == "membership_number" and not col_membership:
         raise HTTPException(
             status_code=400,
-            detail="CSV must contain a 'badge_number' column for badge matching. "
+            detail="CSV must contain a 'membership_number' column for membership number matching. "
                    f"Found columns: {', '.join(column_headers)}"
         )
     if not col_course:
@@ -1025,15 +1028,15 @@ async def parse_historical_import(
     members = members_result.scalars().all()
 
     email_to_user = {}
-    badge_to_user = {}
+    membership_to_user = {}
 
     for m in members:
         if m.email:
             email_to_user[m.email.strip().lower()] = m
         if hasattr(m, 'personal_email') and m.personal_email:
             email_to_user[m.personal_email.strip().lower()] = m
-        if hasattr(m, 'badge_number') and m.badge_number:
-            badge_to_user[m.badge_number.strip().lower()] = m
+        if hasattr(m, 'membership_number') and m.membership_number:
+            membership_to_user[m.membership_number.strip().lower()] = m
 
     # Pre-load existing courses
     courses_result = await db.execute(
@@ -1059,7 +1062,7 @@ async def parse_historical_import(
 
         # Extract match fields
         email_val = (raw_row.get(col_email) or '').strip().lower() if col_email else ''
-        badge_val = (raw_row.get(col_badge) or '').strip().lower() if col_badge else ''
+        membership_val = (raw_row.get(col_membership) or '').strip().lower() if col_membership else ''
 
         # Extract name for display (optional column)
         name_val = (raw_row.get(col_name) or '').strip() if col_name else ''
@@ -1070,10 +1073,10 @@ async def parse_historical_import(
             match_key = email_val
             if not match_key:
                 row_errors.append("Missing email")
-        elif match_by == "badge_number":
-            match_key = badge_val
+        elif match_by == "membership_number":
+            match_key = membership_val
             if not match_key:
-                row_errors.append("Missing badge number")
+                row_errors.append("Missing membership number")
 
         course_val = (raw_row.get(col_course) or '').strip()
         if not course_val:
@@ -1096,8 +1099,8 @@ async def parse_historical_import(
 
         if match_by == "email":
             try_match(email_to_user, email_val)
-        elif match_by == "badge_number":
-            try_match(badge_to_user, badge_val)
+        elif match_by == "membership_number":
+            try_match(membership_to_user, membership_val)
 
         if member_matched:
             members_matched_set.add(match_key)
@@ -1166,7 +1169,7 @@ async def parse_historical_import(
         rows.append(HistoricalImportParsedRow(
             row_number=row_num,
             email=email_val or None,
-            badge_number=badge_val or None,
+            membership_number=membership_val or None,
             member_name=name_val or None,
             user_id=user_id,
             matched_member_name=matched_name,
@@ -1400,11 +1403,14 @@ def _get_requirement_date_window(req, today: date):
         return date(yr, 1, 1), date(yr, 12, 31)
 
 
-def _evaluate_member_requirement(req, member_records, today: date):
+def _evaluate_member_requirement(req, member_records, today: date, waivers=None):
     """
     Evaluate a single member's status for a single requirement.
 
     Returns (status, latest_completion_date, latest_expiry_date).
+
+    When *waivers* is provided, required hours/shifts/calls are adjusted
+    for waived months so members on leave are not penalised.
 
     Matching strategy depends on requirement_type:
     - HOURS:          Sum hours of completed records matching training_type within date window
@@ -1416,6 +1422,7 @@ def _evaluate_member_requirement(req, member_records, today: date):
     req_type = req.requirement_type.value if hasattr(req.requirement_type, 'value') else str(req.requirement_type)
     freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
     start_date, end_date = _get_requirement_date_window(req, today)
+    _waivers = waivers or []
 
     # Filter completed records within the date window
     completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
@@ -1438,6 +1445,10 @@ def _evaluate_member_requirement(req, member_records, today: date):
 
         total_hours = sum(r.hours_completed or 0 for r in type_matched)
         required = req.required_hours or 0
+
+        # Adjust required hours for waived months
+        if required > 0 and start_date and end_date and _waivers:
+            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
 
         latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
@@ -1519,6 +1530,10 @@ def _evaluate_member_requirement(req, member_records, today: date):
         count = len(type_matched)
         required = req.required_shifts or 0
 
+        # Adjust required shifts for waived months
+        if required > 0 and start_date and end_date and _waivers:
+            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
+
         latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
         latest_exp = None
@@ -1536,6 +1551,10 @@ def _evaluate_member_requirement(req, member_records, today: date):
             type_matched = [r for r in windowed if r.training_type == req.training_type]
         count = len(type_matched)
         required = req.required_calls or 0
+
+        # Adjust required calls for waived months
+        if required > 0 and start_date and end_date and _waivers:
+            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
 
         latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
@@ -1631,17 +1650,21 @@ async def get_compliance_matrix(
     for r in all_records:
         records_by_user.setdefault(r.user_id, []).append(r)
 
+    # Batch-fetch all active waivers / leaves for the org
+    waivers_by_user = await fetch_org_waivers(db, str(org_id))
+
     today = date.today()
     matrix = []
 
     for member in members:
         member_records = records_by_user.get(member.id, [])
+        member_waivers = waivers_by_user.get(str(member.id), [])
         req_statuses = []
         completed_count = 0
 
         for req in requirements:
             req_status, comp_date, exp_date = _evaluate_member_requirement(
-                req, member_records, today
+                req, member_records, today, waivers=member_waivers
             )
 
             if req_status == TrainingStatus.COMPLETED.value:

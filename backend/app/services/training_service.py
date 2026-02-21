@@ -27,6 +27,9 @@ from app.schemas.training import (
     TrainingReport,
     RequirementProgress,
 )
+from app.services.training_waiver_service import (
+    WaiverPeriod, fetch_user_waivers, adjust_required,
+)
 
 
 class TrainingService:
@@ -217,6 +220,11 @@ class TrainingService:
             )
             requirements = req_result.scalars().all()
 
+            # Pre-fetch waivers once for all requirement checks
+            user_waivers = await fetch_user_waivers(
+                self.db, str(organization_id), str(user_id),
+            )
+
             for req in requirements:
                 # Tier-based exemption: treat requirement as met
                 if tier_exempt:
@@ -229,7 +237,7 @@ class TrainingService:
                         continue
 
                 progress = await self.check_requirement_progress(
-                    user_id, req.id, organization_id
+                    user_id, req.id, organization_id, waivers=user_waivers
                 )
                 if progress.is_complete:
                     requirements_met.append(req.id)
@@ -248,10 +256,15 @@ class TrainingService:
         )
 
     async def check_requirement_progress(
-        self, user_id: UUID, requirement_id: UUID, organization_id: UUID
+        self, user_id: UUID, requirement_id: UUID, organization_id: UUID,
+        waivers: Optional[List[WaiverPeriod]] = None,
     ) -> RequirementProgress:
         """
-        Check a user's progress towards a specific requirement
+        Check a user's progress towards a specific requirement.
+
+        When *waivers* is provided the required hours/shifts/calls are
+        adjusted proportionally for waived months.  If *waivers* is None
+        the service will fetch them automatically.
         """
         # Get the requirement
         result = await self.db.execute(
@@ -320,15 +333,26 @@ class TrainingService:
         result = await self.db.execute(query)
         completed_hours = float(result.scalar() or 0)
 
-        # Calculate progress
+        # Fetch waivers if not pre-loaded
+        if waivers is None:
+            waivers = await fetch_user_waivers(
+                self.db, str(organization_id), str(user_id),
+            )
+
+        # Adjust required hours for waived months
         required_hours = requirement.required_hours or 0
+        if required_hours > 0 and start_date and end_date and waivers:
+            required_hours, _, _ = adjust_required(
+                required_hours, start_date, end_date, waivers, str(requirement.id),
+            )
+
         percentage = (completed_hours / required_hours * 100) if required_hours > 0 else 100
         is_complete = completed_hours >= required_hours
 
         return RequirementProgress(
             requirement_id=requirement.id,
             requirement_name=requirement.name,
-            required_hours=requirement.required_hours,
+            required_hours=required_hours,
             completed_hours=completed_hours,
             percentage_complete=round(percentage, 2),
             is_complete=is_complete,
@@ -383,11 +407,16 @@ class TrainingService:
                 if any(role_id in user_role_ids for role_id in req.required_roles):
                     applicable_requirements.append(req)
 
+        # Pre-fetch waivers once for all requirement checks
+        user_waivers = await fetch_user_waivers(
+            self.db, str(organization_id), str(user_id),
+        )
+
         # Get progress for each requirement
         progress_list = []
         for req in applicable_requirements:
             progress = await self.check_requirement_progress(
-                user_id, req.id, organization_id
+                user_id, req.id, organization_id, waivers=user_waivers
             )
             progress_list.append(progress)
 

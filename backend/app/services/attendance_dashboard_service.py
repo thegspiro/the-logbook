@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from loguru import logger
 
-from app.models.user import User, UserStatus, Organization
+from app.models.user import User, UserStatus, Organization, MemberLeaveOfAbsence
 from app.models.meeting import Meeting, MeetingAttendee
 from app.services.membership_tier_service import MembershipTierService
 
@@ -59,32 +59,42 @@ class AttendanceDashboardService:
 
         cutoff = datetime.utcnow() - timedelta(days=period_months * 30)
 
-        # Total meetings in period
-        meeting_query = select(func.count(Meeting.id)).where(
+        # Fetch actual meetings (need dates for leave-of-absence cross-reference)
+        meeting_query = select(Meeting).where(
             Meeting.organization_id == org_id,
             Meeting.meeting_date >= cutoff.date(),
         )
         if meeting_type:
             meeting_query = meeting_query.where(Meeting.meeting_type == meeting_type)
-        total_result = await self.db.execute(meeting_query)
-        total_meetings = total_result.scalar() or 0
+        meeting_result = await self.db.execute(meeting_query)
+        meetings = list(meeting_result.scalars().all())
+        total_meetings = len(meetings)
+        meeting_dates = [m.meeting_date for m in meetings]
 
         # Get all attendance records for the period
-        meeting_ids_subq = select(Meeting.id).where(
-            Meeting.organization_id == org_id,
-            Meeting.meeting_date >= cutoff.date(),
-        )
-        if meeting_type:
-            meeting_ids_subq = meeting_ids_subq.where(Meeting.meeting_type == meeting_type)
+        meeting_ids = [m.id for m in meetings]
 
         att_result = await self.db.execute(
             select(MeetingAttendee).where(
-                MeetingAttendee.meeting_id.in_(meeting_ids_subq)
+                MeetingAttendee.meeting_id.in_(meeting_ids)
+            )
+        ) if meeting_ids else None
+        all_attendance = list(att_result.scalars().all()) if att_result else []
+
+        # Fetch active leaves of absence for all org members
+        leave_result = await self.db.execute(
+            select(MemberLeaveOfAbsence).where(
+                MemberLeaveOfAbsence.organization_id == org_id,
+                MemberLeaveOfAbsence.active == True,  # noqa: E712
             )
         )
-        all_attendance = list(att_result.scalars().all())
+        all_leaves = list(leave_result.scalars().all())
+        leaves_by_user: Dict[str, List] = {}
+        for leave in all_leaves:
+            uid = str(leave.user_id)
+            leaves_by_user.setdefault(uid, []).append(leave)
 
-        # Index by user_id
+        # Index attendance by user_id
         attendance_by_user: Dict[str, List[MeetingAttendee]] = {}
         for att in all_attendance:
             uid = str(att.user_id)
@@ -98,9 +108,20 @@ class AttendanceDashboardService:
             records = attendance_by_user.get(uid, [])
             attended = sum(1 for r in records if r.present and not r.waiver_reason)
             waived = sum(1 for r in records if r.waiver_reason)
-            absent = total_meetings - attended - waived
 
-            eligible_meetings = total_meetings - waived
+            # Count meetings that fall within an active leave of absence
+            member_leaves = leaves_by_user.get(uid, [])
+            on_leave_count = 0
+            if member_leaves:
+                for md in meeting_dates:
+                    for leave in member_leaves:
+                        if leave.start_date <= md <= leave.end_date:
+                            on_leave_count += 1
+                            break
+
+            absent = total_meetings - attended - waived - on_leave_count
+
+            eligible_meetings = total_meetings - waived - on_leave_count
             pct = round((attended / eligible_meetings) * 100, 1) if eligible_meetings > 0 else 100.0
 
             # Tier and voting info
@@ -130,6 +151,7 @@ class AttendanceDashboardService:
                 "attendance_pct": pct,
                 "meetings_attended": attended,
                 "meetings_waived": waived,
+                "meetings_on_leave": on_leave_count,
                 "meetings_absent": max(0, absent),
                 "total_meetings": total_meetings,
                 "eligible_meetings": eligible_meetings,

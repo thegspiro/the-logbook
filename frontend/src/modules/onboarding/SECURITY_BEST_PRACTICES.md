@@ -97,7 +97,7 @@ sessionStorage.setItem('adminUser', JSON.stringify({
 
 // ✅ SECURE APPROACH
 // 1. Send password directly to backend
-const response = await fetch('/api/v1/onboarding/admin-user', {
+const response = await fetch('/api/v1/onboarding/system-owner', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',

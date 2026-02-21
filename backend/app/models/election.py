@@ -17,7 +17,7 @@ from sqlalchemy import (
     JSON,
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.sql import func
 from enum import Enum
 from app.core.utils import generate_uuid
 
@@ -63,13 +63,13 @@ class Election(Base):
 
     # Email notification tracking
     email_sent = Column(Boolean, nullable=False, default=False)
-    email_sent_at = Column(DateTime, nullable=True)
+    email_sent_at = Column(DateTime(timezone=True), nullable=True)
     email_recipients = Column(JSON, nullable=True)  # List of user IDs who received email
-    meeting_date = Column(DateTime, nullable=True)  # For meeting-based ballots
+    meeting_date = Column(DateTime(timezone=True), nullable=True)  # For meeting-based ballots
 
     # Timing
-    start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime, nullable=False)
+    start_date = Column(DateTime(timezone=True), nullable=False)
+    end_date = Column(DateTime(timezone=True), nullable=False)
 
     # Status
     status = Column(SQLEnum(ElectionStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ElectionStatus.DRAFT)
@@ -145,8 +145,8 @@ class Election(Base):
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     candidates = relationship("Candidate", back_populates="election", cascade="all, delete-orphan")
@@ -178,7 +178,7 @@ class Candidate(Base):
     photo_url = Column(String(500), nullable=True)
 
     # Nomination details
-    nomination_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    nomination_date = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     nominated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     accepted = Column(Boolean, nullable=False, default=True)  # For member candidates
     is_write_in = Column(Boolean, nullable=False, default=False)
@@ -187,8 +187,8 @@ class Candidate(Base):
     display_order = Column(Integer, nullable=False, default=0)
 
     # Metadata
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     election = relationship("Election", back_populates="candidates")
@@ -221,15 +221,15 @@ class VotingToken(Base):
     voter_hash = Column(String(64), nullable=False)  # SHA256 hash
 
     # Token metadata
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
 
     # Usage tracking
     used = Column(Boolean, nullable=False, default=False)
-    used_at = Column(DateTime, nullable=True)
+    used_at = Column(DateTime(timezone=True), nullable=True)
 
     # Access tracking
-    first_accessed_at = Column(DateTime, nullable=True)
+    first_accessed_at = Column(DateTime(timezone=True), nullable=True)
     access_count = Column(Integer, nullable=False, default=0)
 
     # Multi-position tracking: which positions have been voted on via this token
@@ -267,7 +267,7 @@ class Vote(Base):
     # Vote details
     position = Column(String(100), nullable=True)  # Position being voted for (multi-position elections)
     vote_rank = Column(Integer, nullable=True)  # For ranked-choice voting (1 = first choice)
-    voted_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    voted_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     # Cryptographic signature for tampering detection
     # HMAC-SHA256(election_id:candidate_id:voter_hash:voted_at, VOTE_SIGNING_KEY)
@@ -284,7 +284,7 @@ class Vote(Base):
     user_agent = Column(String(500), nullable=True)
 
     # Soft-delete for audit trail (votes are never hard-deleted)
-    deleted_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by = Column(String(36), nullable=True)
     deletion_reason = Column(Text, nullable=True)
 

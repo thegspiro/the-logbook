@@ -205,6 +205,24 @@ The matrix displays:
 
 > **Hint:** Use this view for annual reporting and to identify which members need attention before compliance deadlines.
 
+### Leave of Absence Adjustments
+
+When a member has an active **Leave of Absence** (created via **Administration > Member Lifecycle**), the Compliance Matrix, Competency Matrix, Training Reports, and all other compliance views automatically adjust proportional requirements (hours, shifts, calls) so the member is not penalized for time they were inactive.
+
+The adjustment formula is:
+
+```
+adjusted_required = base_required × (active_months / total_months)
+```
+
+For example, if a member takes a 3-month leave during a 12-month annual requirement of 24 hours, the adjusted requirement becomes `24 × (9/12) = 18 hours`.
+
+A calendar month is only waived if the leave covers **15 or more days** of that month. Courses and certifications are not adjusted (they are binary completions).
+
+Members see a blue info banner on their My Training page showing the adjustment. Officers see the adjusted values reflected in the compliance and competency matrices, training reports, and requirement progress views.
+
+> For the full guide on creating and managing Leaves of Absence, see the [Training Waivers & Leaves of Absence](../../backend/app/docs/TRAINING_WAIVERS.md) documentation.
+
 ---
 
 ## Expiring Certifications
@@ -287,6 +305,7 @@ Navigate to **Training Admin > Import History** to import historical training re
 | Hours not counting toward a requirement | Verify the training record's course is linked to the correct requirement. The record must be in "Approved" status. |
 | Program progress not updating after a shift | Shift completion reports must be filed by the shift officer. Auto-progression only works for enrolled members with matching requirement types. |
 | Compliance matrix shows incorrect data | Check the requirement's frequency and due date type settings. Rolling periods use today's date as the reference point. |
+| Member on leave still shows as non-compliant | Verify the Leave of Absence is active in Member Lifecycle. The leave must cover ≥15 days of a month for that month to be waived. Only hours, shifts, and calls requirements are adjusted. |
 | Cannot see the Training module | Training is an optional module. Your department administrator must enable it in Settings > Modules. |
 | External integration not syncing | Check the integration configuration and sync logs. Ensure user mappings are correctly set up. |
 

@@ -85,7 +85,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
           (m.first_name?.toLowerCase().includes(q) ?? false) ||
           (m.last_name?.toLowerCase().includes(q) ?? false) ||
           (m.full_name?.toLowerCase().includes(q) ?? false) ||
-          (m.badge_number?.toLowerCase().includes(q) ?? false)
+          (m.membership_number?.toLowerCase().includes(q) ?? false)
       )
       .slice(0, 10);
   }, [members, memberSearch, candidateUserIds]);
@@ -262,7 +262,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
                   className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  placeholder="Search members by name or badge number..."
+                  placeholder="Search members by name or membership number..."
                 />
                 {filteredMembers.length > 0 && (
                   <div className="absolute z-10 mt-1 w-full bg-theme-surface border border-theme-input-border rounded-md shadow-lg max-h-48 overflow-y-auto">
@@ -276,8 +276,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                         <span className="text-theme-text-primary">
                           {member.first_name} {member.last_name}
                         </span>
-                        {member.badge_number && (
-                          <span className="text-xs text-theme-text-muted">#{member.badge_number}</span>
+                        {member.membership_number && (
+                          <span className="text-xs text-theme-text-muted">#{member.membership_number}</span>
                         )}
                       </button>
                     ))}

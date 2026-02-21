@@ -426,7 +426,7 @@ class MemberInventorySummary(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     full_name: Optional[str] = None
-    badge_number: Optional[str] = None
+    membership_number: Optional[str] = None
     permanent_count: int = 0
     checkout_count: int = 0
     issued_count: int = 0

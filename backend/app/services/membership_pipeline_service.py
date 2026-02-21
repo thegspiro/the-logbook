@@ -403,7 +403,7 @@ class MembershipPipelineService:
                 "name": m.full_name,
                 "email": m.email,
                 "status": m.status.value if hasattr(m.status, 'value') else str(m.status),
-                "badge_number": m.badge_number,
+                "membership_number": m.membership_number,
                 "archived_at": m.archived_at.isoformat() if m.archived_at else None,
                 "match_type": "email" if m.email and m.email.lower() == email.lower() else "name",
             }

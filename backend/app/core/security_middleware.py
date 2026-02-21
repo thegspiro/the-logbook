@@ -400,8 +400,8 @@ class SecurityAuditLogger:
             "severity": severity
         }
 
-        # In production, send to logging service (e.g., Elasticsearch, CloudWatch)
-        print(f"[SECURITY AUDIT] {log_entry}")
+        from loguru import logger
+        logger.warning(f"[SECURITY AUDIT] {log_entry}")
 
     @staticmethod
     async def log_failed_login(

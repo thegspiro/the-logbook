@@ -10,7 +10,6 @@ export interface User {
   first_name?: string;
   last_name?: string;
   full_name?: string;
-  badge_number?: string;
   membership_number?: string;
   phone?: string;
   mobile?: string;
@@ -65,7 +64,7 @@ export interface UserProfileUpdate {
   last_name?: string;
   phone?: string;
   mobile?: string;
-  badge_number?: string;
+  membership_number?: string;
   date_of_birth?: string;
   hire_date?: string;
   rank?: string;
@@ -82,7 +81,7 @@ export interface ArchivedMember {
   user_id: string;
   name: string;
   email?: string;
-  badge_number?: string;
+  membership_number?: string;
   rank?: string;
   archived_at?: string;
   status_change_reason?: string;
@@ -93,7 +92,7 @@ export interface OverdueMember {
   name: string;
   member_name: string;
   email?: string;
-  badge_number?: string;
+  membership_number?: string;
   drop_date: string;
   days_since_drop: number;
   items_outstanding: unknown[];

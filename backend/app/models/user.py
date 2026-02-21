@@ -223,7 +223,6 @@ class User(Base):
     first_name = Column(String(100))
     middle_name = Column(String(100))
     last_name = Column(String(100))
-    badge_number = Column(String(50))
     membership_number = Column(String(50))  # Organization-assigned membership ID (e.g., "001", "M-042")
     phone = Column(String(20))
     mobile = Column(String(20))
@@ -298,7 +297,6 @@ class User(Base):
         Index('idx_user_org_username', 'organization_id', 'username', unique=True),
         Index('idx_user_org_email', 'organization_id', 'email', unique=True),
         Index('idx_user_org_membership_number', 'organization_id', 'membership_number', unique=True),
-        Index('idx_user_org_badge_number', 'organization_id', 'badge_number', unique=True),
     )
 
     # Backward-compatible alias so ``selectinload(User.roles)`` and

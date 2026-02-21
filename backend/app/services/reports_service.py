@@ -97,7 +97,7 @@ class ReportsService:
                 "first_name": user.first_name or "",
                 "last_name": user.last_name or "",
                 "email": user.email or "",
-                "badge_number": user.badge_number,
+                "membership_number": user.membership_number,
                 "rank": user.rank,
                 "status": status_val,
                 "station": user.station,

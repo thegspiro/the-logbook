@@ -2624,14 +2624,14 @@ docker compose up -d
 
 ---
 
-### Problem: Rank field can be changed by any member
-**Symptom:** Members can change their own rank through profile editing
+### Problem: Rank, station, or membership number can be changed by any member
+**Symptom:** Members can change their own rank, station, or membership number through profile editing
 
 ### Root Cause
-The profile update endpoint did not restrict rank changes — any authenticated user could modify rank via self-profile update.
+The profile update endpoint did not restrict these fields — any authenticated user could modify them via self-profile update.
 
 ### Solution
-Pull latest changes. Rank updates are now restricted to users with `members.manage` permission (Chief, membership coordinator) or wildcard admin permissions. Regular members' rank field changes are silently ignored during profile updates.
+Pull latest changes. Rank, station, and membership number updates are now restricted to users with `members.manage` permission (leadership, secretary, membership coordinator). Unauthorized attempts return a 403 error, and the corresponding fields are disabled in the UI for regular members.
 
 ---
 

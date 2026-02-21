@@ -330,10 +330,10 @@ ADMIN_DATA='{
     "password_confirm": "SecureP@ssw0rd!2026",
     "first_name": "Test",
     "last_name": "Admin",
-    "badge_number": "001"
+    "membership_number": "001"
 }'
 
-RESPONSE=$(curl -s -w '\n%{http_code}' -X POST "${API_URL}/onboarding/admin-user" \
+RESPONSE=$(curl -s -w '\n%{http_code}' -X POST "${API_URL}/onboarding/system-owner" \
     -H 'Content-Type: application/json' \
     -H "X-Session-ID: $SESSION_ID" \
     -H "X-CSRF-Token: $CSRF_TOKEN" \
@@ -342,12 +342,12 @@ HTTP_CODE=$(echo "$RESPONSE" | tail -1)
 BODY=$(echo "$RESPONSE" | head -n -1)
 
 if [ "$HTTP_CODE" = "200" ]; then
-    log_pass "POST /onboarding/admin-user returned 200"
+    log_pass "POST /onboarding/system-owner returned 200"
     ADMIN_USERNAME=$(echo "$BODY" | python3 -c "import json,sys; print(json.loads(sys.stdin.read())['username'])" 2>/dev/null)
     ADMIN_STATUS=$(echo "$BODY" | python3 -c "import json,sys; print(json.loads(sys.stdin.read())['status'])" 2>/dev/null)
     log_pass "Admin user created: $ADMIN_USERNAME (status: $ADMIN_STATUS)"
 else
-    log_fail "POST /onboarding/admin-user returned $HTTP_CODE: $BODY"
+    log_fail "POST /onboarding/system-owner returned $HTTP_CODE: $BODY"
     exit 1
 fi
 
@@ -474,7 +474,7 @@ fi
 
 # Check user details
 USER_DETAILS=$(docker compose exec -T mysql mysql -uroot -pchange_me_in_production -N -e \
-    "SELECT username, email, status, badge_number FROM intranet_db.users LIMIT 1;" 2>/dev/null)
+    "SELECT username, email, status, membership_number FROM intranet_db.users LIMIT 1;" 2>/dev/null)
 log_info "User details: $USER_DETAILS"
 
 # Check sessions table

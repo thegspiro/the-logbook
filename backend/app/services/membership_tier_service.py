@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
-from app.models.user import User, UserStatus, Organization
+from app.models.user import User, UserStatus, Organization, MemberLeaveOfAbsence
 from app.models.meeting import Meeting, MeetingAttendee
 
 
@@ -37,8 +37,9 @@ class MembershipTierService:
         """
         Calculate a member's meeting attendance percentage over a look-back
         period.  Attendance = (meetings marked present / eligible meetings) * 100.
-        Waived meetings are excluded from both numerator and denominator so they
-        don't penalise the member's percentage.
+        Waived meetings and meetings that fall within an active Leave of Absence
+        are excluded from both numerator and denominator so they don't penalise
+        the member's percentage.
         Returns 100.0 if no eligible meetings occurred.
         """
         cutoff = datetime.utcnow() - timedelta(days=period_months * 30)
@@ -69,9 +70,34 @@ class MembershipTierService:
         )
         waived_count = waived_result.scalar() or 0
 
-        eligible_meetings = total_meetings - waived_count
+        # Count meetings that fall within an active Leave of Absence
+        leave_result = await self.db.execute(
+            select(MemberLeaveOfAbsence).where(
+                MemberLeaveOfAbsence.organization_id == organization_id,
+                MemberLeaveOfAbsence.user_id == user_id,
+                MemberLeaveOfAbsence.active == True,  # noqa: E712
+            )
+        )
+        leaves = list(leave_result.scalars().all())
+        on_leave_count = 0
+        if leaves:
+            # Fetch actual meeting dates for cross-reference
+            meeting_date_result = await self.db.execute(
+                select(Meeting.meeting_date).where(
+                    Meeting.organization_id == organization_id,
+                    Meeting.meeting_date >= cutoff.date(),
+                )
+            )
+            meeting_dates = [row[0] for row in meeting_date_result.all()]
+            for md in meeting_dates:
+                for leave in leaves:
+                    if leave.start_date <= md <= leave.end_date:
+                        on_leave_count += 1
+                        break
+
+        eligible_meetings = total_meetings - waived_count - on_leave_count
         if eligible_meetings <= 0:
-            return 100.0  # All meetings waived — don't penalise
+            return 100.0  # All meetings waived/on-leave — don't penalise
 
         # Meetings where this user was marked present (non-waived only)
         attended_result = await self.db.execute(

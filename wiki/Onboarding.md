@@ -22,7 +22,7 @@ The system automatically detects if onboarding is needed by checking:
 
 ### 2. Onboarding Steps
 
-The onboarding process consists of 9 steps:
+The onboarding process consists of 10 steps:
 
 #### Step 1: Welcome
 - Introduction to The Logbook
@@ -126,7 +126,7 @@ GET /api/v1/onboarding/status
   "needs_onboarding": true,
   "is_completed": false,
   "current_step": 0,
-  "total_steps": 7,
+  "total_steps": 10,
   "steps_completed": {},
   "organization_name": null
 }
@@ -259,7 +259,7 @@ Content-Type: application/json
 ### Create Admin User
 
 ```bash
-POST /api/v1/onboarding/admin-user
+POST /api/v1/onboarding/system-owner
 Content-Type: application/json
 
 {
@@ -269,7 +269,7 @@ Content-Type: application/json
   "password_confirm": "SecureP@ssw0rd123!",
   "first_name": "John",
   "last_name": "Doe",
-  "badge_number": "001"
+  "membership_number": "001"
 }
 ```
 
@@ -290,7 +290,7 @@ Content-Type: application/json
   "email": "admin@springfieldfd.org",
   "first_name": "John",
   "last_name": "Doe",
-  "badge_number": "001",
+  "membership_number": "001",
   "status": "active"
 }
 ```

@@ -17,7 +17,7 @@ from sqlalchemy import (
     JSON,
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.sql import func
 from enum import Enum
 from app.core.utils import generate_uuid
 
@@ -81,14 +81,14 @@ class Event(Base):
     location_details = Column(Text, nullable=True)  # Additional directions, room numbers, etc.
 
     # Timing
-    start_datetime = Column(DateTime, nullable=False)
-    end_datetime = Column(DateTime, nullable=False)
-    actual_start_time = Column(DateTime, nullable=True)  # Recorded by secretary when event actually starts
-    actual_end_time = Column(DateTime, nullable=True)  # Recorded by secretary when event actually ends
+    start_datetime = Column(DateTime(timezone=True), nullable=False)
+    end_datetime = Column(DateTime(timezone=True), nullable=False)
+    actual_start_time = Column(DateTime(timezone=True), nullable=True)  # Recorded by secretary when event actually starts
+    actual_end_time = Column(DateTime(timezone=True), nullable=True)  # Recorded by secretary when event actually ends
 
     # RSVP settings
     requires_rsvp = Column(Boolean, nullable=False, default=False)
-    rsvp_deadline = Column(DateTime, nullable=True)
+    rsvp_deadline = Column(DateTime(timezone=True), nullable=True)
     max_attendees = Column(Integer, nullable=True)  # Null means unlimited
     allowed_rsvp_statuses = Column(JSON, nullable=True)  # List of allowed RSVP statuses, defaults to ["going", "not_going"]
 
@@ -110,7 +110,7 @@ class Event(Base):
     # Recurrence
     is_recurring = Column(Boolean, nullable=False, default=False)
     recurrence_pattern = Column(SQLEnum(RecurrencePattern, values_callable=lambda x: [e.value for e in x]), nullable=True)
-    recurrence_end_date = Column(DateTime, nullable=True)  # When the recurring series ends
+    recurrence_end_date = Column(DateTime(timezone=True), nullable=True)  # When the recurring series ends
     recurrence_custom_days = Column(JSON, nullable=True)  # For CUSTOM: list of weekday numbers (0=Mon, 6=Sun)
     recurrence_parent_id = Column(String(36), ForeignKey("events.id"), nullable=True)  # Links instances to their parent
     template_id = Column(String(36), ForeignKey("event_templates.id"), nullable=True)  # Created from a template
@@ -122,12 +122,12 @@ class Event(Base):
     # Status
     is_cancelled = Column(Boolean, nullable=False, default=False)
     cancellation_reason = Column(Text, nullable=True)
-    cancelled_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     rsvps = relationship("EventRSVP", back_populates="event", cascade="all, delete-orphan")
@@ -164,21 +164,21 @@ class EventRSVP(Base):
     notes = Column(Text, nullable=True)  # Special requests, dietary restrictions, etc.
 
     # Tracking
-    responded_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    responded_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     # Actual attendance (filled in after event)
     checked_in = Column(Boolean, nullable=False, default=False)
-    checked_in_at = Column(DateTime, nullable=True)
-    checked_out_at = Column(DateTime, nullable=True)
+    checked_in_at = Column(DateTime(timezone=True), nullable=True)
+    checked_out_at = Column(DateTime(timezone=True), nullable=True)
     attendance_duration_minutes = Column(Integer, nullable=True)  # Calculated duration in minutes
 
     # Attendance overrides (for managers/training officers)
-    override_check_in_at = Column(DateTime, nullable=True)  # Manual override of check-in time
-    override_check_out_at = Column(DateTime, nullable=True)  # Manual override of check-out time
+    override_check_in_at = Column(DateTime(timezone=True), nullable=True)  # Manual override of check-in time
+    override_check_out_at = Column(DateTime(timezone=True), nullable=True)  # Manual override of check-out time
     override_duration_minutes = Column(Integer, nullable=True)  # Manual override of duration
     overridden_by = Column(String(36), ForeignKey("users.id"), nullable=True)  # Who made the override
-    overridden_at = Column(DateTime, nullable=True)  # When the override was made
+    overridden_at = Column(DateTime(timezone=True), nullable=True)  # When the override was made
 
     # Relationships
     event = relationship("Event", back_populates="rsvps")
@@ -242,8 +242,8 @@ class EventTemplate(Base):
     # Metadata
     is_active = Column(Boolean, nullable=False, default=True)
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         Index("ix_event_templates_organization_id", "organization_id"),
@@ -272,7 +272,7 @@ class EventExternalAttendee(Base):
 
     # Check-in tracking
     checked_in = Column(Boolean, nullable=False, default=False)
-    checked_in_at = Column(DateTime, nullable=True)
+    checked_in_at = Column(DateTime(timezone=True), nullable=True)
 
     # Source tracking (e.g., "form_submission" with form submission ID)
     source = Column(String(50), nullable=True)
@@ -280,7 +280,7 @@ class EventExternalAttendee(Base):
     notes = Column(Text, nullable=True)
 
     # Metadata
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships

@@ -119,18 +119,18 @@ async def create_member(
             detail="Username already exists"
         )
 
-    # Check if badge number already exists in the organization
-    if user_data.badge_number:
+    # Check if membership number already exists in the organization
+    if user_data.membership_number:
         result = await db.execute(
             select(User)
-            .where(User.badge_number == user_data.badge_number)
+            .where(User.membership_number == user_data.membership_number)
             .where(User.organization_id == str(current_user.organization_id))
             .where(User.deleted_at.is_(None))
         )
         if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A member with this Department ID / badge number already exists"
+                detail="A member with this membership number already exists"
             )
 
     # Check if email already exists (including archived members)
@@ -189,8 +189,7 @@ async def create_member(
         first_name=user_data.first_name,
         middle_name=user_data.middle_name,
         last_name=user_data.last_name,
-        badge_number=user_data.badge_number,
-        membership_number=user_data.membership_id,
+        membership_number=user_data.membership_number,
         phone=user_data.phone,
         mobile=user_data.mobile,
         date_of_birth=user_data.date_of_birth,
@@ -850,11 +849,11 @@ async def update_user_profile(
     # Update only provided fields
     update_data = profile_update.model_dump(exclude_unset=True)
 
-    # Check badge_number uniqueness within the organization
-    if "badge_number" in update_data and update_data["badge_number"]:
+    # Check membership_number uniqueness within the organization
+    if "membership_number" in update_data and update_data["membership_number"]:
         existing = await db.execute(
             select(User)
-            .where(User.badge_number == update_data["badge_number"])
+            .where(User.membership_number == update_data["membership_number"])
             .where(User.organization_id == str(current_user.organization_id))
             .where(User.id != str(user_id))
             .where(User.deleted_at.is_(None))
@@ -862,17 +861,22 @@ async def update_user_profile(
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A member with this Department ID / badge number already exists"
+                detail="A member with this membership number already exists"
             )
 
-    # Rank changes restricted to Chief / membership coordinator
-    if "rank" in update_data:
-        rank_perm_result = await db.execute(
+    # Rank, station, and membership number changes restricted to leadership / secretary / membership coordinator
+    restricted_fields = {"rank", "station", "membership_number"}
+    has_restricted = restricted_fields & update_data.keys()
+    if has_restricted:
+        perm_result = await db.execute(
             select(User).where(User.id == current_user.id).options(selectinload(User.positions))
         )
-        rank_perm_user = rank_perm_result.scalar_one_or_none()
-        if not rank_perm_user or not _has_permission("members.manage", _collect_user_permissions(rank_perm_user)):
-            update_data.pop("rank")
+        perm_user = perm_result.scalar_one_or_none()
+        if not perm_user or not _has_permission("members.manage", _collect_user_permissions(perm_user)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, or membership number"
+            )
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
@@ -882,8 +886,8 @@ async def update_user_profile(
 
     # Allowlist of safe fields to prevent mass-assignment of sensitive columns
     ALLOWED_PROFILE_FIELDS = {
-        "first_name", "middle_name", "last_name", "badge_number", "phone", "mobile",
-        "date_of_birth", "hire_date", "rank", "station", "membership_number",
+        "first_name", "middle_name", "last_name", "membership_number", "phone", "mobile",
+        "date_of_birth", "hire_date", "rank", "station",
         "address_street", "address_city", "address_state", "address_zip", "address_country",
     }
     for field, value in update_data.items():

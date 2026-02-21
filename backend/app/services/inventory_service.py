@@ -974,7 +974,7 @@ class InventoryService:
                     User.username.ilike(pattern),
                     User.first_name.ilike(pattern),
                     User.last_name.ilike(pattern),
-                    User.badge_number.ilike(pattern),
+                    User.membership_number.ilike(pattern),
                 )
             )
         user_q = user_q.order_by(User.last_name, User.first_name)
@@ -1048,7 +1048,7 @@ class InventoryService:
                 "first_name": u.first_name,
                 "last_name": u.last_name,
                 "full_name": full_name,
-                "badge_number": u.badge_number,
+                "membership_number": u.membership_number,
                 "permanent_count": perm,
                 "checkout_count": co,
                 "issued_count": iss,

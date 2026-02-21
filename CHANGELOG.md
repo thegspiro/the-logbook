@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Badge Number Consolidation & Field Restrictions (2026-02-21)
+
+#### Consolidate `badge_number` into `membership_number`
+- **Database migration** (`20260221_0200`): Copies existing `badge_number` values into `membership_number` where NULL, then drops the `badge_number` column and its unique index.
+- **Backend**: Removed `badge_number` from the User model, all Pydantic schemas (`UserBase`, `AdminUserCreate`, `UserUpdate`, `UserListResponse`, `UserResponse`), and all service/endpoint logic across auth, onboarding, training, inventory, forms, reports, and member status modules.
+- **Frontend**: Renamed all `badge_number` / `departmentId` references to `membership_number` across types, services, pages, and components. UI labels updated from "Badge #" / "Department ID" to "Member #" / "Membership Number".
+- **CSV imports**: `badge_number` is still accepted as a column alias for backward compatibility in training record imports.
+- **Property return reports**: Dict key `member_badge_number` renamed to `member_number`; HTML template updated from "Badge #" to "Member #".
+
+#### Restrict rank, station, and membership number edits
+- **Backend**: Users without `members.manage` permission now receive a 403 error when attempting to update `rank`, `station`, or `membership_number` via the profile update endpoint. Previously rank was silently dropped and station had no restriction.
+- **Frontend**: The rank, station, and membership number fields on the User Settings page are now disabled (grayed out) for users without `members.manage` permission.
+
+#### Documentation & test fixes
+- Updated all onboarding documentation (ONBOARDING.md, ONBOARDING_FLOW.md, wiki/Onboarding.md) to use `membership_number` instead of `badge_number`, correct endpoint `/system-owner` instead of `/admin-user`, correct route `/positions` instead of `/roles`, and correct `total_steps: 10`.
+- Updated training documentation (01-membership.md) to remove badge_number as a separate field.
+- Updated troubleshooting docs to reference "Duplicate Membership Number Error" instead of badge number.
+- Fixed `test_onboarding_e2e.sh` to use the correct API endpoint and field names.
+- Fixed stale placeholder text in 3 frontend search inputs and 4 backend docstrings/descriptions.
+
+### Training Waiver Consistency & Meeting Attendance Fixes (2026-02-21)
+
+#### Shared Training Waiver Service
+- **New `training_waiver_service.py`**: Created a centralized service for all training waiver/leave-of-absence calculations. Merges data from both `training_waivers` (training-specific, supports per-requirement targeting) and `member_leaves_of_absence` (department-wide leaves from Member Lifecycle UI) into a uniform `WaiverPeriod` representation.
+- **Consistent waiver adjustments across all compliance views**: Previously, training requirement adjustments for leaves of absence were only applied in the member's My Training self-view (`GET /my-training`). Now the same proportional adjustment formula (`adjusted = base × active_months / total_months`) is applied consistently in:
+  - Compliance Matrix (`GET /training/compliance-matrix`)
+  - Competency Matrix / Heat Map (`GET /training/competency-matrix`)
+  - Individual Training Reports (`GET /training/reports/user/{id}`)
+  - Per-Requirement Progress (`GET /training/requirements/progress/{id}`)
+  - Program Enrollment Progress recalculation
+- **Batch-fetch pattern**: Org-wide views (compliance matrix, competency matrix) use `fetch_org_waivers()` to load all waivers in a single query, avoiding N+1 database calls.
+- **Requirement types adjusted**: Hours, Shifts, and Calls requirements are reduced proportionally. Courses and Certifications are not adjusted (they are binary completions).
+
+#### Meeting Attendance — Leave of Absence Exclusion
+- **Attendance Dashboard**: Meetings that fall within a member's active Leave of Absence are now automatically excluded from the attendance denominator. Officers no longer need to manually grant per-meeting waivers for members on formal leave. New `meetings_on_leave` field added to the dashboard response.
+- **Voting Eligibility**: `MembershipTierService.get_meeting_attendance_pct()` now accounts for Leave of Absence periods when calculating attendance percentage for voting eligibility checks.
+
+#### Documentation
+- **New `TRAINING_WAIVERS.md`**: Comprehensive how-to guide covering: step-by-step UI workflow for creating leaves of absence, waiver calculation details (15-day threshold, overlapping deduplication, requirement types affected), all compliance views where adjustments are applied, API reference for both Member Leaves and Training Waivers endpoints, meeting attendance impact, example scenario, and FAQ.
+
+#### Database Column Type Consistency
+- **DateTime timezone awareness**: Added `timezone=True` to all DateTime columns across `election.py`, `event.py`, `minute.py`, and `training.py` models to ensure consistent UTC storage.
+- **Enum migration**: Created migration `20260221_0100_fix_column_type_consistency.py` to convert `waiver_type` and `leave_type` columns from plain String to proper database ENUM types, matching the SQLAlchemy model definitions.
+
+#### CI Pipeline
+- **New `.github/workflows/ci.yml`**: Added GitHub Actions CI pipeline with backend linting (flake8), frontend build validation (TypeScript + Vite), and Python syntax checking.
+
 ### Dependency Updates & Hardcoded Value Elimination (2026-02-20)
 
 #### Dependency Version Bumps (minor/patch only)

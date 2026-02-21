@@ -27,6 +27,9 @@ from app.models.training import (
     RequirementFrequency,
 )
 from app.models.user import User, UserStatus
+from app.services.training_waiver_service import (
+    WaiverPeriod, fetch_org_waivers, adjust_required,
+)
 
 
 class CompetencyMatrixService:
@@ -113,6 +116,9 @@ class CompetencyMatrixService:
                 records_by_user[uid] = []
             records_by_user[uid].append(record)
 
+        # Batch-fetch all active waivers / leaves for the org
+        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
+
         today = date.today()
         expiring_threshold = today + timedelta(days=90)
 
@@ -138,12 +144,13 @@ class CompetencyMatrixService:
         for member in members:
             uid = str(member.id)
             user_records = records_by_user.get(uid, [])
+            member_waivers = waivers_by_user.get(uid, [])
             statuses = {}
 
             for req in requirements:
                 rid = str(req.id)
                 status_info = self._evaluate_requirement_status(
-                    req, user_records, today, expiring_threshold
+                    req, user_records, today, expiring_threshold, waivers=member_waivers
                 )
                 statuses[rid] = status_info
 
@@ -221,11 +228,13 @@ class CompetencyMatrixService:
         user_records: List[TrainingRecord],
         today: date,
         expiring_threshold: date,
+        waivers: Optional[List[WaiverPeriod]] = None,
     ) -> Dict:
         """Evaluate a single requirement for a single member using type-aware matching."""
         req_type = requirement.requirement_type.value if hasattr(requirement.requirement_type, 'value') else str(requirement.requirement_type)
         start_date, end_date = self._get_date_window(requirement, today)
         not_started = {"status": "not_started", "expiration_date": None, "completion_date": None, "details": None}
+        _waivers = waivers or []
 
         # Filter completed records within the date window
         completed = [r for r in user_records if r.status == TrainingStatus.COMPLETED]
@@ -245,6 +254,10 @@ class CompetencyMatrixService:
 
             total_hours = sum(r.hours_completed or 0 for r in type_matched)
             required = requirement.required_hours or 0
+
+            # Adjust required hours for waived months
+            if required > 0 and start_date and end_date and _waivers:
+                required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(requirement.id))
 
             most_recent = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
             if not most_recent:

@@ -81,7 +81,7 @@ class TestOnboardingIntegration:
             "password": "SecureP@ssw0rd!",
             "first_name": "Test",
             "last_name": "Admin",
-            "badge_number": "ADMIN-001",
+            "membership_number": "ADMIN-001",
         }
 
         try:
@@ -223,7 +223,7 @@ class TestOnboardingIntegration:
             "password": "SecureP@ssw0rd!",
             "first_name": "Test",
             "last_name": "Admin",
-            "badge_number": "ADMIN-004",
+            "membership_number": "ADMIN-004",
         }
 
         user1 = await service.create_system_owner(**owner_data)

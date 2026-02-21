@@ -205,10 +205,29 @@ The **Meetings > Attendance Dashboard** provides:
 - Attendance percentage by member
 - Attendance by membership tier
 - Meeting attendance waivers granted
+- Meetings excluded due to Leave of Absence
 - Voting eligibility based on attendance requirements
 
+The attendance percentage is calculated as:
+
+```
+attendance_pct = meetings_attended / eligible_meetings × 100
+```
+
+Where `eligible_meetings = total_meetings − per_meeting_waivers − meetings_during_leave`.
+
 > **Screenshot placeholder:**
-> _[Screenshot of the Attendance Dashboard showing a table of members with their attendance percentage, number of meetings attended, and voting eligibility status]_
+> _[Screenshot of the Attendance Dashboard showing a table of members with their attendance percentage, number of meetings attended, meetings on leave, and voting eligibility status]_
+
+### Leave of Absence & Meeting Attendance
+
+When a member has an active **Leave of Absence** (created via **Administration > Member Lifecycle**), any meetings whose date falls within the leave period are automatically excluded from the attendance denominator. This means:
+
+- The member's attendance percentage is not penalized for meetings they could not attend
+- Officers do **not** need to grant individual per-meeting waivers for members on formal leave
+- Voting eligibility calculations also respect the adjusted attendance percentage
+
+Per-meeting waivers (granted for one-off absences) and Leave of Absence exclusions are tracked separately in the dashboard. Both reduce the denominator independently.
 
 ---
 

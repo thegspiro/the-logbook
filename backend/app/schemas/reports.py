@@ -31,7 +31,7 @@ class MemberRosterEntry(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[str] = None
-    badge_number: Optional[str] = None
+    membership_number: Optional[str] = None
     rank: Optional[str] = None
     status: Optional[str] = None
     station: Optional[str] = None

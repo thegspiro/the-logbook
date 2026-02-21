@@ -115,7 +115,7 @@ from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address)
 
-@app.post("/api/v1/onboarding/admin-user")
+@app.post("/api/v1/onboarding/system-owner")
 @limiter.limit("5/minute")  # Max 5 attempts per minute
 async def create_admin_user(...):
     pass

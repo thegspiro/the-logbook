@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-20 (includes hardcoded value elimination across 43 files, centralized constants for role groups/event types/folder slugs, CSS variable consolidation for toast/status colors, dependency version bumps; comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique badge number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
+**Last Updated**: 2026-02-21 (includes training waiver consistency across all compliance views, meeting attendance Leave of Absence exclusion, shared training waiver service, DateTime timezone consistency, CI pipeline; hardcoded value elimination across 43 files, centralized constants for role groups/event types/folder slugs, CSS variable consolidation for toast/status colors, dependency version bumps; comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique membership number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
 
 ---
 
@@ -517,13 +517,13 @@ docker compose up --build
 
 ---
 
-### Duplicate Badge Number Error
+### Duplicate Membership Number Error
 
-**Symptom**: Error when creating a member: "A member with badge number 'XXX' already exists in this organization."
+**Symptom**: Error when creating a member: "A member with membership number 'XXX' already exists in this organization."
 
-**Cause**: As of 2026-02-20, badge numbers are enforced as unique per organization. Previously, duplicates could be silently created, leading to data confusion.
+**Cause**: Membership numbers are enforced as unique per organization.
 
-**Resolution**: Use a different badge number, or check with your administrator if the existing badge was assigned incorrectly.
+**Resolution**: Use a different membership number, or check with your administrator if the existing number was assigned incorrectly.
 
 ---
 
@@ -1779,6 +1779,46 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 5. View all waivers: `GET /api/v1/meetings/{meeting_id}/attendance-waivers`
 
 **Note**: Waivers are logged as `meeting_attendance_waiver_granted` audit events with `warning` severity.
+
+#### Leave of Absence: Training Requirement Adjustments
+
+**Scenario**: A member is on leave and their training compliance numbers look wrong — they're showing as non-compliant even though they should have reduced requirements.
+
+**How Waiver Adjustments Work**:
+When a Leave of Absence is created via **Administration > Member Lifecycle**, the system automatically reduces all proportional training requirements (hours, shifts, calls) using:
+
+```
+adjusted_required = base_required × (active_months / total_months)
+```
+
+A calendar month is "waived" if the leave covers **15 or more days** of that month. Overlapping leaves are deduplicated — the same month is never counted twice.
+
+**Where Adjustments Are Applied** (all views should show the same adjusted numbers):
+- My Training page (member self-view)
+- Compliance Matrix (officer view)
+- Competency Matrix / Heat Map
+- Individual Training Reports
+- Per-Requirement Progress
+- Program Enrollment Progress
+
+**Not working? Check these causes**:
+1. **Leave is not active**: Go to Member Lifecycle > Leave of Absence and verify the leave is active (not deactivated)
+2. **Leave doesn't cover enough days**: A month is only waived if the leave covers ≥15 days of that month. A leave from Jan 20–Jan 31 (12 days) does NOT waive January.
+3. **Wrong requirement type**: Only Hours, Shifts, and Calls requirements are adjusted proportionally. Courses and Certifications are binary (complete or not) and are never adjusted.
+4. **Training Waiver vs. Leave of Absence**: A Leave of Absence (Member Lifecycle) applies to ALL requirements. A Training Waiver (`/training/waivers` API) can target specific requirements via `requirement_ids`. You don't need both — a Leave of Absence is sufficient for general leaves.
+
+#### Leave of Absence: Meeting Attendance Not Adjusted
+
+**Scenario**: A member was on leave but their meeting attendance percentage is still being penalized for meetings held during the leave period.
+
+**How It Works**: Any meeting whose `meeting_date` falls between a leave's `start_date` and `end_date` (inclusive) is automatically excluded from the attendance denominator. No per-meeting waivers are needed for members on formal leave.
+
+**Not working? Check these causes**:
+1. **Leave is not active**: Verify the leave hasn't been deactivated
+2. **Leave dates don't cover the meeting**: The meeting date must fall between the leave's start and end dates (inclusive)
+3. **Per-meeting waiver vs. Leave of Absence**: Both subtract from the denominator independently. If a member has both a per-meeting waiver AND a leave covering the same meeting, the meeting is only subtracted once from the denominator in the Attendance Dashboard (they are counted separately: `eligible = total - waived - on_leave`)
+
+**Attendance Dashboard** (`GET /meetings/attendance/dashboard`) now shows a `meetings_on_leave` count per member.
 
 #### Training: Auto-Enrollment on Member Conversion
 

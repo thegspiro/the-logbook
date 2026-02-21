@@ -139,11 +139,11 @@ This document describes the complete onboarding flow for The Logbook application
 │ Collects IT contact info     │
 └──────────┬───────────────────┘
            │
-           │ Button: "Continue" → Navigate to /onboarding/roles
+           │ Button: "Continue" → Navigate to /onboarding/positions
            v
 ┌──────────────────────────────┐
 │ 9. Role Setup                │
-│ Route: /onboarding/roles     │
+│ Route: /onboarding/positions  │
 │ API: POST                    │
 │ /api/v1/onboarding/          │
 │ session/roles                │
@@ -178,21 +178,21 @@ This document describes the complete onboarding flow for The Logbook application
            │ - "Ignore" → Mark as ignored
            │
            │ When all modules processed:
-           │ Button: "Continue to Admin Setup" → Navigate to /onboarding/admin-user
+           │ Button: "Continue to Admin Setup" → Navigate to /onboarding/system-owner
            v
 ┌──────────────────────────────┐
 │ 11. Admin User Creation      │
 │ Route: /onboarding/          │
-│ admin-user                   │
+│ system-owner                 │
 │ API: POST                    │
 │ /api/v1/onboarding/          │
-│ admin-user                   │
+│ system-owner                 │
 │ Collects:                    │
 │ - Username                   │
 │ - Email                      │
 │ - Password (12+ chars)       │
 │ - First/Last Name            │
-│ - Badge Number (optional)    │
+│ - Membership Number (optional)│
 └──────────┬───────────────────┘
            │
            │ Button: "Create Admin & Complete Setup"
@@ -480,7 +480,7 @@ Body: {
 
 ---
 
-### 9. Role Setup (`/onboarding/roles`)
+### 9. Role Setup (`/onboarding/positions`)
 **Purpose**: Configure roles and permissions using a two-tier model
 
 **Two-Tier Permission Model**:
@@ -559,7 +559,7 @@ Body: {
 ```
 
 **Navigation**:
-- Button: "Continue to Admin Setup" → `/onboarding/admin-user`
+- Button: "Continue to Admin Setup" → `/onboarding/system-owner`
 
 ---
 
@@ -578,7 +578,7 @@ Body: {
 
 ---
 
-### 11. Admin User Creation (`/onboarding/admin-user`)
+### 11. Admin User Creation (`/onboarding/system-owner`)
 **Purpose**: Create the first administrator account
 
 **Form Fields**:
@@ -588,7 +588,7 @@ Body: {
 - Confirm Password (must match)
 - First Name (required)
 - Last Name (required)
-- Badge Number (optional)
+- Membership Number (optional)
 
 **Validation**:
 - Username: alphanumeric, hyphens, underscores only
@@ -600,7 +600,7 @@ Body: {
 1. POST /api/v1/onboarding/organization
    (if not already created)
 
-2. POST /api/v1/onboarding/admin-user
+2. POST /api/v1/onboarding/system-owner
    Body: {
      username: string,
      email: string,
@@ -608,7 +608,7 @@ Body: {
      password_confirm: string,
      first_name: string,
      last_name: string,
-     badge_number?: string
+     membership_number?: string
    }
 
 3. POST /api/v1/onboarding/complete
@@ -734,7 +734,7 @@ Creates organization with comprehensive details and commits to database immediat
 
 ### Create Admin User
 ```
-POST /api/v1/onboarding/admin-user
+POST /api/v1/onboarding/system-owner
 Body: {
   username: string,
   email: string,
@@ -742,7 +742,7 @@ Body: {
   password_confirm: string,
   first_name: string,
   last_name: string,
-  badge_number?: string
+  membership_number?: string
 }
 ```
 Creates administrator user with Super Admin role.

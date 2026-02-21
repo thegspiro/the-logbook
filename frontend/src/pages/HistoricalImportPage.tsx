@@ -44,10 +44,10 @@ import type {
 
 // ==================== Constants ====================
 
-type MatchStrategy = 'email' | 'badge_number';
+type MatchStrategy = 'email' | 'membership_number';
 
 const MATCH_STRATEGIES: { value: MatchStrategy; label: string; description: string; requiredCol: string }[] = [
-  { value: 'badge_number', label: 'Badge Number', description: 'Most reliable — match by badge or employee number', requiredCol: 'badge_number' },
+  { value: 'membership_number', label: 'Membership Number', description: 'Most reliable — match by membership number', requiredCol: 'membership_number' },
   { value: 'email', label: 'Email Address', description: 'Match members by their email address', requiredCol: 'email' },
 ];
 
@@ -237,7 +237,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
             <p className="font-medium text-theme-text-primary mb-1">Required Columns</p>
             <ul className="text-theme-text-muted space-y-0.5">
               {matchBy === 'email' && <li><code className="text-red-500">email</code> - Member email for matching</li>}
-              {matchBy === 'badge_number' && <li><code className="text-red-500">badge_number</code> - Badge or employee number</li>}
+              {matchBy === 'membership_number' && <li><code className="text-red-500">membership_number</code> - Membership number</li>}
               <li><code className="text-red-500">course_name</code> - Training course title</li>
             </ul>
           </div>
@@ -258,7 +258,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
         onClick={() => {
           const templates: Record<MatchStrategy, string> = {
             email: 'email,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\njohn@dept.gov,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\njane@dept.gov,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n',
-            badge_number: 'badge_number,name,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\n1234,John Smith,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\n5678,Jane Doe,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n',
+            membership_number: 'membership_number,name,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes\n1234,John Smith,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Smith,Station 1,95,Annual certification\n5678,Jane Doe,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher\n',
           };
           const blob = new Blob([templates[matchBy]], { type: 'text/csv' });
           const url = URL.createObjectURL(blob);
@@ -618,13 +618,13 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                       <div>
                         <span className="text-theme-text-primary">{row.matched_member_name}</span>
                         <span className="block text-xs text-theme-text-muted">
-                          {row.email || row.badge_number || row.member_name}
+                          {row.email || row.membership_number || row.member_name}
                         </span>
                       </div>
                     ) : (
                       <div>
                         <span className="text-yellow-400">
-                          {row.member_name || row.email || row.badge_number || 'Unknown'}
+                          {row.member_name || row.email || row.membership_number || 'Unknown'}
                         </span>
                         <span className="block text-xs text-yellow-500">No match</span>
                       </div>
@@ -785,7 +785,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
 
 const HistoricalImportPage: React.FC = () => {
   const [step, setStep] = useState(1);
-  const [matchBy, setMatchBy] = useState<MatchStrategy>('badge_number');
+  const [matchBy, setMatchBy] = useState<MatchStrategy>('membership_number');
   const [parseResult, setParseResult] = useState<HistoricalImportParseResponse | null>(null);
   const [courseMappings, setCourseMappings] = useState<CourseMappingEntry[]>([]);
   const [existingCourses, setExistingCourses] = useState<TrainingCourse[]>([]);
@@ -842,7 +842,7 @@ const HistoricalImportPage: React.FC = () => {
 
   const handleReset = useCallback(() => {
     setStep(1);
-    setMatchBy('badge_number');
+    setMatchBy('membership_number');
     setParseResult(null);
     setCourseMappings([]);
     setImportResult(null);

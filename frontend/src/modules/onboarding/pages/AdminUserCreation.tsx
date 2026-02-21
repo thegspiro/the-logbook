@@ -21,7 +21,7 @@ const SystemOwnerCreation: React.FC = () => {
     email: '',
     firstName: '',
     lastName: '',
-    badgeNumber: '',
+    membershipNumber: '',
     password: '',
     confirmPassword: '',
   });
@@ -168,7 +168,7 @@ const SystemOwnerCreation: React.FC = () => {
           password_confirm: formData.confirmPassword,
           first_name: formData.firstName,
           last_name: formData.lastName,
-          badge_number: formData.badgeNumber || undefined,
+          membership_number: formData.membershipNumber || undefined,
         });
 
         if (response.error) {
@@ -193,7 +193,7 @@ const SystemOwnerCreation: React.FC = () => {
           email: '',
           firstName: '',
           lastName: '',
-          badgeNumber: '',
+          membershipNumber: '',
           password: '',
           confirmPassword: '',
         });
@@ -383,19 +383,19 @@ const SystemOwnerCreation: React.FC = () => {
                 </div>
               </div>
 
-              {/* Badge Number (Optional) */}
+              {/* Membership Number (Optional) */}
               <div className="mt-4">
                 <label
-                  htmlFor="badgeNumber"
+                  htmlFor="membershipNumber"
                   className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
-                  Badge Number <span className="text-theme-text-muted">(Optional)</span>
+                  Membership Number <span className="text-theme-text-muted">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  id="badgeNumber"
-                  name="badgeNumber"
-                  value={formData.badgeNumber}
+                  id="membershipNumber"
+                  name="membershipNumber"
+                  value={formData.membershipNumber}
                   onChange={handleChange}
                   className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring transition-all"
                   placeholder="e.g., FF-1234"

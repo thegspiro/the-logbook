@@ -18,7 +18,7 @@ from sqlalchemy import (
     JSON,
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.sql import func
 from enum import Enum
 from app.core.utils import generate_uuid
 
@@ -174,8 +174,8 @@ class MinutesTemplate(Base):
     footer_config = Column(JSON, nullable=True)
 
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         Index("ix_minutes_templates_organization_id", "organization_id"),
@@ -198,11 +198,11 @@ class MeetingMinutes(Base):
     # Meeting details
     title = Column(String(300), nullable=False)
     meeting_type = Column(SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesMeetingType.BUSINESS)
-    meeting_date = Column(DateTime, nullable=False)
+    meeting_date = Column(DateTime(timezone=True), nullable=False)
     location = Column(String(300), nullable=True)
     called_by = Column(String(200), nullable=True)
-    called_to_order_at = Column(DateTime, nullable=True)
-    adjourned_at = Column(DateTime, nullable=True)
+    called_to_order_at = Column(DateTime(timezone=True), nullable=True)
+    adjourned_at = Column(DateTime(timezone=True), nullable=True)
 
     # Attendees (stored as JSON array of {user_id, name, role, present})
     attendees = Column(JSON, nullable=True)
@@ -243,11 +243,11 @@ class MeetingMinutes(Base):
 
     # Approval workflow
     status = Column(SQLEnum(MinutesStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesStatus.DRAFT)
-    submitted_at = Column(DateTime, nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
     submitted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    approved_at = Column(DateTime, nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
     approved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    rejected_at = Column(DateTime, nullable=True)
+    rejected_at = Column(DateTime(timezone=True), nullable=True)
     rejected_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     rejection_reason = Column(Text, nullable=True)
 
@@ -259,8 +259,8 @@ class MeetingMinutes(Base):
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     template = relationship("MinutesTemplate", foreign_keys=[template_id])
@@ -342,8 +342,8 @@ class Motion(Base):
     votes_abstain = Column(Integer, nullable=True)
 
     # Metadata
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     minutes = relationship("MeetingMinutes", back_populates="motions")
@@ -369,17 +369,17 @@ class ActionItem(Base):
     description = Column(Text, nullable=False)
     assignee_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     assignee_name = Column(String(200), nullable=True)
-    due_date = Column(DateTime, nullable=True)
+    due_date = Column(DateTime(timezone=True), nullable=True)
     priority = Column(SQLEnum(ActionItemPriority, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ActionItemPriority.MEDIUM)
 
     # Status tracking
     status = Column(SQLEnum(MinutesActionItemStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesActionItemStatus.PENDING)
-    completed_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
     completion_notes = Column(Text, nullable=True)
 
     # Metadata
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     minutes = relationship("MeetingMinutes", back_populates="action_items")

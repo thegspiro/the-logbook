@@ -46,18 +46,12 @@ async def db_session(initialize_database) -> AsyncGenerator[AsyncSession, None]:
 def sample_org_data():
     """
     Sample organization data for testing.
+    Matches the OrganizationCreate schema used by onboarding.
     """
     return {
         "name": "Test Fire Department",
-        "type": "fire_department",
-        "address": "123 Test St",
-        "city": "Test City",
-        "state": "NY",
-        "zip_code": "12345",
-        "country": "USA",
-        "phone": "555-0100",
-        "email": "test@example.com",
-        "website": "https://test.example.com",
+        "organization_type": "fire_department",
+        "slug": "test-fire-dept",
         "timezone": "America/New_York",
     }
 
@@ -73,7 +67,7 @@ def sample_admin_data():
         "password": "SecurePass123!",
         "first_name": "Test",
         "last_name": "Admin",
-        "badge_number": "ADMIN-001",
+        "membership_number": "ADMIN-001",
     }
 
 
@@ -97,12 +91,10 @@ def sample_departments_data():
         "departments": [
             {
                 "name": "Operations",
-                "type": "operations",
                 "description": "Fire suppression and emergency response",
             },
             {
                 "name": "Training",
-                "type": "training",
                 "description": "Member training and certification",
             },
         ]
@@ -118,10 +110,6 @@ def sample_stations_data():
         "stations": [
             {
                 "name": "Station 1",
-                "address": "100 Main St",
-                "city": "Test City",
-                "state": "NY",
-                "zip_code": "12345",
                 "station_number": "1",
             }
         ]

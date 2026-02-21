@@ -151,7 +151,7 @@ class PropertyReturnService:
             "member_name": member.full_name,
             "member_email": member.email,
             "member_address": self._format_address(member),
-            "member_badge_number": member.badge_number,
+            "member_number": member.membership_number,
             "member_rank": member.rank,
             "organization_name": org_name,
             "organization_address": self._format_org_address(org) if org else "",
@@ -349,7 +349,7 @@ class PropertyReturnService:
 
     <!-- Subject -->
     <p style="margin:0 0 4px 0;"><strong>Re: {escape(data['drop_type_display'])} — Notice of Department Property Return</strong></p>
-    {f'<p style="margin:0 0 20px 0;color:#4b5563;">Badge #{escape(data["member_badge_number"])}</p>' if data.get('member_badge_number') else '<div style="margin-bottom:20px;"></div>'}
+    {f'<p style="margin:0 0 20px 0;color:#4b5563;">Member #{escape(data["member_number"])}</p>' if data.get('member_number') else '<div style="margin-bottom:20px;"></div>'}
 
     <!-- Salutation -->
     <p style="margin:0 0 16px 0;">Dear {escape(data['member_name'])},</p>

@@ -357,7 +357,7 @@ The onboarding wizard is designed to work with the backend API endpoints:
 - `POST /api/v1/onboarding/session/it-team` - Save IT team and backup access
 - `POST /api/v1/onboarding/session/modules` - Save module selection
 - `POST /api/v1/onboarding/organization` - Create organization
-- `POST /api/v1/onboarding/admin-user` - Create admin user
+- `POST /api/v1/onboarding/system-owner` - Create admin user
 - `POST /api/v1/onboarding/complete` - Complete onboarding
 - `POST /api/v1/onboarding/reset` - Reset all onboarding data (destructive)
 

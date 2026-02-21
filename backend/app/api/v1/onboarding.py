@@ -102,7 +102,7 @@ class SystemOwnerCreate(BaseModel):
     password_confirm: str = Field(..., min_length=12)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    badge_number: Optional[str] = Field(None, max_length=50)
+    membership_number: Optional[str] = Field(None, max_length=50)
 
     @validator('password_confirm')
     def passwords_match(cls, v, values):
@@ -124,7 +124,7 @@ class UserResponse(BaseModel):
     email: str
     first_name: str
     last_name: str
-    badge_number: Optional[str]
+    membership_number: Optional[str]
     status: str
 
     class Config:
@@ -138,7 +138,7 @@ class SystemOwnerResponse(BaseModel):
     email: str
     first_name: str
     last_name: str
-    badge_number: Optional[str]
+    membership_number: Optional[str]
     status: str
     access_token: str
     refresh_token: Optional[str] = None
@@ -515,9 +515,23 @@ async def _persist_session_data_to_org(
         org_settings.setdefault("auth", {})
         org_settings["auth"]["provider"] = auth_data["platform"]
 
+    # Persist module selections
+    modules_data = session_data.get("modules")
+    if modules_data and modules_data.get("enabled"):
+        enabled_list = modules_data["enabled"]
+        # Map the enabled list to the configurable module keys used by the
+        # Settings page (ModuleSettings schema).  Core modules like members,
+        # events, documents are always on and not tracked here.
+        configurable_keys = [
+            "training", "inventory", "scheduling", "elections", "minutes",
+            "reports", "notifications", "mobile", "forms", "integrations",
+            "facilities",
+        ]
+        org_settings["modules"] = {k: k in enabled_list for k in configurable_keys}
+
     organization.settings = org_settings
     await db.flush()
-    logger.info("Persisted session data (IT team, auth) to Organization.settings")
+    logger.info("Persisted session data (IT team, auth, modules) to Organization.settings")
 
 
 # ============================================
@@ -786,7 +800,7 @@ async def create_system_owner(
             password=user_data.password,
             first_name=user_data.first_name,
             last_name=user_data.last_name,
-            badge_number=user_data.badge_number
+            membership_number=user_data.membership_number
         )
 
         # Commit all changes (user, role assignment, onboarding step) before
@@ -810,7 +824,7 @@ async def create_system_owner(
             email=user.email,
             first_name=user.first_name,
             last_name=user.last_name,
-            badge_number=user.badge_number,
+            membership_number=user.membership_number,
             status=user.status.value,
             access_token=access_token,
             refresh_token=refresh_token,
@@ -996,9 +1010,10 @@ async def mark_checklist_item_complete(
     }
 
 
-@router.post("/test/email", response_model=EmailTestResponse)
+@router.post("/test/email", response_model=EmailTestResponse, dependencies=[Depends(check_rate_limit)])
 async def test_email_configuration(
     request: EmailTestRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1007,6 +1022,8 @@ async def test_email_configuration(
     Tests SMTP connection, authentication, and validates email settings.
     Supports Gmail, Microsoft 365, self-hosted SMTP, and other email platforms.
 
+    Requires a valid onboarding session to prevent unauthenticated SSRF.
+
     Args:
         request: Email configuration to test
 
@@ -1014,8 +1031,10 @@ async def test_email_configuration(
         EmailTestResponse with success status and details
 
     Raises:
-        HTTPException: If configuration is invalid
+        HTTPException: If session is invalid or configuration is invalid
     """
+    # Require valid session to prevent unauthenticated SSRF
+    await validate_session(raw_request, db)
     platform = request.platform
     config = request.config
 
@@ -1683,17 +1702,8 @@ async def reset_onboarding(
             detail="Cannot reset after onboarding is completed. Use the admin panel to manage settings."
         )
 
-    # Validate session if one exists (CSRF protection)
-    try:
-        await validate_session(request, db)
-    except HTTPException:
-        # Allow reset without valid session only if onboarding is still in progress
-        # (session may have expired during a failed onboarding attempt)
-        if not await service.needs_onboarding():
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Session expired and onboarding appears complete. Cannot reset."
-            )
+    # Require a valid session — never allow unauthenticated destructive operations
+    await validate_session(request, db)
 
     # Import models for deletion
     from app.models.user import Organization, User, Role
@@ -1734,8 +1744,8 @@ async def reset_onboarding(
         try:
             from sqlalchemy import text
             await db.execute(text("DELETE FROM user_positions"))
-        except Exception:
-            pass  # Table might not exist yet
+        except Exception as e:
+            logger.warning(f"Could not delete user_positions (table may not exist yet): {e}")
 
         # 5. Delete users
         await db.execute(

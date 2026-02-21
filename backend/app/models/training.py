@@ -263,11 +263,11 @@ class TrainingRecord(Base):
     attachments = Column(JSON)  # List of file URLs or references
 
     # Certification expiration alert tracking — records when each tier was sent
-    alert_90_sent_at = Column(DateTime, nullable=True)
-    alert_60_sent_at = Column(DateTime, nullable=True)
-    alert_30_sent_at = Column(DateTime, nullable=True)
-    alert_7_sent_at = Column(DateTime, nullable=True)
-    escalation_sent_at = Column(DateTime, nullable=True)  # CC to training/compliance officers
+    alert_90_sent_at = Column(DateTime(timezone=True), nullable=True)
+    alert_60_sent_at = Column(DateTime(timezone=True), nullable=True)
+    alert_30_sent_at = Column(DateTime(timezone=True), nullable=True)
+    alert_7_sent_at = Column(DateTime(timezone=True), nullable=True)
+    escalation_sent_at = Column(DateTime(timezone=True), nullable=True)  # CC to training/compliance officers
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1889,7 +1889,7 @@ class TrainingWaiver(Base):
     organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    waiver_type = Column(Enum(TrainingWaiverType), nullable=False, default=TrainingWaiverType.LEAVE_OF_ABSENCE)
+    waiver_type = Column(Enum(TrainingWaiverType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=TrainingWaiverType.LEAVE_OF_ABSENCE)
     reason = Column(Text, nullable=True)
 
     # The period the member is excused (inclusive)

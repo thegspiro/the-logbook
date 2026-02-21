@@ -198,8 +198,8 @@ const Dashboard: React.FC = () => {
   const loadHours = async () => {
     try {
       const [schedulingSummary, trainingSummary] = await Promise.all([
-        schedulingService.getSummary().catch(() => null),
-        trainingModuleConfigService.getMyTraining().catch(() => null),
+        schedulingService.getSummary().catch((err) => { console.error('Failed to load scheduling summary:', err); return null; }),
+        trainingModuleConfigService.getMyTraining().catch((err) => { console.error('Failed to load training summary:', err); return null; }),
       ]);
       setHours({
         training: trainingSummary?.hours_summary?.total_hours ?? 0,

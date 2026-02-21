@@ -104,7 +104,9 @@ const InventoryMembersTab: React.FC = () => {
     // Refresh member list and detail after a scan operation
     loadMembers();
     if (expandedUserId) {
-      inventoryService.getUserInventory(expandedUserId).then(setMemberDetail).catch(() => {});
+      inventoryService.getUserInventory(expandedUserId).then(setMemberDetail).catch((err) => {
+        console.error('Failed to load member inventory detail:', err);
+      });
     }
   };
 
@@ -141,7 +143,7 @@ const InventoryMembersTab: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, username, or badge number..."
+              placeholder="Search by name, username, or membership number..."
               className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
             />
           </div>
@@ -221,9 +223,9 @@ const InventoryMembersTab: React.FC = () => {
                             {member.full_name && (
                               <span className="text-theme-text-muted text-xs">@{member.username}</span>
                             )}
-                            {member.badge_number && (
+                            {member.membership_number && (
                               <span className="hidden sm:inline-flex items-center gap-1 text-xs text-theme-text-muted">
-                                <Shield className="w-3 h-3" /> {member.badge_number}
+                                <Shield className="w-3 h-3" /> {member.membership_number}
                               </span>
                             )}
                           </div>
