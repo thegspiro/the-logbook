@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-21 (includes training waiver consistency across all compliance views, meeting attendance Leave of Absence exclusion, shared training waiver service, DateTime timezone consistency, CI pipeline; hardcoded value elimination across 43 files, centralized constants for role groups/event types/folder slugs, CSS variable consolidation for toast/status colors, dependency version bumps; comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique badge number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
+**Last Updated**: 2026-02-21 (includes training waiver consistency across all compliance views, meeting attendance Leave of Absence exclusion, shared training waiver service, DateTime timezone consistency, CI pipeline; hardcoded value elimination across 43 files, centralized constants for role groups/event types/folder slugs, CSS variable consolidation for toast/status colors, dependency version bumps; comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique membership number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
 
 ---
 
@@ -517,13 +517,13 @@ docker compose up --build
 
 ---
 
-### Duplicate Badge Number Error
+### Duplicate Membership Number Error
 
-**Symptom**: Error when creating a member: "A member with badge number 'XXX' already exists in this organization."
+**Symptom**: Error when creating a member: "A member with membership number 'XXX' already exists in this organization."
 
-**Cause**: As of 2026-02-20, badge numbers are enforced as unique per organization. Previously, duplicates could be silently created, leading to data confusion.
+**Cause**: Membership numbers are enforced as unique per organization.
 
-**Resolution**: Use a different badge number, or check with your administrator if the existing badge was assigned incorrectly.
+**Resolution**: Use a different membership number, or check with your administrator if the existing number was assigned incorrectly.
 
 ---
 

@@ -203,7 +203,7 @@ setFormData({
 **apiClient automatically clears password**:
 ```typescript
 // Inside apiClient.createAdminUser()
-const response = await this.request('POST', '/onboarding/admin-user', data, true);
+const response = await this.request('POST', '/onboarding/system-owner', data, true);
 
 // SECURITY: Clear password from memory immediately
 data.password = '';
@@ -326,7 +326,7 @@ sessionStorage.setItem('itTeamConfigured', 'true');
    - Saves IT team contacts and backup access
    - Requires CSRF token
 
-7. **POST /api/v1/onboarding/admin-user**
+7. **POST /api/v1/onboarding/system-owner**
    - Creates admin user (password hashed with Argon2id)
    - Requires CSRF token
    - **CRITICAL**: Password never stored client-side
@@ -347,7 +347,7 @@ After the admin user creates their account, they are **automatically logged in**
 
 ### Flow:
 1. User submits admin account form
-2. `POST /api/v1/onboarding/admin-user` creates user and returns auth token
+2. `POST /api/v1/onboarding/system-owner` creates user and returns auth token
 3. Token stored in `localStorage` (or httpOnly cookie set by backend)
 4. `POST /api/v1/onboarding/complete` finalizes onboarding
 5. All onboarding data cleared from sessionStorage

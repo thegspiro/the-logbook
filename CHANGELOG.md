@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Badge Number Consolidation & Field Restrictions (2026-02-21)
+
+#### Consolidate `badge_number` into `membership_number`
+- **Database migration** (`20260221_0200`): Copies existing `badge_number` values into `membership_number` where NULL, then drops the `badge_number` column and its unique index.
+- **Backend**: Removed `badge_number` from the User model, all Pydantic schemas (`UserBase`, `AdminUserCreate`, `UserUpdate`, `UserListResponse`, `UserResponse`), and all service/endpoint logic across auth, onboarding, training, inventory, forms, reports, and member status modules.
+- **Frontend**: Renamed all `badge_number` / `departmentId` references to `membership_number` across types, services, pages, and components. UI labels updated from "Badge #" / "Department ID" to "Member #" / "Membership Number".
+- **CSV imports**: `badge_number` is still accepted as a column alias for backward compatibility in training record imports.
+- **Property return reports**: Dict key `member_badge_number` renamed to `member_number`; HTML template updated from "Badge #" to "Member #".
+
+#### Restrict rank, station, and membership number edits
+- **Backend**: Users without `members.manage` permission now receive a 403 error when attempting to update `rank`, `station`, or `membership_number` via the profile update endpoint. Previously rank was silently dropped and station had no restriction.
+- **Frontend**: The rank, station, and membership number fields on the User Settings page are now disabled (grayed out) for users without `members.manage` permission.
+
+#### Documentation & test fixes
+- Updated all onboarding documentation (ONBOARDING.md, ONBOARDING_FLOW.md, wiki/Onboarding.md) to use `membership_number` instead of `badge_number`, correct endpoint `/system-owner` instead of `/admin-user`, correct route `/positions` instead of `/roles`, and correct `total_steps: 10`.
+- Updated training documentation (01-membership.md) to remove badge_number as a separate field.
+- Updated troubleshooting docs to reference "Duplicate Membership Number Error" instead of badge number.
+- Fixed `test_onboarding_e2e.sh` to use the correct API endpoint and field names.
+- Fixed stale placeholder text in 3 frontend search inputs and 4 backend docstrings/descriptions.
+
 ### Training Waiver Consistency & Meeting Attendance Fixes (2026-02-21)
 
 #### Shared Training Waiver Service

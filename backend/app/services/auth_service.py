@@ -329,7 +329,7 @@ class AuthService:
             first_name: First name
             last_name: Last name
             organization_id: Organization ID
-            membership_number: Optional badge number
+            membership_number: Optional membership number
 
         Returns:
             Tuple of (User object if successful, error message if failed)

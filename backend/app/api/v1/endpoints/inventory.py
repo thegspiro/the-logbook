@@ -818,7 +818,7 @@ async def get_low_stock_alerts(
 
 @router.get("/members-summary", response_model=MembersInventoryListResponse)
 async def get_members_inventory_summary(
-    search: Optional[str] = Query(None, description="Search by name, username, or badge number"),
+    search: Optional[str] = Query(None, description="Search by name, username, or membership number"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):

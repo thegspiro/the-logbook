@@ -70,7 +70,7 @@ The onboarding process consists of 10 steps:
 #### Step 9: Admin User Creation
 - Create first administrator account
 - Enforces strong password requirements (12+ characters with complexity rules)
-- Badge Number is optional — all other fields are required
+- Membership Number is optional — all other fields are required
 - Automatically assigns Super Admin role
 
 #### Step 10: Complete
@@ -113,7 +113,7 @@ GET /api/v1/onboarding/status
   "needs_onboarding": true,
   "is_completed": false,
   "current_step": 0,
-  "total_steps": 7,
+  "total_steps": 10,
   "steps_completed": {},
   "organization_name": null
 }
@@ -246,7 +246,7 @@ Content-Type: application/json
 ### Create Admin User
 
 ```bash
-POST /api/v1/onboarding/admin-user
+POST /api/v1/onboarding/system-owner
 Content-Type: application/json
 
 {
@@ -256,7 +256,7 @@ Content-Type: application/json
   "password_confirm": "SecureP@ssw0rd123!",
   "first_name": "John",
   "last_name": "Doe",
-  "badge_number": "001"
+  "membership_number": "001"
 }
 ```
 
@@ -277,7 +277,7 @@ Content-Type: application/json
   "email": "admin@springfieldfd.org",
   "first_name": "John",
   "last_name": "Doe",
-  "badge_number": "001",
+  "membership_number": "001",
   "status": "active"
 }
 ```
@@ -513,10 +513,10 @@ The onboarding module is designed to be integrated with a frontend wizard:
 /onboarding/file-storage-config → Step 4a: File Storage Config (placeholder)
 /onboarding/authentication     → Step 5: Authentication Choice
 /onboarding/it-team            → Step 6: IT Team & Backup Access
-/onboarding/roles              → Step 7: Role Setup (two-tier permissions)
+/onboarding/positions           → Step 7: Role Setup (two-tier permissions)
 /onboarding/modules            → Step 8: Module Selection
 /onboarding/modules/:id/config → Step 8a: Per-Module Configuration
-/onboarding/admin-user         → Step 9: Admin User Creation
+/onboarding/system-owner       → Step 9: Admin User Creation
 → On completion, redirects to /dashboard
 ```
 

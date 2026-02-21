@@ -881,7 +881,7 @@ class FormsService:
     async def search_members(
         self, organization_id: UUID, query: str, limit: int = 20
     ) -> List[Dict[str, Any]]:
-        """Search members by name, badge number, or email for member_lookup fields"""
+        """Search members by name, membership number, or email for member_lookup fields"""
         search_term = f"%{query}%"
         result = await self.db.execute(
             select(User)

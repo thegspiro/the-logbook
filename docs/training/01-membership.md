@@ -52,7 +52,7 @@ The directory shows all active members with their name, rank, status, and contac
 Click on any member in the directory to view their profile. The profile page includes:
 
 **Left Column:**
-- **Basic Information** - Name, rank, badge number, membership number, hire date, station
+- **Basic Information** - Name, rank, membership number, hire date, station
 - **Training Records** - Recent training completions and course history
 - **Assigned Inventory** - Equipment currently assigned to the member
 
@@ -81,7 +81,7 @@ Navigate to **Administration > Members > Member Management**, then click the **A
    - **Email** (must be unique within the department)
    - **Username** (auto-generated or custom)
 2. Optionally set:
-   - Rank, station, badge number, membership number
+   - Rank, station, membership number
    - Hire date
    - Assigned roles/positions
 3. Check **Send Welcome Email** to automatically email the new member their login credentials.
@@ -118,7 +118,7 @@ For bulk onboarding, you can import members from a CSV file:
 - `first_name`, `last_name` (required)
 - `email` (required, must be unique)
 - `username`, `phone`, `mobile`
-- `rank`, `station`, `badge_number`
+- `rank`, `station`, `membership_number`
 - `hire_date` (format: YYYY-MM-DD)
 
 > **Troubleshooting:** If rows fail validation, the preview will highlight the issues. Common problems include duplicate emails, missing required fields, or incorrectly formatted dates.

@@ -498,7 +498,7 @@ class OnboardingService:
             password: Plain text password (will be hashed)
             first_name: First name
             last_name: Last name
-            membership_number: Optional badge number
+            membership_number: Optional membership number
 
         Returns:
             Created User object

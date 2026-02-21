@@ -172,7 +172,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-              placeholder="Search by name or badge number..."
+              placeholder="Search by name or membership number..."
             />
           </div>
 
