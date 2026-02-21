@@ -982,7 +982,7 @@ async def parse_historical_import(
         return None
 
     col_email = find_col(['email', 'member_email', 'user_email', 'e-mail', 'e_mail'])
-    col_badge = find_col(['membership_number', 'badge_number', 'badge', 'badge_no', 'employee_id', 'employee_number', 'member_id', 'id_number'])
+    col_membership = find_col(['membership_number', 'badge_number', 'badge', 'badge_no', 'employee_id', 'employee_number', 'member_id', 'id_number'])
     col_name = find_col(['name', 'member_name', 'full_name', 'member', 'employee_name'])
     col_course = find_col(['course_name', 'course', 'training', 'training_name', 'class', 'class_name'])
     col_course_code = find_col(['course_code', 'code', 'class_code'])
@@ -1006,7 +1006,7 @@ async def parse_historical_import(
             detail="CSV must contain an 'email' column for email matching. "
                    f"Found columns: {', '.join(column_headers)}"
         )
-    if match_by == "membership_number" and not col_badge:
+    if match_by == "membership_number" and not col_membership:
         raise HTTPException(
             status_code=400,
             detail="CSV must contain a 'membership_number' column for membership number matching. "
@@ -1028,7 +1028,7 @@ async def parse_historical_import(
     members = members_result.scalars().all()
 
     email_to_user = {}
-    badge_to_user = {}
+    membership_to_user = {}
 
     for m in members:
         if m.email:
@@ -1036,7 +1036,7 @@ async def parse_historical_import(
         if hasattr(m, 'personal_email') and m.personal_email:
             email_to_user[m.personal_email.strip().lower()] = m
         if hasattr(m, 'membership_number') and m.membership_number:
-            badge_to_user[m.membership_number.strip().lower()] = m
+            membership_to_user[m.membership_number.strip().lower()] = m
 
     # Pre-load existing courses
     courses_result = await db.execute(
@@ -1062,7 +1062,7 @@ async def parse_historical_import(
 
         # Extract match fields
         email_val = (raw_row.get(col_email) or '').strip().lower() if col_email else ''
-        badge_val = (raw_row.get(col_badge) or '').strip().lower() if col_badge else ''
+        membership_val = (raw_row.get(col_membership) or '').strip().lower() if col_membership else ''
 
         # Extract name for display (optional column)
         name_val = (raw_row.get(col_name) or '').strip() if col_name else ''
@@ -1074,7 +1074,7 @@ async def parse_historical_import(
             if not match_key:
                 row_errors.append("Missing email")
         elif match_by == "membership_number":
-            match_key = badge_val
+            match_key = membership_val
             if not match_key:
                 row_errors.append("Missing membership number")
 
@@ -1100,7 +1100,7 @@ async def parse_historical_import(
         if match_by == "email":
             try_match(email_to_user, email_val)
         elif match_by == "membership_number":
-            try_match(badge_to_user, badge_val)
+            try_match(membership_to_user, membership_val)
 
         if member_matched:
             members_matched_set.add(match_key)
@@ -1169,7 +1169,7 @@ async def parse_historical_import(
         rows.append(HistoricalImportParsedRow(
             row_number=row_num,
             email=email_val or None,
-            membership_number=badge_val or None,
+            membership_number=membership_val or None,
             member_name=name_val or None,
             user_id=user_id,
             matched_member_name=matched_name,

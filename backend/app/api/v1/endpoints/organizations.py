@@ -5,6 +5,7 @@ Endpoints for organization settings management.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -17,7 +18,6 @@ from app.schemas.organization import (
     MembershipIdSettings,
     EnabledModulesResponse,
     ModuleSettingsUpdate,
-    MembershipIdSettings,
     SetupChecklistResponse,
     SetupChecklistItem,
 )
@@ -423,8 +423,8 @@ async def get_setup_checklist(
             select(func.count()).select_from(Form)
             .where(Form.organization_id == org_id)
         )).scalar() or 0
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to query form count for setup checklist: {e}")
 
     pipeline_count = 0
     try:
@@ -432,8 +432,8 @@ async def get_setup_checklist(
             select(func.count()).select_from(MembershipPipeline)
             .where(MembershipPipeline.organization_id == org_id, MembershipPipeline.is_active == True)
         )).scalar() or 0
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to query pipeline count for setup checklist: {e}")
 
     # Get organization settings for email/module info
     org_service = OrganizationService(db)

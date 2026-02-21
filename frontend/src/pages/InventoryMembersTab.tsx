@@ -104,7 +104,9 @@ const InventoryMembersTab: React.FC = () => {
     // Refresh member list and detail after a scan operation
     loadMembers();
     if (expandedUserId) {
-      inventoryService.getUserInventory(expandedUserId).then(setMemberDetail).catch(() => {});
+      inventoryService.getUserInventory(expandedUserId).then(setMemberDetail).catch((err) => {
+        console.error('Failed to load member inventory detail:', err);
+      });
     }
   };
 

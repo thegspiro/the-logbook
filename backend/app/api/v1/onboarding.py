@@ -996,9 +996,10 @@ async def mark_checklist_item_complete(
     }
 
 
-@router.post("/test/email", response_model=EmailTestResponse)
+@router.post("/test/email", response_model=EmailTestResponse, dependencies=[Depends(check_rate_limit)])
 async def test_email_configuration(
     request: EmailTestRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1007,6 +1008,8 @@ async def test_email_configuration(
     Tests SMTP connection, authentication, and validates email settings.
     Supports Gmail, Microsoft 365, self-hosted SMTP, and other email platforms.
 
+    Requires a valid onboarding session to prevent unauthenticated SSRF.
+
     Args:
         request: Email configuration to test
 
@@ -1014,8 +1017,10 @@ async def test_email_configuration(
         EmailTestResponse with success status and details
 
     Raises:
-        HTTPException: If configuration is invalid
+        HTTPException: If session is invalid or configuration is invalid
     """
+    # Require valid session to prevent unauthenticated SSRF
+    await validate_session(raw_request, db)
     platform = request.platform
     config = request.config
 
@@ -1683,17 +1688,8 @@ async def reset_onboarding(
             detail="Cannot reset after onboarding is completed. Use the admin panel to manage settings."
         )
 
-    # Validate session if one exists (CSRF protection)
-    try:
-        await validate_session(request, db)
-    except HTTPException:
-        # Allow reset without valid session only if onboarding is still in progress
-        # (session may have expired during a failed onboarding attempt)
-        if not await service.needs_onboarding():
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Session expired and onboarding appears complete. Cannot reset."
-            )
+    # Require a valid session — never allow unauthenticated destructive operations
+    await validate_session(request, db)
 
     # Import models for deletion
     from app.models.user import Organization, User, Role
@@ -1734,8 +1730,8 @@ async def reset_onboarding(
         try:
             from sqlalchemy import text
             await db.execute(text("DELETE FROM user_positions"))
-        except Exception:
-            pass  # Table might not exist yet
+        except Exception as e:
+            logger.warning(f"Could not delete user_positions (table may not exist yet): {e}")
 
         # 5. Delete users
         await db.execute(

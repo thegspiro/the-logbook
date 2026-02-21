@@ -7,6 +7,7 @@ GET  /my-training     - Member's aggregated training data (respects visibility c
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
@@ -102,8 +103,8 @@ async def get_my_training_summary(
         if user_with_roles and user_with_roles.roles:
             role_names = [r.name for r in user_with_roles.roles]
             is_officer = any(r in role_names for r in TRAINING_OFFICER_ROLE_SLUGS)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to check training officer role for user {current_user.id}: {e}")
 
     org_id = str(current_user.organization_id)
     user_id = str(current_user.id)
@@ -169,8 +170,8 @@ async def get_my_training_summary(
     try:
         if user_with_roles and user_with_roles.roles:
             user_role_ids = [str(r.id) for r in user_with_roles.roles]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to load user role IDs for user {current_user.id}: {e}")
 
     applicable: List[Any] = []
     for req in all_requirements:
