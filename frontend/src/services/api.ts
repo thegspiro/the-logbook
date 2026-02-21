@@ -3567,7 +3567,6 @@ export interface TrainingSessionCreate {
   rsvp_deadline?: string;
   max_attendees?: number;
   is_mandatory?: boolean;
-  eligible_roles?: string[];
   check_in_window_type?: string;
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;

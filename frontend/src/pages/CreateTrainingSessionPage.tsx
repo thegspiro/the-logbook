@@ -53,7 +53,6 @@ const CreateTrainingSessionPage: React.FC = () => {
     rsvp_deadline: '',
     max_attendees: undefined,
     is_mandatory: false,
-    eligible_roles: [],
     use_existing_course: false,
     course_id: '',
     course_name: '',

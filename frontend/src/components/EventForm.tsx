@@ -17,8 +17,7 @@ import {
   Bell,
 } from 'lucide-react';
 import type { EventCreate, EventType, RSVPStatus } from '../types/event';
-import type { Role } from '../types/role';
-import { roleService, locationsService } from '../services/api';
+import { locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
@@ -57,7 +56,6 @@ const DEFAULT_FORM_DATA: EventCreate = {
   max_attendees: undefined,
   allowed_rsvp_statuses: ['going', 'not_going'],
   is_mandatory: false,
-  eligible_roles: undefined,
   allow_guests: false,
   send_reminders: true,
   reminder_hours_before: 24,
@@ -111,14 +109,12 @@ export const EventForm: React.FC<EventFormProps> = ({
   });
   const [error, setError] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>(
     initialData?.location ? 'other' : 'select'
   );
 
   useEffect(() => {
     loadLocations();
-    loadRoles();
   }, []);
 
   const loadLocations = async () => {
@@ -131,15 +127,6 @@ export const EventForm: React.FC<EventFormProps> = ({
     } catch {
       // Non-critical — fall back to free-text
       setLocationMode('other');
-    }
-  };
-
-  const loadRoles = async () => {
-    try {
-      const data = await roleService.getRoles();
-      setRoles(data);
-    } catch {
-      // Non-critical
     }
   };
 
@@ -174,16 +161,6 @@ export const EventForm: React.FC<EventFormProps> = ({
       update({ allowed_rsvp_statuses: [...statuses, status] });
     } else {
       update({ allowed_rsvp_statuses: statuses.filter((s) => s !== status) });
-    }
-  };
-
-  const toggleEligibleRole = (slug: string, checked: boolean) => {
-    const current = formData.eligible_roles || [];
-    if (checked) {
-      update({ eligible_roles: [...current, slug] });
-    } else {
-      const updated = current.filter((r) => r !== slug);
-      update({ eligible_roles: updated.length > 0 ? updated : undefined });
     }
   };
 
@@ -542,28 +519,6 @@ export const EventForm: React.FC<EventFormProps> = ({
           </label>
         </div>
 
-        {/* Eligible Roles */}
-        {roles.length > 0 && (
-          <div>
-            <span className={labelClass}>Eligible Roles</span>
-            <p className="text-xs text-theme-text-muted mb-3">
-              Leave all unchecked to allow all members. Check specific roles to restrict attendance.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {roles.map((role) => (
-                <label key={role.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.eligible_roles?.includes(role.slug) || false}
-                    onChange={(e) => toggleEligibleRole(role.slug, e.target.checked)}
-                    className={checkboxClass}
-                  />
-                  <span className="text-theme-text-secondary">{role.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
       </section>
 
       <hr className="border-theme-surface-border" />

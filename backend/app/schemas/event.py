@@ -27,7 +27,6 @@ class EventBase(BaseModel):
     max_attendees: Optional[int] = Field(default=None, ge=1)
     allowed_rsvp_statuses: Optional[List[str]] = Field(default=None, description="Allowed RSVP statuses. Defaults to ['going', 'not_going']")
     is_mandatory: bool = Field(default=False)
-    eligible_roles: Optional[List[str]] = Field(default=None, description="Role slugs, null means all members")
     allow_guests: bool = Field(default=False)
     send_reminders: bool = Field(default=True)
     reminder_hours_before: int = Field(default=24, ge=1, le=168)  # 1 hour to 1 week
@@ -59,7 +58,6 @@ class EventUpdate(BaseModel):
     max_attendees: Optional[int] = Field(None, ge=1)
     allowed_rsvp_statuses: Optional[List[str]] = None
     is_mandatory: Optional[bool] = None
-    eligible_roles: Optional[List[str]] = None
     allow_guests: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_hours_before: Optional[int] = Field(None, ge=1, le=168)
@@ -284,7 +282,6 @@ class EventTemplateCreate(BaseModel):
     requires_rsvp: bool = False
     max_attendees: Optional[int] = Field(None, ge=1)
     is_mandatory: bool = False
-    eligible_roles: Optional[List[str]] = None
     allow_guests: bool = False
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = Field(default=30, ge=0)
@@ -309,7 +306,6 @@ class EventTemplateUpdate(BaseModel):
     requires_rsvp: Optional[bool] = None
     max_attendees: Optional[int] = Field(None, ge=1)
     is_mandatory: Optional[bool] = None
-    eligible_roles: Optional[List[str]] = None
     allow_guests: Optional[bool] = None
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = Field(None, ge=0)
@@ -339,7 +335,6 @@ class EventTemplateResponse(BaseModel):
     requires_rsvp: bool
     max_attendees: Optional[int] = None
     is_mandatory: bool
-    eligible_roles: Optional[List[str]] = None
     allow_guests: bool
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = None
@@ -379,7 +374,6 @@ class RecurringEventCreate(BaseModel):
     rsvp_deadline: Optional[datetime] = None
     max_attendees: Optional[int] = Field(None, ge=1)
     is_mandatory: bool = False
-    eligible_roles: Optional[List[str]] = None
     allow_guests: bool = False
     send_reminders: bool = True
     reminder_hours_before: int = Field(default=24, ge=1)

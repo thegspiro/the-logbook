@@ -14,7 +14,7 @@ from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.orm import selectinload
 
 from app.models.event import Event, EventRSVP, EventTemplate, EventType, RSVPStatus, CheckInWindowType, RecurrencePattern
-from app.models.user import User, Role, user_roles, Organization
+from app.models.user import User, Organization
 from app.models.location import Location
 from app.models.training import TrainingSession, TrainingRecord, TrainingStatus
 from app.schemas.event import (
@@ -308,7 +308,6 @@ class EventService:
             max_attendees=source_event.max_attendees,
             allowed_rsvp_statuses=source_event.allowed_rsvp_statuses,
             is_mandatory=source_event.is_mandatory,
-            eligible_roles=source_event.eligible_roles,
             allow_guests=source_event.allow_guests,
             send_reminders=source_event.send_reminders,
             reminder_hours_before=source_event.reminder_hours_before,
@@ -709,42 +708,6 @@ class EventService:
         await self.db.refresh(rsvp)
 
         return rsvp, None
-
-    async def get_eligible_members(
-        self, event_id: UUID, organization_id: UUID
-    ) -> List[User]:
-        """
-        Get all members eligible to attend an event
-
-        If event has eligible_roles specified, only returns members with those roles.
-        Otherwise returns all members in the organization.
-        """
-        event_result = await self.db.execute(
-            select(Event)
-            .where(Event.id == str(event_id))
-            .where(Event.organization_id == str(organization_id))
-        )
-        event = event_result.scalar_one_or_none()
-
-        if not event:
-            return []
-
-        # Base query for users in the organization
-        query = select(User).where(User.organization_id == str(organization_id))
-
-        # Filter by eligible roles if specified (list of role slugs)
-        if event.eligible_roles:
-            query = (
-                query
-                .join(user_roles, User.id == user_roles.c.user_id)
-                .join(Role, Role.id == user_roles.c.position_id)
-                .where(Role.slug.in_(event.eligible_roles))
-                .distinct()
-            )
-
-        query = query.order_by(User.last_name, User.first_name)
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
 
     async def get_event_stats(
         self, event_id: UUID, organization_id: UUID

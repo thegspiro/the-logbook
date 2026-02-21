@@ -108,7 +108,6 @@ class TrainingSessionService:
             rsvp_deadline=session_data.rsvp_deadline,
             max_attendees=session_data.max_attendees,
             is_mandatory=session_data.is_mandatory,
-            eligible_roles=session_data.eligible_roles,
             allow_guests=False,  # Training sessions don't allow guests
             send_reminders=True,
             reminder_hours_before=24,

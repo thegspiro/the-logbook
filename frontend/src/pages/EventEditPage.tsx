@@ -99,7 +99,6 @@ export const EventEditPage: React.FC = () => {
     max_attendees: event.max_attendees || undefined,
     allowed_rsvp_statuses: event.allowed_rsvp_statuses || undefined,
     is_mandatory: event.is_mandatory,
-    eligible_roles: event.eligible_roles || undefined,
     allow_guests: event.allow_guests,
     send_reminders: event.send_reminders,
     reminder_hours_before: event.reminder_hours_before,

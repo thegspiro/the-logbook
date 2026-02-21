@@ -73,7 +73,6 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         max_attendees=event.max_attendees,
         allowed_rsvp_statuses=event.allowed_rsvp_statuses,
         is_mandatory=event.is_mandatory,
-        eligible_roles=event.eligible_roles,
         allow_guests=event.allow_guests,
         send_reminders=event.send_reminders,
         reminder_hours_before=event.reminder_hours_before,
@@ -746,38 +745,6 @@ async def get_event_stats(
         )
 
     return stats
-
-
-@router.get("/{event_id}/eligible-members")
-async def get_eligible_members(
-    event_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
-):
-    """
-    Get all members eligible to attend an event
-
-    This is used for the check-in interface to show which members can be checked in.
-
-    **Authentication required**
-    **Requires permission: events.manage**
-    """
-    service = EventService(db)
-    members = await service.get_eligible_members(
-        event_id=event_id,
-        organization_id=current_user.organization_id,
-    )
-
-    # Return simplified member list
-    return [
-        {
-            "id": str(member.id),
-            "first_name": member.first_name,
-            "last_name": member.last_name,
-            "email": member.email,
-        }
-        for member in members
-    ]
 
 
 @router.post("/{event_id}/record-times", response_model=EventResponse)

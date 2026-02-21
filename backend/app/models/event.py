@@ -94,7 +94,6 @@ class Event(Base):
 
     # Attendance settings
     is_mandatory = Column(Boolean, nullable=False, default=False)
-    eligible_roles = Column(JSON, nullable=True)  # List of role slugs, null means all members
 
     # Additional settings
     allow_guests = Column(Boolean, nullable=False, default=False)
@@ -224,7 +223,6 @@ class EventTemplate(Base):
     requires_rsvp = Column(Boolean, nullable=False, default=False)
     max_attendees = Column(Integer, nullable=True)
     is_mandatory = Column(Boolean, nullable=False, default=False)
-    eligible_roles = Column(JSON, nullable=True)  # List of role IDs that should attend
     allow_guests = Column(Boolean, nullable=False, default=False)
 
     # Check-in defaults

@@ -32,7 +32,7 @@ export interface Event {
   max_attendees?: number;
   allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory: boolean;
-  eligible_roles?: string[];
+
   allow_guests: boolean;
   send_reminders: boolean;
   reminder_hours_before: number;
@@ -90,7 +90,7 @@ export interface EventCreate {
   max_attendees?: number;
   allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory?: boolean;
-  eligible_roles?: string[];
+
   allow_guests?: boolean;
   send_reminders?: boolean;
   reminder_hours_before?: number;
@@ -116,7 +116,7 @@ export interface EventUpdate {
   max_attendees?: number;
   allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory?: boolean;
-  eligible_roles?: string[];
+
   allow_guests?: boolean;
   send_reminders?: boolean;
   reminder_hours_before?: number;
@@ -254,7 +254,7 @@ export interface EventTemplate {
   requires_rsvp: boolean;
   max_attendees?: number;
   is_mandatory: boolean;
-  eligible_roles?: string[];
+
   allow_guests: boolean;
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
@@ -281,7 +281,7 @@ export interface EventTemplateCreate {
   requires_rsvp?: boolean;
   max_attendees?: number;
   is_mandatory?: boolean;
-  eligible_roles?: string[];
+
   allow_guests?: boolean;
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
@@ -308,7 +308,7 @@ export interface RecurringEventCreate {
   rsvp_deadline?: string;
   max_attendees?: number;
   is_mandatory?: boolean;
-  eligible_roles?: string[];
+
   allow_guests?: boolean;
   send_reminders?: boolean;
   reminder_hours_before?: number;
