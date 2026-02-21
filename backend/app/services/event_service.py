@@ -4,6 +4,7 @@ Event Service
 Business logic for event management.
 """
 
+import calendar
 from typing import List, Optional, Tuple, Dict, Any
 from uuid import UUID
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -13,7 +14,7 @@ from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.orm import selectinload
 
 from app.models.event import Event, EventRSVP, EventTemplate, EventType, RSVPStatus, CheckInWindowType, RecurrencePattern
-from app.models.user import User, Role, user_roles, Organization
+from app.models.user import User, Organization
 from app.models.location import Location
 from app.models.training import TrainingSession, TrainingRecord, TrainingStatus
 from app.schemas.event import (
@@ -163,7 +164,8 @@ class EventService:
         return list(result.scalars().all())
 
     async def update_event(
-        self, event_id: UUID, organization_id: UUID, event_data: EventUpdate
+        self, event_id: UUID, organization_id: UUID, event_data: EventUpdate,
+        updated_by: Optional[UUID] = None,
     ) -> Optional[Event]:
         """Update an event"""
         result = await self.db.execute(
@@ -212,7 +214,9 @@ class EventService:
         for field, value in update_data.items():
             setattr(event, field, value)
 
-        event.updated_at = datetime.utcnow()
+        if updated_by:
+            event.updated_by = str(updated_by)
+        event.updated_at = datetime.now(dt_timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(event)
@@ -240,8 +244,8 @@ class EventService:
 
         event.is_cancelled = True
         event.cancellation_reason = reason
-        event.cancelled_at = datetime.utcnow()
-        event.updated_at = datetime.utcnow()
+        event.cancelled_at = datetime.now(dt_timezone.utc)
+        event.updated_at = datetime.now(dt_timezone.utc)
 
         # Capture rsvps before commit expires the relationship
         rsvps_to_notify = list(event.rsvps)
@@ -304,10 +308,9 @@ class EventService:
             max_attendees=source_event.max_attendees,
             allowed_rsvp_statuses=source_event.allowed_rsvp_statuses,
             is_mandatory=source_event.is_mandatory,
-            eligible_roles=source_event.eligible_roles,
             allow_guests=source_event.allow_guests,
             send_reminders=source_event.send_reminders,
-            reminder_hours_before=source_event.reminder_hours_before,
+            reminder_schedule=source_event.reminder_schedule,
             check_in_window_type=source_event.check_in_window_type,
             check_in_minutes_before=source_event.check_in_minutes_before,
             check_in_minutes_after=source_event.check_in_minutes_after,
@@ -376,7 +379,7 @@ class EventService:
             return None, "Event does not require RSVP"
 
         # Check RSVP deadline
-        if event.rsvp_deadline and datetime.utcnow() > event.rsvp_deadline:
+        if event.rsvp_deadline and datetime.now(dt_timezone.utc) > event.rsvp_deadline:
             return None, "RSVP deadline has passed"
 
         # Validate RSVP status against allowed statuses
@@ -396,7 +399,7 @@ class EventService:
             # Update existing RSVP
             for field, value in rsvp_data.model_dump().items():
                 setattr(existing_rsvp, field, value)
-            existing_rsvp.updated_at = datetime.utcnow()
+            existing_rsvp.updated_at = datetime.now(dt_timezone.utc)
             rsvp = existing_rsvp
         else:
             # Create new RSVP
@@ -442,7 +445,12 @@ class EventService:
         return result.scalar_one_or_none()
 
     async def list_event_rsvps(
-        self, event_id: UUID, organization_id: UUID, status_filter: Optional[str] = None
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        status_filter: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[EventRSVP]:
         """List all RSVPs for an event"""
         # Verify event belongs to organization
@@ -461,7 +469,9 @@ class EventService:
         if status_filter:
             query = query.where(EventRSVP.status == status_filter)
 
-        result = await self.db.execute(query.order_by(EventRSVP.responded_at.desc()))
+        query = query.order_by(EventRSVP.responded_at.desc()).offset(skip).limit(limit)
+
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def manager_add_attendee(
@@ -513,7 +523,7 @@ class EventService:
         )
         existing_rsvp = existing_result.scalar_one_or_none()
 
-        now = datetime.utcnow()
+        now = datetime.now(dt_timezone.utc)
 
         if existing_rsvp:
             # Update existing RSVP
@@ -587,7 +597,7 @@ class EventService:
         if not rsvp:
             return None, "RSVP not found for this user"
 
-        now = datetime.utcnow()
+        now = datetime.now(dt_timezone.utc)
         override_fields = override_data.model_dump(exclude_unset=True)
 
         # Validate override times if both provided
@@ -619,6 +629,41 @@ class EventService:
         await self.db.refresh(rsvp)
 
         return rsvp, None
+
+    async def remove_attendee(
+        self, event_id: UUID, user_id: UUID, organization_id: UUID
+    ) -> Optional[str]:
+        """
+        Remove an attendee's RSVP from an event (manager action).
+
+        Returns an error string on failure, or None on success.
+        """
+        # Verify event exists and belongs to organization
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return "Event not found"
+
+        # Get the RSVP
+        rsvp_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
+        )
+        rsvp = rsvp_result.scalar_one_or_none()
+
+        if not rsvp:
+            return "RSVP not found for this user"
+
+        await self.db.delete(rsvp)
+        await self.db.commit()
+
+        return None
 
     async def check_in_attendee(
         self, event_id: UUID, user_id: UUID, organization_id: UUID
@@ -652,7 +697,7 @@ class EventService:
         tz_name = org.timezone if org else None
 
         # Validate check-in window
-        now = datetime.utcnow()
+        now = datetime.now(dt_timezone.utc)
         is_valid, error_msg = self._validate_check_in_window(event, now, tz_name)
         if not is_valid:
             return None, error_msg
@@ -684,7 +729,7 @@ class EventService:
                 user_id=user_id,
                 status=RSVPStatus.GOING,
                 guest_count=0,
-                responded_at=datetime.utcnow(),
+                responded_at=datetime.now(dt_timezone.utc),
             )
             self.db.add(rsvp)
 
@@ -692,48 +737,12 @@ class EventService:
             return None, "Already checked in"
 
         rsvp.checked_in = True
-        rsvp.checked_in_at = datetime.utcnow()
+        rsvp.checked_in_at = datetime.now(dt_timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(rsvp)
 
         return rsvp, None
-
-    async def get_eligible_members(
-        self, event_id: UUID, organization_id: UUID
-    ) -> List[User]:
-        """
-        Get all members eligible to attend an event
-
-        If event has eligible_roles specified, only returns members with those roles.
-        Otherwise returns all members in the organization.
-        """
-        event_result = await self.db.execute(
-            select(Event)
-            .where(Event.id == str(event_id))
-            .where(Event.organization_id == str(organization_id))
-        )
-        event = event_result.scalar_one_or_none()
-
-        if not event:
-            return []
-
-        # Base query for users in the organization
-        query = select(User).where(User.organization_id == str(organization_id))
-
-        # Filter by eligible roles if specified (list of role slugs)
-        if event.eligible_roles:
-            query = (
-                query
-                .join(user_roles, User.id == user_roles.c.user_id)
-                .join(Role, Role.id == user_roles.c.position_id)
-                .where(Role.slug.in_(event.eligible_roles))
-                .distinct()
-            )
-
-        query = query.order_by(User.last_name, User.first_name)
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
 
     async def get_event_stats(
         self, event_id: UUID, organization_id: UUID
@@ -784,7 +793,7 @@ class EventService:
         # Calculate capacity percentage
         capacity_percentage = None
         if event.max_attendees and event.max_attendees > 0:
-            capacity_percentage = (going_count / event.max_attendees) * 100
+            capacity_percentage = round((going_count / event.max_attendees) * 100, 2)
 
         return EventStats(
             event_id=event.id,
@@ -832,7 +841,7 @@ class EventService:
         if actual_end_time is not None:
             event.actual_end_time = actual_end_time
 
-        event.updated_at = datetime.utcnow()
+        event.updated_at = datetime.now(dt_timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(event)
@@ -866,7 +875,7 @@ class EventService:
             return None, "Event has been cancelled"
 
         # Check time window
-        now = datetime.utcnow()
+        now = datetime.now(dt_timezone.utc)
         check_in_start = event.start_datetime - timedelta(hours=1)
 
         # Use actual_end_time if set (early end), otherwise use scheduled end_datetime
@@ -905,7 +914,7 @@ class EventService:
 
         if check_in_window_type == CheckInWindowType.FLEXIBLE:
             # Allow check-in within configurable window before event starts, until event ends
-            minutes_before = event.check_in_minutes_before or 30  # Default 30 minutes before
+            minutes_before = event.check_in_minutes_before if event.check_in_minutes_before is not None else 30
             check_in_start = event.start_datetime - timedelta(minutes=minutes_before)
             check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
 
@@ -916,8 +925,8 @@ class EventService:
 
         else:  # WINDOW type
             # Configurable window before/after start
-            minutes_before = event.check_in_minutes_before or 15
-            minutes_after = event.check_in_minutes_after or 15
+            minutes_before = event.check_in_minutes_before if event.check_in_minutes_before is not None else 15
+            minutes_after = event.check_in_minutes_after if event.check_in_minutes_after is not None else 15
             check_in_start = event.start_datetime - timedelta(minutes=minutes_before)
             check_in_end = event.end_datetime + timedelta(minutes=minutes_after)
 
@@ -983,7 +992,7 @@ class EventService:
         org = org_result.scalar_one_or_none()
         tz_name = org.timezone if org else None
 
-        now = datetime.utcnow()
+        now = datetime.now(dt_timezone.utc)
 
         # Validate check-in window
         is_valid, error_msg = self._validate_check_in_window(event, now, tz_name)
@@ -1009,7 +1018,7 @@ class EventService:
                 user_id=user_id,
                 status=RSVPStatus.GOING,
                 guest_count=0,
-                responded_at=datetime.utcnow(),
+                responded_at=datetime.now(dt_timezone.utc),
             )
             self.db.add(rsvp)
 
@@ -1130,7 +1139,7 @@ class EventService:
             return None, "Event not found in your organization"
 
         # Calculate check-in window
-        now = datetime.utcnow()
+        now = datetime.now(dt_timezone.utc)
         check_in_start = event.start_datetime - timedelta(hours=1)
         check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
         is_check_in_active = check_in_start <= now <= check_in_end
@@ -1227,7 +1236,11 @@ class EventService:
         return template
 
     async def list_templates(
-        self, organization_id: UUID, include_inactive: bool = False
+        self,
+        organization_id: UUID,
+        include_inactive: bool = False,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[EventTemplate]:
         """List all event templates for an organization"""
         query = (
@@ -1236,7 +1249,7 @@ class EventService:
         )
         if not include_inactive:
             query = query.where(EventTemplate.is_active == True)
-        query = query.order_by(EventTemplate.name)
+        query = query.order_by(EventTemplate.name).offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -1252,7 +1265,8 @@ class EventService:
         return result.scalar_one_or_none()
 
     async def update_template(
-        self, template_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self, template_id: UUID, organization_id: UUID, update_data: Dict[str, Any],
+        updated_by: Optional[UUID] = None,
     ) -> Optional[EventTemplate]:
         """Update an event template"""
         template = await self.get_template(template_id, organization_id)
@@ -1262,7 +1276,9 @@ class EventService:
         for field, value in update_data.items():
             setattr(template, field, value)
 
-        template.updated_at = datetime.utcnow()
+        if updated_by:
+            template.updated_by = str(updated_by)
+        template.updated_at = datetime.now(dt_timezone.utc)
         await self.db.commit()
         await self.db.refresh(template)
         return template
@@ -1276,7 +1292,7 @@ class EventService:
             return False
 
         template.is_active = False
-        template.updated_at = datetime.utcnow()
+        template.updated_at = datetime.now(dt_timezone.utc)
         await self.db.commit()
         return True
 
@@ -1321,7 +1337,6 @@ class EventService:
                     current = current.replace(year=year, month=month)
                 except ValueError:
                     # Handle months with fewer days (e.g., Jan 31 -> Feb 28)
-                    import calendar
                     last_day = calendar.monthrange(year, month)[1]
                     current = current.replace(year=year, month=month, day=min(current.day, last_day))
             elif pattern == RecurrencePattern.CUSTOM.value and custom_days:

@@ -173,6 +173,64 @@ async def mark_notification_read(
 
 
 # ============================================
+# User-Facing Notification Inbox
+# ============================================
+
+@router.get("/my", response_model=NotificationLogsListResponse)
+async def get_my_notifications(
+    include_expired: bool = Query(False, description="Include expired notifications (for history view)"),
+    include_read: bool = Query(True, description="Include read notifications"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the current user's in-app notifications.
+
+    By default, hides expired notifications (e.g., event reminders 24 hours
+    after the event). Set include_expired=true for the full history.
+    """
+    service = NotificationsService(db)
+    logs, total = await service.get_user_notifications(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+        include_expired=include_expired,
+        include_read=include_read,
+        skip=skip,
+        limit=limit,
+    )
+    return {"logs": logs, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/my/unread-count")
+async def get_my_unread_count(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get count of unread, non-expired in-app notifications for the current user."""
+    service = NotificationsService(db)
+    count = await service.get_user_unread_count(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+    )
+    return {"unread_count": count}
+
+
+@router.post("/my/{log_id}/read", response_model=NotificationLogResponse)
+async def mark_my_notification_read(
+    log_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark one of the current user's notifications as read."""
+    service = NotificationsService(db)
+    result, error = await service.mark_as_read(log_id, current_user.organization_id)
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to mark notification as read. {error}")
+    return result
+
+
+# ============================================
 # Summary Endpoint
 # ============================================
 

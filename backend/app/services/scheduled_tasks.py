@@ -24,6 +24,12 @@ Recommended crontab (add to host or container cron):
 
 # Every 15 minutes — process delayed inventory change notifications
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_notifications
+
+# Every 30 minutes — send event reminders
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=event_reminders
+
+# Every 30 minutes — post-event validation notifications
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_event_validation
 -----------------------------------------------------
 """
 
@@ -73,6 +79,18 @@ SCHEDULE = {
         "frequency": "every 15 minutes",
         "recommended_time": "*/15 * * * *",
         "cron": "*/15 * * * *",
+    },
+    "event_reminders": {
+        "description": "Send email and in-app reminders for upcoming events based on each event's reminder_schedule setting",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
+    "post_event_validation": {
+        "description": "Notify event organizers to validate attendance and timing after their event ends",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
     },
 }
 
@@ -284,6 +302,423 @@ async def run_inventory_notifications(db: AsyncSession) -> Dict[str, Any]:
         return {"task": "inventory_notifications", "error": str(e)}
 
 
+async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send event reminders for upcoming events.
+
+    Each event has a reminder_schedule (e.g. [168, 24] = 1 week + 1 day before).
+    For each scheduled interval, if the current time has passed the threshold
+    and we haven't already sent that interval's reminder, we send it.
+
+    Reminder timing:
+    - For intervals >= 24 hours (day-level): the reminder fires at the org's
+      default_reminder_time (e.g. noon) on the appropriate day. This is set
+      in the org's event module settings.
+    - For intervals < 24 hours: the reminder fires at exactly X hours before
+      the event start.
+
+    Notifications always create an in-app entry. Email is only sent if the
+    user has not opted out (email_notifications preference). In-app
+    notifications expire 24 hours after the event ends but remain in history.
+
+    Tracks which intervals have been sent in custom_fields.reminders_sent.
+    """
+    from datetime import timedelta, timezone as dt_timezone, time as dt_time
+    from zoneinfo import ZoneInfo
+    from sqlalchemy.orm import selectinload
+    from app.models.event import Event, EventRSVP, RSVPStatus
+    from app.models.user import User
+    from app.models.notification import NotificationLog, NotificationChannel
+    from app.services.email_service import EmailService
+    from app.core.utils import generate_uuid
+    from app.core.config import settings
+
+    now = datetime.now(dt_timezone.utc)
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_reminders = 0
+    total_emails = 0
+    results = []
+
+    for org in organizations:
+        org_reminders = 0
+        org_emails = 0
+
+        try:
+            # Load org event settings to get default_reminder_time
+            org_settings = (org.settings or {}).get("events", {}).get("defaults", {})
+            default_reminder_time_str = org_settings.get("default_reminder_time", "12:00")
+            try:
+                parts = default_reminder_time_str.split(":")
+                default_reminder_time = dt_time(int(parts[0]), int(parts[1]))
+            except (ValueError, IndexError):
+                default_reminder_time = dt_time(12, 0)
+
+            # Org timezone for day-level reminders
+            org_tz_name = org.timezone or "America/New_York"
+            try:
+                org_tz = ZoneInfo(org_tz_name)
+            except Exception:
+                org_tz = ZoneInfo("America/New_York")
+
+            # Look ahead up to 168 hours (max reminder window)
+            max_lookahead = now + timedelta(hours=168)
+
+            events_result = await db.execute(
+                select(Event)
+                .options(
+                    selectinload(Event.rsvps),
+                    selectinload(Event.location_obj),
+                )
+                .where(Event.organization_id == str(org.id))
+                .where(Event.send_reminders == True)
+                .where(Event.is_cancelled == False)
+                .where(Event.start_datetime > now)
+                .where(Event.start_datetime <= max_lookahead)
+            )
+            events = list(events_result.scalars().all())
+
+            for event in events:
+                schedule = event.reminder_schedule or [24]
+                custom = event.custom_fields or {}
+                already_sent = set(custom.get("reminders_sent", []))
+
+                # Find which intervals are due now but not yet sent
+                due_intervals = []
+                for hours in schedule:
+                    if hours in already_sent:
+                        continue
+
+                    if hours >= 24:
+                        # Day-level reminder: fire at default_reminder_time on the
+                        # appropriate day in the org's timezone.
+                        days_before = hours // 24
+                        event_local = event.start_datetime.astimezone(org_tz)
+                        reminder_date = (event_local - timedelta(days=days_before)).date()
+                        reminder_local = datetime.combine(
+                            reminder_date, default_reminder_time, tzinfo=org_tz
+                        )
+                        threshold = reminder_local.astimezone(dt_timezone.utc)
+                    else:
+                        # Sub-day reminder: fire at exactly X hours before
+                        threshold = event.start_datetime - timedelta(hours=hours)
+
+                    if now >= threshold:
+                        due_intervals.append(hours)
+
+                if not due_intervals:
+                    continue
+
+                # Determine recipients once for all due intervals
+                recipients = []
+                if event.is_mandatory:
+                    users_result = await db.execute(
+                        select(User)
+                        .where(User.organization_id == str(org.id))
+                        .where(User.is_active == True)
+                    )
+                    recipients = list(users_result.scalars().all())
+                else:
+                    going_user_ids = [
+                        str(rsvp.user_id)
+                        for rsvp in event.rsvps
+                        if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
+                    ]
+                    if going_user_ids:
+                        users_result = await db.execute(
+                            select(User).where(User.id.in_(going_user_ids))
+                        )
+                        recipients = list(users_result.scalars().all())
+
+                if not recipients:
+                    # Mark all due intervals as sent to avoid re-processing
+                    event.custom_fields = {
+                        **custom,
+                        "reminders_sent": sorted(already_sent | set(due_intervals)),
+                    }
+                    continue
+
+                # Build shared event info
+                location_name = None
+                if event.location_obj:
+                    location_name = event.location_obj.name
+                elif event.location:
+                    location_name = event.location
+
+                event_type_label = (
+                    event.event_type.value.replace("_", " ").title()
+                    if event.event_type else "Event"
+                )
+                event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
+                email_service = EmailService(organization=org)
+
+                # Notifications expire 24 hours after the event ends
+                expires_at = event.end_datetime + timedelta(hours=24)
+
+                # Send one notification per due interval
+                for hours in due_intervals:
+                    for user in recipients:
+                        prefs = user.notification_preferences or {}
+                        user_name = f"{user.first_name} {user.last_name}"
+
+                        # In-app notification — always created regardless of
+                        # email preference so users who opt out of email still
+                        # see reminders in the notification inbox.
+                        try:
+                            in_app_log = NotificationLog(
+                                id=generate_uuid(),
+                                organization_id=str(org.id),
+                                recipient_id=str(user.id),
+                                channel=NotificationChannel.IN_APP,
+                                category="event_reminder",
+                                subject=f"Reminder: {event.title}",
+                                message=(
+                                    f"Your event \"{event.title}\" starts "
+                                    f"{_format_relative_time(event.start_datetime, now)}."
+                                ),
+                                expires_at=expires_at,
+                            )
+                            db.add(in_app_log)
+                            org_reminders += 1
+                        except Exception as e:
+                            logger.error(f"Failed to create in-app reminder for user {user.id}: {e}")
+
+                        # Email notification — only if user hasn't opted out
+                        wants_email = prefs.get("email_notifications", True)
+                        wants_reminders = prefs.get("event_reminders", True)
+                        if wants_reminders and wants_email and user.email:
+                            try:
+                                sent = await email_service.send_event_reminder(
+                                    to_email=user.email,
+                                    recipient_name=user_name,
+                                    event_title=event.title,
+                                    event_start=event.start_datetime,
+                                    event_end=event.end_datetime,
+                                    event_type=event_type_label,
+                                    location_name=location_name,
+                                    location_details=event.location_details,
+                                    event_url=event_url,
+                                )
+                                if sent:
+                                    org_emails += 1
+                            except Exception as e:
+                                logger.error(f"Failed to send reminder email to {user.email}: {e}")
+
+                # Mark all due intervals as sent
+                event.custom_fields = {
+                    **custom,
+                    "reminders_sent": sorted(already_sent | set(due_intervals)),
+                }
+
+            await db.commit()
+
+        except Exception as e:
+            logger.error(f"Event reminders failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+            continue
+
+        total_reminders += org_reminders
+        total_emails += org_emails
+        if org_reminders > 0 or org_emails > 0:
+            results.append({
+                "org_id": str(org.id),
+                "in_app_reminders": org_reminders,
+                "emails_sent": org_emails,
+            })
+
+    logger.info(
+        f"Event reminders complete: {total_reminders} in-app, "
+        f"{total_emails} emails across {len(organizations)} orgs"
+    )
+    return {
+        "task": "event_reminders",
+        "total_in_app_reminders": total_reminders,
+        "total_emails_sent": total_emails,
+        "organizations": results,
+    }
+
+
+async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send a notification to event organizers after their event ends,
+    asking them to validate attendance records and event timing.
+
+    Runs every 30 minutes. Looks for events that ended within the last
+    2 hours and haven't already had a validation notification sent.
+    Sends an in-app notification (and optionally email) to the event
+    creator with a link to the event detail page.
+
+    Tracks sent status in custom_fields.validation_notification_sent.
+    """
+    from datetime import timedelta, timezone as dt_timezone
+    from sqlalchemy.orm import selectinload
+    from app.models.event import Event
+    from app.models.user import User
+    from app.models.notification import NotificationLog, NotificationChannel
+    from app.services.email_service import EmailService
+    from app.core.utils import generate_uuid
+    from app.core.config import settings
+
+    now = datetime.now(dt_timezone.utc)
+    # Look back 2 hours for recently ended events
+    lookback = now - timedelta(hours=2)
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_notifications = 0
+    total_emails = 0
+    results = []
+
+    for org in organizations:
+        org_notifications = 0
+        org_emails = 0
+
+        try:
+            events_result = await db.execute(
+                select(Event)
+                .options(selectinload(Event.rsvps))
+                .where(Event.organization_id == str(org.id))
+                .where(Event.is_cancelled == False)
+                .where(Event.end_datetime <= now)
+                .where(Event.end_datetime >= lookback)
+                .where(Event.created_by.isnot(None))
+            )
+            events = list(events_result.scalars().all())
+
+            for event in events:
+                custom = event.custom_fields or {}
+                if custom.get("validation_notification_sent"):
+                    continue
+
+                # Find the event creator
+                creator_result = await db.execute(
+                    select(User).where(
+                        User.id == event.created_by,
+                        User.is_active == True,
+                    )
+                )
+                creator = creator_result.scalar_one_or_none()
+                if not creator:
+                    # Mark as sent to avoid retrying for deleted/inactive users
+                    event.custom_fields = {**custom, "validation_notification_sent": True}
+                    continue
+
+                event_url = f"/events/{event.id}"
+                rsvp_count = len(event.rsvps) if event.rsvps else 0
+                checked_in_count = sum(
+                    1 for r in (event.rsvps or []) if r.checked_in
+                )
+
+                subject = f"Action Required: Validate attendance for {event.title}"
+                message = (
+                    f'Your event "{event.title}" has ended. '
+                    f"{checked_in_count} of {rsvp_count} attendees checked in. "
+                    f"Please review and confirm the attendance records and "
+                    f"event timing before finalizing."
+                )
+
+                # In-app notification
+                try:
+                    in_app_log = NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=str(org.id),
+                        recipient_id=str(creator.id),
+                        channel=NotificationChannel.IN_APP,
+                        category="event_validation",
+                        subject=subject,
+                        message=message,
+                        action_url=event_url,
+                    )
+                    db.add(in_app_log)
+                    org_notifications += 1
+                except Exception as e:
+                    logger.error(
+                        f"Failed to create post-event validation notification "
+                        f"for user {creator.id}, event {event.id}: {e}"
+                    )
+
+                # Email notification (if user has email prefs enabled)
+                prefs = creator.notification_preferences or {}
+                wants_email = prefs.get("email_notifications", True)
+                if wants_email and creator.email:
+                    try:
+                        full_event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
+                        email_service = EmailService(organization=org)
+                        sent_count, _ = await email_service.send_email(
+                            to_emails=[creator.email],
+                            subject=subject,
+                            html_body=(
+                                f"<p>Hi {creator.first_name},</p>"
+                                f'<p>Your event "<strong>{event.title}</strong>" has ended. '
+                                f"{checked_in_count} of {rsvp_count} attendees checked in.</p>"
+                                f"<p>Please review and confirm the attendance records and "
+                                f"event timing before finalizing.</p>"
+                                f'<p><a href="{full_event_url}">Review Event</a></p>'
+                            ),
+                            text_body=(
+                                f"Hi {creator.first_name},\n\n"
+                                f'Your event "{event.title}" has ended. '
+                                f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
+                                f"Please review and confirm the attendance records and "
+                                f"event timing before finalizing.\n\n"
+                                f"Review Event: {full_event_url}"
+                            ),
+                        )
+                        if sent_count > 0:
+                            org_emails += 1
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to send post-event validation email "
+                            f"to {creator.email}: {e}"
+                        )
+
+                # Mark as sent
+                event.custom_fields = {**custom, "validation_notification_sent": True}
+
+            await db.commit()
+
+        except Exception as e:
+            logger.error(f"Post-event validation failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+            continue
+
+        total_notifications += org_notifications
+        total_emails += org_emails
+        if org_notifications > 0 or org_emails > 0:
+            results.append({
+                "org_id": str(org.id),
+                "notifications": org_notifications,
+                "emails_sent": org_emails,
+            })
+
+    logger.info(
+        f"Post-event validation complete: {total_notifications} in-app, "
+        f"{total_emails} emails across {len(organizations)} orgs"
+    )
+    return {
+        "task": "post_event_validation",
+        "total_notifications": total_notifications,
+        "total_emails_sent": total_emails,
+        "organizations": results,
+    }
+
+
+def _format_relative_time(event_time: datetime, now: datetime) -> str:
+    """Format a future time as a relative description."""
+    delta = event_time - now
+    hours = delta.total_seconds() / 3600
+    if hours < 1:
+        minutes = int(delta.total_seconds() / 60)
+        return f"in {minutes} minutes"
+    elif hours < 24:
+        return f"in {int(hours)} hour{'s' if int(hours) != 1 else ''}"
+    else:
+        days = int(hours / 24)
+        return f"in {days} day{'s' if days != 1 else ''}"
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -292,4 +727,6 @@ TASK_RUNNERS = {
     "membership_tier_advance": run_membership_tier_advance,
     "action_item_reminders": run_action_item_reminders,
     "inventory_notifications": run_inventory_notifications,
+    "event_reminders": run_event_reminders,
+    "post_event_validation": run_post_event_validation,
 }

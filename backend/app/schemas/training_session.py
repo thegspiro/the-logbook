@@ -27,7 +27,6 @@ class TrainingSessionCreate(BaseModel):
     rsvp_deadline: Optional[datetime] = None
     max_attendees: Optional[int] = Field(default=None, ge=1)
     is_mandatory: bool = Field(default=False)
-    eligible_roles: Optional[list[str]] = None
 
     # Check-in settings
     check_in_window_type: str = Field(default="flexible", description="flexible, strict, or window")

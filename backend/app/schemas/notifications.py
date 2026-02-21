@@ -74,6 +74,7 @@ class NotificationLogResponse(BaseModel):
     recipient_email: Optional[str] = None
     recipient_name: Optional[str] = None
     channel: str
+    category: Optional[str] = None
     subject: Optional[str] = None
     message: Optional[str] = None
     sent_at: datetime
@@ -81,6 +82,8 @@ class NotificationLogResponse(BaseModel):
     read: bool
     read_at: Optional[datetime] = None
     error: Optional[str] = None
+    action_url: Optional[str] = None
+    expires_at: Optional[datetime] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -32,10 +32,10 @@ export interface Event {
   max_attendees?: number;
   allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory: boolean;
-  eligible_roles?: string[];
+
   allow_guests: boolean;
   send_reminders: boolean;
-  reminder_hours_before: number;
+  reminder_schedule: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -90,10 +90,10 @@ export interface EventCreate {
   max_attendees?: number;
   allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory?: boolean;
-  eligible_roles?: string[];
+
   allow_guests?: boolean;
   send_reminders?: boolean;
-  reminder_hours_before?: number;
+  reminder_schedule?: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -116,10 +116,10 @@ export interface EventUpdate {
   max_attendees?: number;
   allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory?: boolean;
-  eligible_roles?: string[];
+
   allow_guests?: boolean;
   send_reminders?: boolean;
-  reminder_hours_before?: number;
+  reminder_schedule?: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -254,14 +254,14 @@ export interface EventTemplate {
   requires_rsvp: boolean;
   max_attendees?: number;
   is_mandatory: boolean;
-  eligible_roles?: string[];
+
   allow_guests: boolean;
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
   require_checkout: boolean;
   send_reminders: boolean;
-  reminder_hours_before: number;
+  reminder_schedule: number[];
   custom_fields_template?: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
@@ -281,14 +281,14 @@ export interface EventTemplateCreate {
   requires_rsvp?: boolean;
   max_attendees?: number;
   is_mandatory?: boolean;
-  eligible_roles?: string[];
+
   allow_guests?: boolean;
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
   require_checkout?: boolean;
   send_reminders?: boolean;
-  reminder_hours_before?: number;
+  reminder_schedule?: number[];
   custom_fields_template?: Record<string, unknown>;
 }
 
@@ -308,10 +308,10 @@ export interface RecurringEventCreate {
   rsvp_deadline?: string;
   max_attendees?: number;
   is_mandatory?: boolean;
-  eligible_roles?: string[];
+
   allow_guests?: boolean;
   send_reminders?: boolean;
-  reminder_hours_before?: number;
+  reminder_schedule?: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -369,7 +369,8 @@ export interface EventModuleSettings {
     allow_guests: boolean;
     is_mandatory: boolean;
     send_reminders: boolean;
-    reminder_hours_before: number;
+    reminder_schedule: number[];
+    default_reminder_time: string;
     default_duration_minutes: number;
   };
   // QR code page settings

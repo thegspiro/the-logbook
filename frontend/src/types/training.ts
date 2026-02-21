@@ -93,7 +93,6 @@ export interface TrainingSessionCreate {
   rsvp_deadline?: string;
   max_attendees?: number;
   is_mandatory?: boolean;
-  eligible_roles?: string[];
 
   // Use existing course or create new
   use_existing_course?: boolean;

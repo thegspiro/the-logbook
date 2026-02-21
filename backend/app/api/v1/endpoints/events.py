@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
@@ -73,10 +73,9 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         max_attendees=event.max_attendees,
         allowed_rsvp_statuses=event.allowed_rsvp_statuses,
         is_mandatory=event.is_mandatory,
-        eligible_roles=event.eligible_roles,
         allow_guests=event.allow_guests,
         send_reminders=event.send_reminders,
-        reminder_hours_before=event.reminder_hours_before,
+        reminder_schedule=event.reminder_schedule or [24],
         check_in_window_type=event.check_in_window_type.value if event.check_in_window_type else "flexible",
         check_in_minutes_before=event.check_in_minutes_before,
         check_in_minutes_after=event.check_in_minutes_after,
@@ -87,6 +86,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         cancellation_reason=event.cancellation_reason,
         cancelled_at=event.cancelled_at,
         created_by=event.created_by,
+        updated_by=event.updated_by,
         created_at=event.created_at,
         updated_at=event.updated_at,
         **extra_fields,
@@ -269,6 +269,7 @@ async def update_event(
             event_id=event_id,
             organization_id=current_user.organization_id,
             event_data=event_data,
+            updated_by=current_user.id,
         )
 
         if not event:
@@ -465,6 +466,8 @@ async def create_or_update_rsvp(
 async def list_event_rsvps(
     event_id: UUID,
     status_filter: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -479,6 +482,8 @@ async def list_event_rsvps(
         event_id=event_id,
         organization_id=current_user.organization_id,
         status_filter=status_filter,
+        skip=skip,
+        limit=limit,
     )
 
     # Build response using eager-loaded user data
@@ -715,6 +720,48 @@ async def override_rsvp_attendance(
     )
 
 
+@router.delete("/{event_id}/rsvps/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_attendee(
+    event_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Remove an attendee's RSVP from an event (manager action)
+
+    Permanently deletes the RSVP record for the given user on this event.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    error = await service.remove_attendee(
+        event_id=event_id,
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="event_attendee_removed",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "removed_user_id": str(user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 @router.get("/{event_id}/stats", response_model=EventStats)
 async def get_event_stats(
     event_id: UUID,
@@ -740,38 +787,6 @@ async def get_event_stats(
         )
 
     return stats
-
-
-@router.get("/{event_id}/eligible-members")
-async def get_eligible_members(
-    event_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
-):
-    """
-    Get all members eligible to attend an event
-
-    This is used for the check-in interface to show which members can be checked in.
-
-    **Authentication required**
-    **Requires permission: events.manage**
-    """
-    service = EventService(db)
-    members = await service.get_eligible_members(
-        event_id=event_id,
-        organization_id=current_user.organization_id,
-    )
-
-    # Return simplified member list
-    return [
-        {
-            "id": str(member.id),
-            "first_name": member.first_name,
-            "last_name": member.last_name,
-            "email": member.email,
-        }
-        for member in members
-    ]
 
 
 @router.post("/{event_id}/record-times", response_model=EventResponse)
@@ -1005,6 +1020,8 @@ async def create_event_template(
 @router.get("/templates", response_model=List[EventTemplateResponse])
 async def list_event_templates(
     include_inactive: bool = False,
+    skip: int = 0,
+    limit: int = 100,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -1018,6 +1035,8 @@ async def list_event_templates(
     templates = await service.list_templates(
         organization_id=current_user.organization_id,
         include_inactive=include_inactive,
+        skip=skip,
+        limit=limit,
     )
     return [EventTemplateResponse.model_validate(t) for t in templates]
 
@@ -1066,6 +1085,7 @@ async def update_event_template(
         template_id=template_id,
         organization_id=current_user.organization_id,
         update_data=data,
+        updated_by=current_user.id,
     )
     if not template:
         raise HTTPException(
@@ -1493,6 +1513,56 @@ async def add_external_attendee(
     )
 
 
+class ExternalAttendeeUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    organization_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.patch("/{event_id}/external-attendees/{attendee_id}", response_model=ExternalAttendeeResponse)
+async def update_external_attendee(
+    event_id: UUID,
+    attendee_id: UUID,
+    data: ExternalAttendeeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """Update an external attendee's information."""
+    result = await db.execute(
+        select(EventExternalAttendee).where(
+            EventExternalAttendee.id == str(attendee_id),
+            EventExternalAttendee.event_id == str(event_id),
+            EventExternalAttendee.organization_id == current_user.organization_id,
+        )
+    )
+    attendee = result.scalar_one_or_none()
+    if not attendee:
+        raise HTTPException(status_code=404, detail="External attendee not found")
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(attendee, field, value)
+
+    await db.commit()
+    await db.refresh(attendee)
+
+    return ExternalAttendeeResponse(
+        id=attendee.id,
+        event_id=attendee.event_id,
+        name=attendee.name,
+        email=attendee.email,
+        phone=attendee.phone,
+        organization_name=attendee.organization_name,
+        checked_in=attendee.checked_in,
+        checked_in_at=attendee.checked_in_at.isoformat() if attendee.checked_in_at else None,
+        source=attendee.source,
+        notes=attendee.notes,
+        created_at=attendee.created_at.isoformat() if attendee.created_at else "",
+    )
+
+
 @router.patch("/{event_id}/external-attendees/{attendee_id}/check-in")
 async def check_in_external_attendee(
     event_id: UUID,
@@ -1513,7 +1583,7 @@ async def check_in_external_attendee(
         raise HTTPException(status_code=404, detail="External attendee not found")
 
     attendee.checked_in = True
-    attendee.checked_in_at = datetime.utcnow()
+    attendee.checked_in_at = datetime.now(dt_timezone.utc)
     await db.commit()
     return {"status": "checked_in", "attendee_id": attendee.id}
 
@@ -1539,6 +1609,123 @@ async def remove_external_attendee(
 
     await db.delete(attendee)
     await db.commit()
+
+
+# ============================================
+# Event Module Settings
+# ============================================
+
+from app.models.user import Organization
+
+EVENT_SETTINGS_DEFAULTS = {
+    "enabled_event_types": [
+        "business_meeting", "public_education", "training",
+        "social", "fundraiser", "ceremony", "other",
+    ],
+    "event_type_labels": {},
+    "defaults": {
+        "event_type": "other",
+        "check_in_window_type": "flexible",
+        "check_in_minutes_before": 30,
+        "check_in_minutes_after": 15,
+        "require_checkout": False,
+        "requires_rsvp": False,
+        "allowed_rsvp_statuses": ["going", "not_going"],
+        "allow_guests": False,
+        "is_mandatory": False,
+        "send_reminders": True,
+        "reminder_schedule": [24],
+        "default_reminder_time": "12:00",
+        "default_duration_minutes": 60,
+    },
+    "qr_code": {
+        "show_event_description": True,
+        "show_location_details": True,
+        "custom_instructions": "",
+    },
+    "cancellation": {
+        "require_reason": True,
+        "notify_attendees": True,
+    },
+}
+
+
+@router.get("/settings")
+async def get_event_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Get event module settings for the organization.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    settings = (org.settings or {}).get("events", {})
+    # Merge with defaults so frontend always gets a complete object
+    merged = {**EVENT_SETTINGS_DEFAULTS}
+    for key, default_val in EVENT_SETTINGS_DEFAULTS.items():
+        if key in settings:
+            if isinstance(default_val, dict):
+                merged[key] = {**default_val, **settings[key]}
+            else:
+                merged[key] = settings[key]
+
+    return merged
+
+
+@router.patch("/settings")
+async def update_event_settings(
+    updates: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Update event module settings for the organization.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    current_settings = dict(org.settings or {})
+    current_events = current_settings.get("events", {})
+
+    # Deep merge the updates into existing event settings
+    for key, value in updates.items():
+        if key in EVENT_SETTINGS_DEFAULTS:
+            if isinstance(value, dict) and isinstance(current_events.get(key), dict):
+                current_events[key] = {**current_events.get(key, {}), **value}
+            else:
+                current_events[key] = value
+
+    current_settings["events"] = current_events
+    org.settings = current_settings
+    await db.commit()
+    await db.refresh(org)
+
+    # Return merged result
+    merged = {**EVENT_SETTINGS_DEFAULTS}
+    for key, default_val in EVENT_SETTINGS_DEFAULTS.items():
+        if key in current_events:
+            if isinstance(default_val, dict):
+                merged[key] = {**default_val, **current_events[key]}
+            else:
+                merged[key] = current_events[key]
+
+    return merged
 
 
 # ============================================

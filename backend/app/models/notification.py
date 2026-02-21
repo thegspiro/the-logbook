@@ -119,12 +119,21 @@ class NotificationLog(Base):
     subject = Column(String(500))
     message = Column(Text)
 
+    # Categorization
+    category = Column(String(50), nullable=True, index=True)  # e.g., "event_reminder", "action_items"
+
     # Status
     sent_at = Column(DateTime(timezone=True), server_default=func.now())
     delivered = Column(Boolean, default=False)
     read = Column(Boolean, default=False)
     read_at = Column(DateTime(timezone=True))
     error = Column(Text)
+
+    # Navigation
+    action_url = Column(String(500), nullable=True)  # Frontend route to navigate to on click
+
+    # Lifecycle
+    expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

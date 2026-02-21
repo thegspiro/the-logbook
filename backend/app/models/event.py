@@ -94,12 +94,11 @@ class Event(Base):
 
     # Attendance settings
     is_mandatory = Column(Boolean, nullable=False, default=False)
-    eligible_roles = Column(JSON, nullable=True)  # List of role slugs, null means all members
 
     # Additional settings
     allow_guests = Column(Boolean, nullable=False, default=False)
     send_reminders = Column(Boolean, nullable=False, default=True)
-    reminder_hours_before = Column(Integer, nullable=False, default=24)  # Hours before event to send reminder
+    reminder_schedule = Column(JSON, nullable=False, default=lambda: [24])  # List of hours before event to send reminders
 
     # Check-in window settings
     check_in_window_type = Column(SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=CheckInWindowType.FLEXIBLE)
@@ -126,6 +125,7 @@ class Event(Base):
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
@@ -223,7 +223,6 @@ class EventTemplate(Base):
     requires_rsvp = Column(Boolean, nullable=False, default=False)
     max_attendees = Column(Integer, nullable=True)
     is_mandatory = Column(Boolean, nullable=False, default=False)
-    eligible_roles = Column(JSON, nullable=True)  # List of role IDs that should attend
     allow_guests = Column(Boolean, nullable=False, default=False)
 
     # Check-in defaults
@@ -234,7 +233,7 @@ class EventTemplate(Base):
 
     # Notification defaults
     send_reminders = Column(Boolean, nullable=False, default=True)
-    reminder_hours_before = Column(Integer, nullable=False, default=24)
+    reminder_schedule = Column(JSON, nullable=False, default=lambda: [24])
 
     # Custom fields template (structure for custom data fields)
     custom_fields_template = Column(JSON, nullable=True)
@@ -242,6 +241,7 @@ class EventTemplate(Base):
     # Metadata
     is_active = Column(Boolean, nullable=False, default=True)
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
@@ -281,7 +281,9 @@ class EventExternalAttendee(Base):
 
     # Metadata
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=True, onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     event = relationship("Event", foreign_keys=[event_id])

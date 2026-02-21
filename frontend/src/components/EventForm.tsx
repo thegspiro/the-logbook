@@ -17,8 +17,7 @@ import {
   Bell,
 } from 'lucide-react';
 import type { EventCreate, EventType, RSVPStatus } from '../types/event';
-import type { Role } from '../types/role';
-import { roleService, locationsService } from '../services/api';
+import { locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
@@ -57,10 +56,9 @@ const DEFAULT_FORM_DATA: EventCreate = {
   max_attendees: undefined,
   allowed_rsvp_statuses: ['going', 'not_going'],
   is_mandatory: false,
-  eligible_roles: undefined,
   allow_guests: false,
   send_reminders: true,
-  reminder_hours_before: 24,
+  reminder_schedule: [24],
   check_in_window_type: 'flexible',
   check_in_minutes_before: 15,
   check_in_minutes_after: 15,
@@ -111,14 +109,12 @@ export const EventForm: React.FC<EventFormProps> = ({
   });
   const [error, setError] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>(
     initialData?.location ? 'other' : 'select'
   );
 
   useEffect(() => {
     loadLocations();
-    loadRoles();
   }, []);
 
   const loadLocations = async () => {
@@ -131,15 +127,6 @@ export const EventForm: React.FC<EventFormProps> = ({
     } catch {
       // Non-critical — fall back to free-text
       setLocationMode('other');
-    }
-  };
-
-  const loadRoles = async () => {
-    try {
-      const data = await roleService.getRoles();
-      setRoles(data);
-    } catch {
-      // Non-critical
     }
   };
 
@@ -174,16 +161,6 @@ export const EventForm: React.FC<EventFormProps> = ({
       update({ allowed_rsvp_statuses: [...statuses, status] });
     } else {
       update({ allowed_rsvp_statuses: statuses.filter((s) => s !== status) });
-    }
-  };
-
-  const toggleEligibleRole = (slug: string, checked: boolean) => {
-    const current = formData.eligible_roles || [];
-    if (checked) {
-      update({ eligible_roles: [...current, slug] });
-    } else {
-      const updated = current.filter((r) => r !== slug);
-      update({ eligible_roles: updated.length > 0 ? updated : undefined });
     }
   };
 
@@ -542,28 +519,6 @@ export const EventForm: React.FC<EventFormProps> = ({
           </label>
         </div>
 
-        {/* Eligible Roles */}
-        {roles.length > 0 && (
-          <div>
-            <span className={labelClass}>Eligible Roles</span>
-            <p className="text-xs text-theme-text-muted mb-3">
-              Leave all unchecked to allow all members. Check specific roles to restrict attendance.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {roles.map((role) => (
-                <label key={role.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.eligible_roles?.includes(role.slug) || false}
-                    onChange={(e) => toggleEligibleRole(role.slug, e.target.checked)}
-                    className={checkboxClass}
-                  />
-                  <span className="text-theme-text-secondary">{role.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
       </section>
 
       <hr className="border-theme-surface-border" />
@@ -750,24 +705,73 @@ export const EventForm: React.FC<EventFormProps> = ({
         </div>
 
         {formData.send_reminders && (
-          <div className="pl-6 border-l-2 border-red-500/30">
-            <label htmlFor="reminder-hours" className={labelClass}>
-              Reminder hours before event
-            </label>
+          <div className="pl-6 border-l-2 border-red-500/30 space-y-3">
+            <label className={labelClass}>Reminder Schedule</label>
+
+            {/* Selected reminders as tags */}
+            {(formData.reminder_schedule || [24]).length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {[...(formData.reminder_schedule || [24])]
+                  .sort((a, b) => b - a)
+                  .map((hours) => (
+                    <span
+                      key={hours}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/30"
+                    >
+                      {hours >= 168
+                        ? `${Math.floor(hours / 168)} week${hours >= 336 ? 's' : ''}`
+                        : hours >= 24
+                          ? `${Math.floor(hours / 24)} day${hours >= 48 ? 's' : ''}`
+                          : `${hours} hour${hours !== 1 ? 's' : ''}`}{' '}
+                      before
+                      <button
+                        type="button"
+                        onClick={() =>
+                          update({
+                            reminder_schedule: (formData.reminder_schedule || [24]).filter(
+                              (h) => h !== hours
+                            ),
+                          })
+                        }
+                        className="ml-0.5 hover:text-red-900 dark:hover:text-red-100"
+                        aria-label={`Remove ${hours}-hour reminder`}
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+              </div>
+            )}
+
+            {/* Add reminder dropdown */}
             <select
-              id="reminder-hours"
-              value={formData.reminder_hours_before || 24}
-              onChange={(e) => update({ reminder_hours_before: parseInt(e.target.value) })}
+              id="add-reminder"
+              value=""
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                if (val && !(formData.reminder_schedule || []).includes(val)) {
+                  update({ reminder_schedule: [...(formData.reminder_schedule || []), val] });
+                }
+              }}
               className="w-full max-w-xs px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             >
-              <option value={1}>1 hour</option>
-              <option value={2}>2 hours</option>
-              <option value={4}>4 hours</option>
-              <option value={12}>12 hours</option>
-              <option value={24}>24 hours (1 day)</option>
-              <option value={48}>48 hours (2 days)</option>
-              <option value={72}>72 hours (3 days)</option>
-              <option value={168}>168 hours (1 week)</option>
+              <option value="">+ Add a reminder...</option>
+              {[
+                { value: 1, label: '1 hour before' },
+                { value: 2, label: '2 hours before' },
+                { value: 4, label: '4 hours before' },
+                { value: 12, label: '12 hours before' },
+                { value: 24, label: '1 day before' },
+                { value: 48, label: '2 days before' },
+                { value: 72, label: '3 days before' },
+                { value: 168, label: '1 week before' },
+              ]
+                .filter(({ value }) => !(formData.reminder_schedule || []).includes(value))
+                .map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
             </select>
           </div>
         )}

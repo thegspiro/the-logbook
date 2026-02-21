@@ -1654,6 +1654,13 @@ export const eventService = {
     return response.data;
   },
 
+  /**
+   * Remove an attendee's RSVP from an event (manager action)
+   */
+  async removeAttendee(eventId: string, userId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/rsvps/${userId}`);
+  },
+
   // Event Templates
   async getTemplates(includeInactive?: boolean): Promise<import('../types/event').EventTemplate[]> {
     const params = includeInactive ? { include_inactive: true } : undefined;
@@ -1699,6 +1706,27 @@ export const eventService = {
   async getEventFolder(eventId: string): Promise<DocumentFolder> {
     const response = await api.get<DocumentFolder>(`/events/${eventId}/folder`);
     return response.data;
+  },
+
+  // External Attendees
+  async getExternalAttendees(eventId: string): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get(`/events/${eventId}/external-attendees`);
+    return response.data;
+  },
+  async addExternalAttendee(eventId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/events/${eventId}/external-attendees`, data);
+    return response.data;
+  },
+  async updateExternalAttendee(eventId: string, attendeeId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/events/${eventId}/external-attendees/${attendeeId}`, data);
+    return response.data;
+  },
+  async checkInExternalAttendee(eventId: string, attendeeId: string): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/events/${eventId}/external-attendees/${attendeeId}/check-in`);
+    return response.data;
+  },
+  async removeExternalAttendee(eventId: string, attendeeId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/external-attendees/${attendeeId}`);
   },
 };
 
@@ -3147,6 +3175,7 @@ export interface NotificationLogRecord {
   recipient_email?: string;
   recipient_name?: string;
   channel: string;
+  category?: string;
   subject?: string;
   message?: string;
   sent_at: string;
@@ -3154,6 +3183,8 @@ export interface NotificationLogRecord {
   read: boolean;
   read_at?: string;
   error?: string;
+  action_url?: string;
+  expires_at?: string;
   created_at: string;
 }
 
@@ -3206,6 +3237,22 @@ export const notificationsService = {
 
   async getSummary(): Promise<NotificationsSummary> {
     const response = await api.get<NotificationsSummary>('/notifications/summary');
+    return response.data;
+  },
+
+  // User-facing notification inbox
+  async getMyNotifications(params?: { include_expired?: boolean; include_read?: boolean; skip?: number; limit?: number }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/notifications/my', { params });
+    return response.data;
+  },
+
+  async getMyUnreadCount(): Promise<{ unread_count: number }> {
+    const response = await api.get<{ unread_count: number }>('/notifications/my/unread-count');
+    return response.data;
+  },
+
+  async markMyNotificationRead(logId: string): Promise<NotificationLogRecord> {
+    const response = await api.post<NotificationLogRecord>(`/notifications/my/${logId}/read`);
     return response.data;
   },
 };
@@ -3546,7 +3593,6 @@ export interface TrainingSessionCreate {
   rsvp_deadline?: string;
   max_attendees?: number;
   is_mandatory?: boolean;
-  eligible_roles?: string[];
   check_in_window_type?: string;
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -4177,6 +4223,40 @@ export const facilitiesService = {
     await api.delete(`/facilities/utility-accounts/${accountId}`);
   },
 
+  // Photos
+  async getPhotos(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/photos', { params });
+    return response.data;
+  },
+  async createPhoto(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/photos', data);
+    return response.data;
+  },
+  async updatePhoto(photoId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/photos/${photoId}`, data);
+    return response.data;
+  },
+  async deletePhoto(photoId: string): Promise<void> {
+    await api.delete(`/facilities/photos/${photoId}`);
+  },
+
+  // Documents
+  async getFacilityDocuments(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/documents', { params });
+    return response.data;
+  },
+  async createFacilityDocument(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/documents', data);
+    return response.data;
+  },
+  async updateFacilityDocument(documentId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/documents/${documentId}`, data);
+    return response.data;
+  },
+  async deleteFacilityDocument(documentId: string): Promise<void> {
+    await api.delete(`/facilities/documents/${documentId}`);
+  },
+
   // Utility Readings
   async getUtilityReadings(accountId: string, params?: { skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
     const response = await api.get(`/facilities/utility-accounts/${accountId}/readings`, { params });
@@ -4184,6 +4264,10 @@ export const facilitiesService = {
   },
   async createUtilityReading(accountId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await api.post(`/facilities/utility-accounts/${accountId}/readings`, data);
+    return response.data;
+  },
+  async updateUtilityReading(readingId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/utility-readings/${readingId}`, data);
     return response.data;
   },
   async deleteUtilityReading(readingId: string): Promise<void> {
