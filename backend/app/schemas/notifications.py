@@ -82,6 +82,7 @@ class NotificationLogResponse(BaseModel):
     read: bool
     read_at: Optional[datetime] = None
     error: Optional[str] = None
+    action_url: Optional[str] = None
     expires_at: Optional[datetime] = None
     created_at: datetime
 

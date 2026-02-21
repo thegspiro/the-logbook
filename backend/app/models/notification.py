@@ -129,6 +129,9 @@ class NotificationLog(Base):
     read_at = Column(DateTime(timezone=True))
     error = Column(Text)
 
+    # Navigation
+    action_url = Column(String(500), nullable=True)  # Frontend route to navigate to on click
+
     # Lifecycle
     expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
 

@@ -3176,6 +3176,7 @@ export interface NotificationLogRecord {
   read: boolean;
   read_at?: string;
   error?: string;
+  action_url?: string;
   expires_at?: string;
   created_at: string;
 }

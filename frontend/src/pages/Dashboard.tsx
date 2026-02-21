@@ -571,7 +571,10 @@ const Dashboard: React.FC = () => {
                 {notifications.map((notification) => (
                   <button
                     key={notification.id}
-                    onClick={() => !notification.read && markNotificationRead(notification.id)}
+                    onClick={() => {
+                      if (!notification.read) markNotificationRead(notification.id);
+                      if (notification.action_url) navigate(notification.action_url);
+                    }}
                     className={`w-full text-left p-3 rounded-lg transition-colors ${
                       notification.read
                         ? 'bg-theme-surface-secondary text-theme-text-muted'
@@ -583,9 +586,14 @@ const Dashboard: React.FC = () => {
                         <p className="text-sm font-medium truncate">{notification.subject || 'Notification'}</p>
                         <p className="text-xs text-theme-text-muted mt-0.5 truncate">{notification.message || ''}</p>
                       </div>
-                      <span className="text-xs text-theme-text-muted ml-2 whitespace-nowrap">
-                        {formatDate(notification.sent_at, tz)}
-                      </span>
+                      <div className="flex items-center ml-2 shrink-0">
+                        <span className="text-xs text-theme-text-muted whitespace-nowrap">
+                          {formatDate(notification.sent_at, tz)}
+                        </span>
+                        {notification.action_url && (
+                          <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted ml-1" />
+                        )}
+                      </div>
                     </div>
                   </button>
                 ))}

@@ -27,6 +27,9 @@ Recommended crontab (add to host or container cron):
 
 # Every 30 minutes — send event reminders
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=event_reminders
+
+# Every 30 minutes — post-event validation notifications
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_event_validation
 -----------------------------------------------------
 """
 
@@ -79,6 +82,12 @@ SCHEDULE = {
     },
     "event_reminders": {
         "description": "Send email and in-app reminders for upcoming events based on each event's reminder_schedule setting",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
+    "post_event_validation": {
+        "description": "Notify event organizers to validate attendance and timing after their event ends",
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
@@ -530,6 +539,172 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send a notification to event organizers after their event ends,
+    asking them to validate attendance records and event timing.
+
+    Runs every 30 minutes. Looks for events that ended within the last
+    2 hours and haven't already had a validation notification sent.
+    Sends an in-app notification (and optionally email) to the event
+    creator with a link to the event detail page.
+
+    Tracks sent status in custom_fields.validation_notification_sent.
+    """
+    from datetime import timedelta, timezone as dt_timezone
+    from sqlalchemy.orm import selectinload
+    from app.models.event import Event
+    from app.models.user import User
+    from app.models.notification import NotificationLog, NotificationChannel
+    from app.services.email_service import EmailService
+    from app.core.utils import generate_uuid
+    from app.core.config import settings
+
+    now = datetime.now(dt_timezone.utc)
+    # Look back 2 hours for recently ended events
+    lookback = now - timedelta(hours=2)
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_notifications = 0
+    total_emails = 0
+    results = []
+
+    for org in organizations:
+        org_notifications = 0
+        org_emails = 0
+
+        try:
+            events_result = await db.execute(
+                select(Event)
+                .options(selectinload(Event.rsvps))
+                .where(Event.organization_id == str(org.id))
+                .where(Event.is_cancelled == False)
+                .where(Event.end_datetime <= now)
+                .where(Event.end_datetime >= lookback)
+                .where(Event.created_by.isnot(None))
+            )
+            events = list(events_result.scalars().all())
+
+            for event in events:
+                custom = event.custom_fields or {}
+                if custom.get("validation_notification_sent"):
+                    continue
+
+                # Find the event creator
+                creator_result = await db.execute(
+                    select(User).where(
+                        User.id == event.created_by,
+                        User.is_active == True,
+                    )
+                )
+                creator = creator_result.scalar_one_or_none()
+                if not creator:
+                    # Mark as sent to avoid retrying for deleted/inactive users
+                    event.custom_fields = {**custom, "validation_notification_sent": True}
+                    continue
+
+                event_url = f"/events/{event.id}"
+                rsvp_count = len(event.rsvps) if event.rsvps else 0
+                checked_in_count = sum(
+                    1 for r in (event.rsvps or []) if r.checked_in
+                )
+
+                subject = f"Action Required: Validate attendance for {event.title}"
+                message = (
+                    f'Your event "{event.title}" has ended. '
+                    f"{checked_in_count} of {rsvp_count} attendees checked in. "
+                    f"Please review and confirm the attendance records and "
+                    f"event timing before finalizing."
+                )
+
+                # In-app notification
+                try:
+                    in_app_log = NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=str(org.id),
+                        recipient_id=str(creator.id),
+                        channel=NotificationChannel.IN_APP,
+                        category="event_validation",
+                        subject=subject,
+                        message=message,
+                        action_url=event_url,
+                    )
+                    db.add(in_app_log)
+                    org_notifications += 1
+                except Exception as e:
+                    logger.error(
+                        f"Failed to create post-event validation notification "
+                        f"for user {creator.id}, event {event.id}: {e}"
+                    )
+
+                # Email notification (if user has email prefs enabled)
+                prefs = creator.notification_preferences or {}
+                wants_email = prefs.get("email_notifications", True)
+                if wants_email and creator.email:
+                    try:
+                        full_event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
+                        email_service = EmailService(organization=org)
+                        sent_count, _ = await email_service.send_email(
+                            to_emails=[creator.email],
+                            subject=subject,
+                            html_body=(
+                                f"<p>Hi {creator.first_name},</p>"
+                                f'<p>Your event "<strong>{event.title}</strong>" has ended. '
+                                f"{checked_in_count} of {rsvp_count} attendees checked in.</p>"
+                                f"<p>Please review and confirm the attendance records and "
+                                f"event timing before finalizing.</p>"
+                                f'<p><a href="{full_event_url}">Review Event</a></p>'
+                            ),
+                            text_body=(
+                                f"Hi {creator.first_name},\n\n"
+                                f'Your event "{event.title}" has ended. '
+                                f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
+                                f"Please review and confirm the attendance records and "
+                                f"event timing before finalizing.\n\n"
+                                f"Review Event: {full_event_url}"
+                            ),
+                        )
+                        if sent_count > 0:
+                            org_emails += 1
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to send post-event validation email "
+                            f"to {creator.email}: {e}"
+                        )
+
+                # Mark as sent
+                event.custom_fields = {**custom, "validation_notification_sent": True}
+
+            await db.commit()
+
+        except Exception as e:
+            logger.error(f"Post-event validation failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+            continue
+
+        total_notifications += org_notifications
+        total_emails += org_emails
+        if org_notifications > 0 or org_emails > 0:
+            results.append({
+                "org_id": str(org.id),
+                "notifications": org_notifications,
+                "emails_sent": org_emails,
+            })
+
+    logger.info(
+        f"Post-event validation complete: {total_notifications} in-app, "
+        f"{total_emails} emails across {len(organizations)} orgs"
+    )
+    return {
+        "task": "post_event_validation",
+        "total_notifications": total_notifications,
+        "total_emails_sent": total_emails,
+        "organizations": results,
+    }
+
+
 def _format_relative_time(event_time: datetime, now: datetime) -> str:
     """Format a future time as a relative description."""
     delta = event_time - now
@@ -553,4 +728,5 @@ TASK_RUNNERS = {
     "action_item_reminders": run_action_item_reminders,
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
+    "post_event_validation": run_post_event_validation,
 }
