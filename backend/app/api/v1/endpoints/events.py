@@ -720,6 +720,48 @@ async def override_rsvp_attendance(
     )
 
 
+@router.delete("/{event_id}/rsvps/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_attendee(
+    event_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Remove an attendee's RSVP from an event (manager action)
+
+    Permanently deletes the RSVP record for the given user on this event.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    error = await service.remove_attendee(
+        event_id=event_id,
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="event_attendee_removed",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "removed_user_id": str(user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 @router.get("/{event_id}/stats", response_model=EventStats)
 async def get_event_stats(
     event_id: UUID,

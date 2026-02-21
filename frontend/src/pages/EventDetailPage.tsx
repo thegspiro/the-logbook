@@ -42,6 +42,11 @@ export const EventDetailPage: React.FC = () => {
   const [memberSearch, setMemberSearch] = useState('');
   const [actualStartTime, setActualStartTime] = useState('');
   const [actualEndTime, setActualEndTime] = useState('');
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [editingRsvp, setEditingRsvp] = useState<RSVP | null>(null);
+  const [overrideCheckIn, setOverrideCheckIn] = useState('');
+  const [overrideCheckOut, setOverrideCheckOut] = useState('');
+  const [removeConfirmUserId, setRemoveConfirmUserId] = useState<string | null>(null);
 
   const { checkPermission } = useAuthStore();
   const tz = useTimezone();
@@ -243,6 +248,65 @@ export const EventDetailPage: React.FC = () => {
       setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to record times');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openOverrideModal = (rsvp: RSVP) => {
+    setEditingRsvp(rsvp);
+    setOverrideCheckIn(
+      rsvp.override_check_in_at
+        ? formatForDateTimeInput(rsvp.override_check_in_at, tz)
+        : rsvp.checked_in_at
+          ? formatForDateTimeInput(rsvp.checked_in_at, tz)
+          : ''
+    );
+    setOverrideCheckOut(
+      rsvp.override_check_out_at
+        ? formatForDateTimeInput(rsvp.override_check_out_at, tz)
+        : rsvp.checked_out_at
+          ? formatForDateTimeInput(rsvp.checked_out_at, tz)
+          : ''
+    );
+    setShowOverrideModal(true);
+    setSubmitError(null);
+  };
+
+  const handleOverrideAttendance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventId || !editingRsvp) return;
+
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+
+      const data: import('../types/event').RSVPOverride = {};
+      if (overrideCheckIn) data.override_check_in_at = localToUTC(overrideCheckIn, tz);
+      if (overrideCheckOut) data.override_check_out_at = localToUTC(overrideCheckOut, tz);
+
+      await eventService.overrideAttendance(eventId, editingRsvp.user_id, data);
+      setShowOverrideModal(false);
+      setEditingRsvp(null);
+      await fetchRSVPs();
+      await fetchStats();
+      toast.success('Attendance times updated');
+    } catch (err) {
+      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to update attendance');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRemoveAttendee = async (userId: string) => {
+    if (!eventId) return;
+
+    try {
+      await eventService.removeAttendee(eventId, userId);
+      setRemoveConfirmUserId(null);
+      await fetchRSVPs();
+      await fetchStats();
+      toast.success('Attendee removed');
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to remove attendee');
     }
   };
 
@@ -578,40 +642,98 @@ export const EventDetailPage: React.FC = () => {
           {/* RSVPs List (for managers) */}
           {canManage && rsvps.length > 0 && (
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
-              <h2 className="text-lg font-medium text-theme-text-primary mb-4">RSVPs</h2>
+              <h2 className="text-lg font-medium text-theme-text-primary mb-4">Attendance</h2>
               <div className="space-y-3">
-                {rsvps.map((rsvp) => (
-                  <div key={rsvp.id} className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-theme-text-primary">{rsvp.user_name}</p>
-                      <p className="text-xs text-theme-text-muted">{rsvp.user_email}</p>
-                      {rsvp.guest_count > 0 && (
-                        <p className="text-xs text-theme-text-muted mt-1">+{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}</p>
-                      )}
-                      {rsvp.notes && (
-                        <p className="text-xs text-theme-text-secondary mt-1">{rsvp.notes}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}>
-                        {getRSVPStatusLabel(rsvp.status)}
-                      </span>
-                      {rsvp.status === 'going' && !rsvp.checked_in && (
-                        <button
-                          onClick={() => handleCheckIn(rsvp.user_id)}
-                          className="text-sm text-red-400 hover:text-red-300"
-                        >
-                          Check In
-                        </button>
-                      )}
+                {rsvps.map((rsvp) => {
+                  const effectiveCheckIn = rsvp.override_check_in_at || rsvp.checked_in_at;
+                  const effectiveCheckOut = rsvp.override_check_out_at || rsvp.checked_out_at;
+                  const effectiveDuration = rsvp.override_duration_minutes ?? rsvp.attendance_duration_minutes;
+                  const isRemoving = removeConfirmUserId === rsvp.user_id;
+
+                  return (
+                    <div key={rsvp.id} className="p-3 bg-theme-surface-secondary rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-theme-text-primary">{rsvp.user_name}</p>
+                          <p className="text-xs text-theme-text-muted">{rsvp.user_email}</p>
+                          {rsvp.guest_count > 0 && (
+                            <p className="text-xs text-theme-text-muted mt-0.5">+{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}>
+                            {getRSVPStatusLabel(rsvp.status)}
+                          </span>
+                          {rsvp.status === 'going' && !rsvp.checked_in && (
+                            <button
+                              onClick={() => handleCheckIn(rsvp.user_id)}
+                              className="text-xs text-red-400 hover:text-red-300"
+                            >
+                              Check In
+                            </button>
+                          )}
+                          {rsvp.checked_in && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                              Checked In
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Attendance times */}
                       {rsvp.checked_in && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
-                          Checked In
-                        </span>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted">
+                          {effectiveCheckIn && (
+                            <span>In: {formatTime(effectiveCheckIn, tz)}</span>
+                          )}
+                          {effectiveCheckOut && (
+                            <span>Out: {formatTime(effectiveCheckOut, tz)}</span>
+                          )}
+                          {effectiveDuration != null && (
+                            <span>Duration: {effectiveDuration} min</span>
+                          )}
+                          {rsvp.override_check_in_at && (
+                            <span className="text-amber-500 text-[10px]">(times overridden)</span>
+                          )}
+                        </div>
                       )}
+
+                      {/* Action buttons */}
+                      <div className="mt-2 flex items-center gap-3">
+                        <button
+                          onClick={() => openOverrideModal(rsvp)}
+                          className="text-xs text-blue-400 hover:text-blue-300"
+                        >
+                          Edit Times
+                        </button>
+                        {!isRemoving ? (
+                          <button
+                            onClick={() => setRemoveConfirmUserId(rsvp.user_id)}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Remove
+                          </button>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <span className="text-xs text-theme-text-muted">Remove?</span>
+                            <button
+                              onClick={() => handleRemoveAttendee(rsvp.user_id)}
+                              className="text-xs font-medium text-red-400 hover:text-red-300"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setRemoveConfirmUserId(null)}
+                              className="text-xs text-theme-text-muted hover:text-theme-text-secondary"
+                            >
+                              No
+                            </button>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1133,6 +1255,100 @@ export const EventDetailPage: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setShowRecordTimesModal(false);
+                      setSubmitError(null);
+                    }}
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Override Attendance Modal */}
+      {showOverrideModal && editingRsvp && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="override-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowOverrideModal(false); setSubmitError(null); } }}
+        >
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
+            </div>
+
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <form onSubmit={handleOverrideAttendance}>
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 id="override-modal-title" className="text-lg font-medium text-theme-text-primary mb-1">
+                    Edit Attendance Times
+                  </h3>
+                  <p className="text-sm text-theme-text-muted mb-4">{editingRsvp.user_name}</p>
+
+                  {submitError && (
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                      <p className="text-sm text-red-300">{submitError}</p>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="override_check_in" className="block text-sm font-medium text-theme-text-secondary">
+                        Check-in Time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        step="60"
+                        id="override_check_in"
+                        value={overrideCheckIn}
+                        onChange={(e) => setOverrideCheckIn(e.target.value)}
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="override_check_out" className="block text-sm font-medium text-theme-text-secondary">
+                        Check-out Time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        step="60"
+                        id="override_check_out"
+                        value={overrideCheckOut}
+                        onChange={(e) => setOverrideCheckOut(e.target.value)}
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                      />
+                    </div>
+
+                    {overrideCheckIn && overrideCheckOut && (
+                      <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg p-3">
+                        <p className="text-sm text-blue-800 dark:text-blue-300">
+                          <strong>Duration:</strong>{' '}
+                          {Math.round((new Date(overrideCheckOut).getTime() - new Date(overrideCheckIn).getTime()) / 60000)} minutes
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                  >
+                    {submitting ? 'Saving...' : 'Save Times'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowOverrideModal(false);
+                      setEditingRsvp(null);
                       setSubmitError(null);
                     }}
                     className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"

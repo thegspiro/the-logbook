@@ -630,6 +630,41 @@ class EventService:
 
         return rsvp, None
 
+    async def remove_attendee(
+        self, event_id: UUID, user_id: UUID, organization_id: UUID
+    ) -> Optional[str]:
+        """
+        Remove an attendee's RSVP from an event (manager action).
+
+        Returns an error string on failure, or None on success.
+        """
+        # Verify event exists and belongs to organization
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return "Event not found"
+
+        # Get the RSVP
+        rsvp_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
+        )
+        rsvp = rsvp_result.scalar_one_or_none()
+
+        if not rsvp:
+            return "RSVP not found for this user"
+
+        await self.db.delete(rsvp)
+        await self.db.commit()
+
+        return None
+
     async def check_in_attendee(
         self, event_id: UUID, user_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:

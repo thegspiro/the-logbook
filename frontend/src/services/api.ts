@@ -1654,6 +1654,13 @@ export const eventService = {
     return response.data;
   },
 
+  /**
+   * Remove an attendee's RSVP from an event (manager action)
+   */
+  async removeAttendee(eventId: string, userId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/rsvps/${userId}`);
+  },
+
   // Event Templates
   async getTemplates(includeInactive?: boolean): Promise<import('../types/event').EventTemplate[]> {
     const params = includeInactive ? { include_inactive: true } : undefined;
