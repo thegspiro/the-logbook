@@ -7,19 +7,23 @@
  * When a shift is assigned to an apparatus with defined positions,
  * a "crew board" shows each position as a slot (filled or open)
  * so members can sign up for specific seats on the vehicle.
+ *
+ * Admins can edit shift details, delete shifts, and assign members
+ * via a searchable member dropdown.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
-  Loader2, Phone, ChevronDown, ChevronUp,
+  Loader2, Phone, ChevronDown, ChevronUp, Pencil, Trash2, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../services/api';
+import { schedulingService, memberService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
+import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -36,29 +40,13 @@ interface Assignment {
   assignment_status?: string;
 }
 
-const POSITION_LABELS: Record<string, string> = {
-  officer: 'Officer',
-  driver: 'Driver/Operator',
-  firefighter: 'Firefighter',
-  EMS: 'EMS',
-  ems: 'EMS',
-  captain: 'Captain',
-  lieutenant: 'Lieutenant',
-  probationary: 'Probationary',
-  volunteer: 'Volunteer',
-  other: 'Other',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  assigned: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  confirmed: 'bg-green-500/10 text-green-700 dark:text-green-400',
-  declined: 'bg-red-500/10 text-red-700 dark:text-red-400',
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-300',
-};
+interface MemberOption {
+  id: string;
+  label: string;
+}
 
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
-  shift,
+  shift: initialShift,
   onClose,
   onRefresh,
 }) => {
@@ -66,26 +54,45 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
 
+  const [shift, setShift] = useState(initialShift);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [calls, setCalls] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCalls, setShowCalls] = useState(false);
 
+  // Edit state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    shift_date: shift.shift_date,
+    notes: shift.notes || '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  // Delete state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   // Signup state
   const [signupPosition, setSignupPosition] = useState('');
   const [signingUp, setSigningUp] = useState(false);
 
-  // Assign state (admin)
+  // Assign state (admin) — with member search
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignForm, setAssignForm] = useState({ user_id: '', position: '' });
   const [assigning, setAssigning] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
   const hasApparatusPositions = shift.apparatus_positions && shift.apparatus_positions.length > 0;
 
   // Determine available position options based on apparatus
-  const positionOptions: [string, string][] = hasApparatusPositions
-    ? shift.apparatus_positions!.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)])
-    : Object.entries(POSITION_LABELS);
+  const positionOptions: [string, string][] = useMemo(() =>
+    hasApparatusPositions
+      ? shift.apparatus_positions!.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)])
+      : Object.entries(POSITION_LABELS),
+    [hasApparatusPositions, shift.apparatus_positions]
+  );
 
   // Set default signup position
   useEffect(() => {
@@ -119,6 +126,33 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     load();
   }, [shift.id]);
 
+  // Load members for the assign dropdown
+  useEffect(() => {
+    if (!showAssignForm) return;
+    const loadMembers = async () => {
+      setLoadingMembers(true);
+      try {
+        const data = await memberService.getMembers({ status: 'active', limit: 200 });
+        const members = (data.members || []).map((m: Record<string, unknown>) => ({
+          id: String(m.id),
+          label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || String(m.email || m.id),
+        }));
+        setMemberOptions(members);
+      } catch {
+        // Non-critical — fallback to manual ID entry
+      } finally {
+        setLoadingMembers(false);
+      }
+    };
+    loadMembers();
+  }, [showAssignForm]);
+
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch) return memberOptions;
+    const q = memberSearch.toLowerCase();
+    return memberOptions.filter(m => m.label.toLowerCase().includes(q));
+  }, [memberSearch, memberOptions]);
+
   const refreshAssignments = async () => {
     const data = await schedulingService.getShiftAssignments(shift.id);
     setAssignments(data as unknown as Assignment[]);
@@ -149,6 +183,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     }
   };
 
+  const handleDecline = async (assignmentId: string) => {
+    if (!window.confirm('Decline this shift assignment?')) return;
+    try {
+      await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
+      toast.success('Assignment declined');
+      await refreshAssignments();
+    } catch {
+      toast.error('Failed to decline assignment');
+    }
+  };
+
   const handleRemove = async (assignmentId: string) => {
     if (!window.confirm('Remove this assignment?')) return;
     try {
@@ -172,12 +217,47 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       toast.success('Member assigned');
       setShowAssignForm(false);
       setAssignForm({ user_id: '', position: positionOptions[0]?.[0] || 'firefighter' });
+      setMemberSearch('');
       await refreshAssignments();
       onRefresh?.();
     } catch {
       toast.error('Failed to assign member');
     } finally {
       setAssigning(false);
+    }
+  };
+
+  // Edit shift
+  const handleSaveEdit = async () => {
+    setSaving(true);
+    try {
+      const updated = await schedulingService.updateShift(shift.id, {
+        shift_date: editForm.shift_date,
+        notes: editForm.notes || null,
+      });
+      setShift(updated);
+      setIsEditing(false);
+      toast.success('Shift updated');
+      onRefresh?.();
+    } catch {
+      toast.error('Failed to update shift');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete shift
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await schedulingService.deleteShift(shift.id);
+      toast.success('Shift deleted');
+      onClose();
+      onRefresh?.();
+    } catch {
+      toast.error('Failed to delete shift');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -194,36 +274,34 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const isPast = shiftDate < new Date();
 
   // Build crew board data: for each apparatus position, find the assignment(s) filling it
-  const getCrewBoard = () => {
+  const crewBoard = useMemo(() => {
     if (!hasApparatusPositions) return null;
     return shift.apparatus_positions!.map(position => {
       const filled = assignments.find(a => a.position.toLowerCase() === position.toLowerCase());
       return { position, assignment: filled || null };
     });
-  };
+  }, [hasApparatusPositions, shift.apparatus_positions, assignments]);
 
   // Assignments not matching any apparatus position (extra crew)
-  const getExtraAssignments = () => {
+  const extraAssignments = useMemo(() => {
     if (!hasApparatusPositions) return assignments;
-    const apparatusPositionsLower = shift.apparatus_positions!.map(p => p.toLowerCase());
     const boardFilledIds = new Set<string>();
-    // Mark the first match for each apparatus position
     for (const pos of shift.apparatus_positions!) {
       const match = assignments.find(a => a.position.toLowerCase() === pos.toLowerCase() && !boardFilledIds.has(a.id));
       if (match) boardFilledIds.add(match.id);
     }
     return assignments.filter(a => !boardFilledIds.has(a.id));
-  };
+  }, [hasApparatusPositions, shift.apparatus_positions, assignments]);
 
-  const crewBoard = getCrewBoard();
-  const extraAssignments = getExtraAssignments();
-
-  // Open positions (apparatus positions with no one assigned)
   const openPositions = crewBoard?.filter(s => !s.assignment).map(s => s.position) || [];
 
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500';
+
   const renderAssignmentRow = (assignment: Assignment) => {
-    const statusColor = STATUS_COLORS[assignment.status || assignment.assignment_status || 'assigned'] || STATUS_COLORS.assigned;
+    const effectiveStatus = assignment.status || assignment.assignment_status || 'assigned';
+    const statusColor = ASSIGNMENT_STATUS_COLORS[effectiveStatus] || ASSIGNMENT_STATUS_COLORS.assigned;
     const isCurrentUser = assignment.user_id === user?.id;
+    const isAssigned = effectiveStatus === 'assigned';
     return (
       <div key={assignment.id} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${isCurrentUser ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30'}`}>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -241,16 +319,23 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         </div>
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${statusColor}`}>
-            {assignment.status || assignment.assignment_status || 'assigned'}
+            {effectiveStatus}
           </span>
-          {isCurrentUser && (assignment.status === 'assigned' || assignment.assignment_status === 'assigned') && (
-            <button onClick={() => handleConfirm(assignment.id)}
-              className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Confirm"
-            >
-              <Check className="w-4 h-4" />
-            </button>
+          {isCurrentUser && isAssigned && (
+            <>
+              <button onClick={() => handleConfirm(assignment.id)}
+                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Confirm"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+              <button onClick={() => handleDecline(assignment.id)}
+                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Decline"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </>
           )}
-          {canManage && (
+          {canManage && !isCurrentUser && (
             <button onClick={() => handleRemove(assignment.id)}
               className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Remove"
             >
@@ -267,8 +352,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       {/* Backdrop */}
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
-      {/* Panel */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-theme-surface border-l border-theme-surface-border z-50 overflow-y-auto shadow-2xl overscroll-contain">
+      {/* Panel — uses drawer-panel CSS class for mobile-responsive width */}
+      <div className="drawer-panel overflow-y-auto overscroll-contain !bg-theme-surface">
         {/* Header */}
         <div className="sticky top-0 bg-theme-surface border-b border-theme-surface-border p-4 sm:p-6 z-10">
           <div className="flex items-center justify-between">
@@ -278,13 +363,79 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 {shiftDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz })}
               </p>
             </div>
-            <button onClick={onClose} className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0">
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {canManage && !isPast && (
+                <>
+                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, notes: shift.notes || '' }); setIsEditing(!isEditing); }}
+                    className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" title="Edit shift"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setShowDeleteConfirm(true)}
+                    className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" title="Delete shift"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              <button onClick={onClose} className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
+          {/* Delete Confirmation */}
+          {showDeleteConfirm && (
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg space-y-3">
+              <p className="text-sm text-red-700 dark:text-red-300">
+                Are you sure you want to delete this shift? This will remove all assignments and cannot be undone.
+              </p>
+              <div className="flex items-center gap-2 justify-end">
+                <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
+                <button onClick={handleDelete} disabled={deleting}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+                >
+                  {deleting && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Delete Shift
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Form */}
+          {isEditing && (
+            <div className="p-4 border border-violet-500/20 rounded-lg bg-violet-500/5 space-y-3">
+              <h4 className="text-sm font-medium text-theme-text-primary flex items-center gap-2">
+                <Pencil className="w-3.5 h-3.5" /> Edit Shift
+              </h4>
+              <div>
+                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Shift Date</label>
+                <input type="date" value={editForm.shift_date}
+                  onChange={e => setEditForm(p => ({...p, shift_date: e.target.value}))}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Notes</label>
+                <textarea value={editForm.notes}
+                  onChange={e => setEditForm(p => ({...p, notes: e.target.value}))}
+                  rows={2} placeholder="Shift notes..." className={inputCls + ' resize-none'}
+                />
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
+                <button onClick={handleSaveEdit} disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Time & Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div className="flex items-center gap-3 p-3 bg-theme-surface-hover/50 rounded-lg">
@@ -331,7 +482,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             )}
           </div>
 
-          {shift.notes && (
+          {shift.notes && !isEditing && (
             <div className="p-3 bg-theme-surface-hover/50 rounded-lg">
               <p className="text-xs text-theme-text-muted mb-1">Notes</p>
               <p className="text-sm text-theme-text-primary">{shift.notes}</p>
@@ -391,17 +542,24 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                       {assignment ? (
                         <>
-                          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${STATUS_COLORS[assignment.status || assignment.assignment_status || 'assigned'] || STATUS_COLORS.assigned}`}>
+                          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || assignment.assignment_status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
                             {assignment.status || assignment.assignment_status || 'assigned'}
                           </span>
                           {assignment.user_id === user?.id && (assignment.status === 'assigned' || assignment.assignment_status === 'assigned') && (
-                            <button onClick={() => handleConfirm(assignment.id)}
-                              className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Confirm"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
+                            <>
+                              <button onClick={() => handleConfirm(assignment.id)}
+                                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Confirm"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => handleDecline(assignment.id)}
+                                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Decline"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
-                          {canManage && (
+                          {canManage && assignment.user_id !== user?.id && (
                             <button onClick={() => handleRemove(assignment.id)}
                               className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Remove"
                             >
@@ -471,7 +629,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             </div>
           )}
 
-          {/* Admin Assign Form (works for both modes) */}
+          {/* Admin Assign Form — with member search dropdown */}
           {(showAssignForm || (hasApparatusPositions && canManage && !isPast)) && canManage && (
             <>
               {!showAssignForm && hasApparatusPositions && (
@@ -484,21 +642,41 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               {showAssignForm && (
                 <div className="p-4 border border-theme-surface-border rounded-lg bg-theme-surface-hover/30 space-y-3">
                   <h4 className="text-sm font-medium text-theme-text-primary">Assign Member</h4>
-                  <input type="text" placeholder="Enter member ID or name"
-                    value={assignForm.user_id}
-                    onChange={e => setAssignForm(p => ({...p, user_id: e.target.value}))}
-                    className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
-                  />
+                  {/* Member search + select */}
+                  <div>
+                    <input type="text" placeholder="Search members..."
+                      value={memberSearch}
+                      onChange={e => setMemberSearch(e.target.value)}
+                      className={inputCls}
+                    />
+                    {loadingMembers ? (
+                      <div className="flex items-center gap-2 mt-2 text-xs text-theme-text-muted">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Loading members...
+                      </div>
+                    ) : (
+                      <select
+                        value={assignForm.user_id}
+                        onChange={e => setAssignForm(p => ({...p, user_id: e.target.value}))}
+                        className={inputCls + ' mt-2'}
+                        size={Math.min(filteredMembers.length + 1, 6)}
+                      >
+                        <option value="">Select a member</option>
+                        {filteredMembers.map(m => (
+                          <option key={m.id} value={m.id}>{m.label}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                   <select value={assignForm.position} onChange={e => setAssignForm(p => ({...p, position: e.target.value}))}
-                    className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className={inputCls}
                   >
                     {positionOptions.map(([val, label]) => (
                       <option key={val} value={val}>{label}</option>
                     ))}
                   </select>
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setShowAssignForm(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-                    <button onClick={handleAssign} disabled={assigning}
+                    <button onClick={() => { setShowAssignForm(false); setMemberSearch(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
+                    <button onClick={handleAssign} disabled={assigning || !assignForm.user_id}
                       className="px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
                     >
                       {assigning ? 'Assigning...' : 'Assign'}
@@ -517,7 +695,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               </h3>
               <div className="flex items-center gap-2">
                 <select value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
-                  className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className={'flex-1 ' + inputCls}
                 >
                   {positionOptions.map(([val, label]) => (
                     <option key={val} value={val}>{label}</option>

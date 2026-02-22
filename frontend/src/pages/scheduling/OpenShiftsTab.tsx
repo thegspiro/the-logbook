@@ -16,18 +16,7 @@ import type { ShiftRecord } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
-
-const POSITION_LABELS: Record<string, string> = {
-  officer: 'Officer',
-  driver: 'Driver/Operator',
-  firefighter: 'Firefighter',
-  EMS: 'EMS',
-  captain: 'Captain',
-  lieutenant: 'Lieutenant',
-  probationary: 'Probationary',
-  volunteer: 'Volunteer',
-  other: 'Other',
-};
+import { POSITION_LABELS } from '../../constants/enums';
 
 interface OpenShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;

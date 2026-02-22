@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
+import type { ShiftRecord } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDate } from '../../utils/dateFormatting';
+import { formatDate, formatTime } from '../../utils/dateFormatting';
+import { REQUEST_REQUEST_STATUS_COLORS } from '../../constants/enums';
 
 interface SwapRequest {
   id: string;
@@ -28,6 +30,9 @@ interface SwapRequest {
   status: string;
   reviewer_notes?: string;
   created_at: string;
+  // Enriched shift info
+  offering_shift?: ShiftRecord;
+  requesting_shift?: ShiftRecord;
 }
 
 interface TimeOffRequest {
@@ -41,13 +46,6 @@ interface TimeOffRequest {
   reviewer_notes?: string;
   created_at: string;
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-  approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
-  denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
-};
 
 export const RequestsTab: React.FC = () => {
   const { checkPermission, user: currentUser } = useAuthStore();
@@ -73,7 +71,30 @@ export const RequestsTab: React.FC = () => {
         schedulingService.getSwapRequests(params),
         schedulingService.getTimeOffRequests(params),
       ]);
-      setSwapRequests(swaps as unknown as SwapRequest[]);
+      const rawSwaps = swaps as unknown as SwapRequest[];
+
+      // Enrich swap requests with shift details
+      const shiftIds = new Set<string>();
+      rawSwaps.forEach(s => {
+        if (s.offering_shift_id) shiftIds.add(s.offering_shift_id);
+        if (s.requesting_shift_id) shiftIds.add(s.requesting_shift_id);
+      });
+      const shiftMap = new Map<string, ShiftRecord>();
+      await Promise.all(
+        Array.from(shiftIds).map(async (id) => {
+          try {
+            const shift = await schedulingService.getShift(id);
+            shiftMap.set(id, shift);
+          } catch { /* shift may have been deleted */ }
+        })
+      );
+      const enrichedSwaps = rawSwaps.map(s => ({
+        ...s,
+        offering_shift: shiftMap.get(s.offering_shift_id),
+        requesting_shift: s.requesting_shift_id ? shiftMap.get(s.requesting_shift_id) : undefined,
+      }));
+
+      setSwapRequests(enrichedSwaps);
       setTimeOffRequests(timeOff as unknown as TimeOffRequest[]);
     } catch {
       toast.error('Failed to load requests');
@@ -172,7 +193,7 @@ export const RequestsTab: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {swapRequests.map(req => {
-              const statusColor = STATUS_COLORS[req.status] || STATUS_COLORS.pending;
+              const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
               return (
                 <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5">
                   <div className="flex items-start sm:items-center justify-between gap-3">
@@ -190,8 +211,21 @@ export const RequestsTab: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-xs text-theme-text-muted mt-0.5">
-                          Shift: {req.offering_shift_id?.slice(0, 8)}...
-                          {req.requesting_shift_id && ` for ${req.requesting_shift_id.slice(0, 8)}...`}
+                          {req.offering_shift ? (
+                            <>
+                              Offering: {new Date(req.offering_shift.shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
+                              {' '}{formatTime(req.offering_shift.start_time, tz)}
+                            </>
+                          ) : (
+                            <>Shift: {req.offering_shift_id?.slice(0, 8)}...</>
+                          )}
+                          {req.requesting_shift ? (
+                            <> {' \u2192 '} {new Date(req.requesting_shift.shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
+                              {' '}{formatTime(req.requesting_shift.start_time, tz)}
+                            </>
+                          ) : req.requesting_shift_id ? (
+                            <> for {req.requesting_shift_id.slice(0, 8)}...</>
+                          ) : null}
                         </p>
                         {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
                         <p className="text-xs text-theme-text-muted mt-1">
@@ -234,7 +268,7 @@ export const RequestsTab: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {timeOffRequests.map(req => {
-              const statusColor = STATUS_COLORS[req.status] || STATUS_COLORS.pending;
+              const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
               return (
                 <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5">
                   <div className="flex items-start sm:items-center justify-between gap-3">

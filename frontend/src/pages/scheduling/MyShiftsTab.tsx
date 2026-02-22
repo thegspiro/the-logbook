@@ -15,6 +15,7 @@ import { schedulingService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
+import { ASSIGNMENT_ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
 
 interface Assignment {
   id: string;
@@ -25,15 +26,6 @@ interface Assignment {
   assignment_status?: string;
   shift?: ShiftRecord;
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  assigned: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-  confirmed: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
-  declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-  cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
-  no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
-};
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
@@ -51,6 +43,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const [swapAssignment, setSwapAssignment] = useState<Assignment | null>(null);
   const [swapForm, setSwapForm] = useState({ target_shift_id: '', reason: '' });
   const [submittingSwap, setSubmittingSwap] = useState(false);
+  const [availableShifts, setAvailableShifts] = useState<ShiftRecord[]>([]);
 
   // Time off modal
   const [showTimeOffModal, setShowTimeOffModal] = useState(false);
@@ -85,10 +78,30 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     }
   };
 
-  const openSwapRequest = (assignment: Assignment) => {
+  const handleDecline = async (assignmentId: string) => {
+    if (!window.confirm('Decline this shift assignment?')) return;
+    try {
+      await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
+      toast.success('Shift declined');
+      loadData();
+    } catch {
+      toast.error('Failed to decline shift');
+    }
+  };
+
+  const openSwapRequest = async (assignment: Assignment) => {
     setSwapAssignment(assignment);
     setSwapForm({ target_shift_id: '', reason: '' });
     setShowSwapModal(true);
+    // Load available shifts for the picker
+    try {
+      const today = getTodayLocalDate(tz);
+      const data = await schedulingService.getShifts({ start_date: today, limit: 50 });
+      // Filter out the current shift
+      setAvailableShifts(data.shifts.filter(s => s.id !== assignment.shift_id));
+    } catch {
+      // Non-critical — user can still submit open swap
+    }
   };
 
   const handleSwapRequest = async () => {
@@ -189,7 +202,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         <div className="space-y-3">
           {displayList.map(assignment => {
             const shift = assignment.shift;
-            const statusColor = STATUS_COLORS[assignment.status] || STATUS_COLORS.assigned;
+            const statusColor = ASSIGNMENT_STATUS_COLORS[assignment.status] || ASSIGNMENT_STATUS_COLORS.assigned;
             const shiftDate = shift ? new Date(shift.shift_date + 'T12:00:00') : null;
 
             return (
@@ -223,11 +236,18 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       {assignment.status}
                     </span>
                     {view === 'upcoming' && assignment.status === 'assigned' && (
-                      <button onClick={() => handleConfirm(assignment.id)}
-                        className="p-2 text-green-600 hover:bg-green-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Confirm shift"
-                      >
-                        <Check className="w-5 h-5" />
-                      </button>
+                      <>
+                        <button onClick={() => handleConfirm(assignment.id)}
+                          className="p-2 text-green-600 hover:bg-green-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Confirm shift"
+                        >
+                          <Check className="w-5 h-5" />
+                        </button>
+                        <button onClick={() => handleDecline(assignment.id)}
+                          className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Decline shift"
+                        >
+                          <XCircle className="w-5 h-5" />
+                        </button>
+                      </>
                     )}
                     {view === 'upcoming' && (
                       <button onClick={() => openSwapRequest(assignment)}
@@ -263,11 +283,25 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Target Shift ID (optional)</label>
-                <input type="text" value={swapForm.target_shift_id}
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Swap Into (optional)</label>
+                <select value={swapForm.target_shift_id}
                   onChange={e => setSwapForm(p => ({...p, target_shift_id: e.target.value}))}
-                  placeholder="Leave blank for open swap request" className={inputCls}
-                />
+                  className={inputCls}
+                >
+                  <option value="">Open swap — any available shift</option>
+                  {availableShifts.map(s => {
+                    const d = new Date(s.shift_date + 'T12:00:00');
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz })}
+                        {' '}{formatTime(s.start_time, tz)}
+                        {s.end_time ? ` - ${formatTime(s.end_time, tz)}` : ''}
+                        {s.apparatus_unit_number ? ` (${s.apparatus_unit_number})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="text-xs text-theme-text-muted mt-1">Leave blank to request an open swap that any member can accept.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
@@ -297,7 +331,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               <h2 className="text-lg font-bold text-theme-text-primary">Request Time Off</h2>
             </div>
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="form-grid-2">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date *</label>
                   <input type="date" value={timeOffForm.start_date}
