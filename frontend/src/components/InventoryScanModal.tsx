@@ -110,43 +110,59 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       });
       streamRef.current = stream;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       detectorRef.current = new (window as any).BarcodeDetector({
         formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'],
       });
 
+      // Set cameraActive first so the <video> element mounts, then
+      // a useEffect will wire up the stream once the element exists.
       setCameraActive(true);
-
-      // Poll for barcodes every 300ms
-      const alreadyScanned = new Set<string>();
-      scanIntervalRef.current = setInterval(async () => {
-        if (!videoRef.current || !detectorRef.current) return;
-        try {
-          const barcodes = await detectorRef.current.detect(videoRef.current);
-          for (const barcode of barcodes) {
-            const value = barcode.rawValue;
-            if (value && !alreadyScanned.has(value)) {
-              alreadyScanned.add(value);
-              // Allow re-scan after 3 seconds
-              setTimeout(() => alreadyScanned.delete(value), 3000);
-              handleCodeScannedRef.current(value);
-            }
-          }
-        } catch {
-          // Detection can fail on individual frames; ignore
-        }
-      }, 300);
     } catch {
       setLookupError('Camera access denied. Please allow camera permissions, or type codes manually.');
       setTimeout(() => setLookupError(null), 5000);
       setCameraActive(false);
     }
-  }, []); // handleCodeScanned accessed via ref to avoid stale closure
+  }, []);
+
+  // Once cameraActive flips to true the <video> element mounts.
+  // Wire the stream to it and start the barcode-polling interval.
+  useEffect(() => {
+    if (!cameraActive || !streamRef.current) return;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.srcObject = streamRef.current;
+    video.play().catch(() => {
+      // autoplay may be blocked; user will see a black preview
+    });
+
+    const alreadyScanned = new Set<string>();
+    scanIntervalRef.current = setInterval(async () => {
+      if (!videoRef.current || !detectorRef.current) return;
+      try {
+        const barcodes = await detectorRef.current.detect(videoRef.current);
+        for (const barcode of barcodes) {
+          const value = barcode.rawValue;
+          if (value && !alreadyScanned.has(value)) {
+            alreadyScanned.add(value);
+            setTimeout(() => alreadyScanned.delete(value), 3000);
+            handleCodeScannedRef.current(value);
+          }
+        }
+      } catch {
+        // Detection can fail on individual frames; ignore
+      }
+    }, 300);
+
+    return () => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+    };
+  }, [cameraActive]);
 
   // Cleanup camera on unmount or close
   useEffect(() => {
@@ -159,6 +175,14 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       setResults(null);
     }
   }, [isOpen, stopCamera]);
+
+  // Re-focus the manual input after the Modal's own focus effect
+  // steals focus to the modal container on open.
+  useEffect(() => {
+    if (!isOpen) return;
+    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [isOpen]);
 
   // ── Code lookup ──────────────────────────────────────────────
 
@@ -386,21 +410,22 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 </form>
               </div>
 
-              {/* Camera video preview */}
-              {cameraActive && (
-                <div className="relative rounded-lg overflow-hidden bg-black">
-                  <video
-                    ref={videoRef}
-                    className="w-full h-48 object-cover"
-                    playsInline
-                    muted
-                  />
-                  <div className="absolute inset-0 border-2 border-red-500/50 pointer-events-none" />
-                  <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white/80">
-                    Point camera at barcode
-                  </p>
-                </div>
-              )}
+              {/* Camera video preview — always mounted so videoRef is available
+                  when startCamera captures the stream */}
+              <div
+                className={`relative rounded-lg overflow-hidden bg-black ${cameraActive ? '' : 'hidden'}`}
+              >
+                <video
+                  ref={videoRef}
+                  className="w-full h-48 object-cover"
+                  playsInline
+                  muted
+                />
+                <div className="absolute inset-0 border-2 border-red-500/50 pointer-events-none" />
+                <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white/80">
+                  Point camera at barcode
+                </p>
+              </div>
 
               {/* Lookup error */}
               {lookupError && (
