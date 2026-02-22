@@ -47,6 +47,7 @@ class ShiftCompletionService:
         skills_observed: Optional[list] = None,
         tasks_performed: Optional[list] = None,
         enrollment_id: Optional[str] = None,
+        review_status: str = 'approved',
     ) -> ShiftCompletionReport:
         """Create a shift completion report and update pipeline progress."""
 
@@ -66,6 +67,7 @@ class ShiftCompletionService:
             skills_observed=[s.model_dump() if hasattr(s, 'model_dump') else s for s in skills_observed] if skills_observed else None,
             tasks_performed=[t.model_dump() if hasattr(t, 'model_dump') else t for t in tasks_performed] if tasks_performed else None,
             enrollment_id=enrollment_id,
+            review_status=review_status,
         )
 
         self.db.add(report)
@@ -316,6 +318,56 @@ class ShiftCompletionService:
         report.trainee_acknowledged_at = datetime.now(timezone.utc)
         if trainee_comments:
             report.trainee_comments = trainee_comments
+
+        await self.db.commit()
+        await self.db.refresh(report)
+        return report
+
+    async def get_reports_by_status(
+        self,
+        organization_id: UUID,
+        review_status: str,
+    ) -> List[ShiftCompletionReport]:
+        """Get reports filtered by review status."""
+        result = await self.db.execute(
+            select(ShiftCompletionReport)
+            .where(
+                ShiftCompletionReport.organization_id == str(organization_id),
+                ShiftCompletionReport.review_status == review_status,
+            )
+            .order_by(ShiftCompletionReport.shift_date.desc())
+        )
+        return list(result.scalars().all())
+
+    async def review_report(
+        self,
+        report_id: str,
+        organization_id: UUID,
+        reviewer_id: str,
+        review_status: str,
+        reviewer_notes: Optional[str] = None,
+        redact_fields: Optional[List[str]] = None,
+    ) -> Optional[ShiftCompletionReport]:
+        """Review a shift completion report: approve, flag, or redact fields."""
+        report = await self.get_report(report_id)
+        if not report or report.organization_id != str(organization_id):
+            return None
+
+        # Redact specified fields before approving (clear sensitive content)
+        REDACTABLE_FIELDS = {
+            'performance_rating', 'areas_of_strength', 'areas_for_improvement',
+            'officer_narrative', 'skills_observed',
+        }
+        if redact_fields:
+            for field in redact_fields:
+                if field in REDACTABLE_FIELDS and hasattr(report, field):
+                    setattr(report, field, None)
+
+        report.review_status = review_status
+        report.reviewed_by = reviewer_id
+        report.reviewed_at = datetime.now(timezone.utc)
+        if reviewer_notes:
+            report.reviewer_notes = reviewer_notes
 
         await self.db.commit()
         await self.db.refresh(report)

@@ -13,11 +13,13 @@ class SkillObservation(BaseModel):
     skill_name: str
     demonstrated: bool = False
     notes: Optional[str] = None
+    comment: Optional[str] = None  # Officer comment on this specific skill observation
 
 
 class TaskPerformed(BaseModel):
     task: str
     description: Optional[str] = None
+    comment: Optional[str] = None  # Officer comment on this specific task
 
 
 class RequirementProgressEntry(BaseModel):
@@ -57,6 +59,12 @@ class TraineeAcknowledgment(BaseModel):
     trainee_comments: Optional[str] = None
 
 
+class ReportReview(BaseModel):
+    review_status: str  # approved, flagged
+    reviewer_notes: Optional[str] = None
+    redact_fields: Optional[List[str]] = None  # field names to clear before approving
+
+
 class ShiftCompletionReportResponse(BaseModel):
     id: str
     organization_id: str
@@ -79,6 +87,12 @@ class ShiftCompletionReportResponse(BaseModel):
 
     enrollment_id: Optional[str] = None
     requirements_progressed: Optional[List[RequirementProgressEntry]] = None
+
+    # Review workflow
+    review_status: str = 'approved'
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    reviewer_notes: Optional[str] = None
 
     trainee_acknowledged: bool = False
     trainee_acknowledged_at: Optional[datetime] = None

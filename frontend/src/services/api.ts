@@ -3870,6 +3870,16 @@ export const shiftCompletionService = {
     const response = await api.post(`/training/shift-reports/${reportId}/acknowledge`, { trainee_comments: comments });
     return response.data;
   },
+
+  async getPendingReviewReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get('/training/shift-reports/pending-review');
+    return response.data;
+  },
+
+  async reviewReport(reportId: string, data: { review_status: string; reviewer_notes?: string; redact_fields?: string[] }): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.post(`/training/shift-reports/${reportId}/review`, data);
+    return response.data;
+  },
 };
 
 // ============================================

@@ -1026,11 +1026,13 @@ export interface SkillObservation {
   skill_name: string;
   demonstrated: boolean;
   notes?: string;
+  comment?: string;
 }
 
 export interface TaskPerformed {
   task: string;
   description?: string;
+  comment?: string;
 }
 
 export interface ShiftCompletionReportCreate {
@@ -1067,6 +1069,10 @@ export interface ShiftCompletionReport {
   tasks_performed?: TaskPerformed[];
   enrollment_id?: string;
   requirements_progressed?: { requirement_progress_id: string; value_added: number }[];
+  review_status: string;  // draft, pending_review, approved, flagged
+  reviewed_by?: string;
+  reviewed_at?: string;
+  reviewer_notes?: string;
   trainee_acknowledged: boolean;
   trainee_acknowledged_at?: string;
   trainee_comments?: string;
@@ -1103,6 +1109,11 @@ export interface TrainingModuleConfig {
   show_skills_observed: boolean;
   show_submission_history: boolean;
   allow_member_report_export: boolean;
+  report_review_required: boolean;
+  report_review_role: string;
+  rating_label: string;
+  rating_scale_type: string;  // stars, competency, custom
+  rating_scale_labels?: Record<string, string>;  // {"1":"Unsatisfactory","2":"Developing",...}
 }
 
 export interface MemberVisibility {
@@ -1120,6 +1131,11 @@ export interface MemberVisibility {
   show_skills_observed: boolean;
   show_submission_history: boolean;
   allow_member_report_export: boolean;
+  report_review_required: boolean;
+  report_review_role: string;
+  rating_label: string;
+  rating_scale_type: string;
+  rating_scale_labels?: Record<string, string>;
 }
 
 export interface RequirementDetail {

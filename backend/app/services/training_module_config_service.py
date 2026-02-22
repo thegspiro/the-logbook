@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 from app.models.training import TrainingModuleConfig
 
 
-DEFAULT_VISIBILITY: Dict[str, bool] = {
+DEFAULT_VISIBILITY: Dict[str, Any] = {
     "show_training_history": True,
     "show_training_hours": True,
     "show_certification_status": True,
@@ -27,6 +27,11 @@ DEFAULT_VISIBILITY: Dict[str, bool] = {
     "show_skills_observed": True,
     "show_submission_history": True,
     "allow_member_report_export": False,
+    "report_review_required": False,
+    "report_review_role": "training_officer",
+    "rating_label": "Performance Rating",
+    "rating_scale_type": "stars",
+    "rating_scale_labels": None,
 }
 
 

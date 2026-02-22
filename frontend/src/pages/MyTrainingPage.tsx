@@ -108,6 +108,26 @@ const VISIBILITY_FIELDS: Array<{ key: keyof TMConfig; label: string; description
   { key: 'allow_member_report_export', label: 'Allow Report Export', description: 'Members can download their own training data', group: 'Reports' },
 ];
 
+const REVIEW_ROLE_OPTIONS = [
+  { value: 'training_officer', label: 'Training Officer' },
+  { value: 'captain', label: 'Captain' },
+  { value: 'chief', label: 'Chief' },
+];
+
+const RATING_SCALE_OPTIONS = [
+  { value: 'stars', label: 'Star Rating (1-5 stars)' },
+  { value: 'competency', label: 'Competency Scale (Unsatisfactory → Exemplary)' },
+  { value: 'custom', label: 'Custom Labels' },
+];
+
+const DEFAULT_COMPETENCY_LABELS: Record<string, string> = {
+  '1': 'Unsatisfactory',
+  '2': 'Developing',
+  '3': 'Competent',
+  '4': 'Proficient',
+  '5': 'Exemplary',
+};
+
 const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
   const [draft, setDraft] = useState<Partial<TMConfig>>({});
   const [saving, setSaving] = useState(false);
@@ -116,6 +136,14 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
 
   const getCurrentValue = (key: keyof TMConfig) => {
     return draft[key] !== undefined ? draft[key] as boolean : config[key] as boolean;
+  };
+
+  const getStringValue = (key: keyof TMConfig) => {
+    return (draft[key] !== undefined ? draft[key] : config[key]) as string;
+  };
+
+  const getLabelsValue = (): Record<string, string> => {
+    return (draft.rating_scale_labels ?? config.rating_scale_labels ?? DEFAULT_COMPETENCY_LABELS) as Record<string, string>;
   };
 
   const handleSave = async () => {
@@ -128,6 +156,8 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
       setSaving(false);
     }
   };
+
+  const currentScaleType = getStringValue('rating_scale_type') || 'stars';
 
   return (
     <div className="space-y-6">
@@ -157,6 +187,107 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
           </div>
         </div>
       ))}
+
+      {/* Report Review Workflow */}
+      <div>
+        <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Report Review Workflow</h4>
+        <div className="space-y-3">
+          <label className="flex items-center justify-between bg-theme-surface rounded-lg p-3 cursor-pointer hover:bg-theme-surface-hover transition-colors">
+            <div>
+              <p className="text-sm font-medium text-theme-text-primary">Require Review Before Visibility</p>
+              <p className="text-xs text-theme-text-muted">Reports must be reviewed and approved before trainees can see them</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={getCurrentValue('report_review_required')}
+              onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
+              className="w-5 h-5 rounded bg-theme-input-bg border-theme-input-border text-red-600 focus:ring-red-500"
+            />
+          </label>
+
+          {getCurrentValue('report_review_required') && (
+            <div className="bg-theme-surface rounded-lg p-3">
+              <p className="text-sm font-medium text-theme-text-primary mb-1">Review Role</p>
+              <p className="text-xs text-theme-text-muted mb-2">Who should review reports before they are visible to trainees?</p>
+              <select
+                value={getStringValue('report_review_role') || 'training_officer'}
+                onChange={(e) => setDraft({ ...draft, report_review_role: e.target.value })}
+                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                {REVIEW_ROLE_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Rating Scale Configuration */}
+      <div>
+        <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Rating Scale</h4>
+        <div className="space-y-3">
+          <div className="bg-theme-surface rounded-lg p-3">
+            <p className="text-sm font-medium text-theme-text-primary mb-1">Rating Label</p>
+            <p className="text-xs text-theme-text-muted mb-2">How the rating field is labeled to officers (e.g. &quot;Performance Rating&quot;, &quot;Skills Assessment&quot;)</p>
+            <input
+              type="text"
+              value={getStringValue('rating_label') || 'Performance Rating'}
+              onChange={(e) => setDraft({ ...draft, rating_label: e.target.value })}
+              placeholder="Performance Rating"
+              className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+
+          <div className="bg-theme-surface rounded-lg p-3">
+            <p className="text-sm font-medium text-theme-text-primary mb-1">Scale Type</p>
+            <p className="text-xs text-theme-text-muted mb-2">How the rating is displayed</p>
+            <select
+              value={currentScaleType}
+              onChange={(e) => {
+                const newDraft: Partial<TMConfig> = { ...draft, rating_scale_type: e.target.value };
+                // Set default labels when switching to competency
+                if (e.target.value === 'competency') {
+                  newDraft.rating_scale_labels = DEFAULT_COMPETENCY_LABELS;
+                }
+                setDraft(newDraft);
+              }}
+              className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+            >
+              {RATING_SCALE_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {(currentScaleType === 'competency' || currentScaleType === 'custom') && (
+            <div className="bg-theme-surface rounded-lg p-3">
+              <p className="text-sm font-medium text-theme-text-primary mb-1">Scale Labels</p>
+              <p className="text-xs text-theme-text-muted mb-2">Define labels for each level (1-5)</p>
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map(level => {
+                  const labels = getLabelsValue();
+                  return (
+                    <div key={level} className="flex items-center gap-2">
+                      <span className="w-6 text-center text-sm font-mono text-theme-text-muted">{level}</span>
+                      <input
+                        type="text"
+                        value={labels[String(level)] || ''}
+                        onChange={(e) => {
+                          const updated = { ...getLabelsValue(), [String(level)]: e.target.value };
+                          setDraft({ ...draft, rating_scale_labels: updated });
+                        }}
+                        placeholder={DEFAULT_COMPETENCY_LABELS[String(level)]}
+                        className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {Object.keys(draft).length > 0 && (
         <div className="flex justify-end">
