@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     JSON,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -224,7 +225,7 @@ class TrainingRecord(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    course_id = Column(String(36), ForeignKey("training_courses.id", ondelete="SET NULL"))
+    course_id = Column(String(36), ForeignKey("training_courses.id", ondelete="SET NULL"), index=True)
 
     # Training Details
     course_name = Column(String(255), nullable=False)  # Stored in case course is deleted
@@ -574,6 +575,9 @@ class ProgramPhase(Base):
     """
 
     __tablename__ = "program_phases"
+    __table_args__ = (
+        UniqueConstraint("program_id", "phase_number", name="uq_program_phases_program_id_phase_number"),
+    )
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     program_id = Column(String(36), ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False, index=True)

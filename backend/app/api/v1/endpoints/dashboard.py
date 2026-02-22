@@ -171,9 +171,11 @@ async def get_admin_summary(
     training_pct = 0.0
     try:
         # Count total required requirement-progress entries for active/completed enrollments
+        # Exclude soft-deleted users so they don't inflate the denominator
         total_required_result = await db.execute(
             select(func.count(RequirementProgress.id))
             .join(ProgramEnrollment, RequirementProgress.enrollment_id == ProgramEnrollment.id)
+            .join(User, User.id == ProgramEnrollment.user_id)
             .join(
                 ProgramRequirement,
                 and_(
@@ -185,15 +187,17 @@ async def get_admin_summary(
                 ProgramEnrollment.organization_id == org_id,
                 ProgramEnrollment.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]),
                 ProgramRequirement.is_required == True,  # noqa: E712
+                User.deleted_at.is_(None),
             )
         )
         total_required = total_required_result.scalar() or 0
 
         if total_required > 0:
-            # Count completed/verified ones
+            # Count completed/verified ones (also excluding soft-deleted users)
             satisfied_result = await db.execute(
                 select(func.count(RequirementProgress.id))
                 .join(ProgramEnrollment, RequirementProgress.enrollment_id == ProgramEnrollment.id)
+                .join(User, User.id == ProgramEnrollment.user_id)
                 .join(
                     ProgramRequirement,
                     and_(
@@ -205,6 +209,7 @@ async def get_admin_summary(
                     ProgramEnrollment.organization_id == org_id,
                     ProgramEnrollment.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]),
                     ProgramRequirement.is_required == True,  # noqa: E712
+                    User.deleted_at.is_(None),
                     RequirementProgress.status.in_([
                         RequirementProgressStatus.COMPLETED,
                         RequirementProgressStatus.VERIFIED,

@@ -19,7 +19,7 @@ import {
 import { trainingService, userService, trainingSubmissionService } from '../services/api';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
-import type { TrainingRequirement, TrainingRecord as TrainingRecordType } from '../types/training';
+import type { TrainingRequirement } from '../types/training';
 
 interface DashboardStats {
   totalMembers: number;
@@ -102,13 +102,14 @@ const TrainingOfficerDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch all data in parallel
-      const [members, expiring, allRecords, reqs, pendingCount] = await Promise.all([
+      // Fetch all data in parallel (including compliance matrix from the server)
+      const [members, expiring, allRecords, reqs, pendingCount, complianceMatrix] = await Promise.all([
         userService.getUsers(),
         trainingService.getExpiringCertifications(90),
         trainingService.getRecords(),
         trainingService.getRequirements({ active_only: true }),
         trainingSubmissionService.getPendingCount().catch(() => ({ pending_count: 0 })),
+        trainingService.getComplianceMatrix().catch(() => ({ members: [], requirements: [], generated_at: '' })),
       ]);
       setPendingSubmissionCount(pendingCount.pending_count);
 
@@ -168,80 +169,23 @@ const TrainingOfficerDashboard: React.FC = () => {
       );
       const totalHours = completedThisYear.reduce((sum, r) => sum + (r.hours_completed || 0), 0);
 
-      // Calculate compliance based on requirement completion
+      // Use the server-side compliance matrix which correctly evaluates ALL
+      // requirement types (hours, courses, certifications, shifts, calls, etc.)
+      // with proper waiver adjustments and frequency windows.
       const compliantCount = (() => {
-        // Only evaluate hours-based requirements (the most common type)
-        const hoursReqs = reqs.filter((r) => r.requirement_type === 'hours' && r.active);
-        if (hoursReqs.length === 0) {
-          // Fallback: if no hours requirements, check expired certifications
-          const expiredByMember = new Map<string, number>();
-          allRecords.forEach((r) => {
-            if (r.expiration_date && new Date(r.expiration_date) < new Date()) {
-              expiredByMember.set(r.user_id, (expiredByMember.get(r.user_id) || 0) + 1);
-            }
-          });
-          return members.filter((m) => !expiredByMember.has(m.id)).length;
+        if (complianceMatrix.members.length > 0) {
+          // A member is fully compliant when their completion_pct is 100
+          return complianceMatrix.members.filter((m) => m.completion_pct >= 100).length;
         }
-
-        // Build records by user
-        const recordsByUser = new Map<string, TrainingRecordType[]>();
+        // Fallback when no compliance matrix data (no active requirements)
+        // — count members with no expired certifications
+        const expiredByMember = new Map<string, number>();
         allRecords.forEach((r) => {
-          if (r.status === 'completed' && r.completion_date) {
-            const existing = recordsByUser.get(r.user_id) || [];
-            existing.push(r);
-            recordsByUser.set(r.user_id, existing);
+          if (r.expiration_date && new Date(r.expiration_date) < new Date()) {
+            expiredByMember.set(r.user_id, (expiredByMember.get(r.user_id) || 0) + 1);
           }
         });
-
-        const now = new Date();
-        const currentYear = now.getFullYear();
-
-        let count = 0;
-        for (const member of members) {
-          const memberRecords = recordsByUser.get(member.id) || [];
-          let allMet = true;
-
-          for (const req of hoursReqs) {
-            // Get date window based on frequency
-            let startDate: Date;
-            let endDate: Date;
-            const freq = req.frequency;
-            if (freq === 'biannual') {
-              const baseYear = req.year || currentYear;
-              startDate = new Date(baseYear - 1, 0, 1);
-              endDate = new Date(baseYear, 11, 31);
-            } else if (freq === 'quarterly') {
-              const qMonth = Math.floor((now.getMonth()) / 3) * 3;
-              startDate = new Date(currentYear, qMonth, 1);
-              endDate = new Date(currentYear, qMonth + 3, 0);
-            } else if (freq === 'monthly') {
-              startDate = new Date(currentYear, now.getMonth(), 1);
-              endDate = new Date(currentYear, now.getMonth() + 1, 0);
-            } else {
-              // Annual (default)
-              const yr = req.year || currentYear;
-              startDate = new Date(yr, 0, 1);
-              endDate = new Date(yr, 11, 31);
-            }
-
-            // Filter records by date window and training type
-            const matching = memberRecords.filter((r) => {
-              const compDate = new Date(r.completion_date!);
-              if (compDate < startDate || compDate > endDate) return false;
-              if (req.training_type && r.training_type !== req.training_type) return false;
-              return true;
-            });
-
-            const totalHours = matching.reduce((sum, r) => sum + (r.hours_completed || 0), 0);
-            if ((req.required_hours || 0) > 0 && totalHours < (req.required_hours || 0)) {
-              allMet = false;
-              break;
-            }
-          }
-
-          if (allMet) count++;
-        }
-        return count;
+        return members.filter((m) => !expiredByMember.has(m.id)).length;
       })();
 
       setStats({

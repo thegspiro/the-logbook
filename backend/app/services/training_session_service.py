@@ -487,14 +487,19 @@ class TrainingSessionService:
                 rsvp.overridden_by = approved_by
                 rsvp.overridden_at = datetime.now(timezone.utc)
 
-        await self.db.commit()
-
-        # Create/Update TrainingRecords with final hours and mark as completed
-        await self._finalize_training_records(
-            approval=approval,
-            attendees=attendees,
-            approved_by=approved_by,
-        )
+        # Create/Update TrainingRecords with final hours and mark as completed.
+        # Do this BEFORE committing so that approval + records are atomic.
+        # If _finalize_training_records fails, the entire transaction rolls back.
+        try:
+            await self._finalize_training_records(
+                approval=approval,
+                attendees=attendees,
+                approved_by=approved_by,
+            )
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
 
         return True, None
 
@@ -604,7 +609,8 @@ class TrainingSessionService:
                     hours_completed=hours_completed,
                 )
 
-        await self.db.commit()
+        # NOTE: Caller (submit_training_approval) is responsible for commit/rollback
+        # to ensure atomicity of approval + record creation.
 
     async def _update_enrollment_progress(
         self,
