@@ -4,6 +4,7 @@ Email Service
 Handles sending emails using SMTP or organization-specific email service configuration.
 """
 
+import html as _html
 import smtplib
 import os
 from email.mime.text import MIMEText
@@ -31,6 +32,11 @@ class EmailService:
         """
         self.organization = organization
         self._smtp_config = self._get_smtp_config()
+
+    @staticmethod
+    def _esc(value: str) -> str:
+        """HTML-escape a string for safe insertion into email HTML bodies."""
+        return _html.escape(str(value)) if value else ""
 
     def _format_local_dt(self, dt: datetime, fmt: str = '%B %d, %Y at %I:%M %p') -> str:
         """Format a datetime in the organization's local timezone."""
@@ -199,6 +205,13 @@ class EmailService:
         """
         subject = f"Ballot Available: {election_title}"
 
+        # HTML-escape user-controlled values
+        esc = self._esc
+        e_election_title = esc(election_title)
+        e_recipient_name = esc(recipient_name)
+        e_custom_message = esc(custom_message) if custom_message else ''
+        e_ballot_url = esc(ballot_url) if ballot_url else ''
+
         # Build email body
         html_body = f"""
 <!DOCTYPE html>
@@ -216,18 +229,18 @@ class EmailService:
 <body>
     <div class="container">
         <div class="header">
-            <h1>{election_title}</h1>
+            <h1>{e_election_title}</h1>
         </div>
         <div class="content">
-            <p>Hello {recipient_name},</p>
+            <p>Hello {e_recipient_name},</p>
 
             <p>A ballot is now available for your review and vote.</p>
 
             {'<p><strong>Meeting Date:</strong> ' + self._format_local_dt(meeting_date) + '</p>' if meeting_date else ''}
 
-            {f'<p>{custom_message}</p>' if custom_message else ''}
+            {f'<p>{e_custom_message}</p>' if e_custom_message else ''}
 
-            {f'<p style="text-align: center;"><a href="{ballot_url}" class="button">Vote Now</a></p>' if ballot_url else ''}
+            {f'<p style="text-align: center;"><a href="{e_ballot_url}" class="button">Vote Now</a></p>' if e_ballot_url else ''}
 
             <p>Please review the ballot items and cast your vote before the voting period closes.</p>
 
@@ -307,6 +320,13 @@ Please do not reply to this email.
         """
         subject = f"Training Approval Required: {course_name}"
 
+        # HTML-escape user-controlled values
+        esc = self._esc
+        e_course_name = esc(course_name)
+        e_event_title = esc(event_title)
+        e_submitter_name = esc(submitter_name) if submitter_name else ''
+        e_approval_url = esc(approval_url)
+
         html_body = f"""
 <!DOCTYPE html>
 <html>
@@ -335,11 +355,11 @@ Please do not reply to this email.
             <div class="details">
                 <div class="details-row">
                     <span class="details-label">Course Name:</span>
-                    <span>{course_name}</span>
+                    <span>{e_course_name}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Event:</span>
-                    <span>{event_title}</span>
+                    <span>{e_event_title}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Date:</span>
@@ -349,7 +369,7 @@ Please do not reply to this email.
                     <span class="details-label">Attendees:</span>
                     <span>{attendee_count} member(s)</span>
                 </div>
-                {f'<div class="details-row"><span class="details-label">Submitted By:</span><span>{submitter_name}</span></div>' if submitter_name else ''}
+                {f'<div class="details-row"><span class="details-label">Submitted By:</span><span>{e_submitter_name}</span></div>' if e_submitter_name else ''}
                 <div class="details-row">
                     <span class="details-label">Deadline:</span>
                     <span class="warning">{self._format_local_dt(approval_deadline)}</span>
@@ -359,10 +379,10 @@ Please do not reply to this email.
             <p>Please review the attendee hours and approve or make adjustments as needed.</p>
 
             <p style="text-align: center;">
-                <a href="{approval_url}" class="button">Review & Approve Training</a>
+                <a href="{e_approval_url}" class="button">Review & Approve Training</a>
             </p>
 
-            <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{approval_url}</small></p>
+            <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{e_approval_url}</small></p>
         </div>
         <div class="footer">
             <p>This is an automated message from {self._smtp_config['from_name']}</p>
@@ -489,7 +509,8 @@ Please do not reply to this email.
             def _replace(text: str) -> str:
                 def replacer(match):
                     var = match.group(1).strip()
-                    return str(context.get(var, match.group(0)))
+                    value = str(context.get(var, match.group(0)))
+                    return _html.escape(value)
                 return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
 
             subject = _replace(DEFAULT_WELCOME_SUBJECT)
@@ -574,7 +595,8 @@ Please do not reply to this email.
             def _replace(text: str) -> str:
                 def replacer(match):
                     var = match.group(1).strip()
-                    return str(context.get(var, match.group(0)))
+                    value = str(context.get(var, match.group(0)))
+                    return _html.escape(value)
                 return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
 
             subject = _replace(DEFAULT_PASSWORD_RESET_SUBJECT)
@@ -616,6 +638,13 @@ Please do not reply to this email.
 
         subject = f"[IT Notice] Password Reset Requested — {organization_name}"
 
+        # HTML-escape user-controlled values
+        esc = self._esc
+        e_org_name = esc(organization_name)
+        e_user_name = esc(user_name)
+        e_user_email = esc(user_email)
+        e_ip_display = esc(ip_display)
+
         html_body = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -636,19 +665,19 @@ Please do not reply to this email.
             <h1>Password Reset Notification</h1>
         </div>
         <div class="content">
-            <p>A password reset has been requested for a member of <strong>{organization_name}</strong>.</p>
+            <p>A password reset has been requested for a member of <strong>{e_org_name}</strong>.</p>
 
             <div class="details">
-                <p><strong>Member:</strong> {user_name}</p>
-                <p><strong>Email:</strong> {user_email}</p>
+                <p><strong>Member:</strong> {e_user_name}</p>
+                <p><strong>Email:</strong> {e_user_email}</p>
                 <p><strong>Requested At:</strong> {timestamp}</p>
-                <p><strong>IP Address:</strong> {ip_display}</p>
+                <p><strong>IP Address:</strong> {e_ip_display}</p>
             </div>
 
             <p>This is for informational purposes. If this request appears suspicious, please investigate and consider disabling the account.</p>
         </div>
         <div class="footer">
-            <p>This is an automated IT notification from {organization_name}.</p>
+            <p>This is an automated IT notification from {e_org_name}.</p>
         </div>
     </div>
 </body>
@@ -709,19 +738,25 @@ Automated IT notification from {organization_name}."""
         end_str = self._format_local_dt(event_end, '%I:%M %p')
         subject = f"Reminder: {event_title}"
 
+        # HTML-escape user-controlled values
+        esc = self._esc
+        e_recipient_name = esc(recipient_name)
+        e_event_title = esc(event_title)
+        e_event_type = esc(event_type)
+
         location_html = ""
         location_text = ""
         if location_name:
-            location_html = f'<div class="details-row"><span class="details-label">Location:</span><span>{location_name}</span></div>'
+            location_html = f'<div class="details-row"><span class="details-label">Location:</span><span>{esc(location_name)}</span></div>'
             location_text = f"Location: {location_name}"
             if location_details:
-                location_html += f'<div class="details-row"><span class="details-label">Details:</span><span>{location_details}</span></div>'
+                location_html += f'<div class="details-row"><span class="details-label">Details:</span><span>{esc(location_details)}</span></div>'
                 location_text += f"\nDetails: {location_details}"
 
         button_html = ""
         button_text = ""
         if event_url:
-            button_html = f'<p style="text-align: center;"><a href="{event_url}" class="button">View Event</a></p>'
+            button_html = f'<p style="text-align: center;"><a href="{esc(event_url)}" class="button">View Event</a></p>'
             button_text = f"\nView Event: {event_url}"
 
         html_body = f"""<!DOCTYPE html>
@@ -746,17 +781,17 @@ Automated IT notification from {organization_name}."""
             <h1>Event Reminder</h1>
         </div>
         <div class="content">
-            <p>Hello {recipient_name},</p>
+            <p>Hello {e_recipient_name},</p>
             <p>This is a reminder about an upcoming event.</p>
 
             <div class="details">
                 <div class="details-row">
                     <span class="details-label">Event:</span>
-                    <span>{event_title}</span>
+                    <span>{e_event_title}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Type:</span>
-                    <span>{event_type}</span>
+                    <span>{e_event_type}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">When:</span>

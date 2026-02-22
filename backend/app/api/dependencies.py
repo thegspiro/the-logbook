@@ -9,7 +9,7 @@ Permission aggregation combines **position permissions** (from the
 """
 
 from typing import Optional, List
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, status, Header, Cookie, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
@@ -42,13 +42,15 @@ def _collect_user_permissions(user: User) -> set:
 
 async def get_current_user(
     authorization: Optional[str] = Header(None),
+    access_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
-    Get the current authenticated user from the request
+    Get the current authenticated user from the request.
 
-    Extracts JWT token from Authorization header, validates it,
-    and returns the authenticated user.
+    Token resolution order:
+    1. HttpOnly ``access_token`` cookie (preferred — immune to XSS).
+    2. ``Authorization: Bearer <token>`` header (API / non-browser clients).
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -56,15 +58,22 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    if not authorization:
-        raise credentials_exception
+    token: Optional[str] = None
 
-    # Extract token from "Bearer <token>" format
-    try:
-        scheme, token = authorization.split()
-        if scheme.lower() != "bearer":
+    # Prefer httpOnly cookie
+    if access_token:
+        token = access_token
+    elif authorization:
+        # Extract token from "Bearer <token>" format
+        try:
+            scheme, bearer_token = authorization.split()
+            if scheme.lower() != "bearer":
+                raise credentials_exception
+            token = bearer_token
+        except ValueError:
             raise credentials_exception
-    except ValueError:
+
+    if not token:
         raise credentials_exception
 
     # Validate token and get user

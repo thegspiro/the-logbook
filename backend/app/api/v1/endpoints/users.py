@@ -310,11 +310,9 @@ async def create_member(
 
         background_tasks.add_task(_send_welcome)
 
-    # Build response — include the temporary password so the admin can
-    # communicate it to the user even if the welcome email fails or was skipped.
+    # Build response — temporary passwords are communicated only via the
+    # welcome email, never in API responses (prevents caching/logging leaks).
     response = UserWithRolesResponse.model_validate(new_user)
-    if password_was_generated:
-        response.temporary_password = initial_password
     return response
 
 

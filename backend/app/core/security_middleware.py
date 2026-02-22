@@ -264,6 +264,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         response = await call_next(request)
 
+        # Prevent caching of API responses containing sensitive data
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+
         # Strict Transport Security (HSTS)
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
@@ -283,11 +289,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
         # Content Security Policy
+        # NOTE: style-src 'unsafe-inline' is required because the frontend
+        # uses inline style attributes (Tailwind + component styles).
+        # Removing it would break the UI.  img-src restricts https: to
+        # 'self' + data/blob for inline images.
         csp = (
             "default-src 'self'; "
             "script-src 'self'; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https:; "
+            "img-src 'self' data: blob:; "
             "font-src 'self'; "
             "connect-src 'self'; "
             "frame-ancestors 'none'; "
@@ -337,28 +347,34 @@ async def check_rate_limit(
 
 async def verify_csrf_token(request: Request) -> None:
     """
-    Dependency to verify CSRF token
+    Dependency to verify CSRF token on state-changing requests.
+
+    **Primary CSRF defence**: auth cookies are set with ``SameSite=Strict``
+    which prevents the browser from sending them on any cross-site
+    request, making traditional CSRF attacks impossible.
+
+    This dependency provides a *defence-in-depth* double-submit check:
+    the frontend reads a non-httpOnly ``csrf_token`` cookie and echoes it
+    in the ``X-CSRF-Token`` header.  An attacker on a different origin
+    cannot read the cookie and therefore cannot forge the header.
 
     Usage:
         @router.post("/endpoint", dependencies=[Depends(verify_csrf_token)])
     """
-    # Skip CSRF for GET, HEAD, OPTIONS
+    # Skip CSRF for safe methods
     if request.method in ["GET", "HEAD", "OPTIONS"]:
         return
 
-    # Get token from header
+    # Double-submit cookie pattern: compare header value against cookie
     request_token = request.headers.get("X-CSRF-Token")
+    cookie_token = request.cookies.get("csrf_token")
 
-    # Get token from session (you'll need to implement session management)
-    # For now, we'll skip if no session exists
-    session_token = request.session.get("csrf_token") if hasattr(request, "session") else None
-
-    if not session_token:
-        # Generate new token if none exists
+    if not cookie_token:
+        # No CSRF cookie yet — allow (first request after login).
+        # The login response should set the csrf_token cookie.
         return
 
-    # Validate token
-    if not CSRFProtection.validate_token(request_token, session_token):
+    if not request_token or not CSRFProtection.validate_token(request_token, cookie_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid CSRF token"

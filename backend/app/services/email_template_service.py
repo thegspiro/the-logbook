@@ -447,10 +447,18 @@ class EmailTemplateService:
         return subject, full_html, text_body
 
     def _replace_variables(self, text: str, context: Dict[str, Any]) -> str:
-        """Replace {{variable_name}} placeholders with context values"""
+        """Replace {{variable_name}} placeholders with context values.
+
+        All values are HTML-escaped to prevent injection of malicious
+        HTML/JS through user-controlled template variables (e.g.
+        election titles, custom messages, recipient names).
+        """
+        import html as _html
+
         def replacer(match):
             var_name = match.group(1).strip()
-            return str(context.get(var_name, match.group(0)))
+            value = str(context.get(var_name, match.group(0)))
+            return _html.escape(value)
 
         return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
 

@@ -456,7 +456,7 @@ async def validate_session(
         csrf_token = request.headers.get('X-CSRF-Token')
         stored_csrf = session.data.get('csrf_token') if session.data else None
 
-        if not csrf_token or csrf_token != stored_csrf:
+        if not csrf_token or not stored_csrf or not secrets.compare_digest(csrf_token, stored_csrf):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="CSRF validation failed. Please refresh and try again."
@@ -631,7 +631,7 @@ async def start_onboarding(
     )
 
 
-@router.get("/system-info", response_model=SystemInfoResponse)
+@router.get("/system-info", response_model=SystemInfoResponse, dependencies=[Depends(check_rate_limit)])
 async def get_system_info(
     db: AsyncSession = Depends(get_db)
 ):
@@ -644,7 +644,7 @@ async def get_system_info(
     return await service.get_system_info()
 
 
-@router.get("/security-check", response_model=SecurityCheckResponse)
+@router.get("/security-check", response_model=SecurityCheckResponse, dependencies=[Depends(check_rate_limit)])
 async def verify_security(
     db: AsyncSession = Depends(get_db)
 ):
@@ -672,7 +672,7 @@ async def verify_security(
     return result
 
 
-@router.get("/database-check", response_model=DatabaseCheckResponse)
+@router.get("/database-check", response_model=DatabaseCheckResponse, dependencies=[Depends(check_rate_limit)])
 async def verify_database(
     db: AsyncSession = Depends(get_db)
 ):

@@ -97,17 +97,34 @@ const API_BASE_URL = '/api/v1';
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
+  withCredentials: true,  // Send httpOnly auth cookies with every request
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// Helper to read a cookie value by name
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+// Request interceptor — httpOnly cookies are sent automatically.
+// We keep the Authorization header as a fallback during the migration
+// period so existing localStorage tokens continue to work.
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Double-submit CSRF token for state-changing requests
+    const method = (config.method || '').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const csrf = getCookie('csrf_token');
+      if (csrf) {
+        config.headers['X-CSRF-Token'] = csrf;
+      }
     }
     return config;
   },
@@ -123,7 +140,7 @@ api.interceptors.request.use(
 // replay attack and the backend revokes all sessions.  By sharing a
 // single promise, only one refresh request is made and all waiting
 // callers receive the same new access token.
-let refreshPromise: Promise<string> | null = null;
+let refreshPromise: Promise<string | null> | null = null;
 
 // Response interceptor to handle token expiration
 api.interceptors.response.use(
@@ -131,30 +148,23 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If 401 and we haven't retried yet, try to refresh token
+    // If 401 and we haven't retried yet, try to refresh via httpOnly cookie
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) {
-        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
-      }
 
       try {
         // If a refresh is already in flight, wait for it
         if (!refreshPromise) {
+          // POST to /auth/refresh — the httpOnly refresh_token cookie
+          // is sent automatically via withCredentials.
           refreshPromise = axios
-            .post(`${API_BASE_URL}/auth/refresh`, {
-              refresh_token: refreshToken,
-            })
+            .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
             .then((response) => {
               const { access_token, refresh_token: new_refresh_token } = response.data;
-              localStorage.setItem('access_token', access_token);
-              // SEC-11: Store the rotated refresh token from the server
-              if (new_refresh_token) {
-                localStorage.setItem('refresh_token', new_refresh_token);
-              }
-              return access_token;
+              // Sync localStorage for backward compatibility
+              if (access_token) localStorage.setItem('access_token', access_token);
+              if (new_refresh_token) localStorage.setItem('refresh_token', new_refresh_token);
+              return access_token as string | null;
             })
             .finally(() => {
               refreshPromise = null;
@@ -162,7 +172,9 @@ api.interceptors.response.use(
         }
 
         const newAccessToken = await refreshPromise;
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        if (newAccessToken) {
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        }
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed, clear tokens and redirect to login
