@@ -2129,6 +2129,13 @@ export const inventoryService = {
     const response = await api.post<BatchReturnResponse>('/inventory/batch-return', data);
     return response.data;
   },
+
+  async generateBarcodeLabels(itemIds: string[]): Promise<Blob> {
+    const response = await api.post('/inventory/labels/generate', { item_ids: itemIds }, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
 
 // ============================================

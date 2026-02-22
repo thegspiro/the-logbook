@@ -7,6 +7,7 @@ assignments, checkouts, maintenance, and reporting.
 
 from typing import List, Optional, Dict, Tuple, Any
 from datetime import datetime, date, timedelta
+from io import BytesIO
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, update, delete
 from sqlalchemy.orm import selectinload, joinedload
@@ -1187,8 +1188,8 @@ class InventoryService:
                         })
                         successful += 1
 
-                elif item.status == ItemStatus.AVAILABLE:
-                    # Individual available item → permanent assign
+                elif item.status in (ItemStatus.AVAILABLE, ItemStatus.ASSIGNED):
+                    # Individual available/assigned item → (re)assign
                     assignment, err = await self.assign_item_to_user(
                         item_id=UUID(item.id),
                         user_id=user_id,
@@ -1413,3 +1414,95 @@ class InventoryService:
             "failed": failed,
             "results": results,
         }
+
+    # ============================================
+    # Barcode Label Generation
+    # ============================================
+
+    async def generate_barcode_labels(
+        self,
+        item_ids: List[UUID],
+        organization_id: UUID,
+    ) -> BytesIO:
+        """
+        Generate a PDF containing barcode labels for the given items.
+        Each label shows the item name, barcode value, and a Code128 barcode.
+        Labels are laid out in a 2-column grid on letter-size pages.
+        """
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        from reportlab.graphics.barcode import code128
+        from reportlab.pdfgen import canvas
+
+        items = []
+        for item_id in item_ids:
+            item = await self.get_item_by_id(item_id, organization_id)
+            if item:
+                items.append(item)
+
+        if not items:
+            raise ValueError("No valid items found for label generation")
+
+        buf = BytesIO()
+        c = canvas.Canvas(buf, pagesize=letter)
+        page_w, page_h = letter
+
+        # Label layout: 2 columns, 5 rows per page
+        cols = 2
+        rows = 5
+        margin_x = 0.5 * inch
+        margin_y = 0.5 * inch
+        label_w = (page_w - 2 * margin_x) / cols
+        label_h = (page_h - 2 * margin_y) / rows
+        labels_per_page = cols * rows
+
+        for idx, item in enumerate(items):
+            if idx > 0 and idx % labels_per_page == 0:
+                c.showPage()
+
+            pos = idx % labels_per_page
+            col = pos % cols
+            row = pos // cols
+
+            x = margin_x + col * label_w
+            y = page_h - margin_y - (row + 1) * label_h
+
+            # Label border (light gray)
+            c.setStrokeColorRGB(0.8, 0.8, 0.8)
+            c.setLineWidth(0.5)
+            c.rect(x + 4, y + 4, label_w - 8, label_h - 8)
+
+            # Barcode value — use barcode, then asset_tag, then serial_number
+            barcode_value = item.barcode or item.asset_tag or item.serial_number or item.id[:12]
+
+            # Item name (truncated)
+            c.setFont("Helvetica-Bold", 9)
+            name = item.name[:40] + ("..." if len(item.name) > 40 else "")
+            c.drawString(x + 10, y + label_h - 22, name)
+
+            # Secondary info line
+            c.setFont("Helvetica", 7)
+            info_parts = []
+            if item.asset_tag:
+                info_parts.append(f"Asset: {item.asset_tag}")
+            if item.serial_number:
+                info_parts.append(f"S/N: {item.serial_number}")
+            if info_parts:
+                c.drawString(x + 10, y + label_h - 34, "  |  ".join(info_parts))
+
+            # Barcode
+            barcode_obj = code128.Code128(
+                barcode_value, barWidth=0.012 * inch, barHeight=0.45 * inch
+            )
+            barcode_width = barcode_obj.width
+            # Center barcode horizontally in label
+            barcode_x = x + (label_w - barcode_width) / 2
+            barcode_obj.drawOn(c, barcode_x, y + 22)
+
+            # Barcode text below
+            c.setFont("Courier", 7)
+            c.drawCentredString(x + label_w / 2, y + 12, barcode_value)
+
+        c.save()
+        buf.seek(0)
+        return buf
