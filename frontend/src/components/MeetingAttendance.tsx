@@ -13,6 +13,7 @@ import type { Election, Attendee } from '../types/election';
 import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
 import { UserStatus, ElectionStatus } from '../constants/enums';
+import { useTimezone } from '../hooks/useTimezone';
 
 interface MeetingAttendanceProps {
   electionId: string;
@@ -25,6 +26,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
   election,
   onUpdate,
 }) => {
+  const tz = useTimezone();
   const [attendees, setAttendees] = useState<Attendee[]>(election.attendees || []);
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,7 +141,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
               >
                 <span className="text-green-700 dark:text-green-300 font-medium">{attendee.name}</span>
                 <span className="text-green-700 dark:text-green-500 text-xs">
-                  {new Date(attendee.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(attendee.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz })}
                 </span>
                 {!isClosed && (
                   <button

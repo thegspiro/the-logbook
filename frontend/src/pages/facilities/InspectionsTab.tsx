@@ -10,6 +10,8 @@ import {
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../services/api';
 import type { Inspection, Facility, INSPECTION_TYPES } from './types';
+import { useTimezone } from '../../hooks/useTimezone';
+import { getTodayLocalDate } from '../../utils/dateFormatting';
 
 const INSPECTION_TYPE_OPTIONS: Array<typeof INSPECTION_TYPES[number]> = [
   'FIRE', 'BUILDING_CODE', 'HEALTH', 'ADA', 'ENVIRONMENTAL',
@@ -23,6 +25,7 @@ interface Props {
 }
 
 export default function InspectionsTab({ facilities, filterFacilityId, onClearFilter }: Props) {
+  const tz = useTimezone();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,7 +71,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
     setEditingInspection(null);
     setFormData({
       facility_id: filterFacilityId || '', inspection_type: 'ROUTINE', title: '',
-      description: '', inspection_date: new Date().toISOString().split('T')[0],
+      description: '', inspection_date: getTodayLocalDate(tz),
       next_inspection_date: '', inspector_name: '', inspector_organization: '',
       passed: '', findings: '', corrective_actions: '', corrective_action_deadline: '', notes: '',
     });

@@ -25,6 +25,8 @@ import {
   Shield,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, formatShortDateTime } from '../utils/dateFormatting';
 
 // ============================================
 // Interfaces
@@ -602,6 +604,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ isOpen, onClose, onSubmit, ti
 // ============================================
 
 export const ShiftAssignmentsPage: React.FC = () => {
+  const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<TabView>('assignments');
   const [loading, setLoading] = useState(true);
 
@@ -795,11 +798,6 @@ export const ShiftAssignmentsPage: React.FC = () => {
     }
   };
 
-  const formatDate = (d?: string) => {
-    if (!d) return '-';
-    return new Date(d).toLocaleDateString();
-  };
-
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -953,7 +951,7 @@ export const ShiftAssignmentsPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-theme-text-secondary">
-                        {a.confirmed_at ? new Date(a.confirmed_at).toLocaleString() : '-'}
+                        {a.confirmed_at ? formatShortDateTime(a.confirmed_at, tz) : '-'}
                       </td>
                       <td className="py-3 px-4 text-theme-text-muted max-w-xs truncate">
                         {a.notes || '-'}
@@ -1060,7 +1058,7 @@ export const ShiftAssignmentsPage: React.FC = () => {
                           {sr.status}
                         </span>
                         <span className="text-sm text-theme-text-muted">
-                          Requested {new Date(sr.created_at).toLocaleDateString()}
+                          Requested {formatDate(sr.created_at, tz)}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-4 text-sm">
@@ -1077,14 +1075,14 @@ export const ShiftAssignmentsPage: React.FC = () => {
                         <div>
                           <p className="text-theme-text-muted">Offering Shift</p>
                           <p className="text-theme-text-primary">
-                            {sr.offering_shift_date ? formatDate(sr.offering_shift_date) : sr.offering_shift_id.slice(0, 8) + '...'}
+                            {sr.offering_shift_date ? formatDate(sr.offering_shift_date, tz) : sr.offering_shift_id.slice(0, 8) + '...'}
                           </p>
                         </div>
                         {sr.requesting_shift_id && (
                           <div>
                             <p className="text-theme-text-muted">Requesting Shift</p>
                             <p className="text-theme-text-primary">
-                              {sr.requesting_shift_date ? formatDate(sr.requesting_shift_date) : sr.requesting_shift_id.slice(0, 8) + '...'}
+                              {sr.requesting_shift_date ? formatDate(sr.requesting_shift_date, tz) : sr.requesting_shift_id.slice(0, 8) + '...'}
                             </p>
                           </div>
                         )}
@@ -1195,8 +1193,8 @@ export const ShiftAssignmentsPage: React.FC = () => {
                       <td className="py-3 px-4 text-theme-text-primary font-medium">
                         {tor.user_name || tor.user_id}
                       </td>
-                      <td className="py-3 px-4 text-theme-text-secondary">{formatDate(tor.start_date)}</td>
-                      <td className="py-3 px-4 text-theme-text-secondary">{formatDate(tor.end_date)}</td>
+                      <td className="py-3 px-4 text-theme-text-secondary">{formatDate(tor.start_date, tz)}</td>
+                      <td className="py-3 px-4 text-theme-text-secondary">{formatDate(tor.end_date, tz)}</td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                           statusStyles[tor.status] || statusStyles.pending
@@ -1285,7 +1283,7 @@ export const ShiftAssignmentsPage: React.FC = () => {
           reviewingSwap
             ? `${reviewingSwap.requesting_user_name || 'Member'} wants to swap shift ${
                 reviewingSwap.offering_shift_date
-                  ? formatDate(reviewingSwap.offering_shift_date)
+                  ? formatDate(reviewingSwap.offering_shift_date, tz)
                   : reviewingSwap.offering_shift_id.slice(0, 8) + '...'
               }${reviewingSwap.reason ? ` - Reason: ${reviewingSwap.reason}` : ''}`
             : ''
@@ -1307,7 +1305,7 @@ export const ShiftAssignmentsPage: React.FC = () => {
         title="Review Time-Off Request"
         itemDescription={
           reviewingTimeOff
-            ? `${reviewingTimeOff.user_name || 'Member'} requests time off from ${formatDate(reviewingTimeOff.start_date)} to ${formatDate(reviewingTimeOff.end_date)}${reviewingTimeOff.reason ? ` - Reason: ${reviewingTimeOff.reason}` : ''}`
+            ? `${reviewingTimeOff.user_name || 'Member'} requests time off from ${formatDate(reviewingTimeOff.start_date, tz)} to ${formatDate(reviewingTimeOff.end_date, tz)}${reviewingTimeOff.reason ? ` - Reason: ${reviewingTimeOff.reason}` : ''}`
             : ''
         }
       />

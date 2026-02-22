@@ -16,7 +16,7 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.sql import func
 from app.core.utils import generate_uuid, generate_display_code
 
 from app.core.database import Base
@@ -67,8 +67,8 @@ class Location(Base):
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     events = relationship("Event", back_populates="location_obj")

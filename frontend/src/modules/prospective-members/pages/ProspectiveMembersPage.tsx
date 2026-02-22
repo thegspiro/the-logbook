@@ -37,9 +37,11 @@ import { ConversionModal } from '../components/ConversionModal';
 import { applicantService } from '../services/api';
 import type { ApplicantListItem, Applicant, ApplicantStatus } from '../types';
 import { isValidEmail, getInitials } from '../types';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 export const ProspectiveMembersPage: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const {
     pipelines,
     currentPipeline,
@@ -699,6 +701,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                               month: 'short',
                               day: 'numeric',
                               year: 'numeric',
+                              timeZone: tz,
                             })
                           : '—'}
                       </td>
@@ -823,6 +826,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                               month: 'short',
                               day: 'numeric',
                               year: 'numeric',
+                              timeZone: tz,
                             })
                           : '—'}
                       </td>

@@ -28,6 +28,8 @@ import {
 import { memberStatusService, userService } from '../services/api';
 import type { LeaveOfAbsenceResponse } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 import { useRanks } from '../hooks/useRanks';
 import type {
   ArchivedMember,
@@ -44,6 +46,7 @@ type TabView = 'archived' | 'overdue' | 'tiers' | 'leaves';
 
 const ArchivedMembersPanel: React.FC = () => {
   const { formatRank } = useRanks();
+  const tz = useTimezone();
   const [members, setMembers] = useState<ArchivedMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [reactivatingId, setReactivatingId] = useState<string | null>(null);
@@ -122,7 +125,7 @@ const ArchivedMembersPanel: React.FC = () => {
                 <td className="p-3 text-theme-text-secondary">{member.email || '—'}</td>
                 <td className="p-3 text-theme-text-secondary">{member.membership_number || '—'}</td>
                 <td className="p-3 text-theme-text-secondary">
-                  {member.archived_at ? new Date(member.archived_at).toLocaleDateString() : '—'}
+                  {member.archived_at ? formatDate(member.archived_at, tz) : '—'}
                 </td>
                 <td className="p-3 text-theme-text-secondary text-xs max-w-[200px] truncate" title={member.status_change_reason}>
                   {member.status_change_reason || '—'}
@@ -156,6 +159,7 @@ const ArchivedMembersPanel: React.FC = () => {
 // ==================== Overdue Property Returns Tab ====================
 
 const OverdueReturnsPanel: React.FC = () => {
+  const tz = useTimezone();
   const [members, setMembers] = useState<OverdueMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -244,7 +248,7 @@ const OverdueReturnsPanel: React.FC = () => {
                 <div>
                   <h3 className="text-theme-text-primary font-medium">{member.member_name}</h3>
                   <p className="text-xs text-theme-text-muted">
-                    Dropped: {new Date(member.drop_date).toLocaleDateString()} ({member.days_since_drop} days ago)
+                    Dropped: {formatDate(member.drop_date, tz)} ({member.days_since_drop} days ago)
                   </p>
                 </div>
                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -660,6 +664,7 @@ interface MemberOption {
 }
 
 const LeavesOfAbsencePanel: React.FC = () => {
+  const tz = useTimezone();
   const [leaves, setLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
@@ -952,10 +957,10 @@ const LeavesOfAbsencePanel: React.FC = () => {
                       {LEAVE_TYPE_LABELS[leave.leave_type] || leave.leave_type}
                     </td>
                     <td className="p-3 text-theme-text-secondary">
-                      {new Date(leave.start_date + 'T00:00:00').toLocaleDateString()}
+                      {formatDate(leave.start_date, tz)}
                     </td>
                     <td className="p-3 text-theme-text-secondary">
-                      {new Date(leave.end_date + 'T00:00:00').toLocaleDateString()}
+                      {formatDate(leave.end_date, tz)}
                     </td>
                     <td className="p-3 text-theme-text-secondary text-xs max-w-[200px] truncate" title={leave.reason || ''}>
                       {leave.reason || '\u2014'}

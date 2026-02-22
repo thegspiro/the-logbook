@@ -29,8 +29,11 @@ import {
   RefreshCw,
   ClipboardList,
 } from 'lucide-react';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 
 const MembershipPipelinePage: React.FC = () => {
+  const tz = useTimezone();
   const [searchParams, setSearchParams] = useSearchParams();
   const [pipelines, setPipelines] = useState<PipelineListItem[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(
@@ -325,7 +328,7 @@ const MembershipPipelinePage: React.FC = () => {
                       )}
                       <div className="flex items-center gap-1.5 text-xs text-theme-text-muted">
                         <Calendar className="h-3 w-3" />
-                        <span>{new Date(prospect.created_at).toLocaleDateString()}</span>
+                        <span>{formatDate(prospect.created_at, tz)}</span>
                       </div>
                     </div>
                     {canManage && !column.step?.is_final_step && (

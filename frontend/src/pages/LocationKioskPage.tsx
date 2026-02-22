@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { MapPin, Wifi, WifiOff } from 'lucide-react';
+import { useTimezone } from '../hooks/useTimezone';
 
 /**
  * Location Kiosk Page (Public — No Authentication Required)
@@ -41,6 +42,7 @@ interface DisplayData {
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
 const LocationKioskPage: React.FC = () => {
+  const tz = useTimezone();
   const { code } = useParams<{ code: string }>();
   const [data, setData] = useState<DisplayData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,11 +104,11 @@ const LocationKioskPage: React.FC = () => {
   };
 
   const formatTime = (isoString: string) => {
-    return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz });
   };
 
   const formatDate = (isoString: string) => {
-    return new Date(isoString).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    return new Date(isoString).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
   };
 
   // Loading state
@@ -155,7 +157,7 @@ const LocationKioskPage: React.FC = () => {
             <WifiOff className="w-5 h-5 text-red-400 animate-pulse" />
           )}
           <span className="text-lg text-slate-100 font-mono">
-            {currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+            {currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })}
           </span>
         </div>
       </div>

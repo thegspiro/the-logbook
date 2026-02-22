@@ -131,6 +131,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
+      timeZone: tz,
     });
 
   const formatDateTimeForInputLocal = (dateString: string) => {

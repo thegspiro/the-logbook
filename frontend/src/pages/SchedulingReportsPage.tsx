@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
 import type { RequirementComplianceSummary, MemberComplianceRecord } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 
 // ============================================
 // Interfaces
@@ -176,6 +178,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon }) => (
 // ============================================
 
 export const SchedulingReportsPage: React.FC = () => {
+  const tz = useTimezone();
   const { formatRank } = useRanks();
   const [activeTab, setActiveTab] = useState<TabView>('member-hours');
 
@@ -453,7 +456,7 @@ export const SchedulingReportsPage: React.FC = () => {
                 />
                 <StatCard
                   label="Period"
-                  value={`${new Date(memberHoursReport.period_start).toLocaleDateString()} - ${new Date(memberHoursReport.period_end).toLocaleDateString()}`}
+                  value={`${formatDate(memberHoursReport.period_start, tz)} - ${formatDate(memberHoursReport.period_end, tz)}`}
                   icon={<Clock className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
                 />
                 <StatCard
@@ -588,7 +591,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   <tbody>
                     {coverageData.map((row, idx) => (
                       <tr key={idx} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
-                        <td className="py-3 px-4 text-theme-text-primary font-medium">{new Date(row.date).toLocaleDateString()}</td>
+                        <td className="py-3 px-4 text-theme-text-primary font-medium">{formatDate(row.date, tz)}</td>
                         <td className="py-3 px-4 text-right text-theme-text-primary">{row.total_shifts}</td>
                         <td className="py-3 px-4 text-right text-theme-text-secondary">{row.total_assigned}</td>
                         <td className="py-3 px-4 text-right">
@@ -980,7 +983,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                 {req.frequency.replace('_', ' ')}
                               </span>
                               <span className="text-xs text-theme-text-muted">
-                                {new Date(req.period_start).toLocaleDateString()} — {new Date(req.period_end).toLocaleDateString()}
+                                {formatDate(req.period_start, tz)} — {formatDate(req.period_end, tz)}
                               </span>
                               <span className="text-xs text-theme-text-secondary font-medium">
                                 Required: {req.required_value} {req.requirement_type === 'shifts' ? 'shifts' : 'hours'}

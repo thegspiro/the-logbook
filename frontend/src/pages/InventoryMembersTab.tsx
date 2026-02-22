@@ -28,8 +28,11 @@ import {
 } from '../services/api';
 import { InventoryScanModal } from '../components/InventoryScanModal';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 
 const InventoryMembersTab: React.FC = () => {
+  const tz = useTimezone();
   const [members, setMembers] = useState<MemberInventorySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -335,9 +338,9 @@ const InventoryMembersTab: React.FC = () => {
                                       >
                                         <p className="text-sm font-medium text-theme-text-primary">{item.item_name}</p>
                                         <div className="flex items-center gap-3 mt-1 text-xs text-theme-text-muted">
-                                          <span>Out: {new Date(item.checked_out_at).toLocaleDateString()}</span>
+                                          <span>Out: {formatDate(item.checked_out_at, tz)}</span>
                                           {item.expected_return_at && (
-                                            <span>Due: {new Date(item.expected_return_at).toLocaleDateString()}</span>
+                                            <span>Due: {formatDate(item.expected_return_at, tz)}</span>
                                           )}
                                           {item.is_overdue && (
                                             <span className="text-red-700 dark:text-red-400 font-semibold">OVERDUE</span>
@@ -362,7 +365,7 @@ const InventoryMembersTab: React.FC = () => {
                                         <div className="flex items-center gap-3 mt-1 text-xs text-theme-text-muted">
                                           <span>Qty: {item.quantity_issued}</span>
                                           {item.size && <span>Size: {item.size}</span>}
-                                          <span>{new Date(item.issued_at).toLocaleDateString()}</span>
+                                          <span>{formatDate(item.issued_at, tz)}</span>
                                         </div>
                                       </div>
                                     ))}

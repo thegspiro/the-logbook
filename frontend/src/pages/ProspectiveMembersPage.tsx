@@ -29,6 +29,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { prospectiveMemberService } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 
 // ==================== Interfaces ====================
 
@@ -620,6 +622,7 @@ const CreateProspectModal: React.FC<CreateProspectModalProps> = ({ isOpen, onClo
 
 export const ProspectiveMembersPage: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<TabView>('pipelines');
 
   // Pipelines state
@@ -986,7 +989,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-theme-text-muted">
-                          {new Date(prospect.created_at).toLocaleDateString()}
+                          {formatDate(prospect.created_at, tz)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
@@ -1073,7 +1076,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                           {pkg.coordinator_notes || '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-theme-text-muted">
-                          {new Date(pkg.created_at).toLocaleDateString()}
+                          {formatDate(pkg.created_at, tz)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
