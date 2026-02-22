@@ -2124,7 +2124,9 @@ Best regards,
         proxy_result = await self.db.execute(select(User).where(User.id == str(proxy_user_id)))
         proxy_user = proxy_result.scalar_one()
         auth_result = await self.db.execute(select(User).where(User.id == str(authorized_by)))
-        authorizer = auth_result.scalar_one()
+        authorizer = auth_result.scalar_one_or_none()
+        if not authorizer:
+            return None, "Authorizing user not found"
 
         authorizations = election.proxy_authorizations or []
 

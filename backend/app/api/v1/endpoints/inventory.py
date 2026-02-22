@@ -855,7 +855,7 @@ async def get_user_inventory(
     **Authentication required**
     """
     # Check if user is viewing their own inventory or has inventory.view permission
-    if user_id != current_user.id:
+    if str(user_id) != str(current_user.id):
         # Check if user has inventory.view permission
         has_permission = any(
             "inventory.view" in (role.permissions or [])
