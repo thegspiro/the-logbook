@@ -205,8 +205,8 @@ async def change_member_status(
                 )
                 cc_users = cc_users_result.scalars().all()
                 for u in cc_users:
-                    role_names = [r.name for r in (u.roles or [])]
-                    if any(r in role_names for r in cc_role_names):
+                    role_slugs = [r.slug for r in (u.roles or [])]
+                    if any(r in role_slugs for r in cc_role_names):
                         if u.email and u.email not in cc_emails and u.id != str(user_id):
                             cc_emails.append(u.email)
 

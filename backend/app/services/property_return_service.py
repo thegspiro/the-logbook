@@ -132,7 +132,7 @@ class PropertyReturnService:
                 "name": item.name,
                 "serial_number": item.serial_number or "-",
                 "asset_tag": item.asset_tag or "-",
-                "condition": item.checkout_condition.value if c.checkout_condition else (item.condition.value if item.condition else "unknown"),
+                "condition": c.checkout_condition.value if c.checkout_condition else (item.condition.value if item.condition else "unknown"),
                 "value": value,
                 "type": "checked_out",
                 "assigned_date": c.checked_out_at.astimezone(org_tz).strftime("%m/%d/%Y") if c.checked_out_at else "-",

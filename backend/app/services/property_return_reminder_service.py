@@ -432,8 +432,8 @@ class PropertyReturnReminderService:
         admins = admin_result.scalars().all()
         admin_emails = []
         for u in admins:
-            role_names = [r.name for r in (u.roles or [])]
-            if any(r in role_names for r in ADMIN_NOTIFY_ROLE_SLUGS):
+            role_slugs = [r.slug for r in (u.roles or [])]
+            if any(r in role_slugs for r in ADMIN_NOTIFY_ROLE_SLUGS):
                 if u.email:
                     admin_emails.append(u.email)
 
