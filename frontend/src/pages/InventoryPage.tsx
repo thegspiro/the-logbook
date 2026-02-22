@@ -188,10 +188,10 @@ const InventoryPage: React.FC = () => {
     setFormError(null);
     try {
       // Strip empty strings so the backend only receives fields with real values
-      const payload: Record<string, unknown> = {};
+      const payload: Partial<InventoryItemCreate> = {};
       for (const [key, value] of Object.entries(itemForm)) {
         if (value !== '' && value !== undefined && value !== null) {
-          payload[key] = value;
+          (payload as Record<string, unknown>)[key] = value;
         }
       }
       await inventoryService.createItem(payload as unknown as InventoryItemCreate);

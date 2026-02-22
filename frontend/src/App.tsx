@@ -187,14 +187,14 @@ function App() {
               {/* Training Module - Admin Hub */}
               <Route path="/training/admin" element={<ProtectedRoute requiredPermission="training.manage"><TrainingAdminPage /></ProtectedRoute>} />
 
-              {/* Training Module - Legacy redirects to admin hub tabs */}
-              <Route path="/training/officer" element={<Navigate to="/training/admin?tab=dashboard" replace />} />
-              <Route path="/training/submissions" element={<Navigate to="/training/admin?tab=submissions" replace />} />
-              <Route path="/training/requirements" element={<Navigate to="/training/admin?tab=requirements" replace />} />
-              <Route path="/training/sessions/new" element={<Navigate to="/training/admin?tab=sessions" replace />} />
-              <Route path="/training/programs/new" element={<Navigate to="/training/admin?tab=pipelines" replace />} />
-              <Route path="/training/shift-reports" element={<Navigate to="/training/admin?tab=shift-reports" replace />} />
-              <Route path="/training/integrations" element={<Navigate to="/training/admin?tab=integrations" replace />} />
+              {/* Training Module - Legacy redirects to admin hub sub-pages */}
+              <Route path="/training/officer" element={<Navigate to="/training/admin?page=dashboard&tab=overview" replace />} />
+              <Route path="/training/submissions" element={<Navigate to="/training/admin?page=records&tab=submissions" replace />} />
+              <Route path="/training/requirements" element={<Navigate to="/training/admin?page=setup&tab=requirements" replace />} />
+              <Route path="/training/sessions/new" element={<Navigate to="/training/admin?page=records&tab=sessions" replace />} />
+              <Route path="/training/programs/new" element={<Navigate to="/training/admin?page=setup&tab=pipelines" replace />} />
+              <Route path="/training/shift-reports" element={<Navigate to="/training/admin?page=records&tab=shift-reports" replace />} />
+              <Route path="/training/integrations" element={<Navigate to="/training/admin?page=setup&tab=integrations" replace />} />
 
               {/* Inventory Module */}
               <Route path="/inventory" element={<InventoryPage />} />
