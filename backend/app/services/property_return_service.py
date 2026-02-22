@@ -12,7 +12,7 @@ The report:
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
 from typing import Dict, Any, Optional, List, Tuple
@@ -139,12 +139,7 @@ class PropertyReturnService:
             })
 
         today = date.today()
-        return_deadline = date.today().replace(day=today.day)
-        try:
-            from datetime import timedelta
-            return_deadline = today + timedelta(days=return_deadline_days)
-        except Exception:
-            pass
+        return_deadline = today + timedelta(days=return_deadline_days)
 
         report_data = {
             "member_id": user_id,

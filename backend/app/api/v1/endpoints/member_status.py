@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from uuid import UUID
 
+from datetime import datetime, timezone
 from app.core.database import get_db
 from app.core.audit import log_audit_event
 from app.api.dependencies import get_current_user, require_permission
@@ -97,9 +98,8 @@ async def change_member_status(
         )
 
     # Update the status and record when it changed
-    from datetime import datetime as dt
     member.status = new_status
-    member.status_changed_at = dt.utcnow()
+    member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason
     await db.commit()
     await db.refresh(member)
@@ -370,8 +370,6 @@ async def archive_member(
 
     Requires `members.manage` permission.
     """
-    from datetime import datetime as dt
-
     # Load the target member
     result = await db.execute(
         select(User)
@@ -394,7 +392,7 @@ async def archive_member(
         )
 
     previous_status = member.status.value
-    now = dt.utcnow()
+    now = datetime.now(timezone.utc)
     member.status = UserStatus.ARCHIVED
     member.archived_at = now
     member.status_changed_at = now
@@ -531,8 +529,6 @@ async def change_membership_type(
 
     Requires `members.manage` permission.
     """
-    from datetime import datetime as dt
-
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
@@ -564,7 +560,7 @@ async def change_membership_type(
             detail=f"Member is already at tier '{request.membership_type}'",
         )
 
-    now = dt.utcnow()
+    now = datetime.now(timezone.utc)
     member.membership_type = request.membership_type
     member.membership_type_changed_at = now
     await db.commit()
@@ -666,8 +662,6 @@ async def update_membership_tier_config(
 
     **Requires permission: members.manage**
     """
-    from datetime import datetime as dt
-
     org_result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
