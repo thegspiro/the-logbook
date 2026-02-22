@@ -40,7 +40,14 @@ class EventBase(BaseModel):
 
 class EventCreate(EventBase):
     """Schema for creating a new event"""
-    pass
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "EventCreate":
+        if self.end_datetime <= self.start_datetime:
+            raise ValueError("end_datetime must be after start_datetime")
+        if self.requires_rsvp and self.rsvp_deadline is None:
+            raise ValueError("rsvp_deadline is required when requires_rsvp is True")
+        return self
 
 
 class EventUpdate(BaseModel):
@@ -67,6 +74,13 @@ class EventUpdate(BaseModel):
     require_checkout: Optional[bool] = None
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[Dict[str, str]]] = None
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "EventUpdate":
+        if self.start_datetime and self.end_datetime:
+            if self.end_datetime <= self.start_datetime:
+                raise ValueError("end_datetime must be after start_datetime")
+        return self
 
 
 class EventCancel(BaseModel):

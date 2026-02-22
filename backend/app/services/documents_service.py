@@ -244,7 +244,8 @@ class DocumentsService:
             query = query.where(Document.status == DocumentStatus.ACTIVE)
 
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             query = query.where(
                 Document.name.ilike(search_term)
                 | Document.description.ilike(search_term)

@@ -243,7 +243,8 @@ class FormsService:
             query = query.where(Form.is_template == is_template)
 
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
                     Form.name.ilike(search_term),
@@ -882,7 +883,8 @@ class FormsService:
         self, organization_id: UUID, query: str, limit: int = 20
     ) -> List[Dict[str, Any]]:
         """Search members by name, membership number, or email for member_lookup fields"""
-        search_term = f"%{query}%"
+        safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        search_term = f"%{safe_query}%"
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))

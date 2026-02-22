@@ -180,7 +180,8 @@ class InventoryService:
             query = query.where(InventoryItem.assigned_to_user_id == assigned_to)
 
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
                     InventoryItem.name.ilike(search_term),
@@ -1136,7 +1137,8 @@ class InventoryService:
             return []
 
         org_id = str(organization_id)
-        search_term = f"%{code}%"
+        safe_code = code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        search_term = f"%{safe_code}%"
         results: List[Tuple[InventoryItem, str, str]] = []
         seen_ids: set = set()
 

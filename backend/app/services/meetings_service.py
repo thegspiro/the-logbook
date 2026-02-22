@@ -116,7 +116,8 @@ class MeetingsService:
                 pass
 
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
                     Meeting.title.ilike(search_term),

@@ -404,7 +404,8 @@ class FacilitiesService:
         if is_archived is not None:
             conditions.append(Facility.is_archived == is_archived)
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             conditions.append(
                 or_(
                     Facility.name.ilike(search_term),

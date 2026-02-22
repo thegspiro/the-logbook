@@ -13,6 +13,7 @@ export const UserStatus = {
   INACTIVE: 'inactive',
   SUSPENDED: 'suspended',
   PROBATIONARY: 'probationary',
+  LEAVE: 'leave',
   RETIRED: 'retired',
   DROPPED_VOLUNTARY: 'dropped_voluntary',
   DROPPED_INVOLUNTARY: 'dropped_involuntary',

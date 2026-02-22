@@ -323,7 +323,8 @@ class MembershipPipelineService:
         if status:
             query = query.where(ProspectiveMember.status == status)
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             query = query.where(
                 ProspectiveMember.first_name.ilike(search_term)
                 | ProspectiveMember.last_name.ilike(search_term)

@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import toast from 'react-hot-toast';
 import {
   Archive,
@@ -330,7 +331,7 @@ const OverdueReturnsPanel: React.FC = () => {
                 {reportPreview.html ? (
                   <div
                     className="prose prose-sm max-w-none text-theme-text-primary dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: reportPreview.html }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reportPreview.html) }}
                   />
                 ) : reportPreview.items.length > 0 ? (
                   <div className="space-y-2">

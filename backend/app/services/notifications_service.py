@@ -73,7 +73,8 @@ class NotificationsService:
             query = query.where(NotificationRule.enabled == enabled)
 
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
                     NotificationRule.name.ilike(search_term),

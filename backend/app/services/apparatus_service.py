@@ -482,9 +482,11 @@ class ApparatusService:
             if filters.year_max:
                 conditions.append(Apparatus.year <= filters.year_max)
             if filters.make:
-                conditions.append(Apparatus.make.ilike(f"%{filters.make}%"))
+                safe_make = filters.make.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                conditions.append(Apparatus.make.ilike(f"%{safe_make}%"))
             if filters.search:
-                search_term = f"%{filters.search}%"
+                safe_search = filters.search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                search_term = f"%{safe_search}%"
                 conditions.append(
                     or_(
                         Apparatus.unit_number.ilike(search_term),
