@@ -411,7 +411,10 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                         threshold = reminder_local.astimezone(dt_timezone.utc)
                     else:
                         # Sub-day reminder: fire at exactly X hours before
-                        threshold = event.start_datetime - timedelta(hours=hours)
+                        start_dt = event.start_datetime
+                        if start_dt and start_dt.tzinfo is None:
+                            start_dt = start_dt.replace(tzinfo=timezone.utc)
+                        threshold = start_dt - timedelta(hours=hours)
 
                     if now >= threshold:
                         due_intervals.append(hours)
