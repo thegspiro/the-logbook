@@ -395,7 +395,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                       type="text"
                       value={manualCode}
                       onChange={(e) => setManualCode(e.target.value)}
-                      placeholder="Type or scan barcode / serial / asset tag..."
+                      placeholder="Type or scan barcode / serial / asset tag / name..."
                       className="w-full pl-9 pr-3 py-2 border border-theme-border rounded-lg bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       autoFocus
                     />
