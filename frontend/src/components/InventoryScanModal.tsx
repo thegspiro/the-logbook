@@ -85,6 +85,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const detectorRef = useRef<BarcodeDetector | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const handleCodeScannedRef = useRef<(code: string) => void>(() => {});
 
   // ── Camera scanning ──────────────────────────────────────────
 
@@ -133,7 +134,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               alreadyScanned.add(value);
               // Allow re-scan after 3 seconds
               setTimeout(() => alreadyScanned.delete(value), 3000);
-              handleCodeScanned(value);
+              handleCodeScannedRef.current(value);
             }
           }
         } catch {
@@ -145,7 +146,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       setTimeout(() => setLookupError(null), 5000);
       setCameraActive(false);
     }
-  }, []); // handleCodeScanned is stable via ref pattern below
+  }, []); // handleCodeScanned accessed via ref to avoid stale closure
 
   // Cleanup camera on unmount or close
   useEffect(() => {
@@ -161,6 +162,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
   // ── Code lookup ──────────────────────────────────────────────
 
+  // Keep ref in sync so startCamera's interval always calls the latest version
   const handleCodeScanned = async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
@@ -196,13 +198,24 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           returnCondition: 'good',
         },
       ]);
-    } catch {
-      setLookupError(`No item found for "${trimmed}"`);
+    } catch (err: unknown) {
+      const is404 =
+        err instanceof Error &&
+        'response' in err &&
+        (err as { response?: { status?: number } }).response?.status === 404;
+      if (is404) {
+        setLookupError(`No item found for "${trimmed}"`);
+      } else {
+        setLookupError('Failed to look up item. Please check your connection and try again.');
+      }
       setTimeout(() => setLookupError(null), 3000);
     } finally {
       setLookupLoading(false);
     }
   };
+
+  // Keep the ref up to date so startCamera's interval sees current state
+  handleCodeScannedRef.current = handleCodeScanned;
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
