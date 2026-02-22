@@ -14,6 +14,7 @@ import {
   Pencil,
   Archive,
   ArrowLeft,
+  ChevronDown,
 } from 'lucide-react';
 import {
   inventoryService,
@@ -22,6 +23,7 @@ import {
   type InventorySummary,
   type InventoryItemCreate,
   type InventoryCategoryCreate,
+  type LabelFormat,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -99,6 +101,9 @@ const InventoryPage: React.FC = () => {
   // Label printing
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [printingLabels, setPrintingLabels] = useState(false);
+  const [labelFormat, setLabelFormat] = useState('letter');
+  const [labelFormats, setLabelFormats] = useState<LabelFormat[]>([]);
+  const [showLabelMenu, setShowLabelMenu] = useState(false);
 
   // Add item form
   const defaultItemForm: InventoryItemCreate = {
@@ -161,19 +166,29 @@ const InventoryPage: React.FC = () => {
     }
   }, [searchQuery, statusFilter, categoryFilter]);
 
+  // Close label format menu on outside click
+  useEffect(() => {
+    if (!showLabelMenu) return;
+    const handler = () => setShowLabelMenu(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [showLabelMenu]);
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryData, categoriesData, itemsData] = await Promise.all([
+      const [summaryData, categoriesData, itemsData, formatsData] = await Promise.all([
         inventoryService.getSummary(),
         inventoryService.getCategories(),
         inventoryService.getItems({ limit: 100 }),
+        inventoryService.getLabelFormats(),
       ]);
       setSummary(summaryData);
       setCategories(categoriesData);
       setItems(itemsData.items);
       setTotalItems(itemsData.total);
+      setLabelFormats(formatsData.formats);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to load inventory data. Please check your connection and refresh the page.'));
     } finally {
@@ -334,12 +349,17 @@ const InventoryPage: React.FC = () => {
       return;
     }
     setPrintingLabels(true);
+    setShowLabelMenu(false);
     try {
-      const blob = await inventoryService.generateBarcodeLabels(Array.from(selectedItemIds));
+      const blob = await inventoryService.generateBarcodeLabels(
+        Array.from(selectedItemIds),
+        labelFormat,
+      );
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60000);
-      toast.success(`Generated labels for ${selectedItemIds.size} item(s)`);
+      const fmt = labelFormats.find(f => f.id === labelFormat);
+      toast.success(`Generated ${fmt?.description || labelFormat} labels for ${selectedItemIds.size} item(s)`);
     } catch {
       toast.error('Failed to generate barcode labels');
     } finally {
@@ -379,15 +399,55 @@ const InventoryPage: React.FC = () => {
           {canManage && (
             <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
               {selectedItemIds.size > 0 && (
-                <button
-                  onClick={handlePrintLabels}
-                  disabled={printingLabels}
-                  className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg transition-colors text-sm disabled:opacity-50"
-                >
-                  <Printer className="w-4 h-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Print Labels ({selectedItemIds.size})</span>
-                  <span className="sm:hidden">Labels ({selectedItemIds.size})</span>
-                </button>
+                <div className="relative">
+                  <div className="flex items-center">
+                    <button
+                      onClick={handlePrintLabels}
+                      disabled={printingLabels}
+                      className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-l-lg border border-theme-surface-border transition-colors text-sm disabled:opacity-50"
+                    >
+                      <Printer className="w-4 h-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Print Labels ({selectedItemIds.size})</span>
+                      <span className="sm:hidden">Labels ({selectedItemIds.size})</span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowLabelMenu(!showLabelMenu); }}
+                      className="px-2 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-r-lg border border-l-0 border-theme-surface-border transition-colors"
+                      aria-label="Select label format"
+                    >
+                      <ChevronDown className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  {showLabelMenu && (
+                    <div className="absolute right-0 top-full mt-1 w-72 bg-theme-surface-modal rounded-lg shadow-xl border border-theme-surface-border z-50 py-1">
+                      <div className="px-3 py-2 border-b border-theme-surface-border">
+                        <p className="text-xs font-medium text-theme-text-muted uppercase">Label Format</p>
+                      </div>
+                      {labelFormats.map((fmt) => (
+                        <button
+                          key={fmt.id}
+                          onClick={() => { setLabelFormat(fmt.id); setShowLabelMenu(false); }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-theme-surface-hover flex items-center justify-between ${
+                            labelFormat === fmt.id ? 'text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'text-theme-text-primary'
+                          }`}
+                        >
+                          <div>
+                            <span className="block">{fmt.description}</span>
+                            {fmt.type === 'thermal' && fmt.width && fmt.height && (
+                              <span className="text-xs text-theme-text-muted">{fmt.width}" x {fmt.height}" — Thermal</span>
+                            )}
+                            {fmt.type === 'sheet' && (
+                              <span className="text-xs text-theme-text-muted">8.5" x 11" — Standard printer</span>
+                            )}
+                          </div>
+                          {labelFormat === fmt.id && (
+                            <span className="text-blue-600 dark:text-blue-400 text-xs font-medium">Selected</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               <button
                 onClick={() => setShowAddCategory(true)}

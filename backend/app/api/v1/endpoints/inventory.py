@@ -1082,6 +1082,31 @@ async def batch_return_items(
 # Barcode Label Generation
 # ============================================
 
+@router.get("/labels/formats")
+async def get_label_formats(
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Return available label format presets for barcode label printing.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    formats = []
+    for key, fmt in InventoryService.LABEL_FORMATS.items():
+        entry = {"id": key, "description": fmt["description"], "type": fmt["type"]}
+        if fmt["type"] == "thermal":
+            entry["width"] = fmt["width"]
+            entry["height"] = fmt["height"]
+        formats.append(entry)
+    formats.append({
+        "id": "custom",
+        "description": "Custom label size (specify width and height in inches)",
+        "type": "thermal",
+    })
+    return {"formats": formats}
+
+
 @router.post("/labels/generate")
 async def generate_barcode_labels(
     request: dict,
@@ -1091,7 +1116,13 @@ async def generate_barcode_labels(
     """
     Generate a PDF of barcode labels for the specified inventory items.
 
-    Accepts a JSON body with `item_ids` (list of item UUIDs).
+    Accepts a JSON body with:
+    - `item_ids` (list of item UUIDs) — required
+    - `label_format` (string) — optional, defaults to "letter"
+      Supported: "letter", "dymo_30252", "dymo_30256", "dymo_30334", "rollo_4x6", "custom"
+    - `custom_width` (float) — required if label_format is "custom", width in inches
+    - `custom_height` (float) — required if label_format is "custom", height in inches
+
     Returns a PDF file with printable Code128 barcode labels.
 
     **Authentication required**
@@ -1106,22 +1137,30 @@ async def generate_barcode_labels(
             detail="item_ids is required and must not be empty",
         )
 
+    label_format = request.get("label_format", "letter")
+    custom_width = request.get("custom_width")
+    custom_height = request.get("custom_height")
+
     service = InventoryService(db)
     try:
         pdf_buf = await service.generate_barcode_labels(
             item_ids=[UUID(iid) for iid in item_ids],
             organization_id=current_user.organization_id,
+            label_format=label_format,
+            custom_width=custom_width,
+            custom_height=custom_height,
         )
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
 
+    filename = f"inventory-labels-{label_format}.pdf"
     return StreamingResponse(
         pdf_buf,
         media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=inventory-labels.pdf"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
