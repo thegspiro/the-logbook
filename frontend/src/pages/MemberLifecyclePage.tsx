@@ -697,10 +697,10 @@ const LeavesOfAbsencePanel: React.FC = () => {
     try {
       const data = await userService.getUsers();
       setMembers(
-        data.map((u: Record<string, string>) => ({
+        data.map((u) => ({
           id: u.id,
-          first_name: u.first_name,
-          last_name: u.last_name,
+          first_name: u.first_name ?? '',
+          last_name: u.last_name ?? '',
           username: u.username,
         }))
       );
