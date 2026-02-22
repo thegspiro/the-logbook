@@ -90,18 +90,6 @@ export const FieldType = {
 export type FieldType = (typeof FieldType)[keyof typeof FieldType];
 
 // ============================================
-// Training Status
-// ============================================
-export const TrainingStatus = {
-  SCHEDULED: 'scheduled',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
-  FAILED: 'failed',
-} as const;
-export type TrainingStatus = (typeof TrainingStatus)[keyof typeof TrainingStatus];
-
-// ============================================
 // Ballot / Vote Types
 // ============================================
 export const VoteType = {
@@ -191,58 +179,3 @@ export const SubmissionStatus = {
   REVISION_REQUESTED: 'revision_requested',
 } as const;
 export type SubmissionStatus = (typeof SubmissionStatus)[keyof typeof SubmissionStatus];
-
-// ============================================
-// Operational Ranks
-// ============================================
-export const OperationalRank = {
-  FIRE_CHIEF: 'fire_chief',
-  DEPUTY_CHIEF: 'deputy_chief',
-  ASSISTANT_CHIEF: 'assistant_chief',
-  CAPTAIN: 'captain',
-  LIEUTENANT: 'lieutenant',
-  ENGINEER: 'engineer',
-  FIREFIGHTER: 'firefighter',
-} as const;
-export type OperationalRank = (typeof OperationalRank)[keyof typeof OperationalRank];
-
-export const OPERATIONAL_RANK_LABELS: Record<OperationalRank, string> = {
-  [OperationalRank.FIRE_CHIEF]: 'Fire Chief',
-  [OperationalRank.DEPUTY_CHIEF]: 'Deputy Chief',
-  [OperationalRank.ASSISTANT_CHIEF]: 'Assistant Chief',
-  [OperationalRank.CAPTAIN]: 'Captain',
-  [OperationalRank.LIEUTENANT]: 'Lieutenant',
-  [OperationalRank.ENGINEER]: 'Engineer',
-  [OperationalRank.FIREFIGHTER]: 'Firefighter',
-};
-
-/** Dropdown-ready {value, label} list for <select> elements. */
-export const OPERATIONAL_RANKS = Object.values(OperationalRank).map(value => ({
-  value,
-  label: OPERATIONAL_RANK_LABELS[value],
-}));
-
-/** Format a raw rank value (e.g. "fire_chief") to its display label ("Fire Chief"). */
-export function formatRank(rank: string | null | undefined): string {
-  if (!rank) return '';
-  return OPERATIONAL_RANK_LABELS[rank as OperationalRank] ?? rank.replace(/_/g, ' ');
-}
-
-// ============================================
-// Election Voting Methods
-// ============================================
-export const VotingMethod = {
-  SIMPLE_MAJORITY: 'simple_majority',
-  RANKED_CHOICE: 'ranked_choice',
-  APPROVAL: 'approval',
-  SUPERMAJORITY: 'supermajority',
-} as const;
-export type VotingMethod = (typeof VotingMethod)[keyof typeof VotingMethod];
-
-export const VictoryCondition = {
-  MOST_VOTES: 'most_votes',
-  MAJORITY: 'majority',
-  SUPERMAJORITY: 'supermajority',
-  THRESHOLD: 'threshold',
-} as const;
-export type VictoryCondition = (typeof VictoryCondition)[keyof typeof VictoryCondition];
