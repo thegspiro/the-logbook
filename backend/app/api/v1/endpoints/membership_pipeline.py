@@ -663,6 +663,7 @@ async def transfer_prospect(
         rank=data.rank,
         station=data.station,
         role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,
+        send_welcome_email=data.send_welcome_email,
     )
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")

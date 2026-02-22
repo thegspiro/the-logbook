@@ -674,6 +674,7 @@ class MembershipPipelineService:
         rank: Optional[str] = None,
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
+        send_welcome_email: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Transfer a prospect to a full User record"""
         prospect = await self.get_prospect(prospect_id, organization_id)
@@ -684,7 +685,8 @@ class MembershipPipelineService:
             return {"success": False, "message": "Prospect has already been transferred"}
 
         return await self._do_transfer(
-            prospect, transferred_by, username, membership_id, rank, station, role_ids
+            prospect, transferred_by, username, membership_id, rank, station, role_ids,
+            send_welcome_email=send_welcome_email,
         )
 
     async def _do_transfer(
@@ -696,6 +698,7 @@ class MembershipPipelineService:
         rank: Optional[str] = None,
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
+        send_welcome_email: bool = False,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
 
@@ -745,12 +748,21 @@ class MembershipPipelineService:
             org_service = OrganizationService(self.db)
             membership_id = await org_service.generate_next_membership_id(prospect.organization_id)
 
+        # Generate a temporary password so the new member can log in.
+        # The password is hashed before storage; the plaintext is only
+        # kept in memory for the optional welcome email.
+        from app.core.security import generate_temporary_password, hash_password
+
+        temp_password = generate_temporary_password()
+        password_hash = hash_password(temp_password)
+
         user_id = generate_uuid()
         new_user = User(
             id=user_id,
             organization_id=prospect.organization_id,
             username=username,
             email=prospect.email,
+            password_hash=password_hash,
             first_name=prospect.first_name,
             last_name=prospect.last_name,
             phone=prospect.phone,
@@ -765,6 +777,7 @@ class MembershipPipelineService:
             station=station,
             status=UserStatus.ACTIVE,
             membership_type="probationary",
+            must_change_password=True,
         )
         self.db.add(new_user)
 
@@ -817,6 +830,16 @@ class MembershipPipelineService:
         if enrollment_result:
             result_msg += f". Auto-enrolled in training program: {enrollment_result['program_name']}"
 
+        # Send welcome email with temporary credentials if requested
+        welcome_email_sent = False
+        if send_welcome_email:
+            welcome_email_sent = await self._send_transfer_welcome_email(
+                prospect=prospect,
+                username=username,
+                temp_password=temp_password,
+                organization_id=prospect.organization_id,
+            )
+
         return {
             "success": True,
             "prospect_id": prospect.id,
@@ -824,6 +847,7 @@ class MembershipPipelineService:
             "membership_number": membership_number,
             "message": result_msg,
             "auto_enrollment": enrollment_result,
+            "welcome_email_sent": welcome_email_sent,
         }
 
     async def _auto_enroll_probationary(
@@ -912,6 +936,48 @@ class MembershipPipelineService:
         except Exception as e:
             logger.error(f"Auto-enrollment failed for user {user_id}: {e}")
             return None
+
+    async def _send_transfer_welcome_email(
+        self,
+        prospect: ProspectiveMember,
+        username: str,
+        temp_password: str,
+        organization_id: str,
+    ) -> bool:
+        """Send welcome email with temporary credentials to a newly transferred member."""
+        try:
+            from app.services.email_service import EmailService
+            from app.core.config import settings
+
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return False
+
+            org_name = org.name or "The Logbook"
+            login_url = (
+                f"{settings.FRONTEND_URL}/login"
+                if hasattr(settings, "FRONTEND_URL") and settings.FRONTEND_URL
+                else "/login"
+            )
+
+            email_svc = EmailService(org)
+            sent = await email_svc.send_welcome_email(
+                to_email=prospect.email,
+                first_name=prospect.first_name,
+                last_name=prospect.last_name,
+                username=username,
+                temp_password=temp_password,
+                organization_name=org_name,
+                login_url=login_url,
+                organization_id=organization_id,
+            )
+            return bool(sent)
+        except Exception as e:
+            logger.error(f"Failed to send welcome email to {prospect.email}: {e}")
+            return False
 
     def _generate_username(self, first_name: str, last_name: str) -> str:
         """Generate a username from first and last name"""
