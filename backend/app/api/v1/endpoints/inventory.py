@@ -65,7 +65,12 @@ from app.schemas.inventory import (
     LabelGenerateRequest,
     # Members summary
     MembersInventoryListResponse,
+    # Equipment request schemas
+    EquipmentRequestCreate,
+    EquipmentRequestReview,
+    EquipmentRequestResponse,
 )
+from app.models.inventory import EquipmentRequest, RequestStatus
 from app.services.inventory_service import InventoryService
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.api.dependencies import get_current_user, require_permission
@@ -276,6 +281,70 @@ async def create_item(
     )
 
     return new_item
+
+
+@router.get("/items/export")
+async def export_items_csv(
+    category_id: Optional[UUID] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Export inventory items as CSV."""
+    import csv
+    import io
+    from starlette.responses import StreamingResponse
+
+    service = InventoryService(db)
+    status_enum = None
+    if status:
+        from app.models.inventory import ItemStatus
+        try:
+            status_enum = ItemStatus(status)
+        except ValueError:
+            pass
+
+    items, _ = await service.get_items(
+        organization_id=current_user.organization_id,
+        category_id=category_id,
+        status=status_enum,
+        search=search,
+        active_only=True,
+        limit=10000,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Name", "Category", "Serial Number", "Asset Tag", "Barcode",
+        "Status", "Condition", "Storage Location", "Station",
+        "Manufacturer", "Model Number", "Quantity", "Tracking Type",
+        "Purchase Date", "Purchase Price", "Vendor", "Warranty Expiration",
+        "Notes",
+    ])
+    for item in items:
+        cat_name = item.category.name if item.category else ""
+        writer.writerow([
+            item.name, cat_name, item.serial_number or "", item.asset_tag or "",
+            item.barcode or "", item.status.value if hasattr(item.status, 'value') else str(item.status),
+            item.condition.value if hasattr(item.condition, 'value') else str(item.condition),
+            item.storage_location or "", item.station or "",
+            item.manufacturer or "", item.model_number or "",
+            item.quantity, item.tracking_type.value if hasattr(item.tracking_type, 'value') else str(item.tracking_type),
+            str(item.purchase_date) if item.purchase_date else "",
+            str(item.purchase_price) if item.purchase_price else "",
+            item.vendor or "",
+            str(item.warranty_expiration) if item.warranty_expiration else "",
+            item.notes or "",
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=inventory_export.csv"},
+    )
 
 
 @router.get("/items/{item_id}", response_model=InventoryItemResponse)
@@ -760,7 +829,7 @@ async def checkin_item(
     return {"message": "Item checked in successfully"}
 
 
-@router.get("/checkout/active", response_model=List[CheckOutRecordResponse])
+@router.get("/checkout/active")
 async def get_active_checkouts(
     user_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
@@ -777,10 +846,26 @@ async def get_active_checkouts(
         organization_id=current_user.organization_id,
         user_id=user_id,
     )
-    return checkouts
+    return {
+        "checkouts": [
+            {
+                "checkout_id": c.id,
+                "item_id": c.item_id,
+                "item_name": c.item.name if c.item else "Unknown",
+                "user_id": c.user_id,
+                "user_name": f"{c.user.first_name} {c.user.last_name}".strip() if c.user else "Unknown",
+                "checked_out_at": c.checked_out_at.isoformat() if c.checked_out_at else None,
+                "expected_return_at": c.expected_return_at.isoformat() if c.expected_return_at else None,
+                "is_overdue": c.is_overdue,
+                "checkout_reason": c.checkout_reason,
+            }
+            for c in checkouts
+        ],
+        "total": len(checkouts),
+    }
 
 
-@router.get("/checkout/overdue", response_model=List[CheckOutRecordResponse])
+@router.get("/checkout/overdue")
 async def get_overdue_checkouts(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
@@ -795,7 +880,23 @@ async def get_overdue_checkouts(
     checkouts = await service.get_overdue_checkouts(
         organization_id=current_user.organization_id
     )
-    return checkouts
+    return {
+        "checkouts": [
+            {
+                "checkout_id": c.id,
+                "item_id": c.item_id,
+                "item_name": c.item.name if c.item else "Unknown",
+                "user_id": c.user_id,
+                "user_name": f"{c.user.first_name} {c.user.last_name}".strip() if c.user else "Unknown",
+                "checked_out_at": c.checked_out_at.isoformat() if c.checked_out_at else None,
+                "expected_return_at": c.expected_return_at.isoformat() if c.expected_return_at else None,
+                "is_overdue": c.is_overdue,
+                "checkout_reason": c.checkout_reason,
+            }
+            for c in checkouts
+        ],
+        "total": len(checkouts),
+    }
 
 
 # ============================================
@@ -1448,3 +1549,153 @@ async def complete_departure_clearance(
     )
 
     return clearance
+
+
+# ============================================
+# Equipment Request Endpoints
+# ============================================
+
+@router.post("/requests", status_code=status.HTTP_201_CREATED)
+async def create_equipment_request(
+    request_data: EquipmentRequestCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Create an equipment request.
+
+    Any authenticated member can submit a request for checkout, issuance, or purchase.
+    """
+    from app.core.utils import generate_uuid as gen_id
+
+    req = EquipmentRequest(
+        id=gen_id(),
+        organization_id=str(current_user.organization_id),
+        requester_id=str(current_user.id),
+        item_name=request_data.item_name,
+        item_id=str(request_data.item_id) if request_data.item_id else None,
+        category_id=str(request_data.category_id) if request_data.category_id else None,
+        quantity=request_data.quantity,
+        request_type=request_data.request_type,
+        priority=request_data.priority,
+        reason=request_data.reason,
+    )
+    db.add(req)
+    await db.commit()
+    await db.refresh(req)
+
+    return {
+        "id": req.id,
+        "item_name": req.item_name,
+        "status": "pending",
+        "message": "Request submitted successfully",
+    }
+
+
+@router.get("/requests")
+async def list_equipment_requests(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    mine_only: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List equipment requests.
+
+    Members see their own requests. Admins with inventory.manage see all org requests.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    query = (
+        select(EquipmentRequest)
+        .where(EquipmentRequest.organization_id == str(current_user.organization_id))
+        .options(
+            selectinload(EquipmentRequest.requester),
+            selectinload(EquipmentRequest.reviewer),
+        )
+    )
+
+    can_manage = current_user.has_permission("inventory.manage")
+    if mine_only or not can_manage:
+        query = query.where(EquipmentRequest.requester_id == str(current_user.id))
+
+    if status_filter:
+        query = query.where(EquipmentRequest.status == status_filter)
+
+    query = query.order_by(EquipmentRequest.created_at.desc()).limit(100)
+
+    result = await db.execute(query)
+    requests = result.scalars().all()
+
+    return {
+        "requests": [
+            {
+                "id": r.id,
+                "requester_id": r.requester_id,
+                "requester_name": f"{r.requester.first_name} {r.requester.last_name}".strip() if r.requester else None,
+                "item_name": r.item_name,
+                "item_id": r.item_id,
+                "category_id": r.category_id,
+                "quantity": r.quantity,
+                "request_type": r.request_type if isinstance(r.request_type, str) else r.request_type.value,
+                "priority": r.priority if isinstance(r.priority, str) else r.priority.value,
+                "reason": r.reason,
+                "status": r.status if isinstance(r.status, str) else r.status.value,
+                "reviewed_by": r.reviewed_by,
+                "reviewer_name": f"{r.reviewer.first_name} {r.reviewer.last_name}".strip() if r.reviewer else None,
+                "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+                "review_notes": r.review_notes,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+            for r in requests
+        ],
+        "total": len(requests),
+    }
+
+
+@router.put("/requests/{request_id}/review")
+async def review_equipment_request(
+    request_id: UUID,
+    review_data: EquipmentRequestReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Review (approve/deny) an equipment request.
+
+    **Requires permission: inventory.manage**
+    """
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(EquipmentRequest).where(
+            EquipmentRequest.id == str(request_id),
+            EquipmentRequest.organization_id == str(current_user.organization_id),
+        )
+    )
+    req = result.scalar_one_or_none()
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    current_status = req.status if isinstance(req.status, str) else req.status.value
+    if current_status != "pending":
+        raise HTTPException(status_code=400, detail="Only pending requests can be reviewed")
+
+    if review_data.status not in ("approved", "denied"):
+        raise HTTPException(status_code=400, detail="Status must be 'approved' or 'denied'")
+
+    req.status = review_data.status
+    req.reviewed_by = str(current_user.id)
+    req.reviewed_at = datetime.utcnow()
+    req.review_notes = review_data.review_notes
+
+    await db.commit()
+
+    return {
+        "id": req.id,
+        "status": review_data.status,
+        "message": f"Request {review_data.status}",
+    }

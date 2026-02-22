@@ -652,3 +652,48 @@ class LabelGenerateRequest(BaseModel):
     )
     custom_width: Optional[float] = Field(None, gt=0, description="Width in inches (required for custom format)")
     custom_height: Optional[float] = Field(None, gt=0, description="Height in inches (required for custom format)")
+
+
+# ============================================
+# Equipment Request Schemas
+# ============================================
+
+class EquipmentRequestCreate(BaseModel):
+    """Schema for creating an equipment request"""
+    item_name: str = Field(..., min_length=1, max_length=255)
+    item_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    quantity: int = Field(default=1, ge=1)
+    request_type: str = Field(default="checkout")
+    priority: str = Field(default="normal")
+    reason: Optional[str] = None
+
+
+class EquipmentRequestReview(BaseModel):
+    """Schema for reviewing an equipment request"""
+    status: str = Field(..., description="approved or denied")
+    review_notes: Optional[str] = None
+
+
+class EquipmentRequestResponse(BaseModel):
+    """Schema for equipment request response"""
+    id: UUID
+    organization_id: UUID
+    requester_id: UUID
+    requester_name: Optional[str] = None
+    item_name: str
+    item_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    quantity: int
+    request_type: str
+    priority: str
+    reason: Optional[str] = None
+    status: str
+    reviewed_by: Optional[UUID] = None
+    reviewer_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

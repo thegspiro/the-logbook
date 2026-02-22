@@ -1746,9 +1746,12 @@ export interface UserCheckoutItem {
   checkout_id: string;
   item_id: string;
   item_name: string;
+  user_id?: string;
+  user_name?: string;
   checked_out_at: string;
   expected_return_at?: string;
   is_overdue: boolean;
+  checkout_reason?: string;
 }
 
 export interface UserIssuedItem {
@@ -1799,6 +1802,8 @@ export interface InventoryItem {
   warranty_expiration?: string;
   location_id?: string;
   storage_location?: string;
+  size?: string;
+  color?: string;
   station?: string;
   condition: string;
   status: string;
@@ -1814,6 +1819,34 @@ export interface InventoryItem {
   assigned_date?: string;
   notes?: string;
   active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LowStockAlert {
+  category_id: string;
+  category_name: string;
+  item_type: string;
+  current_stock: number;
+  threshold: number;
+}
+
+export interface EquipmentRequestItem {
+  id: string;
+  requester_id: string;
+  requester_name?: string;
+  item_name: string;
+  item_id?: string;
+  category_id?: string;
+  quantity: number;
+  request_type: string;
+  priority: string;
+  reason?: string;
+  status: string;
+  reviewed_by?: string;
+  reviewer_name?: string;
+  reviewed_at?: string;
+  review_notes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -2089,8 +2122,8 @@ export const inventoryService = {
     return response.data;
   },
 
-  async getLowStockItems(): Promise<InventoryItem[]> {
-    const response = await api.get<InventoryItem[]>('/inventory/low-stock');
+  async getLowStockItems(): Promise<LowStockAlert[]> {
+    const response = await api.get<LowStockAlert[]>('/inventory/low-stock');
     return response.data;
   },
 
@@ -2164,6 +2197,32 @@ export const inventoryService = {
     }, {
       responseType: 'blob',
     });
+    return response.data;
+  },
+
+  async updateCategory(categoryId: string, data: Partial<InventoryCategoryCreate>): Promise<InventoryCategory> {
+    const response = await api.patch<InventoryCategory>(`/inventory/categories/${categoryId}`, data);
+    return response.data;
+  },
+
+  async exportItemsCsv(params?: { category_id?: string; status?: string; search?: string }): Promise<Blob> {
+    const response = await api.get('/inventory/items/export', { params, responseType: 'blob' });
+    return response.data;
+  },
+
+  // Equipment requests
+  async createEquipmentRequest(data: { item_name: string; item_id?: string; category_id?: string; quantity?: number; request_type?: string; priority?: string; reason?: string }): Promise<{ id: string; item_name: string; status: string; message: string }> {
+    const response = await api.post('/inventory/requests', data);
+    return response.data;
+  },
+
+  async getEquipmentRequests(params?: { status?: string; mine_only?: boolean }): Promise<{ requests: EquipmentRequestItem[]; total: number }> {
+    const response = await api.get('/inventory/requests', { params });
+    return response.data;
+  },
+
+  async reviewEquipmentRequest(requestId: string, data: { status: string; review_notes?: string }): Promise<{ id: string; status: string; message: string }> {
+    const response = await api.put(`/inventory/requests/${requestId}/review`, data);
     return response.data;
   },
 };

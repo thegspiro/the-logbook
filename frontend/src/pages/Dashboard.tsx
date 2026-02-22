@@ -19,6 +19,7 @@ import {
   Pin,
   Eye,
   Rocket,
+  Package,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -28,8 +29,9 @@ import {
   notificationsService,
   messagesService,
   organizationService,
+  inventoryService,
 } from '../services/api';
-import type { InboxMessage } from '../services/api';
+import type { InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
@@ -89,6 +91,11 @@ const Dashboard: React.FC = () => {
   const [progressDetails, setProgressDetails] = useState<Map<string, MemberProgramProgress>>(new Map());
   const [loadingTraining, setLoadingTraining] = useState(true);
 
+  // Inventory (admin summary)
+  const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
+  const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
+  const [loadingInventory, setLoadingInventory] = useState(true);
+
   // Setup checklist (admin-only)
   const [setupProgress, setSetupProgress] = useState<{ completed: number; total: number } | null>(null);
 
@@ -114,6 +121,7 @@ const Dashboard: React.FC = () => {
     }
     loadHours();
     loadTrainingProgress();
+    loadInventorySummary();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
@@ -134,6 +142,21 @@ const Dashboard: React.FC = () => {
       setSetupProgress({ completed: data.completed_count, total: data.total_count });
     } catch {
       // Non-critical
+    }
+  };
+
+  const loadInventorySummary = async () => {
+    try {
+      const [summary, alerts] = await Promise.all([
+        inventoryService.getSummary(),
+        inventoryService.getLowStockItems(),
+      ]);
+      setInventorySummary(summary);
+      setLowStockAlerts(alerts);
+    } catch {
+      // Inventory is non-critical on dashboard
+    } finally {
+      setLoadingInventory(false);
     }
   };
 
@@ -805,6 +828,81 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
             )}
+          </div>
+        )}
+        {/* Inventory Summary Widget */}
+        {!loadingInventory && inventorySummary && inventorySummary.total_items > 0 && (
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+                <Package className="w-5 h-5 text-emerald-500" />
+                <span>Equipment & Inventory</span>
+              </h3>
+              <button
+                onClick={() => navigate('/inventory')}
+                className="text-emerald-400 hover:text-emerald-300 text-sm flex items-center space-x-1"
+              >
+                <span>View All</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                <p className="text-theme-text-muted text-xs font-medium uppercase">Total Items</p>
+                <p className="text-theme-text-primary text-xl font-bold mt-1">{inventorySummary.total_items}</p>
+              </div>
+              <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                <p className="text-theme-text-muted text-xs font-medium uppercase">Total Value</p>
+                <p className="text-emerald-700 dark:text-emerald-400 text-xl font-bold mt-1">
+                  ${inventorySummary.total_value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </p>
+              </div>
+              <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                <p className="text-theme-text-muted text-xs font-medium uppercase">Checked Out</p>
+                <p className="text-yellow-700 dark:text-yellow-400 text-xl font-bold mt-1">{inventorySummary.active_checkouts}</p>
+                {inventorySummary.overdue_checkouts > 0 && (
+                  <p className="text-red-400 text-xs">{inventorySummary.overdue_checkouts} overdue</p>
+                )}
+              </div>
+              <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                <p className="text-theme-text-muted text-xs font-medium uppercase">Maintenance Due</p>
+                <p className="text-orange-700 dark:text-orange-400 text-xl font-bold mt-1">{inventorySummary.maintenance_due_count}</p>
+              </div>
+            </div>
+
+            {lowStockAlerts.length > 0 && (
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                  <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">Low Stock</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {lowStockAlerts.map(a => (
+                    <span key={a.category_id} className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded">
+                      {a.category_name}: {a.current_stock} left
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-4">
+              <button
+                onClick={() => navigate('/inventory/my-equipment')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors text-center"
+              >
+                My Equipment
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('/inventory/checkouts')}
+                  className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors text-center"
+                >
+                  View Checkouts
+                </button>
+              )}
+            </div>
           </div>
         )}
       </main>
