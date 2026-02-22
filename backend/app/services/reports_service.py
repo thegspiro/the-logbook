@@ -6,7 +6,7 @@ training summary, event attendance, and compliance reports.
 """
 
 from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, case
 from uuid import UUID
@@ -600,8 +600,8 @@ class ReportsService:
         from app.models.minute import ActionItem as MinutesActionItem, MinutesActionItemStatus
 
         org_id = str(organization_id)
-        period_start = start_date or (datetime.utcnow() - timedelta(days=365)).date()
-        period_end = end_date or datetime.utcnow().date()
+        period_start = start_date or (datetime.now(timezone.utc) - timedelta(days=365)).date()
+        period_end = end_date or datetime.now(timezone.utc).date()
 
         # ── Members ──
         total_result = await self.db.execute(

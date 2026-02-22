@@ -7,7 +7,7 @@ connects to the database, and configures routes.
 """
 
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 import traceback
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -61,7 +61,7 @@ class StartupStatus:
         self.migrations_total = 0
         self.migrations_completed = 0
         self.current_migration = None
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
         self.ready = False
         self.errors = []
         self.detailed_message = None
@@ -93,7 +93,7 @@ class StartupStatus:
             "phase": self.phase,
             "message": self.message,
             "ready": self.ready,
-            "uptime_seconds": (datetime.utcnow() - self.started_at).total_seconds(),
+            "uptime_seconds": (datetime.now(timezone.utc) - self.started_at).total_seconds(),
         }
 
         if self.detailed_message:
@@ -1152,7 +1152,7 @@ async def health_check():
         "status": "healthy",
         "version": settings.VERSION,
         "environment": settings.ENVIRONMENT,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "checks": {}
     }
 
@@ -1230,13 +1230,12 @@ async def health_check_detailed():
         return {"error": "Detailed health check not available in production"}
 
     import psutil
-    from datetime import datetime
 
     return {
         "status": "healthy",
         "version": settings.VERSION,
         "environment": settings.ENVIRONMENT,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "system": {
             "cpu_percent": psutil.cpu_percent(interval=1),
             "memory_percent": psutil.virtual_memory().percent,
