@@ -62,6 +62,7 @@ from app.schemas.inventory import (
     BatchCheckoutResponse,
     BatchReturnRequest,
     BatchReturnResponse,
+    LabelGenerateRequest,
     # Members summary
     MembersInventoryListResponse,
 )
@@ -124,6 +125,35 @@ async def create_category(
         )
 
     return new_category
+
+
+@router.patch("/categories/{category_id}", response_model=InventoryCategoryResponse)
+async def update_category(
+    category_id: UUID,
+    update_data: InventoryCategoryUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update an inventory category
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    updated_category, error = await service.update_category(
+        category_id=category_id,
+        organization_id=current_user.organization_id,
+        update_data=update_data.model_dump(exclude_unset=True),
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return updated_category
 
 
 @router.get("/categories/{category_id}", response_model=InventoryCategoryResponse)
@@ -379,7 +409,13 @@ async def assign_item(
     service = InventoryService(db)
 
     # Convert assignment_type string to enum
-    assignment_type = AssignmentType(assignment_data.assignment_type)
+    try:
+        assignment_type = AssignmentType(assignment_data.assignment_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid assignment type: '{assignment_data.assignment_type}'",
+        )
 
     assignment, error = await service.assign_item_to_user(
         item_id=assignment_data.item_id,
@@ -1109,19 +1145,12 @@ async def get_label_formats(
 
 @router.post("/labels/generate")
 async def generate_barcode_labels(
-    request: dict,
+    request: LabelGenerateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
     Generate a PDF of barcode labels for the specified inventory items.
-
-    Accepts a JSON body with:
-    - `item_ids` (list of item UUIDs) — required
-    - `label_format` (string) — optional, defaults to "letter"
-      Supported: "letter", "dymo_30252", "dymo_30256", "dymo_30334", "rollo_4x6", "custom"
-    - `custom_width` (float) — required if label_format is "custom", width in inches
-    - `custom_height` (float) — required if label_format is "custom", height in inches
 
     Returns a PDF file with printable Code128 barcode labels.
 
@@ -1130,25 +1159,14 @@ async def generate_barcode_labels(
     """
     from fastapi.responses import StreamingResponse
 
-    item_ids = request.get("item_ids", [])
-    if not item_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="item_ids is required and must not be empty",
-        )
-
-    label_format = request.get("label_format", "letter")
-    custom_width = request.get("custom_width")
-    custom_height = request.get("custom_height")
-
     service = InventoryService(db)
     try:
         pdf_buf = await service.generate_barcode_labels(
-            item_ids=[UUID(iid) for iid in item_ids],
+            item_ids=request.item_ids,
             organization_id=current_user.organization_id,
-            label_format=label_format,
-            custom_width=custom_width,
-            custom_height=custom_height,
+            label_format=request.label_format,
+            custom_width=request.custom_width,
+            custom_height=request.custom_height,
         )
     except ValueError as e:
         raise HTTPException(
@@ -1156,7 +1174,7 @@ async def generate_barcode_labels(
             detail=str(e),
         )
 
-    filename = f"inventory-labels-{label_format}.pdf"
+    filename = f"inventory-labels-{request.label_format}.pdf"
     return StreamingResponse(
         pdf_buf,
         media_type="application/pdf",

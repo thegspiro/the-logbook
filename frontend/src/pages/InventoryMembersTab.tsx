@@ -100,13 +100,20 @@ const InventoryMembersTab: React.FC = () => {
     });
   };
 
-  const handleScanComplete = () => {
+  const handleScanComplete = async () => {
     // Refresh member list and detail after a scan operation
-    loadMembers();
+    await loadMembers();
     if (expandedUserId) {
-      inventoryService.getUserInventory(expandedUserId).then(setMemberDetail).catch((err) => {
+      setDetailLoading(true);
+      try {
+        const detail = await inventoryService.getUserInventory(expandedUserId);
+        setMemberDetail(detail);
+      } catch (err) {
         console.error('Failed to load member inventory detail:', err);
-      });
+        setMemberDetail(null);
+      } finally {
+        setDetailLoading(false);
+      }
     }
   };
 

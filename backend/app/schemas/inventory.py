@@ -639,3 +639,14 @@ class BatchReturnResponse(BaseModel):
     successful: int
     failed: int
     results: List[BatchReturnResultItem]
+
+
+class LabelGenerateRequest(BaseModel):
+    """Schema for generating barcode label PDFs"""
+    item_ids: List[UUID] = Field(..., min_length=1, description="Item UUIDs to generate labels for")
+    label_format: str = Field(
+        default="letter",
+        description="Label format: letter, dymo_30252, dymo_30256, dymo_30334, rollo_4x6, or custom",
+    )
+    custom_width: Optional[float] = Field(None, gt=0, description="Width in inches (required for custom format)")
+    custom_height: Optional[float] = Field(None, gt=0, description="Height in inches (required for custom format)")

@@ -182,6 +182,33 @@ class InventoryService:
         )
         return result.scalar_one_or_none()
 
+    async def update_category(
+        self,
+        category_id: UUID,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
+    ) -> Tuple[Optional[InventoryCategory], Optional[str]]:
+        """Update an inventory category"""
+        try:
+            category = await self.get_category_by_id(category_id, organization_id)
+            if not category:
+                return None, "Category not found"
+
+            # Rename "metadata" → "extra_data" (DB column name)
+            if "metadata" in update_data:
+                update_data["extra_data"] = update_data.pop("metadata")
+
+            for key, value in update_data.items():
+                if hasattr(category, key):
+                    setattr(category, key, value)
+
+            await self.db.commit()
+            await self.db.refresh(category)
+            return category, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
     # ============================================
     # Item Management
     # ============================================
@@ -195,6 +222,11 @@ class InventoryService:
             cat_err = await self._validate_category_requirements(item_data, organization_id)
             if cat_err:
                 return None, cat_err
+
+            # Validate pool items have quantity >= 1
+            tracking = item_data.get("tracking_type", "individual")
+            if tracking == "pool" and item_data.get("quantity", 1) < 1:
+                return None, "Pool items must have a quantity of at least 1"
 
             # Validate status/condition state
             status_val = ItemStatus(item_data.get("status", "available"))
@@ -1485,7 +1517,14 @@ class InventoryService:
             try:
                 condition = IC(condition_str)
             except ValueError:
-                condition = IC.GOOD
+                results.append({
+                    "code": code, "item_name": item.name if item else "Unknown",
+                    "item_id": item.id if item else "",
+                    "action": "none", "success": False,
+                    "error": f"Invalid return condition: '{condition_str}'",
+                })
+                failed += 1
+                continue
 
             try:
                 # Check if this item is assigned to the user
@@ -1527,6 +1566,7 @@ class InventoryService:
                     )
                     .order_by(CheckOutRecord.checked_out_at.desc())
                     .limit(1)
+                    .with_for_update()
                 )
                 checkout = checkout_result.scalar_one_or_none()
                 if checkout:
@@ -1565,6 +1605,7 @@ class InventoryService:
                         )
                         .order_by(ItemIssuance.issued_at.desc())
                         .limit(1)
+                        .with_for_update()
                     )
                     issuance = issuance_result.scalar_one_or_none()
                     if issuance:
