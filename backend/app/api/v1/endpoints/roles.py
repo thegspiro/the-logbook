@@ -258,6 +258,19 @@ async def delete_role(
 
     **Authentication required**
     """
+    # Guard: prevent deletion of system positions at the API layer
+    position = await role_service.get_role(db, str(role_id), str(current_user.organization_id))
+    if not position:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found"
+        )
+    if position.is_system:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot delete system positions"
+        )
+
     try:
         await role_service.delete_role(
             db=db,

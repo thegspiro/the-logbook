@@ -12,7 +12,7 @@ The report:
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from html import escape
 from zoneinfo import ZoneInfo
 from typing import Dict, Any, Optional, List, Tuple
@@ -88,7 +88,7 @@ class PropertyReturnService:
             .where(
                 ItemAssignment.organization_id == organization_id,
                 ItemAssignment.user_id == user_id,
-                ItemAssignment.is_active == True,
+                ItemAssignment.is_active == True,  # noqa: E712
             )
             .options(selectinload(ItemAssignment.item))
         )
@@ -100,7 +100,7 @@ class PropertyReturnService:
             .where(
                 CheckOutRecord.organization_id == organization_id,
                 CheckOutRecord.user_id == user_id,
-                CheckOutRecord.is_returned == False,
+                CheckOutRecord.is_returned == False,  # noqa: E712
             )
             .options(selectinload(CheckOutRecord.item))
         )
@@ -166,7 +166,7 @@ class PropertyReturnService:
             "item_count": len(items),
             "performed_by_name": officer.full_name if officer else "Department Administration",
             "performed_by_title": officer.rank if officer and officer.rank else "Administrator",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
         html = self._render_html(report_data, custom_instructions, reason=reason)
@@ -185,7 +185,7 @@ class PropertyReturnService:
             select(DocumentFolder).where(
                 DocumentFolder.organization_id == organization_id,
                 DocumentFolder.name == "Reports",
-                DocumentFolder.is_system == True,
+                DocumentFolder.is_system == True,  # noqa: E712
             )
         )
         folder = folder_result.scalar_one_or_none()

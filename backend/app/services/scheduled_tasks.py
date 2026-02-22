@@ -381,8 +381,8 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     selectinload(Event.location_obj),
                 )
                 .where(Event.organization_id == str(org.id))
-                .where(Event.send_reminders == True)
-                .where(Event.is_cancelled == False)
+                .where(Event.send_reminders == True)  # noqa: E712
+                .where(Event.is_cancelled == False)  # noqa: E712
                 .where(Event.start_datetime > now)
                 .where(Event.start_datetime <= max_lookahead)
             )
@@ -425,7 +425,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     users_result = await db.execute(
                         select(User)
                         .where(User.organization_id == str(org.id))
-                        .where(User.is_active == True)
+                        .where(User.is_active == True)  # noqa: E712
                     )
                     recipients = list(users_result.scalars().all())
                 else:
@@ -589,7 +589,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                 select(Event)
                 .options(selectinload(Event.rsvps))
                 .where(Event.organization_id == str(org.id))
-                .where(Event.is_cancelled == False)
+                .where(Event.is_cancelled == False)  # noqa: E712
                 .where(Event.end_datetime <= now)
                 .where(Event.end_datetime >= lookback)
                 .where(Event.created_by.isnot(None))
@@ -605,7 +605,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                 creator_result = await db.execute(
                     select(User).where(
                         User.id == event.created_by,
-                        User.is_active == True,
+                        User.is_active == True,  # noqa: E712
                     )
                 )
                 creator = creator_result.scalar_one_or_none()
@@ -768,7 +768,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 officer_result = await db.execute(
                     select(User).where(
                         User.id == shift.shift_officer_id,
-                        User.is_active == True,
+                        User.is_active == True,  # noqa: E712
                     )
                 )
                 officer = officer_result.scalar_one_or_none()

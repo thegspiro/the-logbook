@@ -8,7 +8,7 @@ and self-report configuration management.
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import calendar
 
 from app.models.training import (
@@ -252,7 +252,7 @@ class TrainingSubmissionService:
 
             submission.status = SubmissionStatus.APPROVED
             submission.reviewed_by = reviewer_id
-            submission.reviewed_at = datetime.utcnow()
+            submission.reviewed_at = datetime.now(timezone.utc)
             submission.reviewer_notes = reviewer_notes
 
             await self.db.commit()
@@ -263,14 +263,14 @@ class TrainingSubmissionService:
         elif action == "reject":
             submission.status = SubmissionStatus.REJECTED
             submission.reviewed_by = reviewer_id
-            submission.reviewed_at = datetime.utcnow()
+            submission.reviewed_at = datetime.now(timezone.utc)
             submission.reviewer_notes = reviewer_notes
             await self.db.commit()
 
         elif action == "revision_requested":
             submission.status = SubmissionStatus.REVISION_REQUESTED
             submission.reviewed_by = reviewer_id
-            submission.reviewed_at = datetime.utcnow()
+            submission.reviewed_at = datetime.now(timezone.utc)
             submission.reviewer_notes = reviewer_notes
             await self.db.commit()
 

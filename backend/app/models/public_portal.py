@@ -9,7 +9,7 @@ from sqlalchemy import Column, String, Boolean, Integer, Text, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.mysql import CHAR
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from app.core.database import Base
@@ -54,12 +54,12 @@ class PublicPortalConfig(Base):
     settings = Column(JSON, default=dict, nullable=False)
 
     # Timestamps
-    created_at = Column(String(26), nullable=False, default=lambda: datetime.utcnow().isoformat())
+    created_at = Column(String(26), nullable=False, default=lambda: datetime.now(timezone.utc).isoformat())
     updated_at = Column(
         String(26),
         nullable=False,
-        default=lambda: datetime.utcnow().isoformat(),
-        onupdate=lambda: datetime.utcnow().isoformat()
+        default=lambda: datetime.now(timezone.utc).isoformat(),
+        onupdate=lambda: datetime.now(timezone.utc).isoformat()
     )
 
     # Relationships
@@ -135,7 +135,7 @@ class PublicPortalAPIKey(Base):
     )
 
     # Timestamps
-    created_at = Column(String(26), nullable=False, default=lambda: datetime.utcnow().isoformat())
+    created_at = Column(String(26), nullable=False, default=lambda: datetime.now(timezone.utc).isoformat())
 
     # Relationships
     organization = relationship("Organization")
@@ -163,7 +163,7 @@ class PublicPortalAPIKey(Base):
             return False
         try:
             expiry = datetime.fromisoformat(self.expires_at)
-            return datetime.utcnow() > expiry
+            return datetime.now(timezone.utc) > expiry
         except (ValueError, TypeError):
             return False
 
@@ -218,7 +218,7 @@ class PublicPortalAccessLog(Base):
     referer = Column(String(500), nullable=True)
 
     # Timestamp of the request
-    timestamp = Column(String(26), nullable=False, default=lambda: datetime.utcnow().isoformat())
+    timestamp = Column(String(26), nullable=False, default=lambda: datetime.now(timezone.utc).isoformat())
 
     # Security flags
     flagged_suspicious = Column(Boolean, default=False, nullable=False)
@@ -273,12 +273,12 @@ class PublicPortalDataWhitelist(Base):
     is_enabled = Column(Boolean, default=False, nullable=False)
 
     # Timestamps
-    created_at = Column(String(26), nullable=False, default=lambda: datetime.utcnow().isoformat())
+    created_at = Column(String(26), nullable=False, default=lambda: datetime.now(timezone.utc).isoformat())
     updated_at = Column(
         String(26),
         nullable=False,
-        default=lambda: datetime.utcnow().isoformat(),
-        onupdate=lambda: datetime.utcnow().isoformat()
+        default=lambda: datetime.now(timezone.utc).isoformat(),
+        onupdate=lambda: datetime.now(timezone.utc).isoformat()
     )
 
     # Relationships

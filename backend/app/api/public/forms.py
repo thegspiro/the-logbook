@@ -157,11 +157,11 @@ async def submit_public_form(
     # Honeypot triggered - bot detected, return fake success
     if result is None and error is None:
         import uuid
-        from datetime import datetime
+        from datetime import datetime, timezone
         return PublicFormSubmissionResponse(
             id=uuid.uuid4(),
             form_name="Form",
-            submitted_at=datetime.now(),
+            submitted_at=datetime.now(timezone.utc),
             message="Thank you for your submission!",
         )
 

@@ -6,7 +6,7 @@ attendees, action items, and approval workflows.
 """
 
 from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -199,7 +199,7 @@ class MeetingsService:
 
             meeting.status = MeetingStatus.APPROVED
             meeting.approved_by = approved_by
-            meeting.approved_at = datetime.now()
+            meeting.approved_at = datetime.now(timezone.utc)
 
             await self.db.commit()
             await self.db.refresh(meeting)
@@ -300,7 +300,7 @@ class MeetingsService:
             if "status" in update_data:
                 new_status = update_data["status"]
                 if new_status == ActionItemStatus.COMPLETED.value and item.status != ActionItemStatus.COMPLETED:
-                    item.completed_at = datetime.now()
+                    item.completed_at = datetime.now(timezone.utc)
 
             for key, value in update_data.items():
                 setattr(item, key, value)

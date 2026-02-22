@@ -10,7 +10,7 @@ browser extensions.
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -46,7 +46,7 @@ class OnboardingSessionManager:
             session_id: Unique session identifier
         """
         session_id = self.generate_session_id()
-        expires_at = datetime.utcnow() + self.SESSION_TIMEOUT
+        expires_at = datetime.now(timezone.utc) + self.SESSION_TIMEOUT
 
         session = OnboardingSessionModel(
             session_id=session_id,
@@ -54,8 +54,8 @@ class OnboardingSessionManager:
             ip_address=ip_address,
             user_agent=user_agent,
             expires_at=expires_at,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
 
         db.add(session)
@@ -85,7 +85,7 @@ class OnboardingSessionManager:
             return None
 
         # Check if expired
-        if session.expires_at < datetime.utcnow():
+        if session.expires_at < datetime.now(timezone.utc):
             # Delete expired session
             await db.delete(session)
             await db.commit()
@@ -122,7 +122,7 @@ class OnboardingSessionManager:
             return False
 
         # Check if expired
-        if session.expires_at < datetime.utcnow():
+        if session.expires_at < datetime.now(timezone.utc):
             await db.delete(session)
             await db.commit()
             return False
@@ -133,7 +133,7 @@ class OnboardingSessionManager:
         else:
             session.data = data
 
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
 
         await db.commit()
         return True
@@ -175,7 +175,7 @@ class OnboardingSessionManager:
         """
         result = await db.execute(
             delete(OnboardingSessionModel).where(
-                OnboardingSessionModel.expires_at < datetime.utcnow()
+                OnboardingSessionModel.expires_at < datetime.now(timezone.utc)
             )
         )
         await db.commit()

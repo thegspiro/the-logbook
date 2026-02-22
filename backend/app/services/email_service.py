@@ -140,7 +140,7 @@ class EmailService:
                 msg['From'] = f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
                 msg['To'] = to_email
                 msg['Subject'] = subject
-                msg['Date'] = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
+                msg['Date'] = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S +0000')
 
                 # Add CC and BCC recipients
                 all_recipients = [to_email]
@@ -611,7 +611,7 @@ Please do not reply to this email.
         Returns:
             Tuple of (success_count, failure_count)
         """
-        timestamp = self._format_local_dt(datetime.utcnow())
+        timestamp = self._format_local_dt(datetime.now(timezone.utc))
         ip_display = ip_address or "Unknown"
 
         subject = f"[IT Notice] Password Reset Requested — {organization_name}"

@@ -398,7 +398,7 @@ class ApparatusService:
         apparatus = Apparatus(
             organization_id=organization_id,
             created_by=created_by,
-            status_changed_at=datetime.utcnow(),
+            status_changed_at=datetime.now(timezone.utc),
             status_changed_by=created_by,
             **apparatus_data.model_dump()
         )
@@ -412,7 +412,7 @@ class ApparatusService:
             organization_id=organization_id,
             apparatus_id=apparatus.id,
             status_id=apparatus_data.status_id,
-            changed_at=datetime.utcnow(),
+            changed_at=datetime.now(timezone.utc),
             changed_by=created_by,
             reason="Initial status on creation",
         )
@@ -424,7 +424,7 @@ class ApparatusService:
                 organization_id=organization_id,
                 apparatus_id=apparatus.id,
                 location_id=apparatus_data.primary_station_id,
-                assigned_date=datetime.utcnow(),
+                assigned_date=datetime.now(timezone.utc),
                 assignment_reason="Initial station assignment",
                 created_by=created_by,
             )
@@ -549,14 +549,14 @@ class ApparatusService:
                 organization_id=organization_id,
                 apparatus_id=apparatus_id,
                 status_id=apparatus_data.status_id,
-                changed_at=datetime.utcnow(),
+                changed_at=datetime.now(timezone.utc),
                 changed_by=updated_by,
                 reason=apparatus_data.status_reason,
                 mileage_at_change=apparatus.current_mileage,
                 hours_at_change=apparatus.current_hours,
             )
             self.db.add(status_history)
-            apparatus.status_changed_at = datetime.utcnow()
+            apparatus.status_changed_at = datetime.now(timezone.utc)
             apparatus.status_changed_by = updated_by
 
         # Track station change
@@ -569,25 +569,25 @@ class ApparatusService:
             )
             current_location = result.scalar_one_or_none()
             if current_location:
-                current_location.unassigned_date = datetime.utcnow()
+                current_location.unassigned_date = datetime.now(timezone.utc)
 
             # Create new location history
             location_history = ApparatusLocationHistory(
                 organization_id=organization_id,
                 apparatus_id=apparatus_id,
                 location_id=apparatus_data.primary_station_id,
-                assigned_date=datetime.utcnow(),
+                assigned_date=datetime.now(timezone.utc),
                 created_by=updated_by,
             )
             self.db.add(location_history)
 
         # Track mileage/hours updates
         if apparatus_data.current_mileage is not None:
-            apparatus.mileage_updated_at = datetime.utcnow()
+            apparatus.mileage_updated_at = datetime.now(timezone.utc)
         if apparatus_data.current_hours is not None:
-            apparatus.hours_updated_at = datetime.utcnow()
+            apparatus.hours_updated_at = datetime.now(timezone.utc)
         if apparatus_data.current_value is not None:
-            apparatus.value_updated_at = datetime.utcnow()
+            apparatus.value_updated_at = datetime.now(timezone.utc)
 
         update_data = apparatus_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -624,7 +624,7 @@ class ApparatusService:
             organization_id=organization_id,
             apparatus_id=apparatus_id,
             status_id=status_change.status_id,
-            changed_at=datetime.utcnow(),
+            changed_at=datetime.now(timezone.utc),
             changed_by=changed_by,
             reason=status_change.reason,
             mileage_at_change=status_change.current_mileage or apparatus.current_mileage,
@@ -635,15 +635,15 @@ class ApparatusService:
         # Update apparatus
         apparatus.status_id = status_change.status_id
         apparatus.status_reason = status_change.reason
-        apparatus.status_changed_at = datetime.utcnow()
+        apparatus.status_changed_at = datetime.now(timezone.utc)
         apparatus.status_changed_by = changed_by
 
         if status_change.current_mileage is not None:
             apparatus.current_mileage = status_change.current_mileage
-            apparatus.mileage_updated_at = datetime.utcnow()
+            apparatus.mileage_updated_at = datetime.now(timezone.utc)
         if status_change.current_hours is not None:
             apparatus.current_hours = status_change.current_hours
-            apparatus.hours_updated_at = datetime.utcnow()
+            apparatus.hours_updated_at = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(apparatus)
@@ -674,8 +674,8 @@ class ApparatusService:
                     ApparatusStatus.organization_id.is_(None)
                 )
             )
-            .where(ApparatusStatus.is_archived_status == True)
-            .where(ApparatusStatus.is_active == True)
+            .where(ApparatusStatus.is_archived_status == True)  # noqa: E712
+            .where(ApparatusStatus.is_active == True)  # noqa: E712
         )
         archived_status = result.scalars().first()
 
@@ -684,10 +684,10 @@ class ApparatusService:
 
         # Update apparatus
         apparatus.is_archived = True
-        apparatus.archived_at = datetime.utcnow()
+        apparatus.archived_at = datetime.now(timezone.utc)
         apparatus.archived_by = archived_by
         apparatus.status_id = archived_status.id
-        apparatus.status_changed_at = datetime.utcnow()
+        apparatus.status_changed_at = datetime.now(timezone.utc)
         apparatus.status_changed_by = archived_by
 
         apparatus.disposal_method = archive_data.disposal_method
@@ -709,7 +709,7 @@ class ApparatusService:
             organization_id=organization_id,
             apparatus_id=apparatus_id,
             status_id=archived_status.id,
-            changed_at=datetime.utcnow(),
+            changed_at=datetime.now(timezone.utc),
             changed_by=archived_by,
             reason=f"Archived: {archive_data.disposal_method} - {archive_data.disposal_reason or 'No reason provided'}",
             mileage_at_change=apparatus.current_mileage,
@@ -725,7 +725,7 @@ class ApparatusService:
         )
         current_location = result.scalar_one_or_none()
         if current_location:
-            current_location.unassigned_date = datetime.utcnow()
+            current_location.unassigned_date = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(apparatus)
@@ -1175,14 +1175,14 @@ class ApparatusService:
 
         conditions = [
             ApparatusMaintenance.organization_id == organization_id,
-            ApparatusMaintenance.is_completed == False,
+            ApparatusMaintenance.is_completed == False,  # noqa: E712
         ]
 
         if include_overdue:
             conditions.append(
                 or_(
                     ApparatusMaintenance.due_date <= due_date_threshold,
-                    ApparatusMaintenance.is_overdue == True,
+                    ApparatusMaintenance.is_overdue == True,  # noqa: E712
                 )
             )
         else:
@@ -1240,10 +1240,10 @@ class ApparatusService:
         # Update apparatus mileage/hours if provided
         if fuel_data.mileage_at_fill:
             apparatus.current_mileage = fuel_data.mileage_at_fill
-            apparatus.mileage_updated_at = datetime.utcnow()
+            apparatus.mileage_updated_at = datetime.now(timezone.utc)
         if fuel_data.hours_at_fill:
             apparatus.current_hours = fuel_data.hours_at_fill
-            apparatus.hours_updated_at = datetime.utcnow()
+            apparatus.hours_updated_at = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(fuel_log)
@@ -1496,7 +1496,7 @@ class ApparatusService:
                 select(ApparatusPhoto)
                 .where(ApparatusPhoto.apparatus_id == photo_data.apparatus_id)
                 .where(ApparatusPhoto.organization_id == str(organization_id))
-                .where(ApparatusPhoto.is_primary == True)
+                .where(ApparatusPhoto.is_primary == True)  # noqa: E712
             )
             for photo in result.scalars().all():
                 photo.is_primary = False
@@ -1626,7 +1626,7 @@ class ApparatusService:
             )
             .join(Apparatus, Apparatus.apparatus_type_id == ApparatusType.id)
             .where(Apparatus.organization_id == str(organization_id))
-            .where(Apparatus.is_archived == False)
+            .where(Apparatus.is_archived == False)  # noqa: E712
             .group_by(ApparatusType.id)
         )
         type_result = await self.db.execute(type_counts_query)
@@ -1642,7 +1642,7 @@ class ApparatusService:
         # Archived count
         archived_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
-            Apparatus.is_archived == True
+            Apparatus.is_archived == True  # noqa: E712
         )
         archived_result = await self.db.execute(archived_query)
         archived = archived_result.scalar()
@@ -1656,7 +1656,7 @@ class ApparatusService:
 
         reg_expiring_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
-            Apparatus.is_archived == False,
+            Apparatus.is_archived == False,  # noqa: E712
             Apparatus.registration_expiration <= expiration_date,
             Apparatus.registration_expiration >= date.today()
         )
@@ -1665,7 +1665,7 @@ class ApparatusService:
 
         insp_expiring_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
-            Apparatus.is_archived == False,
+            Apparatus.is_archived == False,  # noqa: E712
             Apparatus.inspection_expiration <= expiration_date,
             Apparatus.inspection_expiration >= date.today()
         )
@@ -1674,7 +1674,7 @@ class ApparatusService:
 
         ins_expiring_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
-            Apparatus.is_archived == False,
+            Apparatus.is_archived == False,  # noqa: E712
             Apparatus.insurance_expiration <= expiration_date,
             Apparatus.insurance_expiration >= date.today()
         )
@@ -1938,7 +1938,7 @@ class ApparatusService:
             return None
 
         provider.is_active = False
-        provider.archived_at = datetime.utcnow()
+        provider.archived_at = datetime.now(timezone.utc)
         provider.archived_by = archived_by
         await self.db.commit()
         await self.db.refresh(provider)
@@ -2132,7 +2132,7 @@ class ApparatusService:
         # Track resolution
         if update_data.get("status") == "resolved" and note.status != "resolved":
             note.resolved_by = resolved_by
-            note.resolved_at = datetime.utcnow()
+            note.resolved_at = datetime.now(timezone.utc)
 
         # Convert attachment models to dicts for JSON storage
         if update_data.get("attachments"):
@@ -2181,7 +2181,7 @@ class ApparatusService:
         components_query = select(ApparatusComponent).where(
             ApparatusComponent.organization_id == organization_id,
             ApparatusComponent.apparatus_id == apparatus_id,
-            ApparatusComponent.is_active == True,
+            ApparatusComponent.is_active == True,  # noqa: E712
         )
         if component_ids:
             components_query = components_query.where(
@@ -2226,7 +2226,7 @@ class ApparatusService:
         maint_query = maint_query.where(
             or_(
                 ApparatusMaintenance.created_at >= cutoff,
-                ApparatusMaintenance.is_completed == False,
+                ApparatusMaintenance.is_completed == False,  # noqa: E712
             )
         ).order_by(ApparatusMaintenance.created_at.desc())
         maint_result = await self.db.execute(maint_query)

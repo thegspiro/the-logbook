@@ -275,7 +275,7 @@ class ReportsService:
             attended_result = await self.db.execute(
                 select(func.count(EventRSVP.id))
                 .where(EventRSVP.event_id == event.id)
-                .where(EventRSVP.checked_in == True)
+                .where(EventRSVP.checked_in == True)  # noqa: E712
             )
             attended = attended_result.scalar() or 0
 

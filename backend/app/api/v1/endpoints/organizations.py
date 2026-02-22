@@ -352,17 +352,17 @@ async def get_setup_checklist(
 
     apparatus_count = (await db.execute(
         select(func.count()).select_from(BasicApparatus)
-        .where(BasicApparatus.organization_id == org_id, BasicApparatus.is_active == True)
+        .where(BasicApparatus.organization_id == org_id, BasicApparatus.is_active == True)  # noqa: E712
     )).scalar() or 0
 
     location_count = (await db.execute(
         select(func.count()).select_from(Location)
-        .where(Location.organization_id == org_id, Location.is_active == True)
+        .where(Location.organization_id == org_id, Location.is_active == True)  # noqa: E712
     )).scalar() or 0
 
     shift_template_count = (await db.execute(
         select(func.count()).select_from(ShiftTemplate)
-        .where(ShiftTemplate.organization_id == org_id, ShiftTemplate.is_active == True)
+        .where(ShiftTemplate.organization_id == org_id, ShiftTemplate.is_active == True)  # noqa: E712
     )).scalar() or 0
 
     course_count = (await db.execute(
@@ -383,7 +383,7 @@ async def get_setup_checklist(
     try:
         pipeline_count = (await db.execute(
             select(func.count()).select_from(MembershipPipeline)
-            .where(MembershipPipeline.organization_id == org_id, MembershipPipeline.is_active == True)
+            .where(MembershipPipeline.organization_id == org_id, MembershipPipeline.is_active == True)  # noqa: E712
         )).scalar() or 0
     except Exception as e:
         logger.warning(f"Failed to query pipeline count for setup checklist: {e}")

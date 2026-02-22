@@ -9,7 +9,7 @@ messages.
 """
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 
 from loguru import logger
@@ -116,13 +116,13 @@ class InventoryNotificationService:
 
         Returns a summary dict suitable for the scheduled-task response.
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=delay_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=delay_minutes)
 
         # Fetch pending records older than the cutoff
         result = await self.db.execute(
             select(InventoryNotificationQueue)
             .where(
-                InventoryNotificationQueue.processed == False,
+                InventoryNotificationQueue.processed == False,  # noqa: E712
                 InventoryNotificationQueue.created_at <= cutoff,
             )
             .order_by(
@@ -152,7 +152,7 @@ class InventoryNotificationService:
                 if not net_items:
                     for rec in member_records:
                         rec.processed = True
-                        rec.processed_at = datetime.utcnow()
+                        rec.processed_at = datetime.now(timezone.utc)
                     records_processed += len(member_records)
                     continue
 
@@ -164,7 +164,7 @@ class InventoryNotificationService:
                     logger.warning(f"No email for user {member_id}, skipping inventory notification")
                     for rec in member_records:
                         rec.processed = True
-                        rec.processed_at = datetime.utcnow()
+                        rec.processed_at = datetime.now(timezone.utc)
                     records_processed += len(member_records)
                     continue
 
@@ -180,7 +180,7 @@ class InventoryNotificationService:
                 context = {
                     "first_name": user.first_name or "Member",
                     "organization_name": org.name if org else "Your Department",
-                    "change_date": datetime.utcnow().strftime("%B %d, %Y"),
+                    "change_date": datetime.now(timezone.utc).strftime("%B %d, %Y"),
                     "items_issued_html": items_issued_html,
                     "items_returned_html": items_returned_html,
                     "items_issued_text": items_issued_text,
@@ -194,7 +194,7 @@ class InventoryNotificationService:
                 # Mark all records as processed
                 for rec in member_records:
                     rec.processed = True
-                    rec.processed_at = datetime.utcnow()
+                    rec.processed_at = datetime.now(timezone.utc)
                 records_processed += len(member_records)
 
             except Exception as e:

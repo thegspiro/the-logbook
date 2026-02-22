@@ -196,7 +196,7 @@ async def list_api_keys(
     )
 
     if not include_inactive:
-        query = query.where(PublicPortalAPIKey.is_active == True)
+        query = query.where(PublicPortalAPIKey.is_active == True)  # noqa: E712
 
     query = query.order_by(desc(PublicPortalAPIKey.created_at))
 
@@ -524,7 +524,7 @@ async def get_usage_stats(
         .where(
             and_(
                 PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.flagged_suspicious == True
+                PublicPortalAccessLog.flagged_suspicious == True  # noqa: E712
             )
         )
     )

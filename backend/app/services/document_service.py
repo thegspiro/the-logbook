@@ -38,7 +38,7 @@ class DocumentService:
         existing = await self.db.execute(
             select(func.count(DocumentFolder.id))
             .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.is_system == True)
+            .where(DocumentFolder.is_system == True)  # noqa: E712
         )
         if (existing.scalar() or 0) > 0:
             return await self.list_folders(organization_id)
@@ -305,7 +305,7 @@ class DocumentService:
             if existing:
                 existing.content_html = html
                 existing.name = minutes.title
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(timezone.utc)
                 await self.db.commit()
                 await self.db.refresh(existing)
                 return existing

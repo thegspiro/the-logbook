@@ -6,7 +6,7 @@ including an admin-level summary for Chiefs and department leaders.
 """
 
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
@@ -108,7 +108,7 @@ async def get_dashboard_stats(
     active_members = result.scalar() or 0
 
     # Recent events (last 30 days)
-    cutoff = datetime.utcnow() - timedelta(days=30)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     result = await db.execute(
         select(func.count(Event.id)).where(
             Event.organization_id == org_id,
@@ -216,7 +216,7 @@ async def get_admin_summary(
         else:
             # Fallback: no program enrollments — use record-based metric
             # but exclude cancelled records from the denominator
-            twelve_months_ago = datetime.utcnow() - timedelta(days=365)
+            twelve_months_ago = datetime.now(timezone.utc) - timedelta(days=365)
             result = await db.execute(
                 select(func.count(TrainingRecord.id)).where(
                     TrainingRecord.organization_id == org_id,
@@ -244,7 +244,7 @@ async def get_admin_summary(
         result = await db.execute(
             select(func.count(Event.id)).where(
                 Event.organization_id == org_id,
-                Event.start_datetime >= datetime.utcnow(),
+                Event.start_datetime >= datetime.now(timezone.utc),
                 Event.is_cancelled == False,  # noqa: E712
             )
         )
@@ -288,7 +288,7 @@ async def get_admin_summary(
                     MinutesActionItemStatus.PENDING.value,
                     MinutesActionItemStatus.IN_PROGRESS.value,
                 ]),
-                ActionItem.due_date < datetime.utcnow(),
+                ActionItem.due_date < datetime.now(timezone.utc),
             )
         )
         overdue_minutes = result.scalar() or 0
@@ -311,7 +311,7 @@ async def get_admin_summary(
     # ── Recent training hours (last 30 days) ──
     recent_hours = 0.0
     try:
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         result = await db.execute(
             select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0)).where(
                 TrainingRecord.organization_id == org_id,
@@ -458,7 +458,7 @@ async def get_community_engagement(
         select(func.count(Event.id)).where(
             Event.organization_id == org_id,
             Event.event_type.in_(public_types),
-            Event.start_datetime >= datetime.utcnow(),
+            Event.start_datetime >= datetime.now(timezone.utc),
             Event.is_cancelled == False,  # noqa: E712
         )
     )

@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, List
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
@@ -94,7 +94,7 @@ async def create_training_waiver(
         end_date=data.end_date,
         requirement_ids=data.requirement_ids,
         granted_by=str(current_user.id),
-        granted_at=datetime.utcnow(),
+        granted_at=datetime.now(timezone.utc),
         active=True,
     )
     db.add(waiver)
@@ -176,7 +176,7 @@ async def update_training_waiver(
     for key, value in updates.items():
         setattr(waiver, key, value)
 
-    waiver.updated_at = datetime.utcnow()
+    waiver.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(waiver)
 
@@ -202,7 +202,7 @@ async def delete_training_waiver(
         raise HTTPException(status_code=404, detail="Waiver not found")
 
     waiver.active = False
-    waiver.updated_at = datetime.utcnow()
+    waiver.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
 

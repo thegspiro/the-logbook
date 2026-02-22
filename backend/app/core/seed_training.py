@@ -1348,7 +1348,7 @@ async def seed_pipeline_templates(
             select(TrainingProgram).where(
                 TrainingProgram.organization_id == organization_id,
                 TrainingProgram.code == template["code"],
-                TrainingProgram.is_template == True,
+                TrainingProgram.is_template == True,  # noqa: E712
             )
         )
         existing = result.scalar_one_or_none()

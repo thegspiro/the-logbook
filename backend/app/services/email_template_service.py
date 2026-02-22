@@ -307,7 +307,7 @@ class EmailTemplateService:
             EmailTemplate.template_type == template_type,
         ]
         if active_only:
-            conditions.append(EmailTemplate.is_active == True)
+            conditions.append(EmailTemplate.is_active == True)  # noqa: E712
 
         result = await self.db.execute(
             select(EmailTemplate)

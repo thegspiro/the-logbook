@@ -460,7 +460,7 @@ class SchedulingService:
             .where(ShiftTemplate.organization_id == str(organization_id))
         )
         if active_only:
-            query = query.where(ShiftTemplate.is_active == True)
+            query = query.where(ShiftTemplate.is_active == True)  # noqa: E712
 
         query = query.order_by(ShiftTemplate.name.asc())
         result = await self.db.execute(query)
@@ -544,7 +544,7 @@ class SchedulingService:
             .where(ShiftPattern.organization_id == str(organization_id))
         )
         if active_only:
-            query = query.where(ShiftPattern.is_active == True)
+            query = query.where(ShiftPattern.is_active == True)  # noqa: E712
 
         query = query.order_by(ShiftPattern.name.asc())
         result = await self.db.execute(query)
@@ -1512,7 +1512,7 @@ class SchedulingService:
         req_result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == str(organization_id))
-            .where(TrainingRequirement.active == True)
+            .where(TrainingRequirement.active == True)  # noqa: E712
             .where(TrainingRequirement.requirement_type.in_([
                 RequirementType.SHIFTS.value,
                 RequirementType.HOURS.value,

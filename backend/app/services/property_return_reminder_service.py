@@ -207,7 +207,7 @@ class PropertyReturnReminderService:
             .where(
                 ItemAssignment.organization_id == organization_id,
                 ItemAssignment.user_id == user_id,
-                ItemAssignment.is_active == True,
+                ItemAssignment.is_active == True,  # noqa: E712
             )
             .options(selectinload(ItemAssignment.item))
         )
@@ -219,7 +219,7 @@ class PropertyReturnReminderService:
             .where(
                 CheckOutRecord.organization_id == organization_id,
                 CheckOutRecord.user_id == user_id,
-                CheckOutRecord.is_returned == False,
+                CheckOutRecord.is_returned == False,  # noqa: E712
             )
             .options(selectinload(CheckOutRecord.item))
         )

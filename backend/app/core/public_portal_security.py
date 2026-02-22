@@ -10,7 +10,7 @@ from fastapi.security import APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from typing import Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 import bcrypt
 import hashlib
@@ -84,14 +84,14 @@ def generate_api_key() -> Tuple[str, str]:
 
 async def get_current_hour_timestamp() -> int:
     """Get the current hour as a Unix timestamp (for rate limiting)."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     hour_start = now.replace(minute=0, second=0, microsecond=0)
     return int(hour_start.timestamp())
 
 
 async def get_current_minute_timestamp() -> int:
     """Get the current minute as a Unix timestamp (for IP rate limiting)."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     minute_start = now.replace(second=0, microsecond=0)
     return int(minute_start.timestamp())
 
@@ -120,7 +120,7 @@ async def check_rate_limit(
     # If close to limit, verify with database
     if current_count >= rate_limit * 0.9:  # 90% of limit
         # Count requests in the current hour from database
-        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
         result = await db.execute(
             select(func.count(PublicPortalAccessLog.id))
             .where(
@@ -251,7 +251,7 @@ async def detect_anomalies(
         Tuple of (is_suspicious, reason)
     """
     # Check for rapid requests from same IP (last minute)
-    one_minute_ago = datetime.utcnow() - timedelta(minutes=1)
+    one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
     result = await db.execute(
         select(func.count(PublicPortalAccessLog.id))
         .where(
@@ -267,7 +267,7 @@ async def detect_anomalies(
         return True, f"Rapid requests: {requests_last_minute} in last minute"
 
     # Check for failed authentication attempts (last 5 minutes)
-    five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
+    five_minutes_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
     result = await db.execute(
         select(func.count(PublicPortalAccessLog.id))
         .where(
@@ -384,7 +384,7 @@ async def authenticate_api_key(
         )
 
     # Update last used timestamp
-    api_key_obj.last_used_at = datetime.utcnow().isoformat()
+    api_key_obj.last_used_at = datetime.now(timezone.utc).isoformat()
     await db.commit()
 
     return api_key_obj
@@ -424,9 +424,9 @@ def cleanup_rate_limit_cache():
     Should be called periodically (e.g., every hour) to prevent
     memory bloat.
     """
-    current_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    current_hour = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     current_hour_ts = int(current_hour.timestamp())
-    current_minute = datetime.utcnow().replace(second=0, microsecond=0)
+    current_minute = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     current_minute_ts = int(current_minute.timestamp())
 
     # Clean up hourly cache (keep current and last hour)

@@ -7,7 +7,7 @@ Business logic for meeting minutes management.
 import logging
 from typing import List, Optional, Tuple
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -293,7 +293,7 @@ class MinuteService:
             raise ValueError("Can only submit draft or rejected minutes")
 
         minutes.status = MinutesStatus.SUBMITTED
-        minutes.submitted_at = datetime.utcnow()
+        minutes.submitted_at = datetime.now(timezone.utc)
         minutes.submitted_by = str(submitted_by)
         minutes.rejected_at = None
         minutes.rejected_by = None
@@ -314,7 +314,7 @@ class MinuteService:
             raise ValueError("Can only approve submitted minutes")
 
         minutes.status = MinutesStatus.APPROVED
-        minutes.approved_at = datetime.utcnow()
+        minutes.approved_at = datetime.now(timezone.utc)
         minutes.approved_by = str(approved_by)
 
         await self.db.commit()
@@ -332,7 +332,7 @@ class MinuteService:
             raise ValueError("Can only reject submitted minutes")
 
         minutes.status = MinutesStatus.REJECTED
-        minutes.rejected_at = datetime.utcnow()
+        minutes.rejected_at = datetime.now(timezone.utc)
         minutes.rejected_by = str(rejected_by)
         minutes.rejection_reason = reason
 
@@ -479,7 +479,7 @@ class MinuteService:
         if "status" in update_data:
             update_data["status"] = MinutesActionItemStatus(update_data["status"])
             if update_data["status"] == MinutesActionItemStatus.COMPLETED:
-                update_data["completed_at"] = datetime.utcnow()
+                update_data["completed_at"] = datetime.now(timezone.utc)
 
         if "priority" in update_data:
             update_data["priority"] = ActionItemPriority(update_data["priority"])
@@ -529,7 +529,7 @@ class MinuteService:
         total = total_result.scalar() or 0
 
         # This month
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         this_month_result = await self.db.execute(
             base.where(MeetingMinutes.meeting_date >= month_start)
@@ -681,7 +681,7 @@ class MinuteService:
             section_defaults = DEFAULT_COMMITTEE_SECTIONS
 
         from app.core.utils import generate_uuid
-        meeting_date_dt = datetime.combine(meeting.meeting_date, meeting.start_time or datetime.min.time()) if meeting.meeting_date else datetime.utcnow()
+        meeting_date_dt = datetime.combine(meeting.meeting_date, meeting.start_time or datetime.min.time()) if meeting.meeting_date else datetime.now(timezone.utc)
 
         minutes = MeetingMinutes(
             id=generate_uuid(),

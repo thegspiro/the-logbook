@@ -275,7 +275,7 @@ class TemplateService:
             select(MinutesTemplate)
             .where(MinutesTemplate.organization_id == str(organization_id))
             .where(MinutesTemplate.meeting_type == meeting_type)
-            .where(MinutesTemplate.is_default == True)
+            .where(MinutesTemplate.is_default == True)  # noqa: E712
         )
         return result.scalar_one_or_none()
 
@@ -285,7 +285,7 @@ class TemplateService:
             select(MinutesTemplate)
             .where(MinutesTemplate.organization_id == str(organization_id))
             .where(MinutesTemplate.meeting_type == meeting_type)
-            .where(MinutesTemplate.is_default == True)
+            .where(MinutesTemplate.is_default == True)  # noqa: E712
         )
         for tpl in result.scalars().all():
             tpl.is_default = False

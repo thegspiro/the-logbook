@@ -7,7 +7,7 @@ including automatic pipeline requirement progress updates.
 
 from typing import Optional, List, Tuple
 from uuid import UUID
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 
@@ -313,7 +313,7 @@ class ShiftCompletionService:
             return None
 
         report.trainee_acknowledged = True
-        report.trainee_acknowledged_at = datetime.utcnow()
+        report.trainee_acknowledged_at = datetime.now(timezone.utc)
         if trainee_comments:
             report.trainee_comments = trainee_comments
 

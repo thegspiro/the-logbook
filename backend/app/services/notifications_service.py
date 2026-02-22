@@ -6,7 +6,7 @@ sending, logging, and preferences.
 """
 
 from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from uuid import UUID
@@ -213,7 +213,7 @@ class NotificationsService:
         )
 
         if not include_expired:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             query = query.where(
                 or_(
                     NotificationLog.expires_at.is_(None),
@@ -222,7 +222,7 @@ class NotificationsService:
             )
 
         if not include_read:
-            query = query.where(NotificationLog.read == False)
+            query = query.where(NotificationLog.read == False)  # noqa: E712
 
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
@@ -240,13 +240,13 @@ class NotificationsService:
         user_id: UUID,
     ) -> int:
         """Get count of unread, non-expired in-app notifications for a user."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         result = await self.db.execute(
             select(func.count(NotificationLog.id))
             .where(NotificationLog.organization_id == str(organization_id))
             .where(NotificationLog.recipient_id == str(user_id))
             .where(NotificationLog.channel == NotificationChannel.IN_APP)
-            .where(NotificationLog.read == False)
+            .where(NotificationLog.read == False)  # noqa: E712
             .where(
                 or_(
                     NotificationLog.expires_at.is_(None),
@@ -271,7 +271,7 @@ class NotificationsService:
                 return None, "Notification not found"
 
             log.read = True
-            log.read_at = datetime.utcnow()
+            log.read_at = datetime.now(timezone.utc)
 
             await self.db.commit()
             await self.db.refresh(log)
@@ -297,7 +297,7 @@ class NotificationsService:
         active_result = await self.db.execute(
             select(func.count(NotificationRule.id))
             .where(NotificationRule.organization_id == str(organization_id))
-            .where(NotificationRule.enabled == True)
+            .where(NotificationRule.enabled == True)  # noqa: E712
         )
         active_rules = active_result.scalar() or 0
 

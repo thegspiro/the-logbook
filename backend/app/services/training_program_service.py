@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Any
 from uuid import UUID
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.orm import selectinload
@@ -106,7 +106,7 @@ class TrainingProgramService:
         """
         query = select(TrainingRequirement).where(
             TrainingRequirement.organization_id == organization_id,
-            TrainingRequirement.active == True
+            TrainingRequirement.active == True  # noqa: E712
         )
 
         if source:
@@ -152,7 +152,7 @@ class TrainingProgramService:
             if hasattr(requirement, field) and value is not None:
                 setattr(requirement, field, value)
 
-        requirement.updated_at = datetime.utcnow()
+        requirement.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(requirement)
 
@@ -234,7 +234,7 @@ class TrainingProgramService:
         """
         query = select(TrainingProgram).where(
             TrainingProgram.organization_id == organization_id,
-            TrainingProgram.active == True
+            TrainingProgram.active == True  # noqa: E712
         )
 
         if target_position:
@@ -494,7 +494,7 @@ class TrainingProgramService:
         enrollment = ProgramEnrollment(
             user_id=enrollment_data.user_id,
             program_id=enrollment_data.program_id,
-            enrolled_at=datetime.utcnow(),
+            enrolled_at=datetime.now(timezone.utc),
             target_completion_date=target_completion_date,
             current_phase_id=current_phase_id,
             progress_percentage=0.0,
@@ -609,12 +609,12 @@ class TrainingProgramService:
                 progress.status = status
 
                 if status == RequirementProgressStatus.IN_PROGRESS and not progress.started_at:
-                    progress.started_at = datetime.utcnow()
+                    progress.started_at = datetime.now(timezone.utc)
                 elif status == RequirementProgressStatus.COMPLETED:
-                    progress.completed_at = datetime.utcnow()
+                    progress.completed_at = datetime.now(timezone.utc)
                     if verified_by:
                         progress.verified_by = verified_by
-                        progress.verified_at = datetime.utcnow()
+                        progress.verified_at = datetime.now(timezone.utc)
             except ValueError:
                 return None, f"Invalid status: {updates.status}"
 
@@ -655,7 +655,7 @@ class TrainingProgramService:
             # Auto-complete if reached 100%
             if progress.progress_percentage >= 100.0 and progress.status != RequirementProgressStatus.COMPLETED:
                 progress.status = RequirementProgressStatus.COMPLETED
-                progress.completed_at = datetime.utcnow()
+                progress.completed_at = datetime.now(timezone.utc)
 
         # Update notes
         if updates.progress_notes is not None:
@@ -664,9 +664,9 @@ class TrainingProgramService:
         # Update verification
         if verified_by:
             progress.verified_by = verified_by
-            progress.verified_at = datetime.utcnow()
+            progress.verified_at = datetime.now(timezone.utc)
 
-        progress.updated_at = datetime.utcnow()
+        progress.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(progress)
 
@@ -688,7 +688,7 @@ class TrainingProgramService:
             .join(ProgramRequirement)
             .where(
                 RequirementProgress.enrollment_id == enrollment_id,
-                ProgramRequirement.is_required == True
+                ProgramRequirement.is_required == True  # noqa: E712
             )
         )
         all_progress = result.scalars().all()
@@ -706,7 +706,7 @@ class TrainingProgramService:
             .where(ProgramEnrollment.id == str(enrollment_id))
             .values(
                 progress_percentage=avg_percentage,
-                updated_at=datetime.utcnow()
+                updated_at=datetime.now(timezone.utc)
             )
         )
 
@@ -717,7 +717,7 @@ class TrainingProgramService:
                 .where(ProgramEnrollment.id == str(enrollment_id))
                 .values(
                     status=EnrollmentStatus.COMPLETED,
-                    completed_at=datetime.utcnow()
+                    completed_at=datetime.now(timezone.utc)
                 )
             )
 

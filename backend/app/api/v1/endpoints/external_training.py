@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 import logging
 
 from app.core.database import get_db
@@ -75,7 +75,7 @@ async def list_providers(
     )
 
     if active_only:
-        query = query.where(ExternalTrainingProvider.active == True)
+        query = query.where(ExternalTrainingProvider.active == True)  # noqa: E712
 
     query = query.order_by(ExternalTrainingProvider.name)
 
@@ -284,7 +284,7 @@ async def test_provider_connection(
 
         # Update provider status
         provider.connection_verified = success
-        provider.last_connection_test = datetime.utcnow()
+        provider.last_connection_test = datetime.now(timezone.utc)
         provider.connection_error = None if success else message
         await db.commit()
 
@@ -297,7 +297,7 @@ async def test_provider_connection(
     except Exception as e:
         logger.exception(f"Connection test failed for provider {provider_id}")
         provider.connection_verified = False
-        provider.last_connection_test = datetime.utcnow()
+        provider.last_connection_test = datetime.now(timezone.utc)
         provider.connection_error = str(e)
         await db.commit()
 
@@ -390,7 +390,7 @@ async def trigger_sync(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
         .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
-        .where(ExternalTrainingProvider.active == True)
+        .where(ExternalTrainingProvider.active == True)  # noqa: E712
     )
     provider = result.scalar_one_or_none()
 
@@ -483,7 +483,7 @@ async def list_category_mappings(
     )
 
     if unmapped_only:
-        query = query.where(ExternalCategoryMapping.is_mapped == False)
+        query = query.where(ExternalCategoryMapping.is_mapped == False)  # noqa: E712
 
     query = query.order_by(ExternalCategoryMapping.external_category_name)
 
@@ -612,7 +612,7 @@ async def list_user_mappings(
     )
 
     if unmapped_only:
-        query = query.where(ExternalUserMapping.is_mapped == False)
+        query = query.where(ExternalUserMapping.is_mapped == False)  # noqa: E712
 
     query = query.order_by(ExternalUserMapping.external_name)
 
@@ -819,7 +819,7 @@ async def import_single_record(
         ext_import.training_record_id = training_record.id
         ext_import.user_id = str(import_request.user_id)
         ext_import.import_status = "imported"
-        ext_import.imported_at = datetime.utcnow()
+        ext_import.imported_at = datetime.now(timezone.utc)
         ext_import.import_error = None
 
         await db.commit()
@@ -900,7 +900,7 @@ async def bulk_import_records(
                 select(ExternalUserMapping)
                 .where(ExternalUserMapping.provider_id == str(provider_id))
                 .where(ExternalUserMapping.external_user_id == ext_import.external_user_id)
-                .where(ExternalUserMapping.is_mapped == True)
+                .where(ExternalUserMapping.is_mapped == True)  # noqa: E712
             )
             mapping = mapping_result.scalar_one_or_none()
             if mapping:
@@ -934,7 +934,7 @@ async def bulk_import_records(
             ext_import.training_record_id = training_record.id
             ext_import.user_id = user_id
             ext_import.import_status = "imported"
-            ext_import.imported_at = datetime.utcnow()
+            ext_import.imported_at = datetime.now(timezone.utc)
             ext_import.import_error = None
 
             imported += 1

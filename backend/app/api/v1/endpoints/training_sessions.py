@@ -250,7 +250,7 @@ async def list_training_sessions_calendar(
         select(TrainingSession)
         .join(Event, TrainingSession.event_id == Event.id)
         .where(TrainingSession.organization_id == str(current_user.organization_id))
-        .where(Event.is_cancelled == False)
+        .where(Event.is_cancelled == False)  # noqa: E712
         .options(selectinload(TrainingSession.event))
     )
 
@@ -261,7 +261,7 @@ async def list_training_sessions_calendar(
     if training_type:
         query = query.where(TrainingSession.training_type == training_type)
     if not include_finalized:
-        query = query.where(TrainingSession.is_finalized == False)
+        query = query.where(TrainingSession.is_finalized == False)  # noqa: E712
 
     query = query.order_by(Event.start_datetime)
 

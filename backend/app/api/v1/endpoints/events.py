@@ -1231,10 +1231,10 @@ async def upload_event_attachment(
         "file_type": file.content_type,
         "description": description,
         "uploaded_by": str(current_user.id),
-        "uploaded_at": datetime.utcnow().isoformat(),
+        "uploaded_at": datetime.now(dt_timezone.utc).isoformat(),
     })
     event.attachments = attachments
-    event.updated_at = datetime.utcnow()
+    event.updated_at = datetime.now(dt_timezone.utc)
 
     await db.commit()
 
@@ -1356,7 +1356,7 @@ async def delete_event_attachment(
 
     # Remove from attachments list
     event.attachments = [a for a in attachments if a.get("id") != attachment_id]
-    event.updated_at = datetime.utcnow()
+    event.updated_at = datetime.now(dt_timezone.utc)
 
     await db.commit()
 
@@ -1771,7 +1771,7 @@ async def get_public_calendar(
         .where(
             Event.organization_id == organization_id,
             Event.event_type.in_(public_types),
-            Event.start_datetime >= datetime.utcnow(),
+            Event.start_datetime >= datetime.now(dt_timezone.utc),
             Event.is_cancelled == False,  # noqa: E712
         )
         .order_by(Event.start_datetime.asc())

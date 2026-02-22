@@ -45,9 +45,9 @@ try:
         retention="10 days",
         level="INFO",
     )
-except Exception as _log_err:
+except OSError as _log_err:
     # File logging is optional - stdout is sufficient for development
-    pass
+    logger.debug("Could not set up file logging", exc_info=True)
 
 
 # ============================================
@@ -218,6 +218,7 @@ def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, lis
     Returns (is_valid, errors) from the post-repair validation.
     """
     from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError, DatabaseError
 
     logger.warning(
         f"Schema validation found {len(original_errors)} issue(s). "
@@ -252,8 +253,8 @@ def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, lis
             finally:
                 try:
                     conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
-                except Exception:
-                    pass
+                except (OperationalError, DatabaseError):
+                    logger.debug("Could not re-enable FOREIGN_KEY_CHECKS during schema repair", exc_info=True)
 
         # Re-validate after repair
         schema_valid, schema_errors = validate_schema(engine)
@@ -333,7 +334,8 @@ def _cleanup_duplicate_revisions(versions_dir):
             rev_to_files.setdefault(rev_id, []).append(
                 (filepath, filename, down_rev)
             )
-        except Exception:
+        except (OSError, ValueError):
+            logger.debug(f"Could not parse migration file: {filename}", exc_info=True)
             continue
 
     # Build set of down_revisions that other files depend on.
@@ -431,6 +433,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
     This reduces first-boot database setup from ~20 minutes to seconds.
     """
     from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError, DatabaseError
     from alembic import command
     from alembic.script import ScriptDirectory
 
@@ -502,8 +505,8 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
             # dies anyway, but this is defense-in-depth for pooled engines.
             try:
                 conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
-            except Exception:
-                pass
+            except (OperationalError, DatabaseError):
+                logger.debug("Could not re-enable FOREIGN_KEY_CHECKS during fast-path init", exc_info=True)
 
     # 6. Stamp alembic to head so future startups skip all migrations
     command.stamp(alembic_cfg, "head")
@@ -527,6 +530,7 @@ def run_migrations():
     from alembic import command
     from alembic.script import ScriptDirectory
     from sqlalchemy import create_engine, text
+    from sqlalchemy.exc import OperationalError, DatabaseError, ProgrammingError
     from sqlalchemy.pool import NullPool
     import os
 
@@ -570,8 +574,8 @@ def run_migrations():
             row = result.fetchone()
             if row:
                 current_rev = row[0]
-    except Exception:
-        pass  # Table doesn't exist yet
+    except (OperationalError, ProgrammingError):
+        logger.debug("Could not read alembic_version table (may not exist yet)", exc_info=True)
 
     # Fast exit: already at head - nothing to do
     if current_rev == head_revision:
@@ -614,8 +618,8 @@ def run_migrations():
                 row = result.fetchone()
                 if row:
                     current_rev = row[0]
-        except Exception:
-            pass
+        except (OperationalError, ProgrammingError):
+            logger.debug("Could not re-read alembic_version after acquiring lock", exc_info=True)
 
         if current_rev == head_revision:
             startup_status.migrations_completed = total_migrations
@@ -630,7 +634,8 @@ def run_migrations():
         if current_rev and current_rev != INITIAL_SQL_REVISION:
             try:
                 script_dir.get_revision(current_rev)
-            except Exception:
+            except Exception as rev_err:
+                logger.debug(f"Revision lookup failed for '{current_rev}': {rev_err}", exc_info=True)
                 startup_status.set_phase("migrations", "Fixing migration version mismatch...")
                 logger.warning(
                     f"Migration revision '{current_rev}' not found. "
@@ -777,12 +782,12 @@ def run_migrations():
                 text("SELECT RELEASE_LOCK(:name)"),
                 {"name": MIGRATION_LOCK_NAME}
             )
-        except Exception:
-            pass
+        except (OperationalError, DatabaseError):
+            logger.debug("Could not release migration advisory lock", exc_info=True)
         try:
             lock_conn.close()
-        except Exception:
-            pass
+        except (OperationalError, DatabaseError):
+            logger.debug("Could not close migration lock connection", exc_info=True)
 
 
 def validate_security_configuration():
@@ -1071,8 +1076,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             payload = decode_token(token)
             user_id = payload.get("sub")
             org_id = payload.get("org_id")
-    except Exception:
-        pass  # Token extraction is best-effort
+    except (ValueError, KeyError, AttributeError):
+        logger.debug("Could not extract user context from JWT token", exc_info=True)
 
     # Persist to error_logs table
     if org_id:

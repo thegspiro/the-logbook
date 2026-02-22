@@ -7,7 +7,7 @@ transfer to full membership.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, update, delete
 from sqlalchemy.orm import selectinload
@@ -55,7 +55,7 @@ class MembershipPipelineService:
             .order_by(MembershipPipeline.is_default.desc(), MembershipPipeline.created_at)
         )
         if not include_templates:
-            query = query.where(MembershipPipeline.is_template == False)
+            query = query.where(MembershipPipeline.is_template == False)  # noqa: E712
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -202,7 +202,7 @@ class MembershipPipelineService:
             .where(
                 and_(
                     MembershipPipeline.organization_id == organization_id,
-                    MembershipPipeline.is_default == True,
+                    MembershipPipeline.is_default == True,  # noqa: E712
                 )
             )
             .values(is_default=False)
@@ -529,7 +529,7 @@ class MembershipPipelineService:
                 prospect_id=prospect_id,
                 step_id=step_id,
                 status=StepProgressStatus.COMPLETED,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(timezone.utc),
                 completed_by=completed_by,
                 notes=notes,
                 action_result=action_result,
@@ -537,7 +537,7 @@ class MembershipPipelineService:
             self.db.add(progress)
         else:
             progress.status = StepProgressStatus.COMPLETED
-            progress.completed_at = datetime.utcnow()
+            progress.completed_at = datetime.now(timezone.utc)
             progress.completed_by = completed_by
             if notes:
                 progress.notes = notes
@@ -763,7 +763,7 @@ class MembershipPipelineService:
         # Update prospect record
         prospect.status = ProspectStatus.TRANSFERRED
         prospect.transferred_user_id = user_id
-        prospect.transferred_at = datetime.utcnow()
+        prospect.transferred_at = datetime.now(timezone.utc)
 
         transfer_details: Dict[str, Any] = {"user_id": user_id, "username": username}
         if membership_number:
@@ -841,7 +841,7 @@ class MembershipPipelineService:
                     select(TrainingProgram).where(
                         TrainingProgram.organization_id == organization_id,
                         TrainingProgram.name.ilike("%probationary%"),
-                        TrainingProgram.active == True,
+                        TrainingProgram.active == True,  # noqa: E712
                     ).limit(1)
                 )
                 program = program_result.scalar_one_or_none()
@@ -1040,7 +1040,7 @@ class MembershipPipelineService:
             .where(
                 and_(
                     MembershipPipeline.organization_id == organization_id,
-                    MembershipPipeline.is_default == True,
+                    MembershipPipeline.is_default == True,  # noqa: E712
                 )
             )
             .options(selectinload(MembershipPipeline.steps))

@@ -26,7 +26,7 @@ from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, Onb
 from app.api.v1.email_test_helper import test_smtp_connection, test_gmail_oauth, test_microsoft_oauth
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.utils.image_validator import validate_logo_image
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 
 
@@ -372,14 +372,14 @@ async def get_or_create_session(
         result = await db.execute(
             select(OnboardingSessionModel).where(
                 OnboardingSessionModel.session_id == session_id,
-                OnboardingSessionModel.expires_at > datetime.utcnow()
+                OnboardingSessionModel.expires_at > datetime.now(timezone.utc)
             )
         )
         session = result.scalar_one_or_none()
 
         if session:
             # Update expiration on activity
-            session.expires_at = datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
+            session.expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS)
             await db.commit()
             return session
 
@@ -392,7 +392,7 @@ async def get_or_create_session(
         data={},
         ip_address=ip_address,
         user_agent=user_agent,
-        expires_at=datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS)
     )
 
     db.add(new_session)
@@ -444,7 +444,7 @@ async def validate_session(
         )
 
     # Check expiration
-    if session.expires_at < datetime.utcnow():
+    if session.expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your onboarding session has expired due to inactivity (30-minute limit). Please refresh the page to start a new session. Your previously saved progress will be retained."
@@ -462,7 +462,7 @@ async def validate_session(
             )
 
     # Update expiration on activity
-    session.expires_at = datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
+    session.expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS)
     await db.commit()
 
     return session
@@ -491,7 +491,7 @@ async def _persist_session_data_to_org(
     # Find the organization (single-org system)
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.active == True)
+        .where(Organization.active == True)  # noqa: E712
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -780,7 +780,7 @@ async def create_system_owner(
     from app.models.user import Organization
     result = await db.execute(
         select(Organization)
-        .where(Organization.active == True)
+        .where(Organization.active == True)  # noqa: E712
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -1000,7 +1000,7 @@ async def mark_checklist_item_complete(
 
     # Mark as completed
     item.is_completed = True
-    item.completed_at = datetime.utcnow()
+    item.completed_at = datetime.now(timezone.utc)
     await db.commit()
 
     return {
@@ -1113,7 +1113,7 @@ async def save_department_info(
         'name': data.name,
         'logo': validated_logo,
         'navigation_layout': data.navigation_layout,
-        'saved_at': datetime.utcnow().isoformat()
+        'saved_at': datetime.now(timezone.utc).isoformat()
     }
 
     await db.commit()
@@ -1159,7 +1159,7 @@ async def save_email_config(
     session.data['email'] = {
         'platform': data.platform,
         'config_encrypted': encrypted_config,
-        'saved_at': datetime.utcnow().isoformat()
+        'saved_at': datetime.now(timezone.utc).isoformat()
     }
 
     await db.commit()
@@ -1205,7 +1205,7 @@ async def save_file_storage_config(
     session.data['file_storage'] = {
         'platform': data.platform,
         'config_encrypted': encrypted_config,
-        'saved_at': datetime.utcnow().isoformat()
+        'saved_at': datetime.now(timezone.utc).isoformat()
     }
 
     await db.commit()
@@ -1241,7 +1241,7 @@ async def save_auth_config(
     session.data = session.data or {}
     session.data['auth'] = {
         'platform': data.platform,
-        'saved_at': datetime.utcnow().isoformat()
+        'saved_at': datetime.now(timezone.utc).isoformat()
     }
 
     await db.commit()
@@ -1270,7 +1270,7 @@ async def save_it_team(
     session.data['it_team'] = {
         'members': data.it_team,
         'backup_access': data.backup_access,
-        'saved_at': datetime.utcnow().isoformat()
+        'saved_at': datetime.now(timezone.utc).isoformat()
     }
 
     await db.commit()
@@ -1325,7 +1325,7 @@ async def save_session_modules(
     session.data = session.data or {}
     session.data['modules'] = {
         'enabled': data.modules,
-        'saved_at': datetime.utcnow().isoformat()
+        'saved_at': datetime.now(timezone.utc).isoformat()
     }
 
     await db.commit()
@@ -1424,7 +1424,7 @@ async def save_session_organization(
             'name': data.name,
             'organization_id': str(org.id),
             'logo': org.logo,  # Use sanitized logo from org object
-            'saved_at': datetime.utcnow().isoformat()
+            'saved_at': datetime.now(timezone.utc).isoformat()
         }
         await db.commit()
 
@@ -1508,7 +1508,7 @@ async def save_session_roles(
     await db.execute(
         delete(Role).where(
             Role.organization_id == organization_id,
-            Role.is_system == False
+            Role.is_system == False  # noqa: E712
         )
     )
 
@@ -1516,7 +1516,7 @@ async def save_session_roles(
     result = await db.execute(
         select(Role).where(
             Role.organization_id == organization_id,
-            Role.is_system == True
+            Role.is_system == True  # noqa: E712
         )
     )
     existing_system_roles = {role.slug: role for role in result.scalars().all()}
@@ -1588,7 +1588,7 @@ async def save_session_roles(
         'configured': True,
         'role_count': len(data.roles),
         'roles': [{"id": r.id, "name": r.name, "priority": r.priority} for r in data.roles],
-        'saved_at': datetime.utcnow().isoformat()
+        'saved_at': datetime.now(timezone.utc).isoformat()
     }
 
     await db.commit()

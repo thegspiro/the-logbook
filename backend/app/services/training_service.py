@@ -216,7 +216,7 @@ class TrainingService:
             req_result = await self.db.execute(
                 select(TrainingRequirement)
                 .where(TrainingRequirement.organization_id == str(organization_id))
-                .where(TrainingRequirement.active == True)
+                .where(TrainingRequirement.active == True)  # noqa: E712
             )
             requirements = req_result.scalars().all()
 
@@ -383,7 +383,7 @@ class TrainingService:
         query = (
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == str(organization_id))
-            .where(TrainingRequirement.active == True)
+            .where(TrainingRequirement.active == True)  # noqa: E712
         )
 
         if year:

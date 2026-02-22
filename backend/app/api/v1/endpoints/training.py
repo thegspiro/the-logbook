@@ -12,7 +12,7 @@ import csv
 import io
 from sqlalchemy.orm import selectinload
 from uuid import UUID
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import calendar
 
 from app.core.database import get_db
@@ -1633,7 +1633,7 @@ async def get_compliance_matrix(
     requirements = reqs_result.scalars().all()
 
     if not requirements:
-        return {"members": [], "requirements": [], "generated_at": datetime.utcnow().isoformat()}
+        return {"members": [], "requirements": [], "generated_at": datetime.now(timezone.utc).isoformat()}
 
     # Get all training records for these members
     records_result = await db.execute(
@@ -1693,7 +1693,7 @@ async def get_compliance_matrix(
             {"id": r.id, "name": r.name}
             for r in requirements
         ],
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

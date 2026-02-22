@@ -12,7 +12,7 @@ Zero-Trust Security:
 
 import ipaddress
 from typing import Optional, Dict, Any, Set
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from loguru import logger
 
@@ -123,7 +123,7 @@ class GeoIPService:
             "country_name": None,
             "is_private": False,
             "is_blocked": False,
-            "lookup_time": datetime.utcnow().isoformat(),
+            "lookup_time": datetime.now(timezone.utc).isoformat(),
             "lookup_source": "unknown",
         }
 

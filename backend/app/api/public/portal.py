@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 
 from app.core.database import get_db
@@ -420,7 +420,7 @@ async def get_public_events(
             .where(Event.organization_id == org_id_str)
             .where(Event.is_cancelled == False)  # noqa: E712
             .where(Event.event_type == EventType.PUBLIC_EDUCATION)
-            .where(Event.start_datetime >= datetime.utcnow())
+            .where(Event.start_datetime >= datetime.now(timezone.utc))
             .order_by(Event.start_datetime.asc())
             .offset(offset)
             .limit(limit)
@@ -474,7 +474,7 @@ async def health_check():
         "status": "healthy",
         "service": "public-portal-api",
         "version": "1.0.0",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 

@@ -8,7 +8,7 @@ and optionally the chief when progress is dangerously low.
 Designed to be triggered weekly via the scheduled task system.
 """
 
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -48,7 +48,7 @@ class StrugglingMemberService:
         )
         enrollments = list(result.scalars().all())
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         flagged_members = []
 
         for enrollment in enrollments:
@@ -171,11 +171,11 @@ class StrugglingMemberService:
                 # Only send if not already sent recently
                 if enrollment.deadline_warning_sent and enrollment.deadline_warning_sent_at:
                     last_warn = enrollment.deadline_warning_sent_at
-                    if (datetime.utcnow() - last_warn).days < 5:
+                    if (datetime.now(timezone.utc) - last_warn).days < 5:
                         continue
 
                 enrollment.deadline_warning_sent = True
-                enrollment.deadline_warning_sent_at = datetime.utcnow()
+                enrollment.deadline_warning_sent_at = datetime.now(timezone.utc)
                 warnings_sent += 1
 
         if warnings_sent > 0:

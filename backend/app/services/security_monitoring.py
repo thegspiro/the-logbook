@@ -14,7 +14,7 @@ import hashlib
 import json
 import secrets
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List, Tuple
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -175,7 +175,7 @@ class SecurityMonitoringService:
                         id=secrets.token_hex(16),
                         alert_type=AlertType.SUSPICIOUS_ACTIVITY,
                         threat_level=ThreatLevel.HIGH,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         description=f"Potential {pattern_type.replace('_', ' ')} attempt detected",
                         source_ip=request_data.get("ip_address"),
                         user_id=user_id,
@@ -211,7 +211,7 @@ class SecurityMonitoringService:
         """
         Check for rate limit violations that might indicate attacks
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         minute_ago = now - timedelta(minutes=1)
 
         # Clean old entries
@@ -259,7 +259,7 @@ class SecurityMonitoringService:
                 self._login_attempts[f"user:{user_id}"] = []
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         hour_ago = now - timedelta(hours=1)
 
         # Track by IP
@@ -351,7 +351,7 @@ class SecurityMonitoringService:
         """
         Detect potential session hijacking by monitoring IP/UA changes
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         key = f"session:{session_id}"
 
         # Get previous session data
@@ -422,7 +422,7 @@ class SecurityMonitoringService:
         - Bulk record access
         - Transfers to external/unknown destinations
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         day_ago = now - timedelta(days=1)
 
         # Track data transfers
@@ -554,7 +554,7 @@ class SecurityMonitoringService:
                 id=secrets.token_hex(16),
                 alert_type=AlertType.LOG_TAMPERING,
                 threat_level=ThreatLevel.CRITICAL,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 description="Audit log tampering detected!",
                 details={
                     "errors": result["errors"],
@@ -603,7 +603,7 @@ class SecurityMonitoringService:
                 id=secrets.token_hex(16),
                 alert_type=AlertType.PRIVILEGE_ESCALATION,
                 threat_level=ThreatLevel.CRITICAL,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 description=f"Privilege escalation attempt: {action}",
                 source_ip=ip_address,
                 user_id=user_id,
@@ -635,7 +635,7 @@ class SecurityMonitoringService:
         """
         Get current security status and metrics
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         hour_ago = now - timedelta(hours=1)
         day_ago = now - timedelta(days=1)
 
