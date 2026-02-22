@@ -13,6 +13,8 @@ import {
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
+import { useTimezone } from '../../hooks/useTimezone';
+import { formatDate } from '../../utils/dateFormatting';
 
 interface SwapRequest {
   id: string;
@@ -49,6 +51,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export const RequestsTab: React.FC = () => {
   const { checkPermission, user: currentUser } = useAuthStore();
+  const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
 
   const [activeView, setActiveView] = useState<'swaps' | 'timeoff'>('swaps');
@@ -192,7 +195,7 @@ export const RequestsTab: React.FC = () => {
                         </p>
                         {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
                         <p className="text-xs text-theme-text-muted mt-1">
-                          {new Date(req.created_at).toLocaleDateString()}
+                          {formatDate(req.created_at, tz)}
                         </p>
                       </div>
                     </div>
@@ -249,8 +252,8 @@ export const RequestsTab: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-xs text-theme-text-muted mt-0.5">
-                          {new Date(req.start_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          {req.end_date !== req.start_date && ` - ${new Date(req.end_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                          {new Date(req.start_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
+                          {req.end_date !== req.start_date && ` - ${new Date(req.end_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}`}
                         </p>
                         {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
                       </div>

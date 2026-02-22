@@ -27,6 +27,7 @@ import type {
 } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
 import { VoteType } from '../constants/enums';
+import { useTimezone } from '../hooks/useTimezone';
 
 type ItemChoice = {
   choice: string; // 'approve' | 'deny' | 'write_in' | 'abstain' | candidate UUID
@@ -35,6 +36,7 @@ type ItemChoice = {
 
 export const BallotVotingPage: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const tz = useTimezone();
   const token = searchParams.get('token') || '';
 
   const [election, setElection] = useState<Election | null>(null);
@@ -236,6 +238,7 @@ export const BallotVotingPage: React.FC = () => {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
+                timeZone: tz,
               })}
             </p>
           )}

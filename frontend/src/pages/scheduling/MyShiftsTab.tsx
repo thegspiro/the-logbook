@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime } from '../../utils/dateFormatting';
+import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
 
 interface Assignment {
   id: string;
@@ -129,7 +129,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     }
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayLocalDate(tz);
   const upcoming = assignments.filter(a => {
     const shiftDate = a.shift?.shift_date || '';
     return shiftDate >= today && a.status !== 'declined' && a.status !== 'cancelled';
@@ -203,7 +203,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm sm:text-base font-semibold text-theme-text-primary truncate">
-                        {shiftDate ? shiftDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'Unknown Date'}
+                        {shiftDate ? shiftDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz }) : 'Unknown Date'}
                       </p>
                       <p className="text-xs sm:text-sm text-theme-text-secondary">
                         {shift ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}` : ''}

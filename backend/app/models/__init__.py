@@ -208,6 +208,10 @@ from app.models.ip_security import (
     IPExceptionApprovalStatus,
 )
 
+from app.models.operational_rank import (
+    OperationalRank,
+)
+
 from app.models.facilities import (
     FacilityType,
     FacilityStatus,
@@ -399,6 +403,8 @@ __all__ = [
     "IPExceptionAuditLog",
     "IPExceptionType",
     "IPExceptionApprovalStatus",
+    # Operational rank models
+    "OperationalRank",
     # Facilities models
     "FacilityType",
     "FacilityStatus",

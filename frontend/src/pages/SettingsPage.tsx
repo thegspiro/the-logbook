@@ -5,7 +5,7 @@
  * contact information visibility, and membership ID settings.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   GraduationCap,
   Package,
@@ -19,11 +19,20 @@ import {
   Plug,
   Building2,
   Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
+  X,
+  Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { organizationService } from '../services/api';
-import type { ModuleSettingsData } from '../services/api';
+import { organizationService, ranksService } from '../services/api';
+import type { ModuleSettingsData, OperationalRankResponse } from '../services/api';
 import type { ContactInfoSettings, MembershipIdSettings } from '../types/user';
+import { invalidateRanksCache } from '../hooks/useRanks';
 
 interface ConfigurableModule {
   key: keyof ModuleSettingsData;
@@ -68,8 +77,30 @@ export const SettingsPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // Rank management state
+  const [ranks, setRanks] = useState<OperationalRankResponse[]>([]);
+  const [ranksLoading, setRanksLoading] = useState(false);
+  const [editingRank, setEditingRank] = useState<OperationalRankResponse | null>(null);
+  const [addingRank, setAddingRank] = useState(false);
+  const [rankForm, setRankForm] = useState({ rank_code: '', display_name: '' });
+  const [rankSaving, setRankSaving] = useState(false);
+  const [deletingRankId, setDeletingRankId] = useState<string | null>(null);
+
   useEffect(() => {
     return () => { clearTimeout(successTimerRef.current); };
+  }, []);
+
+  const fetchRanks = useCallback(async () => {
+    try {
+      setRanksLoading(true);
+      invalidateRanksCache();
+      const data = await ranksService.getRanks();
+      setRanks(data);
+    } catch (_err) {
+      // Silently fail — ranks section will show empty state
+    } finally {
+      setRanksLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -81,6 +112,7 @@ export const SettingsPage: React.FC = () => {
         const [settingsData, modulesData] = await Promise.all([
           organizationService.getSettings(),
           organizationService.getEnabledModules(),
+          fetchRanks(),
         ]);
 
         setSettings(settingsData.contact_info_visibility);
@@ -96,7 +128,7 @@ export const SettingsPage: React.FC = () => {
     };
 
     fetchSettings();
-  }, []);
+  }, [fetchRanks]);
 
   const handleModuleToggle = async (moduleKey: keyof ModuleSettingsData) => {
     if (!moduleSettings || togglingModule) return;
@@ -174,6 +206,87 @@ export const SettingsPage: React.FC = () => {
       ...prev,
       [field]: !prev[field],
     }));
+  };
+
+  const handleAddRank = async () => {
+    if (!rankForm.rank_code.trim() || !rankForm.display_name.trim()) return;
+    setRankSaving(true);
+    try {
+      await ranksService.createRank({
+        rank_code: rankForm.rank_code.trim().toLowerCase().replace(/\s+/g, '_'),
+        display_name: rankForm.display_name.trim(),
+        sort_order: ranks.length,
+      });
+      setRankForm({ rank_code: '', display_name: '' });
+      setAddingRank(false);
+      toast.success('Rank added');
+      await fetchRanks();
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to add rank');
+    } finally {
+      setRankSaving(false);
+    }
+  };
+
+  const handleUpdateRank = async () => {
+    if (!editingRank || !rankForm.display_name.trim()) return;
+    setRankSaving(true);
+    try {
+      await ranksService.updateRank(editingRank.id, {
+        rank_code: rankForm.rank_code.trim().toLowerCase().replace(/\s+/g, '_'),
+        display_name: rankForm.display_name.trim(),
+      });
+      setEditingRank(null);
+      setRankForm({ rank_code: '', display_name: '' });
+      toast.success('Rank updated');
+      await fetchRanks();
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to update rank');
+    } finally {
+      setRankSaving(false);
+    }
+  };
+
+  const handleDeleteRank = async (rankId: string) => {
+    setDeletingRankId(rankId);
+    try {
+      await ranksService.deleteRank(rankId);
+      toast.success('Rank removed');
+      await fetchRanks();
+    } catch (_err) {
+      toast.error('Failed to remove rank');
+    } finally {
+      setDeletingRankId(null);
+    }
+  };
+
+  const handleMoveRank = async (index: number, direction: 'up' | 'down') => {
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= ranks.length) return;
+    const newRanks = [...ranks];
+    [newRanks[index], newRanks[swapIndex]] = [newRanks[swapIndex], newRanks[index]];
+    const reorderPayload = newRanks.map((r, i) => ({ id: r.id, sort_order: i }));
+    setRanks(newRanks);
+    try {
+      await ranksService.reorderRanks(reorderPayload);
+    } catch (_err) {
+      toast.error('Failed to reorder ranks');
+      await fetchRanks();
+    }
+  };
+
+  const startEditRank = (rank: OperationalRankResponse) => {
+    setEditingRank(rank);
+    setAddingRank(false);
+    setRankForm({ rank_code: rank.rank_code, display_name: rank.display_name });
+  };
+
+  const cancelRankForm = () => {
+    setEditingRank(null);
+    setAddingRank(false);
+    setRankForm({ rank_code: '', display_name: '' });
   };
 
   if (loading) {
@@ -538,6 +651,167 @@ export const SettingsPage: React.FC = () => {
               {savingMembershipId ? 'Saving...' : 'Save Membership ID Settings'}
             </button>
           </div>
+        </div>
+
+        {/* Operational Ranks */}
+        <div className="mt-6 bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-medium text-theme-text-primary">
+                Operational Ranks
+              </h3>
+              <p className="text-sm text-theme-text-muted">
+                Customize the rank/position choices available to your department.
+                Drag to reorder. Higher ranks should appear first.
+              </p>
+            </div>
+            {!addingRank && !editingRank && (
+              <button
+                type="button"
+                onClick={() => { setAddingRank(true); setRankForm({ rank_code: '', display_name: '' }); }}
+                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add Rank
+              </button>
+            )}
+          </div>
+
+          {/* Add / Edit form */}
+          {(addingRank || editingRank) && (
+            <div className="mb-4 p-4 border border-theme-surface-border rounded-lg bg-theme-surface-secondary/50">
+              <p className="text-sm font-medium text-theme-text-primary mb-3">
+                {editingRank ? 'Edit Rank' : 'New Rank'}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                    Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={rankForm.display_name}
+                    onChange={(e) => {
+                      const display = e.target.value;
+                      setRankForm(prev => ({
+                        ...prev,
+                        display_name: display,
+                        // Auto-generate code from display name when adding
+                        ...(!editingRank ? { rank_code: display.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') } : {}),
+                      }));
+                    }}
+                    placeholder="e.g. Captain"
+                    className="w-full rounded-md bg-theme-surface border border-theme-surface-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                    Code (internal identifier)
+                  </label>
+                  <input
+                    type="text"
+                    value={rankForm.rank_code}
+                    onChange={(e) => setRankForm(prev => ({ ...prev, rank_code: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') }))}
+                    placeholder="e.g. captain"
+                    className="w-full rounded-md bg-theme-surface border border-theme-surface-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={cancelRankForm}
+                  className="inline-flex items-center gap-1 rounded-md border border-theme-surface-border px-3 py-1.5 text-sm font-medium text-theme-text-muted hover:text-theme-text-primary"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={editingRank ? handleUpdateRank : handleAddRank}
+                  disabled={rankSaving || !rankForm.display_name.trim() || !rankForm.rank_code.trim()}
+                  className="inline-flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-3 py-1.5 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  {rankSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  {editingRank ? 'Save' : 'Add'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Rank list */}
+          {ranksLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
+            </div>
+          ) : ranks.length === 0 ? (
+            <p className="text-sm text-theme-text-muted text-center py-8">
+              No ranks configured. Click &quot;Add Rank&quot; to get started.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {ranks.map((rank, idx) => (
+                <div
+                  key={rank.id}
+                  className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-theme-surface-secondary/50 transition-colors group"
+                >
+                  <div className="flex flex-col flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleMoveRank(idx, 'up')}
+                      disabled={idx === 0}
+                      className="text-theme-text-muted hover:text-theme-text-primary disabled:opacity-20 disabled:cursor-not-allowed p-0.5"
+                      aria-label="Move up"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveRank(idx, 'down')}
+                      disabled={idx === ranks.length - 1}
+                      className="text-theme-text-muted hover:text-theme-text-primary disabled:opacity-20 disabled:cursor-not-allowed p-0.5"
+                      aria-label="Move down"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <GripVertical className="w-4 h-4 text-theme-text-muted/40 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-theme-text-primary">
+                      {rank.display_name}
+                    </p>
+                    <p className="text-xs text-theme-text-muted">
+                      {rank.rank_code}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => startEditRank(rank)}
+                      className="p-1.5 rounded text-theme-text-muted hover:text-blue-500 hover:bg-blue-500/10"
+                      aria-label={`Edit ${rank.display_name}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRank(rank.id)}
+                      disabled={deletingRankId === rank.id}
+                      className="p-1.5 rounded text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                      aria-label={`Delete ${rank.display_name}`}
+                    >
+                      {deletingRankId === rank.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

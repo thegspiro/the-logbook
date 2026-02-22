@@ -7,9 +7,9 @@ Compatible with MySQL database.
 Taxonomy
 --------
 - **Operational Rank** (one per member, stored in ``User.rank``):
-  Fire Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant,
-  Engineer, Firefighter.  Ranks carry *default* permissions that are
-  combined with the member's position permissions at runtime.
+  Configurable per organization via the ``operational_ranks`` table.
+  Ranks carry *default* permissions that are combined with the
+  member's position permissions at runtime.
 
 - **Corporate Position** (many per member, via ``user_positions``):
   President, Vice President, Treasurer, Secretary, IT Manager, etc.
@@ -79,22 +79,6 @@ class MembershipType(str, enum.Enum):
     RETIRED = "retired"
     HONORARY = "honorary"
     ADMINISTRATIVE = "administrative"
-
-
-class OperationalRank(str, enum.Enum):
-    """
-    Operational ranks within the department.
-
-    Each rank may carry default permissions (defined in
-    ``app.core.permissions.OPERATIONAL_RANKS``).
-    """
-    FIRE_CHIEF = "fire_chief"
-    DEPUTY_CHIEF = "deputy_chief"
-    ASSISTANT_CHIEF = "assistant_chief"
-    CAPTAIN = "captain"
-    LIEUTENANT = "lieutenant"
-    ENGINEER = "engineer"
-    FIREFIGHTER = "firefighter"
 
 
 class OrganizationType(str, enum.Enum):

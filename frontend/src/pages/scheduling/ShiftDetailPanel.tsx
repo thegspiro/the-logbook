@@ -19,7 +19,7 @@ import { schedulingService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime } from '../../utils/dateFormatting';
+import { formatDate, formatTime } from '../../utils/dateFormatting';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -275,7 +275,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="min-w-0 pr-2">
               <h2 className="text-lg sm:text-xl font-bold text-theme-text-primary">Shift Details</h2>
               <p className="text-xs sm:text-sm text-theme-text-secondary mt-1 truncate">
-                {shiftDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                {shiftDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz })}
               </p>
             </div>
             <button onClick={onClose} className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0">
@@ -568,7 +568,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                       </div>
                       {Boolean(call.dispatched_at) && (
                         <p className="text-xs text-theme-text-muted mt-1">
-                          Dispatched: {new Date(String(call.dispatched_at)).toLocaleTimeString()}
+                          Dispatched: {formatTime(String(call.dispatched_at), tz)}
                         </p>
                       )}
                     </div>

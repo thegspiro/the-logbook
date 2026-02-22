@@ -12,7 +12,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, User, Upload, FileText, X, Trash2 } from 'lucide-react';
 import { formsService } from '../../services/api';
 import type { MemberLookupResult } from '../../services/api';
-import { FieldType, formatRank } from '../../constants/enums';
+import { FieldType } from '../../constants/enums';
+import { useRanks } from '../../hooks/useRanks';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -173,6 +174,7 @@ export interface FieldRendererProps {
 }
 
 const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = false, error }: FieldRendererProps) => {
+  const { formatRank } = useRanks();
   const [memberResults, setMemberResults] = useState<MemberLookupResult[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [searchingMembers, setSearchingMembers] = useState(false);

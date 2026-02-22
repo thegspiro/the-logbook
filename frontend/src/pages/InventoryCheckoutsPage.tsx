@@ -17,6 +17,7 @@ import {
 import { inventoryService } from '../services/api';
 import type { UserCheckoutItem } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
 
 type TabView = 'active' | 'overdue';
 
@@ -27,6 +28,7 @@ interface CheckInModalState {
 }
 
 export const InventoryCheckoutsPage: React.FC = () => {
+  const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<TabView>('active');
   const [activeCheckouts, setActiveCheckouts] = useState<UserCheckoutItem[]>([]);
   const [overdueCheckouts, setOverdueCheckouts] = useState<UserCheckoutItem[]>([]);
@@ -95,6 +97,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      timeZone: tz,
     });
 
   if (loading) {

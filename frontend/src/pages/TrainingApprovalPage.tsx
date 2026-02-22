@@ -147,6 +147,7 @@ export const TrainingApprovalPage: React.FC = () => {
       year: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
+      timeZone: tz,
     });
 
   const formatDateTimeForInput = (dateString: string | null) => {

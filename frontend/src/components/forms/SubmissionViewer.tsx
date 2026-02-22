@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { formsService } from '../../services/api';
 import type { FormSubmission, FormField } from '../../services/api';
+import { useTimezone } from '../../hooks/useTimezone';
+import { formatDate, formatShortDateTime } from '../../utils/dateFormatting';
 
 export interface SubmissionViewerProps {
   /** Fetch submissions for this form */
@@ -46,6 +48,7 @@ const SubmissionViewer = ({
   onDelete,
   compact = false,
 }: SubmissionViewerProps) => {
+  const tz = useTimezone();
   const [submissions, setSubmissions] = useState<FormSubmission[]>(directSubmission ? [directSubmission] : []);
   const [fields, setFields] = useState<FormField[]>(directFields || []);
   const [total, setTotal] = useState(0);
@@ -130,11 +133,11 @@ const SubmissionViewer = ({
 
     switch (type) {
       case 'date':
-        try { return new Date(strVal).toLocaleDateString(); } catch { return strVal; }
+        try { return formatDate(strVal, tz); } catch { return strVal; }
       case 'time':
         return strVal;
       case 'datetime':
-        try { return new Date(strVal).toLocaleString(); } catch { return strVal; }
+        try { return formatShortDateTime(strVal, tz); } catch { return strVal; }
       case 'checkbox':
       case 'multiselect':
         return strVal.split(',').join(', ');
@@ -155,7 +158,7 @@ const SubmissionViewer = ({
 
     const headers = ['Submitted At', 'Submitter', ...fieldIds.map(getFieldLabel)];
     const rows = submissions.map((s) => [
-      new Date(s.submitted_at).toLocaleString(),
+      formatShortDateTime(s.submitted_at, tz),
       s.submitter_name || s.submitted_by || 'Anonymous',
       ...fieldIds.map((fId) => formatValue(fId, s.data[fId])),
     ]);
@@ -268,7 +271,7 @@ const SubmissionViewer = ({
 
                 <div className="flex items-center gap-1.5 text-xs text-theme-text-muted flex-shrink-0">
                   <Clock className="w-3 h-3" />
-                  {new Date(sub.submitted_at).toLocaleString()}
+                  {formatShortDateTime(sub.submitted_at, tz)}
                 </div>
               </button>
 

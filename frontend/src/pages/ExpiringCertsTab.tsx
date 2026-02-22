@@ -9,8 +9,11 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, Clock, Shield } from 'lucide-react';
 import { trainingService } from '../services/api';
 import type { ExpiringCertification } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 
 const ExpiringCertsTab: React.FC = () => {
+  const tz = useTimezone();
   const [certs, setCerts] = useState<ExpiringCertification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +123,7 @@ const ExpiringCertsTab: React.FC = () => {
                 <tr key={idx} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
                   <td className="px-4 py-3 text-theme-text-primary font-medium">{cert.member_name}</td>
                   <td className="px-4 py-3 text-theme-text-secondary">{cert.requirement_name}</td>
-                  <td className="px-4 py-3 text-theme-text-secondary">{new Date(cert.expiry_date).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-theme-text-secondary">{formatDate(cert.expiry_date, tz)}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${getUrgencyClass(cert.days_until_expiry)}`}>
                       {cert.days_until_expiry < 0 ? (

@@ -9,6 +9,8 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react';
 import { trainingService } from '../services/api';
 import type { ComplianceMatrix, ComplianceMatrixMember } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatShortDateTime } from '../utils/dateFormatting';
 
 const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-500',
@@ -27,6 +29,7 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 };
 
 const ComplianceMatrixTab: React.FC = () => {
+  const tz = useTimezone();
   const [matrix, setMatrix] = useState<ComplianceMatrix | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +88,7 @@ const ComplianceMatrixTab: React.FC = () => {
             {members.length} members × {requirements.length} requirements
           </p>
         </div>
-        <p className="text-xs text-theme-text-muted">Generated {new Date(matrix.generated_at).toLocaleString()}</p>
+        <p className="text-xs text-theme-text-muted">Generated {formatShortDateTime(matrix.generated_at, tz)}</p>
       </div>
 
       <div className="overflow-x-auto bg-theme-surface-secondary border border-theme-surface-border rounded-lg">

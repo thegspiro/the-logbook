@@ -15,7 +15,7 @@ import { schedulingService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime } from '../../utils/dateFormatting';
+import { formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
 
 const POSITION_LABELS: Record<string, string> = {
   officer: 'Officer',
@@ -55,12 +55,12 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         setShifts(data as unknown as ShiftRecord[]);
       } catch {
         // Fallback: get upcoming shifts
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayLocalDate(tz);
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + 30);
         const data = await schedulingService.getShifts({
           start_date: dateFilter || today,
-          end_date: endDate.toISOString().split('T')[0],
+          end_date: toLocalDateString(endDate, tz),
           limit: 50,
         });
         setShifts(data.shifts);
@@ -156,7 +156,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
             return (
               <div key={date}>
                 <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3">
-                  {dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  {dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz })}
                 </h3>
                 <div className="space-y-3">
                   {dayShifts.map(shift => (

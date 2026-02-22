@@ -37,6 +37,8 @@ import {
   Copy,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 
 // ============================================
 // Interfaces
@@ -1254,6 +1256,7 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
 // ============================================
 
 export const ShiftTemplatesPage: React.FC = () => {
+  const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<TabView>('templates');
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [patterns, setPatterns] = useState<ShiftPattern[]>([]);
@@ -1725,8 +1728,8 @@ export const ShiftTemplatesPage: React.FC = () => {
                     <div className="flex items-center gap-2 text-sm">
                       <Calendar className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
                       <span className="text-theme-text-secondary">
-                        {new Date(pattern.start_date).toLocaleDateString()}
-                        {pattern.end_date && ` - ${new Date(pattern.end_date).toLocaleDateString()}`}
+                        {formatDate(pattern.start_date, tz)}
+                        {pattern.end_date && ` - ${formatDate(pattern.end_date, tz)}`}
                       </span>
                     </div>
                     {pattern.rotation_days && (

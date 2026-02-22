@@ -66,6 +66,9 @@ from app.models.ip_security import (
     IPException, BlockedAccessAttempt, CountryBlockRule, IPExceptionAuditLog
 )
 
+# Operational Ranks
+from app.models.operational_rank import OperationalRank  # noqa: F401
+
 # This is the Alembic Config object
 config = context.config
 

@@ -227,7 +227,7 @@ const SchedulingPage: React.FC = () => {
 
   const dateRangeLabel = useMemo(() => {
     if (viewMode === 'month') {
-      return currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      return currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: tz });
     }
     const start = weekDates[0];
     const end = weekDates[6];
@@ -582,7 +582,7 @@ const SchedulingPage: React.FC = () => {
                           <span className={`text-sm font-semibold ${
                             isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
                           }`}>
-                            {DAYS_OF_WEEK[i]}, {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {DAYS_OF_WEEK[i]}, {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
                           </span>
                           {isToday(date) && (
                             <span className="text-xs px-2 py-0.5 bg-violet-600 text-white rounded-full">Today</span>
@@ -750,7 +750,7 @@ const SchedulingPage: React.FC = () => {
                                 <span className={`text-sm font-semibold ${
                                   isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
                                 }`}>
-                                  {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                  {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz })}
                                 </span>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs text-theme-text-muted">{dayShifts.length} shift{dayShifts.length !== 1 ? 's' : ''}</span>

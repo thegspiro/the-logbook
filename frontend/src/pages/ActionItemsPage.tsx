@@ -18,6 +18,8 @@ import {
 import { dashboardService } from '../services/api';
 import type { ActionItemSummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 const STATUS_BADGES: Record<string, string> = {
   open: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -36,6 +38,7 @@ const PRIORITY_BADGES: Record<string, string> = {
 
 const ActionItemsPage: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [items, setItems] = useState<ActionItemSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -190,7 +193,7 @@ const ActionItemsPage: React.FC = () => {
                   {item.due_date ? (
                     <div className={`text-sm ${getDueDateClass(item.due_date)}`}>
                       <Clock className="h-3 w-3 inline mr-1" />
-                      {new Date(item.due_date).toLocaleDateString()}
+                      {formatDate(item.due_date, tz)}
                     </div>
                   ) : (
                     <span className="text-xs text-theme-text-muted">No due date</span>

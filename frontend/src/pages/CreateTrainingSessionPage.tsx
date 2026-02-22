@@ -18,7 +18,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { userService, schedulingService, locationsService, trainingSessionService, trainingService } from '../services/api';
-import { formatRank } from '../constants/enums';
+import { useRanks } from '../hooks/useRanks';
 
 /**
  * Create Training Session Page
@@ -31,6 +31,7 @@ import { formatRank } from '../constants/enums';
 const CreateTrainingSessionPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { formatRank } = useRanks();
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [availableCourses, setAvailableCourses] = useState<TrainingCourse[]>([]);

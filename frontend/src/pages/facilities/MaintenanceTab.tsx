@@ -10,6 +10,8 @@ import {
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../services/api';
 import type { MaintenanceRecord, MaintenanceType, Facility, MAINTENANCE_CATEGORIES } from './types';
+import { useTimezone } from '../../hooks/useTimezone';
+import { getTodayLocalDate } from '../../utils/dateFormatting';
 
 const CATEGORY_OPTIONS: Array<typeof MAINTENANCE_CATEGORIES[number]> = [
   'PREVENTIVE', 'REPAIR', 'INSPECTION', 'RENOVATION', 'CLEANING', 'SAFETY', 'OTHER',
@@ -22,6 +24,7 @@ interface Props {
 }
 
 export default function MaintenanceTab({ facilities, filterFacilityId, onClearFilter }: Props) {
+  const tz = useTimezone();
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [maintenanceTypes, setMaintenanceTypes] = useState<MaintenanceType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,7 +133,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
     try {
       await facilitiesService.updateMaintenanceRecord(record.id, {
         is_completed: true,
-        completed_date: new Date().toISOString().split('T')[0],
+        completed_date: getTodayLocalDate(tz),
       });
       toast.success('Marked as completed');
       loadRecords();
