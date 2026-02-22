@@ -156,6 +156,8 @@ function mapStepToStage(step: any): PipelineStage {
     config: getDefaultStageConfig(stageType),
     sort_order: step.sort_order ?? 0,
     is_required: step.required ?? true,
+    notify_prospect_on_completion: step.notify_prospect_on_completion ?? false,
+    public_visible: step.public_visible ?? true,
     created_at: step.created_at,
     updated_at: step.updated_at,
   };
@@ -172,6 +174,7 @@ function mapPipelineResponse(data: any): Pipeline {
     inactivity_config: data.inactivity_config && Object.keys(data.inactivity_config).length > 0
       ? data.inactivity_config
       : DEFAULT_INACTIVITY_CONFIG,
+    public_status_enabled: data.public_status_enabled ?? false,
     stages: (data.steps || []).map(mapStepToStage),
     applicant_count: data.prospect_count ?? 0,
     created_at: data.created_at,
@@ -194,14 +197,14 @@ function mapPipelineListItem(data: any): PipelineListItem {
 
 /** Map a frontend PipelineStageCreate to a backend step create payload */
 function mapStageCreateToBackend(stage: PipelineStageCreate): any {
-  const { step_type, action_type } = mapStageTypeToBackend(stage.stage_type);
   return {
     name: stage.name,
     description: stage.description,
-    step_type,
-    action_type,
+    ...mapStageTypeToBackend(stage.stage_type),
     sort_order: stage.sort_order,
     required: stage.is_required ?? true,
+    notify_prospect_on_completion: stage.notify_prospect_on_completion ?? false,
+    public_visible: stage.public_visible ?? true,
   };
 }
 
@@ -217,6 +220,8 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): any {
   }
   if (stage.sort_order !== undefined) payload.sort_order = stage.sort_order;
   if (stage.is_required !== undefined) payload.required = stage.is_required;
+  if (stage.notify_prospect_on_completion !== undefined) payload.notify_prospect_on_completion = stage.notify_prospect_on_completion;
+  if (stage.public_visible !== undefined) payload.public_visible = stage.public_visible;
   return payload;
 }
 
@@ -244,6 +249,7 @@ function mapProspectToApplicant(data: any): any {
     })),
     stage_entered_at: data.created_at,
     target_membership_type: 'probationary',
+    status_token: data.status_token,
     status: typeof data.status === 'object' ? data.status.value ?? data.status : data.status,
     last_activity_at: data.updated_at,
   };
@@ -450,15 +456,17 @@ export const applicantService = {
       }
     );
 
-    // Backend returns a flat list; wrap into paginated format
-    const items = Array.isArray(response.data) ? response.data : [];
+    // Backend returns { items, total, limit, offset }
+    const data = response.data;
+    const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+    const total = data?.total ?? items.length;
     const mappedItems = items.map(mapProspectListToApplicantList);
     return {
       items: mappedItems,
-      total: mappedItems.length,
+      total,
       page,
       page_size: pageSize,
-      total_pages: Math.max(1, Math.ceil(mappedItems.length / pageSize)),
+      total_pages: Math.max(1, Math.ceil(total / pageSize)),
     };
   },
 
@@ -525,7 +533,7 @@ export const applicantService = {
     await api.delete(`/prospective-members/prospects/${applicantId}`);
   },
 
-  async checkExisting(email: string, firstName?: string, lastName?: string): Promise<{ has_matches: boolean; match_count: number; matches: Array<Record<string, unknown>> }> {
+  async checkExisting(email: string, firstName?: string, lastName?: string): Promise<{ has_matches: boolean; match_count: number; matches: Array<{ status: string; match_type: string }> }> {
     const params: Record<string, string> = { email };
     if (firstName) params.first_name = firstName;
     if (lastName) params.last_name = lastName;
@@ -575,10 +583,9 @@ export const applicantService = {
     applicantId: string,
     reason?: string
   ): Promise<Applicant> {
-    // Backend doesn't have "on_hold" status; use withdrawn as closest match
     const response = await api.put(
       `/prospective-members/prospects/${applicantId}`,
-      { status: 'withdrawn', notes: reason }
+      { status: 'on_hold', notes: reason }
     );
     return mapProspectToApplicant(response.data);
   },
@@ -623,7 +630,7 @@ export const applicantService = {
     return this.getApplicants({
       filters: {
         pipeline_id: params?.pipeline_id,
-        status: 'withdrawn', // Backend has no "inactive" status; closest is withdrawn
+        status: 'inactive',
         search: params?.search,
       },
       page: params?.page,
@@ -672,10 +679,16 @@ export const applicantService = {
     // Backend uses /transfer endpoint with different payload shape
     const payload: Record<string, unknown> = {
       send_welcome_email: data.send_welcome_email,
+      membership_type: data.target_membership_type,
     };
     if (data.target_role_id) {
       payload.role_ids = [data.target_role_id];
     }
+    if (data.middle_name) payload.middle_name = data.middle_name;
+    if (data.hire_date) payload.hire_date = data.hire_date;
+    if (data.rank) payload.rank = data.rank;
+    if (data.station) payload.station = data.station;
+    if (data.emergency_contacts?.length) payload.emergency_contacts = data.emergency_contacts;
     const response = await api.post(
       `/prospective-members/prospects/${applicantId}/transfer`,
       payload
@@ -698,7 +711,7 @@ export const applicantService = {
       stage_id: d.step_id,
       document_type: d.document_type,
       file_name: d.file_name,
-      file_url: d.file_path,
+      file_url: `/api/v1/prospective-members/prospects/${applicantId}/documents/${d.id}/download`,
       file_size: d.file_size,
       mime_type: d.mime_type,
       uploaded_by: d.uploaded_by,
@@ -744,7 +757,7 @@ export const applicantService = {
       stage_id: d.step_id,
       document_type: d.document_type,
       file_name: d.file_name,
-      file_url: d.file_path,
+      file_url: `/api/v1/prospective-members/prospects/${applicantId}/documents/${d.id}/download`,
       file_size: d.file_size,
       mime_type: d.mime_type,
       uploaded_by: d.uploaded_by,
@@ -816,6 +829,26 @@ export const applicantService = {
 // =============================================================================
 // Election Package Service (cross-module query for Elections module)
 // =============================================================================
+
+// =============================================================================
+// Public Application Status (no auth required)
+// =============================================================================
+
+export const publicStatusService = {
+  async getApplicationStatus(token: string): Promise<{
+    first_name: string;
+    last_name: string;
+    status: string;
+    current_stage_name?: string;
+    pipeline_name?: string;
+    total_stages: number;
+    stage_timeline: { stage_name: string; status: string; completed_at?: string }[];
+    applied_at?: string;
+  }> {
+    const response = await axios.get(`/api/public/v1/application-status/${token}`);
+    return response.data;
+  },
+};
 
 export const electionPackageService = {
   async getPendingPackages(pipelineId?: string): Promise<ElectionPackage[]> {

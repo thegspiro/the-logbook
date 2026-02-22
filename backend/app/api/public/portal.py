@@ -463,6 +463,42 @@ async def get_public_events(
         )
 
 
+@router.get("/application-status/{token}")
+async def get_application_status(
+    token: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public endpoint for prospects to check their application status.
+
+    No authentication required — uses a unique token emailed to the prospect.
+    Returns limited public-safe fields only.
+
+    Rate limit: 30 requests/min per IP
+    """
+    from app.services.membership_pipeline_service import MembershipPipelineService
+
+    await validate_ip_rate_limit(request)
+
+    if not token or len(token) < 10 or len(token) > 64:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token format"
+        )
+
+    service = MembershipPipelineService(db)
+    result = await service.get_prospect_by_token(token)
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found"
+        )
+
+    return result
+
+
 @router.get("/health")
 async def health_check():
     """

@@ -25,6 +25,7 @@ from app.schemas.membership_pipeline import (
     ProspectUpdate,
     ProspectResponse,
     ProspectListResponse,
+    PaginatedProspectListResponse,
     CompleteStepRequest,
     AdvanceProspectRequest,
     TransferProspectRequest,
@@ -414,7 +415,7 @@ async def purge_inactive_prospects(
 # Prospect Endpoints
 # ============================================
 
-@router.get("/prospects", response_model=List[ProspectListResponse])
+@router.get("/prospects", response_model=PaginatedProspectListResponse)
 async def list_prospects(
     pipeline_id: Optional[UUID] = Query(None, description="Filter by pipeline"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
@@ -426,6 +427,9 @@ async def list_prospects(
 ):
     """
     List prospective members with optional filters.
+
+    Returns a paginated response with ``items``, ``total``, ``limit``,
+    and ``offset`` so clients can implement proper pagination.
 
     **Requires permission: members.view**
     """
@@ -439,9 +443,9 @@ async def list_prospects(
         offset=offset,
     )
 
-    result = []
+    items = []
     for p in prospects:
-        result.append(ProspectListResponse(
+        items.append(ProspectListResponse(
             id=p.id,
             first_name=p.first_name,
             last_name=p.last_name,
@@ -454,7 +458,7 @@ async def list_prospects(
             current_step_name=p.current_step.name if p.current_step else None,
             created_at=p.created_at,
         ))
-    return result
+    return PaginatedProspectListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.post("/prospects/check-existing")
@@ -482,10 +486,20 @@ async def check_existing_members_for_prospect(
         first_name=first_name,
         last_name=last_name,
     )
+    # Return only non-sensitive summary data to avoid leaking PII.
+    # The full match details (user_id, email, membership_number) are
+    # only used internally by create_prospect and _do_transfer.
+    safe_matches = [
+        {
+            "status": m["status"],
+            "match_type": m["match_type"],
+        }
+        for m in matches
+    ]
     return {
         "has_matches": len(matches) > 0,
         "match_count": len(matches),
-        "matches": matches,
+        "matches": safe_matches,
     }
 
 
@@ -663,6 +677,11 @@ async def transfer_prospect(
         rank=data.rank,
         station=data.station,
         role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,
+        send_welcome_email=data.send_welcome_email,
+        middle_name=data.middle_name,
+        hire_date=data.hire_date,
+        emergency_contacts=[ec for ec in data.emergency_contacts] if data.emergency_contacts else None,
+        membership_type=data.membership_type,
     )
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
@@ -747,17 +766,20 @@ async def add_prospect_document(
     **Requires permission: members.manage**
     """
     service = MembershipPipelineService(db)
-    doc = await service.add_prospect_document(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        document_type=document_type,
-        file_name=file_name,
-        file_path=file_path,
-        file_size=file_size,
-        mime_type=mime_type,
-        step_id=str(step_id) if step_id else None,
-        uploaded_by=current_user.id,
-    )
+    try:
+        doc = await service.add_prospect_document(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            document_type=document_type,
+            file_name=file_name,
+            file_path=file_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            step_id=str(step_id) if step_id else None,
+            uploaded_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
     return doc
@@ -888,3 +910,27 @@ async def list_election_packages(
         status_filter=status_filter,
     )
     return packages
+
+
+# ============================================
+# Inactivity Check Endpoint
+# ============================================
+
+@router.post("/prospects/process-inactivity")
+async def process_inactivity(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+):
+    """
+    Process inactivity warnings for all prospects in the organization.
+    Marks critical prospects as inactive and logs warnings.
+    Can be triggered manually or via a scheduled job.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    result = await service.process_inactivity_warnings(
+        organization_id=current_user.organization_id,
+        processed_by=current_user.id,
+    )
+    return result

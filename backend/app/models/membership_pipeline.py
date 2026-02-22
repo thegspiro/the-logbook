@@ -50,9 +50,11 @@ class ActionType(str, enum.Enum):
 class ProspectStatus(str, enum.Enum):
     """Status of a prospective member"""
     ACTIVE = "active"
+    ON_HOLD = "on_hold"
     APPROVED = "approved"
     REJECTED = "rejected"
     WITHDRAWN = "withdrawn"
+    INACTIVE = "inactive"
     TRANSFERRED = "transferred"
 
 
@@ -90,6 +92,7 @@ class MembershipPipeline(Base):
     is_active = Column(Boolean, default=True, index=True)
     auto_transfer_on_approval = Column(Boolean, default=False)
     inactivity_config = Column(JSON, default=dict)
+    public_status_enabled = Column(Boolean, default=False)
 
     created_by = Column(String(36), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -157,6 +160,8 @@ class MembershipPipelineStep(Base):
     required = Column(Boolean, default=True)
     config = Column(JSON, default=dict)
     inactivity_timeout_days = Column(Integer, nullable=True)
+    notify_prospect_on_completion = Column(Boolean, default=False)
+    public_visible = Column(Boolean, default=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -237,6 +242,10 @@ class ProspectiveMember(Base):
         String(36),
         ForeignKey("form_submissions.id", ondelete="SET NULL"),
     )
+
+    # Public status check token
+    status_token = Column(String(64), unique=True, index=True)
+    status_token_created_at = Column(DateTime(timezone=True))
 
     # Transfer tracking
     transferred_user_id = Column(

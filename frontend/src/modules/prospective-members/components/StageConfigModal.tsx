@@ -14,6 +14,8 @@ import {
   Plus,
   Trash2,
   Clock,
+  Bell,
+  Eye,
 } from 'lucide-react';
 import type {
   PipelineStage,
@@ -88,6 +90,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     DEFAULT_CONFIGS.manual_approval()
   );
   const [isRequired, setIsRequired] = useState(true);
+  const [notifyProspect, setNotifyProspect] = useState(false);
+  const [publicVisible, setPublicVisible] = useState(true);
   const [hasTimeoutOverride, setHasTimeoutOverride] = useState(false);
   const [timeoutOverrideDays, setTimeoutOverrideDays] = useState<number>(180);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -99,6 +103,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       setStageType(editingStage.stage_type);
       setConfig(editingStage.config);
       setIsRequired(editingStage.is_required);
+      setNotifyProspect(editingStage.notify_prospect_on_completion ?? false);
+      setPublicVisible(editingStage.public_visible ?? true);
       if (editingStage.inactivity_timeout_days != null) {
         setHasTimeoutOverride(true);
         setTimeoutOverrideDays(editingStage.inactivity_timeout_days);
@@ -112,6 +118,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       setStageType('manual_approval');
       setConfig(DEFAULT_CONFIGS.manual_approval());
       setIsRequired(true);
+      setNotifyProspect(false);
+      setPublicVisible(true);
       setHasTimeoutOverride(false);
       setTimeoutOverrideDays(180);
     }
@@ -179,6 +187,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         : existingStageCount,
       is_required: isRequired,
       inactivity_timeout_days: hasTimeoutOverride ? timeoutOverrideDays : null,
+      notify_prospect_on_completion: notifyProspect,
+      public_visible: publicVisible,
     };
 
     onSave(stageData);
@@ -595,6 +605,38 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             />
             This stage is required (cannot be skipped)
           </label>
+
+          {/* Prospect Notification & Public Visibility */}
+          <div className="border-t border-theme-surface-border pt-6 space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Bell className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+              <h3 className="text-sm font-medium text-theme-text-secondary">Prospect Communication</h3>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+              <input
+                type="checkbox"
+                checked={notifyProspect}
+                onChange={(e) => setNotifyProspect(e.target.checked)}
+                className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+              />
+              Notify prospect when this stage is completed
+            </label>
+            <p className="text-xs text-theme-text-muted ml-6">
+              When checked, the prospect will receive an email notification when they advance past this stage.
+            </p>
+            <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+              <input
+                type="checkbox"
+                checked={publicVisible}
+                onChange={(e) => setPublicVisible(e.target.checked)}
+                className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+              />
+              Show this stage on the public status page
+            </label>
+            <p className="text-xs text-theme-text-muted ml-6">
+              When unchecked, this stage will be hidden from the prospect's status check page. Useful for internal-only steps like background checks.
+            </p>
+          </div>
         </div>
 
         {/* Footer */}

@@ -12,6 +12,7 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import {
   ProspectiveMembersPage,
   PipelineSettingsPage,
+  ApplicationStatusPage,
 } from './pages';
 
 export const getProspectiveMembersRoutes = () => {
@@ -22,6 +23,9 @@ export const getProspectiveMembersRoutes = () => {
 
       {/* Pipeline Settings */}
       <Route path="/prospective-members/settings" element={<ProtectedRoute requiredPermission="prospective_members.manage"><PipelineSettingsPage /></ProtectedRoute>} />
+
+      {/* Public Application Status (no auth required) */}
+      <Route path="/application-status/:token" element={<ApplicationStatusPage />} />
     </React.Fragment>
   );
 };

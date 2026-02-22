@@ -168,6 +168,24 @@ export const PipelineSettingsPage: React.FC = () => {
     ? Math.round(effectiveTimeoutDays * (inactivityConfig.warning_threshold_percent / 100))
     : null;
 
+  const handleTogglePublicStatus = async () => {
+    if (!currentPipeline) return;
+    try {
+      const updated = await pipelineService.updatePipeline(currentPipeline.id, {
+        public_status_enabled: !currentPipeline.public_status_enabled,
+      });
+      setCurrentPipeline(updated);
+      toast.success(
+        updated.public_status_enabled
+          ? 'Public status page enabled'
+          : 'Public status page disabled'
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to toggle setting';
+      toast.error(msg);
+    }
+  };
+
   const handlePipelineUpdated = (pipeline: Pipeline) => {
     setCurrentPipeline(pipeline);
   };
@@ -601,6 +619,29 @@ export const PipelineSettingsPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {/* Public Status Page Settings */}
+              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Bell className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+                  <h3 className="text-sm font-semibold text-theme-text-primary">
+                    Public Application Status Page
+                  </h3>
+                </div>
+                <p className="text-xs text-theme-text-muted mb-4">
+                  When enabled, prospects receive a link to check their application status.
+                  Only stages marked as "public visible" in the stage settings will be shown.
+                </p>
+                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={currentPipeline.public_status_enabled}
+                    onChange={handleTogglePublicStatus}
+                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+                  />
+                  Allow prospects to check their application status via a public link
+                </label>
               </div>
             </div>
           )}

@@ -187,6 +187,8 @@ export interface PipelineStage {
   sort_order: number;
   is_required: boolean;
   inactivity_timeout_days?: number | null; // null = use pipeline default
+  notify_prospect_on_completion: boolean;
+  public_visible: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -199,6 +201,8 @@ export interface PipelineStageCreate {
   sort_order: number;
   is_required?: boolean;
   inactivity_timeout_days?: number | null;
+  notify_prospect_on_completion?: boolean;
+  public_visible?: boolean;
 }
 
 export interface PipelineStageUpdate {
@@ -209,6 +213,8 @@ export interface PipelineStageUpdate {
   sort_order?: number;
   is_required?: boolean;
   inactivity_timeout_days?: number | null;
+  notify_prospect_on_completion?: boolean;
+  public_visible?: boolean;
 }
 
 // =============================================================================
@@ -222,6 +228,7 @@ export interface Pipeline {
   description?: string;
   is_active: boolean;
   inactivity_config: InactivityConfig;
+  public_status_enabled: boolean;
   stages: PipelineStage[];
   applicant_count?: number;
   created_at: string;
@@ -240,6 +247,7 @@ export interface PipelineUpdate {
   description?: string;
   is_active?: boolean;
   inactivity_config?: InactivityConfig;
+  public_status_enabled?: boolean;
 }
 
 export interface PipelineListItem {
@@ -310,6 +318,7 @@ export interface Applicant {
   target_role_id?: string;
   target_role_name?: string;
   form_submission_id?: string;
+  status_token?: string;
   status: ApplicantStatus;
   notes?: string;
   stage_history: StageHistoryEntry[];
@@ -405,6 +414,20 @@ export interface ConvertApplicantRequest {
   target_role_id?: string;
   send_welcome_email: boolean;
   notes?: string;
+  // Two-step wizard fields
+  middle_name?: string;
+  hire_date?: string;
+  rank?: string;
+  station?: string;
+  emergency_contacts?: EmergencyContact[];
+}
+
+export interface EmergencyContact {
+  name: string;
+  relationship: string;
+  phone: string;
+  email?: string;
+  is_primary?: boolean;
 }
 
 export interface ConvertApplicantResponse {
@@ -412,6 +435,22 @@ export interface ConvertApplicantResponse {
   user_id: string;
   membership_type: TargetMembershipType;
   message: string;
+}
+
+// Public application status
+export interface ApplicationStatus {
+  first_name: string;
+  last_name: string;
+  status: string;
+  current_stage_name?: string;
+  pipeline_name?: string;
+  total_stages: number;
+  stage_timeline: {
+    stage_name: string;
+    status: string;
+    completed_at?: string;
+  }[];
+  applied_at?: string;
 }
 
 // =============================================================================

@@ -228,6 +228,11 @@ class User(Base):
     address_zip = Column(String(20))
     address_country = Column(String(100), default="USA")
 
+    # Referral data preserved from prospect record on transfer
+    referral_source = Column(String(255))
+    interest_reason = Column(Text)
+    referred_by_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+
     # Emergency Contacts (stored as JSON array)
     # Format: [{"name": "...", "relationship": "...", "phone": "...", "email": "...", "is_primary": true}, ...]
     emergency_contacts = Column(JSON, default=list)
