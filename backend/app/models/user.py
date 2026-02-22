@@ -43,7 +43,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.sql import func
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 
 from app.core.utils import generate_uuid
@@ -319,7 +319,7 @@ class User(Base):
         """Check if account is locked"""
         if not self.locked_until:
             return False
-        return datetime.utcnow() < self.locked_until
+        return datetime.now(timezone.utc) < self.locked_until
 
     def __repr__(self):
         return f"<User(username={self.username}, email={self.email})>"

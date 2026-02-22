@@ -179,3 +179,58 @@ export const CheckInWindowType = {
   WINDOW: 'window',
 } as const;
 export type CheckInWindowType = (typeof CheckInWindowType)[keyof typeof CheckInWindowType];
+
+// ============================================
+// Training Submission Status
+// ============================================
+export const SubmissionStatus = {
+  DRAFT: 'draft',
+  PENDING_REVIEW: 'pending_review',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  REVISION_REQUESTED: 'revision_requested',
+} as const;
+export type SubmissionStatus = (typeof SubmissionStatus)[keyof typeof SubmissionStatus];
+
+// ============================================
+// Operational Ranks
+// ============================================
+export const OperationalRank = {
+  FIRE_CHIEF: 'fire_chief',
+  DEPUTY_CHIEF: 'deputy_chief',
+  ASSISTANT_CHIEF: 'assistant_chief',
+  CAPTAIN: 'captain',
+  LIEUTENANT: 'lieutenant',
+  ENGINEER: 'engineer',
+  FIREFIGHTER: 'firefighter',
+} as const;
+export type OperationalRank = (typeof OperationalRank)[keyof typeof OperationalRank];
+
+export const OPERATIONAL_RANK_LABELS: Record<OperationalRank, string> = {
+  [OperationalRank.FIRE_CHIEF]: 'Fire Chief',
+  [OperationalRank.DEPUTY_CHIEF]: 'Deputy Chief',
+  [OperationalRank.ASSISTANT_CHIEF]: 'Assistant Chief',
+  [OperationalRank.CAPTAIN]: 'Captain',
+  [OperationalRank.LIEUTENANT]: 'Lieutenant',
+  [OperationalRank.ENGINEER]: 'Engineer',
+  [OperationalRank.FIREFIGHTER]: 'Firefighter',
+};
+
+// ============================================
+// Election Voting Methods
+// ============================================
+export const VotingMethod = {
+  SIMPLE_MAJORITY: 'simple_majority',
+  RANKED_CHOICE: 'ranked_choice',
+  APPROVAL: 'approval',
+  SUPERMAJORITY: 'supermajority',
+} as const;
+export type VotingMethod = (typeof VotingMethod)[keyof typeof VotingMethod];
+
+export const VictoryCondition = {
+  MOST_VOTES: 'most_votes',
+  MAJORITY: 'majority',
+  SUPERMAJORITY: 'supermajority',
+  THRESHOLD: 'threshold',
+} as const;
+export type VictoryCondition = (typeof VictoryCondition)[keyof typeof VictoryCondition];

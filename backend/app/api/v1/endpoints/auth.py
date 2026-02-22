@@ -48,7 +48,7 @@ async def get_login_branding(
     try:
         result = await db.execute(
             select(Organization.name, Organization.logo)
-            .where(Organization.active == True)
+            .where(Organization.active == True)  # noqa: E712
             .order_by(Organization.created_at.asc())
             .limit(1)
         )
@@ -76,7 +76,7 @@ async def get_oauth_config(
     try:
         result = await db.execute(
             select(Organization.settings)
-            .where(Organization.active == True)
+            .where(Organization.active == True)  # noqa: E712
             .order_by(Organization.created_at.asc())
             .limit(1)
         )
@@ -130,7 +130,7 @@ async def register(
     from sqlalchemy import select
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.active == True)
+        .where(Organization.active == True)  # noqa: E712
         .order_by(Organization.created_at.asc())
         .limit(1)
     )

@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import { electionService } from '../services/api';
 import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
+import { ElectionStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
@@ -215,7 +216,7 @@ export const ElectionsPage: React.FC = () => {
       )}
 
       <div className="mb-4 flex space-x-2">
-        {['all', 'draft', 'open', 'closed'].map((status) => (
+        {['all', ElectionStatus.DRAFT, ElectionStatus.OPEN, ElectionStatus.CLOSED].map((status) => (
           <button
             key={status}
             onClick={() => setStatusFilter(status)}

@@ -38,6 +38,7 @@ import {
   type FormIntegrationCreate,
 } from '../services/api';
 import { FormBuilder, FormRenderer, SubmissionViewer } from '../components/forms';
+import { FormStatus } from '../constants/enums';
 
 interface StarterTemplate {
   id: string;
@@ -648,7 +649,7 @@ const FormsPage: React.FC = () => {
                     )}
 
                     {/* Public URL */}
-                    {form.is_public && form.public_slug && form.status === 'published' && (
+                    {form.is_public && form.public_slug && form.status === FormStatus.PUBLISHED && (
                       <div className="flex items-center space-x-2 mb-3 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-3 py-2">
                         <Link className="w-4 h-4 text-cyan-700 dark:text-cyan-400 flex-shrink-0" aria-hidden="true" />
                         <span className="text-cyan-700 dark:text-cyan-300 text-xs truncate flex-1">{getPublicUrl(form.public_slug)}</span>
@@ -706,7 +707,7 @@ const FormsPage: React.FC = () => {
                             <Plug className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
-                        {canManage && form.status === 'draft' && (
+                        {canManage && form.status === FormStatus.DRAFT && (
                           <button
                             onClick={() => handlePublish(form.id)}
                             className="p-1.5 text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
@@ -715,7 +716,7 @@ const FormsPage: React.FC = () => {
                             <Send className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
-                        {canManage && form.status === 'published' && (
+                        {canManage && form.status === FormStatus.PUBLISHED && (
                           <button
                             onClick={() => handleArchive(form.id)}
                             className="p-1.5 text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"

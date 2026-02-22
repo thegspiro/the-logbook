@@ -59,7 +59,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         organization_id=event.organization_id,
         title=event.title,
         description=event.description,
-        event_type=event.event_type.value,
+        event_type=event.event_type.value if event.event_type else "other",
         location_id=event.location_id,
         location=event.location,
         location_name=location_name,
@@ -156,7 +156,7 @@ async def list_events(
             EventListItem(
                 id=event.id,
                 title=event.title,
-                event_type=event.event_type.value,
+                event_type=event.event_type.value if event.event_type else "other",
                 start_datetime=event.start_datetime,
                 end_datetime=event.end_datetime,
                 location_id=event.location_id,

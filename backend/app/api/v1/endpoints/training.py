@@ -72,7 +72,7 @@ async def list_courses(
     )
 
     if active_only:
-        query = query.where(TrainingCourse.active == True)
+        query = query.where(TrainingCourse.active == True)  # noqa: E712
 
     query = query.order_by(TrainingCourse.name)
 
@@ -335,7 +335,7 @@ async def list_categories(
     )
 
     if active_only:
-        query = query.where(TrainingCategory.active == True)
+        query = query.where(TrainingCategory.active == True)  # noqa: E712
 
     query = query.order_by(TrainingCategory.sort_order, TrainingCategory.name)
 
@@ -486,7 +486,7 @@ async def list_requirements(
     )
 
     if active_only:
-        query = query.where(TrainingRequirement.active == True)
+        query = query.where(TrainingRequirement.active == True)  # noqa: E712
 
     if year:
         query = query.where(TrainingRequirement.year == year)
@@ -1042,7 +1042,7 @@ async def parse_historical_import(
     courses_result = await db.execute(
         select(TrainingCourse)
         .where(TrainingCourse.organization_id == current_user.organization_id)
-        .where(TrainingCourse.active == True)
+        .where(TrainingCourse.active == True)  # noqa: E712
     )
     courses = courses_result.scalars().all()
     course_name_map = {c.name.strip().lower(): c for c in courses}

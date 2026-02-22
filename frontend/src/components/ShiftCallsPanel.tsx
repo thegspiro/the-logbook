@@ -318,7 +318,7 @@ export const ShiftCallsPanel: React.FC<ShiftCallsPanelProps> = ({ shiftId }) => 
     setLoading(true);
     try {
       const data = await schedulingService.getShiftCalls(shiftId);
-      setCalls(data as unknown as ShiftCall[]);
+      setCalls(data as ShiftCall[]);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load calls'));
     } finally {

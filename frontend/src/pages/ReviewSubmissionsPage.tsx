@@ -25,6 +25,7 @@ import {
 import { trainingSubmissionService, trainingService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { SubmissionStatus } from '../constants/enums';
 import type {
   TrainingSubmission,
   SelfReportConfig,
@@ -888,11 +889,11 @@ const ReviewSubmissionsPage: React.FC = () => {
               className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             >
               <option value="">All statuses</option>
-              <option value="pending_review">Pending Review</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="revision_requested">Revision Requested</option>
-              <option value="draft">Draft</option>
+              <option value={SubmissionStatus.PENDING_REVIEW}>Pending Review</option>
+              <option value={SubmissionStatus.APPROVED}>Approved</option>
+              <option value={SubmissionStatus.REJECTED}>Rejected</option>
+              <option value={SubmissionStatus.REVISION_REQUESTED}>Revision Requested</option>
+              <option value={SubmissionStatus.DRAFT}>Draft</option>
             </select>
           </div>
         )}

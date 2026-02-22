@@ -14,7 +14,7 @@ import time
 import hashlib
 import secrets
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import re
 import html
 
@@ -388,7 +388,7 @@ class SecurityAuditLogger:
 
         In production, send to centralized logging system
         """
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         log_entry = {
             "timestamp": timestamp,
@@ -864,7 +864,7 @@ async def run_periodic_security_checks() -> Dict[str, Any]:
     from app.core.audit import verify_audit_log_integrity, audit_logger
 
     results = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "checks": {},
     }
 
