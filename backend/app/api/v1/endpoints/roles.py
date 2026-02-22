@@ -17,6 +17,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
+from app.core.utils import safe_error_detail
 from app.schemas.role import (
     RoleResponse,
     RoleCreate,
@@ -163,7 +164,7 @@ async def create_role(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -240,7 +241,7 @@ async def update_role(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -292,11 +293,11 @@ async def delete_role(
         if "not found" in str(e).lower():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(e)
+                detail=safe_error_detail(e)
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -346,11 +347,11 @@ async def clone_role(
         if "not found" in str(e).lower():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(e)
+                detail=safe_error_detail(e)
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 

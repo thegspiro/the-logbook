@@ -20,6 +20,7 @@ from functools import partial
 
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit
+from app.core.utils import safe_error_detail
 from app.services.onboarding import OnboardingService
 from app.services.auth_service import AuthService
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
@@ -738,7 +739,7 @@ async def create_organization(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -834,7 +835,7 @@ async def create_system_owner(
         logger.error(f"Admin user creation failed with ValueError: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
     except Exception as e:
         # Log full details server-side, return generic message to client
@@ -872,7 +873,7 @@ async def configure_modules(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -942,7 +943,7 @@ async def complete_onboarding(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -1081,8 +1082,8 @@ async def test_email_configuration(
 
         return EmailTestResponse(
             success=False,
-            message=f"Failed to test email configuration: {str(e)}",
-            details={"error": str(e)}
+            message=safe_error_detail(e, "Failed to test email configuration"),
+            details={"error": "internal_error"}
         )
 
 
@@ -1441,7 +1442,7 @@ async def save_session_organization(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
     except Exception as e:
         logger.error(f"Error creating organization during onboarding: {e}")

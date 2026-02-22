@@ -17,6 +17,7 @@ from uuid import UUID
 from datetime import datetime, timezone
 from app.core.database import get_db
 from app.core.audit import log_audit_event
+from app.core.utils import safe_error_detail
 from app.api.dependencies import get_current_user, require_permission
 from app.models.user import User, UserStatus, Organization
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
@@ -474,7 +475,7 @@ async def reactivate_member(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail=safe_error_detail(e),
         )
 
     return result

@@ -13,6 +13,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.models.inventory import ItemStatus, AssignmentType
 from app.schemas.inventory import (
@@ -1272,7 +1273,7 @@ async def generate_barcode_labels(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail=safe_error_detail(e),
         )
 
     filename = f"inventory-labels-{request.label_format}.pdf"

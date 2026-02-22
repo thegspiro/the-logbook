@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date, datetime
 
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.apparatus import (
     # Apparatus Type
@@ -141,7 +142,7 @@ async def create_apparatus_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return apparatus_type
 
@@ -195,7 +196,7 @@ async def update_apparatus_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not apparatus_type:
         raise HTTPException(
@@ -228,7 +229,7 @@ async def delete_apparatus_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(
@@ -283,7 +284,7 @@ async def create_apparatus_status(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return apparatus_status
 
@@ -337,7 +338,7 @@ async def update_apparatus_status(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not apparatus_status:
         raise HTTPException(
@@ -370,7 +371,7 @@ async def delete_apparatus_status(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(
@@ -457,7 +458,7 @@ async def create_apparatus(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     # Reload with relations
     apparatus = await service.get_apparatus(
@@ -572,7 +573,7 @@ async def update_apparatus(
             updated_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not apparatus:
         raise HTTPException(
@@ -612,7 +613,7 @@ async def change_apparatus_status(
             changed_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not apparatus:
         raise HTTPException(
@@ -652,7 +653,7 @@ async def archive_apparatus(
             archived_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not apparatus:
         raise HTTPException(
@@ -739,7 +740,7 @@ async def create_custom_field(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return field
 
@@ -766,7 +767,7 @@ async def update_custom_field(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not field:
         raise HTTPException(
@@ -849,7 +850,7 @@ async def create_maintenance_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return maint_type
 
@@ -876,7 +877,7 @@ async def update_maintenance_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not maint_type:
         raise HTTPException(
@@ -907,7 +908,7 @@ async def delete_maintenance_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(
@@ -1002,7 +1003,7 @@ async def create_maintenance_record(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return record
 
@@ -1057,7 +1058,7 @@ async def update_maintenance_record(
             updated_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not record:
         raise HTTPException(
@@ -1147,7 +1148,7 @@ async def create_fuel_log(
             recorded_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return log
 
@@ -1205,7 +1206,7 @@ async def create_operator(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return operator
 
@@ -1232,7 +1233,7 @@ async def update_operator(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not operator:
         raise HTTPException(
@@ -1320,7 +1321,7 @@ async def create_equipment(
             assigned_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return equipment
 
@@ -1347,7 +1348,7 @@ async def update_equipment(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not equipment:
         raise HTTPException(
@@ -1620,7 +1621,7 @@ async def create_nfpa_compliance(
             checked_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return record
 
@@ -1648,7 +1649,7 @@ async def update_nfpa_compliance(
             checked_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not record:
         raise HTTPException(
@@ -1759,7 +1760,7 @@ async def create_report_config(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return config
 
@@ -1786,7 +1787,7 @@ async def update_report_config(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not config:
         raise HTTPException(
@@ -1894,7 +1895,7 @@ async def create_service_provider(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
 
 @router.patch("/service-providers/{provider_id}", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
@@ -1913,7 +1914,7 @@ async def update_service_provider(
     try:
         provider = await service.update_service_provider(provider_id, provider_data, current_user.organization_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
     if not provider:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
     return provider
@@ -2029,7 +2030,7 @@ async def create_component(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
 
 @router.patch("/components/{component_id}", response_model=ApparatusComponentResponse, tags=["Components"])
@@ -2048,7 +2049,7 @@ async def update_component(
     try:
         component = await service.update_component(component_id, component_data, current_user.organization_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
     if not component:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found")
     return component
@@ -2146,7 +2147,7 @@ async def create_component_note(
             reported_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
 
 @router.patch("/component-notes/{note_id}", response_model=ApparatusComponentNoteResponse, tags=["Component Notes"])
@@ -2170,7 +2171,7 @@ async def update_component_note(
             resolved_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found")
     return note
@@ -2227,7 +2228,7 @@ async def generate_service_report(
             component_ids=parsed_ids,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
 
 # ============================================================================

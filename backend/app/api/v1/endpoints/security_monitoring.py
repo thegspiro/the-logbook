@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.api.dependencies import get_current_user, require_permission
 from app.models.user import User
 from app.services.security_monitoring import (
@@ -262,7 +263,7 @@ async def create_audit_checkpoint(
         }
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
 @router.get("/intrusion-detection/status")
