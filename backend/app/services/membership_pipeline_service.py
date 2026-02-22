@@ -129,6 +129,12 @@ class MembershipPipelineService:
         await self.db.commit()
         return await self.get_pipeline(pipeline.id, organization_id)
 
+    # Fields that may never be set via the generic update dict
+    _PIPELINE_PROTECTED_FIELDS = frozenset({
+        "id", "organization_id", "created_by", "created_at", "updated_at",
+        "steps", "prospects",
+    })
+
     async def update_pipeline(
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
     ) -> Optional[MembershipPipeline]:
@@ -141,6 +147,8 @@ class MembershipPipelineService:
             await self._unset_default_pipeline(organization_id)
 
         for key, value in data.items():
+            if key in self._PIPELINE_PROTECTED_FIELDS:
+                continue
             if value is not None and hasattr(pipeline, key):
                 setattr(pipeline, key, value)
 
@@ -245,6 +253,11 @@ class MembershipPipelineService:
         await self.db.refresh(step)
         return step
 
+    _STEP_PROTECTED_FIELDS = frozenset({
+        "id", "pipeline_id", "created_at", "updated_at",
+        "pipeline", "progress_records",
+    })
+
     async def update_step(
         self, step_id: str, pipeline_id: str, organization_id: str, data: Dict[str, Any]
     ) -> Optional[MembershipPipelineStep]:
@@ -258,6 +271,8 @@ class MembershipPipelineService:
             return None
 
         for key, value in data.items():
+            if key in self._STEP_PROTECTED_FIELDS:
+                continue
             if value is not None and hasattr(step, key):
                 setattr(step, key, value)
 
@@ -472,6 +487,15 @@ class MembershipPipelineService:
         await self.db.commit()
         return await self.get_prospect(prospect.id, organization_id)
 
+    # Fields that may never be set via the generic update dict
+    _PROSPECT_PROTECTED_FIELDS = frozenset({
+        "id", "organization_id", "pipeline_id", "current_step_id",
+        "transferred_user_id", "transferred_at", "form_submission_id",
+        "created_at", "updated_at", "step_progress", "activity_log",
+        "pipeline", "current_step", "referrer", "transferred_user",
+        "documents", "election_packages",
+    })
+
     async def update_prospect(
         self, prospect_id: str, organization_id: str, data: Dict[str, Any], updated_by: Optional[str] = None
     ) -> Optional[ProspectiveMember]:
@@ -482,6 +506,8 @@ class MembershipPipelineService:
 
         changes = {}
         for key, value in data.items():
+            if key in self._PROSPECT_PROTECTED_FIELDS:
+                continue
             if value is not None and hasattr(prospect, key):
                 old_value = getattr(prospect, key)
                 if old_value != value:
@@ -737,6 +763,8 @@ class MembershipPipelineService:
             membership_id=membership_id,
             rank=rank,
             station=station,
+            status=UserStatus.ACTIVE,
+            membership_type="probationary",
         )
         self.db.add(new_user)
 
@@ -1237,17 +1265,30 @@ class MembershipPipelineService:
         uploaded_by: Optional[str] = None,
     ) -> Optional[ProspectDocument]:
         """Add a document to a prospect"""
+        import os
+
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
+
+        # Validate file_path: must be under the expected uploads directory
+        # and must not contain path traversal sequences.
+        normalized = os.path.normpath(file_path)
+        if ".." in normalized or not normalized.startswith("/uploads/"):
+            raise ValueError(
+                "Invalid file_path: must be under /uploads/ and may not contain path traversal"
+            )
+
+        # Sanitise file_name to prevent path injection through the file name
+        safe_file_name = os.path.basename(file_name)
 
         doc = ProspectDocument(
             id=generate_uuid(),
             prospect_id=prospect_id,
             step_id=step_id,
             document_type=document_type,
-            file_name=file_name,
-            file_path=file_path,
+            file_name=safe_file_name,
+            file_path=normalized,
             file_size=file_size,
             mime_type=mime_type,
             uploaded_by=uploaded_by,
@@ -1257,7 +1298,7 @@ class MembershipPipelineService:
         await self._log_activity(
             prospect_id=prospect_id,
             action="document_uploaded",
-            details={"document_type": document_type, "file_name": file_name},
+            details={"document_type": document_type, "file_name": safe_file_name},
             performed_by=uploaded_by,
         )
 
@@ -1337,15 +1378,23 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
-        # Build applicant snapshot
+        # Build applicant snapshot — capture all relevant prospect data
+        # so the election package is self-contained even if the prospect
+        # record is later modified.
         snapshot = {
             "first_name": prospect.first_name,
             "last_name": prospect.last_name,
             "email": prospect.email,
             "phone": prospect.phone,
+            "mobile": prospect.mobile,
             "date_of_birth": str(prospect.date_of_birth) if prospect.date_of_birth else None,
+            "address_street": prospect.address_street,
+            "address_city": prospect.address_city,
+            "address_state": prospect.address_state,
+            "address_zip": prospect.address_zip,
             "interest_reason": prospect.interest_reason,
             "referral_source": prospect.referral_source,
+            "notes": prospect.notes,
             "created_at": str(prospect.created_at) if prospect.created_at else None,
         }
 
@@ -1371,6 +1420,11 @@ class MembershipPipelineService:
         await self.db.commit()
         return pkg
 
+    _ELECTION_PKG_PROTECTED_FIELDS = frozenset({
+        "id", "prospect_id", "pipeline_id", "election_id",
+        "created_at", "updated_at", "prospect", "pipeline", "step",
+    })
+
     async def update_election_package(
         self,
         prospect_id: str,
@@ -1384,6 +1438,8 @@ class MembershipPipelineService:
             return None
 
         for key, value in updates.items():
+            if key in self._ELECTION_PKG_PROTECTED_FIELDS:
+                continue
             if hasattr(pkg, key) and value is not None:
                 setattr(pkg, key, value)
 

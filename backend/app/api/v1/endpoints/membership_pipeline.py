@@ -747,17 +747,20 @@ async def add_prospect_document(
     **Requires permission: members.manage**
     """
     service = MembershipPipelineService(db)
-    doc = await service.add_prospect_document(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        document_type=document_type,
-        file_name=file_name,
-        file_path=file_path,
-        file_size=file_size,
-        mime_type=mime_type,
-        step_id=str(step_id) if step_id else None,
-        uploaded_by=current_user.id,
-    )
+    try:
+        doc = await service.add_prospect_document(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            document_type=document_type,
+            file_name=file_name,
+            file_path=file_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            step_id=str(step_id) if step_id else None,
+            uploaded_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
     return doc

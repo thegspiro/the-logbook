@@ -284,6 +284,7 @@ class TransferProspectResponse(BaseModel):
     success: bool
     prospect_id: UUID
     user_id: UUID
+    membership_number: Optional[str] = None
     message: str
 
 
@@ -321,13 +322,16 @@ class PipelineKanbanResponse(BaseModel):
 # --- Document Schemas ---
 
 class ProspectDocumentResponse(BaseModel):
-    """Schema for a prospect document"""
+    """Schema for a prospect document.
+
+    Note: ``file_path`` is intentionally excluded from the response to
+    avoid leaking internal server storage paths to API consumers.
+    """
     id: UUID
     prospect_id: UUID
     step_id: Optional[UUID] = None
     document_type: str
     file_name: str
-    file_path: str
     file_size: int = 0
     mime_type: Optional[str] = None
     uploaded_by: Optional[UUID] = None
