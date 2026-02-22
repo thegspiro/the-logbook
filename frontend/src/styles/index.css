@@ -293,7 +293,7 @@
   /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */
   .drawer-panel {
     @apply fixed top-0 right-0 h-full w-full flex flex-col shadow-2xl z-50;
-    @apply bg-theme-bg border-l border-theme-surface-border;
+    @apply bg-theme-surface border-l border-theme-surface-border;
     max-width: 100%;
   }
   @media (min-width: 640px) {
