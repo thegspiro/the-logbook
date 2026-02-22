@@ -9,6 +9,7 @@
 import React, { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatRank } from '../constants/enums';
 import {
   BarChart3,
   Clock,
@@ -1044,7 +1045,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                       <span className="text-theme-text-primary font-medium">{member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.user_id}</span>
                                     </td>
                                     <td className="py-2 px-4">
-                                      <span className="text-theme-text-secondary text-xs capitalize">{member.rank?.replace('_', ' ') || '-'}</span>
+                                      <span className="text-theme-text-secondary text-xs">{formatRank(member.rank) || '-'}</span>
                                     </td>
                                     <td className="py-2 px-4 text-right text-theme-text-primary">{member.shift_count}</td>
                                     <td className="py-2 px-4 text-right text-theme-text-primary">{member.total_hours}</td>

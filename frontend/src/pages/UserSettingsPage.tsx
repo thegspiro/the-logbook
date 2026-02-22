@@ -17,6 +17,7 @@ import type { PasswordChangeData } from '../types/auth';
 import type { UserProfileUpdate } from '../types/user';
 import type { UserWithRoles } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
+import { OPERATIONAL_RANKS } from '../constants/enums';
 
 type TabType = 'account' | 'password' | 'appearance' | 'notifications';
 
@@ -355,14 +356,18 @@ export const UserSettingsPage: React.FC = () => {
                     </div>
                     <div>
                       <label htmlFor="rank" className="block text-sm font-medium text-theme-text-secondary mb-1">Rank</label>
-                      <input
+                      <select
                         id="rank"
-                        type="text"
                         value={profileForm.rank || ''}
                         onChange={(e) => handleProfileChange('rank', e.target.value)}
-                        className={`block w-full px-3 py-2 border border-theme-input-border rounded-md ${canManageMembers ? 'bg-theme-input-bg' : 'bg-theme-surface-secondary opacity-60 cursor-not-allowed'} text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm`}
+                        className={`block w-full px-3 py-2 border border-theme-input-border rounded-md ${canManageMembers ? 'bg-theme-input-bg' : 'bg-theme-surface-secondary opacity-60 cursor-not-allowed'} text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm`}
                         disabled={savingProfile || !canManageMembers}
-                      />
+                      >
+                        <option value="">Select Rank</option>
+                        {OPERATIONAL_RANKS.map((r) => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label htmlFor="station" className="block text-sm font-medium text-theme-text-secondary mb-1">Station</label>

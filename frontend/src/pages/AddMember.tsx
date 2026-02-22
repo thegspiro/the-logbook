@@ -20,12 +20,7 @@ import type { Location } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
-import { OperationalRank, OPERATIONAL_RANK_LABELS } from '../constants/enums';
-
-const OPERATIONAL_RANKS = Object.values(OperationalRank).map(value => ({
-  value,
-  label: OPERATIONAL_RANK_LABELS[value],
-}));
+import { OPERATIONAL_RANKS } from '../constants/enums';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();

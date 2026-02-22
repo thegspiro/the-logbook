@@ -20,6 +20,7 @@ import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../utils/dateFormatting';
+import { OPERATIONAL_RANKS } from '../constants/enums';
 import {
   ArrowLeft,
   User,
@@ -545,13 +546,16 @@ export const ProspectDetailPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Rank</label>
-                  <input
-                    type="text"
+                  <select
                     value={transferData.rank || ''}
                     onChange={e => setTransferData(prev => ({ ...prev, rank: e.target.value }))}
-                    placeholder="e.g., Probationary"
-                    className="form-input w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  />
+                    className="form-input w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  >
+                    <option value="">Select Rank</option>
+                    {OPERATIONAL_RANKS.map((r) => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Station</label>
