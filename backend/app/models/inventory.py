@@ -177,7 +177,8 @@ class InventoryItem(Base):
     weight = Column(Float)  # Weight in pounds or kg
 
     # Location
-    storage_location = Column(String(255))  # Building, room, shelf, etc.
+    location_id = Column(String(36), ForeignKey("locations.id", ondelete="SET NULL"), index=True)  # Room reference
+    storage_location = Column(String(255))  # Storage area within the room (e.g., Shelf B-3, Secure Closet 2)
     station = Column(String(100))  # Which station it's assigned to
 
     # Condition & Status
@@ -222,6 +223,7 @@ class InventoryItem(Base):
 
     # Relationships
     category = relationship("InventoryCategory", back_populates="items", foreign_keys=[category_id])
+    location = relationship("Location", foreign_keys=[location_id])
     assigned_to_user = relationship("User", foreign_keys=[assigned_to_user_id])
     checkout_records = relationship("CheckOutRecord", back_populates="item", cascade="all, delete-orphan")
     maintenance_records = relationship("MaintenanceRecord", back_populates="item", cascade="all, delete-orphan")

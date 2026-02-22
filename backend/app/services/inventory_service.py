@@ -1788,6 +1788,19 @@ class InventoryService:
         if not items:
             raise ValueError("No valid items found for label generation")
 
+        # Auto-populate the barcode field for items that don't have one yet,
+        # using the same fallback logic the label renderer uses.  This ensures
+        # the barcode printed on the label is stored on the item and visible
+        # when the user opens the edit form.
+        dirty = False
+        for item in items:
+            if not item.barcode:
+                effective = item.asset_tag or item.serial_number or item.id[:12]
+                item.barcode = effective
+                dirty = True
+        if dirty:
+            await self.db.commit()
+
         if label_format == "custom":
             if not custom_width or not custom_height:
                 raise ValueError("custom_width and custom_height are required for custom label format")
