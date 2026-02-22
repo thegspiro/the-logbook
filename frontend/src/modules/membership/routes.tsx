@@ -11,6 +11,8 @@
  *
  * Admin hub:
  *   /members/admin - Tabbed admin hub (manage, add, import)
+ *   /members/admin/edit/:userId - Admin member edit page
+ *   /members/admin/history/:userId - Member audit history
  *
  * Legacy redirects:
  *   /admin/members → /members/admin
@@ -39,6 +41,16 @@ const MembersAdminHub = lazy(() =>
     default: m.MembersAdminHub,
   }))
 );
+const MemberAdminEditPage = lazy(() =>
+  import('../../pages/MemberAdminEditPage').then((m) => ({
+    default: m.MemberAdminEditPage,
+  }))
+);
+const MemberAuditHistoryPage = lazy(() =>
+  import('../../pages/MemberAuditHistoryPage').then((m) => ({
+    default: m.MemberAuditHistoryPage,
+  }))
+);
 
 export const getMembershipRoutes = () => {
   return (
@@ -54,6 +66,24 @@ export const getMembershipRoutes = () => {
         element={
           <ProtectedRoute requiredPermission="members.manage">
             <MembersAdminHub />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Admin Edit & History */}
+      <Route
+        path="/members/admin/edit/:userId"
+        element={
+          <ProtectedRoute requiredPermission="members.manage">
+            <MemberAdminEditPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/members/admin/history/:userId"
+        element={
+          <ProtectedRoute requiredPermission="members.manage">
+            <MemberAuditHistoryPage />
           </ProtectedRoute>
         }
       />

@@ -40,8 +40,10 @@ export interface UserWithRoles {
   membership_number?: string;
   phone?: string;
   mobile?: string;
+  personal_email?: string;
   photo_url?: string;
   status: string;
+  membership_type?: string;
   hire_date?: string;
   date_of_birth?: string;
   rank?: string;

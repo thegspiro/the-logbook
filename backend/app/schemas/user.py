@@ -5,7 +5,7 @@ Request and response schemas for user-related endpoints.
 """
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime, date
 from uuid import UUID
 
@@ -87,6 +87,7 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
+    personal_email: Optional[str] = Field(None, max_length=255)
     membership_number: Optional[str] = Field(None, max_length=50)
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
@@ -117,7 +118,9 @@ class UserResponse(UserBase):
     id: UUID
     organization_id: UUID
     photo_url: Optional[str] = None
+    personal_email: Optional[str] = None
     status: str
+    membership_type: Optional[str] = None
     email_verified: bool
     mfa_enabled: bool
     last_login_at: Optional[datetime] = None
@@ -163,6 +166,7 @@ class UserListResponse(BaseModel):
     mobile: Optional[str] = None  # Conditionally included
     photo_url: Optional[str] = None
     status: str
+    membership_type: Optional[str] = None
     hire_date: Optional[date] = None
 
     # Department info
@@ -236,3 +240,28 @@ class AdminPasswordReset(BaseModel):
     """Schema for admin resetting a user's password"""
     new_password: str = Field(..., min_length=12, description="New password for the user")
     force_change: bool = Field(default=True, description="Require the user to change the password on next login")
+
+
+class MemberAuditLogEntry(BaseModel):
+    """Schema for member audit history entries"""
+    id: int
+    timestamp: datetime
+    event_type: str
+    severity: str
+    description: str
+    changed_by_username: Optional[str] = None
+    changed_by_user_id: Optional[str] = None
+    event_data: Optional[dict] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DeletionImpactResponse(BaseModel):
+    """Schema for member deletion impact assessment"""
+    user_id: str
+    full_name: Optional[str] = None
+    status: str
+    training_records: int = 0
+    inventory_items: int = 0
+    documents: int = 0
+    total_records: int = 0

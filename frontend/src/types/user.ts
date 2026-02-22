@@ -7,7 +7,9 @@ export interface User {
   organization_id: string;
   username: string;
   email?: string;
+  personal_email?: string;
   first_name?: string;
+  middle_name?: string;
   last_name?: string;
   full_name?: string;
   membership_number?: string;
@@ -15,8 +17,17 @@ export interface User {
   mobile?: string;
   photo_url?: string;
   rank?: string;
+  station?: string;
   status: string;
+  membership_type?: string;
+  date_of_birth?: string;
   hire_date?: string;
+  address_street?: string;
+  address_city?: string;
+  address_state?: string;
+  address_zip?: string;
+  address_country?: string;
+  emergency_contacts?: EmergencyContact[];
 }
 
 export interface ContactInfoSettings {
@@ -64,6 +75,7 @@ export interface UserProfileUpdate {
   last_name?: string;
   phone?: string;
   mobile?: string;
+  personal_email?: string;
   membership_number?: string;
   date_of_birth?: string;
   hire_date?: string;
@@ -139,4 +151,25 @@ export interface PropertyReturnReport {
   total_value: number;
   html?: string;
   items: unknown[];
+}
+
+export interface DeletionImpact {
+  user_id: string;
+  full_name?: string;
+  status: string;
+  training_records: number;
+  inventory_items: number;
+  documents: number;
+  total_records: number;
+}
+
+export interface MemberAuditLogEntry {
+  id: number;
+  timestamp: string;
+  event_type: string;
+  severity: string;
+  description: string;
+  changed_by_username?: string;
+  changed_by_user_id?: string;
+  event_data?: Record<string, unknown>;
 }

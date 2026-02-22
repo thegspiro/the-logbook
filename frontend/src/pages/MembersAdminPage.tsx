@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { userService, roleService, locationsService } from '../services/api';
 import type { Location } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
@@ -20,6 +20,7 @@ import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { validatePasswordStrength } from '../utils/passwordValidation';
 import { Modal } from '../components/Modal';
+import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
 
 type ViewMode = 'by-member' | 'by-role';
@@ -36,6 +37,7 @@ interface EditProfileForm {
 }
 
 export const MembersAdminPage: React.FC = () => {
+  const navigate = useNavigate();
   const { checkPermission, user: currentUser } = useAuthStore();
   const { rankOptions } = useRanks();
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
@@ -72,6 +74,9 @@ export const MembersAdminPage: React.FC = () => {
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
   const [resetForceChange, setResetForceChange] = useState(true);
   const [savingReset, setSavingReset] = useState(false);
+
+  // Delete modal state
+  const [deleteModalUser, setDeleteModalUser] = useState<UserWithRoles | null>(null);
 
   // Station lookup
   const [availableStations, setAvailableStations] = useState<Location[]>([]);
@@ -315,17 +320,29 @@ export const MembersAdminPage: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (user: UserWithRoles) => {
-    if (!confirm(`Are you sure you want to delete ${user.full_name || user.username}? This action cannot be easily undone.`)) {
-      return;
-    }
+  const handleDeleteUser = (user: UserWithRoles) => {
+    setDeleteModalUser(user);
+  };
 
+  const handleSoftDelete = async (userId: string) => {
     try {
       setError(null);
-      await userService.deleteUser(user.id);
+      await userService.deleteUserWithMode(userId, false);
+      setDeleteModalUser(null);
       await fetchData();
     } catch (_err) {
-      setError('Unable to delete the member. Please check your connection and try again.');
+      setError('Unable to deactivate the member. Please try again.');
+    }
+  };
+
+  const handleHardDelete = async (userId: string) => {
+    try {
+      setError(null);
+      await userService.deleteUserWithMode(userId, true);
+      setDeleteModalUser(null);
+      await fetchData();
+    } catch (_err) {
+      setError('Unable to permanently delete the member. Please try again.');
     }
   };
 
@@ -539,10 +556,10 @@ export const MembersAdminPage: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end gap-3">
                       <button
-                        onClick={() => handleEditProfile(user)}
+                        onClick={() => navigate(`/members/admin/edit/${user.id}`)}
                         className="text-green-400 hover:text-green-300"
                       >
-                        Edit Info
+                        Edit
                       </button>
                       <button
                         onClick={() => handleEditRoles(user)}
@@ -978,6 +995,15 @@ export const MembersAdminPage: React.FC = () => {
           ))}
         </div>
       </Modal>
+
+      {/* Delete Member Modal */}
+      <DeleteMemberModal
+        isOpen={!!deleteModalUser}
+        onClose={() => setDeleteModalUser(null)}
+        member={deleteModalUser}
+        onSoftDelete={handleSoftDelete}
+        onHardDelete={handleHardDelete}
+      />
       </div>
     </div>
   );

@@ -350,6 +350,61 @@ export const userService = {
       notification_preferences: preferences,
     });
   },
+
+  /**
+   * Get deletion impact assessment for a member
+   */
+  async getDeletionImpact(userId: string): Promise<import('../types/user').DeletionImpact> {
+    const response = await api.get(`/users/${userId}/deletion-impact`);
+    return response.data;
+  },
+
+  /**
+   * Delete a user (soft or hard delete)
+   */
+  async deleteUserWithMode(userId: string, hard: boolean = false): Promise<void> {
+    await api.delete(`/users/${userId}`, { params: { hard } });
+  },
+
+  /**
+   * Upload a profile photo for a member
+   */
+  async uploadPhoto(userId: string, file: File): Promise<{ message: string; photo_url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post(`/users/${userId}/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /**
+   * Remove a member's profile photo
+   */
+  async deletePhoto(userId: string): Promise<void> {
+    await api.delete(`/users/${userId}/photo`);
+  },
+
+  /**
+   * Change a member's membership type
+   */
+  async changeMembershipType(userId: string, membershipType: string, reason?: string): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/users/${userId}/membership-type`, {
+      membership_type: membershipType,
+      reason,
+    });
+    return response.data;
+  },
+
+  /**
+   * Get audit history for a member
+   */
+  async getMemberAuditHistory(userId: string, page: number = 1, eventType?: string): Promise<import('../types/user').MemberAuditLogEntry[]> {
+    const response = await api.get(`/users/${userId}/audit-history`, {
+      params: { page, page_size: 50, event_type: eventType || undefined },
+    });
+    return response.data;
+  },
 };
 
 export interface ModuleSettingsData {
