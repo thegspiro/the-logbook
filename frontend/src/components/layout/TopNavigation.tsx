@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, LogOut, Menu, X, Sun, Moon, Monitor, ChevronDown } from 'lucide-react';
+import { Home, LogOut, Menu, X, Sun, Moon, Monitor, ChevronDown, Bell, UserCog } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
@@ -16,6 +16,7 @@ interface SubNavItem {
   label: string;
   path: string;
   permission?: string;
+  isDivider?: boolean;
 }
 
 interface NavItem {
@@ -73,10 +74,12 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     checkPermission('settings.manage') ||
     checkPermission('analytics.view');
 
+  // Build the divider sentinel used between Admin sub-groups
+  const DIV: SubNavItem = { label: '', path: '', isDivider: true };
+
   // Match the side navigation structure
   const navItems: NavItem[] = [
-    // ── Member-facing pages ──
-    { label: 'Dashboard', path: '/dashboard' },
+    // ── Member-facing pages (logo links to Dashboard) ──
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
@@ -90,11 +93,12 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Programs', path: '/training/programs' },
       ],
     },
-    { label: 'Scheduling', path: '/scheduling' },
+    { label: 'Shift Scheduling', path: '/scheduling' },
     {
       label: 'Operations',
       path: '/inventory',
       subItems: [
+        { label: 'My Equipment', path: '/inventory/my-equipment' },
         { label: 'Inventory', path: '/inventory' },
         ...(apparatusModuleEnabled
           ? [{ label: 'Apparatus', path: '/apparatus' }]
@@ -112,7 +116,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Action Items', path: '/action-items' },
       ],
     },
-    { label: 'Notifications', path: '/notifications' },
 
     // ── Administration (only for admins) ──
     ...(hasAnyAdminPermission ? [{
@@ -120,15 +123,19 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       path: '#',
       subItems: [
         { label: 'Department Setup', path: '/setup', permission: 'settings.manage' },
+        DIV,
         { label: 'Prospective Members', path: '/prospective-members', permission: 'prospective_members.manage' },
         { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
         { label: 'Member Management', path: '/members/admin', permission: 'members.manage' },
+        DIV,
         { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
         { label: 'Training Admin', path: '/training/admin', permission: 'training.manage' },
         { label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' },
+        DIV,
         { label: 'Forms', path: '/forms', permission: 'settings.manage' },
         { label: 'Integrations', path: '/integrations', permission: 'settings.manage' },
         { label: 'Reports', path: '/reports' },
+        DIV,
         { label: 'Organization', path: '/settings', permission: 'settings.manage' },
         { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
         { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
@@ -136,9 +143,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
       ],
     } as NavItem] : []),
-
-    // ── Always-visible personal ──
-    { label: 'My Account', path: '/account' },
   ];
 
   const isActive = (path: string) => {
@@ -191,6 +195,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     );
   };
 
+  const notificationsActive = isActive('/notifications');
+  const accountActive = isActive('/account');
+
   return (
     <header className="border-b" style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }} role="banner">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -219,18 +226,26 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-1" ref={dropdownRef} aria-label="Main navigation">
             {navItems.map((item) => {
-              // Filter sub-items by permission
+              // Filter sub-items by permission (strip dividers whose neighbours are all hidden)
               const visibleSubItems = item.subItems?.filter(
-                (sub) => !sub.permission || checkPermission(sub.permission)
+                (sub) => sub.isDivider || !sub.permission || checkPermission(sub.permission)
               );
+
+              // Strip leading, trailing, and consecutive dividers
+              const cleanedSubItems = visibleSubItems?.filter((sub, i, arr) => {
+                if (!sub.isDivider) return true;
+                if (i === 0 || i === arr.length - 1) return false;
+                return !arr[i - 1]?.isDivider;
+              });
 
               // Skip top-level permission-gated items
               if (item.permission && !checkPermission(item.permission)) return null;
 
               // Skip parent groups where all sub-items are hidden
-              if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;
+              const realSubItems = cleanedSubItems?.filter(s => !s.isDivider);
+              if (item.subItems && realSubItems && realSubItems.length === 0) return null;
 
-              const hasSubItems = !!visibleSubItems && visibleSubItems.length > 0;
+              const hasSubItems = !!cleanedSubItems && cleanedSubItems.length > 0;
               const active = isParentActive(item);
 
               if (hasSubItems) {
@@ -249,9 +264,16 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     </button>
 
                     {openDropdown === item.label && (
-                      <div className="absolute top-full left-0 mt-1 w-48 bg-theme-surface border border-theme-surface-border rounded-lg shadow-xl py-1 z-50">
-                        {visibleSubItems.map((subItem) => {
-                          const subActive = isSubItemActive(subItem.path, item.subItems || []);
+                      <div className={`absolute top-full mt-1 bg-theme-surface border border-theme-surface-border rounded-lg shadow-xl py-1 z-50 ${
+                        item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'
+                      }`}>
+                        {cleanedSubItems.map((subItem, idx) => {
+                          if (subItem.isDivider) {
+                            return (
+                              <div key={`div-${idx}`} className="my-1 border-t border-theme-surface-border" role="separator" />
+                            );
+                          }
+                          const subActive = isSubItemActive(subItem.path, (item.subItems || []).filter(s => !s.isDivider));
                           return (
                           <a
                             key={subItem.path}
@@ -288,21 +310,50 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                 </a>
               );
             })}
-            <button
-              onClick={cycleTheme}
-              className="text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-              title={`Theme: ${themeLabel}`}
-              aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
-            >
-              <ThemeIcon className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <button
-              onClick={onLogout}
-              className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
-            >
-              <LogOut className="w-4 h-4" aria-hidden="true" />
-              <span>Logout</span>
-            </button>
+
+            {/* ── Utility icons ── */}
+            <div className="flex items-center border-l border-theme-surface-border ml-1 pl-2 space-x-1">
+              <a
+                href="/notifications"
+                onClick={(e) => handleNavigation('/notifications', e)}
+                className={`p-2 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  notificationsActive ? 'text-theme-text-primary' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+                }`}
+                title="Notifications"
+                aria-label="Notifications"
+                aria-current={notificationsActive ? 'page' : undefined}
+              >
+                <Bell className="w-4 h-4" aria-hidden="true" />
+              </a>
+              <a
+                href="/account"
+                onClick={(e) => handleNavigation('/account', e)}
+                className={`p-2 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  accountActive ? 'text-theme-text-primary' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+                }`}
+                title="My Account"
+                aria-label="My Account"
+                aria-current={accountActive ? 'page' : undefined}
+              >
+                <UserCog className="w-4 h-4" aria-hidden="true" />
+              </a>
+              <button
+                onClick={cycleTheme}
+                className="text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                title={`Theme: ${themeLabel}`}
+                aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
+              >
+                <ThemeIcon className="w-4 h-4" aria-hidden="true" />
+              </button>
+              <button
+                onClick={onLogout}
+                className="text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                title="Logout"
+                aria-label="Logout"
+              >
+                <LogOut className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
           </nav>
 
           {/* Mobile menu button */}
@@ -324,16 +375,23 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               {navItems.map((item) => {
                 // Filter sub-items by permission
                 const visibleSubItems = item.subItems?.filter(
-                  (sub) => !sub.permission || checkPermission(sub.permission)
+                  (sub) => sub.isDivider || !sub.permission || checkPermission(sub.permission)
                 );
+
+                const cleanedSubItems = visibleSubItems?.filter((sub, i, arr) => {
+                  if (!sub.isDivider) return true;
+                  if (i === 0 || i === arr.length - 1) return false;
+                  return !arr[i - 1]?.isDivider;
+                });
 
                 // Skip top-level permission-gated items
                 if (item.permission && !checkPermission(item.permission)) return null;
 
                 // Skip parent groups where all sub-items are hidden
-                if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;
+                const realSubItems = cleanedSubItems?.filter(s => !s.isDivider);
+                if (item.subItems && realSubItems && realSubItems.length === 0) return null;
 
-                const hasSubItems = !!visibleSubItems && visibleSubItems.length > 0;
+                const hasSubItems = !!cleanedSubItems && cleanedSubItems.length > 0;
                 const isExpanded = expandedMobileMenus.includes(item.label);
 
                 if (hasSubItems) {
@@ -351,8 +409,13 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       </button>
                       {isExpanded && (
                         <div className="ml-4 space-y-1 mt-1">
-                          {visibleSubItems.map((subItem) => {
-                            const subActive = isSubItemActive(subItem.path, item.subItems || []);
+                          {cleanedSubItems.map((subItem, idx) => {
+                            if (subItem.isDivider) {
+                              return (
+                                <div key={`div-${idx}`} className="my-1 border-t border-theme-surface-border mx-3" role="separator" />
+                              );
+                            }
+                            const subActive = isSubItemActive(subItem.path, (item.subItems || []).filter(s => !s.isDivider));
                             return (
                             <a
                               key={subItem.path}
@@ -389,20 +452,46 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                   </a>
                 );
               })}
-              <button
-                onClick={cycleTheme}
-                className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                <ThemeIcon className="w-4 h-4" aria-hidden="true" />
-                <span>Theme: {themeLabel}</span>
-              </button>
-              <button
-                onClick={onLogout}
-                className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                <LogOut className="w-4 h-4" aria-hidden="true" />
-                <span>Logout</span>
-              </button>
+
+              {/* ── Mobile utility links ── */}
+              <div className="border-t border-theme-surface-border mt-2 pt-2 space-y-1">
+                <a
+                  href="/notifications"
+                  onClick={(e) => handleNavigation('/notifications', e)}
+                  aria-current={notificationsActive ? 'page' : undefined}
+                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                    notificationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                  }`}
+                >
+                  <Bell className="w-4 h-4" aria-hidden="true" />
+                  <span>Notifications</span>
+                </a>
+                <a
+                  href="/account"
+                  onClick={(e) => handleNavigation('/account', e)}
+                  aria-current={accountActive ? 'page' : undefined}
+                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                    accountActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                  }`}
+                >
+                  <UserCog className="w-4 h-4" aria-hidden="true" />
+                  <span>My Account</span>
+                </a>
+                <button
+                  onClick={cycleTheme}
+                  className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <ThemeIcon className="w-4 h-4" aria-hidden="true" />
+                  <span>Theme: {themeLabel}</span>
+                </button>
+                <button
+                  onClick={onLogout}
+                  className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <LogOut className="w-4 h-4" aria-hidden="true" />
+                  <span>Logout</span>
+                </button>
+              </div>
             </div>
           </nav>
         )}

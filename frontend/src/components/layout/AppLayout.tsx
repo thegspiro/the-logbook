@@ -54,6 +54,15 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         // Branding is non-critical — keep defaults
       });
     }
+
+    // Listen for branding updates from the Settings page (same-tab)
+    const onBrandingUpdate = (e: Event) => {
+      const { name, logo } = (e as CustomEvent).detail;
+      if (name) setDepartmentName(name);
+      setLogoPreview(logo || null);
+    };
+    window.addEventListener('branding-updated', onBrandingUpdate);
+    return () => window.removeEventListener('branding-updated', onBrandingUpdate);
   }, []);
 
   const handleLogoutClick = () => {

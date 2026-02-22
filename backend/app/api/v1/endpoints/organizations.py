@@ -564,3 +564,109 @@ async def get_organization_address(
         "state": org.mailing_state or "",
         "zip": org.mailing_zip or "",
     }
+
+
+@router.get("/profile")
+async def get_organization_profile(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get organization profile details (name, timezone, logo, contact, address).
+    Accessible by any authenticated user.
+    """
+    from app.models.user import Organization
+
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    return {
+        "name": org.name,
+        "timezone": org.timezone or "America/New_York",
+        "phone": org.phone or "",
+        "email": org.email or "",
+        "website": org.website or "",
+        "county": org.county or "",
+        "founded_year": org.founded_year,
+        "logo": org.logo,
+        "mailing_address": {
+            "line1": org.mailing_address_line1 or "",
+            "line2": org.mailing_address_line2 or "",
+            "city": org.mailing_city or "",
+            "state": org.mailing_state or "",
+            "zip": org.mailing_zip or "",
+        },
+    }
+
+
+@router.patch("/profile")
+async def update_organization_profile(
+    updates: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("settings.manage")),
+):
+    """
+    Update organization profile details.
+    Requires settings.manage permission.
+    """
+    from app.models.user import Organization
+    from sqlalchemy.orm.attributes import flag_modified
+
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Allowed top-level scalar fields
+    allowed_fields = {"name", "timezone", "phone", "email", "website", "county", "founded_year"}
+    for field in allowed_fields:
+        if field in updates:
+            setattr(org, field, updates[field])
+
+    # Handle logo separately (can be large base64)
+    if "logo" in updates:
+        org.logo = updates["logo"]
+
+    # Handle mailing address
+    addr = updates.get("mailing_address")
+    if isinstance(addr, dict):
+        org.mailing_address_line1 = addr.get("line1", org.mailing_address_line1)
+        org.mailing_address_line2 = addr.get("line2", org.mailing_address_line2)
+        org.mailing_city = addr.get("city", org.mailing_city)
+        org.mailing_state = addr.get("state", org.mailing_state)
+        org.mailing_zip = addr.get("zip", org.mailing_zip)
+
+    await db.commit()
+    await db.refresh(org)
+
+    # Also update localStorage branding for the caller
+    await log_audit_event(
+        db=db,
+        user_id=str(current_user.id),
+        action="organization.profile_updated",
+        details={"fields_changed": list(updates.keys())},
+    )
+
+    return {
+        "name": org.name,
+        "timezone": org.timezone or "America/New_York",
+        "phone": org.phone or "",
+        "email": org.email or "",
+        "website": org.website or "",
+        "county": org.county or "",
+        "founded_year": org.founded_year,
+        "logo": org.logo,
+        "mailing_address": {
+            "line1": org.mailing_address_line1 or "",
+            "line2": org.mailing_address_line2 or "",
+            "city": org.mailing_city or "",
+            "state": org.mailing_state or "",
+            "zip": org.mailing_zip or "",
+        },
+    }
