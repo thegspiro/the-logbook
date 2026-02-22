@@ -18,12 +18,14 @@ import {
 } from 'lucide-react';
 import {
   inventoryService,
+  locationsService,
   type InventoryItem,
   type InventoryCategory,
   type InventorySummary,
   type InventoryItemCreate,
   type InventoryCategoryCreate,
   type LabelFormat,
+  type Location,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -89,6 +91,9 @@ const InventoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Rooms (locations with room_number or building set) for storage location dropdown
+  const [rooms, setRooms] = useState<Location[]>([]);
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -116,6 +121,7 @@ const InventoryPage: React.FC = () => {
     serial_number: '',
     asset_tag: '',
     barcode: '',
+    location_id: '',
     storage_location: '',
     station: '',
     size: '',
@@ -178,17 +184,20 @@ const InventoryPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryData, categoriesData, itemsData, formatsData] = await Promise.all([
+      const [summaryData, categoriesData, itemsData, formatsData, locationsData] = await Promise.all([
         inventoryService.getSummary(),
         inventoryService.getCategories(),
         inventoryService.getItems({ limit: 100 }),
         inventoryService.getLabelFormats(),
+        locationsService.getLocations({ is_active: true }),
       ]);
       setSummary(summaryData);
       setCategories(categoriesData);
       setItems(itemsData.items);
       setTotalItems(itemsData.total);
       setLabelFormats(formatsData.formats);
+      // Rooms are locations that have a room_number or a building (parent station) set
+      setRooms(locationsData.filter(l => l.room_number || l.building));
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to load inventory data. Please check your connection and refresh the page.'));
     } finally {
@@ -262,6 +271,7 @@ const InventoryPage: React.FC = () => {
       serial_number: item.serial_number || '',
       asset_tag: item.asset_tag || '',
       barcode: item.barcode || '',
+      location_id: item.location_id || '',
       storage_location: item.storage_location || '',
       station: item.station || '',
       condition: item.condition,
@@ -662,7 +672,14 @@ const InventoryPage: React.FC = () => {
                           <td className="hidden lg:table-cell px-6 py-4">
                             <span className="text-theme-text-secondary font-mono text-sm">{item.serial_number || '-'}</span>
                           </td>
-                          <td className="hidden lg:table-cell px-6 py-4 text-theme-text-secondary text-sm">{item.storage_location || item.station || '-'}</td>
+                          <td className="hidden lg:table-cell px-6 py-4 text-theme-text-secondary text-sm">{(() => {
+                            const room = item.location_id ? rooms.find(r => r.id === item.location_id) : null;
+                            const roomLabel = room ? room.name : null;
+                            const area = item.storage_location;
+                            if (roomLabel && area) return `${roomLabel} — ${area}`;
+                            if (roomLabel) return roomLabel;
+                            return area || item.station || '-';
+                          })()}</td>
                           <td className="hidden md:table-cell px-6 py-4">
                             <span className={`text-sm capitalize ${getConditionColor(item.condition)}`}>
                               {item.condition.replace('_', ' ')}
@@ -963,23 +980,42 @@ const InventoryPage: React.FC = () => {
                       {/* ── Location ── */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label htmlFor="item-storage-location" className="block text-sm font-medium text-theme-text-secondary mb-1">Storage Location</label>
+                          <label htmlFor="item-room" className="block text-sm font-medium text-theme-text-secondary mb-1">Room</label>
+                          {rooms.length > 0 ? (
+                            <select
+                              id="item-room"
+                              value={itemForm.location_id || ''}
+                              onChange={(e) => {
+                                const selectedRoom = rooms.find(r => r.id === e.target.value);
+                                setItemForm({
+                                  ...itemForm,
+                                  location_id: e.target.value,
+                                  station: selectedRoom?.building || itemForm.station,
+                                });
+                              }}
+                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                              <option value="">Select a room</option>
+                              {rooms.map(r => (
+                                <option key={r.id} value={r.id}>
+                                  {r.building ? `${r.building} — ` : ''}{r.name}{r.room_number ? ` (${r.room_number})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-muted text-sm">
+                              No rooms configured. Add rooms in Locations first.
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <label htmlFor="item-storage-area" className="block text-sm font-medium text-theme-text-secondary mb-1">Storage Area</label>
                           <input
-                            id="item-storage-location"
+                            id="item-storage-area"
                             type="text" value={itemForm.storage_location}
                             onChange={(e) => setItemForm({ ...itemForm, storage_location: e.target.value })}
                             className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            placeholder="e.g., Shelf B-3"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="item-station" className="block text-sm font-medium text-theme-text-secondary mb-1">Station</label>
-                          <input
-                            id="item-station"
-                            type="text" value={itemForm.station}
-                            onChange={(e) => setItemForm({ ...itemForm, station: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            placeholder="e.g., Station 1"
+                            placeholder="e.g., Shelf 5, Secure Closet 2"
                           />
                         </div>
                       </div>
@@ -1299,18 +1335,47 @@ const InventoryPage: React.FC = () => {
                           <input id="edit-item-asset-tag" type="text" value={editForm.asset_tag || ''} onChange={(e) => setEditForm({ ...editForm, asset_tag: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                         </div>
                         <div>
-                          <label htmlFor="edit-item-barcode" className="block text-sm font-medium text-theme-text-secondary mb-1">Barcode</label>
-                          <input id="edit-item-barcode" type="text" value={editForm.barcode || ''} onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          <label htmlFor="edit-item-barcode" className="block text-sm font-medium text-theme-text-secondary mb-1 flex items-center gap-1">
+                            <Barcode className="w-3.5 h-3.5" aria-hidden="true" /> Barcode
+                          </label>
+                          <input id="edit-item-barcode" type="text" value={editForm.barcode || ''} onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono" placeholder={editForm.asset_tag || editForm.serial_number || 'No barcode assigned'} />
+                          {!editForm.barcode && (editForm.asset_tag || editForm.serial_number) && (
+                            <p className="text-xs text-theme-text-muted mt-1">Label will use {editForm.asset_tag ? 'asset tag' : 'serial number'} if barcode is blank.</p>
+                          )}
                         </div>
+                      </div>
+                      <div>
+                        <label htmlFor="edit-item-manufacturer" className="block text-sm font-medium text-theme-text-secondary mb-1">Manufacturer</label>
+                        <input id="edit-item-manufacturer" type="text" value={editForm.manufacturer || ''} onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label htmlFor="edit-item-manufacturer" className="block text-sm font-medium text-theme-text-secondary mb-1">Manufacturer</label>
-                          <input id="edit-item-manufacturer" type="text" value={editForm.manufacturer || ''} onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          <label htmlFor="edit-item-room" className="block text-sm font-medium text-theme-text-secondary mb-1">Room</label>
+                          {rooms.length > 0 ? (
+                            <select id="edit-item-room" value={editForm.location_id || ''} onChange={(e) => {
+                              const selectedRoom = rooms.find(r => r.id === e.target.value);
+                              setEditForm({
+                                ...editForm,
+                                location_id: e.target.value,
+                                station: selectedRoom?.building || editForm.station,
+                              });
+                            }} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                              <option value="">Select a room</option>
+                              {rooms.map(r => (
+                                <option key={r.id} value={r.id}>
+                                  {r.building ? `${r.building} — ` : ''}{r.name}{r.room_number ? ` (${r.room_number})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-muted text-sm">
+                              No rooms configured. Add rooms in Locations first.
+                            </div>
+                          )}
                         </div>
                         <div>
-                          <label htmlFor="edit-item-storage" className="block text-sm font-medium text-theme-text-secondary mb-1">Storage Location</label>
-                          <input id="edit-item-storage" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          <label htmlFor="edit-item-storage-area" className="block text-sm font-medium text-theme-text-secondary mb-1">Storage Area</label>
+                          <input id="edit-item-storage-area" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Shelf 5, Secure Closet 2" />
                         </div>
                       </div>
                       <div>

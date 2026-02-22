@@ -233,15 +233,21 @@ Each module has view and manage permissions:
 
 ### Settings Navigation
 
-After onboarding, role management is accessible from the main application's Settings menu:
+After onboarding, settings are split into two areas:
 
+**User Account** (accessible to all authenticated users):
 ```
-Settings (expandable menu)
-├── My Account        → /settings/account (User account settings)
+My Account → /account (Profile, password, appearance, notifications)
+```
+
+**Organization Settings** (Administration section, requires `settings.manage`):
+```
+Organization Settings (expandable menu)
 ├── Organization      → /settings         (Organization settings)
 ├── Role Management   → /settings/roles   (Create/edit/delete roles)
-├── Member Admin      → /admin/members    (Assign roles to users)
-└── Public Portal     → /admin/public-portal (Public portal configuration)
+├── Public Portal     → /admin/public-portal (Public portal configuration)
+├── Analytics         → /admin/analytics  (Analytics dashboard)
+└── Error Monitor     → /admin/errors     (Error monitoring)
 ```
 
 ### Accessing Admin Pages

@@ -238,10 +238,13 @@ function App() {
               <Route path="/admin/public-portal" element={<ProtectedRoute requiredPermission="settings.manage"><PublicPortalAdmin /></ProtectedRoute>} />
 
               {/* Settings Module */}
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/settings/account" element={<UserSettingsPage />} />
+              <Route path="/settings" element={<ProtectedRoute requiredPermission="settings.manage"><SettingsPage /></ProtectedRoute>} />
               <Route path="/settings/roles" element={<ProtectedRoute requiredPermission="positions.manage_permissions"><RoleManagementPage /></ProtectedRoute>} />
               <Route path="/setup" element={<ProtectedRoute requiredPermission="settings.manage"><DepartmentSetupPage /></ProtectedRoute>} />
+
+              {/* User Account Settings (accessible to all authenticated users) */}
+              <Route path="/account" element={<UserSettingsPage />} />
+              <Route path="/settings/account" element={<Navigate to="/account" replace />} />
 
               {/* Reports */}
               <Route path="/reports" element={<ReportsPage />} />

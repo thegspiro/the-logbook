@@ -315,12 +315,17 @@ Tab-based interface with the following views:
 
 ---
 
+## User Account
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/account` | User Account Settings | Authenticated |
+
 ## Settings & Administration
 
 | URL | Page | Permission |
 |-----|------|------------|
-| `/settings` | Settings | Authenticated |
-| `/settings/account` | User Account Settings | Authenticated |
+| `/settings` | Organization Settings | `settings.manage` |
 | `/settings/roles` | Role Management | `positions.manage_permissions` |
 | `/setup` | Department Setup | `settings.manage` |
 | `/admin/errors` | Error Monitoring | `settings.manage` |

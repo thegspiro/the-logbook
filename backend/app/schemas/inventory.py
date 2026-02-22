@@ -85,6 +85,7 @@ class InventoryItemBase(BaseModel):
     size: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=50)
     weight: Optional[float] = Field(None, ge=0)
+    location_id: Optional[UUID] = None
     storage_location: Optional[str] = Field(None, max_length=255)
     station: Optional[str] = Field(None, max_length=100)
     condition: str = "good"
@@ -124,6 +125,7 @@ class InventoryItemUpdate(BaseModel):
     size: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=50)
     weight: Optional[float] = Field(None, ge=0)
+    location_id: Optional[UUID] = None
     storage_location: Optional[str] = Field(None, max_length=255)
     station: Optional[str] = Field(None, max_length=100)
     condition: Optional[str] = None

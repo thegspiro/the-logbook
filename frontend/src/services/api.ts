@@ -1797,6 +1797,7 @@ export interface InventoryItem {
   purchase_price?: number;
   vendor?: string;
   warranty_expiration?: string;
+  location_id?: string;
   storage_location?: string;
   station?: string;
   condition: string;
@@ -1836,6 +1837,7 @@ export interface InventoryItemCreate {
   size?: string;
   color?: string;
   weight?: number;
+  location_id?: string;
   storage_location?: string;
   station?: string;
   condition?: string;
