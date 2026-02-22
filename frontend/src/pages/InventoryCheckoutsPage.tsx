@@ -88,7 +88,8 @@ export const InventoryCheckoutsPage: React.FC = () => {
   const filteredList = searchQuery.trim()
     ? currentList.filter(
         (c) =>
-          c.item_name.toLowerCase().includes(searchQuery.toLowerCase())
+          c.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (c.user_name && c.user_name.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : currentList;
 
@@ -191,7 +192,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             <input
               id="checkout-search"
               type="text"
-              placeholder="Search by item name..."
+              placeholder="Search by item or member name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -220,6 +221,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                   <thead>
                     <tr className="border-b border-theme-surface-border bg-theme-surface">
                       <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item Name</th>
+                      <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
                       <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Checkout Date</th>
                       <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Due Date</th>
                       <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
@@ -236,6 +238,9 @@ export const InventoryCheckoutsPage: React.FC = () => {
                       >
                         <td className="p-3">
                           <p className="text-theme-text-primary font-medium text-sm">{checkout.item_name}</p>
+                        </td>
+                        <td className="hidden sm:table-cell p-3 text-theme-text-secondary text-sm">
+                          {checkout.user_name || '--'}
                         </td>
                         <td className="hidden sm:table-cell p-3 text-theme-text-secondary text-sm">
                           {formatDate(checkout.checked_out_at)}

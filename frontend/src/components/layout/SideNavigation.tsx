@@ -149,6 +149,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       path: '#',
       icon: Package,
       subItems: [
+        { label: 'My Equipment', path: '/inventory/my-equipment', icon: Package },
         { label: 'Inventory', path: '/inventory', icon: Package },
         // Full apparatus module or lightweight version
         ...(apparatusModuleEnabled

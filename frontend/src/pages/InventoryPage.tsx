@@ -15,12 +15,18 @@ import {
   Archive,
   ArrowLeft,
   ChevronDown,
+  Download,
+  Send,
+  ClipboardList,
+  Check,
+  XCircle,
 } from 'lucide-react';
 import {
   inventoryService,
   locationsService,
   type InventoryItem,
   type InventoryCategory,
+  type EquipmentRequestItem,
   type InventorySummary,
   type InventoryItemCreate,
   type InventoryCategoryCreate,
@@ -162,6 +168,31 @@ const InventoryPage: React.FC = () => {
   // Confirmation dialog for batch submit in scan modal
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
 
+  // Bulk operations
+  const [showBulkMenu, setShowBulkMenu] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [showBulkRetireModal, setShowBulkRetireModal] = useState(false);
+
+  // Category edit
+  const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
+  const [editCategoryForm, setEditCategoryForm] = useState<Partial<InventoryCategoryCreate>>({});
+
+  // Pool issuance
+  const [showPoolIssueModal, setShowPoolIssueModal] = useState(false);
+  const [poolIssueItem, setPoolIssueItem] = useState<InventoryItem | null>(null);
+  const [poolIssueForm, setPoolIssueForm] = useState({ member_id: '', quantity: 1, reason: '' });
+  const [members, setMembers] = useState<Array<{ id: string; name: string }>>([]);
+
+  // Low stock alerts
+  const [lowStockAlerts, setLowStockAlerts] = useState<Array<{ category_id: string; category_name: string; item_type: string; current_stock: number; threshold: number }>>([]);
+
+  // Equipment requests (admin view)
+  const [pendingRequests, setPendingRequests] = useState<EquipmentRequestItem[]>([]);
+  const [showRequestsPanel, setShowRequestsPanel] = useState(false);
+  const [reviewingRequest, setReviewingRequest] = useState<EquipmentRequestItem | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+
   useEffect(() => {
     loadData();
   }, []);
@@ -198,6 +229,17 @@ const InventoryPage: React.FC = () => {
       setLabelFormats(formatsData.formats);
       // Rooms are locations that have a room_number or a building (parent station) set
       setRooms(locationsData.filter(l => l.room_number || l.building));
+      // Low stock alerts (non-critical)
+      inventoryService.getLowStockItems().then(setLowStockAlerts).catch(() => {});
+      // Load members for pool issuance and pending requests (non-critical)
+      if (canManage) {
+        inventoryService.getMembersSummary().then(data => {
+          setMembers((data.members || []).map(m => ({ id: m.user_id, name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username || 'Unknown' })));
+        }).catch(() => {});
+        inventoryService.getEquipmentRequests({ status: 'pending' }).then(data => {
+          setPendingRequests(data.requests || []);
+        }).catch(() => {});
+      }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to load inventory data. Please check your connection and refresh the page.'));
     } finally {
@@ -277,6 +319,14 @@ const InventoryPage: React.FC = () => {
       condition: item.condition,
       status: item.status,
       quantity: item.quantity,
+      size: item.size || '',
+      color: item.color || '',
+      unit_of_measure: item.unit_of_measure || '',
+      purchase_date: item.purchase_date || '',
+      purchase_price: item.purchase_price,
+      vendor: item.vendor || '',
+      warranty_expiration: item.warranty_expiration || '',
+      inspection_interval_days: item.inspection_interval_days,
       notes: item.notes || '',
     });
     setFormError(null);
@@ -374,6 +424,143 @@ const InventoryPage: React.FC = () => {
       toast.error('Failed to generate barcode labels');
     } finally {
       setPrintingLabels(false);
+    }
+  };
+
+  // Bulk status update
+  const handleBulkStatusUpdate = async () => {
+    if (selectedItemIds.size === 0 || !bulkStatus) return;
+    setSubmitting(true);
+    try {
+      let successCount = 0;
+      for (const itemId of selectedItemIds) {
+        try {
+          await inventoryService.updateItem(itemId, { status: bulkStatus } as Partial<InventoryItemCreate>);
+          successCount++;
+        } catch { /* skip failed */ }
+      }
+      setShowBulkStatusModal(false);
+      setBulkStatus('');
+      setSelectedItemIds(new Set());
+      loadData();
+      toast.success(`Updated status for ${successCount} item(s)`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Bulk update failed'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Bulk retire
+  const handleBulkRetire = async () => {
+    if (selectedItemIds.size === 0) return;
+    setSubmitting(true);
+    try {
+      let successCount = 0;
+      for (const itemId of selectedItemIds) {
+        try {
+          await inventoryService.retireItem(itemId);
+          successCount++;
+        } catch { /* skip failed */ }
+      }
+      setShowBulkRetireModal(false);
+      setSelectedItemIds(new Set());
+      loadData();
+      toast.success(`Retired ${successCount} item(s)`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Bulk retire failed'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Category edit
+  const openEditCategory = (cat: InventoryCategory) => {
+    setEditingCategory(cat);
+    setEditCategoryForm({
+      name: cat.name,
+      description: cat.description || '',
+      item_type: cat.item_type,
+      requires_serial_number: cat.requires_serial_number,
+      requires_maintenance: cat.requires_maintenance,
+      requires_assignment: cat.requires_assignment,
+      low_stock_threshold: cat.low_stock_threshold ?? undefined,
+    });
+    setFormError(null);
+  };
+
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+    setSubmitting(true);
+    try {
+      await inventoryService.updateCategory(editingCategory.id, editCategoryForm);
+      setEditingCategory(null);
+      loadData();
+      toast.success('Category updated');
+    } catch (err: unknown) {
+      setFormError(getErrorMessage(err, 'Unable to update category.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // CSV export
+  const handleExportCsv = async () => {
+    try {
+      const blob = await inventoryService.exportItemsCsv({
+        category_id: categoryFilter || undefined,
+        status: statusFilter || undefined,
+        search: searchQuery || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'inventory_export.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Inventory exported');
+    } catch {
+      toast.error('Failed to export inventory');
+    }
+  };
+
+  // Pool issuance
+  const openPoolIssueModal = (item: InventoryItem) => {
+    setPoolIssueItem(item);
+    setPoolIssueForm({ member_id: '', quantity: 1, reason: '' });
+    setShowPoolIssueModal(true);
+  };
+
+  const handlePoolIssue = async () => {
+    if (!poolIssueItem || !poolIssueForm.member_id) return;
+    setSubmitting(true);
+    try {
+      await inventoryService.issueFromPool(poolIssueItem.id, poolIssueForm.member_id, poolIssueForm.quantity, poolIssueForm.reason || undefined);
+      toast.success(`Issued ${poolIssueForm.quantity} ${poolIssueItem.name} successfully`);
+      setShowPoolIssueModal(false);
+      setPoolIssueItem(null);
+      loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to issue item'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Equipment request review
+  const handleReviewRequest = async (requestId: string, decision: 'approved' | 'denied') => {
+    setSubmitting(true);
+    try {
+      await inventoryService.reviewEquipmentRequest(requestId, { status: decision, review_notes: reviewNotes || undefined });
+      toast.success(`Request ${decision}`);
+      setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+      setReviewingRequest(null);
+      setReviewNotes('');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to review request'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -475,6 +662,17 @@ const InventoryPage: React.FC = () => {
                 <span className="hidden sm:inline">Add Item</span>
                 <span className="sm:hidden">Item</span>
               </button>
+              {pendingRequests.length > 0 && (
+                <button
+                  onClick={() => setShowRequestsPanel(!showRequestsPanel)}
+                  className="flex items-center space-x-1.5 px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-lg transition-colors text-sm"
+                  title="Pending equipment requests"
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  <span className="hidden sm:inline">Requests</span>
+                  <span className="px-1.5 py-0.5 text-xs bg-yellow-500 text-white rounded-full">{pendingRequests.length}</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -513,6 +711,93 @@ const InventoryPage: React.FC = () => {
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Maintenance Due</p>
               <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">{summary.maintenance_due_count}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Low Stock Alerts */}
+        {lowStockAlerts.length > 0 && (
+          <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4" role="alert">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" aria-hidden="true" />
+              <h3 className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">Low Stock Alerts</h3>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {lowStockAlerts.map(alert => (
+                <div key={alert.category_id} className="flex items-center gap-2 bg-yellow-500/10 rounded-lg px-3 py-1.5">
+                  <span className="text-sm text-yellow-700 dark:text-yellow-300 font-medium">{alert.category_name}</span>
+                  <span className="text-xs text-yellow-600 dark:text-yellow-400">{alert.current_stock} / {alert.threshold} threshold</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Pending Equipment Requests Panel */}
+        {showRequestsPanel && pendingRequests.length > 0 && (
+          <div className="mb-6 bg-theme-surface rounded-lg border border-yellow-500/30 overflow-hidden">
+            <div className="px-4 py-3 bg-yellow-500/10 border-b border-yellow-500/20 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-yellow-700 dark:text-yellow-300 flex items-center gap-2">
+                <ClipboardList className="w-4 h-4" /> Pending Equipment Requests
+              </h3>
+              <button onClick={() => setShowRequestsPanel(false)} className="text-theme-text-muted hover:text-theme-text-primary p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="divide-y divide-theme-surface-border">
+              {pendingRequests.map(req => (
+                <div key={req.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-theme-text-primary text-sm font-medium">{req.item_name} {req.quantity > 1 ? `x${req.quantity}` : ''}</p>
+                    <p className="text-theme-text-muted text-xs">
+                      {req.requester_name || 'Unknown'} &middot; {req.request_type} &middot;
+                      <span className={req.priority === 'high' ? ' text-red-500 font-medium' : ''}> {req.priority} priority</span>
+                    </p>
+                    {req.reason && <p className="text-theme-text-secondary text-xs mt-0.5 truncate">{req.reason}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleReviewRequest(req.id, 'approved')}
+                      className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg"
+                      title="Approve"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => { setReviewingRequest(req); setReviewNotes(''); }}
+                      className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+                      title="Deny (with notes)"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Request Deny Modal (with notes) */}
+        {reviewingRequest && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setReviewingRequest(null); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setReviewingRequest(null)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+                <div className="px-6 pt-5 pb-4">
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-2">Deny Request</h3>
+                  <p className="text-theme-text-secondary text-sm mb-4">{reviewingRequest.item_name} requested by {reviewingRequest.requester_name || 'Unknown'}</p>
+                  <div>
+                    <label htmlFor="deny-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason for denial (optional)</label>
+                    <textarea id="deny-notes" rows={3} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Explain why this request is being denied..." />
+                  </div>
+                </div>
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setReviewingRequest(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={() => handleReviewRequest(reviewingRequest.id, 'denied')} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Denying...' : 'Deny Request'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -590,6 +875,35 @@ const InventoryPage: React.FC = () => {
                     ))}
                   </select>
                 </div>
+                {canManage && (
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button onClick={handleExportCsv} className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary bg-theme-input-bg border border-theme-input-border rounded-lg hover:bg-theme-surface-hover transition-colors" title="Export CSV">
+                      <Download className="w-4 h-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Export</span>
+                    </button>
+                    {selectedItemIds.size > 0 && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowBulkMenu(!showBulkMenu)}
+                          className="flex items-center gap-1.5 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                        >
+                          Bulk Actions ({selectedItemIds.size})
+                          <ChevronDown className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                        {showBulkMenu && (
+                          <div className="absolute right-0 top-full mt-1 w-48 bg-theme-surface-modal rounded-lg shadow-xl border border-theme-surface-border z-50 py-1">
+                            <button onClick={() => { setShowBulkStatusModal(true); setShowBulkMenu(false); }} className="w-full text-left px-3 py-2 text-sm text-theme-text-primary hover:bg-theme-surface-hover">
+                              Change Status
+                            </button>
+                            <button onClick={() => { setShowBulkRetireModal(true); setShowBulkMenu(false); }} className="w-full text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-theme-surface-hover">
+                              Retire Selected
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -697,6 +1011,11 @@ const InventoryPage: React.FC = () => {
                                 <button onClick={() => openEditModal(item)} className="p-1.5 text-theme-text-muted hover:text-emerald-500 rounded" title="Edit item" aria-label={`Edit ${item.name}`}>
                                   <Pencil className="w-4 h-4" aria-hidden="true" />
                                 </button>
+                                {item.tracking_type === 'pool' && item.status !== 'retired' && (
+                                  <button onClick={() => openPoolIssueModal(item)} className="p-1.5 text-theme-text-muted hover:text-purple-500 rounded" title="Issue from pool" aria-label={`Issue ${item.name}`}>
+                                    <Send className="w-4 h-4" aria-hidden="true" />
+                                  </button>
+                                )}
                                 {item.status !== 'retired' && (
                                   <button onClick={() => setShowRetireConfirm(item)} className="p-1.5 text-theme-text-muted hover:text-red-500 rounded" title="Retire item" aria-label={`Retire ${item.name}`}>
                                     <Archive className="w-4 h-4" aria-hidden="true" />
@@ -740,9 +1059,16 @@ const InventoryPage: React.FC = () => {
                   <div key={cat.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
                     <div className="flex items-start justify-between mb-3">
                       <h3 className="text-theme-text-primary font-semibold text-lg">{cat.name}</h3>
-                      <span className="px-2 py-1 text-xs font-medium rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 capitalize">
-                        {cat.item_type}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 text-xs font-medium rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 capitalize">
+                          {cat.item_type}
+                        </span>
+                        {canManage && (
+                          <button onClick={() => openEditCategory(cat)} className="p-1 text-theme-text-muted hover:text-emerald-500 rounded" title="Edit category" aria-label={`Edit ${cat.name}`}>
+                            <Pencil className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {cat.description && (
                       <p className="text-theme-text-secondary text-sm mb-3">{cat.description}</p>
@@ -1306,9 +1632,14 @@ const InventoryPage: React.FC = () => {
                     )}
 
                     <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                      {/* Basic Info */}
                       <div>
                         <label htmlFor="edit-item-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
                         <input id="edit-item-name" type="text" required value={editForm.name || ''} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                      </div>
+                      <div>
+                        <label htmlFor="edit-item-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
+                        <textarea id="edit-item-description" rows={2} value={editForm.description || ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -1319,46 +1650,78 @@ const InventoryPage: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <label htmlFor="edit-item-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Condition</label>
-                          <select id="edit-item-condition" value={editForm.condition || 'good'} onChange={(e) => setEditForm({ ...editForm, condition: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                            {CONDITION_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                          <label htmlFor="edit-item-tracking-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Tracking Type</label>
+                          <select id="edit-item-tracking-type" value={editForm.tracking_type || 'individual'} onChange={(e) => setEditForm({ ...editForm, tracking_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="individual">Individual</option>
+                            <option value="pool">Pool</option>
                           </select>
                         </div>
                       </div>
+
+                      {/* Identification */}
+                      <fieldset>
+                        <legend className="flex items-center gap-1.5 text-xs font-semibold uppercase text-theme-text-muted mb-2">
+                          <Barcode className="w-3.5 h-3.5" aria-hidden="true" /> Identification
+                        </legend>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div>
+                            <label htmlFor="edit-item-serial" className="block text-sm font-medium text-theme-text-secondary mb-1">Serial Number</label>
+                            <input id="edit-item-serial" type="text" value={editForm.serial_number || ''} onChange={(e) => setEditForm({ ...editForm, serial_number: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          </div>
+                          <div>
+                            <label htmlFor="edit-item-asset-tag" className="block text-sm font-medium text-theme-text-secondary mb-1">Asset Tag</label>
+                            <input id="edit-item-asset-tag" type="text" value={editForm.asset_tag || ''} onChange={(e) => setEditForm({ ...editForm, asset_tag: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          </div>
+                          <div>
+                            <label htmlFor="edit-item-barcode" className="block text-sm font-medium text-theme-text-secondary mb-1 flex items-center gap-1">
+                              <Barcode className="w-3.5 h-3.5" aria-hidden="true" /> Barcode
+                            </label>
+                            <input id="edit-item-barcode" type="text" value={editForm.barcode || ''} onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono" placeholder={editForm.asset_tag || editForm.serial_number || 'No barcode assigned'} />
+                            {!editForm.barcode && (editForm.asset_tag || editForm.serial_number) && (
+                              <p className="text-xs text-theme-text-muted mt-1">Label will use {editForm.asset_tag ? 'asset tag' : 'serial number'} if barcode is blank.</p>
+                            )}
+                          </div>
+                        </div>
+                      </fieldset>
+
+                      {/* Product Details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="edit-item-manufacturer" className="block text-sm font-medium text-theme-text-secondary mb-1">Manufacturer</label>
+                          <input id="edit-item-manufacturer" type="text" value={editForm.manufacturer || ''} onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="edit-item-model" className="block text-sm font-medium text-theme-text-secondary mb-1">Model Number</label>
+                          <input id="edit-item-model" type="text" value={editForm.model_number || ''} onChange={(e) => setEditForm({ ...editForm, model_number: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        </div>
+                      </div>
+
+                      {/* Physical Properties */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
-                          <label htmlFor="edit-item-serial" className="block text-sm font-medium text-theme-text-secondary mb-1">Serial Number</label>
-                          <input id="edit-item-serial" type="text" value={editForm.serial_number || ''} onChange={(e) => setEditForm({ ...editForm, serial_number: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          <label htmlFor="edit-item-size" className="block text-sm font-medium text-theme-text-secondary mb-1">Size</label>
+                          <input id="edit-item-size" type="text" value={editForm.size || ''} onChange={(e) => setEditForm({ ...editForm, size: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Large, 10.5" />
                         </div>
                         <div>
-                          <label htmlFor="edit-item-asset-tag" className="block text-sm font-medium text-theme-text-secondary mb-1">Asset Tag</label>
-                          <input id="edit-item-asset-tag" type="text" value={editForm.asset_tag || ''} onChange={(e) => setEditForm({ ...editForm, asset_tag: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          <label htmlFor="edit-item-color" className="block text-sm font-medium text-theme-text-secondary mb-1">Color</label>
+                          <input id="edit-item-color" type="text" value={editForm.color || ''} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                         </div>
-                        <div>
-                          <label htmlFor="edit-item-barcode" className="block text-sm font-medium text-theme-text-secondary mb-1 flex items-center gap-1">
-                            <Barcode className="w-3.5 h-3.5" aria-hidden="true" /> Barcode
-                          </label>
-                          <input id="edit-item-barcode" type="text" value={editForm.barcode || ''} onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono" placeholder={editForm.asset_tag || editForm.serial_number || 'No barcode assigned'} />
-                          {!editForm.barcode && (editForm.asset_tag || editForm.serial_number) && (
-                            <p className="text-xs text-theme-text-muted mt-1">Label will use {editForm.asset_tag ? 'asset tag' : 'serial number'} if barcode is blank.</p>
-                          )}
-                        </div>
+                        {editForm.tracking_type === 'pool' && (
+                          <div>
+                            <label htmlFor="edit-item-uom" className="block text-sm font-medium text-theme-text-secondary mb-1">Unit of Measure</label>
+                            <input id="edit-item-uom" type="text" value={editForm.unit_of_measure || ''} onChange={(e) => setEditForm({ ...editForm, unit_of_measure: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., pair, box, each" />
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <label htmlFor="edit-item-manufacturer" className="block text-sm font-medium text-theme-text-secondary mb-1">Manufacturer</label>
-                        <input id="edit-item-manufacturer" type="text" value={editForm.manufacturer || ''} onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                      </div>
+
+                      {/* Location */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label htmlFor="edit-item-room" className="block text-sm font-medium text-theme-text-secondary mb-1">Room</label>
                           {rooms.length > 0 ? (
                             <select id="edit-item-room" value={editForm.location_id || ''} onChange={(e) => {
                               const selectedRoom = rooms.find(r => r.id === e.target.value);
-                              setEditForm({
-                                ...editForm,
-                                location_id: e.target.value,
-                                station: selectedRoom?.building || editForm.station,
-                              });
+                              setEditForm({ ...editForm, location_id: e.target.value, station: selectedRoom?.building || editForm.station });
                             }} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
                               <option value="">Select a room</option>
                               {rooms.map(r => (
@@ -1378,6 +1741,64 @@ const InventoryPage: React.FC = () => {
                           <input id="edit-item-storage-area" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Shelf 5, Secure Closet 2" />
                         </div>
                       </div>
+
+                      {/* Status & Quantity */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label htmlFor="edit-item-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Condition</label>
+                          <select id="edit-item-condition" value={editForm.condition || 'good'} onChange={(e) => setEditForm({ ...editForm, condition: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            {CONDITION_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="edit-item-status" className="block text-sm font-medium text-theme-text-secondary mb-1">Status</label>
+                          <select id="edit-item-status" value={editForm.status || 'available'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="edit-item-quantity" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                            {editForm.tracking_type === 'pool' ? 'Total Stock' : 'Quantity'}
+                          </label>
+                          <input id="edit-item-quantity" type="number" min="1" value={editForm.quantity ?? 1} onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        </div>
+                      </div>
+
+                      {/* Purchase & Warranty */}
+                      <details className="group">
+                        <summary className="cursor-pointer text-xs font-semibold uppercase text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1.5 select-none">
+                          <span className="transition-transform group-open:rotate-90">&#9654;</span>
+                          Purchase & Warranty
+                        </summary>
+                        <div className="mt-3 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                              <label htmlFor="edit-item-purchase-price" className="block text-sm font-medium text-theme-text-secondary mb-1">Purchase Price</label>
+                              <input id="edit-item-purchase-price" type="number" min="0" step="0.01" value={editForm.purchase_price ?? ''} onChange={(e) => setEditForm({ ...editForm, purchase_price: e.target.value ? parseFloat(e.target.value) : undefined })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="0.00" />
+                            </div>
+                            <div>
+                              <label htmlFor="edit-item-purchase-date" className="block text-sm font-medium text-theme-text-secondary mb-1">Purchase Date</label>
+                              <input id="edit-item-purchase-date" type="date" value={editForm.purchase_date || ''} onChange={(e) => setEditForm({ ...editForm, purchase_date: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                            </div>
+                            <div>
+                              <label htmlFor="edit-item-vendor" className="block text-sm font-medium text-theme-text-secondary mb-1">Vendor</label>
+                              <input id="edit-item-vendor" type="text" value={editForm.vendor || ''} onChange={(e) => setEditForm({ ...editForm, vendor: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label htmlFor="edit-item-warranty" className="block text-sm font-medium text-theme-text-secondary mb-1">Warranty Expiration</label>
+                              <input id="edit-item-warranty" type="date" value={editForm.warranty_expiration || ''} onChange={(e) => setEditForm({ ...editForm, warranty_expiration: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                            </div>
+                            <div>
+                              <label htmlFor="edit-item-inspection-interval" className="block text-sm font-medium text-theme-text-secondary mb-1">Inspection Interval (days)</label>
+                              <input id="edit-item-inspection-interval" type="number" min="0" value={editForm.inspection_interval_days ?? ''} onChange={(e) => setEditForm({ ...editForm, inspection_interval_days: e.target.value ? parseInt(e.target.value) : undefined })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., 365" />
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+
+                      {/* Notes */}
                       <div>
                         <label htmlFor="edit-item-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
                         <textarea id="edit-item-notes" rows={2} value={editForm.notes || ''} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
@@ -1438,6 +1859,164 @@ const InventoryPage: React.FC = () => {
                   <button onClick={() => { setShowRetireConfirm(null); setRetireNotes(''); }} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
                   <button onClick={handleRetireItem} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Retiring...' : 'Retire Item'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Bulk Status Modal */}
+        {showBulkStatusModal && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setShowBulkStatusModal(false); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowBulkStatusModal(false)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+                <div className="px-6 pt-5 pb-4">
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4">Change Status ({selectedItemIds.size} items)</h3>
+                  <div>
+                    <label htmlFor="bulk-status-select" className="block text-sm font-medium text-theme-text-secondary mb-1">New Status</label>
+                    <select id="bulk-status-select" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                      <option value="">Select status...</option>
+                      {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setShowBulkStatusModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={handleBulkStatusUpdate} disabled={submitting || !bulkStatus} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Updating...' : 'Update Status'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Retire Modal */}
+        {showBulkRetireModal && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setShowBulkRetireModal(false); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowBulkRetireModal(false)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+                <div className="px-6 pt-5 pb-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-red-500/10 p-2 rounded-full">
+                      <AlertCircle className="w-5 h-5 text-red-600" aria-hidden="true" />
+                    </div>
+                    <h3 className="text-lg font-medium text-theme-text-primary">Retire {selectedItemIds.size} Items</h3>
+                  </div>
+                  <p className="text-theme-text-secondary text-sm">
+                    Are you sure you want to retire the selected {selectedItemIds.size} item{selectedItemIds.size !== 1 ? 's' : ''}? This action will mark them as inactive.
+                  </p>
+                </div>
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setShowBulkRetireModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={handleBulkRetire} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Retiring...' : 'Retire All'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Category Modal */}
+        {editingCategory && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setEditingCategory(null); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setEditingCategory(null)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+                <form onSubmit={handleUpdateCategory}>
+                  <div className="px-4 sm:px-6 pt-5 pb-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-medium text-theme-text-primary">Edit Category</h3>
+                      <button type="button" onClick={() => setEditingCategory(null)} className="text-theme-text-muted hover:text-theme-text-primary p-1 min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Close dialog">
+                        <X className="w-5 h-5" aria-hidden="true" />
+                      </button>
+                    </div>
+                    {formError && (
+                      <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                        <p className="text-sm text-red-700 dark:text-red-300">{formError}</p>
+                      </div>
+                    )}
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="edit-category-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
+                        <input id="edit-category-name" type="text" required value={editCategoryForm.name || ''} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, name: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                      </div>
+                      <div>
+                        <label htmlFor="edit-category-item-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Item Type *</label>
+                        <select id="edit-category-item-type" value={editCategoryForm.item_type || 'equipment'} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, item_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="edit-category-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
+                        <textarea id="edit-category-description" rows={2} value={editCategoryForm.description || ''} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, description: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="flex items-center space-x-2">
+                          <input type="checkbox" checked={editCategoryForm.requires_serial_number || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_serial_number: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
+                          <span className="text-sm text-theme-text-secondary">Requires serial number</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input type="checkbox" checked={editCategoryForm.requires_maintenance || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_maintenance: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
+                          <span className="text-sm text-theme-text-secondary">Requires maintenance tracking</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input type="checkbox" checked={editCategoryForm.requires_assignment || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_assignment: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
+                          <span className="text-sm text-theme-text-secondary">Requires member assignment</span>
+                        </label>
+                      </div>
+                      <div>
+                        <label htmlFor="edit-category-low-stock" className="block text-sm font-medium text-theme-text-secondary mb-1">Low Stock Threshold</label>
+                        <input id="edit-category-low-stock" type="number" min="0" value={editCategoryForm.low_stock_threshold || ''} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, low_stock_threshold: e.target.value ? parseInt(e.target.value) : undefined })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Alert when stock falls below" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                    <button type="button" onClick={() => setEditingCategory(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                    <button type="submit" disabled={submitting} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                      {submitting ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pool Issuance Modal */}
+        {showPoolIssueModal && poolIssueItem && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setShowPoolIssueModal(false); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowPoolIssueModal(false)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+                <div className="px-6 pt-5 pb-4">
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-1">Issue From Pool</h3>
+                  <p className="text-theme-text-secondary text-sm mb-4">{poolIssueItem.name} — {poolIssueItem.quantity - poolIssueItem.quantity_issued} available</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="pool-issue-member" className="block text-sm font-medium text-theme-text-secondary mb-1">Member *</label>
+                      <select id="pool-issue-member" value={poolIssueForm.member_id} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, member_id: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <option value="">Select member...</option>
+                        {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="pool-issue-quantity" className="block text-sm font-medium text-theme-text-secondary mb-1">Quantity</label>
+                      <input id="pool-issue-quantity" type="number" min="1" max={poolIssueItem.quantity - poolIssueItem.quantity_issued} value={poolIssueForm.quantity} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, quantity: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    </div>
+                    <div>
+                      <label htmlFor="pool-issue-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason (optional)</label>
+                      <input id="pool-issue-reason" type="text" value={poolIssueForm.reason} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, reason: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="e.g., Initial issue, replacement" />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setShowPoolIssueModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={handlePoolIssue} disabled={submitting || !poolIssueForm.member_id} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Issuing...' : 'Issue Items'}
                   </button>
                 </div>
               </div>

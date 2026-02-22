@@ -673,3 +673,85 @@ class PropertyReturnReminder(Base):
 
     def __repr__(self):
         return f"<PropertyReturnReminder(user_id={self.user_id}, type={self.reminder_type})>"
+
+
+class RequestType(str, enum.Enum):
+    """Type of equipment request"""
+    CHECKOUT = "checkout"       # Temporary checkout
+    ISSUANCE = "issuance"       # Pool item issuance
+    PURCHASE = "purchase"       # Request to purchase new item
+
+
+class RequestStatus(str, enum.Enum):
+    """Status of equipment request"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    FULFILLED = "fulfilled"
+
+
+class RequestPriority(str, enum.Enum):
+    """Priority of equipment request"""
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+
+
+class EquipmentRequest(Base):
+    """
+    Equipment Request model
+
+    Members can request equipment checkouts, pool issuances, or purchases.
+    Admins/quartermasters review and approve/deny requests.
+    """
+
+    __tablename__ = "equipment_requests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Requester
+    requester_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # What they're requesting
+    item_name = Column(String(255), nullable=False)  # Description of what's needed
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"))  # Specific item (optional)
+    category_id = Column(String(36), ForeignKey("inventory_categories.id", ondelete="SET NULL"))  # Category (optional)
+    quantity = Column(Integer, nullable=False, default=1)
+    request_type = Column(
+        Enum(RequestType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=RequestType.CHECKOUT,
+    )
+    priority = Column(
+        Enum(RequestPriority, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=RequestPriority.NORMAL,
+    )
+    reason = Column(Text)
+
+    # Review
+    status = Column(
+        Enum(RequestStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=RequestStatus.PENDING,
+        index=True,
+    )
+    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at = Column(DateTime(timezone=True))
+    review_notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    requester = relationship("User", foreign_keys=[requester_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+    category = relationship("InventoryCategory", foreign_keys=[category_id])
+
+    __table_args__ = (
+        Index("idx_equip_requests_org_status", "organization_id", "status"),
+        Index("idx_equip_requests_requester", "requester_id", "status"),
+    )
