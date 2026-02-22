@@ -178,9 +178,11 @@ class IPException(Base):
         if self.approval_status != IPExceptionApprovalStatus.APPROVED:
             return False
         now = datetime.now(timezone.utc)
-        if self.valid_from and now < self.valid_from:
+        valid_from = self.valid_from.replace(tzinfo=timezone.utc) if self.valid_from and self.valid_from.tzinfo is None else self.valid_from
+        valid_until = self.valid_until.replace(tzinfo=timezone.utc) if self.valid_until and self.valid_until.tzinfo is None else self.valid_until
+        if valid_from and now < valid_from:
             return False
-        if self.valid_until and now > self.valid_until:
+        if valid_until and now > valid_until:
             return False
         return True
 
@@ -188,13 +190,15 @@ class IPException(Base):
         """Check if exception has expired."""
         if not self.valid_until:
             return False
-        return datetime.now(timezone.utc) > self.valid_until
+        valid_until = self.valid_until.replace(tzinfo=timezone.utc) if self.valid_until.tzinfo is None else self.valid_until
+        return datetime.now(timezone.utc) > valid_until
 
     def days_remaining(self) -> int:
         """Get number of days remaining until expiration."""
         if not self.valid_until:
             return 0
-        delta = self.valid_until - datetime.now(timezone.utc)
+        valid_until = self.valid_until.replace(tzinfo=timezone.utc) if self.valid_until.tzinfo is None else self.valid_until
+        delta = valid_until - datetime.now(timezone.utc)
         return max(0, delta.days)
 
 

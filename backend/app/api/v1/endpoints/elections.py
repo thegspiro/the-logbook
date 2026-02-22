@@ -408,7 +408,10 @@ async def update_election(
         # If updating end_date, validate it's in the future and after start_date
         if "end_date" in update_data:
             new_end_date = update_data["end_date"]
-            if new_end_date <= election.start_date:
+            if new_end_date.tzinfo is None:
+                new_end_date = new_end_date.replace(tzinfo=timezone.utc)
+            e_start = election.start_date.replace(tzinfo=timezone.utc) if election.start_date and election.start_date.tzinfo is None else election.start_date
+            if e_start and new_end_date <= e_start:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="End date must be after start date"
@@ -432,13 +435,21 @@ async def update_election(
     # For draft elections, validate dates if they're being updated
     elif election.status == ElectionStatus.DRAFT:
         if "end_date" in update_data and "start_date" not in update_data:
-            if update_data["end_date"] <= election.start_date:
+            new_end = update_data["end_date"]
+            if new_end and new_end.tzinfo is None:
+                new_end = new_end.replace(tzinfo=timezone.utc)
+            db_start = election.start_date.replace(tzinfo=timezone.utc) if election.start_date and election.start_date.tzinfo is None else election.start_date
+            if db_start and new_end <= db_start:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="End date must be after start date"
                 )
         elif "start_date" in update_data and "end_date" not in update_data:
-            if election.end_date <= update_data["start_date"]:
+            new_start = update_data["start_date"]
+            if new_start and new_start.tzinfo is None:
+                new_start = new_start.replace(tzinfo=timezone.utc)
+            db_end = election.end_date.replace(tzinfo=timezone.utc) if election.end_date and election.end_date.tzinfo is None else election.end_date
+            if db_end and db_end <= new_start:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="End date must be after start date"

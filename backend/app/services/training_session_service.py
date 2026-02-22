@@ -206,7 +206,9 @@ class TrainingSessionService:
         # Check if event has ended
         now = datetime.now(timezone.utc)
         event_end = event.actual_end_time or event.end_datetime
-        if now < event_end:
+        if event_end and event_end.tzinfo is None:
+            event_end = event_end.replace(tzinfo=timezone.utc)
+        if event_end and now < event_end:
             return None, "Cannot finalize training session before event ends"
 
         # Get all checked-in attendees
@@ -390,7 +392,8 @@ class TrainingSessionService:
             return None, "Invalid approval link"
 
         # Check if token is expired
-        if datetime.now(timezone.utc) > approval.token_expires_at:
+        token_exp = approval.token_expires_at.replace(tzinfo=timezone.utc) if approval.token_expires_at.tzinfo is None else approval.token_expires_at
+        if datetime.now(timezone.utc) > token_exp:
             return None, "This approval link has expired"
 
         # Get event and training session details
@@ -453,7 +456,8 @@ class TrainingSessionService:
             return False, "This training session has already been processed"
 
         # Check if token is expired
-        if datetime.now(timezone.utc) > approval.token_expires_at:
+        token_exp = approval.token_expires_at.replace(tzinfo=timezone.utc) if approval.token_expires_at.tzinfo is None else approval.token_expires_at
+        if datetime.now(timezone.utc) > token_exp:
             return False, "This approval link has expired"
 
         # Update approval record

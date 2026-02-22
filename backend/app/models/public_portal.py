@@ -163,6 +163,8 @@ class PublicPortalAPIKey(Base):
             return False
         try:
             expiry = datetime.fromisoformat(self.expires_at)
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
             return datetime.now(timezone.utc) > expiry
         except (ValueError, TypeError):
             return False

@@ -85,7 +85,8 @@ class OnboardingSessionManager:
             return None
 
         # Check if expired
-        if session.expires_at < datetime.now(timezone.utc):
+        sess_exp = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at.tzinfo is None else session.expires_at
+        if sess_exp < datetime.now(timezone.utc):
             # Delete expired session
             await db.delete(session)
             await db.commit()
@@ -122,7 +123,8 @@ class OnboardingSessionManager:
             return False
 
         # Check if expired
-        if session.expires_at < datetime.now(timezone.utc):
+        sess_exp = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at.tzinfo is None else session.expires_at
+        if sess_exp < datetime.now(timezone.utc):
             await db.delete(session)
             await db.commit()
             return False

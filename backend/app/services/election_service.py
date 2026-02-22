@@ -365,6 +365,8 @@ class ElectionService:
 
         # Check if election is open
         now = datetime.now(timezone.utc)
+        start = election.start_date.replace(tzinfo=timezone.utc) if election.start_date and election.start_date.tzinfo is None else election.start_date
+        end = election.end_date.replace(tzinfo=timezone.utc) if election.end_date and election.end_date.tzinfo is None else election.end_date
         if election.status != ElectionStatus.OPEN:
             return VoterEligibility(
                 is_eligible=False,
@@ -374,7 +376,7 @@ class ElectionService:
                 reason=f"Election is {election.status.value}",
             )
 
-        if now < election.start_date:
+        if start and now < start:
             return VoterEligibility(
                 is_eligible=False,
                 has_voted=False,
@@ -383,7 +385,7 @@ class ElectionService:
                 reason="Election has not started yet",
             )
 
-        if now > election.end_date:
+        if end and now > end:
             return VoterEligibility(
                 is_eligible=False,
                 has_voted=False,
@@ -1047,7 +1049,8 @@ class ElectionService:
         # SECURITY: Check if results can be viewed
         # Results are ONLY visible after the election closing time has passed
         current_time = datetime.now(timezone.utc)
-        election_has_closed = current_time > election.end_date
+        end_date = election.end_date.replace(tzinfo=timezone.utc) if election.end_date and election.end_date.tzinfo is None else election.end_date
+        election_has_closed = end_date is not None and current_time > end_date
 
         can_view = (
             (election.status == ElectionStatus.CLOSED and election_has_closed)
@@ -2046,7 +2049,8 @@ Best regards,
 
         # Token expires when election ends (or 30 days if election is longer)
         max_expiry = datetime.now(timezone.utc) + timedelta(days=30)
-        expires_at = min(election_end_date, max_expiry)
+        end_for_expiry = election_end_date.replace(tzinfo=timezone.utc) if election_end_date and election_end_date.tzinfo is None else election_end_date
+        expires_at = min(end_for_expiry, max_expiry) if end_for_expiry else max_expiry
 
         voting_token = VotingToken(
             id=uuid4(),
@@ -2563,7 +2567,8 @@ Best regards,
             return None, None, "Invalid voting token"
 
         # Check if token has expired
-        if datetime.now(timezone.utc) > voting_token.expires_at:
+        token_exp = voting_token.expires_at.replace(tzinfo=timezone.utc) if voting_token.expires_at.tzinfo is None else voting_token.expires_at
+        if datetime.now(timezone.utc) > token_exp:
             return None, None, "Voting token has expired"
 
         # Check if token has already been fully used
@@ -2588,13 +2593,15 @@ Best regards,
 
         # Check if election is still open
         now = datetime.now(timezone.utc)
+        start = election.start_date.replace(tzinfo=timezone.utc) if election.start_date and election.start_date.tzinfo is None else election.start_date
+        end = election.end_date.replace(tzinfo=timezone.utc) if election.end_date and election.end_date.tzinfo is None else election.end_date
         if election.status != ElectionStatus.OPEN:
             return None, None, f"Election is {election.status.value}"
 
-        if now < election.start_date:
+        if start and now < start:
             return None, None, "Voting has not started yet"
 
-        if now > election.end_date:
+        if end and now > end:
             return None, None, "Voting has ended"
 
         return election, voting_token, None
