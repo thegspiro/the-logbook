@@ -3669,6 +3669,17 @@ export interface OperationalRankUpdate {
   is_active?: boolean;
 }
 
+export interface RankValidationIssue {
+  member_id: string;
+  member_name: string;
+  rank_code: string;
+}
+
+export interface RankValidationResponse {
+  issues: RankValidationIssue[];
+  total: number;
+}
+
 export const ranksService = {
   async getRanks(params?: { is_active?: boolean }): Promise<OperationalRankResponse[]> {
     const response = await api.get<OperationalRankResponse[]>('/operational-ranks', { params });
@@ -3696,6 +3707,11 @@ export const ranksService = {
 
   async reorderRanks(ranks: { id: string; sort_order: number }[]): Promise<OperationalRankResponse[]> {
     const response = await api.post<OperationalRankResponse[]>('/operational-ranks/reorder', { ranks });
+    return response.data;
+  },
+
+  async validateRanks(): Promise<RankValidationResponse> {
+    const response = await api.get<RankValidationResponse>('/operational-ranks/validate');
     return response.data;
   },
 };
