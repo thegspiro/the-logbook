@@ -4540,49 +4540,6 @@ export const memberStatusService = {
 };
 
 // ============================================
-// Prospective Member Service
-// ============================================
-
-export const prospectiveMemberService = {
-  async listPipelines(activeOnly?: boolean): Promise<{ pipelines: Record<string, unknown>[] }> {
-    const params = activeOnly ? { active_only: true } : undefined;
-    const response = await api.get('/prospective-members/pipelines', { params });
-    return response.data;
-  },
-  async createPipeline(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/prospective-members/pipelines', data);
-    return response.data;
-  },
-  async updatePipeline(pipelineId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/prospective-members/pipelines/${pipelineId}`, data);
-    return response.data;
-  },
-  async deletePipeline(pipelineId: string): Promise<void> {
-    await api.delete(`/prospective-members/pipelines/${pipelineId}`);
-  },
-  async duplicatePipeline(pipelineId: string, name: string): Promise<Record<string, unknown>> {
-    const response = await api.post(`/prospective-members/pipelines/${pipelineId}/duplicate`, { name });
-    return response.data;
-  },
-  async seedTemplates(pipelineId: string): Promise<{ message?: string }> {
-    const response = await api.post<{ message?: string }>(`/prospective-members/pipelines/${pipelineId}/seed-templates`);
-    return response.data;
-  },
-  async listProspects(params?: Record<string, unknown>): Promise<{ prospects: Record<string, unknown>[]; total: number }> {
-    const response = await api.get('/prospective-members/prospects', { params: params as Record<string, string> });
-    return response.data;
-  },
-  async createProspect(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/prospective-members/prospects', data);
-    return response.data;
-  },
-  async listElectionPackages(params?: Record<string, unknown>): Promise<{ packages: Record<string, unknown>[]; total: number }> {
-    const response = await api.get('/prospective-members/election-packages', { params: params as Record<string, string> });
-    return response.data;
-  },
-};
-
-// ============================================
 // Scheduled Tasks Service
 // ============================================
 
