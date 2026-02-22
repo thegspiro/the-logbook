@@ -31,7 +31,6 @@ import type {
   SelfReportConfig,
   SelfReportConfigUpdate,
   SubmissionReviewRequest,
-  SubmissionStatus,
   TrainingType,
   TrainingRecordUpdate,
   FieldConfig,
