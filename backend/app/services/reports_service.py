@@ -61,7 +61,10 @@ class ReportsService:
         """Generate a member roster report"""
         query = (
             select(User)
-            .where(User.organization_id == str(organization_id))
+            .where(
+                User.organization_id == str(organization_id),
+                User.deleted_at.is_(None),
+            )
             .options(selectinload(User.roles))
             .order_by(User.last_name, User.first_name)
         )
@@ -138,11 +141,14 @@ class ReportsService:
         records_result = await self.db.execute(records_query)
         records = records_result.scalars().all()
 
-        # Get active users
+        # Get active (non-deleted) users
         users_result = await self.db.execute(
             select(User)
-            .where(User.organization_id == str(organization_id))
-            .where(User.status == UserStatus.ACTIVE)
+            .where(
+                User.organization_id == str(organization_id),
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
         )
         users = users_result.scalars().all()
 
@@ -378,9 +384,12 @@ class ReportsService:
         result = await self.db.execute(enrollments_query)
         enrollments = result.scalars().unique().all()
 
-        # Get member map
+        # Get member map (exclude soft-deleted users)
         users_result = await self.db.execute(
-            select(User).where(User.organization_id == str(organization_id))
+            select(User).where(
+                User.organization_id == str(organization_id),
+                User.deleted_at.is_(None),
+            )
         )
         users = users_result.scalars().all()
         member_map = {str(u.id): f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username for u in users}
