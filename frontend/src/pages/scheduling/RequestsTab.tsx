@@ -16,7 +16,7 @@ import type { ShiftRecord } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
-import { REQUEST_REQUEST_STATUS_COLORS } from '../../constants/enums';
+import { REQUEST_STATUS_COLORS } from '../../constants/enums';
 
 interface SwapRequest {
   id: string;

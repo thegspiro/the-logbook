@@ -167,9 +167,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       toast.success('Contact info updated');
       setIsEditingContact(false);
       // Refresh the applicant data
-      const { refreshApplicant } = useProspectiveMembersStore.getState();
-      if (refreshApplicant) {
-        refreshApplicant(applicant.id);
+      const { fetchApplicant } = useProspectiveMembersStore.getState();
+      if (fetchApplicant) {
+        fetchApplicant(applicant.id);
       }
     } catch {
       toast.error('Failed to update contact info');
