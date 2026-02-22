@@ -683,6 +683,56 @@ async def advance_prospect(
     return prospect
 
 
+@router.get("/prospects/{prospect_id}/preview-email")
+async def preview_prospect_email(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+):
+    """
+    Preview the department email that would be generated for this prospect
+    based on the organization's email generation settings.
+
+    Returns the suggested email and whether a collision was detected.
+    """
+    from app.services.organization_service import OrganizationService
+
+    service = MembershipPipelineService(db)
+    prospect = await service.get_prospect(str(prospect_id), current_user.organization_id)
+    if not prospect:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+
+    org_service = OrganizationService(db)
+    settings = await org_service.get_organization_settings(current_user.organization_id)
+    eg = settings.email_generation
+
+    if eg.use_personal_as_primary:
+        return {
+            "mode": "personal_as_primary",
+            "email": prospect.email,
+            "was_incremented": False,
+        }
+
+    if not eg.enabled or not eg.domain:
+        return {
+            "mode": "manual",
+            "email": None,
+            "was_incremented": False,
+        }
+
+    unique_email, was_incremented = await org_service.generate_unique_email(
+        organization_id=current_user.organization_id,
+        first_name=prospect.first_name,
+        last_name=prospect.last_name,
+    )
+
+    return {
+        "mode": "auto_generated",
+        "email": unique_email,
+        "was_incremented": was_incremented,
+    }
+
+
 @router.post("/prospects/{prospect_id}/transfer", response_model=TransferProspectResponse)
 async def transfer_prospect(
     prospect_id: UUID,

@@ -16,6 +16,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
+  Info,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Applicant, TargetMembershipType } from '../types';
@@ -54,6 +55,14 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
     membership_number?: string;
   } | null>(null);
 
+  // Email preview state
+  const [emailPreview, setEmailPreview] = useState<{
+    mode: 'auto_generated' | 'personal_as_primary' | 'manual';
+    email: string | null;
+    was_incremented: boolean;
+  } | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
   // Reset state when applicant changes or modal opens
   useEffect(() => {
     if (applicant && isOpen) {
@@ -64,6 +73,27 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       setUsePersonalAsPrimary(false);
       setIsConverting(false);
       setConversionResult(null);
+      setEmailPreview(null);
+
+      // Fetch email preview from org settings
+      setLoadingPreview(true);
+      applicantService.previewEmail(applicant.id)
+        .then((preview) => {
+          setEmailPreview(preview);
+          // If org uses personal as primary, sync the checkbox
+          if (preview.mode === 'personal_as_primary') {
+            setUsePersonalAsPrimary(true);
+          }
+          // If auto-generated, pre-fill the department email field
+          if (preview.mode === 'auto_generated' && preview.email) {
+            setDepartmentEmail(preview.email);
+          }
+        })
+        .catch(() => {
+          // Preview failed — manual mode fallback
+          setEmailPreview({ mode: 'manual', email: null, was_incremented: false });
+        })
+        .finally(() => setLoadingPreview(false));
     }
   }, [applicant?.id, isOpen]);
 
@@ -102,7 +132,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       aria-labelledby="conversion-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape' && !isConverting) onClose(); }}
     >
-      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full">
+      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <div className="flex items-center gap-3">
@@ -243,38 +273,68 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 <h3 className="text-sm font-medium text-theme-text-secondary mb-3">
                   Email Assignment
                 </h3>
-                <p className="text-xs text-theme-text-muted mb-3">
-                  The applicant's current email ({applicant.email}) will be saved as their personal email.
-                  If your department has an email domain configured, a department email will be auto-generated.
-                </p>
 
-                <label className="flex items-center gap-2 text-sm text-theme-text-secondary mb-3">
-                  <input
-                    type="checkbox"
-                    checked={usePersonalAsPrimary}
-                    onChange={(e) => {
-                      setUsePersonalAsPrimary(e.target.checked);
-                      if (e.target.checked) setDepartmentEmail('');
-                    }}
-                    className="rounded border-theme-surface-border bg-theme-surface-secondary text-red-500 focus:ring-red-500"
-                  />
-                  Use personal email as the primary department email
-                </label>
-
-                {!usePersonalAsPrimary && (
-                  <div>
-                    <label htmlFor="department-email" className="block text-xs text-theme-text-muted mb-1">
-                      Department Email (optional — leave blank for auto-generation)
-                    </label>
-                    <input
-                      id="department-email"
-                      type="email"
-                      value={departmentEmail}
-                      onChange={(e) => setDepartmentEmail(e.target.value)}
-                      placeholder="e.g., john.doe@department.org"
-                      className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
+                {loadingPreview ? (
+                  <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading email settings...
                   </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-theme-text-muted mb-3">
+                      The applicant's current email ({applicant.email}) will be saved as their personal email.
+                      {emailPreview?.mode === 'auto_generated'
+                        ? ' A department email has been suggested based on your organization settings.'
+                        : emailPreview?.mode === 'personal_as_primary'
+                          ? ' Your organization is configured to use personal email as the primary email.'
+                          : ' You can enter a department email below or leave blank to use the personal email.'}
+                    </p>
+
+                    <label className="flex items-center gap-2 text-sm text-theme-text-secondary mb-3">
+                      <input
+                        type="checkbox"
+                        checked={usePersonalAsPrimary}
+                        onChange={(e) => {
+                          setUsePersonalAsPrimary(e.target.checked);
+                          if (e.target.checked) setDepartmentEmail('');
+                        }}
+                        className="rounded border-theme-surface-border bg-theme-surface-secondary text-red-500 focus:ring-red-500"
+                      />
+                      Use personal email as the primary department email
+                    </label>
+
+                    {!usePersonalAsPrimary && (
+                      <div>
+                        <label htmlFor="department-email" className="block text-xs text-theme-text-muted mb-1">
+                          Department Email{emailPreview?.mode === 'auto_generated' ? ' (auto-suggested — you can override)' : ' (optional)'}
+                        </label>
+                        <input
+                          id="department-email"
+                          type="email"
+                          value={departmentEmail}
+                          onChange={(e) => setDepartmentEmail(e.target.value)}
+                          placeholder="e.g., john.doe@department.org"
+                          className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                        {emailPreview?.was_incremented && emailPreview?.mode === 'auto_generated' && (
+                          <div className="flex items-start gap-2 text-xs text-amber-400 mt-2">
+                            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                            <span>
+                              A number was added because the base email already exists for another member.
+                            </span>
+                          </div>
+                        )}
+                        {emailPreview?.mode === 'auto_generated' && !emailPreview?.was_incremented && departmentEmail && (
+                          <div className="flex items-start gap-2 text-xs text-blue-400 mt-2">
+                            <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                            <span>
+                              Auto-generated from organization email settings. Edit the field above to override.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

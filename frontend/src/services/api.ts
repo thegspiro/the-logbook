@@ -363,7 +363,7 @@ export const organizationService = {
   /**
    * Get organization settings
    */
-  async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings; membership_id?: import('../types/user').MembershipIdSettings }> {
+  async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings; membership_id?: import('../types/user').MembershipIdSettings; email_generation?: import('../types/user').EmailGenerationSettings }> {
     const response = await api.get('/organization/settings');
     return response.data;
   },
@@ -410,6 +410,28 @@ export const organizationService = {
 
   async previewNextMembershipId(): Promise<{ enabled: boolean; next_id?: string }> {
     const response = await api.get<{ enabled: boolean; next_id?: string }>('/organization/settings/membership-id/preview');
+    return response.data;
+  },
+
+  async getEmailGenerationSettings(): Promise<import('../types/user').EmailGenerationSettings> {
+    const response = await api.get('/organization/settings/email-generation');
+    return response.data;
+  },
+
+  async updateEmailGenerationSettings(settings: import('../types/user').EmailGenerationSettings): Promise<import('../types/user').EmailGenerationSettings> {
+    const response = await api.patch('/organization/settings/email-generation', settings);
+    return response.data;
+  },
+
+  async previewGeneratedEmail(firstName: string, lastName: string): Promise<{
+    enabled: boolean;
+    email: string | null;
+    base_email?: string;
+    was_incremented: boolean;
+  }> {
+    const response = await api.post('/organization/settings/email-generation/preview', null, {
+      params: { first_name: firstName, last_name: lastName },
+    });
     return response.data;
   },
 

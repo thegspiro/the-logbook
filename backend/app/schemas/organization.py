@@ -232,6 +232,38 @@ class MembershipTierSettings(BaseModel):
     )
 
 
+class EmailGenerationFormat(str, Enum):
+    """Supported email address format presets"""
+    FIRST_DOT_LAST = "firstname.lastname"           # john.doe@dept.org
+    FIRST_INITIAL_DOT_LAST = "firstinitial.lastname"  # j.doe@dept.org
+    FIRST_DOT_LAST_INITIAL = "firstname.lastinitial"  # john.d@dept.org
+    FIRST_INITIAL_LAST = "firstinitiallastname"      # jdoe@dept.org
+    FIRST = "firstname"                               # john@dept.org
+    LAST_DOT_FIRST = "lastname.firstname"             # doe.john@dept.org
+    LAST_DOT_FIRST_INITIAL = "lastname.firstinitial"  # doe.j@dept.org
+
+
+class EmailGenerationSettings(BaseModel):
+    """Settings for automatic department email generation during member conversion"""
+    enabled: bool = Field(
+        default=False,
+        description="Whether automatic email generation is enabled",
+    )
+    domain: str = Field(
+        default="",
+        max_length=253,
+        description="Email domain (e.g. 'department.org')",
+    )
+    format: EmailGenerationFormat = Field(
+        default=EmailGenerationFormat.FIRST_DOT_LAST,
+        description="Email address format preset",
+    )
+    use_personal_as_primary: bool = Field(
+        default=False,
+        description="Use the member's personal email as their primary department email instead of generating one",
+    )
+
+
 class MembershipIdSettings(BaseModel):
     """Settings for membership ID number display and generation"""
     enabled: bool = Field(
@@ -387,6 +419,10 @@ class OrganizationSettings(BaseModel):
         default_factory=MembershipIdSettings,
         description="Membership ID number configuration",
     )
+    email_generation: EmailGenerationSettings = Field(
+        default_factory=EmailGenerationSettings,
+        description="Automatic department email generation settings",
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -423,6 +459,7 @@ class OrganizationSettingsUpdate(BaseModel):
     member_drop_notifications: Optional[MemberDropNotificationSettings] = None
     membership_tiers: Optional[MembershipTierSettings] = None
     membership_id: Optional[MembershipIdSettings] = None
+    email_generation: Optional[EmailGenerationSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -447,6 +484,7 @@ class OrganizationSettingsResponse(BaseModel):
     it_team: ITTeamSettings = Field(default_factory=ITTeamSettings)
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
     membership_id: MembershipIdSettings = Field(default_factory=MembershipIdSettings)
+    email_generation: EmailGenerationSettings = Field(default_factory=EmailGenerationSettings)
 
     model_config = ConfigDict(from_attributes=True, extra='allow')
 

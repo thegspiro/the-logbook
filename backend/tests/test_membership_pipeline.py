@@ -1164,3 +1164,108 @@ class TestTransferEmailAssignment:
         assert result["success"] is True
         assert result["primary_email"] == "auto.gen@testfire.org"
         assert result["personal_email"] == "auto@personal.com"
+
+    @pytest.mark.asyncio
+    async def test_transfer_email_generation_formats(self, db_session, transfer_env):
+        """Email generation settings with different format presets."""
+        pipeline, org_id, user_id, service = await transfer_env
+
+        formats_and_expected = [
+            ("firstname.lastname", "jane.smith@testfire.org"),
+            ("firstinitial.lastname", "j.smith@testfire.org"),
+            ("firstname.lastinitial", "jane.s@testfire.org"),
+            ("firstinitiallastname", "jsmith@testfire.org"),
+            ("firstname", "jane@testfire.org"),
+            ("lastname.firstname", "smith.jane@testfire.org"),
+            ("lastname.firstinitial", "smith.j@testfire.org"),
+        ]
+
+        for fmt, expected_email in formats_and_expected:
+            import json
+            settings = json.dumps({
+                "email_generation": {
+                    "enabled": True,
+                    "domain": "testfire.org",
+                    "format": fmt,
+                    "use_personal_as_primary": False,
+                }
+            })
+            await db_session.execute(
+                text("UPDATE organizations SET settings = :s WHERE id = :oid"),
+                {"s": settings, "oid": org_id},
+            )
+            await db_session.flush()
+
+            prospect = await service.create_prospect(
+                org_id,
+                {"first_name": "Jane", "last_name": "Smith", "email": f"jane.{fmt}@personal.com", "pipeline_id": pipeline.id},
+                user_id,
+            )
+
+            result = await service.transfer_to_membership(prospect.id, org_id, transferred_by=user_id)
+            assert result["success"] is True, f"Transfer failed for format: {fmt}"
+            assert result["primary_email"] == expected_email, f"For format {fmt}: expected {expected_email}, got {result['primary_email']}"
+            assert result["personal_email"] == f"jane.{fmt}@personal.com"
+
+    @pytest.mark.asyncio
+    async def test_transfer_email_generation_use_personal(self, db_session, transfer_env):
+        """Org-level use_personal_as_primary in email_generation settings."""
+        pipeline, org_id, user_id, service = await transfer_env
+
+        import json
+        settings = json.dumps({
+            "email_generation": {
+                "enabled": True,
+                "domain": "testfire.org",
+                "format": "firstname.lastname",
+                "use_personal_as_primary": True,
+            }
+        })
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :oid"),
+            {"s": settings, "oid": org_id},
+        )
+        await db_session.flush()
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Org", "last_name": "Personal", "email": "personal@gmail.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        result = await service.transfer_to_membership(prospect.id, org_id, transferred_by=user_id)
+        assert result["success"] is True
+        assert result["primary_email"] == "personal@gmail.com"
+        assert result["personal_email"] == "personal@gmail.com"
+
+    @pytest.mark.asyncio
+    async def test_email_format_helper(self):
+        """Test the OrganizationService.format_email static method."""
+        from app.services.organization_service import OrganizationService
+        from app.schemas.organization import EmailGenerationFormat
+
+        cases = [
+            (EmailGenerationFormat.FIRST_DOT_LAST, "john.doe@dept.org"),
+            (EmailGenerationFormat.FIRST_INITIAL_DOT_LAST, "j.doe@dept.org"),
+            (EmailGenerationFormat.FIRST_DOT_LAST_INITIAL, "john.d@dept.org"),
+            (EmailGenerationFormat.FIRST_INITIAL_LAST, "jdoe@dept.org"),
+            (EmailGenerationFormat.FIRST, "john@dept.org"),
+            (EmailGenerationFormat.LAST_DOT_FIRST, "doe.john@dept.org"),
+            (EmailGenerationFormat.LAST_DOT_FIRST_INITIAL, "doe.j@dept.org"),
+        ]
+
+        for fmt, expected in cases:
+            result = OrganizationService.format_email("John", "Doe", "dept.org", fmt)
+            assert result == expected, f"For {fmt}: expected {expected}, got {result}"
+
+    @pytest.mark.asyncio
+    async def test_email_format_sanitizes_names(self):
+        """Email generation strips non-alpha characters from names."""
+        from app.services.organization_service import OrganizationService
+        from app.schemas.organization import EmailGenerationFormat
+
+        # Name with spaces, hyphens, and special chars
+        result = OrganizationService.format_email(
+            "Mary-Jane", "O'Brien", "dept.org", EmailGenerationFormat.FIRST_DOT_LAST
+        )
+        assert result == "maryjane.obrien@dept.org"

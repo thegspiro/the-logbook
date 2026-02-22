@@ -732,6 +732,15 @@ export const applicantService = {
     };
   },
 
+  async previewEmail(
+    applicantId: string
+  ): Promise<{ mode: 'auto_generated' | 'personal_as_primary' | 'manual'; email: string | null; was_incremented: boolean }> {
+    const response = await api.get(
+      `/prospective-members/prospects/${applicantId}/preview-email`
+    );
+    return response.data;
+  },
+
   async convertToMember(
     applicantId: string,
     data: ConvertApplicantRequest

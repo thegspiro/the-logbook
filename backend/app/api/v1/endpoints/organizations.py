@@ -16,6 +16,8 @@ from app.schemas.organization import (
     OrganizationSettingsUpdate,
     ContactInfoSettings,
     MembershipIdSettings,
+    EmailGenerationSettings,
+    EmailGenerationFormat,
     EnabledModulesResponse,
     ModuleSettingsUpdate,
     SetupChecklistResponse,
@@ -314,6 +316,116 @@ async def preview_next_membership_id(
     number_str = str(membership_id_settings.next_number).zfill(4)
     next_id = f"{membership_id_settings.prefix}{number_str}"
     return {"enabled": True, "next_id": next_id}
+
+
+@router.get("/settings/email-generation", response_model=EmailGenerationSettings)
+async def get_email_generation_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get email generation settings for the organization.
+
+    **Authentication required**
+    """
+    org_service = OrganizationService(db)
+    settings = await org_service.get_organization_settings(current_user.organization_id)
+    return settings.email_generation
+
+
+@router.patch("/settings/email-generation", response_model=EmailGenerationSettings)
+async def update_email_generation_settings(
+    email_gen_settings: EmailGenerationSettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
+):
+    """
+    Update email generation settings.
+
+    Configure automatic department email generation for new members.
+
+    **Authentication and permission required**
+    """
+    org_service = OrganizationService(db)
+
+    settings_dict = {
+        "email_generation": {
+            "enabled": email_gen_settings.enabled,
+            "domain": email_gen_settings.domain,
+            "format": email_gen_settings.format.value if isinstance(email_gen_settings.format, EmailGenerationFormat) else email_gen_settings.format,
+            "use_personal_as_primary": email_gen_settings.use_personal_as_primary,
+        }
+    }
+
+    try:
+        await org_service.update_organization_settings(current_user.organization_id, settings_dict)
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "settings_changed": ["email_generation"],
+                "email_generation_enabled": email_gen_settings.enabled,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return email_gen_settings
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.post("/settings/email-generation/preview")
+async def preview_generated_email(
+    first_name: str,
+    last_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Preview what a generated email address would look like for a given name.
+
+    Uses the organization's current email generation settings.
+    Returns the generated email and whether a numeric suffix was needed
+    to avoid a collision with an existing member.
+
+    **Authentication required**
+    """
+    org_service = OrganizationService(db)
+    settings = await org_service.get_organization_settings(current_user.organization_id)
+    eg = settings.email_generation
+
+    if not eg.enabled or not eg.domain:
+        return {
+            "enabled": False,
+            "email": None,
+            "was_incremented": False,
+        }
+
+    # Preview without the collision check (just show the format)
+    base_email = OrganizationService.format_email(
+        first_name, last_name, eg.domain, eg.format
+    )
+
+    # Also check for collisions
+    unique_email, was_incremented = await org_service.generate_unique_email(
+        organization_id=str(current_user.organization_id),
+        first_name=first_name,
+        last_name=last_name,
+    )
+
+    return {
+        "enabled": True,
+        "email": unique_email or base_email,
+        "base_email": base_email,
+        "was_incremented": was_incremented,
+    }
 
 
 @router.get("/setup-checklist", response_model=SetupChecklistResponse)

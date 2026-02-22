@@ -33,6 +33,22 @@ export interface MembershipIdSettings {
   next_number: number;
 }
 
+export type EmailGenerationFormat =
+  | 'firstname.lastname'
+  | 'firstinitial.lastname'
+  | 'firstname.lastinitial'
+  | 'firstinitiallastname'
+  | 'firstname'
+  | 'lastname.firstname'
+  | 'lastname.firstinitial';
+
+export interface EmailGenerationSettings {
+  enabled: boolean;
+  domain: string;
+  format: EmailGenerationFormat;
+  use_personal_as_primary: boolean;
+}
+
 export interface NotificationPreferences {
   email: boolean;
   sms: boolean;

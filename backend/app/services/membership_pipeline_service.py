@@ -1017,40 +1017,65 @@ class MembershipPipelineService:
     ) -> tuple[str, Optional[str]]:
         """Determine primary and personal emails for a newly converted member.
 
+        Resolution cascade:
+        1. Caller explicitly requests personal-as-primary -> done.
+        2. Caller provides an explicit department email -> use it.
+        3. Org-level email_generation settings:
+           a. use_personal_as_primary -> done.
+           b. enabled + domain -> auto-generate with format & duplicate check.
+        4. Legacy fallback: settings.email.domain (first.last@domain).
+        5. Final fallback: prospect email = primary, no personal stored.
+
         Returns (primary_email, personal_email).
         """
+        from app.services.organization_service import OrganizationService
+
         prospect_email = prospect.email
 
         if use_personal_as_primary:
-            # Department uses personal email as the main email
             return prospect_email, prospect_email
 
         if department_email:
-            # Explicit department email provided
             return department_email, prospect_email
 
-        # Check if the org has an email domain configured
+        # Use the org-level email generation settings
+        org_service = OrganizationService(self.db)
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == prospect.organization_id)
         )
         org = org_result.scalar_one_or_none()
+        if not org:
+            return prospect_email, None
 
-        if org:
-            email_settings = (org.settings or {}).get("email", {})
-            domain = email_settings.get("domain")
-            org_use_personal = email_settings.get("use_personal_as_primary", False)
+        settings_dict = org.settings or {}
+        email_gen = settings_dict.get("email_generation", {})
 
-            if org_use_personal:
-                return prospect_email, prospect_email
+        # Check org-level "use personal as primary"
+        if email_gen.get("use_personal_as_primary", False):
+            return prospect_email, prospect_email
 
-            if domain:
-                # Auto-generate: firstname.lastname@domain
-                fname = prospect.first_name.lower().replace(" ", "")
-                lname = prospect.last_name.lower().replace(" ", "")
-                generated = f"{fname}.{lname}@{domain}"
+        # Auto-generate using org email generation settings
+        if email_gen.get("enabled") and email_gen.get("domain"):
+            generated, _incremented = await org_service.generate_unique_email(
+                organization_id=prospect.organization_id,
+                first_name=prospect.first_name,
+                last_name=prospect.last_name,
+            )
+            if generated:
                 return generated, prospect_email
 
-        # Fallback: prospect email becomes the primary, no personal stored
+        # Legacy fallback: settings.email.domain
+        legacy_email = settings_dict.get("email", {})
+        legacy_domain = legacy_email.get("domain")
+        if legacy_email.get("use_personal_as_primary", False):
+            return prospect_email, prospect_email
+        if legacy_domain:
+            fname = prospect.first_name.lower().replace(" ", "")
+            lname = prospect.last_name.lower().replace(" ", "")
+            generated = f"{fname}.{lname}@{legacy_domain}"
+            return generated, prospect_email
+
+        # Final fallback
         return prospect_email, None
 
     # =========================================================================

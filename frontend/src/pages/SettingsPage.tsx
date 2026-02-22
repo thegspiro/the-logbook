@@ -27,11 +27,13 @@ import {
   ChevronDown,
   X,
   Check,
+  Mail,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationService, ranksService } from '../services/api';
 import type { ModuleSettingsData, OperationalRankResponse } from '../services/api';
-import type { ContactInfoSettings, MembershipIdSettings } from '../types/user';
+import type { ContactInfoSettings, MembershipIdSettings, EmailGenerationSettings, EmailGenerationFormat } from '../types/user';
 import { invalidateRanksCache } from '../hooks/useRanks';
 
 interface ConfigurableModule {
@@ -68,6 +70,14 @@ export const SettingsPage: React.FC = () => {
     prefix: '',
     next_number: 1,
   });
+  const [emailGeneration, setEmailGeneration] = useState<EmailGenerationSettings>({
+    enabled: false,
+    domain: '',
+    format: 'firstname.lastname' as EmailGenerationFormat,
+    use_personal_as_primary: false,
+  });
+  const [savingEmailGen, setSavingEmailGen] = useState(false);
+  const [emailPreview, setEmailPreview] = useState<string>('');
   const [moduleSettings, setModuleSettings] = useState<ModuleSettingsData | null>(null);
   const [togglingModule, setTogglingModule] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +128,9 @@ export const SettingsPage: React.FC = () => {
         setSettings(settingsData.contact_info_visibility);
         if (settingsData.membership_id) {
           setMembershipId(settingsData.membership_id);
+        }
+        if (settingsData.email_generation) {
+          setEmailGeneration(settingsData.email_generation);
         }
         setModuleSettings(modulesData.module_settings);
       } catch (_err) {
@@ -206,6 +219,59 @@ export const SettingsPage: React.FC = () => {
       ...prev,
       [field]: !prev[field],
     }));
+  };
+
+  // Email generation helpers
+  const EMAIL_FORMAT_OPTIONS: { value: EmailGenerationFormat; label: string; example: string }[] = [
+    { value: 'firstname.lastname', label: 'First.Last', example: 'john.doe' },
+    { value: 'firstinitial.lastname', label: 'Initial.Last', example: 'j.doe' },
+    { value: 'firstname.lastinitial', label: 'First.Initial', example: 'john.d' },
+    { value: 'firstinitiallastname', label: 'InitialLast', example: 'jdoe' },
+    { value: 'firstname', label: 'First Name Only', example: 'john' },
+    { value: 'lastname.firstname', label: 'Last.First', example: 'doe.john' },
+    { value: 'lastname.firstinitial', label: 'Last.Initial', example: 'doe.j' },
+  ];
+
+  const getEmailPreview = useCallback((fmt: EmailGenerationFormat, domain: string) => {
+    if (!domain) return '';
+    const examples: Record<EmailGenerationFormat, string> = {
+      'firstname.lastname': 'john.doe',
+      'firstinitial.lastname': 'j.doe',
+      'firstname.lastinitial': 'john.d',
+      'firstinitiallastname': 'jdoe',
+      'firstname': 'john',
+      'lastname.firstname': 'doe.john',
+      'lastname.firstinitial': 'doe.j',
+    };
+    return `${examples[fmt] || 'john.doe'}@${domain}`;
+  }, []);
+
+  // Update preview whenever format or domain changes
+  useEffect(() => {
+    setEmailPreview(getEmailPreview(emailGeneration.format, emailGeneration.domain));
+  }, [emailGeneration.format, emailGeneration.domain, getEmailPreview]);
+
+  const handleSaveEmailGeneration = async () => {
+    try {
+      setSavingEmailGen(true);
+      setError(null);
+      setSuccessMessage(null);
+
+      await organizationService.updateEmailGenerationSettings(emailGeneration);
+
+      setSuccessMessage('Email generation settings saved successfully!');
+      clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403) {
+        setError('You do not have permission to update email generation settings.');
+      } else {
+        setError('Unable to save email generation settings. Please try again.');
+      }
+    } finally {
+      setSavingEmailGen(false);
+    }
   };
 
   const handleAddRank = async () => {
@@ -649,6 +715,168 @@ export const SettingsPage: React.FC = () => {
               } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
             >
               {savingMembershipId ? 'Saving...' : 'Save Membership ID Settings'}
+            </button>
+          </div>
+        </div>
+
+        {/* Email Generation */}
+        <div className="mt-6 bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-theme-text-primary mb-4">
+            <Mail className="w-5 h-5 inline-block mr-2 -mt-0.5" />
+            Department Email Generation
+          </h3>
+          <p className="text-sm text-theme-text-muted mb-6">
+            Configure how department email addresses are automatically generated when
+            prospective members are converted to full members.
+          </p>
+
+          <div className="space-y-4">
+            {/* Use Personal as Primary Toggle */}
+            <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
+              <div>
+                <label className="text-sm font-medium text-theme-text-primary">
+                  Use Personal Email as Primary
+                </label>
+                <p className="text-sm text-theme-text-muted">
+                  Members will use their personal email as their department email
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmailGeneration((prev) => ({
+                  ...prev,
+                  use_personal_as_primary: !prev.use_personal_as_primary,
+                  // Disable auto-generation when using personal email
+                  ...(prev.use_personal_as_primary ? {} : { enabled: false }),
+                }))}
+                className={`${
+                  emailGeneration.use_personal_as_primary ? 'bg-blue-600' : 'bg-slate-600'
+                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+                role="switch"
+                aria-checked={emailGeneration.use_personal_as_primary}
+              >
+                <span
+                  className={`${
+                    emailGeneration.use_personal_as_primary ? 'translate-x-5' : 'translate-x-0'
+                  } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                />
+              </button>
+            </div>
+
+            {!emailGeneration.use_personal_as_primary && (
+              <>
+                {/* Enable Auto-Generation Toggle */}
+                <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
+                  <div>
+                    <label className="text-sm font-medium text-theme-text-primary">
+                      Enable Auto-Generation
+                    </label>
+                    <p className="text-sm text-theme-text-muted">
+                      Automatically generate department email addresses for new members
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEmailGeneration((prev) => ({ ...prev, enabled: !prev.enabled }))}
+                    className={`${
+                      emailGeneration.enabled ? 'bg-blue-600' : 'bg-slate-600'
+                    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+                    role="switch"
+                    aria-checked={emailGeneration.enabled}
+                  >
+                    <span
+                      className={`${
+                        emailGeneration.enabled ? 'translate-x-5' : 'translate-x-0'
+                      } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    />
+                  </button>
+                </div>
+
+                {emailGeneration.enabled && (
+                  <div className="pl-4 space-y-4">
+                    {/* Email Domain */}
+                    <div className="py-3">
+                      <label className="block text-sm font-medium text-theme-text-primary mb-1">
+                        Email Domain
+                      </label>
+                      <p className="text-sm text-theme-text-muted mb-2">
+                        The domain used for generated email addresses
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-theme-text-muted">@</span>
+                        <input
+                          type="text"
+                          value={emailGeneration.domain}
+                          onChange={(e) => setEmailGeneration((prev) => ({ ...prev, domain: e.target.value.toLowerCase().trim() }))}
+                          placeholder="e.g. department.org"
+                          className="w-64 rounded-md bg-theme-surface border border-theme-surface-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Email Format */}
+                    <div className="py-3">
+                      <label className="block text-sm font-medium text-theme-text-primary mb-1">
+                        Email Format
+                      </label>
+                      <p className="text-sm text-theme-text-muted mb-2">
+                        Choose how the local part of the email is constructed from the member's name
+                      </p>
+                      <select
+                        value={emailGeneration.format}
+                        onChange={(e) => setEmailGeneration((prev) => ({ ...prev, format: e.target.value as EmailGenerationFormat }))}
+                        className="w-64 rounded-md bg-theme-surface border border-theme-surface-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        {EMAIL_FORMAT_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label} ({opt.example})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Preview */}
+                    {emailPreview && (
+                      <div className="py-3">
+                        <label className="block text-sm font-medium text-theme-text-primary mb-1">
+                          Preview
+                        </label>
+                        <p className="text-sm text-theme-text-muted mb-2">
+                          Example for a member named &quot;John Doe&quot;
+                        </p>
+                        <div className="inline-flex items-center gap-2 bg-theme-surface-secondary rounded-lg px-4 py-2">
+                          <Mail className="w-4 h-4 text-blue-400" />
+                          <span className="text-sm font-mono text-theme-text-primary">{emailPreview}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Duplicate handling note */}
+                    <div className="flex items-start gap-2 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <p>
+                        If a generated email conflicts with an existing member, a number will
+                        be appended automatically (e.g. john.doe2@domain.org). The admin can
+                        override the suggested email during conversion.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={handleSaveEmailGeneration}
+              disabled={savingEmailGen}
+              className={`${
+                savingEmailGen
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+              } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
+            >
+              {savingEmailGen ? 'Saving...' : 'Save Email Settings'}
             </button>
           </div>
         </div>

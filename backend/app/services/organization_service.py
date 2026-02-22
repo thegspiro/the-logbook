@@ -19,6 +19,8 @@ from app.schemas.organization import (
     EnabledModulesResponse,
     ModuleSettings,
     EmailServiceSettings,
+    EmailGenerationSettings,
+    EmailGenerationFormat,
 )
 
 
@@ -167,12 +169,21 @@ class OrganizationService:
             next_number=membership_id.get("next_number", 1),
         )
 
+        # Parse email generation settings
+        email_gen = settings_dict.get("email_generation", {})
+        email_gen_settings = EmailGenerationSettings(
+            enabled=email_gen.get("enabled", False),
+            domain=email_gen.get("domain", ""),
+            format=email_gen.get("format", EmailGenerationFormat.FIRST_DOT_LAST),
+            use_personal_as_primary=email_gen.get("use_personal_as_primary", False),
+        )
+
         # Collect extra/custom settings (e.g. station_mode) that aren't
         # covered by a dedicated sub-schema so they round-trip through the API.
         known_keys = {
             "contact_info_visibility", "email_service", "auth", "modules",
             "it_team", "member_drop_notifications", "membership_tiers",
-            "membership_id",
+            "membership_id", "email_generation",
         }
         extra_settings = {k: v for k, v in settings_dict.items() if k not in known_keys}
 
@@ -181,6 +192,7 @@ class OrganizationService:
             email_service=email_settings,
             modules=module_settings,
             membership_id=membership_id_settings,
+            email_generation=email_gen_settings,
             **extra_settings,
         )
 
@@ -302,3 +314,83 @@ class OrganizationService:
 
         # Return updated enabled modules
         return await self.get_enabled_modules(organization_id)
+
+    # ------------------------------------------------------------------
+    # Email generation helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def format_email(
+        first_name: str,
+        last_name: str,
+        domain: str,
+        fmt: EmailGenerationFormat,
+    ) -> str:
+        """Generate an email address from a name using the given format preset."""
+        import re
+        # Sanitize: lowercase, strip whitespace, remove non-alpha chars
+        fname = re.sub(r"[^a-z]", "", first_name.lower().strip())
+        lname = re.sub(r"[^a-z]", "", last_name.lower().strip())
+
+        fi = fname[0] if fname else "x"
+        li = lname[0] if lname else "x"
+
+        local_part = {
+            EmailGenerationFormat.FIRST_DOT_LAST: f"{fname}.{lname}",
+            EmailGenerationFormat.FIRST_INITIAL_DOT_LAST: f"{fi}.{lname}",
+            EmailGenerationFormat.FIRST_DOT_LAST_INITIAL: f"{fname}.{li}",
+            EmailGenerationFormat.FIRST_INITIAL_LAST: f"{fi}{lname}",
+            EmailGenerationFormat.FIRST: fname,
+            EmailGenerationFormat.LAST_DOT_FIRST: f"{lname}.{fname}",
+            EmailGenerationFormat.LAST_DOT_FIRST_INITIAL: f"{lname}.{fi}",
+        }.get(fmt, f"{fname}.{lname}")
+
+        return f"{local_part}@{domain}"
+
+    async def generate_unique_email(
+        self,
+        organization_id: str,
+        first_name: str,
+        last_name: str,
+    ) -> tuple[str, bool]:
+        """Generate a unique department email for a member based on org settings.
+
+        Returns:
+            (email, was_incremented) — the generated email and whether a numeric
+            suffix was added to avoid a collision.
+        """
+        from app.models.user import User as UserModel
+
+        settings = await self.get_organization_settings(UUID(str(organization_id)))
+        eg = settings.email_generation
+
+        if not eg.enabled or not eg.domain:
+            return "", False
+
+        base_email = self.format_email(first_name, last_name, eg.domain, eg.format)
+
+        # Check for collisions within the organization
+        result = await self.db.execute(
+            select(UserModel.email).where(
+                UserModel.organization_id == str(organization_id),
+                UserModel.email == base_email,
+            )
+        )
+        if not result.scalar_one_or_none():
+            return base_email, False
+
+        # Collision — auto-increment
+        local, domain = base_email.rsplit("@", 1)
+        for i in range(2, 100):
+            candidate = f"{local}{i}@{domain}"
+            dup = await self.db.execute(
+                select(UserModel.email).where(
+                    UserModel.organization_id == str(organization_id),
+                    UserModel.email == candidate,
+                )
+            )
+            if not dup.scalar_one_or_none():
+                return candidate, True
+
+        # Extremely unlikely fallback
+        return base_email, False
