@@ -24,9 +24,13 @@ from app.models.membership_pipeline import (
     ProspectActivityLog,
     ProspectDocument,
     ProspectElectionPackage,
+    InterviewRecord,
+    ReferenceCheckRecord,
     ProspectStatus,
     StepProgressStatus,
     PipelineStepType,
+    InterviewStatus,
+    ReferenceCheckStatus,
 )
 from app.models.user import User, UserStatus, Organization, generate_uuid
 
@@ -728,6 +732,8 @@ class MembershipPipelineService:
         rank: Optional[str] = None,
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
+        department_email: Optional[str] = None,
+        use_personal_as_primary: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Transfer a prospect to a full User record"""
         prospect = await self.get_prospect(prospect_id, organization_id)
@@ -738,7 +744,9 @@ class MembershipPipelineService:
             return {"success": False, "message": "Prospect has already been transferred"}
 
         return await self._do_transfer(
-            prospect, transferred_by, username, membership_id, rank, station, role_ids
+            prospect, transferred_by, username, membership_id, rank, station, role_ids,
+            department_email=department_email,
+            use_personal_as_primary=use_personal_as_primary,
         )
 
     async def _do_transfer(
@@ -750,8 +758,23 @@ class MembershipPipelineService:
         rank: Optional[str] = None,
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
+        department_email: Optional[str] = None,
+        use_personal_as_primary: bool = False,
     ) -> Dict[str, Any]:
-        """Internal method to perform the actual transfer"""
+        """Internal method to perform the actual transfer.
+
+        Email assignment rules:
+        1. If ``use_personal_as_primary`` is True the prospect's existing
+           email is kept as the primary ``User.email`` and also stored in
+           ``User.personal_email`` (department uses personal email).
+        2. If ``department_email`` is provided it becomes ``User.email``
+           and the prospect's original email becomes ``User.personal_email``.
+        3. If neither is provided but the org has ``settings.email.domain``
+           configured, a department email is auto-generated as
+           ``first_name.last_name@domain`` and the original becomes
+           ``personal_email``.
+        4. Fallback: prospect email → ``User.email``, no personal_email set.
+        """
 
         # Check for existing users with the same email (prevents duplicates)
         existing_matches = await self.check_existing_members(
@@ -765,7 +788,6 @@ class MembershipPipelineService:
             active_or_other = [m for m in existing_matches if m["status"] != "archived"]
 
             if archived:
-                # Archived member found — recommend reactivation
                 match = archived[0]
                 return {
                     "success": False,
@@ -778,7 +800,6 @@ class MembershipPipelineService:
                     ),
                 }
             elif active_or_other:
-                # Active or other status — block duplicate
                 match = active_or_other[0]
                 return {
                     "success": False,
@@ -799,12 +820,20 @@ class MembershipPipelineService:
             org_service = OrganizationService(self.db)
             membership_id = await org_service.generate_next_membership_id(prospect.organization_id)
 
+        # Resolve email assignment
+        primary_email, personal_email = await self._resolve_transfer_emails(
+            prospect=prospect,
+            department_email=department_email,
+            use_personal_as_primary=use_personal_as_primary,
+        )
+
         user_id = generate_uuid()
         new_user = User(
             id=user_id,
             organization_id=prospect.organization_id,
             username=username,
-            email=prospect.email,
+            email=primary_email,
+            personal_email=personal_email,
             first_name=prospect.first_name,
             last_name=prospect.last_name,
             phone=prospect.phone,
@@ -845,7 +874,13 @@ class MembershipPipelineService:
         prospect.transferred_user_id = user_id
         prospect.transferred_at = datetime.now(timezone.utc)
 
-        transfer_details: Dict[str, Any] = {"user_id": user_id, "username": username}
+        transfer_details: Dict[str, Any] = {
+            "user_id": user_id,
+            "username": username,
+            "primary_email": primary_email,
+        }
+        if personal_email:
+            transfer_details["personal_email"] = personal_email
         if membership_number:
             transfer_details["membership_number"] = membership_number
 
@@ -874,6 +909,8 @@ class MembershipPipelineService:
             "prospect_id": prospect.id,
             "user_id": user_id,
             "membership_number": membership_number,
+            "primary_email": primary_email,
+            "personal_email": personal_email,
             "message": result_msg,
             "auto_enrollment": enrollment_result,
         }
@@ -971,6 +1008,396 @@ class MembershipPipelineService:
         # Add random suffix to avoid collisions
         suffix = ''.join(secrets.choice(string.digits) for _ in range(3))
         return f"{base}{suffix}"
+
+    async def _resolve_transfer_emails(
+        self,
+        prospect: ProspectiveMember,
+        department_email: Optional[str] = None,
+        use_personal_as_primary: bool = False,
+    ) -> tuple[str, Optional[str]]:
+        """Determine primary and personal emails for a newly converted member.
+
+        Returns (primary_email, personal_email).
+        """
+        prospect_email = prospect.email
+
+        if use_personal_as_primary:
+            # Department uses personal email as the main email
+            return prospect_email, prospect_email
+
+        if department_email:
+            # Explicit department email provided
+            return department_email, prospect_email
+
+        # Check if the org has an email domain configured
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == prospect.organization_id)
+        )
+        org = org_result.scalar_one_or_none()
+
+        if org:
+            email_settings = (org.settings or {}).get("email", {})
+            domain = email_settings.get("domain")
+            org_use_personal = email_settings.get("use_personal_as_primary", False)
+
+            if org_use_personal:
+                return prospect_email, prospect_email
+
+            if domain:
+                # Auto-generate: firstname.lastname@domain
+                fname = prospect.first_name.lower().replace(" ", "")
+                lname = prospect.last_name.lower().replace(" ", "")
+                generated = f"{fname}.{lname}@{domain}"
+                return generated, prospect_email
+
+        # Fallback: prospect email becomes the primary, no personal stored
+        return prospect_email, None
+
+    # =========================================================================
+    # Interview Management
+    # =========================================================================
+
+    async def list_interviews(
+        self, prospect_id: str, organization_id: str, step_id: Optional[str] = None
+    ) -> List[InterviewRecord]:
+        """List all interviews for a prospect, optionally filtered by step"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return []
+
+        query = (
+            select(InterviewRecord)
+            .where(InterviewRecord.prospect_id == prospect_id)
+            .order_by(InterviewRecord.created_at)
+        )
+        if step_id:
+            query = query.where(InterviewRecord.step_id == step_id)
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_interview(
+        self, interview_id: str, prospect_id: str, organization_id: str
+    ) -> Optional[InterviewRecord]:
+        """Get a single interview record"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+
+        query = (
+            select(InterviewRecord)
+            .where(
+                and_(
+                    InterviewRecord.id == interview_id,
+                    InterviewRecord.prospect_id == prospect_id,
+                )
+            )
+        )
+        result = await self.db.execute(query)
+        return result.scalars().first()
+
+    async def create_interview(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        step_id: str,
+        scheduled_at: Optional[datetime] = None,
+        location: Optional[str] = None,
+        interviewer_ids: Optional[List[str]] = None,
+        questions: Optional[List[Dict[str, Any]]] = None,
+        created_by: Optional[str] = None,
+    ) -> Optional[InterviewRecord]:
+        """Create an interview record for a prospect"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+
+        # If no questions provided, pull preset questions from the step config
+        if questions is None:
+            step = next(
+                (s for s in (prospect.pipeline.steps if prospect.pipeline else [])
+                 if str(s.id) == str(step_id)),
+                None,
+            )
+            if step and step.config:
+                questions = step.config.get("questions", [])
+
+        interview = InterviewRecord(
+            id=generate_uuid(),
+            prospect_id=prospect_id,
+            step_id=step_id,
+            scheduled_at=scheduled_at,
+            location=location,
+            status=InterviewStatus.SCHEDULED,
+            interviewer_ids=[str(uid) for uid in (interviewer_ids or [])],
+            questions=questions or [],
+        )
+        self.db.add(interview)
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="interview_scheduled",
+            details={
+                "interview_id": interview.id,
+                "step_id": step_id,
+                "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+                "interviewer_count": len(interviewer_ids or []),
+            },
+            performed_by=created_by,
+        )
+
+        await self.db.commit()
+        await self.db.refresh(interview)
+        return interview
+
+    async def update_interview(
+        self,
+        interview_id: str,
+        prospect_id: str,
+        organization_id: str,
+        data: Dict[str, Any],
+        updated_by: Optional[str] = None,
+    ) -> Optional[InterviewRecord]:
+        """Update an interview record (notes, questions, status, etc.)"""
+        interview = await self.get_interview(interview_id, prospect_id, organization_id)
+        if not interview:
+            return None
+
+        for key, value in data.items():
+            if not hasattr(interview, key):
+                continue
+            if key == "interviewer_ids" and value is not None:
+                value = [str(uid) for uid in value]
+            setattr(interview, key, value)
+
+        # If marking as completed, set completed_at and completed_by
+        if data.get("status") == InterviewStatus.COMPLETED.value:
+            if not interview.completed_at:
+                interview.completed_at = datetime.now(timezone.utc)
+            if not interview.completed_by and updated_by:
+                interview.completed_by = updated_by
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="interview_updated",
+            details={
+                "interview_id": interview_id,
+                "updates": list(data.keys()),
+            },
+            performed_by=updated_by,
+        )
+
+        await self.db.commit()
+        await self.db.refresh(interview)
+        return interview
+
+    async def get_interview_history(
+        self, prospect_id: str, organization_id: str
+    ) -> List[Dict[str, Any]]:
+        """Get all completed interviews for a prospect, with interviewer names.
+
+        This is used by later interview steps to review notes from
+        previous interviews.
+        """
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return []
+
+        query = (
+            select(InterviewRecord)
+            .where(
+                and_(
+                    InterviewRecord.prospect_id == prospect_id,
+                    InterviewRecord.status == InterviewStatus.COMPLETED,
+                )
+            )
+            .order_by(InterviewRecord.completed_at)
+        )
+        result = await self.db.execute(query)
+        interviews = list(result.scalars().all())
+
+        # Resolve interviewer names
+        all_interviewer_ids = set()
+        for iv in interviews:
+            all_interviewer_ids.update(iv.interviewer_ids or [])
+
+        name_map: Dict[str, str] = {}
+        if all_interviewer_ids:
+            user_result = await self.db.execute(
+                select(User.id, User.first_name, User.last_name)
+                .where(User.id.in_(list(all_interviewer_ids)))
+            )
+            for row in user_result.all():
+                name_map[str(row[0])] = f"{row[1]} {row[2]}".strip()
+
+        # Also resolve step names
+        step_ids = {iv.step_id for iv in interviews if iv.step_id}
+        step_name_map: Dict[str, str] = {}
+        if step_ids:
+            step_result = await self.db.execute(
+                select(MembershipPipelineStep.id, MembershipPipelineStep.name)
+                .where(MembershipPipelineStep.id.in_(list(step_ids)))
+            )
+            for row in step_result.all():
+                step_name_map[str(row[0])] = row[1]
+
+        history = []
+        for iv in interviews:
+            history.append({
+                "id": iv.id,
+                "step_id": iv.step_id,
+                "step_name": step_name_map.get(str(iv.step_id), "Unknown Step"),
+                "scheduled_at": iv.scheduled_at.isoformat() if iv.scheduled_at else None,
+                "completed_at": iv.completed_at.isoformat() if iv.completed_at else None,
+                "interviewer_ids": iv.interviewer_ids or [],
+                "interviewer_names": [
+                    name_map.get(uid, uid) for uid in (iv.interviewer_ids or [])
+                ],
+                "questions": iv.questions or [],
+                "notes": iv.notes,
+                "status": iv.status.value if hasattr(iv.status, 'value') else str(iv.status),
+            })
+
+        return history
+
+    # =========================================================================
+    # Reference Check Management
+    # =========================================================================
+
+    async def list_reference_checks(
+        self, prospect_id: str, organization_id: str, step_id: Optional[str] = None
+    ) -> List[ReferenceCheckRecord]:
+        """List all reference checks for a prospect"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return []
+
+        query = (
+            select(ReferenceCheckRecord)
+            .where(ReferenceCheckRecord.prospect_id == prospect_id)
+            .order_by(ReferenceCheckRecord.created_at)
+        )
+        if step_id:
+            query = query.where(ReferenceCheckRecord.step_id == step_id)
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_reference_check(
+        self, check_id: str, prospect_id: str, organization_id: str
+    ) -> Optional[ReferenceCheckRecord]:
+        """Get a single reference check record"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+
+        query = (
+            select(ReferenceCheckRecord)
+            .where(
+                and_(
+                    ReferenceCheckRecord.id == check_id,
+                    ReferenceCheckRecord.prospect_id == prospect_id,
+                )
+            )
+        )
+        result = await self.db.execute(query)
+        return result.scalars().first()
+
+    async def create_reference_check(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        step_id: str,
+        reference_name: str,
+        reference_phone: Optional[str] = None,
+        reference_email: Optional[str] = None,
+        reference_relationship: Optional[str] = None,
+        questions: Optional[List[Dict[str, Any]]] = None,
+        created_by: Optional[str] = None,
+    ) -> Optional[ReferenceCheckRecord]:
+        """Create a reference check record"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+
+        # Pull preset questions from step config if none provided
+        if questions is None:
+            step = next(
+                (s for s in (prospect.pipeline.steps if prospect.pipeline else [])
+                 if str(s.id) == str(step_id)),
+                None,
+            )
+            if step and step.config:
+                questions = step.config.get("questions", [])
+
+        check = ReferenceCheckRecord(
+            id=generate_uuid(),
+            prospect_id=prospect_id,
+            step_id=step_id,
+            reference_name=reference_name,
+            reference_phone=reference_phone,
+            reference_email=reference_email,
+            reference_relationship=reference_relationship,
+            status=ReferenceCheckStatus.PENDING,
+            questions=questions or [],
+        )
+        self.db.add(check)
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="reference_check_created",
+            details={
+                "check_id": check.id,
+                "step_id": step_id,
+                "reference_name": reference_name,
+            },
+            performed_by=created_by,
+        )
+
+        await self.db.commit()
+        await self.db.refresh(check)
+        return check
+
+    async def update_reference_check(
+        self,
+        check_id: str,
+        prospect_id: str,
+        organization_id: str,
+        data: Dict[str, Any],
+        updated_by: Optional[str] = None,
+    ) -> Optional[ReferenceCheckRecord]:
+        """Update a reference check record"""
+        check = await self.get_reference_check(check_id, prospect_id, organization_id)
+        if not check:
+            return None
+
+        for key, value in data.items():
+            if hasattr(check, key):
+                setattr(check, key, value)
+
+        # If marking as completed or attempted, set contacted_at/by
+        if data.get("status") in (
+            ReferenceCheckStatus.COMPLETED.value,
+            ReferenceCheckStatus.ATTEMPTED.value,
+        ):
+            if not check.contacted_at:
+                check.contacted_at = datetime.now(timezone.utc)
+            if not check.contacted_by and updated_by:
+                check.contacted_by = updated_by
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="reference_check_updated",
+            details={
+                "check_id": check_id,
+                "updates": list(data.keys()),
+            },
+            performed_by=updated_by,
+        )
+
+        await self.db.commit()
+        await self.db.refresh(check)
+        return check
 
     # =========================================================================
     # Kanban Board
@@ -1082,7 +1509,31 @@ class MembershipPipelineService:
                     {"name": "Application Sent", "step_type": "action", "action_type": "send_email", "required": True},
                     {"name": "Application Received", "step_type": "checkbox", "required": True},
                     {"name": "Background Check", "step_type": "checkbox", "required": True},
-                    {"name": "Interview Completed", "step_type": "note", "required": True},
+                    {"name": "Reference Checks", "step_type": "reference_check", "required": True, "config": {
+                        "required_references_count": 3,
+                        "questions": [
+                            {"text": "How long have you known the applicant?", "type": "preset"},
+                            {"text": "How would you describe their character?", "type": "preset"},
+                            {"text": "Would you recommend them for membership?", "type": "preset"},
+                        ],
+                    }},
+                    {"name": "Initial Interview", "step_type": "interview", "required": True, "config": {
+                        "questions": [
+                            {"text": "Why are you interested in joining?", "type": "preset"},
+                            {"text": "What relevant experience do you have?", "type": "preset"},
+                            {"text": "What are your availability and commitment expectations?", "type": "preset"},
+                        ],
+                        "allow_view_previous_interviews": True,
+                        "required_interviewers_count": 2,
+                    }},
+                    {"name": "Final Interview with Chief", "step_type": "interview", "required": True, "config": {
+                        "questions": [
+                            {"text": "Review of previous interview notes", "type": "preset"},
+                            {"text": "Additional questions from leadership", "type": "freeform"},
+                        ],
+                        "allow_view_previous_interviews": True,
+                        "required_interviewers_count": 1,
+                    }},
                     {"name": "Membership Vote", "step_type": "checkbox", "required": True},
                     {"name": "Approved / Elected", "step_type": "checkbox", "is_final_step": True, "required": True},
                 ],
@@ -1093,7 +1544,14 @@ class MembershipPipelineService:
                 "steps": [
                     {"name": "Application Received", "step_type": "checkbox", "is_first_step": True, "required": True},
                     {"name": "Credentials Verified", "step_type": "checkbox", "required": True},
-                    {"name": "Interview Completed", "step_type": "note", "required": True},
+                    {"name": "Interview", "step_type": "interview", "required": True, "config": {
+                        "questions": [
+                            {"text": "Describe your relevant credentials and experience", "type": "preset"},
+                            {"text": "Why are you seeking a lateral transfer?", "type": "preset"},
+                        ],
+                        "allow_view_previous_interviews": True,
+                        "required_interviewers_count": 1,
+                    }},
                     {"name": "Approved / Elected", "step_type": "checkbox", "is_final_step": True, "required": True},
                 ],
             },

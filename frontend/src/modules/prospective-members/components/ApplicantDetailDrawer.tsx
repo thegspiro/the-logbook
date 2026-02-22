@@ -32,6 +32,8 @@ import {
   Eye,
   Archive,
   Activity,
+  Mic,
+  PhoneCall,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -57,6 +59,8 @@ interface ApplicantDetailDrawerProps {
 const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   form_submission: FileText,
   document_upload: Upload,
+  interview: Mic,
+  reference_check: PhoneCall,
   election_vote: Vote,
   manual_approval: CheckCircle,
 };

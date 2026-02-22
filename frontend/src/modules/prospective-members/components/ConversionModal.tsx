@@ -43,10 +43,15 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
   );
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
   const [notes, setNotes] = useState('');
+  const [departmentEmail, setDepartmentEmail] = useState('');
+  const [usePersonalAsPrimary, setUsePersonalAsPrimary] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [conversionResult, setConversionResult] = useState<{
     user_id: string;
     message: string;
+    primary_email?: string;
+    personal_email?: string;
+    membership_number?: string;
   } | null>(null);
 
   // Reset state when applicant changes or modal opens
@@ -55,6 +60,8 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       setMembershipType(applicant.target_membership_type ?? 'probationary');
       setSendWelcomeEmail(true);
       setNotes('');
+      setDepartmentEmail('');
+      setUsePersonalAsPrimary(false);
       setIsConverting(false);
       setConversionResult(null);
     }
@@ -70,6 +77,8 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
         target_role_id: applicant.target_role_id,
         send_welcome_email: sendWelcomeEmail,
         notes: notes || undefined,
+        department_email: departmentEmail || undefined,
+        use_personal_as_primary: usePersonalAsPrimary,
       });
       setConversionResult(result);
       await fetchApplicants();
@@ -127,9 +136,18 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 Conversion Complete
               </h3>
               <p className="text-theme-text-muted mb-4">{conversionResult.message}</p>
-              <p className="text-sm text-theme-text-muted">
-                Member ID: {conversionResult.user_id}
-              </p>
+              <div className="space-y-1 text-sm text-theme-text-muted">
+                <p>Member ID: {conversionResult.user_id}</p>
+                {conversionResult.membership_number && (
+                  <p>Department ID: {conversionResult.membership_number}</p>
+                )}
+                {conversionResult.primary_email && (
+                  <p>Primary Email: {conversionResult.primary_email}</p>
+                )}
+                {conversionResult.personal_email && conversionResult.personal_email !== conversionResult.primary_email && (
+                  <p>Personal Email: {conversionResult.personal_email}</p>
+                )}
+              </div>
             </div>
             <div className="flex justify-end">
               <button
@@ -219,6 +237,46 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                   </span>
                 </div>
               )}
+
+              {/* Email Assignment */}
+              <div className="border-t border-theme-surface-border pt-4">
+                <h3 className="text-sm font-medium text-theme-text-secondary mb-3">
+                  Email Assignment
+                </h3>
+                <p className="text-xs text-theme-text-muted mb-3">
+                  The applicant's current email ({applicant.email}) will be saved as their personal email.
+                  If your department has an email domain configured, a department email will be auto-generated.
+                </p>
+
+                <label className="flex items-center gap-2 text-sm text-theme-text-secondary mb-3">
+                  <input
+                    type="checkbox"
+                    checked={usePersonalAsPrimary}
+                    onChange={(e) => {
+                      setUsePersonalAsPrimary(e.target.checked);
+                      if (e.target.checked) setDepartmentEmail('');
+                    }}
+                    className="rounded border-theme-surface-border bg-theme-surface-secondary text-red-500 focus:ring-red-500"
+                  />
+                  Use personal email as the primary department email
+                </label>
+
+                {!usePersonalAsPrimary && (
+                  <div>
+                    <label htmlFor="department-email" className="block text-xs text-theme-text-muted mb-1">
+                      Department Email (optional — leave blank for auto-generation)
+                    </label>
+                    <input
+                      id="department-email"
+                      type="email"
+                      value={departmentEmail}
+                      onChange={(e) => setDepartmentEmail(e.target.value)}
+                      placeholder="e.g., john.doe@department.org"
+                      className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+                )}
+              </div>
 
               {/* Welcome Email */}
               <label className="flex items-center gap-2 text-sm text-theme-text-secondary">

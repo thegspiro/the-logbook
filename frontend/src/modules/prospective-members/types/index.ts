@@ -12,7 +12,9 @@ export type StageType =
   | 'form_submission'
   | 'document_upload'
   | 'election_vote'
-  | 'manual_approval';
+  | 'manual_approval'
+  | 'interview'
+  | 'reference_check';
 
 export type ApplicantStatus =
   | 'active'
@@ -167,11 +169,31 @@ export interface ManualApprovalConfig {
   require_notes: boolean;
 }
 
+export interface InterviewQuestionItem {
+  text: string;
+  type: 'preset' | 'freeform';
+  answer?: string;
+}
+
+export interface InterviewStageConfig {
+  questions: InterviewQuestionItem[];
+  allow_view_previous_interviews: boolean;
+  required_interviewers_count: number;
+}
+
+export interface ReferenceCheckStageConfig {
+  required_references_count: number;
+  questions: InterviewQuestionItem[];
+  verification_required: boolean;
+}
+
 export type StageConfig =
   | FormStageConfig
   | DocumentStageConfig
   | ElectionStageConfig
-  | ManualApprovalConfig;
+  | ManualApprovalConfig
+  | InterviewStageConfig
+  | ReferenceCheckStageConfig;
 
 // =============================================================================
 // Pipeline Stage
@@ -405,6 +427,8 @@ export interface ConvertApplicantRequest {
   target_role_id?: string;
   send_welcome_email: boolean;
   notes?: string;
+  department_email?: string;
+  use_personal_as_primary?: boolean;
 }
 
 export interface ConvertApplicantResponse {
@@ -412,6 +436,9 @@ export interface ConvertApplicantResponse {
   user_id: string;
   membership_type: TargetMembershipType;
   message: string;
+  primary_email?: string;
+  personal_email?: string;
+  membership_number?: string;
 }
 
 // =============================================================================
@@ -568,4 +595,98 @@ export interface ElectionPackageUpdate {
   supporting_statement?: string;
   custom_fields?: Record<string, string>;
   status?: ElectionPackageStatus;
+}
+
+// =============================================================================
+// Interview Records
+// =============================================================================
+
+export type InterviewStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface InterviewRecord {
+  id: string;
+  prospect_id: string;
+  step_id?: string;
+  step_name?: string;
+  scheduled_at?: string;
+  location?: string;
+  status: InterviewStatus;
+  interviewer_ids: string[];
+  interviewer_names?: string[];
+  questions?: InterviewQuestionItem[];
+  notes?: string;
+  completed_at?: string;
+  completed_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InterviewCreate {
+  step_id: string;
+  scheduled_at?: string;
+  location?: string;
+  interviewer_ids?: string[];
+  questions?: InterviewQuestionItem[];
+}
+
+export interface InterviewUpdate {
+  scheduled_at?: string;
+  location?: string;
+  interviewer_ids?: string[];
+  questions?: InterviewQuestionItem[];
+  notes?: string;
+  status?: InterviewStatus;
+}
+
+export interface InterviewHistory {
+  prospect_id: string;
+  prospect_name: string;
+  interviews: InterviewRecord[];
+}
+
+// =============================================================================
+// Reference Check Records
+// =============================================================================
+
+export type ReferenceCheckStatus = 'pending' | 'attempted' | 'completed' | 'unable_to_reach';
+
+export interface ReferenceCheckRecord {
+  id: string;
+  prospect_id: string;
+  step_id?: string;
+  step_name?: string;
+  reference_name: string;
+  reference_phone?: string;
+  reference_email?: string;
+  reference_relationship?: string;
+  contact_method?: string;
+  status: ReferenceCheckStatus;
+  contacted_at?: string;
+  contacted_by?: string;
+  questions?: InterviewQuestionItem[];
+  notes?: string;
+  verification_result?: 'positive' | 'negative' | 'neutral';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReferenceCheckCreate {
+  step_id: string;
+  reference_name: string;
+  reference_phone?: string;
+  reference_email?: string;
+  reference_relationship?: string;
+  questions?: InterviewQuestionItem[];
+}
+
+export interface ReferenceCheckUpdate {
+  reference_name?: string;
+  reference_phone?: string;
+  reference_email?: string;
+  reference_relationship?: string;
+  contact_method?: string;
+  status?: ReferenceCheckStatus;
+  questions?: InterviewQuestionItem[];
+  notes?: string;
+  verification_result?: 'positive' | 'negative' | 'neutral';
 }

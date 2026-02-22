@@ -40,6 +40,13 @@ from app.schemas.membership_pipeline import (
     ElectionPackageCreate,
     ElectionPackageUpdate,
     ElectionPackageResponse,
+    InterviewCreate,
+    InterviewUpdate,
+    InterviewResponse,
+    InterviewHistoryResponse,
+    ReferenceCheckCreate,
+    ReferenceCheckUpdate,
+    ReferenceCheckResponse,
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.api.dependencies import get_current_user, require_permission
@@ -698,6 +705,8 @@ async def transfer_prospect(
         rank=data.rank,
         station=data.station,
         role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,
+        department_email=data.department_email,
+        use_personal_as_primary=data.use_personal_as_primary,
     )
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
@@ -923,3 +932,408 @@ async def list_election_packages(
         status_filter=status_filter,
     )
     return packages
+
+
+# ============================================
+# Interview Endpoints
+# ============================================
+
+@router.get("/prospects/{prospect_id}/interviews", response_model=List[InterviewResponse])
+async def list_interviews(
+    prospect_id: UUID,
+    step_id: Optional[UUID] = Query(None, description="Filter by pipeline step"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+):
+    """
+    List all interviews for a prospect.
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    interviews = await service.list_interviews(
+        str(prospect_id),
+        current_user.organization_id,
+        step_id=str(step_id) if step_id else None,
+    )
+    return [
+        InterviewResponse(
+            id=iv.id,
+            prospect_id=iv.prospect_id,
+            step_id=iv.step_id,
+            scheduled_at=iv.scheduled_at,
+            location=iv.location,
+            status=iv.status.value if hasattr(iv.status, 'value') else str(iv.status),
+            interviewer_ids=iv.interviewer_ids or [],
+            questions=iv.questions,
+            notes=iv.notes,
+            completed_at=iv.completed_at,
+            completed_by=iv.completed_by,
+            created_at=iv.created_at,
+            updated_at=iv.updated_at,
+        )
+        for iv in interviews
+    ]
+
+
+@router.post(
+    "/prospects/{prospect_id}/interviews",
+    response_model=InterviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_interview(
+    prospect_id: UUID,
+    data: InterviewCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+):
+    """
+    Schedule an interview for a prospect.
+
+    Questions can be provided explicitly or will be pulled from the
+    step's configuration (preset questions).
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    interview = await service.create_interview(
+        prospect_id=str(prospect_id),
+        organization_id=current_user.organization_id,
+        step_id=str(data.step_id),
+        scheduled_at=data.scheduled_at,
+        location=data.location,
+        interviewer_ids=[str(uid) for uid in data.interviewer_ids] if data.interviewer_ids else None,
+        questions=[q.model_dump() for q in data.questions] if data.questions else None,
+        created_by=current_user.id,
+    )
+    if not interview:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+    return InterviewResponse(
+        id=interview.id,
+        prospect_id=interview.prospect_id,
+        step_id=interview.step_id,
+        scheduled_at=interview.scheduled_at,
+        location=interview.location,
+        status=interview.status.value if hasattr(interview.status, 'value') else str(interview.status),
+        interviewer_ids=interview.interviewer_ids or [],
+        questions=interview.questions,
+        notes=interview.notes,
+        completed_at=interview.completed_at,
+        completed_by=interview.completed_by,
+        created_at=interview.created_at,
+        updated_at=interview.updated_at,
+    )
+
+
+@router.get("/prospects/{prospect_id}/interviews/{interview_id}", response_model=InterviewResponse)
+async def get_interview(
+    prospect_id: UUID,
+    interview_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+):
+    """
+    Get a single interview record.
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    interview = await service.get_interview(
+        str(interview_id), str(prospect_id), current_user.organization_id
+    )
+    if not interview:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
+    return InterviewResponse(
+        id=interview.id,
+        prospect_id=interview.prospect_id,
+        step_id=interview.step_id,
+        scheduled_at=interview.scheduled_at,
+        location=interview.location,
+        status=interview.status.value if hasattr(interview.status, 'value') else str(interview.status),
+        interviewer_ids=interview.interviewer_ids or [],
+        questions=interview.questions,
+        notes=interview.notes,
+        completed_at=interview.completed_at,
+        completed_by=interview.completed_by,
+        created_at=interview.created_at,
+        updated_at=interview.updated_at,
+    )
+
+
+@router.put("/prospects/{prospect_id}/interviews/{interview_id}", response_model=InterviewResponse)
+async def update_interview(
+    prospect_id: UUID,
+    interview_id: UUID,
+    data: InterviewUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+):
+    """
+    Update an interview record (add notes, update questions/answers,
+    change status, etc.).
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    update_data = data.model_dump(exclude_unset=True)
+    if "questions" in update_data and update_data["questions"] is not None:
+        update_data["questions"] = [
+            q.model_dump() if hasattr(q, 'model_dump') else q
+            for q in update_data["questions"]
+        ]
+    if "interviewer_ids" in update_data and update_data["interviewer_ids"] is not None:
+        update_data["interviewer_ids"] = [str(uid) for uid in update_data["interviewer_ids"]]
+
+    interview = await service.update_interview(
+        str(interview_id),
+        str(prospect_id),
+        current_user.organization_id,
+        update_data,
+        updated_by=current_user.id,
+    )
+    if not interview:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
+    return InterviewResponse(
+        id=interview.id,
+        prospect_id=interview.prospect_id,
+        step_id=interview.step_id,
+        scheduled_at=interview.scheduled_at,
+        location=interview.location,
+        status=interview.status.value if hasattr(interview.status, 'value') else str(interview.status),
+        interviewer_ids=interview.interviewer_ids or [],
+        questions=interview.questions,
+        notes=interview.notes,
+        completed_at=interview.completed_at,
+        completed_by=interview.completed_by,
+        created_at=interview.created_at,
+        updated_at=interview.updated_at,
+    )
+
+
+@router.get("/prospects/{prospect_id}/interview-history", response_model=InterviewHistoryResponse)
+async def get_interview_history(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+):
+    """
+    Get all completed interviews for a prospect with interviewer names.
+
+    Used by later interview steps so the interviewer (e.g., the Chief)
+    can review notes from all previous interviews.
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    prospect = await service.get_prospect(str(prospect_id), current_user.organization_id)
+    if not prospect:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+
+    history = await service.get_interview_history(
+        str(prospect_id), current_user.organization_id
+    )
+    return InterviewHistoryResponse(
+        prospect_id=prospect.id,
+        prospect_name=prospect.full_name,
+        interviews=[
+            InterviewResponse(
+                id=iv["id"],
+                prospect_id=prospect.id,
+                step_id=iv.get("step_id"),
+                step_name=iv.get("step_name"),
+                scheduled_at=iv.get("scheduled_at"),
+                status=iv["status"],
+                interviewer_ids=iv.get("interviewer_ids", []),
+                interviewer_names=iv.get("interviewer_names", []),
+                questions=iv.get("questions"),
+                notes=iv.get("notes"),
+                completed_at=iv.get("completed_at"),
+                created_at=iv.get("completed_at") or iv.get("scheduled_at") or "",
+                updated_at=iv.get("completed_at") or iv.get("scheduled_at") or "",
+            )
+            for iv in history
+        ],
+    )
+
+
+# ============================================
+# Reference Check Endpoints
+# ============================================
+
+@router.get("/prospects/{prospect_id}/reference-checks", response_model=List[ReferenceCheckResponse])
+async def list_reference_checks(
+    prospect_id: UUID,
+    step_id: Optional[UUID] = Query(None, description="Filter by pipeline step"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+):
+    """
+    List all reference checks for a prospect.
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    checks = await service.list_reference_checks(
+        str(prospect_id),
+        current_user.organization_id,
+        step_id=str(step_id) if step_id else None,
+    )
+    return [
+        ReferenceCheckResponse(
+            id=c.id,
+            prospect_id=c.prospect_id,
+            step_id=c.step_id,
+            reference_name=c.reference_name,
+            reference_phone=c.reference_phone,
+            reference_email=c.reference_email,
+            reference_relationship=c.reference_relationship,
+            contact_method=c.contact_method,
+            status=c.status.value if hasattr(c.status, 'value') else str(c.status),
+            contacted_at=c.contacted_at,
+            contacted_by=c.contacted_by,
+            questions=c.questions,
+            notes=c.notes,
+            verification_result=c.verification_result,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+        )
+        for c in checks
+    ]
+
+
+@router.post(
+    "/prospects/{prospect_id}/reference-checks",
+    response_model=ReferenceCheckResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reference_check(
+    prospect_id: UUID,
+    data: ReferenceCheckCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+):
+    """
+    Create a reference check record for a prospect.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    check = await service.create_reference_check(
+        prospect_id=str(prospect_id),
+        organization_id=current_user.organization_id,
+        step_id=str(data.step_id),
+        reference_name=data.reference_name,
+        reference_phone=data.reference_phone,
+        reference_email=data.reference_email,
+        reference_relationship=data.reference_relationship,
+        questions=[q.model_dump() for q in data.questions] if data.questions else None,
+        created_by=current_user.id,
+    )
+    if not check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+    return ReferenceCheckResponse(
+        id=check.id,
+        prospect_id=check.prospect_id,
+        step_id=check.step_id,
+        reference_name=check.reference_name,
+        reference_phone=check.reference_phone,
+        reference_email=check.reference_email,
+        reference_relationship=check.reference_relationship,
+        contact_method=check.contact_method,
+        status=check.status.value if hasattr(check.status, 'value') else str(check.status),
+        contacted_at=check.contacted_at,
+        contacted_by=check.contacted_by,
+        questions=check.questions,
+        notes=check.notes,
+        verification_result=check.verification_result,
+        created_at=check.created_at,
+        updated_at=check.updated_at,
+    )
+
+
+@router.get("/prospects/{prospect_id}/reference-checks/{check_id}", response_model=ReferenceCheckResponse)
+async def get_reference_check(
+    prospect_id: UUID,
+    check_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+):
+    """
+    Get a single reference check record.
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    check = await service.get_reference_check(
+        str(check_id), str(prospect_id), current_user.organization_id
+    )
+    if not check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reference check not found")
+    return ReferenceCheckResponse(
+        id=check.id,
+        prospect_id=check.prospect_id,
+        step_id=check.step_id,
+        reference_name=check.reference_name,
+        reference_phone=check.reference_phone,
+        reference_email=check.reference_email,
+        reference_relationship=check.reference_relationship,
+        contact_method=check.contact_method,
+        status=check.status.value if hasattr(check.status, 'value') else str(check.status),
+        contacted_at=check.contacted_at,
+        contacted_by=check.contacted_by,
+        questions=check.questions,
+        notes=check.notes,
+        verification_result=check.verification_result,
+        created_at=check.created_at,
+        updated_at=check.updated_at,
+    )
+
+
+@router.put("/prospects/{prospect_id}/reference-checks/{check_id}", response_model=ReferenceCheckResponse)
+async def update_reference_check(
+    prospect_id: UUID,
+    check_id: UUID,
+    data: ReferenceCheckUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+):
+    """
+    Update a reference check record (add notes, set verification result, etc.).
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    update_data = data.model_dump(exclude_unset=True)
+    if "questions" in update_data and update_data["questions"] is not None:
+        update_data["questions"] = [
+            q.model_dump() if hasattr(q, 'model_dump') else q
+            for q in update_data["questions"]
+        ]
+
+    check = await service.update_reference_check(
+        str(check_id),
+        str(prospect_id),
+        current_user.organization_id,
+        update_data,
+        updated_by=current_user.id,
+    )
+    if not check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reference check not found")
+    return ReferenceCheckResponse(
+        id=check.id,
+        prospect_id=check.prospect_id,
+        step_id=check.step_id,
+        reference_name=check.reference_name,
+        reference_phone=check.reference_phone,
+        reference_email=check.reference_email,
+        reference_relationship=check.reference_relationship,
+        contact_method=check.contact_method,
+        status=check.status.value if hasattr(check.status, 'value') else str(check.status),
+        contacted_at=check.contacted_at,
+        contacted_by=check.contacted_by,
+        questions=check.questions,
+        notes=check.notes,
+        verification_result=check.verification_result,
+        created_at=check.created_at,
+        updated_at=check.updated_at,
+    )

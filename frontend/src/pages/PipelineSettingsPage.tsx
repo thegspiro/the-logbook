@@ -8,13 +8,13 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { membershipPipelineService } from '../services/membershipPipelineApi';
+import { membershipPipelineService } from '@/services/membershipPipelineApi';
 import type {
   Pipeline,
   PipelineListItem,
   PipelineCreate,
   PipelineStepCreate,
-} from '../services/membershipPipelineApi';
+} from '@/services/membershipPipelineApi';
 import { getErrorMessage } from '../utils/errorHandling';
 import {
   ArrowLeft,

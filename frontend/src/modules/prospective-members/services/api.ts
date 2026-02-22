@@ -36,6 +36,13 @@ import type {
   ElectionPackage,
   ElectionPackageCreate,
   ElectionPackageUpdate,
+  InterviewRecord,
+  InterviewCreate,
+  InterviewUpdate,
+  InterviewHistory,
+  ReferenceCheckRecord,
+  ReferenceCheckCreate,
+  ReferenceCheckUpdate,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS } from '../types';
 
@@ -107,6 +114,10 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
       return { step_type: 'action', action_type: 'collect_document' };
     case 'election_vote':
       return { step_type: 'action', action_type: 'custom' };
+    case 'interview':
+      return { step_type: 'interview' };
+    case 'reference_check':
+      return { step_type: 'reference_check' };
     case 'manual_approval':
     default:
       return { step_type: 'checkbox' };
@@ -115,6 +126,8 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
 
 /** Map backend step_type + action_type to frontend stage_type */
 function mapStepTypeToFrontend(stepType: string, actionType?: string | null): StageType {
+  if (stepType === 'interview') return 'interview';
+  if (stepType === 'reference_check') return 'reference_check';
   if (stepType === 'action') {
     if (actionType === 'collect_document') return 'document_upload';
     return 'form_submission';
@@ -137,6 +150,18 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
         eligible_voter_roles: [],
         anonymous_voting: true,
       };
+    case 'interview':
+      return {
+        questions: [],
+        allow_view_previous_interviews: true,
+        required_interviewers_count: 1,
+      };
+    case 'reference_check':
+      return {
+        required_references_count: 3,
+        questions: [],
+        verification_required: true,
+      };
     case 'manual_approval':
     default:
       return { approver_roles: [], require_notes: false };
@@ -148,15 +173,21 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
 /** Map a backend pipeline step response to a frontend PipelineStage */
 function mapStepToStage(step: any): PipelineStage {
   const stageType = mapStepTypeToFrontend(step.step_type, step.action_type);
+  // For interview and reference_check steps, preserve the backend config
+  // which contains questions, interviewer settings, etc.
+  const config = (stageType === 'interview' || stageType === 'reference_check') && step.config
+    ? step.config
+    : getDefaultStageConfig(stageType);
   return {
     id: step.id,
     pipeline_id: step.pipeline_id,
     name: step.name,
     description: step.description ?? undefined,
     stage_type: stageType,
-    config: getDefaultStageConfig(stageType),
+    config,
     sort_order: step.sort_order ?? 0,
     is_required: step.required ?? true,
+    inactivity_timeout_days: step.inactivity_timeout_days ?? undefined,
     created_at: step.created_at,
     updated_at: step.updated_at,
   };
@@ -196,7 +227,7 @@ function mapPipelineListItem(data: any): PipelineListItem {
 /** Map a frontend PipelineStageCreate to a backend step create payload */
 function mapStageCreateToBackend(stage: PipelineStageCreate): any {
   const { step_type, action_type } = mapStageTypeToBackend(stage.stage_type);
-  return {
+  const payload: any = {
     name: stage.name,
     description: stage.description,
     step_type,
@@ -204,6 +235,14 @@ function mapStageCreateToBackend(stage: PipelineStageCreate): any {
     sort_order: stage.sort_order,
     required: stage.is_required ?? true,
   };
+  // Include config for interview and reference_check steps
+  if (stage.stage_type === 'interview' || stage.stage_type === 'reference_check') {
+    payload.config = stage.config;
+  }
+  if (stage.inactivity_timeout_days != null) {
+    payload.inactivity_timeout_days = stage.inactivity_timeout_days;
+  }
+  return payload;
 }
 
 /** Map a frontend PipelineStageUpdate to a backend step update payload */
@@ -218,6 +257,8 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): any {
   }
   if (stage.sort_order !== undefined) payload.sort_order = stage.sort_order;
   if (stage.is_required !== undefined) payload.required = stage.is_required;
+  if (stage.config !== undefined) payload.config = stage.config;
+  if (stage.inactivity_timeout_days !== undefined) payload.inactivity_timeout_days = stage.inactivity_timeout_days;
   return payload;
 }
 
@@ -702,6 +743,12 @@ export const applicantService = {
     if (data.target_role_id) {
       payload.role_ids = [data.target_role_id];
     }
+    if (data.department_email) {
+      payload.department_email = data.department_email;
+    }
+    if (data.use_personal_as_primary) {
+      payload.use_personal_as_primary = data.use_personal_as_primary;
+    }
     const response = await api.post(
       `/prospective-members/prospects/${applicantId}/transfer`,
       payload
@@ -711,6 +758,9 @@ export const applicantService = {
       user_id: response.data.user_id,
       membership_type: data.target_membership_type,
       message: response.data.message ?? 'Transfer successful',
+      primary_email: response.data.primary_email,
+      personal_email: response.data.personal_email,
+      membership_number: response.data.membership_number,
     };
   },
 
@@ -836,6 +886,95 @@ export const applicantService = {
       payload
     );
     return mapElectionPackageResponse(response.data);
+  },
+
+  // Interview management
+  async getInterviews(applicantId: string, stepId?: string): Promise<InterviewRecord[]> {
+    const params: Record<string, string> = {};
+    if (stepId) params.step_id = stepId;
+    const response = await api.get(
+      `/prospective-members/prospects/${applicantId}/interviews`,
+      { params }
+    );
+    return response.data;
+  },
+
+  async createInterview(applicantId: string, data: InterviewCreate): Promise<InterviewRecord> {
+    const response = await api.post(
+      `/prospective-members/prospects/${applicantId}/interviews`,
+      data
+    );
+    return response.data;
+  },
+
+  async getInterview(applicantId: string, interviewId: string): Promise<InterviewRecord> {
+    const response = await api.get(
+      `/prospective-members/prospects/${applicantId}/interviews/${interviewId}`
+    );
+    return response.data;
+  },
+
+  async updateInterview(
+    applicantId: string,
+    interviewId: string,
+    data: InterviewUpdate
+  ): Promise<InterviewRecord> {
+    const response = await api.put(
+      `/prospective-members/prospects/${applicantId}/interviews/${interviewId}`,
+      data
+    );
+    return response.data;
+  },
+
+  async getInterviewHistory(applicantId: string): Promise<InterviewHistory> {
+    const response = await api.get(
+      `/prospective-members/prospects/${applicantId}/interview-history`
+    );
+    return response.data;
+  },
+
+  // Reference check management
+  async getReferenceChecks(applicantId: string, stepId?: string): Promise<ReferenceCheckRecord[]> {
+    const params: Record<string, string> = {};
+    if (stepId) params.step_id = stepId;
+    const response = await api.get(
+      `/prospective-members/prospects/${applicantId}/reference-checks`,
+      { params }
+    );
+    return response.data;
+  },
+
+  async createReferenceCheck(
+    applicantId: string,
+    data: ReferenceCheckCreate
+  ): Promise<ReferenceCheckRecord> {
+    const response = await api.post(
+      `/prospective-members/prospects/${applicantId}/reference-checks`,
+      data
+    );
+    return response.data;
+  },
+
+  async getReferenceCheck(
+    applicantId: string,
+    checkId: string
+  ): Promise<ReferenceCheckRecord> {
+    const response = await api.get(
+      `/prospective-members/prospects/${applicantId}/reference-checks/${checkId}`
+    );
+    return response.data;
+  },
+
+  async updateReferenceCheck(
+    applicantId: string,
+    checkId: string,
+    data: ReferenceCheckUpdate
+  ): Promise<ReferenceCheckRecord> {
+    const response = await api.put(
+      `/prospective-members/prospects/${applicantId}/reference-checks/${checkId}`,
+      data
+    );
+    return response.data;
   },
 };
 

@@ -277,6 +277,8 @@ class TransferProspectRequest(BaseModel):
     station: Optional[str] = Field(None, description="Station to assign")
     role_ids: Optional[List[UUID]] = Field(None, description="Role IDs to assign to the new member")
     send_welcome_email: bool = Field(default=False, description="Send welcome email with credentials")
+    department_email: Optional[str] = Field(None, description="Department email to assign. If not provided and org has an email domain, one is auto-generated.")
+    use_personal_as_primary: bool = Field(default=False, description="If true, use the prospect's personal email as the member's primary email instead of a department email")
 
 
 class TransferProspectResponse(BaseModel):
@@ -373,3 +375,115 @@ class ElectionPackageResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Interview Schemas ---
+
+class InterviewQuestionItem(BaseModel):
+    """A single interview question with optional answer"""
+    text: str = Field(..., min_length=1)
+    type: str = Field(default="freeform", description="Question type: preset or freeform")
+    answer: Optional[str] = None
+
+
+class InterviewCreate(BaseModel):
+    """Schema for creating/scheduling an interview"""
+    step_id: UUID
+    scheduled_at: Optional[datetime] = None
+    location: Optional[str] = Field(None, max_length=255)
+    interviewer_ids: List[UUID] = Field(default_factory=list, description="User IDs of department members conducting the interview")
+    questions: Optional[List[InterviewQuestionItem]] = Field(None, description="Questions to ask — preset from step config or custom")
+
+
+class InterviewUpdate(BaseModel):
+    """Schema for updating an interview"""
+    scheduled_at: Optional[datetime] = None
+    location: Optional[str] = Field(None, max_length=255)
+    interviewer_ids: Optional[List[UUID]] = None
+    questions: Optional[List[InterviewQuestionItem]] = None
+    notes: Optional[str] = None
+    status: Optional[str] = Field(None, description="Status: scheduled, in_progress, completed, cancelled")
+
+
+class InterviewResponse(BaseModel):
+    """Schema for an interview record"""
+    id: UUID
+    prospect_id: UUID
+    step_id: Optional[UUID] = None
+    scheduled_at: Optional[datetime] = None
+    location: Optional[str] = None
+    status: str
+    interviewer_ids: List[str] = []
+    interviewer_names: Optional[List[str]] = None
+    questions: Optional[List[Dict[str, Any]]] = None
+    notes: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    completed_by: Optional[UUID] = None
+    step_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InterviewHistoryResponse(BaseModel):
+    """All interview records for a prospect, for reviewing previous interviews"""
+    prospect_id: UUID
+    prospect_name: str
+    interviews: List[InterviewResponse] = []
+
+
+# --- Reference Check Schemas ---
+
+class ReferenceCheckCreate(BaseModel):
+    """Schema for creating a reference check"""
+    step_id: UUID
+    reference_name: str = Field(..., min_length=1, max_length=200)
+    reference_phone: Optional[str] = Field(None, max_length=20)
+    reference_email: Optional[str] = Field(None, max_length=255)
+    reference_relationship: Optional[str] = Field(None, max_length=100)
+    questions: Optional[List[InterviewQuestionItem]] = None
+
+
+class ReferenceCheckUpdate(BaseModel):
+    """Schema for updating a reference check"""
+    reference_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    reference_phone: Optional[str] = Field(None, max_length=20)
+    reference_email: Optional[str] = Field(None, max_length=255)
+    reference_relationship: Optional[str] = Field(None, max_length=100)
+    contact_method: Optional[str] = Field(None, description="Contact method: phone, email, in_person")
+    status: Optional[str] = Field(None, description="Status: pending, attempted, completed, unable_to_reach")
+    questions: Optional[List[InterviewQuestionItem]] = None
+    notes: Optional[str] = None
+    verification_result: Optional[str] = Field(None, description="Result: positive, negative, neutral")
+
+
+class ReferenceCheckResponse(BaseModel):
+    """Schema for a reference check record"""
+    id: UUID
+    prospect_id: UUID
+    step_id: Optional[UUID] = None
+    reference_name: str
+    reference_phone: Optional[str] = None
+    reference_email: Optional[str] = None
+    reference_relationship: Optional[str] = None
+    contact_method: Optional[str] = None
+    status: str
+    contacted_at: Optional[datetime] = None
+    contacted_by: Optional[UUID] = None
+    questions: Optional[List[Dict[str, Any]]] = None
+    notes: Optional[str] = None
+    verification_result: Optional[str] = None
+    step_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Transfer Schema Update ---
+
+class TransferEmailConfig(BaseModel):
+    """Email configuration for the transfer/conversion step"""
+    department_email: Optional[str] = Field(None, description="Department-assigned email (auto-generated from org domain if configured)")
+    use_personal_as_primary: bool = Field(default=False, description="Use the prospect's email as the primary member email")

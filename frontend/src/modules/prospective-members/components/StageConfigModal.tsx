@@ -14,6 +14,8 @@ import {
   Plus,
   Trash2,
   Clock,
+  Mic,
+  PhoneCall,
 } from 'lucide-react';
 import type {
   PipelineStage,
@@ -24,6 +26,9 @@ import type {
   ElectionStageConfig,
   ElectionPackageFieldConfig,
   ManualApprovalConfig,
+  InterviewStageConfig,
+  InterviewQuestionItem,
+  ReferenceCheckStageConfig,
 } from '../types';
 import { DEFAULT_ELECTION_PACKAGE_FIELDS } from '../types';
 
@@ -49,6 +54,18 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
     description: 'Require document uploads (ID, background check, etc.).',
   },
   {
+    value: 'interview',
+    label: 'Interview',
+    icon: Mic,
+    description: 'Schedule and conduct interviews with preset or custom questions.',
+  },
+  {
+    value: 'reference_check',
+    label: 'Reference Check',
+    icon: PhoneCall,
+    description: 'Verify references with structured questions and outcomes.',
+  },
+  {
     value: 'election_vote',
     label: 'Election / Vote',
     icon: Vote,
@@ -62,7 +79,7 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
   },
 ];
 
-const DEFAULT_CONFIGS: Record<StageType, () => FormStageConfig | DocumentStageConfig | ElectionStageConfig | ManualApprovalConfig> = {
+const DEFAULT_CONFIGS: Record<StageType, () => FormStageConfig | DocumentStageConfig | ElectionStageConfig | ManualApprovalConfig | InterviewStageConfig | ReferenceCheckStageConfig> = {
   form_submission: () => ({ form_id: '', form_name: '' }),
   document_upload: () => ({ required_document_types: [''], allow_multiple: true }),
   election_vote: () => ({
@@ -70,6 +87,16 @@ const DEFAULT_CONFIGS: Record<StageType, () => FormStageConfig | DocumentStageCo
     victory_condition: 'majority' as const,
     eligible_voter_roles: [],
     anonymous_voting: true,
+  }),
+  interview: () => ({
+    questions: [{ text: '', type: 'preset' as const }],
+    allow_view_previous_interviews: true,
+    required_interviewers_count: 1,
+  }),
+  reference_check: () => ({
+    required_references_count: 3,
+    questions: [{ text: '', type: 'preset' as const }],
+    verification_required: true,
   }),
   manual_approval: () => ({ approver_roles: [], require_notes: false }),
 };
@@ -84,7 +111,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [stageType, setStageType] = useState<StageType>('manual_approval');
-  const [config, setConfig] = useState<FormStageConfig | DocumentStageConfig | ElectionStageConfig | ManualApprovalConfig>(
+  const [config, setConfig] = useState<FormStageConfig | DocumentStageConfig | ElectionStageConfig | ManualApprovalConfig | InterviewStageConfig | ReferenceCheckStageConfig>(
     DEFAULT_CONFIGS.manual_approval()
   );
   const [isRequired, setIsRequired] = useState(true);
@@ -149,6 +176,24 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       }
     }
 
+    if (stageType === 'interview') {
+      const c = config as InterviewStageConfig;
+      const validQs = (c.questions || []).filter(q => q.text.trim());
+      if (validQs.length === 0) {
+        newErrors.questions = 'At least one interview question is required';
+      }
+      if (!c.required_interviewers_count || c.required_interviewers_count < 1) {
+        newErrors.interviewers = 'At least one interviewer is required';
+      }
+    }
+
+    if (stageType === 'reference_check') {
+      const c = config as ReferenceCheckStageConfig;
+      if (!c.required_references_count || c.required_references_count < 1) {
+        newErrors.references = 'At least one reference is required';
+      }
+    }
+
     if (stageType === 'manual_approval') {
       const c = config as ManualApprovalConfig;
       if (!c.approver_roles || c.approver_roles.length === 0) {
@@ -190,6 +235,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const docConfig = config as DocumentStageConfig;
   const electionConfig = config as ElectionStageConfig;
   const approvalConfig = config as ManualApprovalConfig;
+  const interviewConfig = config as InterviewStageConfig;
+  const refCheckConfig = config as ReferenceCheckStageConfig;
 
   return (
     <div
@@ -254,7 +301,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             <label className="block text-sm font-medium text-theme-text-secondary mb-3">
               Stage Type *
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {STAGE_TYPE_OPTIONS.map((opt) => {
                 const Icon = opt.icon;
                 const selected = stageType === opt.value;
@@ -525,6 +572,210 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     );
                   })()}
                 </div>
+              </div>
+            )}
+
+            {/* Interview Config */}
+            {stageType === 'interview' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-theme-text-muted mb-2">
+                    Interview Questions
+                  </label>
+                  <p className="text-xs text-theme-text-muted mb-3">
+                    Add preset questions for interviewers. They can also add free-form questions during the interview.
+                  </p>
+                  {(interviewConfig.questions || []).map((q: InterviewQuestionItem, idx: number) => (
+                    <div key={idx} className="flex items-center gap-2 mb-2">
+                      <select
+                        value={q.type}
+                        onChange={(e) => {
+                          const updated = [...(interviewConfig.questions || [])];
+                          updated[idx] = { ...updated[idx], type: e.target.value as 'preset' | 'freeform' };
+                          setConfig({ ...interviewConfig, questions: updated });
+                        }}
+                        aria-label={`Question ${idx + 1} type`}
+                        className="w-28 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-2 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      >
+                        <option value="preset">Preset</option>
+                        <option value="freeform">Free-form</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={q.text}
+                        onChange={(e) => {
+                          const updated = [...(interviewConfig.questions || [])];
+                          updated[idx] = { ...updated[idx], text: e.target.value };
+                          setConfig({ ...interviewConfig, questions: updated });
+                        }}
+                        placeholder={q.type === 'freeform' ? 'Free-form prompt for interviewer...' : 'e.g., Why do you want to join?'}
+                        aria-label={`Question ${idx + 1} text`}
+                        className="flex-1 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                      {(interviewConfig.questions || []).length > 1 && (
+                        <button
+                          onClick={() => {
+                            const updated = (interviewConfig.questions || []).filter((_: InterviewQuestionItem, i: number) => i !== idx);
+                            setConfig({ ...interviewConfig, questions: updated });
+                          }}
+                          className="text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                          aria-label={`Remove question ${idx + 1}`}
+                        >
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() =>
+                      setConfig({
+                        ...interviewConfig,
+                        questions: [...(interviewConfig.questions || []), { text: '', type: 'preset' }],
+                      })
+                    }
+                    className="flex items-center gap-1 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" aria-hidden="true" /> Add question
+                  </button>
+                  {errors.questions && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.questions}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="stage-interviewers-count" className="block text-sm text-theme-text-muted mb-2">
+                    Required Interviewers
+                  </label>
+                  <input
+                    id="stage-interviewers-count"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={interviewConfig.required_interviewers_count ?? 1}
+                    onChange={(e) =>
+                      setConfig({ ...interviewConfig, required_interviewers_count: Math.max(1, Number(e.target.value)) })
+                    }
+                    className="w-24 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                  <span className="ml-2 text-sm text-theme-text-muted">department member(s)</span>
+                  {errors.interviewers && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.interviewers}</p>
+                  )}
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={interviewConfig.allow_view_previous_interviews ?? true}
+                    onChange={(e) =>
+                      setConfig({ ...interviewConfig, allow_view_previous_interviews: e.target.checked })
+                    }
+                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+                  />
+                  Allow viewing notes from previous interview steps
+                </label>
+                <p className="text-xs text-theme-text-muted ml-6 -mt-2">
+                  Enables a final reviewer (e.g., the Chief) to see all prior interview notes and responses.
+                </p>
+              </div>
+            )}
+
+            {/* Reference Check Config */}
+            {stageType === 'reference_check' && (
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="stage-ref-count" className="block text-sm text-theme-text-muted mb-2">
+                    Required Number of References
+                  </label>
+                  <input
+                    id="stage-ref-count"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={refCheckConfig.required_references_count ?? 3}
+                    onChange={(e) =>
+                      setConfig({ ...refCheckConfig, required_references_count: Math.max(1, Number(e.target.value)) })
+                    }
+                    className="w-24 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                  <span className="ml-2 text-sm text-theme-text-muted">reference(s) required</span>
+                  {errors.references && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.references}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm text-theme-text-muted mb-2">
+                    Reference Check Questions
+                  </label>
+                  <p className="text-xs text-theme-text-muted mb-3">
+                    Preset questions for reference checks. Free-form notes can also be added during the check.
+                  </p>
+                  {(refCheckConfig.questions || []).map((q: InterviewQuestionItem, idx: number) => (
+                    <div key={idx} className="flex items-center gap-2 mb-2">
+                      <select
+                        value={q.type}
+                        onChange={(e) => {
+                          const updated = [...(refCheckConfig.questions || [])];
+                          updated[idx] = { ...updated[idx], type: e.target.value as 'preset' | 'freeform' };
+                          setConfig({ ...refCheckConfig, questions: updated });
+                        }}
+                        aria-label={`Reference question ${idx + 1} type`}
+                        className="w-28 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-2 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      >
+                        <option value="preset">Preset</option>
+                        <option value="freeform">Free-form</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={q.text}
+                        onChange={(e) => {
+                          const updated = [...(refCheckConfig.questions || [])];
+                          updated[idx] = { ...updated[idx], text: e.target.value };
+                          setConfig({ ...refCheckConfig, questions: updated });
+                        }}
+                        placeholder="e.g., How long have you known the applicant?"
+                        aria-label={`Reference question ${idx + 1} text`}
+                        className="flex-1 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                      {(refCheckConfig.questions || []).length > 1 && (
+                        <button
+                          onClick={() => {
+                            const updated = (refCheckConfig.questions || []).filter((_: InterviewQuestionItem, i: number) => i !== idx);
+                            setConfig({ ...refCheckConfig, questions: updated });
+                          }}
+                          className="text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                          aria-label={`Remove reference question ${idx + 1}`}
+                        >
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() =>
+                      setConfig({
+                        ...refCheckConfig,
+                        questions: [...(refCheckConfig.questions || []), { text: '', type: 'preset' }],
+                      })
+                    }
+                    className="flex items-center gap-1 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" aria-hidden="true" /> Add question
+                  </button>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={refCheckConfig.verification_required ?? true}
+                    onChange={(e) =>
+                      setConfig({ ...refCheckConfig, verification_required: e.target.checked })
+                    }
+                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+                  />
+                  Require a verification result (positive/negative/neutral) for each reference
+                </label>
               </div>
             )}
 

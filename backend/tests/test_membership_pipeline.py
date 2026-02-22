@@ -735,3 +735,432 @@ class TestKanbanBoard:
         assert "columns" in board
         assert len(board["columns"]) == len(steps)
         assert board["total_prospects"] >= 1
+
+
+# ── Interview Management ────────────────────────────────────────────
+
+class TestInterviewManagement:
+
+    @pytest.fixture
+    async def interview_pipeline(self, db_session, setup_org_and_user):
+        """Create a pipeline with interview steps for testing."""
+        org_id, user_id = await setup_org_and_user
+        service = MembershipPipelineService(db_session)
+        pipeline = await service.create_pipeline(
+            organization_id=org_id,
+            name="Interview Pipeline",
+            steps=[
+                {"name": "Application", "step_type": "checkbox", "is_first_step": True, "required": True},
+                {
+                    "name": "Initial Interview",
+                    "step_type": "interview",
+                    "required": True,
+                    "config": {
+                        "questions": [
+                            {"text": "Why do you want to join?", "type": "preset"},
+                            {"text": "Describe your experience", "type": "preset"},
+                        ],
+                        "allow_view_previous_interviews": True,
+                        "required_interviewers_count": 2,
+                    },
+                },
+                {
+                    "name": "Final Interview with Chief",
+                    "step_type": "interview",
+                    "required": True,
+                    "config": {
+                        "questions": [{"text": "Additional leadership questions", "type": "freeform"}],
+                        "allow_view_previous_interviews": True,
+                        "required_interviewers_count": 1,
+                    },
+                },
+                {"name": "Approved", "step_type": "checkbox", "is_final_step": True, "required": True},
+            ],
+            created_by=user_id,
+        )
+        steps = sorted(pipeline.steps, key=lambda s: s.sort_order)
+        return pipeline, org_id, user_id, steps, service
+
+    @pytest.mark.asyncio
+    async def test_create_interview(self, db_session, interview_pipeline):
+        pipeline, org_id, user_id, steps, service = await interview_pipeline
+        interview_step = steps[1]  # Initial Interview
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Jane", "last_name": "Doe", "email": "jane@interview.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        scheduled = datetime(2026, 3, 15, 14, 0, tzinfo=timezone.utc)
+        interview = await service.create_interview(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=interview_step.id,
+            scheduled_at=scheduled,
+            location="Station 1 - Conference Room",
+            interviewer_ids=[user_id],
+            questions=[
+                {"text": "Why do you want to join?", "type": "preset"},
+                {"text": "Describe your experience", "type": "preset"},
+            ],
+            created_by=user_id,
+        )
+
+        assert interview is not None
+        assert interview.prospect_id == prospect.id
+        assert interview.step_id == interview_step.id
+        assert interview.location == "Station 1 - Conference Room"
+        assert interview.status.value == "scheduled"
+        assert len(interview.interviewer_ids) == 1
+        assert len(interview.questions) == 2
+
+    @pytest.mark.asyncio
+    async def test_update_interview_notes(self, db_session, interview_pipeline):
+        pipeline, org_id, user_id, steps, service = await interview_pipeline
+        interview_step = steps[1]
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Bob", "last_name": "Notes", "email": "bob@notes.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        interview = await service.create_interview(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=interview_step.id,
+            created_by=user_id,
+        )
+
+        updated = await service.update_interview(
+            interview_id=interview.id,
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            data={
+                "notes": "Candidate shows strong communication skills",
+                "questions": [
+                    {"text": "Why do you want to join?", "type": "preset", "answer": "Community service"},
+                    {"text": "Describe your experience", "type": "preset", "answer": "5 years EMT"},
+                ],
+            },
+            updated_by=user_id,
+        )
+
+        assert updated is not None
+        assert updated.notes == "Candidate shows strong communication skills"
+        assert updated.questions[0]["answer"] == "Community service"
+        assert updated.questions[1]["answer"] == "5 years EMT"
+
+    @pytest.mark.asyncio
+    async def test_complete_interview(self, db_session, interview_pipeline):
+        pipeline, org_id, user_id, steps, service = await interview_pipeline
+        interview_step = steps[1]
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Sam", "last_name": "Complete", "email": "sam@complete.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        interview = await service.create_interview(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=interview_step.id,
+            created_by=user_id,
+        )
+
+        completed = await service.update_interview(
+            interview_id=interview.id,
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            data={"status": "completed", "notes": "Approved for next round"},
+            updated_by=user_id,
+        )
+
+        assert completed is not None
+        assert completed.status.value == "completed"
+        assert completed.completed_at is not None
+        assert completed.completed_by == user_id
+
+    @pytest.mark.asyncio
+    async def test_get_interview_history(self, db_session, interview_pipeline):
+        pipeline, org_id, user_id, steps, service = await interview_pipeline
+        step1 = steps[1]  # Initial Interview
+        step2 = steps[2]  # Final Interview with Chief
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Hist", "last_name": "Test", "email": "hist@history.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        # Create and complete first interview
+        iv1 = await service.create_interview(
+            prospect_id=prospect.id, organization_id=org_id, step_id=step1.id,
+            interviewer_ids=[user_id], created_by=user_id,
+        )
+        await service.update_interview(
+            iv1.id, prospect.id, org_id,
+            {"status": "completed", "notes": "Good candidate, recommend moving forward"},
+            updated_by=user_id,
+        )
+
+        # Create and complete second interview
+        iv2 = await service.create_interview(
+            prospect_id=prospect.id, organization_id=org_id, step_id=step2.id,
+            interviewer_ids=[user_id], created_by=user_id,
+        )
+        await service.update_interview(
+            iv2.id, prospect.id, org_id,
+            {"status": "completed", "notes": "Chief approves membership"},
+            updated_by=user_id,
+        )
+
+        # Get history — should include both interviews in order
+        history = await service.get_interview_history(prospect.id, org_id)
+        assert len(history) == 2
+        assert history[0]["notes"] == "Good candidate, recommend moving forward"
+        assert history[1]["notes"] == "Chief approves membership"
+        assert history[0]["step_name"] == "Initial Interview"
+        assert history[1]["step_name"] == "Final Interview with Chief"
+        # Verify interviewer names are resolved
+        assert len(history[0]["interviewer_names"]) >= 1
+
+    @pytest.mark.asyncio
+    async def test_list_interviews_by_step(self, db_session, interview_pipeline):
+        pipeline, org_id, user_id, steps, service = await interview_pipeline
+        step1 = steps[1]
+        step2 = steps[2]
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "List", "last_name": "Filter", "email": "list@filter.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        await service.create_interview(prospect.id, org_id, step1.id, created_by=user_id)
+        await service.create_interview(prospect.id, org_id, step2.id, created_by=user_id)
+
+        # All interviews
+        all_ivs = await service.list_interviews(prospect.id, org_id)
+        assert len(all_ivs) == 2
+
+        # Filter by step
+        step1_only = await service.list_interviews(prospect.id, org_id, step_id=step1.id)
+        assert len(step1_only) == 1
+        assert step1_only[0].step_id == step1.id
+
+
+# ── Reference Check Management ──────────────────────────────────────
+
+class TestReferenceCheckManagement:
+
+    @pytest.fixture
+    async def refcheck_pipeline(self, db_session, setup_org_and_user):
+        org_id, user_id = await setup_org_and_user
+        service = MembershipPipelineService(db_session)
+        pipeline = await service.create_pipeline(
+            organization_id=org_id,
+            name="RefCheck Pipeline",
+            steps=[
+                {"name": "Application", "step_type": "checkbox", "is_first_step": True, "required": True},
+                {
+                    "name": "Reference Checks",
+                    "step_type": "reference_check",
+                    "required": True,
+                    "config": {
+                        "required_references_count": 3,
+                        "questions": [{"text": "How long have you known them?", "type": "preset"}],
+                    },
+                },
+                {"name": "Approved", "step_type": "checkbox", "is_final_step": True, "required": True},
+            ],
+            created_by=user_id,
+        )
+        steps = sorted(pipeline.steps, key=lambda s: s.sort_order)
+        return pipeline, org_id, user_id, steps, service
+
+    @pytest.mark.asyncio
+    async def test_create_reference_check(self, db_session, refcheck_pipeline):
+        pipeline, org_id, user_id, steps, service = await refcheck_pipeline
+        ref_step = steps[1]
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Ref", "last_name": "Check", "email": "ref@check.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        check = await service.create_reference_check(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=ref_step.id,
+            reference_name="John Smith",
+            reference_phone="555-0100",
+            reference_email="john@ref.com",
+            reference_relationship="Former supervisor",
+            created_by=user_id,
+        )
+
+        assert check is not None
+        assert check.reference_name == "John Smith"
+        assert check.reference_phone == "555-0100"
+        assert check.reference_relationship == "Former supervisor"
+        assert check.status.value == "pending"
+
+    @pytest.mark.asyncio
+    async def test_update_reference_check_result(self, db_session, refcheck_pipeline):
+        pipeline, org_id, user_id, steps, service = await refcheck_pipeline
+        ref_step = steps[1]
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Up", "last_name": "Ref", "email": "up@ref.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        check = await service.create_reference_check(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=ref_step.id,
+            reference_name="Mary Jones",
+            created_by=user_id,
+        )
+
+        updated = await service.update_reference_check(
+            check_id=check.id,
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            data={
+                "status": "completed",
+                "contact_method": "phone",
+                "notes": "Very positive reference, highly recommended",
+                "verification_result": "positive",
+            },
+            updated_by=user_id,
+        )
+
+        assert updated is not None
+        assert updated.status.value == "completed"
+        assert updated.contact_method == "phone"
+        assert updated.verification_result == "positive"
+        assert updated.contacted_at is not None
+
+    @pytest.mark.asyncio
+    async def test_list_reference_checks_by_step(self, db_session, refcheck_pipeline):
+        pipeline, org_id, user_id, steps, service = await refcheck_pipeline
+        ref_step = steps[1]
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Multi", "last_name": "Ref", "email": "multi@ref.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        await service.create_reference_check(prospect.id, org_id, ref_step.id, "Ref One", created_by=user_id)
+        await service.create_reference_check(prospect.id, org_id, ref_step.id, "Ref Two", created_by=user_id)
+        await service.create_reference_check(prospect.id, org_id, ref_step.id, "Ref Three", created_by=user_id)
+
+        checks = await service.list_reference_checks(prospect.id, org_id, step_id=ref_step.id)
+        assert len(checks) == 3
+        names = [c.reference_name for c in checks]
+        assert "Ref One" in names
+        assert "Ref Two" in names
+        assert "Ref Three" in names
+
+
+# ── Transfer Email Assignment ────────────────────────────────────────
+
+class TestTransferEmailAssignment:
+
+    @pytest.fixture
+    async def transfer_env(self, db_session, setup_org_and_user):
+        org_id, user_id = await setup_org_and_user
+        service = MembershipPipelineService(db_session)
+        pipeline = await service.create_pipeline(
+            organization_id=org_id,
+            name="Transfer Pipeline",
+            steps=[
+                {"name": "Apply", "step_type": "checkbox", "is_first_step": True, "is_final_step": True, "required": True},
+            ],
+            created_by=user_id,
+        )
+        return pipeline, org_id, user_id, service
+
+    @pytest.mark.asyncio
+    async def test_transfer_default_email(self, db_session, transfer_env):
+        """Default: prospect email becomes User.email, no personal_email set."""
+        pipeline, org_id, user_id, service = await transfer_env
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Default", "last_name": "Email", "email": "default@personal.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        result = await service.transfer_to_membership(prospect.id, org_id, transferred_by=user_id)
+        assert result["success"] is True
+        assert result["primary_email"] == "default@personal.com"
+        assert result.get("personal_email") is None
+
+    @pytest.mark.asyncio
+    async def test_transfer_with_department_email(self, db_session, transfer_env):
+        """Explicit dept email becomes primary; prospect email becomes personal."""
+        pipeline, org_id, user_id, service = await transfer_env
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Dept", "last_name": "Email", "email": "personal@home.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        result = await service.transfer_to_membership(
+            prospect.id, org_id, transferred_by=user_id,
+            department_email="dept.email@firedept.org",
+        )
+        assert result["success"] is True
+        assert result["primary_email"] == "dept.email@firedept.org"
+        assert result["personal_email"] == "personal@home.com"
+
+    @pytest.mark.asyncio
+    async def test_transfer_use_personal_as_primary(self, db_session, transfer_env):
+        """When use_personal_as_primary, same email is used for both fields."""
+        pipeline, org_id, user_id, service = await transfer_env
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Pers", "last_name": "Primary", "email": "mine@gmail.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        result = await service.transfer_to_membership(
+            prospect.id, org_id, transferred_by=user_id,
+            use_personal_as_primary=True,
+        )
+        assert result["success"] is True
+        assert result["primary_email"] == "mine@gmail.com"
+        assert result["personal_email"] == "mine@gmail.com"
+
+    @pytest.mark.asyncio
+    async def test_transfer_auto_generate_department_email(self, db_session, transfer_env):
+        """When org has settings.email.domain, auto-generate a dept email."""
+        pipeline, org_id, user_id, service = await transfer_env
+
+        # Set org email domain
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :oid"),
+            {"s": '{"email": {"domain": "testfire.org"}}', "oid": org_id},
+        )
+        await db_session.flush()
+
+        prospect = await service.create_prospect(
+            org_id,
+            {"first_name": "Auto", "last_name": "Gen", "email": "auto@personal.com", "pipeline_id": pipeline.id},
+            user_id,
+        )
+
+        result = await service.transfer_to_membership(prospect.id, org_id, transferred_by=user_id)
+        assert result["success"] is True
+        assert result["primary_email"] == "auto.gen@testfire.org"
+        assert result["personal_email"] == "auto@personal.com"

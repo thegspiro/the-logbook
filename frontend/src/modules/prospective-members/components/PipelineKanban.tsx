@@ -12,6 +12,8 @@ import {
   Vote,
   CheckCircle,
   Users,
+  Mic,
+  PhoneCall,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -31,6 +33,8 @@ interface PipelineKanbanProps {
 const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   form_submission: FileText,
   document_upload: Upload,
+  interview: Mic,
+  reference_check: PhoneCall,
   election_vote: Vote,
   manual_approval: CheckCircle,
 };
@@ -38,6 +42,8 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
 const STAGE_HEADER_COLORS: Record<StageType, string> = {
   form_submission: 'border-blue-500',
   document_upload: 'border-amber-500',
+  interview: 'border-teal-500',
+  reference_check: 'border-cyan-500',
   election_vote: 'border-purple-500',
   manual_approval: 'border-emerald-500',
 };

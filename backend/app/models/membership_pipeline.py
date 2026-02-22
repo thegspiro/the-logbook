@@ -37,6 +37,8 @@ class PipelineStepType(str, enum.Enum):
     ACTION = "action"
     CHECKBOX = "checkbox"
     NOTE = "note"
+    INTERVIEW = "interview"
+    REFERENCE_CHECK = "reference_check"
 
 
 class ActionType(str, enum.Enum):
@@ -461,3 +463,146 @@ class ProspectElectionPackage(Base):
 
     def __repr__(self):
         return f"<ProspectElectionPackage(prospect={self.prospect_id}, status={self.status})>"
+
+
+class InterviewStatus(str, enum.Enum):
+    """Status of an interview"""
+    SCHEDULED = "scheduled"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class ReferenceCheckStatus(str, enum.Enum):
+    """Status of a reference check"""
+    PENDING = "pending"
+    ATTEMPTED = "attempted"
+    COMPLETED = "completed"
+    UNABLE_TO_REACH = "unable_to_reach"
+
+
+class InterviewRecord(Base):
+    """
+    Interview record for a prospective member at an interview step.
+
+    Stores the scheduled date/time, assigned interviewers (department
+    members), free-form or preset questions, and interviewer notes.
+    Later interview steps can pull notes from earlier interviews so
+    the final reviewer (e.g., the Chief) has full context.
+    """
+    __tablename__ = "prospect_interviews"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    prospect_id = Column(
+        String(36),
+        ForeignKey("prospective_members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    step_id = Column(
+        String(36),
+        ForeignKey("membership_pipeline_steps.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Scheduling
+    scheduled_at = Column(DateTime(timezone=True), nullable=True)
+    location = Column(String(255))
+    status = Column(
+        Enum(InterviewStatus, values_callable=lambda x: [e.value for e in x]),
+        default=InterviewStatus.SCHEDULED,
+        nullable=False,
+    )
+
+    # Interviewers — list of user IDs from the department
+    interviewer_ids = Column(JSON, default=list)
+
+    # Interview content
+    questions = Column(JSON, default=list)
+    # Format: [{"text": "Why do you want to join?", "type": "preset"|"freeform", "answer": "..."}]
+
+    notes = Column(Text)  # Free-form interviewer notes
+
+    completed_at = Column(DateTime(timezone=True))
+    completed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    prospect = relationship("ProspectiveMember", backref="interviews")
+    step = relationship("MembershipPipelineStep")
+    completer = relationship("User", foreign_keys=[completed_by])
+
+    __table_args__ = (
+        Index("idx_interview_prospect", "prospect_id"),
+        Index("idx_interview_step", "step_id"),
+        Index("idx_interview_status", "status"),
+    )
+
+    def __repr__(self):
+        return f"<InterviewRecord(prospect={self.prospect_id}, status={self.status})>"
+
+
+class ReferenceCheckRecord(Base):
+    """
+    Reference check record for a prospective member.
+
+    Tracks individual references: who was contacted, how, what they
+    said, and the verification outcome.  Multiple records per prospect
+    are expected (one per reference).
+    """
+    __tablename__ = "prospect_reference_checks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    prospect_id = Column(
+        String(36),
+        ForeignKey("prospective_members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    step_id = Column(
+        String(36),
+        ForeignKey("membership_pipeline_steps.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Reference person info
+    reference_name = Column(String(200), nullable=False)
+    reference_phone = Column(String(20))
+    reference_email = Column(String(255))
+    reference_relationship = Column(String(100))
+
+    # Contact details
+    contact_method = Column(String(20))  # phone, email, in_person
+    status = Column(
+        Enum(ReferenceCheckStatus, values_callable=lambda x: [e.value for e in x]),
+        default=ReferenceCheckStatus.PENDING,
+        nullable=False,
+    )
+    contacted_at = Column(DateTime(timezone=True))
+    contacted_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+
+    # Content
+    questions = Column(JSON, default=list)
+    # Format: [{"text": "How long have you known...?", "type": "preset"|"freeform", "answer": "..."}]
+
+    notes = Column(Text)
+    verification_result = Column(String(20))  # positive, negative, neutral
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    prospect = relationship("ProspectiveMember", backref="reference_checks")
+    step = relationship("MembershipPipelineStep")
+    contacter = relationship("User", foreign_keys=[contacted_by])
+
+    __table_args__ = (
+        Index("idx_ref_check_prospect", "prospect_id"),
+        Index("idx_ref_check_step", "step_id"),
+        Index("idx_ref_check_status", "status"),
+    )
+
+    def __repr__(self):
+        return f"<ReferenceCheckRecord(prospect={self.prospect_id}, ref={self.reference_name})>"

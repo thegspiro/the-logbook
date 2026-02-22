@@ -144,7 +144,12 @@ export type MembershipType = (typeof MembershipType)[keyof typeof MembershipType
 // Pipeline / Applicant Stage Types
 // ============================================
 export const StageType = {
+  FORM_SUBMISSION: 'form_submission',
+  DOCUMENT_UPLOAD: 'document_upload',
+  INTERVIEW: 'interview',
+  REFERENCE_CHECK: 'reference_check',
   ELECTION_VOTE: 'election_vote',
+  MANUAL_APPROVAL: 'manual_approval',
 } as const;
 export type StageType = (typeof StageType)[keyof typeof StageType];
 

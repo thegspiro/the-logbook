@@ -17,6 +17,8 @@ import {
   Vote,
   CheckCircle,
   Loader2,
+  Mic,
+  PhoneCall,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -36,6 +38,8 @@ interface PipelineBuilderProps {
 const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   form_submission: FileText,
   document_upload: Upload,
+  interview: Mic,
+  reference_check: PhoneCall,
   election_vote: Vote,
   manual_approval: CheckCircle,
 };
@@ -43,6 +47,8 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
 const STAGE_TYPE_COLORS: Record<StageType, string> = {
   form_submission: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/30',
   document_upload: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/30',
+  interview: 'text-teal-700 dark:text-teal-400 bg-teal-500/10 border-teal-500/30',
+  reference_check: 'text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
   election_vote: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border-purple-500/30',
   manual_approval: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
 };
@@ -50,6 +56,8 @@ const STAGE_TYPE_COLORS: Record<StageType, string> = {
 const STAGE_TYPE_LABELS: Record<StageType, string> = {
   form_submission: 'Form Submission',
   document_upload: 'Document Upload',
+  interview: 'Interview',
+  reference_check: 'Reference Check',
   election_vote: 'Election / Vote',
   manual_approval: 'Manual Approval',
 };

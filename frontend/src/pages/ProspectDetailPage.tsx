@@ -9,13 +9,13 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { membershipPipelineService } from '../services/membershipPipelineApi';
+import { membershipPipelineService } from '@/services/membershipPipelineApi';
 import type {
   Prospect,
   StepProgress,
   ActivityLogEntry,
   TransferRequest,
-} from '../services/membershipPipelineApi';
+} from '@/services/membershipPipelineApi';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';

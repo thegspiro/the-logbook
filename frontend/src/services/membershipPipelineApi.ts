@@ -23,7 +23,7 @@ export interface PipelineStep {
   pipeline_id: string;
   name: string;
   description?: string;
-  step_type: 'action' | 'checkbox' | 'note';
+  step_type: 'action' | 'checkbox' | 'note' | 'interview' | 'reference_check';
   action_type?: 'send_email' | 'schedule_meeting' | 'collect_document' | 'custom';
   is_first_step: boolean;
   is_final_step: boolean;
@@ -147,7 +147,7 @@ export interface KanbanBoard {
 export interface PipelineStepCreate {
   name: string;
   description?: string;
-  step_type?: 'action' | 'checkbox' | 'note';
+  step_type?: 'action' | 'checkbox' | 'note' | 'interview' | 'reference_check';
   action_type?: string;
   is_first_step?: boolean;
   is_final_step?: boolean;
@@ -344,3 +344,26 @@ export const membershipPipelineService = {
     return data;
   },
 };
+
+// ---------------------------------------------------------------------------
+// Re-exported types from the canonical module
+//
+// Interview and reference check types are defined in the module's types and
+// exposed here so that consumers of this shim can access them without adding
+// a second import path.
+// ---------------------------------------------------------------------------
+
+export type {
+  InterviewRecord,
+  InterviewCreate,
+  InterviewUpdate,
+  InterviewHistory,
+  InterviewStatus,
+  InterviewQuestionItem,
+  InterviewStageConfig,
+  ReferenceCheckRecord,
+  ReferenceCheckCreate,
+  ReferenceCheckUpdate,
+  ReferenceCheckStatus,
+  ReferenceCheckStageConfig,
+} from '../modules/prospective-members/types';
