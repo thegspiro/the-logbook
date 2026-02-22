@@ -160,6 +160,25 @@ async def change_member_status(
         if doc:
             response.document_id = str(doc.id)
 
+        # Auto-create departure clearance so items can be tracked and resolved
+        try:
+            from app.services.departure_clearance_service import DepartureClearanceService
+            clearance_svc = DepartureClearanceService(db)
+            _clearance, _cl_err = await clearance_svc.initiate_clearance(
+                user_id=str(user_id),
+                organization_id=str(current_user.organization_id),
+                initiated_by=str(current_user.id),
+                departure_type=new_status.value,
+                return_deadline_days=request.return_deadline_days,
+                notes=f"Auto-created from status change to {new_status.value}",
+            )
+            if _cl_err:
+                from loguru import logger as _lg
+                _lg.warning(f"Could not auto-create departure clearance: {_cl_err}")
+        except Exception as _e:
+            from loguru import logger as _lg
+            _lg.error(f"Failed to auto-create departure clearance: {_e}")
+
         # Email the report to the member (with configurable CC and personal email)
         if request.send_property_return_email and member.email:
             org_result = await db.execute(

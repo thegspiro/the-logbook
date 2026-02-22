@@ -190,15 +190,18 @@ class InventoryNotificationService:
                 sent = await self._send_notification_email(user, org, context)
                 if sent:
                     emails_sent += 1
-
-                # Mark all records as processed
-                for rec in member_records:
-                    rec.processed = True
-                    rec.processed_at = datetime.now(timezone.utc)
-                records_processed += len(member_records)
+                    # Mark all records as processed only on successful send
+                    for rec in member_records:
+                        rec.processed = True
+                        rec.processed_at = datetime.now(timezone.utc)
+                    records_processed += len(member_records)
+                else:
+                    # Email failed — leave records unprocessed for retry on next run
+                    logger.warning(f"Email send failed for user {member_id}; will retry on next run")
 
             except Exception as e:
                 logger.error(f"Failed to process inventory notifications for user {member_id}: {e}")
+                # Records stay unprocessed and will be retried on next scheduled run
 
         await self.db.commit()
 
