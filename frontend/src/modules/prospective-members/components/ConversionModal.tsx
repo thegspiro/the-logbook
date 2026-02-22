@@ -303,7 +303,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     className={`p-3 rounded-lg border text-left transition-all ${
                       membershipType === MembershipType.PROBATIONARY
                         ? 'border-red-500 bg-red-500/10'
-                        : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-border'
+                        : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
                     }`}
                   >
                     <p className="text-sm font-medium text-theme-text-primary">Probationary</p>
@@ -314,7 +314,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     className={`p-3 rounded-lg border text-left transition-all ${
                       membershipType === 'administrative'
                         ? 'border-red-500 bg-red-500/10'
-                        : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-border'
+                        : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
                     }`}
                   >
                     <p className="text-sm font-medium text-theme-text-primary">Administrative</p>
@@ -335,7 +335,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     value={rank}
                     onChange={(e) => setRank(e.target.value)}
                     placeholder="e.g., Firefighter"
-                    className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
                 <div>
@@ -348,7 +348,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     value={station}
                     onChange={(e) => setStation(e.target.value)}
                     placeholder="e.g., Station 1"
-                    className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
               </div>
@@ -365,7 +365,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     value={middleName}
                     onChange={(e) => setMiddleName(e.target.value)}
                     placeholder="Optional"
-                    className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
                 <div>
@@ -393,21 +393,24 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     value={emergencyContact.name}
                     onChange={(e) => setEmergencyContact((c) => ({ ...c, name: e.target.value }))}
                     placeholder="Name"
-                    className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                    aria-label="Emergency contact name"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                   <input
                     type="text"
                     value={emergencyContact.relationship}
                     onChange={(e) => setEmergencyContact((c) => ({ ...c, relationship: e.target.value }))}
                     placeholder="Relationship"
-                    className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                    aria-label="Emergency contact relationship"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                   <input
                     type="text"
                     value={emergencyContact.phone}
                     onChange={(e) => setEmergencyContact((c) => ({ ...c, phone: e.target.value }))}
                     placeholder="Phone"
-                    className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                    aria-label="Emergency contact phone"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
               </div>
@@ -418,7 +421,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                   type="checkbox"
                   checked={sendWelcomeEmail}
                   onChange={(e) => setSendWelcomeEmail(e.target.checked)}
-                  className="rounded border-theme-surface-border bg-theme-surface-secondary text-red-500 focus:ring-red-500"
+                  className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                 />
                 Send welcome email with login credentials
               </label>
@@ -434,12 +437,12 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Any notes about this conversion..."
                   rows={2}
-                  className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                 />
               </div>
 
               {/* Warning */}
-              <div className="flex items-start gap-2 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+              <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <p>
                   This will create a new member account and mark this applicant

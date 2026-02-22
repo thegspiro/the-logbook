@@ -55,25 +55,31 @@ const SortableHeader: React.FC<{
   sortField: SortField | null;
   sortDirection: SortDirection;
   onSort: (field: SortField) => void;
-}> = ({ label, field, sortField, sortDirection, onSort }) => (
-  <th
-    className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary transition-colors"
-    onClick={() => onSort(field)}
-  >
-    <span className="flex items-center gap-1">
-      {label}
-      {sortField === field ? (
-        sortDirection === 'asc' ? (
-          <ChevronUp className="w-3 h-3" />
+}> = ({ label, field, sortField, sortDirection, onSort }) => {
+  const isSorted = sortField === field;
+  const ariaSortValue = isSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none';
+
+  return (
+    <th
+      className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary transition-colors"
+      onClick={() => onSort(field)}
+      aria-sort={ariaSortValue}
+    >
+      <span className="flex items-center gap-1">
+        {label}
+        {isSorted ? (
+          sortDirection === 'asc' ? (
+            <ChevronUp className="w-3 h-3" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="w-3 h-3" aria-hidden="true" />
+          )
         ) : (
-          <ChevronDown className="w-3 h-3" />
-        )
-      ) : (
-        <ChevronsUpDown className="w-3 h-3 opacity-30" />
-      )}
-    </span>
-  </th>
-);
+          <ChevronsUpDown className="w-3 h-3 opacity-30" aria-hidden="true" />
+        )}
+      </span>
+    </th>
+  );
+};
 
 export const PipelineTable: React.FC<PipelineTableProps> = ({
   applicants,
@@ -334,7 +340,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         onClick={() => onApplicantClick(applicant)}
                       >
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-theme-text-primary flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
                           <span className="text-sm font-medium text-theme-text-primary">

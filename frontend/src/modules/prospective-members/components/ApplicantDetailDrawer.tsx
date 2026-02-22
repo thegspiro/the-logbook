@@ -380,14 +380,16 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   onClick={() => setShowPii(!showPii)}
                   className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                   title={showPii ? 'Hide personal info' : 'Show personal info'}
+                  aria-label={showPii ? 'Hide personal info' : 'Show personal info'}
                 >
-                  {showPii ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPii ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
                 </button>
                 <button
                   onClick={onClose}
                   className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  aria-label="Close detail panel"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -479,14 +481,16 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         value={editFields.first_name}
                         onChange={(e) => setEditFields((f) => ({ ...f, first_name: e.target.value }))}
                         placeholder="First name"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                        aria-label="First name"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                       <input
                         type="text"
                         value={editFields.last_name}
                         onChange={(e) => setEditFields((f) => ({ ...f, last_name: e.target.value }))}
                         placeholder="Last name"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                        aria-label="Last name"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>
                     <input
@@ -494,27 +498,31 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       value={editFields.email}
                       onChange={(e) => setEditFields((f) => ({ ...f, email: e.target.value }))}
                       placeholder="Email"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                      aria-label="Email address"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                     <input
                       type="text"
                       value={editFields.phone}
                       onChange={(e) => setEditFields((f) => ({ ...f, phone: e.target.value }))}
                       placeholder="Phone"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                      aria-label="Phone number"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                     <input
                       type="date"
                       value={editFields.date_of_birth}
                       onChange={(e) => setEditFields((f) => ({ ...f, date_of_birth: e.target.value }))}
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                      aria-label="Date of birth"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                     <input
                       type="text"
                       value={editFields.address_street}
                       onChange={(e) => setEditFields((f) => ({ ...f, address_street: e.target.value }))}
                       placeholder="Street address"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                      aria-label="Street address"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                     <div className="grid grid-cols-3 gap-2">
                       <input
@@ -522,21 +530,24 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         value={editFields.address_city}
                         onChange={(e) => setEditFields((f) => ({ ...f, address_city: e.target.value }))}
                         placeholder="City"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                        aria-label="City"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                       <input
                         type="text"
                         value={editFields.address_state}
                         onChange={(e) => setEditFields((f) => ({ ...f, address_state: e.target.value }))}
                         placeholder="State"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                        aria-label="State"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                       <input
                         type="text"
                         value={editFields.address_zip}
                         onChange={(e) => setEditFields((f) => ({ ...f, address_zip: e.target.value }))}
                         placeholder="ZIP"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                        aria-label="ZIP code"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>
                   </div>
