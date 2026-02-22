@@ -105,8 +105,9 @@ class AuthService:
             return None, "Incorrect username or password"
 
         # Check if account is locked
-        if user.locked_until and user.locked_until > datetime.now(timezone.utc):
-            remaining = int((user.locked_until - datetime.now(timezone.utc)).total_seconds() / 60) + 1
+        locked_until = user.locked_until.replace(tzinfo=timezone.utc) if user.locked_until and user.locked_until.tzinfo is None else user.locked_until
+        if locked_until and locked_until > datetime.now(timezone.utc):
+            remaining = int((locked_until - datetime.now(timezone.utc)).total_seconds() / 60) + 1
             logger.warning(f"Authentication failed: account locked - {username}")
             return None, f"Account is temporarily locked. Try again in {remaining} minutes."
 
@@ -536,7 +537,8 @@ class AuthService:
                 logger.debug("Token rejected: session user_id mismatch")
                 return None
 
-            if session.expires_at and session.expires_at < datetime.now(timezone.utc):
+            session_expires = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at and session.expires_at.tzinfo is None else session.expires_at
+            if session_expires and session_expires < datetime.now(timezone.utc):
                 logger.debug("Token rejected: session expired")
                 return None
 
@@ -592,10 +594,11 @@ class AuthService:
             return None, None
 
         # Cooldown: reject if an active (non-expired) token already exists
+        reset_expires = user.password_reset_expires_at.replace(tzinfo=timezone.utc) if user.password_reset_expires_at and user.password_reset_expires_at.tzinfo is None else user.password_reset_expires_at
         if (
             user.password_reset_token
-            and user.password_reset_expires_at
-            and user.password_reset_expires_at > datetime.now(timezone.utc)
+            and reset_expires
+            and reset_expires > datetime.now(timezone.utc)
         ):
             logger.warning(
                 f"Password reset requested while active token exists "
@@ -643,9 +646,12 @@ class AuthService:
         if not user:
             return False, None
 
+        reset_exp = user.password_reset_expires_at
+        if reset_exp and reset_exp.tzinfo is None:
+            reset_exp = reset_exp.replace(tzinfo=timezone.utc)
         if (
-            not user.password_reset_expires_at
-            or user.password_reset_expires_at < datetime.now(timezone.utc)
+            not reset_exp
+            or reset_exp < datetime.now(timezone.utc)
         ):
             return False, None
 
@@ -676,9 +682,12 @@ class AuthService:
         if not user:
             return False, "This password reset link is invalid or has already been used. Please request a new reset link from the login page."
 
+        reset_exp = user.password_reset_expires_at
+        if reset_exp and reset_exp.tzinfo is None:
+            reset_exp = reset_exp.replace(tzinfo=timezone.utc)
         if (
-            not user.password_reset_expires_at
-            or user.password_reset_expires_at < datetime.now(timezone.utc)
+            not reset_exp
+            or reset_exp < datetime.now(timezone.utc)
         ):
             # Clear expired token
             user.password_reset_token = None

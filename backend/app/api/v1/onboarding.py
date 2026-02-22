@@ -444,7 +444,8 @@ async def validate_session(
         )
 
     # Check expiration
-    if session.expires_at < datetime.now(timezone.utc):
+    session_exp = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at.tzinfo is None else session.expires_at
+    if session_exp < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your onboarding session has expired due to inactivity (30-minute limit). Please refresh the page to start a new session. Your previously saved progress will be retained."
