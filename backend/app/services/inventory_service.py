@@ -1621,17 +1621,59 @@ class InventoryService:
     # Barcode Label Generation
     # ============================================
 
+    # Predefined label formats: (width_inches, height_inches, description)
+    LABEL_FORMATS: Dict[str, Dict[str, Any]] = {
+        "letter": {
+            "description": "Standard letter (8.5x11) - 2x5 grid",
+            "type": "sheet",
+        },
+        "dymo_30252": {
+            "description": "Dymo 30252 Address Label (1.125 x 3.5 in)",
+            "width": 3.5,
+            "height": 1.125,
+            "type": "thermal",
+        },
+        "dymo_30256": {
+            "description": "Dymo 30256 Shipping Label (2.3125 x 4 in)",
+            "width": 4.0,
+            "height": 2.3125,
+            "type": "thermal",
+        },
+        "dymo_30334": {
+            "description": "Dymo 30334 Multi-Purpose Label (2.25 x 1.25 in)",
+            "width": 2.25,
+            "height": 1.25,
+            "type": "thermal",
+        },
+        "rollo_4x6": {
+            "description": "Rollo 4x6 Shipping Label",
+            "width": 4.0,
+            "height": 6.0,
+            "type": "thermal",
+        },
+    }
+
     async def generate_barcode_labels(
         self,
         item_ids: List[UUID],
         organization_id: UUID,
+        label_format: str = "letter",
+        custom_width: Optional[float] = None,
+        custom_height: Optional[float] = None,
     ) -> BytesIO:
         """
         Generate a PDF containing barcode labels for the given items.
-        Each label shows the item name, barcode value, and a Code128 barcode.
-        Labels are laid out in a 2-column grid on letter-size pages.
+
+        Supports multiple label formats:
+        - "letter": Standard 8.5x11 sheet with 2x5 grid (for standard printers)
+        - "dymo_30252": Dymo 30252 address labels (1.125 x 3.5 in)
+        - "dymo_30256": Dymo 30256 shipping labels (2.3125 x 4 in)
+        - "dymo_30334": Dymo 30334 multi-purpose labels (2.25 x 1.25 in)
+        - "rollo_4x6": Rollo 4x6 shipping labels
+        - "custom": Custom dimensions via custom_width/custom_height (in inches)
+
+        Thermal formats produce one label per page, sized exactly to the label.
         """
-        from reportlab.lib.pagesizes import letter
         from reportlab.lib.units import inch
         from reportlab.graphics.barcode import code128
         from reportlab.pdfgen import canvas
@@ -1645,11 +1687,32 @@ class InventoryService:
         if not items:
             raise ValueError("No valid items found for label generation")
 
+        if label_format == "custom":
+            if not custom_width or not custom_height:
+                raise ValueError("custom_width and custom_height are required for custom label format")
+            return self._generate_thermal_labels(items, custom_width, custom_height)
+
+        fmt = self.LABEL_FORMATS.get(label_format)
+        if not fmt:
+            raise ValueError(f"Unknown label format: {label_format}. Available: {', '.join(self.LABEL_FORMATS.keys())}, custom")
+
+        if fmt["type"] == "sheet":
+            return self._generate_sheet_labels(items)
+        else:
+            return self._generate_thermal_labels(items, fmt["width"], fmt["height"])
+
+    @staticmethod
+    def _generate_sheet_labels(items: list) -> BytesIO:
+        """Generate labels on standard letter-size sheets in a 2x5 grid."""
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        from reportlab.graphics.barcode import code128
+        from reportlab.pdfgen import canvas
+
         buf = BytesIO()
         c = canvas.Canvas(buf, pagesize=letter)
         page_w, page_h = letter
 
-        # Label layout: 2 columns, 5 rows per page
         cols = 2
         rows = 5
         margin_x = 0.5 * inch
@@ -1674,7 +1737,6 @@ class InventoryService:
             c.setLineWidth(0.5)
             c.rect(x + 4, y + 4, label_w - 8, label_h - 8)
 
-            # Barcode value — use barcode, then asset_tag, then serial_number
             barcode_value = item.barcode or item.asset_tag or item.serial_number or item.id[:12]
 
             # Item name (truncated)
@@ -1697,13 +1759,148 @@ class InventoryService:
                 barcode_value, barWidth=0.012 * inch, barHeight=0.45 * inch
             )
             barcode_width = barcode_obj.width
-            # Center barcode horizontally in label
             barcode_x = x + (label_w - barcode_width) / 2
             barcode_obj.drawOn(c, barcode_x, y + 22)
 
             # Barcode text below
             c.setFont("Courier", 7)
             c.drawCentredString(x + label_w / 2, y + 12, barcode_value)
+
+        c.save()
+        buf.seek(0)
+        return buf
+
+    @staticmethod
+    def _generate_thermal_labels(items: list, width_in: float, height_in: float) -> BytesIO:
+        """
+        Generate labels sized for thermal printers (Dymo, Rollo, etc).
+        Each item gets its own page at the exact label dimensions.
+        """
+        from reportlab.lib.units import inch
+        from reportlab.graphics.barcode import code128
+        from reportlab.pdfgen import canvas
+
+        label_w = width_in * inch
+        label_h = height_in * inch
+        page_size = (label_w, label_h)
+
+        buf = BytesIO()
+        c = canvas.Canvas(buf, pagesize=page_size)
+
+        # Determine layout based on label aspect ratio
+        is_landscape = width_in > height_in  # wider than tall (e.g., Dymo 30252)
+        padding = 0.08 * inch  # tight padding for small labels
+
+        for idx, item in enumerate(items):
+            if idx > 0:
+                c.showPage()
+
+            barcode_value = item.barcode or item.asset_tag or item.serial_number or item.id[:12]
+
+            if is_landscape:
+                # Landscape: text on left, barcode on right or text top barcode bottom
+                self_w = label_w - 2 * padding
+                self_h = label_h - 2 * padding
+
+                # Scale fonts based on label height
+                name_font_size = min(8, max(5, self_h / (0.2 * inch)))
+                info_font_size = max(4, name_font_size - 2)
+                barcode_text_size = max(4, info_font_size)
+
+                # Barcode sizing — fit within label
+                max_barcode_width = self_w * 0.85
+                bar_height = min(0.4 * inch, self_h * 0.4)
+                bar_width_unit = 0.01 * inch
+
+                barcode_obj = code128.Code128(
+                    barcode_value, barWidth=bar_width_unit, barHeight=bar_height
+                )
+                # Scale down barWidth if barcode doesn't fit
+                while barcode_obj.width > max_barcode_width and bar_width_unit > 0.005 * inch:
+                    bar_width_unit -= 0.001 * inch
+                    barcode_obj = code128.Code128(
+                        barcode_value, barWidth=bar_width_unit, barHeight=bar_height
+                    )
+
+                # Layout: name at top, info line, barcode centered, text below
+                y_cursor = label_h - padding
+
+                # Item name
+                c.setFont("Helvetica-Bold", name_font_size)
+                name_max_chars = int(self_w / (name_font_size * 0.5))
+                name = item.name[:name_max_chars] + ("..." if len(item.name) > name_max_chars else "")
+                y_cursor -= name_font_size
+                c.drawString(padding, y_cursor, name)
+
+                # Secondary info
+                info_parts = []
+                if item.asset_tag:
+                    info_parts.append(f"Asset: {item.asset_tag}")
+                if item.serial_number:
+                    info_parts.append(f"S/N: {item.serial_number}")
+                if info_parts:
+                    y_cursor -= (info_font_size + 2)
+                    c.setFont("Helvetica", info_font_size)
+                    c.drawString(padding, y_cursor, " | ".join(info_parts))
+
+                # Barcode — centered horizontally
+                barcode_x = padding + (self_w - barcode_obj.width) / 2
+                barcode_y = padding + barcode_text_size + 4
+                barcode_obj.drawOn(c, barcode_x, barcode_y)
+
+                # Barcode text below barcode
+                c.setFont("Courier", barcode_text_size)
+                c.drawCentredString(label_w / 2, padding + 1, barcode_value)
+
+            else:
+                # Portrait / square: text at top, barcode in middle, text at bottom
+                self_w = label_w - 2 * padding
+                self_h = label_h - 2 * padding
+
+                name_font_size = min(10, max(6, self_w / (0.4 * inch)))
+                info_font_size = max(5, name_font_size - 2)
+                barcode_text_size = max(5, info_font_size)
+
+                # Barcode sizing
+                max_barcode_width = self_w * 0.9
+                bar_height = min(0.8 * inch, self_h * 0.3)
+                bar_width_unit = 0.012 * inch
+
+                barcode_obj = code128.Code128(
+                    barcode_value, barWidth=bar_width_unit, barHeight=bar_height
+                )
+                while barcode_obj.width > max_barcode_width and bar_width_unit > 0.005 * inch:
+                    bar_width_unit -= 0.001 * inch
+                    barcode_obj = code128.Code128(
+                        barcode_value, barWidth=bar_width_unit, barHeight=bar_height
+                    )
+
+                # Item name at top
+                c.setFont("Helvetica-Bold", name_font_size)
+                name_max_chars = int(self_w / (name_font_size * 0.52))
+                name = item.name[:name_max_chars] + ("..." if len(item.name) > name_max_chars else "")
+                y_cursor = label_h - padding - name_font_size
+                c.drawCentredString(label_w / 2, y_cursor, name)
+
+                # Secondary info
+                info_parts = []
+                if item.asset_tag:
+                    info_parts.append(f"Asset: {item.asset_tag}")
+                if item.serial_number:
+                    info_parts.append(f"S/N: {item.serial_number}")
+                if info_parts:
+                    y_cursor -= (info_font_size + 4)
+                    c.setFont("Helvetica", info_font_size)
+                    c.drawCentredString(label_w / 2, y_cursor, " | ".join(info_parts))
+
+                # Barcode — centered
+                barcode_x = padding + (self_w - barcode_obj.width) / 2
+                barcode_y = padding + barcode_text_size + 8
+                barcode_obj.drawOn(c, barcode_x, barcode_y)
+
+                # Barcode text
+                c.setFont("Courier", barcode_text_size)
+                c.drawCentredString(label_w / 2, padding + 2, barcode_value)
 
         c.save()
         buf.seek(0)

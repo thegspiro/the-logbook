@@ -1981,6 +1981,14 @@ export interface MembersInventoryListResponse {
   total: number;
 }
 
+export interface LabelFormat {
+  id: string;
+  description: string;
+  type: 'sheet' | 'thermal';
+  width?: number;
+  height?: number;
+}
+
 export const inventoryService = {
   async getMembersSummary(search?: string): Promise<MembersInventoryListResponse> {
     const response = await api.get<MembersInventoryListResponse>('/inventory/members-summary', {
@@ -2135,8 +2143,23 @@ export const inventoryService = {
     return response.data;
   },
 
-  async generateBarcodeLabels(itemIds: string[]): Promise<Blob> {
-    const response = await api.post('/inventory/labels/generate', { item_ids: itemIds }, {
+  async getLabelFormats(): Promise<{ formats: LabelFormat[] }> {
+    const response = await api.get<{ formats: LabelFormat[] }>('/inventory/labels/formats');
+    return response.data;
+  },
+
+  async generateBarcodeLabels(
+    itemIds: string[],
+    labelFormat: string = 'letter',
+    customWidth?: number,
+    customHeight?: number,
+  ): Promise<Blob> {
+    const response = await api.post('/inventory/labels/generate', {
+      item_ids: itemIds,
+      label_format: labelFormat,
+      custom_width: customWidth,
+      custom_height: customHeight,
+    }, {
       responseType: 'blob',
     });
     return response.data;
