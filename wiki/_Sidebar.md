@@ -31,6 +31,7 @@
 - [Events](Module-Events)
 - [Scheduling](Module-Scheduling)
 - [Apparatus](Module-Apparatus)
+- [Inventory](Module-Inventory)
 - [Compliance](Module-Compliance)
 
 ### 🔐 Security

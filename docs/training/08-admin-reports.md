@@ -287,6 +287,8 @@ Scheduled tasks run automatically on a schedule:
 | **Advance Membership Tiers** | Auto-promote eligible members |
 | **Process Property Return Reminders** | Send overdue return emails |
 | **Detect Struggling Members** | Flag members behind on training |
+| **Mark Overdue Checkouts** | Flag inventory checkouts past their expected return date |
+| **Send Event Reminders** | Deliver scheduled event reminders to RSVP'd members |
 | **Clean Up Sessions** | Remove expired login sessions |
 
 For each task you can see:

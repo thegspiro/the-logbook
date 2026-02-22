@@ -64,6 +64,7 @@ docker-compose up -d
 - **[Event Management](Module-Events)** - QR code check-in system
 - **[Scheduling](Module-Scheduling)** - Shift scheduling, signup, swaps, templates & reports
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
+- **[Inventory](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
 - **[Compliance](Module-Compliance)** - Compliance tracking
 
 ### 🔐 Security
@@ -117,7 +118,19 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
-### February 2026 - Scheduling Module, Events Module, TypeScript Quality & Backend Fixes
+### February 2026 (Week of Feb 22) - Inventory Overhaul, Event Reminders & Security Hardening
+- **Inventory module overhaul**: Pool/quantity-tracked items, item issuances, batch checkout/return, departure clearance lifecycle, notification netting, thermal label printing (Dymo/Rollo), barcode label generation
+- **Inventory security hardening**: Row-level locking on all mutation operations, IDOR fix on clearance line items, org-scoped unique constraints, LIKE injection prevention, kwargs whitelist
+- **Event reminders**: Configurable reminder schedules, multiple reminders per event, post-event/shift validation notifications
+- **Notification enhancements**: Time-of-day preferences, notification expiry, in-app notification inbox
+- **UI improvements**: Past events hidden by default (Past Events tab for managers), attendee management on event detail, dark mode modal fixes
+- **Training Admin reorganization**: 3 sub-pages with inner tabs for better navigation
+- **Badge consolidation**: `badge_number` merged into `membership_number` with migration
+- **Training waivers**: Consistent adjustment formula across all compliance views
+- **DateTime consistency**: All deprecated `datetime.utcnow()` replaced across backend
+- **40 new inventory tests**, CI pipeline with GitHub Actions
+
+### February 2026 (Earlier) - Scheduling Module, Events Module, TypeScript Quality & Backend Fixes
 - **Scheduling Module enhanced**: 6-tab hub (Schedule, My Shifts, Open Shifts, Requests, Templates, Reports)
 - Member self-service shift signup with position selection (officer, driver, firefighter, EMS, etc.)
 - My Shifts tab with confirm/decline assignments, swap requests, and time-off requests

@@ -136,6 +136,10 @@ The system calculates **duration in minutes** automatically from check-in and ch
 > **Screenshot placeholder:**
 > _[Screenshot of the attendance section within a shift detail panel, showing a table of members with check-in time, check-out time, duration, and edit buttons]_
 
+### Post-Shift Validation
+
+After a shift ends, the shift officer receives an automatic notification prompting them to review and validate the attendance records. This ensures all check-in/check-out times are recorded before the data is used for compliance reporting.
+
 ---
 
 ## Call Logging

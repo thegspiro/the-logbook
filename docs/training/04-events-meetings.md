@@ -20,7 +20,7 @@ The Events module handles department events, attendance tracking with QR code ch
 
 ## Events Overview
 
-Navigate to **Events** in the sidebar to see all upcoming and past department events.
+Navigate to **Events** in the sidebar to see all upcoming department events. Past events are hidden by default to keep the view focused on what's coming up.
 
 Events are categorized by type:
 - **Business Meeting** - Regular department meetings
@@ -33,8 +33,10 @@ Events are categorized by type:
 
 You can filter events by type and date range using the controls at the top of the page.
 
+**Past Events:** Officers and managers see a **Past Events** tab to browse historical events with the same filtering and search capabilities.
+
 > **Screenshot placeholder:**
-> _[Screenshot of the Events listing page showing upcoming events as cards or rows, with type badges (color-coded), dates, times, and RSVP status indicators. Show the filter controls at the top]_
+> _[Screenshot of the Events listing page showing upcoming events as cards or rows, with type badges (color-coded), dates, times, and RSVP status indicators. Show the filter controls and Past Events tab at the top]_
 
 ---
 
@@ -45,6 +47,7 @@ Click on any event to view its detail page. The detail page shows:
 - Event title, type, date, time, and location
 - Description and any attached files
 - RSVP counts (Going, Maybe, Not Going)
+- Attendee list — officers can add/remove attendees directly from the detail page
 - Attendance list (for past events)
 - Your current RSVP status
 
@@ -102,11 +105,24 @@ Navigate to **Events Admin > Create Event** or click **Create Event** on the eve
 1. Set the **event type**, **title**, **date**, **start time**, and **end time**.
 2. Add a **location** and **description**.
 3. Configure **check-in settings** (QR code, manual, or both).
-4. Optionally attach files (agendas, maps, etc.).
-5. Click **Create Event**.
+4. Set **reminder schedule** — choose one or more reminder times (e.g., 24 hours before, 1 hour before). Members who RSVP'd will receive notifications at these times.
+5. Optionally attach files (agendas, maps, etc.).
+6. Click **Create Event**.
 
 > **Screenshot placeholder:**
-> _[Screenshot of the Create Event form showing fields for type, title, date/time, location, description, check-in configuration options, and file attachment area]_
+> _[Screenshot of the Create Event form showing fields for type, title, date/time, location, description, reminder schedule, check-in configuration options, and file attachment area]_
+
+### Event Reminders
+
+Events support configurable reminders that are sent via the notification system:
+
+- **Multiple reminders**: Set multiple reminder times per event (e.g., "1 day before" and "1 hour before").
+- **Automatic delivery**: Reminders are sent to all members who RSVP'd "Going" or "Maybe".
+- **Notification preferences**: Members can configure their preferred notification delivery window in their account settings.
+
+### Post-Event Notifications
+
+After an event ends, the event organizer receives an automatic notification prompting them to review and finalize the attendance records. This ensures attendance data is complete and accurate for compliance tracking.
 
 ### Training Sessions from Events
 

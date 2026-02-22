@@ -40,6 +40,11 @@ The Logbook is designed with security as a core principle, implementing industry
 ✅ **Data Exfiltration Monitoring**: Detection of unauthorized data transfers
 ✅ **Session Hijacking Detection**: IP/session correlation monitoring
 ✅ **Brute Force Protection**: Automated detection and lockout
+✅ **Row-Level Locking**: SELECT FOR UPDATE on concurrent-mutation inventory operations
+✅ **Multi-Tenant Isolation**: Org-scoped unique constraints on inventory codes
+✅ **IDOR Prevention**: Clearance ID validation on line item resolution
+✅ **LIKE Injection Prevention**: Wildcard escaping in search queries
+✅ **Field Whitelisting**: Kwargs injection prevention in maintenance records
 
 ---
 
