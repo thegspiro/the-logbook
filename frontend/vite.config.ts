@@ -10,6 +10,17 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
+      workbox: {
+        // Prevent the service worker from caching API responses
+        // containing sensitive/PII data (HIPAA compliance).
+        navigateFallbackDenylist: [/^\/api/],
+        runtimeCaching: [
+          {
+            urlPattern: /^.*\/api\/.*/,
+            handler: 'NetworkOnly',
+          },
+        ],
+      },
       manifest: {
         name: 'The Logbook',
         short_name: 'Logbook',
@@ -60,7 +71,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: false, // Disabled in production to prevent source code exposure
     // Temporarily disable manual code splitting to diagnose bundling issue
     // rollupOptions: {
     //   output: {
