@@ -171,6 +171,8 @@ class StrugglingMemberService:
                 # Only send if not already sent recently
                 if enrollment.deadline_warning_sent and enrollment.deadline_warning_sent_at:
                     last_warn = enrollment.deadline_warning_sent_at
+                    if last_warn.tzinfo is None:
+                        last_warn = last_warn.replace(tzinfo=timezone.utc)
                     if (datetime.now(timezone.utc) - last_warn).days < 5:
                         continue
 

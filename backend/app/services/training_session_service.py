@@ -206,7 +206,9 @@ class TrainingSessionService:
         # Check if event has ended
         now = datetime.now(timezone.utc)
         event_end = event.actual_end_time or event.end_datetime
-        if now < event_end:
+        if event_end and event_end.tzinfo is None:
+            event_end = event_end.replace(tzinfo=timezone.utc)
+        if event_end and now < event_end:
             return None, "Cannot finalize training session before event ends"
 
         # Get all checked-in attendees
