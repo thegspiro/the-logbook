@@ -50,9 +50,11 @@ class ActionType(str, enum.Enum):
 class ProspectStatus(str, enum.Enum):
     """Status of a prospective member"""
     ACTIVE = "active"
+    ON_HOLD = "on_hold"
     APPROVED = "approved"
     REJECTED = "rejected"
     WITHDRAWN = "withdrawn"
+    INACTIVE = "inactive"
     TRANSFERRED = "transferred"
 
 

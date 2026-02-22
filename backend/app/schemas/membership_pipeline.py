@@ -194,7 +194,7 @@ class ProspectUpdate(BaseModel):
     referral_source: Optional[str] = Field(None, max_length=255)
     referred_by: Optional[UUID] = None
     notes: Optional[str] = None
-    status: Optional[str] = Field(None, description="Status: active, approved, rejected, withdrawn")
+    status: Optional[str] = Field(None, description="Status: active, on_hold, approved, rejected, withdrawn, inactive")
 
 
 class StepProgressResponse(BaseModel):
@@ -251,6 +251,14 @@ class ProspectListResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedProspectListResponse(BaseModel):
+    """Paginated response wrapping a list of prospects with total count."""
+    items: List[ProspectListResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 # --- Step Completion Schemas ---

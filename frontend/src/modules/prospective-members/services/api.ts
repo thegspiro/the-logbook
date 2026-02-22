@@ -450,15 +450,17 @@ export const applicantService = {
       }
     );
 
-    // Backend returns a flat list; wrap into paginated format
-    const items = Array.isArray(response.data) ? response.data : [];
+    // Backend returns { items, total, limit, offset }
+    const data = response.data;
+    const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+    const total = data?.total ?? items.length;
     const mappedItems = items.map(mapProspectListToApplicantList);
     return {
       items: mappedItems,
-      total: mappedItems.length,
+      total,
       page,
       page_size: pageSize,
-      total_pages: Math.max(1, Math.ceil(mappedItems.length / pageSize)),
+      total_pages: Math.max(1, Math.ceil(total / pageSize)),
     };
   },
 
@@ -525,7 +527,7 @@ export const applicantService = {
     await api.delete(`/prospective-members/prospects/${applicantId}`);
   },
 
-  async checkExisting(email: string, firstName?: string, lastName?: string): Promise<{ has_matches: boolean; match_count: number; matches: Array<Record<string, unknown>> }> {
+  async checkExisting(email: string, firstName?: string, lastName?: string): Promise<{ has_matches: boolean; match_count: number; matches: Array<{ status: string; match_type: string }> }> {
     const params: Record<string, string> = { email };
     if (firstName) params.first_name = firstName;
     if (lastName) params.last_name = lastName;
@@ -575,10 +577,9 @@ export const applicantService = {
     applicantId: string,
     reason?: string
   ): Promise<Applicant> {
-    // Backend doesn't have "on_hold" status; use withdrawn as closest match
     const response = await api.put(
       `/prospective-members/prospects/${applicantId}`,
-      { status: 'withdrawn', notes: reason }
+      { status: 'on_hold', notes: reason }
     );
     return mapProspectToApplicant(response.data);
   },
@@ -623,7 +624,7 @@ export const applicantService = {
     return this.getApplicants({
       filters: {
         pipeline_id: params?.pipeline_id,
-        status: 'withdrawn', // Backend has no "inactive" status; closest is withdrawn
+        status: 'inactive',
         search: params?.search,
       },
       page: params?.page,

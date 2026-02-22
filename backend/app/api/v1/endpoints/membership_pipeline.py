@@ -25,6 +25,7 @@ from app.schemas.membership_pipeline import (
     ProspectUpdate,
     ProspectResponse,
     ProspectListResponse,
+    PaginatedProspectListResponse,
     CompleteStepRequest,
     AdvanceProspectRequest,
     TransferProspectRequest,
@@ -414,7 +415,7 @@ async def purge_inactive_prospects(
 # Prospect Endpoints
 # ============================================
 
-@router.get("/prospects", response_model=List[ProspectListResponse])
+@router.get("/prospects", response_model=PaginatedProspectListResponse)
 async def list_prospects(
     pipeline_id: Optional[UUID] = Query(None, description="Filter by pipeline"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
@@ -426,6 +427,9 @@ async def list_prospects(
 ):
     """
     List prospective members with optional filters.
+
+    Returns a paginated response with ``items``, ``total``, ``limit``,
+    and ``offset`` so clients can implement proper pagination.
 
     **Requires permission: members.view**
     """
@@ -439,9 +443,9 @@ async def list_prospects(
         offset=offset,
     )
 
-    result = []
+    items = []
     for p in prospects:
-        result.append(ProspectListResponse(
+        items.append(ProspectListResponse(
             id=p.id,
             first_name=p.first_name,
             last_name=p.last_name,
@@ -454,7 +458,7 @@ async def list_prospects(
             current_step_name=p.current_step.name if p.current_step else None,
             created_at=p.created_at,
         ))
-    return result
+    return PaginatedProspectListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.post("/prospects/check-existing")
@@ -482,10 +486,20 @@ async def check_existing_members_for_prospect(
         first_name=first_name,
         last_name=last_name,
     )
+    # Return only non-sensitive summary data to avoid leaking PII.
+    # The full match details (user_id, email, membership_number) are
+    # only used internally by create_prospect and _do_transfer.
+    safe_matches = [
+        {
+            "status": m["status"],
+            "match_type": m["match_type"],
+        }
+        for m in matches
+    ]
     return {
         "has_matches": len(matches) > 0,
         "match_count": len(matches),
-        "matches": matches,
+        "matches": safe_matches,
     }
 
 
