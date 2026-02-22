@@ -404,7 +404,8 @@ class FacilitiesService:
         if is_archived is not None:
             conditions.append(Facility.is_archived == is_archived)
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             conditions.append(
                 or_(
                     Facility.name.ilike(search_term),
@@ -641,7 +642,7 @@ class FacilitiesService:
                 select(FacilityPhoto)
                 .where(FacilityPhoto.facility_id == photo_data.facility_id)
                 .where(FacilityPhoto.organization_id == str(organization_id))
-                .where(FacilityPhoto.is_primary == True)
+                .where(FacilityPhoto.is_primary == True)  # noqa: E712
             )
             for photo in result.scalars().all():
                 photo.is_primary = False
@@ -682,7 +683,7 @@ class FacilitiesService:
                 select(FacilityPhoto)
                 .where(FacilityPhoto.facility_id == photo.facility_id)
                 .where(FacilityPhoto.organization_id == str(organization_id))
-                .where(FacilityPhoto.is_primary == True)
+                .where(FacilityPhoto.is_primary == True)  # noqa: E712
                 .where(FacilityPhoto.id != photo_id)
             )
             for other_photo in existing.scalars().all():

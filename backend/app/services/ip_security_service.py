@@ -11,7 +11,7 @@ Zero-Trust Model:
 """
 
 from typing import Optional, List, Set, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, update, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
@@ -109,7 +109,7 @@ class IPSecurityService:
             country_name = geo_info.get("country_name")
 
         # Calculate tentative valid_until (will be confirmed on approval)
-        tentative_valid_until = datetime.utcnow() + timedelta(days=requested_duration_days)
+        tentative_valid_until = datetime.now(timezone.utc) + timedelta(days=requested_duration_days)
 
         # Create the exception request
         exception = IPException(
@@ -201,7 +201,7 @@ class IPSecurityService:
             duration = MAX_EXCEPTION_DURATION_DAYS
 
         # Set validity period
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         valid_until = now + timedelta(days=duration)
 
         # Update exception
@@ -283,7 +283,7 @@ class IPSecurityService:
         # Update exception
         exception.approval_status = IPExceptionApprovalStatus.REJECTED
         exception.rejected_by = admin_id
-        exception.rejected_at = datetime.utcnow()
+        exception.rejected_at = datetime.now(timezone.utc)
         exception.rejection_reason = rejection_reason
 
         await db.commit()
@@ -352,7 +352,7 @@ class IPSecurityService:
         # Update exception
         exception.approval_status = IPExceptionApprovalStatus.REVOKED
         exception.revoked_by = admin_id
-        exception.revoked_at = datetime.utcnow()
+        exception.revoked_at = datetime.now(timezone.utc)
         exception.revoke_reason = revoke_reason
 
         await db.commit()
@@ -447,7 +447,7 @@ class IPSecurityService:
         """
         Get all currently active (approved and not expired) allowed IPs for a user.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         result = await db.execute(
             select(IPException.ip_address)
@@ -474,7 +474,7 @@ class IPSecurityService:
 
         Used by IP blocking middleware to check allowlist.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         query = (
             select(IPException.ip_address)
@@ -503,7 +503,7 @@ class IPSecurityService:
         Returns:
             Number of exceptions expired
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Find approved exceptions past their valid_until
         result = await db.execute(
@@ -625,7 +625,7 @@ class IPSecurityService:
         """Get all blocked country rules."""
         result = await db.execute(
             select(CountryBlockRule)
-            .where(CountryBlockRule.is_blocked == True)
+            .where(CountryBlockRule.is_blocked == True)  # noqa: E712
             .order_by(CountryBlockRule.country_code)
         )
         return list(result.scalars().all())

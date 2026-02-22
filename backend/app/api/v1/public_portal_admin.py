@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from loguru import logger
 
 from app.core.database import get_db
@@ -108,7 +108,7 @@ async def create_portal_config(
         existing_config.default_rate_limit = config_data.default_rate_limit
         existing_config.cache_ttl_seconds = config_data.cache_ttl_seconds
         existing_config.settings = config_data.settings
-        existing_config.updated_at = datetime.utcnow().isoformat()
+        existing_config.updated_at = datetime.now(timezone.utc).isoformat()
 
         await db.commit()
         await db.refresh(existing_config)
@@ -167,7 +167,7 @@ async def update_portal_config(
     if config_update.settings is not None:
         config.settings = config_update.settings
 
-    config.updated_at = datetime.utcnow().isoformat()
+    config.updated_at = datetime.now(timezone.utc).isoformat()
 
     await db.commit()
     await db.refresh(config)
@@ -196,7 +196,7 @@ async def list_api_keys(
     )
 
     if not include_inactive:
-        query = query.where(PublicPortalAPIKey.is_active == True)
+        query = query.where(PublicPortalAPIKey.is_active == True)  # noqa: E712
 
     query = query.order_by(desc(PublicPortalAPIKey.created_at))
 
@@ -415,7 +415,7 @@ async def get_usage_stats(
     Returns aggregated statistics about API usage.
     """
     org_id = str(current_user.organization_id)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Total requests
     result = await db.execute(
@@ -524,7 +524,7 @@ async def get_usage_stats(
         .where(
             and_(
                 PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.flagged_suspicious == True
+                PublicPortalAccessLog.flagged_suspicious == True  # noqa: E712
             )
         )
     )
@@ -658,7 +658,7 @@ async def update_whitelist_entry(
         )
 
     whitelist_entry.is_enabled = entry_update.is_enabled
-    whitelist_entry.updated_at = datetime.utcnow().isoformat()
+    whitelist_entry.updated_at = datetime.now(timezone.utc).isoformat()
 
     await db.commit()
     await db.refresh(whitelist_entry)
@@ -702,7 +702,7 @@ async def bulk_update_whitelist(
 
         if entry:
             entry.is_enabled = enabled
-            entry.updated_at = datetime.utcnow().isoformat()
+            entry.updated_at = datetime.now(timezone.utc).isoformat()
             updated_count += 1
 
     await db.commit()

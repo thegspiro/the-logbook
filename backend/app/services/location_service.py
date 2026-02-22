@@ -6,7 +6,7 @@ Business logic for location management.
 
 from typing import List, Optional, Tuple
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
@@ -127,7 +127,7 @@ class LocationService:
         for field, value in update_data.items():
             setattr(location, field, value)
 
-        location.updated_at = datetime.utcnow()
+        location.updated_at = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(location)
@@ -184,7 +184,7 @@ class LocationService:
         )
 
         if not include_cancelled:
-            query = query.where(Event.is_cancelled == False)
+            query = query.where(Event.is_cancelled == False)  # noqa: E712
 
         if start_after:
             query = query.where(Event.start_datetime >= start_after)
@@ -206,14 +206,14 @@ class LocationService:
         Get events at this location that are currently in their check-in window
         (1 hour before start to end time, respecting actual_end_time if set)
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         check_in_start_threshold = now + timedelta(hours=1)  # Can check in up to 1 hour before
 
         query = (
             select(Event)
             .where(Event.location_id == str(location_id))
             .where(Event.organization_id == str(organization_id))
-            .where(Event.is_cancelled == False)
+            .where(Event.is_cancelled == False)  # noqa: E712
             .where(Event.start_datetime <= check_in_start_threshold)
             .where(
                 or_(
@@ -245,7 +245,7 @@ class LocationService:
             select(Event)
             .where(Event.location_id == str(location_id))
             .where(Event.organization_id == str(organization_id))
-            .where(Event.is_cancelled == False)
+            .where(Event.is_cancelled == False)  # noqa: E712
             .where(
                 or_(
                     # New event starts during existing event
@@ -278,7 +278,7 @@ class LocationService:
         result = await self.db.execute(
             select(Location)
             .where(Location.display_code == display_code)
-            .where(Location.is_active == True)
+            .where(Location.is_active == True)  # noqa: E712
         )
         return result.scalar_one_or_none()
 

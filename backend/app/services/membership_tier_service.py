@@ -5,7 +5,7 @@ Handles tier auto-advancement based on years of service and provides
 meeting attendance calculation for voting eligibility.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 
 from loguru import logger
@@ -42,7 +42,7 @@ class MembershipTierService:
         the member's percentage.
         Returns 100.0 if no eligible meetings occurred.
         """
-        cutoff = datetime.utcnow() - timedelta(days=period_months * 30)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=period_months * 30)
 
         org_meetings_subq = select(Meeting.id).where(
             Meeting.organization_id == organization_id,
@@ -189,7 +189,7 @@ class MembershipTierService:
         members = result.scalars().all()
 
         advanced = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         for member in members:
             yos = self.years_of_service(member.hire_date)

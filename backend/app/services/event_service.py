@@ -152,7 +152,7 @@ class EventService:
             query = query.where(Event.event_type.notin_(exclude_event_types))
 
         if not include_cancelled:
-            query = query.where(Event.is_cancelled == False)
+            query = query.where(Event.is_cancelled == False)  # noqa: E712
 
         if start_after:
             query = query.where(Event.start_datetime >= start_after)
@@ -775,7 +775,7 @@ class EventService:
                 EventRSVP.status,
                 func.count(EventRSVP.id),
                 func.sum(EventRSVP.guest_count),
-                func.sum(case((EventRSVP.checked_in == True, 1), else_=0))
+                func.sum(case((EventRSVP.checked_in == True, 1), else_=0))  # noqa: E712
             )
             .where(EventRSVP.event_id == str(event_id))
             .group_by(EventRSVP.status)
@@ -1179,7 +1179,7 @@ class EventService:
         eligible_members_result = await self.db.execute(
             select(func.count(User.id))
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active == True)
+            .where(User.is_active == True)  # noqa: E712
         )
         total_eligible_members = eligible_members_result.scalar() or 0
 
@@ -1270,7 +1270,7 @@ class EventService:
             .where(EventTemplate.organization_id == str(organization_id))
         )
         if not include_inactive:
-            query = query.where(EventTemplate.is_active == True)
+            query = query.where(EventTemplate.is_active == True)  # noqa: E712
         query = query.order_by(EventTemplate.name).offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())

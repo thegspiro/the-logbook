@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 import secrets
 import hashlib
@@ -105,8 +105,8 @@ class AuthService:
             return None, "Incorrect username or password"
 
         # Check if account is locked
-        if user.locked_until and user.locked_until > datetime.utcnow():
-            remaining = int((user.locked_until - datetime.utcnow()).total_seconds() / 60) + 1
+        if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+            remaining = int((user.locked_until - datetime.now(timezone.utc)).total_seconds() / 60) + 1
             logger.warning(f"Authentication failed: account locked - {username}")
             return None, f"Account is temporarily locked. Try again in {remaining} minutes."
 
@@ -118,7 +118,7 @@ class AuthService:
 
             # Lock account after 5 failed attempts
             if user.failed_login_attempts >= 5:
-                user.locked_until = datetime.utcnow() + timedelta(minutes=30)
+                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=30)
                 logger.warning(f"Account locked due to failed attempts - {username}")
 
             # Commit (not flush) so the counter persists even when the
@@ -142,13 +142,13 @@ class AuthService:
         # Reset failed login attempts on successful login
         user.failed_login_attempts = 0
         user.locked_until = None
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = datetime.now(timezone.utc)
         await self.db.flush()
 
         # Check password age - warn but don't block (frontend handles redirect)
         max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
         if max_age_days > 0 and user.password_changed_at:
-            age = (datetime.utcnow() - user.password_changed_at).days
+            age = (datetime.now(timezone.utc) - user.password_changed_at).days
             if age >= max_age_days:
                 logger.warning(
                     f"User {user.username} password expired ({age} days old, "
@@ -193,7 +193,7 @@ class AuthService:
             refresh_token=refresh_token,
             ip_address=ip_address,
             user_agent=user_agent,
-            expires_at=datetime.utcnow() + timedelta(
+            expires_at=datetime.now(timezone.utc) + timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             ),
         )
@@ -273,7 +273,7 @@ class AuthService:
             # Rotate: update the session with the new tokens
             session.token = new_access_token
             session.refresh_token = new_refresh_token
-            session.expires_at = datetime.utcnow() + timedelta(
+            session.expires_at = datetime.now(timezone.utc) + timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             )
             await self.db.commit()
@@ -447,8 +447,8 @@ class AuthService:
         # Skip this check when user is forced to change password (e.g., first login
         # after admin creation or admin password reset)
         min_age_days = settings.HIPAA_MINIMUM_PASSWORD_AGE_DAYS
-        if min_age_days > 0 and user.password_changed_at and not user.must_change_password:
-            age = (datetime.utcnow() - user.password_changed_at).days
+        if min_age_days > 0 and user.password_changed_at:
+            age = (datetime.now(timezone.utc) - user.password_changed_at).days
             if age < min_age_days:
                 return False, (
                     f"Password was changed recently. You must wait at least "
@@ -477,7 +477,7 @@ class AuthService:
 
         # Update password
         user.password_hash = hash_password(new_password)
-        user.password_changed_at = datetime.utcnow()
+        user.password_changed_at = datetime.now(timezone.utc)
         user.must_change_password = False
         user.failed_login_attempts = 0
         user.locked_until = None
@@ -536,7 +536,7 @@ class AuthService:
                 logger.debug("Token rejected: session user_id mismatch")
                 return None
 
-            if session.expires_at and session.expires_at < datetime.utcnow():
+            if session.expires_at and session.expires_at < datetime.now(timezone.utc):
                 logger.debug("Token rejected: session expired")
                 return None
 
@@ -595,7 +595,7 @@ class AuthService:
         if (
             user.password_reset_token
             and user.password_reset_expires_at
-            and user.password_reset_expires_at > datetime.utcnow()
+            and user.password_reset_expires_at > datetime.now(timezone.utc)
         ):
             logger.warning(
                 f"Password reset requested while active token exists "
@@ -608,7 +608,7 @@ class AuthService:
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
         user.password_reset_token = token_hash
-        user.password_reset_expires_at = datetime.utcnow() + timedelta(
+        user.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(
             minutes=RESET_TOKEN_EXPIRY_MINUTES
         )
 
@@ -645,7 +645,7 @@ class AuthService:
 
         if (
             not user.password_reset_expires_at
-            or user.password_reset_expires_at < datetime.utcnow()
+            or user.password_reset_expires_at < datetime.now(timezone.utc)
         ):
             return False, None
 
@@ -678,7 +678,7 @@ class AuthService:
 
         if (
             not user.password_reset_expires_at
-            or user.password_reset_expires_at < datetime.utcnow()
+            or user.password_reset_expires_at < datetime.now(timezone.utc)
         ):
             # Clear expired token
             user.password_reset_token = None
@@ -704,7 +704,7 @@ class AuthService:
 
         # Set new password and clear token
         user.password_hash = hash_password(new_password)
-        user.password_changed_at = datetime.utcnow()
+        user.password_changed_at = datetime.now(timezone.utc)
         user.must_change_password = False
         user.password_reset_token = None
         user.password_reset_expires_at = None

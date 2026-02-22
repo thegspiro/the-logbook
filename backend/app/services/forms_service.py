@@ -6,7 +6,7 @@ fields, submissions, public forms, integrations, and reporting.
 """
 
 from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -243,7 +243,8 @@ class FormsService:
             query = query.where(Form.is_template == is_template)
 
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
                     Form.name.ilike(search_term),
@@ -280,7 +281,7 @@ class FormsService:
         result = await self.db.execute(
             select(Form)
             .where(Form.public_slug == slug)
-            .where(Form.is_public == True)
+            .where(Form.is_public == True)  # noqa: E712
             .where(Form.status == FormStatus.PUBLISHED)
             .options(selectinload(Form.fields), selectinload(Form.integrations))
         )
@@ -299,7 +300,7 @@ class FormsService:
             if "status" in update_data:
                 new_status = update_data["status"]
                 if new_status == FormStatus.PUBLISHED.value and form.status != FormStatus.PUBLISHED:
-                    update_data["published_at"] = datetime.now()
+                    update_data["published_at"] = datetime.now(timezone.utc)
 
             for key, value in update_data.items():
                 setattr(form, key, value)
@@ -882,7 +883,8 @@ class FormsService:
         self, organization_id: UUID, query: str, limit: int = 20
     ) -> List[Dict[str, Any]]:
         """Search members by name, membership number, or email for member_lookup fields"""
-        search_term = f"%{query}%"
+        safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        search_term = f"%{safe_query}%"
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
@@ -926,7 +928,7 @@ class FormsService:
         total_result = await self.db.execute(
             select(func.count(Form.id))
             .where(Form.organization_id == org_id_str)
-            .where(Form.is_template == False)
+            .where(Form.is_template == False)  # noqa: E712
         )
         total_forms = total_result.scalar()
 
@@ -935,7 +937,7 @@ class FormsService:
             select(func.count(Form.id))
             .where(Form.organization_id == org_id_str)
             .where(Form.status == FormStatus.PUBLISHED)
-            .where(Form.is_template == False)
+            .where(Form.is_template == False)  # noqa: E712
         )
         published_forms = published_result.scalar()
 
@@ -944,7 +946,7 @@ class FormsService:
             select(func.count(Form.id))
             .where(Form.organization_id == org_id_str)
             .where(Form.status == FormStatus.DRAFT)
-            .where(Form.is_template == False)
+            .where(Form.is_template == False)  # noqa: E712
         )
         draft_forms = draft_result.scalar()
 
@@ -952,8 +954,8 @@ class FormsService:
         public_result = await self.db.execute(
             select(func.count(Form.id))
             .where(Form.organization_id == org_id_str)
-            .where(Form.is_public == True)
-            .where(Form.is_template == False)
+            .where(Form.is_public == True)  # noqa: E712
+            .where(Form.is_template == False)  # noqa: E712
         )
         public_forms = public_result.scalar()
 

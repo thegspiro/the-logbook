@@ -12,7 +12,7 @@ The report:
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
 from typing import Dict, Any, Optional, List, Tuple
@@ -88,7 +88,7 @@ class PropertyReturnService:
             .where(
                 ItemAssignment.organization_id == organization_id,
                 ItemAssignment.user_id == user_id,
-                ItemAssignment.is_active == True,
+                ItemAssignment.is_active == True,  # noqa: E712
             )
             .options(selectinload(ItemAssignment.item))
         )
@@ -100,7 +100,7 @@ class PropertyReturnService:
             .where(
                 CheckOutRecord.organization_id == organization_id,
                 CheckOutRecord.user_id == user_id,
-                CheckOutRecord.is_returned == False,
+                CheckOutRecord.is_returned == False,  # noqa: E712
             )
             .options(selectinload(CheckOutRecord.item))
         )
@@ -139,12 +139,7 @@ class PropertyReturnService:
             })
 
         today = date.today()
-        return_deadline = date.today().replace(day=today.day)
-        try:
-            from datetime import timedelta
-            return_deadline = today + timedelta(days=return_deadline_days)
-        except Exception:
-            pass
+        return_deadline = today + timedelta(days=return_deadline_days)
 
         report_data = {
             "member_id": user_id,
@@ -166,7 +161,7 @@ class PropertyReturnService:
             "item_count": len(items),
             "performed_by_name": officer.full_name if officer else "Department Administration",
             "performed_by_title": officer.rank if officer and officer.rank else "Administrator",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
         html = self._render_html(report_data, custom_instructions, reason=reason)
@@ -185,7 +180,7 @@ class PropertyReturnService:
             select(DocumentFolder).where(
                 DocumentFolder.organization_id == organization_id,
                 DocumentFolder.name == "Reports",
-                DocumentFolder.is_system == True,
+                DocumentFolder.is_system == True,  # noqa: E712
             )
         )
         folder = folder_result.scalar_one_or_none()

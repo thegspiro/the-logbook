@@ -80,7 +80,7 @@ class CompetencyMatrixService:
         req_query = (
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == str(organization_id))
-            .where(TrainingRequirement.active == True)
+            .where(TrainingRequirement.active == True)  # noqa: E712
         )
         if requirement_ids:
             req_query = req_query.where(TrainingRequirement.id.in_(requirement_ids))

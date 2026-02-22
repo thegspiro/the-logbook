@@ -6,7 +6,7 @@ Business logic for training session management, approval workflows, and notifica
 
 from typing import Optional, Tuple
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
@@ -204,7 +204,7 @@ class TrainingSessionService:
             return None, "Event not found"
 
         # Check if event has ended
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_end = event.actual_end_time or event.end_datetime
         if now < event_end:
             return None, "Cannot finalize training session before event ends"
@@ -390,7 +390,7 @@ class TrainingSessionService:
             return None, "Invalid approval link"
 
         # Check if token is expired
-        if datetime.utcnow() > approval.token_expires_at:
+        if datetime.now(timezone.utc) > approval.token_expires_at:
             return None, "This approval link has expired"
 
         # Get event and training session details
@@ -453,13 +453,13 @@ class TrainingSessionService:
             return False, "This training session has already been processed"
 
         # Check if token is expired
-        if datetime.utcnow() > approval.token_expires_at:
+        if datetime.now(timezone.utc) > approval.token_expires_at:
             return False, "This approval link has expired"
 
         # Update approval record
         approval.status = ApprovalStatus.APPROVED
         approval.approved_by = approved_by
-        approval.approved_at = datetime.utcnow()
+        approval.approved_at = datetime.now(timezone.utc)
         approval.approval_notes = approval_notes
         approval.attendee_data = [a.model_dump(mode='python') for a in attendees]
 
@@ -481,7 +481,7 @@ class TrainingSessionService:
                     rsvp.override_duration_minutes = attendee.override_duration_minutes
 
                 rsvp.overridden_by = approved_by
-                rsvp.overridden_at = datetime.utcnow()
+                rsvp.overridden_at = datetime.now(timezone.utc)
 
         await self.db.commit()
 
@@ -570,7 +570,7 @@ class TrainingSessionService:
                 # Update existing record
                 existing_record.hours_completed = hours_completed
                 existing_record.status = "completed"
-                existing_record.updated_at = datetime.utcnow()
+                existing_record.updated_at = datetime.now(timezone.utc)
             else:
                 # Create new training record
                 training_record = TrainingRecord(

@@ -177,7 +177,7 @@ class ElectionService:
         attendee_record = {
             "user_id": str(user_id),
             "name": user.full_name,
-            "checked_in_at": datetime.utcnow().isoformat(),
+            "checked_in_at": datetime.now(timezone.utc).isoformat(),
             "checked_in_by": str(checked_in_by),
         }
         attendees.append(attendee_record)
@@ -364,7 +364,7 @@ class ElectionService:
             )
 
         # Check if election is open
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         if election.status != ElectionStatus.OPEN:
             return VoterEligibility(
                 is_eligible=False,
@@ -641,7 +641,7 @@ class ElectionService:
             vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
-            voted_at=datetime.utcnow(),
+            voted_at=datetime.now(timezone.utc),
         )
 
         # Sign the vote for tampering detection
@@ -818,7 +818,7 @@ class ElectionService:
         if not vote:
             return None
 
-        vote.deleted_at = datetime.utcnow()
+        vote.deleted_at = datetime.now(timezone.utc)
         vote.deleted_by = str(deleted_by)
         vote.deletion_reason = reason
         await self.db.commit()
@@ -1046,7 +1046,7 @@ class ElectionService:
 
         # SECURITY: Check if results can be viewed
         # Results are ONLY visible after the election closing time has passed
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         election_has_closed = current_time > election.end_date
 
         can_view = (
@@ -1081,7 +1081,7 @@ class ElectionService:
             users_result = await self.db.execute(
                 select(func.count(User.id))
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)
+                .where(User.is_active == True)  # noqa: E712
             )
             total_eligible = users_result.scalar() or 0
 
@@ -1360,7 +1360,7 @@ class ElectionService:
             users_result = await self.db.execute(
                 select(func.count(User.id))
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)
+                .where(User.is_active == True)  # noqa: E712
             )
             total_eligible = users_result.scalar() or 0
 
@@ -1422,7 +1422,7 @@ class ElectionService:
         candidates_result = await self.db.execute(
             select(Candidate)
             .where(Candidate.election_id == election.id)
-            .where(Candidate.accepted == True)
+            .where(Candidate.accepted == True)  # noqa: E712
         )
         all_candidates = list(candidates_result.scalars().all())
 
@@ -1460,7 +1460,7 @@ class ElectionService:
             advancing_candidates = sorted_candidates[:2]
 
         # Create runoff election
-        runoff_start = datetime.utcnow() + timedelta(hours=1)  # Start 1 hour from now
+        runoff_start = datetime.now(timezone.utc) + timedelta(hours=1)  # Start 1 hour from now
         runoff_end = runoff_start + timedelta(days=1)  # 1 day duration by default
 
         runoff_election = Election(
@@ -1504,7 +1504,7 @@ class ElectionService:
                 position=candidate.position,
                 statement=candidate.statement,
                 photo_url=candidate.photo_url,
-                nomination_date=datetime.utcnow(),
+                nomination_date=datetime.now(timezone.utc),
                 nominated_by=election.created_by,
                 accepted=True,
                 is_write_in=False,
@@ -1584,7 +1584,7 @@ class ElectionService:
         candidates_result = await self.db.execute(
             select(func.count(Candidate.id))
             .where(Candidate.election_id == str(election_id))
-            .where(Candidate.accepted == True)
+            .where(Candidate.accepted == True)  # noqa: E712
         )
         candidate_count = candidates_result.scalar() or 0
 
@@ -1644,7 +1644,7 @@ class ElectionService:
 
         # Create rollback record
         rollback_record = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "performed_by": str(performed_by),
             "from_status": from_status,
             "to_status": to_status,
@@ -1660,7 +1660,7 @@ class ElectionService:
 
         # Update status
         election.status = new_status
-        election.updated_at = datetime.utcnow()
+        election.updated_at = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(election)
@@ -1712,7 +1712,7 @@ class ElectionService:
             select(User)
             .join(User.roles)
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active == True)
+            .where(User.is_active == True)  # noqa: E712
             .options(selectinload(User.roles))
         )
         all_users = users_result.scalars().all()
@@ -1883,7 +1883,7 @@ Best regards,
             select(User)
             .join(User.roles)
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active == True)
+            .where(User.is_active == True)  # noqa: E712
             .options(selectinload(User.roles))
         )
         all_users = users_result.scalars().all()
@@ -2045,7 +2045,7 @@ Best regards,
         voter_hash = self._generate_voter_hash(user_id, election_id, anonymity_salt)
 
         # Token expires when election ends (or 30 days if election is longer)
-        max_expiry = datetime.utcnow() + timedelta(days=30)
+        max_expiry = datetime.now(timezone.utc) + timedelta(days=30)
         expires_at = min(election_end_date, max_expiry)
 
         voting_token = VotingToken(
@@ -2054,7 +2054,7 @@ Best regards,
             election_id=election_id,
             token=token,
             voter_hash=voter_hash,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             expires_at=expires_at,
             used=False,
         )
@@ -2139,7 +2139,7 @@ Best regards,
             "reason": reason,
             "authorized_by": str(authorized_by),
             "authorized_by_name": authorizer.full_name,
-            "authorized_at": datetime.utcnow().isoformat(),
+            "authorized_at": datetime.now(timezone.utc).isoformat(),
             "revoked_at": None,
         }
         authorizations.append(auth_record)
@@ -2200,7 +2200,7 @@ Best regards,
                 if vote_result.scalar_one_or_none():
                     return False, "Cannot revoke — the proxy has already cast a vote using this authorization"
 
-                auth["revoked_at"] = datetime.utcnow().isoformat()
+                auth["revoked_at"] = datetime.now(timezone.utc).isoformat()
                 found = True
                 break
 
@@ -2345,7 +2345,7 @@ Best regards,
             vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
-            voted_at=datetime.utcnow(),
+            voted_at=datetime.now(timezone.utc),
             is_proxy_vote=True,
             proxy_voter_id=str(proxy_user_id),
             proxy_authorization_id=proxy_authorization_id,
@@ -2438,7 +2438,7 @@ Best regards,
             users_result = await self.db.execute(
                 select(User)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)
+                .where(User.is_active == True)  # noqa: E712
             )
             recipients = users_result.scalars().all()
 
@@ -2500,7 +2500,7 @@ Best regards,
 
         # Update election with email sent status
         election.email_sent = True
-        election.email_sent_at = datetime.utcnow()
+        election.email_sent_at = datetime.now(timezone.utc)
         election.email_recipients = [str(user.id) for user in recipients]
 
         # Commit all voting tokens and election updates
@@ -2563,7 +2563,7 @@ Best regards,
             return None, None, "Invalid voting token"
 
         # Check if token has expired
-        if datetime.utcnow() > voting_token.expires_at:
+        if datetime.now(timezone.utc) > voting_token.expires_at:
             return None, None, "Voting token has expired"
 
         # Check if token has already been fully used
@@ -2572,7 +2572,7 @@ Best regards,
 
         # Update access tracking
         if not voting_token.first_accessed_at:
-            voting_token.first_accessed_at = datetime.utcnow()
+            voting_token.first_accessed_at = datetime.now(timezone.utc)
         voting_token.access_count += 1
         await self.db.commit()
 
@@ -2587,7 +2587,7 @@ Best regards,
             return None, None, "Election not found"
 
         # Check if election is still open
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         if election.status != ElectionStatus.OPEN:
             return None, None, f"Election is {election.status.value}"
 
@@ -2665,7 +2665,7 @@ Best regards,
             position=position,
             ip_address=ip_address,
             user_agent=user_agent,
-            voted_at=datetime.utcnow(),
+            voted_at=datetime.now(timezone.utc),
         )
 
         # Sign the vote for tampering detection
@@ -2685,13 +2685,13 @@ Best regards,
         if not election_positions:
             # Single-position election — token used after first vote
             voting_token.used = True
-            voting_token.used_at = datetime.utcnow()
+            voting_token.used_at = datetime.now(timezone.utc)
         else:
             # Multi-position — check if all positions are now covered
             remaining = set(election_positions) - set(positions_voted)
             if not remaining:
                 voting_token.used = True
-                voting_token.used_at = datetime.utcnow()
+                voting_token.used_at = datetime.now(timezone.utc)
 
         # SECURITY: Database-level constraint prevents double-voting
         # even if race condition bypasses application-level checks
@@ -2759,7 +2759,7 @@ Best regards,
         candidate_result = await self.db.execute(
             select(Candidate)
             .where(Candidate.election_id == election.id)
-            .where(Candidate.accepted == True)
+            .where(Candidate.accepted == True)  # noqa: E712
         )
         candidates = candidate_result.scalars().all()
         candidate_map = {str(c.id): c for c in candidates}
@@ -2824,7 +2824,7 @@ Best regards,
                     .where(Candidate.election_id == election.id)
                     .where(Candidate.position == position)
                     .where(Candidate.name == "Approve")
-                    .where(Candidate.is_write_in == False)
+                    .where(Candidate.is_write_in == False)  # noqa: E712
                 )
                 approve_candidate = approve_result.scalar_one_or_none()
 
@@ -2849,7 +2849,7 @@ Best regards,
                     .where(Candidate.election_id == election.id)
                     .where(Candidate.position == position)
                     .where(Candidate.name == "Deny")
-                    .where(Candidate.is_write_in == False)
+                    .where(Candidate.is_write_in == False)  # noqa: E712
                 )
                 deny_candidate = deny_result.scalar_one_or_none()
 
@@ -2882,7 +2882,7 @@ Best regards,
                 position=position,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                voted_at=datetime.utcnow(),
+                voted_at=datetime.now(timezone.utc),
             )
             vote.vote_signature = self._sign_vote(vote)
             self.db.add(vote)
@@ -2890,7 +2890,7 @@ Best regards,
 
         # Mark token as fully used
         voting_token.used = True
-        voting_token.used_at = datetime.utcnow()
+        voting_token.used_at = datetime.now(timezone.utc)
         voting_token.positions_voted = [v.get("ballot_item_id") for v in votes if v.get("choice") != "abstain"]
 
         # Commit all votes atomically

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { healthCheckService, type SystemHealth } from '../services/healthCheck';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatTime } from '../utils/dateFormatting';
@@ -18,21 +18,40 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
   const tz = useTimezone();
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
+  const failCountRef = useRef(0);
 
   useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+
     const runChecks = async () => {
       setLoading(true);
-      const result = await healthCheckService.runAllChecks(eventId);
-      setHealth(result);
-      setLoading(false);
+      try {
+        const result = await healthCheckService.runAllChecks(eventId);
+        if (!cancelled) {
+          setHealth(result);
+          failCountRef.current = 0;
+        }
+      } catch {
+        if (!cancelled) {
+          failCountRef.current = Math.min(failCountRef.current + 1, 5);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          // Exponential backoff: 30s, 60s, 120s, 240s, 480s (max ~8 min)
+          const delay = 30000 * Math.pow(2, failCountRef.current);
+          timeoutId = setTimeout(runChecks, delay);
+        }
+      }
     };
 
     runChecks();
 
-    // Refresh every 30 seconds
-    const interval = setInterval(runChecks, 30000);
-
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [eventId]);
 
   if (loading || !health) {

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 
 from app.core.database import get_db
@@ -76,7 +76,7 @@ async def check_field_whitelisted(
                 PublicPortalDataWhitelist.organization_id == organization_id,
                 PublicPortalDataWhitelist.data_category == category,
                 PublicPortalDataWhitelist.field_name == field,
-                PublicPortalDataWhitelist.is_enabled == True
+                PublicPortalDataWhitelist.is_enabled == True  # noqa: E712
             )
         )
     )
@@ -109,7 +109,7 @@ async def filter_data_by_whitelist(
             and_(
                 PublicPortalDataWhitelist.organization_id == organization_id,
                 PublicPortalDataWhitelist.data_category == category,
-                PublicPortalDataWhitelist.is_enabled == True
+                PublicPortalDataWhitelist.is_enabled == True  # noqa: E712
             )
         )
     )
@@ -330,7 +330,7 @@ async def get_organization_stats(
         members_result = await db.execute(
             select(func.count(User.id))
             .where(User.organization_id == org_id_str)
-            .where(User.is_active == True)
+            .where(User.is_active == True)  # noqa: E712
         )
         total_members = members_result.scalar() or 0
 
@@ -418,9 +418,9 @@ async def get_public_events(
         events_query = (
             select(Event)
             .where(Event.organization_id == org_id_str)
-            .where(Event.is_cancelled == False)
+            .where(Event.is_cancelled == False)  # noqa: E712
             .where(Event.event_type == EventType.PUBLIC_EDUCATION)
-            .where(Event.start_datetime >= datetime.utcnow())
+            .where(Event.start_datetime >= datetime.now(timezone.utc))
             .order_by(Event.start_datetime.asc())
             .offset(offset)
             .limit(limit)
@@ -474,7 +474,7 @@ async def health_check():
         "status": "healthy",
         "service": "public-portal-api",
         "version": "1.0.0",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 

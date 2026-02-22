@@ -1893,10 +1893,15 @@ export interface InventoryCategoryCreate {
 }
 
 // Scan / Quick-Action Types
-export interface ScanLookupResponse {
+export interface ScanLookupResult {
   item: InventoryItem;
   matched_field: string;
   matched_value: string;
+}
+
+export interface ScanLookupResponse {
+  results: ScanLookupResult[];
+  total: number;
 }
 
 export interface BatchScanItem {
@@ -2941,7 +2946,8 @@ export const schedulingService = {
   },
 
   // Shift Calls
-  async getShiftCalls(shiftId: string): Promise<Record<string, unknown>[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getShiftCalls(shiftId: string): Promise<any[]> {
     const response = await api.get(`/scheduling/shifts/${shiftId}/calls`);
     return response.data;
   },
@@ -3102,7 +3108,8 @@ export const schedulingService = {
   },
 
   // --- Basic Apparatus (lightweight, for departments without full Apparatus module) ---
-  async getBasicApparatus(params?: { is_active?: boolean }): Promise<Record<string, unknown>[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getBasicApparatus(params?: { is_active?: boolean }): Promise<any[]> {
     const response = await api.get('/scheduling/apparatus', { params });
     return response.data;
   },

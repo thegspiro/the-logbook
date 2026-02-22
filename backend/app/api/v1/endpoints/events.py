@@ -59,7 +59,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         organization_id=event.organization_id,
         title=event.title,
         description=event.description,
-        event_type=event.event_type.value,
+        event_type=event.event_type.value if event.event_type else "other",
         location_id=event.location_id,
         location=event.location,
         location_name=location_name,
@@ -156,7 +156,7 @@ async def list_events(
             EventListItem(
                 id=event.id,
                 title=event.title,
-                event_type=event.event_type.value,
+                event_type=event.event_type.value if event.event_type else "other",
                 start_datetime=event.start_datetime,
                 end_datetime=event.end_datetime,
                 location_id=event.location_id,
@@ -1231,10 +1231,10 @@ async def upload_event_attachment(
         "file_type": file.content_type,
         "description": description,
         "uploaded_by": str(current_user.id),
-        "uploaded_at": datetime.utcnow().isoformat(),
+        "uploaded_at": datetime.now(dt_timezone.utc).isoformat(),
     })
     event.attachments = attachments
-    event.updated_at = datetime.utcnow()
+    event.updated_at = datetime.now(dt_timezone.utc)
 
     await db.commit()
 
@@ -1356,7 +1356,7 @@ async def delete_event_attachment(
 
     # Remove from attachments list
     event.attachments = [a for a in attachments if a.get("id") != attachment_id]
-    event.updated_at = datetime.utcnow()
+    event.updated_at = datetime.now(dt_timezone.utc)
 
     await db.commit()
 
@@ -1771,7 +1771,7 @@ async def get_public_calendar(
         .where(
             Event.organization_id == organization_id,
             Event.event_type.in_(public_types),
-            Event.start_datetime >= datetime.utcnow(),
+            Event.start_datetime >= datetime.now(dt_timezone.utc),
             Event.is_cancelled == False,  # noqa: E712
         )
         .order_by(Event.start_datetime.asc())

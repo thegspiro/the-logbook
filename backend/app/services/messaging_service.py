@@ -6,7 +6,7 @@ Handles creation, targeting, delivery, and read tracking.
 """
 
 from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, case, desc
 from sqlalchemy.orm import selectinload
@@ -180,7 +180,7 @@ class MessagingService:
         Get messages visible to the current user based on targeting rules.
         Returns messages enriched with read/acknowledged status.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # First get the user's roles and status
         user_result = await self.db.execute(
@@ -359,14 +359,14 @@ class MessagingService:
 
             if record:
                 if not record.acknowledged_at:
-                    record.acknowledged_at = datetime.utcnow()
+                    record.acknowledged_at = datetime.now(timezone.utc)
                     await self.db.commit()
             else:
                 read_record = DepartmentMessageRead(
                     id=generate_uuid(),
                     message_id=message_id,
                     user_id=user_id,
-                    acknowledged_at=datetime.utcnow(),
+                    acknowledged_at=datetime.now(timezone.utc),
                 )
                 self.db.add(read_record)
                 await self.db.commit()

@@ -105,6 +105,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return;
     }
 
+    // Check if token is expired by decoding the payload
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        // Token expired — clear and stop
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        set({ isAuthenticated: false, user: null });
+        return;
+      }
+    } catch {
+      // If token can't be decoded, let the API call validate it
+    }
+
     set({ isLoading: true });
 
     try {

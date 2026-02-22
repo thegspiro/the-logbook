@@ -48,7 +48,7 @@ async def get_login_branding(
     try:
         result = await db.execute(
             select(Organization.name, Organization.logo)
-            .where(Organization.active == True)
+            .where(Organization.active == True)  # noqa: E712
             .order_by(Organization.created_at.asc())
             .limit(1)
         )
@@ -76,7 +76,7 @@ async def get_oauth_config(
     try:
         result = await db.execute(
             select(Organization.settings)
-            .where(Organization.active == True)
+            .where(Organization.active == True)  # noqa: E712
             .order_by(Organization.created_at.asc())
             .limit(1)
         )
@@ -130,7 +130,7 @@ async def register(
     from sqlalchemy import select
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.active == True)
+        .where(Organization.active == True)  # noqa: E712
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -302,7 +302,7 @@ async def get_current_user_info(
 
     Returns the authenticated user's profile and permissions.
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     # Re-fetch with eager loading so we can iterate positions safely in async
     user_result = await db.execute(
@@ -328,7 +328,7 @@ async def get_current_user_info(
     password_expired = False
     max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
     if max_age_days > 0 and current_user.password_changed_at:
-        age = (datetime.utcnow() - current_user.password_changed_at).days
+        age = (datetime.now(timezone.utc) - current_user.password_changed_at).days
         password_expired = age >= max_age_days
 
     # Get organization timezone
@@ -445,7 +445,7 @@ async def forgot_password(
     # Look up the organization (single-org system)
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.active == True)
+        .where(Organization.active == True)  # noqa: E712
         .order_by(Organization.created_at.asc())
         .limit(1)
     )

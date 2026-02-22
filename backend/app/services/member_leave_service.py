@@ -7,7 +7,7 @@ the training and shift modules to exclude months from
 rolling-period requirement calculations.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 from sqlalchemy import select, and_
@@ -46,7 +46,7 @@ class MemberLeaveService:
             start_date=start_date,
             end_date=end_date,
             granted_by=granted_by,
-            granted_at=datetime.utcnow() if granted_by else None,
+            granted_at=datetime.now(timezone.utc) if granted_by else None,
             active=True,
         )
         self.db.add(leave)
@@ -105,7 +105,7 @@ class MemberLeaveService:
             if value is not None:
                 setattr(leave, key, value)
 
-        leave.updated_at = datetime.utcnow()
+        leave.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(leave)
         return leave
@@ -118,7 +118,7 @@ class MemberLeaveService:
         if not leave:
             return False
         leave.active = False
-        leave.updated_at = datetime.utcnow()
+        leave.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
         return True
 

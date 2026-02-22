@@ -835,9 +835,9 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRSVP}>
-                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="rsvp-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">RSVP for {event.title}</h3>
 
                   {submitError && (
@@ -942,9 +942,9 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleCancelEvent}>
-                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="cancel-event-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Event</h3>
 
                   <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
@@ -1036,8 +1036,8 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
-              <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+              <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary">Check In Members</h3>
                   <button
@@ -1178,9 +1178,9 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRecordTimes}>
-                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="record-times-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Record Official Event Times</h3>
 
                   <p className="text-sm text-theme-text-secondary mb-4">
@@ -1282,9 +1282,9 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleOverrideAttendance}>
-                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="override-modal-title" className="text-lg font-medium text-theme-text-primary mb-1">
                     Edit Attendance Times
                   </h3>
@@ -1376,8 +1376,8 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
                   <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
                     <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

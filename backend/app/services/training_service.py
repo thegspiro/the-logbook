@@ -6,7 +6,7 @@ Business logic for training management including courses, records, requirements,
 
 import calendar
 from typing import List, Optional, Dict, Tuple
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -44,7 +44,7 @@ class TrainingService:
         """
         Get comprehensive training statistics for a user
         """
-        current_year = datetime.now().year
+        current_year = datetime.now(timezone.utc).year
 
         # Get all completed training records
         result = await self.db.execute(
@@ -216,7 +216,7 @@ class TrainingService:
             req_result = await self.db.execute(
                 select(TrainingRequirement)
                 .where(TrainingRequirement.organization_id == str(organization_id))
-                .where(TrainingRequirement.active == True)
+                .where(TrainingRequirement.active == True)  # noqa: E712
             )
             requirements = req_result.scalars().all()
 
@@ -365,7 +365,7 @@ class TrainingService:
         """
         Get progress for all requirements applicable to a user
         """
-        current_year = year or datetime.now().year
+        current_year = year or datetime.now(timezone.utc).year
 
         # Get user's roles
         user_result = await self.db.execute(
@@ -383,7 +383,7 @@ class TrainingService:
         query = (
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == str(organization_id))
-            .where(TrainingRequirement.active == True)
+            .where(TrainingRequirement.active == True)  # noqa: E712
         )
 
         if year:

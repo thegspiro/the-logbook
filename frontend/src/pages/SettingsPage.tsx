@@ -5,7 +5,7 @@
  * contact information visibility, and membership ID settings.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   GraduationCap,
   Package,
@@ -66,6 +66,11 @@ export const SettingsPage: React.FC = () => {
   const [savingMembershipId, setSavingMembershipId] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    return () => { clearTimeout(successTimerRef.current); };
+  }, []);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -125,7 +130,8 @@ export const SettingsPage: React.FC = () => {
       await organizationService.updateContactInfoSettings(settings);
 
       setSuccessMessage('Settings saved successfully!');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 3000);
     } catch (_err) {
       setError('Unable to save settings. Please check your connection and try again.');
     } finally {
@@ -142,7 +148,8 @@ export const SettingsPage: React.FC = () => {
       await organizationService.updateMembershipIdSettings(membershipId);
 
       setSuccessMessage('Membership ID settings saved successfully!');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 403) {

@@ -6,7 +6,7 @@ like Vector Solutions, Target Solutions, Lexipol, etc.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -279,7 +279,7 @@ class ExternalTrainingSyncService:
             organization_id=provider.organization_id,
             sync_type=sync_type,
             status=SyncStatus.IN_PROGRESS,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             sync_from_date=from_date,
             sync_to_date=to_date,
             initiated_by=user_id,
@@ -291,10 +291,10 @@ class ExternalTrainingSyncService:
             # Determine date range
             if sync_type == "incremental" and not from_date:
                 # Use last sync date or default to 30 days ago
-                from_date = (provider.last_sync_at or datetime.utcnow() - timedelta(days=30)).date()
+                from_date = (provider.last_sync_at or datetime.now(timezone.utc) - timedelta(days=30)).date()
             elif sync_type == "full" and not from_date:
                 # Full sync: get all records from a year ago
-                from_date = (datetime.utcnow() - timedelta(days=365)).date()
+                from_date = (datetime.now(timezone.utc) - timedelta(days=365)).date()
 
             if not to_date:
                 to_date = date.today()
@@ -333,12 +333,12 @@ class ExternalTrainingSyncService:
             sync_log.records_skipped = skipped
             sync_log.records_failed = failed
             sync_log.status = SyncStatus.COMPLETED if failed == 0 else SyncStatus.PARTIAL
-            sync_log.completed_at = datetime.utcnow()
+            sync_log.completed_at = datetime.now(timezone.utc)
 
             # Update provider sync timestamps
-            provider.last_sync_at = datetime.utcnow()
+            provider.last_sync_at = datetime.now(timezone.utc)
             if provider.auto_sync_enabled:
-                provider.next_sync_at = datetime.utcnow() + timedelta(hours=provider.sync_interval_hours)
+                provider.next_sync_at = datetime.now(timezone.utc) + timedelta(hours=provider.sync_interval_hours)
 
             await self.db.commit()
 
@@ -346,7 +346,7 @@ class ExternalTrainingSyncService:
             logger.exception(f"Sync failed for provider {provider.id}")
             sync_log.status = SyncStatus.FAILED
             sync_log.error_message = str(e)
-            sync_log.completed_at = datetime.utcnow()
+            sync_log.completed_at = datetime.now(timezone.utc)
             await self.db.commit()
 
         return sync_log
@@ -888,7 +888,7 @@ class ExternalTrainingSyncService:
                 select(TrainingCategory)
                 .where(TrainingCategory.organization_id == provider.organization_id)
                 .where(TrainingCategory.name == record_data["external_category_name"])
-                .where(TrainingCategory.active == True)
+                .where(TrainingCategory.active == True)  # noqa: E712
             )
             category = category_result.scalar_one_or_none()
             if category:
@@ -971,7 +971,7 @@ class ExternalTrainingSyncService:
         # Update import record
         import_record.training_record_id = training_record.id
         import_record.import_status = "imported"
-        import_record.imported_at = datetime.utcnow()
+        import_record.imported_at = datetime.now(timezone.utc)
 
         return training_record
 
@@ -1049,7 +1049,7 @@ class ExternalTrainingSyncService:
         result = await self.db.execute(
             select(ExternalUserMapping)
             .where(ExternalUserMapping.provider_id == str(provider_id))
-            .where(ExternalUserMapping.is_mapped == False)
+            .where(ExternalUserMapping.is_mapped == False)  # noqa: E712
         )
         return result.scalars().all()
 
@@ -1060,7 +1060,7 @@ class ExternalTrainingSyncService:
         result = await self.db.execute(
             select(ExternalCategoryMapping)
             .where(ExternalCategoryMapping.provider_id == str(provider_id))
-            .where(ExternalCategoryMapping.is_mapped == False)
+            .where(ExternalCategoryMapping.is_mapped == False)  # noqa: E712
         )
         return result.scalars().all()
 

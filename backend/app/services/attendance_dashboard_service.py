@@ -5,7 +5,7 @@ Provides a secretary/leadership view of member attendance status,
 meeting attendance percentages, waivers, and voting eligibility.
 """
 
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, List, Optional
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +57,7 @@ class AttendanceDashboardService:
         )
         members = list(member_result.scalars().all())
 
-        cutoff = datetime.utcnow() - timedelta(days=period_months * 30)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=period_months * 30)
 
         # Fetch actual meetings (need dates for leave-of-absence cross-reference)
         meeting_query = select(Meeting).where(
@@ -165,7 +165,7 @@ class AttendanceDashboardService:
         below_threshold_count = sum(1 for r in rows if r["voting_blocked_reason"] and "Attendance" in (r["voting_blocked_reason"] or ""))
 
         return {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_months": period_months,
             "meeting_type_filter": meeting_type,
             "total_meetings_in_period": total_meetings,
@@ -209,14 +209,14 @@ class AttendanceDashboardService:
                 excused=True,
                 waiver_reason=reason,
                 waiver_granted_by=granted_by,
-                waiver_granted_at=datetime.utcnow(),
+                waiver_granted_at=datetime.now(timezone.utc),
             )
             self.db.add(attendee)
         else:
             attendee.excused = True
             attendee.waiver_reason = reason
             attendee.waiver_granted_by = granted_by
-            attendee.waiver_granted_at = datetime.utcnow()
+            attendee.waiver_granted_at = datetime.now(timezone.utc)
 
         await self.db.commit()
 

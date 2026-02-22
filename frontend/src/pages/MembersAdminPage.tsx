@@ -13,11 +13,23 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { userService, roleService } from '../services/api';
+import { userService, roleService, locationsService } from '../services/api';
+import type { Location } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
 import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { validatePasswordStrength } from '../utils/passwordValidation';
+import { Modal } from '../components/Modal';
+
+const OPERATIONAL_RANKS = [
+  { value: 'fire_chief', label: 'Fire Chief' },
+  { value: 'deputy_chief', label: 'Deputy Chief' },
+  { value: 'assistant_chief', label: 'Assistant Chief' },
+  { value: 'captain', label: 'Captain' },
+  { value: 'lieutenant', label: 'Lieutenant' },
+  { value: 'engineer', label: 'Engineer' },
+  { value: 'firefighter', label: 'Firefighter' },
+];
 
 type ViewMode = 'by-member' | 'by-role';
 
@@ -69,10 +81,19 @@ export const MembersAdminPage: React.FC = () => {
   const [resetForceChange, setResetForceChange] = useState(true);
   const [savingReset, setSavingReset] = useState(false);
 
+  // Station lookup
+  const [availableStations, setAvailableStations] = useState<Location[]>([]);
+
   const canCreateMembers = checkPermission('users.create');
 
   useEffect(() => {
     fetchData();
+
+    // Load stations for dropdown (top-level locations with an address)
+    locationsService.getLocations({ is_active: true }).then((locs) => {
+      const stations = locs.filter((l: Location) => l.address && !l.room_number);
+      setAvailableStations(stations);
+    }).catch(() => {});
   }, []);
 
   const fetchData = async () => {
@@ -642,386 +663,329 @@ export const MembersAdminPage: React.FC = () => {
       )}
 
       {/* Edit Profile Modal */}
-      {editingProfile && profileUser && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-profile-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setEditingProfile(false); setProfileUser(null); setError(null); } }}
-        >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="edit-profile-title" className="text-lg font-medium text-theme-text-primary">
-                Edit Information for {profileUser.full_name || profileUser.username}
-              </h3>
-            </div>
-
-            <div className="px-6 py-4 space-y-4">
-              {/* Name Fields */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">First Name</label>
-                  <input
-                    type="text"
-                    value={profileForm.first_name}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={savingProfile}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Middle Name</label>
-                  <input
-                    type="text"
-                    value={profileForm.middle_name}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, middle_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={savingProfile}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Last Name</label>
-                  <input
-                    type="text"
-                    value={profileForm.last_name}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={savingProfile}
-                  />
-                </div>
-              </div>
-
-              {/* Contact Fields */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Phone</label>
-                  <input
-                    type="tel"
-                    value={profileForm.phone}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={savingProfile}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Mobile</label>
-                  <input
-                    type="tel"
-                    value={profileForm.mobile}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, mobile: e.target.value }))}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={savingProfile}
-                  />
-                </div>
-              </div>
-
-              {/* Department Fields */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Membership #</label>
-                  <input
-                    type="text"
-                    value={profileForm.membership_number}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, membership_number: e.target.value }))}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={savingProfile}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Rank</label>
-                  <input
-                    type="text"
-                    value={profileForm.rank}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={savingProfile}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Station</label>
-                  <input
-                    type="text"
-                    value={profileForm.station}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, station: e.target.value }))}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={savingProfile}
-                  />
-                </div>
-              </div>
-
-              {error && (
-                <div className="text-sm text-red-400">{error}</div>
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setEditingProfile(false);
-                  setProfileUser(null);
-                  setError(null);
-                }}
+      <Modal
+        isOpen={editingProfile && !!profileUser}
+        onClose={() => { setEditingProfile(false); setProfileUser(null); setError(null); }}
+        title={`Edit Information for ${profileUser?.full_name || profileUser?.username}`}
+        footer={
+          <>
+            <button
+              onClick={handleSaveProfile}
+              disabled={savingProfile}
+              className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+            >
+              {savingProfile ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button
+              onClick={() => { setEditingProfile(false); setProfileUser(null); setError(null); }}
+              disabled={savingProfile}
+              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {/* Name Fields */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">First Name</label>
+              <input
+                type="text"
+                value={profileForm.first_name}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
+                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={savingProfile}
-                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveProfile}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Middle Name</label>
+              <input
+                type="text"
+                value={profileForm.middle_name}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, middle_name: e.target.value }))}
+                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={savingProfile}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {savingProfile ? 'Saving...' : 'Save Changes'}
-              </button>
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Last Name</label>
+              <input
+                type="text"
+                value={profileForm.last_name}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
+                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={savingProfile}
+              />
             </div>
           </div>
+
+          {/* Contact Fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Phone</label>
+              <input
+                type="tel"
+                value={profileForm.phone}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={savingProfile}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Mobile</label>
+              <input
+                type="tel"
+                value={profileForm.mobile}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, mobile: e.target.value }))}
+                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={savingProfile}
+              />
+            </div>
+          </div>
+
+          {/* Department Fields */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Membership #</label>
+              <input
+                type="text"
+                value={profileForm.membership_number}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, membership_number: e.target.value }))}
+                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={savingProfile}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Rank</label>
+              <select
+                value={profileForm.rank}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
+                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={savingProfile}
+              >
+                <option value="">Select Rank</option>
+                {OPERATIONAL_RANKS.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Station</label>
+              <select
+                value={profileForm.station}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, station: e.target.value }))}
+                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={savingProfile}
+              >
+                <option value="">Select Station</option>
+                {availableStations.map((s) => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {error && (
+            <div className="text-sm text-red-400">{error}</div>
+          )}
         </div>
-      )}
+      </Modal>
 
       {/* Reset Password Modal */}
-      {resetPasswordUser && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="reset-password-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setResetPasswordUser(null); setResetNewPassword(''); setResetConfirmPassword(''); setError(null); } }}
-        >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="reset-password-title" className="text-lg font-medium text-theme-text-primary">
-                Reset Password for {resetPasswordUser.full_name || resetPasswordUser.username}
-              </h3>
-            </div>
-
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">New Password</label>
-                <input
-                  type="password"
-                  value={resetNewPassword}
-                  onChange={(e) => setResetNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Minimum 12 characters"
-                  disabled={savingReset}
-                  autoComplete="new-password"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Confirm Password</label>
-                <input
-                  type="password"
-                  value={resetConfirmPassword}
-                  onChange={(e) => setResetConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Re-enter password"
-                  disabled={savingReset}
-                  autoComplete="new-password"
-                />
-                {resetConfirmPassword && resetNewPassword !== resetConfirmPassword && (
-                  <p className="mt-1 text-xs text-red-400">Passwords do not match</p>
-                )}
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={resetForceChange}
-                  onChange={(e) => setResetForceChange(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
-                  disabled={savingReset}
-                />
-                <span className="text-sm text-theme-text-secondary">
-                  Require user to change password on next login
-                </span>
-              </label>
-
-              {error && (
-                <div className="text-sm text-red-400">{error}</div>
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setResetPasswordUser(null);
-                  setResetNewPassword('');
-                  setResetConfirmPassword('');
-                  setError(null);
-                }}
-                disabled={savingReset}
-                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleResetPassword}
-                disabled={savingReset || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
-                className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
-              >
-                {savingReset ? 'Resetting...' : 'Reset Password'}
-              </button>
-            </div>
+      <Modal
+        isOpen={!!resetPasswordUser}
+        onClose={() => { setResetPasswordUser(null); setResetNewPassword(''); setResetConfirmPassword(''); setError(null); }}
+        title={`Reset Password for ${resetPasswordUser?.full_name || resetPasswordUser?.username}`}
+        footer={
+          <>
+            <button
+              onClick={handleResetPassword}
+              disabled={savingReset || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
+              className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+            >
+              {savingReset ? 'Resetting...' : 'Reset Password'}
+            </button>
+            <button
+              onClick={() => { setResetPasswordUser(null); setResetNewPassword(''); setResetConfirmPassword(''); setError(null); }}
+              disabled={savingReset}
+              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">New Password</label>
+            <input
+              type="password"
+              value={resetNewPassword}
+              onChange={(e) => setResetNewPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Minimum 12 characters"
+              disabled={savingReset}
+              autoComplete="new-password"
+            />
           </div>
+
+          <div>
+            <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Confirm Password</label>
+            <input
+              type="password"
+              value={resetConfirmPassword}
+              onChange={(e) => setResetConfirmPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Re-enter password"
+              disabled={savingReset}
+              autoComplete="new-password"
+            />
+            {resetConfirmPassword && resetNewPassword !== resetConfirmPassword && (
+              <p className="mt-1 text-xs text-red-400">Passwords do not match</p>
+            )}
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={resetForceChange}
+              onChange={(e) => setResetForceChange(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
+              disabled={savingReset}
+            />
+            <span className="text-sm text-theme-text-secondary">
+              Require user to change password on next login
+            </span>
+          </label>
+
+          {error && (
+            <div className="text-sm text-red-400">{error}</div>
+          )}
         </div>
-      )}
+      </Modal>
 
       {/* Role Assignment Modal (for View by Member) */}
-      {editingRoles && selectedUser && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="manage-roles-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setEditingRoles(false); setSelectedUser(null); setError(null); } }}
-        >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="manage-roles-title" className="text-lg font-medium text-theme-text-primary">
-                Manage Roles for {selectedUser.full_name || selectedUser.username}
-              </h3>
-            </div>
+      <Modal
+        isOpen={editingRoles && !!selectedUser}
+        onClose={() => { setEditingRoles(false); setSelectedUser(null); setError(null); }}
+        title={`Manage Roles for ${selectedUser?.full_name || selectedUser?.username}`}
+        footer={
+          <>
+            <button
+              onClick={handleSaveRoles}
+              disabled={saving}
+              className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button
+              onClick={() => { setEditingRoles(false); setSelectedUser(null); setError(null); }}
+              disabled={saving}
+              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-theme-text-muted mb-4">
+          Select the roles to assign to this member
+        </p>
 
-            <div className="px-6 py-4">
-              <p className="text-sm text-theme-text-muted mb-4">
-                Select the roles to assign to this member
-              </p>
-
-              <div className="space-y-2">
-                {roles.map((role) => (
-                  <label
-                    key={role.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedRoleIds.includes(role.id)}
-                      onChange={() => handleToggleRole(role.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
-                    />
-                    <div className="ml-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-theme-text-primary">
-                          {role.name}
-                        </span>
-                        {role.is_system && (
-                          <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 px-2 py-0.5 rounded">
-                            System
-                          </span>
-                        )}
-                      </div>
-                      {role.description && (
-                        <p className="text-xs text-theme-text-muted mt-1">{role.description}</p>
-                      )}
-                    </div>
-                  </label>
-                ))}
+        <div className="space-y-2">
+          {roles.map((role) => (
+            <label
+              key={role.id}
+              className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={selectedRoleIds.includes(role.id)}
+                onChange={() => handleToggleRole(role.id)}
+                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
+              />
+              <div className="ml-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-theme-text-primary">
+                    {role.name}
+                  </span>
+                  {role.is_system && (
+                    <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 px-2 py-0.5 rounded">
+                      System
+                    </span>
+                  )}
+                </div>
+                {role.description && (
+                  <p className="text-xs text-theme-text-muted mt-1">{role.description}</p>
+                )}
               </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setEditingRoles(false);
-                  setSelectedUser(null);
-                  setError(null);
-                }}
-                disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveRoles}
-                disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
+            </label>
+          ))}
         </div>
-      )}
+      </Modal>
 
       {/* Member Assignment Modal (for View by Role) */}
-      {editingMembers && selectedRole && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="manage-members-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setEditingMembers(false); setSelectedRole(null); setError(null); } }}
-        >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="manage-members-title" className="text-lg font-medium text-theme-text-primary">
-                Manage Members for {selectedRole.name}
-              </h3>
-            </div>
+      <Modal
+        isOpen={editingMembers && !!selectedRole}
+        onClose={() => { setEditingMembers(false); setSelectedRole(null); setError(null); }}
+        title={`Manage Members for ${selectedRole?.name}`}
+        footer={
+          <>
+            <button
+              onClick={handleSaveMembers}
+              disabled={saving}
+              className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button
+              onClick={() => { setEditingMembers(false); setSelectedRole(null); setError(null); }}
+              disabled={saving}
+              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-theme-text-muted mb-4">
+          Select the members to assign to this role
+        </p>
 
-            <div className="px-6 py-4">
-              <p className="text-sm text-theme-text-muted mb-4">
-                Select the members to assign to this role
-              </p>
-
-              <div className="space-y-2">
-                {users.map((user) => (
-                  <label
-                    key={user.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedUserIds.includes(user.id)}
-                      onChange={() => handleToggleUser(user.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
-                    />
-                    <div className="ml-3 flex items-center gap-2">
-                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
-                        <span className="text-xs text-theme-text-muted font-medium">
-                          {(user.first_name?.[0] || user.username[0]).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-theme-text-primary">
-                          {user.full_name || user.username}
-                        </div>
-                        <div className="text-xs text-theme-text-muted">
-                          @{user.username}
-                          {user.membership_number && ` • #${user.membership_number}`}
-                        </div>
-                      </div>
-                    </div>
-                  </label>
-                ))}
+        <div className="space-y-2">
+          {users.map((user) => (
+            <label
+              key={user.id}
+              className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={selectedUserIds.includes(user.id)}
+                onChange={() => handleToggleUser(user.id)}
+                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
+              />
+              <div className="ml-3 flex items-center gap-2">
+                <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
+                  <span className="text-xs text-theme-text-muted font-medium">
+                    {(user.first_name?.[0] || user.username[0]).toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-theme-text-primary">
+                    {user.full_name || user.username}
+                  </div>
+                  <div className="text-xs text-theme-text-muted">
+                    @{user.username}
+                    {user.membership_number && ` • #${user.membership_number}`}
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setEditingMembers(false);
-                  setSelectedRole(null);
-                  setError(null);
-                }}
-                disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveMembers}
-                disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
+            </label>
+          ))}
         </div>
-      )}
+      </Modal>
       </div>
     </div>
   );

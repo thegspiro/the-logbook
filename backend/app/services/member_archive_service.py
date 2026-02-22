@@ -13,7 +13,7 @@ Workflow:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,7 +67,7 @@ async def check_and_auto_archive(
         select(ItemAssignment.id).where(
             ItemAssignment.organization_id == organization_id,
             ItemAssignment.user_id == user_id,
-            ItemAssignment.is_active == True,
+            ItemAssignment.is_active == True,  # noqa: E712
         ).limit(1)
     )
     if assign_result.scalar_one_or_none() is not None:
@@ -78,7 +78,7 @@ async def check_and_auto_archive(
         select(CheckOutRecord.id).where(
             CheckOutRecord.organization_id == organization_id,
             CheckOutRecord.user_id == user_id,
-            CheckOutRecord.is_returned == False,
+            CheckOutRecord.is_returned == False,  # noqa: E712
         ).limit(1)
     )
     if checkout_result.scalar_one_or_none() is not None:
@@ -89,7 +89,7 @@ async def check_and_auto_archive(
         select(ItemIssuance.id).where(
             ItemIssuance.organization_id == organization_id,
             ItemIssuance.user_id == user_id,
-            ItemIssuance.is_returned == False,
+            ItemIssuance.is_returned == False,  # noqa: E712
         ).limit(1)
     )
     if issuance_result.scalar_one_or_none() is not None:
@@ -110,7 +110,7 @@ async def check_and_auto_archive(
         return None  # Still has an open departure clearance
 
     # All items returned and clearances closed — archive the member
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     previous_status = member.status.value
     member.status = UserStatus.ARCHIVED
     member.archived_at = now
@@ -232,7 +232,7 @@ async def reactivate_member(
             f"Current status: {member.status.value}"
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     previous_status = member.status.value
     member.status = UserStatus.ACTIVE
     member.status_changed_at = now

@@ -11,7 +11,7 @@ Implements tiered notification pipeline for expiring certifications:
 Designed to be triggered by a periodic cron job / scheduled task.
 """
 
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import List, Dict, Optional, Tuple
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -206,7 +206,7 @@ class CertAlertService:
                     )
 
                     if success > 0:
-                        setattr(record, field_name, datetime.utcnow())
+                        setattr(record, field_name, datetime.now(timezone.utc))
                         alerts_sent += 1
                     else:
                         errors += 1
@@ -265,7 +265,7 @@ class CertAlertService:
                 )
 
                 if success > 0:
-                    record.escalation_sent_at = datetime.utcnow()
+                    record.escalation_sent_at = datetime.now(timezone.utc)
                     escalations_sent += 1
                 else:
                     errors += 1

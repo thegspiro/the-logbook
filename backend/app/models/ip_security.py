@@ -25,7 +25,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import enum
 
 from app.core.utils import generate_uuid
@@ -177,7 +177,7 @@ class IPException(Base):
         """Check if exception is currently active and valid."""
         if self.approval_status != IPExceptionApprovalStatus.APPROVED:
             return False
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if self.valid_from and now < self.valid_from:
             return False
         if self.valid_until and now > self.valid_until:
@@ -188,13 +188,13 @@ class IPException(Base):
         """Check if exception has expired."""
         if not self.valid_until:
             return False
-        return datetime.utcnow() > self.valid_until
+        return datetime.now(timezone.utc) > self.valid_until
 
     def days_remaining(self) -> int:
         """Get number of days remaining until expiration."""
         if not self.valid_until:
             return 0
-        delta = self.valid_until - datetime.utcnow()
+        delta = self.valid_until - datetime.now(timezone.utc)
         return max(0, delta.days)
 
 

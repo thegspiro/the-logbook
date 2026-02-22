@@ -14,7 +14,7 @@ stay accurate.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, Any, List, Optional, Tuple
 from uuid import UUID
@@ -80,7 +80,7 @@ class DepartureClearanceService:
             if existing.scalar_one_or_none():
                 return None, "An open departure clearance already exists for this member"
 
-            deadline = datetime.utcnow() + timedelta(days=return_deadline_days)
+            deadline = datetime.now(timezone.utc) + timedelta(days=return_deadline_days)
 
             clearance = DepartureClearance(
                 organization_id=organization_id,
@@ -102,7 +102,7 @@ class DepartureClearanceService:
                 .where(
                     ItemAssignment.organization_id == organization_id,
                     ItemAssignment.user_id == user_id,
-                    ItemAssignment.is_active == True,
+                    ItemAssignment.is_active == True,  # noqa: E712
                 )
                 .options(selectinload(ItemAssignment.item))
             )
@@ -128,7 +128,7 @@ class DepartureClearanceService:
                 .where(
                     CheckOutRecord.organization_id == organization_id,
                     CheckOutRecord.user_id == user_id,
-                    CheckOutRecord.is_returned == False,
+                    CheckOutRecord.is_returned == False,  # noqa: E712
                 )
                 .options(selectinload(CheckOutRecord.item))
             )
@@ -154,7 +154,7 @@ class DepartureClearanceService:
                 .where(
                     ItemIssuance.organization_id == organization_id,
                     ItemIssuance.user_id == user_id,
-                    ItemIssuance.is_returned == False,
+                    ItemIssuance.is_returned == False,  # noqa: E712
                 )
                 .options(selectinload(ItemIssuance.item))
             )
@@ -300,7 +300,7 @@ class DepartureClearanceService:
             # (assigned/checked_out) but the clearance line is resolved.
 
             # Update the line item
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             line_item.disposition = disp
             line_item.return_condition = cond_enum
             line_item.resolved_at = now
@@ -363,7 +363,7 @@ class DepartureClearanceService:
                     f"Resolve all items first or use force_close=True to close with outstanding items."
                 )
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             clearance.completed_at = now
             clearance.completed_by = completed_by
             if notes:

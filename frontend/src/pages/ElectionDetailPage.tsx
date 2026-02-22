@@ -15,6 +15,7 @@ import { CandidateManagement } from '../components/CandidateManagement';
 import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
 import { useAuthStore } from '../stores/authStore';
+import { ElectionStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
@@ -85,7 +86,7 @@ export const ElectionDetailPage: React.FC = () => {
       setElection(data);
 
       // Automatically show results if they're available
-      if (data.status === 'closed' || data.results_visible_immediately) {
+      if (data.status === ElectionStatus.CLOSED || data.results_visible_immediately) {
         setShowResults(true);
       }
     } catch (err: unknown) {
@@ -235,7 +236,7 @@ export const ElectionDetailPage: React.FC = () => {
   const handleDeleteElection = async () => {
     if (!electionId || !election) return;
 
-    const isDraft = election.status === 'draft';
+    const isDraft = election.status === ElectionStatus.DRAFT;
 
     if (!isDraft && deleteReason.trim().length < 10) {
       setDeleteError('A reason of at least 10 characters is required');
@@ -370,9 +371,9 @@ export const ElectionDetailPage: React.FC = () => {
     );
   }
 
-  const resultsAvailable = election.status === 'closed' || election.results_visible_immediately;
-  const isDraft = election.status === 'draft';
-  const isActiveOrCompleted = election.status === 'open' || election.status === 'closed';
+  const resultsAvailable = election.status === ElectionStatus.CLOSED || election.results_visible_immediately;
+  const isDraft = election.status === ElectionStatus.DRAFT;
+  const isActiveOrCompleted = election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED;
 
   return (
     <div className="min-h-screen">
@@ -475,7 +476,7 @@ export const ElectionDetailPage: React.FC = () => {
                 </button>
               )}
 
-              {election.status === 'draft' && (
+              {election.status === ElectionStatus.DRAFT && (
                 <button
                   onClick={handleOpenElection}
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
@@ -484,7 +485,7 @@ export const ElectionDetailPage: React.FC = () => {
                 </button>
               )}
 
-              {election.status === 'open' && (
+              {election.status === ElectionStatus.OPEN && (
                 <>
                   <button
                     onClick={() => setShowSendEmailModal(true)}
@@ -510,7 +511,7 @@ export const ElectionDetailPage: React.FC = () => {
                 </>
               )}
 
-              {(election.status === 'open' || election.status === 'closed') && (
+              {(election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED) && (
                 <button
                   onClick={() => setShowRollbackModal(true)}
                   className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
@@ -520,7 +521,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {/* Results visibility toggle — blocked for open elections to prevent strategic voting */}
-              {election.status !== 'open' && (
+              {election.status !== ElectionStatus.OPEN && (
                 <button
                   onClick={handleToggleResultsVisibility}
                   disabled={updatingVisibility}
@@ -596,7 +597,7 @@ export const ElectionDetailPage: React.FC = () => {
       )}
 
       {/* Voter Ballot (when election is open) */}
-      {election.status === 'open' && electionId && (
+      {election.status === ElectionStatus.OPEN && electionId && (
         <div className="mb-6">
           <ElectionBallot
             electionId={electionId}
@@ -960,7 +961,7 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="send-email-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowSendEmailModal(false); setSendEmailError(null); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="send-email-modal-title" className="text-lg font-medium text-theme-text-primary">
                 {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
@@ -1056,7 +1057,7 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="delete-election-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowDeleteModal(false); setDeleteReason(''); setDeleteError(null); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full">
             <div className={`px-6 py-4 border-b ${isDraft ? 'border-theme-surface-border' : 'border-red-500/30 bg-red-500/10'}`}>
               <h3 id="delete-election-modal-title" className={`text-lg font-medium ${isDraft ? 'text-theme-text-primary' : 'text-red-300'}`}>
                 {isDraft ? 'Delete Draft Election' : 'DELETE ACTIVE ELECTION'}
@@ -1182,7 +1183,7 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="extend-election-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowExtendModal(false); setNewEndDate(''); setExtendError(null); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="extend-election-modal-title" className="text-lg font-medium text-theme-text-primary">Extend Election Time</h3>
             </div>
@@ -1454,7 +1455,7 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="rollback-election-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowRollbackModal(false); setRollbackReason(''); setRollbackError(null); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="rollback-election-modal-title" className="text-lg font-medium text-theme-text-primary">Rollback Election</h3>
             </div>
@@ -1475,10 +1476,10 @@ export const ElectionDetailPage: React.FC = () => {
                     <div className="mt-2 text-sm text-orange-300">
                       <p>Rolling back this election will:</p>
                       <ul className="list-disc list-inside mt-1 space-y-1">
-                        <li>Change the election status from <strong>{election.status.toUpperCase()}</strong> to <strong>{election.status === 'closed' ? 'OPEN' : 'DRAFT'}</strong></li>
+                        <li>Change the election status from <strong>{election.status.toUpperCase()}</strong> to <strong>{election.status === ElectionStatus.CLOSED ? 'OPEN' : 'DRAFT'}</strong></li>
                         <li>Send email notifications to all leadership members</li>
                         <li>Create an audit trail entry with your reason</li>
-                        {election.status === 'closed' && <li>Allow voting to resume (for closed&rarr;open)</li>}
+                        {election.status === ElectionStatus.CLOSED && <li>Allow voting to resume (for closed&rarr;open)</li>}
                       </ul>
                     </div>
                   </div>
@@ -1506,7 +1507,7 @@ export const ElectionDetailPage: React.FC = () => {
                     New Status After Rollback
                   </label>
                   <div className="mt-1 text-sm font-semibold text-green-600">
-                    {election.status === 'closed' ? 'OPEN' : 'DRAFT'}
+                    {election.status === ElectionStatus.CLOSED ? 'OPEN' : 'DRAFT'}
                   </div>
                 </div>
 

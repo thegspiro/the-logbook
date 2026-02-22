@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from uuid import UUID, uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 from loguru import logger
 
 from app.core.database import get_db
@@ -251,7 +251,7 @@ async def get_ballot_candidates(
     result = await db.execute(
         select(Candidate)
         .where(Candidate.election_id == election.id)
-        .where(Candidate.accepted == True)
+        .where(Candidate.accepted == True)  # noqa: E712
         .order_by(Candidate.position, Candidate.display_order)
     )
 
@@ -413,7 +413,7 @@ async def update_election(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="End date must be after start date"
                 )
-            if new_end_date <= datetime.now():
+            if new_end_date <= datetime.now(timezone.utc):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="End date must be in the future"
@@ -458,7 +458,7 @@ async def update_election(
     for field, value in update_data.items():
         setattr(election, field, value)
 
-    election.updated_at = datetime.utcnow()
+    election.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(election)
@@ -753,7 +753,7 @@ async def create_candidate(
     new_candidate = Candidate(
         id=uuid4(),
         nominated_by=current_user.id,
-        nomination_date=datetime.utcnow(),
+        nomination_date=datetime.now(timezone.utc),
         accepted=True,  # Auto-accept if nominated by admin
         **candidate.model_dump()
     )
@@ -797,7 +797,7 @@ async def update_candidate(
     for field, value in update_data.items():
         setattr(candidate, field, value)
 
-    candidate.updated_at = datetime.utcnow()
+    candidate.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(candidate)
@@ -1342,7 +1342,7 @@ async def add_voter_override(
         "reason": body.reason,
         "overridden_by": str(current_user.id),
         "overridden_by_name": current_user.full_name,
-        "overridden_at": datetime.utcnow().isoformat(),
+        "overridden_at": datetime.now(timezone.utc).isoformat(),
     }
     overrides.append(override_record)
     election.voter_overrides = overrides
@@ -1513,7 +1513,7 @@ async def bulk_add_voter_overrides(
             "reason": body.reason,
             "overridden_by": str(current_user.id),
             "overridden_by_name": current_user.full_name,
-            "overridden_at": datetime.utcnow().isoformat(),
+            "overridden_at": datetime.now(timezone.utc).isoformat(),
         }
         overrides.append(override_record)
         existing_ids.add(uid_str)

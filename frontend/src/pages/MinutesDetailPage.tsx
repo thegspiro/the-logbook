@@ -1057,7 +1057,7 @@ export const MinutesDetailPage: React.FC = () => {
           aria-labelledby="link-event-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowLinkEventModal(false); }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full">
             <div className="px-6 py-4 border-b border-theme-surface-border flex justify-between items-center">
               <h3 id="link-event-title" className="text-lg font-medium text-theme-text-primary">Link to Meeting Event</h3>
               <button onClick={() => setShowLinkEventModal(false)} className="text-theme-text-muted hover:text-theme-text-secondary" aria-label="Close dialog">
@@ -1110,7 +1110,7 @@ export const MinutesDetailPage: React.FC = () => {
           aria-labelledby="reject-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowRejectModal(false); setRejectReason(''); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="reject-title" className="text-lg font-medium text-theme-text-primary">Reject Minutes</h3>
             </div>
