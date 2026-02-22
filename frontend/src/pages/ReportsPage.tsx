@@ -480,7 +480,7 @@ export const ReportsPage: React.FC = () => {
                 {entries.map((e, i) => (
                   <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.member_name ?? '-')}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{formatRank(e.rank) || '-'}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{formatRank(e.rank as string) || '-'}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.training_hours ?? 0)}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.shift_hours ?? 0)}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.courses_completed ?? 0)}</td>
