@@ -191,6 +191,7 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
             "users": ["id", "organization_id", "username", "email", "password_hash", "status"],
             "roles": ["id", "organization_id", "name", "slug", "permissions"],
             "onboarding_sessions": ["id", "session_id", "data", "expires_at"],
+            "notification_logs": ["id", "organization_id", "channel", "category", "expires_at", "action_url"],
         }
         for table_name, required_columns in critical_columns.items():
             if table_name not in existing_tables:
@@ -256,6 +257,10 @@ def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, lis
                 except (OperationalError, DatabaseError):
                     logger.debug("Could not re-enable FOREIGN_KEY_CHECKS during schema repair", exc_info=True)
 
+        # Fill in any missing columns on existing tables — create_all only
+        # handles missing tables, not missing columns.
+        _add_missing_model_columns(engine)
+
         # Re-validate after repair
         schema_valid, schema_errors = validate_schema(engine)
         if schema_valid:
@@ -269,6 +274,59 @@ def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, lis
     except Exception as repair_err:
         logger.error(f"Schema repair failed: {repair_err}")
         return (False, original_errors + [f"Repair attempt failed: {repair_err}"])
+
+
+def _add_missing_model_columns(engine):
+    """
+    Detect and add columns that exist in SQLAlchemy models but are missing
+    from the database.
+
+    create_all(checkfirst=True) only creates missing TABLES — it does not
+    add missing columns to existing tables.  When the fast-path (or an
+    'already exists' stamp-to-head) created the DB from an earlier model
+    snapshot, columns added in later model updates will be absent.  This
+    function fills that gap with ALTER TABLE … ADD COLUMN.
+    """
+    from sqlalchemy import inspect, text
+    from sqlalchemy.exc import OperationalError
+
+    _import_all_models()
+    from app.core.database import Base
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    added = []
+
+    with engine.begin() as conn:
+        for table_name, table in Base.metadata.tables.items():
+            if table_name not in existing_tables:
+                continue
+
+            existing_cols = {c["name"] for c in inspector.get_columns(table_name)}
+
+            for col in table.columns:
+                if col.name in existing_cols:
+                    continue
+
+                col_type = col.type.compile(engine.dialect)
+                stmt = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NULL"
+                try:
+                    conn.execute(text(stmt))
+                    added.append(f"{table_name}.{col.name}")
+                    logger.info(f"Added missing column: {table_name}.{col.name}")
+                except OperationalError as e:
+                    if "duplicate column" not in str(e).lower():
+                        logger.warning(
+                            f"Could not add column {table_name}.{col.name}: {e}"
+                        )
+
+    if added:
+        logger.info(
+            f"Schema column repair: added {len(added)} missing column(s): "
+            + ", ".join(added)
+        )
+
+    return added
 
 
 # The revision stamped by the initial SQL schema (001_initial_schema.sql)
@@ -582,6 +640,16 @@ def run_migrations():
         startup_status.migrations_completed = total_migrations
         startup_status.set_phase("migrations", "Database schema is up to date")
         logger.info("Database schema is already up to date")
+
+        # Still check for missing columns — create_all(checkfirst=True) during
+        # fast-path init only creates missing TABLES, not missing columns on
+        # existing tables.  Model updates that add new columns (e.g.
+        # notification_logs.category) will be silently absent until repaired.
+        try:
+            _add_missing_model_columns(engine)
+        except Exception as col_err:
+            logger.warning(f"Column repair check failed (non-fatal): {col_err}")
+
         return
 
     # === ADVISORY LOCK: Serialize migrations across workers ===
