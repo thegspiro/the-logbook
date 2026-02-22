@@ -208,7 +208,6 @@ async def create_member(
         email_verified=False,
         status=UserStatus.ACTIVE,
         must_change_password=True,
-        password_changed_at=datetime.now(timezone.utc),
     )
 
     db.add(new_user)
@@ -1033,7 +1032,10 @@ async def admin_reset_password(
     user.must_change_password = reset_data.force_change
     user.failed_login_attempts = 0
     user.locked_until = None
-    user.password_changed_at = datetime.now(timezone.utc)
+    # Only update password_changed_at if user is NOT forced to change password,
+    # otherwise the HIPAA minimum password age check would block their required change.
+    if not reset_data.force_change:
+        user.password_changed_at = datetime.now(timezone.utc)
 
     await db.commit()
 

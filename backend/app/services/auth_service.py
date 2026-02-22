@@ -444,6 +444,8 @@ class AuthService:
             return False, "Current password is incorrect. Please verify your existing password and try again."
 
         # Enforce minimum password age (prevent rapid cycling through history)
+        # Skip this check when user is forced to change password (e.g., first login
+        # after admin creation or admin password reset)
         min_age_days = settings.HIPAA_MINIMUM_PASSWORD_AGE_DAYS
         if min_age_days > 0 and user.password_changed_at:
             age = (datetime.now(timezone.utc) - user.password_changed_at).days

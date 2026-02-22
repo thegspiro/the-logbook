@@ -194,7 +194,7 @@ const InventoryPage: React.FC = () => {
           (payload as Record<string, unknown>)[key] = value;
         }
       }
-      await inventoryService.createItem(payload as InventoryItemCreate);
+      await inventoryService.createItem(payload as unknown as InventoryItemCreate);
       setShowAddItem(false);
       setItemForm(defaultItemForm);
       loadData();
