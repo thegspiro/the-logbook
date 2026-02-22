@@ -19,6 +19,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     JSON,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -156,8 +157,8 @@ class InventoryItem(Base):
 
     # Identification
     serial_number = Column(String(255), index=True)
-    asset_tag = Column(String(255), unique=True, index=True)
-    barcode = Column(String(255), unique=True, index=True)
+    asset_tag = Column(String(255), index=True)
+    barcode = Column(String(255), index=True)
 
     # Purchase Information
     purchase_date = Column(Date)
@@ -234,6 +235,9 @@ class InventoryItem(Base):
         Index("idx_inventory_items_assigned_to", "assigned_to_user_id"),
         Index("idx_inventory_items_next_inspection", "next_inspection_due"),
         Index("idx_inventory_items_tracking_type", "organization_id", "tracking_type"),
+        # Barcode and asset_tag uniqueness scoped per organization (multi-tenant)
+        UniqueConstraint("organization_id", "barcode", name="uq_item_org_barcode"),
+        UniqueConstraint("organization_id", "asset_tag", name="uq_item_org_asset_tag"),
     )
 
 

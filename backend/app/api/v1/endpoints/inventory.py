@@ -1364,6 +1364,7 @@ async def resolve_clearance_item(
     service = DepartureClearanceService(db)
     line_item, error = await service.resolve_line_item(
         clearance_item_id=str(item_id),
+        clearance_id=str(clearance_id),
         organization_id=str(current_user.organization_id),
         resolved_by=str(current_user.id),
         disposition=resolve_data.disposition,
