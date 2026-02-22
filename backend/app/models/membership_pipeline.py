@@ -52,6 +52,8 @@ class ProspectStatus(str, enum.Enum):
     ACTIVE = "active"
     APPROVED = "approved"
     REJECTED = "rejected"
+    ON_HOLD = "on_hold"
+    INACTIVE = "inactive"
     WITHDRAWN = "withdrawn"
     TRANSFERRED = "transferred"
 

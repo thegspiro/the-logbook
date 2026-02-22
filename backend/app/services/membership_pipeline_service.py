@@ -148,10 +148,17 @@ class MembershipPipelineService:
         return await self.get_pipeline(pipeline_id, organization_id)
 
     async def delete_pipeline(self, pipeline_id: str, organization_id: str) -> bool:
-        """Delete a pipeline (cascades to steps, but not prospects — they become unassigned)"""
+        """Delete a pipeline. Unassigns prospects first so they are not cascade-deleted."""
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return False
+
+        # Detach prospects from this pipeline so they survive the cascade delete
+        await self.db.execute(
+            update(ProspectiveMember)
+            .where(ProspectiveMember.pipeline_id == pipeline_id)
+            .values(pipeline_id=None, current_step_id=None)
+        )
 
         await self.db.delete(pipeline)
         await self.db.commit()
@@ -499,6 +506,22 @@ class MembershipPipelineService:
         await self.db.commit()
         return await self.get_prospect(prospect_id, organization_id)
 
+    async def delete_prospect(
+        self, prospect_id: str, organization_id: str, deleted_by: Optional[str] = None
+    ) -> bool:
+        """Delete a prospect. Only withdrawn or rejected prospects can be deleted."""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return False
+
+        # Only allow deletion of withdrawn or rejected prospects
+        if prospect.status not in (ProspectStatus.WITHDRAWN, ProspectStatus.REJECTED):
+            return False
+
+        await self.db.delete(prospect)
+        await self.db.commit()
+        return True
+
     # =========================================================================
     # Step Progression
     # =========================================================================
@@ -626,13 +649,20 @@ class MembershipPipelineService:
             next_step = sorted_steps[current_idx + 1]
             prospect.current_step_id = next_step.id
 
-            # Mark next step as in_progress
+            # Mark next step as in_progress, creating the record if it doesn't exist
             next_progress = next(
                 (p for p in prospect.step_progress if str(p.step_id) == str(next_step.id)),
                 None,
             )
             if next_progress:
                 next_progress.status = StepProgressStatus.IN_PROGRESS
+            else:
+                self.db.add(ProspectStepProgress(
+                    id=generate_uuid(),
+                    prospect_id=prospect.id,
+                    step_id=next_step.id,
+                    status=StepProgressStatus.IN_PROGRESS,
+                ))
 
     # =========================================================================
     # Transfer to Membership
@@ -1129,17 +1159,16 @@ class MembershipPipelineService:
                 "count": result.scalar() or 0,
             })
 
-        # Calculate avg days to transfer
+        # Calculate avg days to transfer using portable SQL
+        # julianday() works on SQLite; for PostgreSQL use EXTRACT(EPOCH FROM ...)/86400
         avg_days = None
         transferred_count = status_counts.get("transferred", 0)
         if transferred_count > 0:
             avg_query = (
                 select(
                     func.avg(
-                        func.datediff(
-                            ProspectiveMember.transferred_at,
-                            ProspectiveMember.created_at,
-                        )
+                        func.julianday(ProspectiveMember.transferred_at)
+                        - func.julianday(ProspectiveMember.created_at)
                     )
                 )
                 .where(
@@ -1150,8 +1179,31 @@ class MembershipPipelineService:
                     )
                 )
             )
-            result = await self.db.execute(avg_query)
-            avg_days = result.scalar()
+            try:
+                result = await self.db.execute(avg_query)
+                avg_days = result.scalar()
+            except Exception:
+                # Fallback: compute in Python if the DB doesn't support julianday
+                rows_query = (
+                    select(
+                        ProspectiveMember.transferred_at,
+                        ProspectiveMember.created_at,
+                    )
+                    .where(
+                        and_(
+                            ProspectiveMember.pipeline_id == pipeline_id,
+                            ProspectiveMember.status == ProspectStatus.TRANSFERRED,
+                            ProspectiveMember.transferred_at.isnot(None),
+                        )
+                    )
+                )
+                rows_result = await self.db.execute(rows_query)
+                rows = rows_result.all()
+                if rows:
+                    total_days = sum(
+                        (r[0] - r[1]).total_seconds() / 86400 for r in rows if r[0] and r[1]
+                    )
+                    avg_days = total_days / len(rows) if rows else None
 
         conversion_rate = (transferred_count / total * 100) if total > 0 else 0
 

@@ -436,7 +436,7 @@ export const applicantService = {
     const pageSize = params?.pageSize ?? 25;
     const offset = (page - 1) * pageSize;
 
-    // Backend uses /prospects with limit/offset, not /applicants with page/page_size
+    // Backend uses /prospects with limit/offset and returns { items, total, limit, offset }
     const response = await api.get(
       '/prospective-members/prospects',
       {
@@ -450,15 +450,17 @@ export const applicantService = {
       }
     );
 
-    // Backend returns a flat list; wrap into paginated format
-    const items = Array.isArray(response.data) ? response.data : [];
-    const mappedItems = items.map(mapProspectListToApplicantList);
+    // Backend returns { items, total, limit, offset } or a flat list for backwards compat
+    const data = response.data;
+    const rawItems = Array.isArray(data) ? data : (data.items ?? []);
+    const total = Array.isArray(data) ? rawItems.length : (data.total ?? rawItems.length);
+    const mappedItems = rawItems.map(mapProspectListToApplicantList);
     return {
       items: mappedItems,
-      total: mappedItems.length,
+      total,
       page,
       page_size: pageSize,
-      total_pages: Math.max(1, Math.ceil(mappedItems.length / pageSize)),
+      total_pages: Math.max(1, Math.ceil(total / pageSize)),
     };
   },
 

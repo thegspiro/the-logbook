@@ -65,6 +65,7 @@ export interface Pipeline {
   description?: string;
   is_template: boolean;
   is_default: boolean;
+  is_active: boolean;
   auto_transfer_on_approval: boolean;
   created_by?: string;
   created_at: string;
@@ -79,6 +80,7 @@ export interface PipelineListItem {
   description?: string;
   is_template: boolean;
   is_default: boolean;
+  is_active: boolean;
   auto_transfer_on_approval: boolean;
   step_count?: number;
   prospect_count?: number;
@@ -193,6 +195,7 @@ export interface PipelineUpdate {
   name?: string;
   description?: string;
   is_default?: boolean;
+  is_active?: boolean;
   auto_transfer_on_approval?: boolean;
 }
 
@@ -235,6 +238,7 @@ export interface ProspectUpdate {
 
 export interface TransferRequest {
   username?: string;
+  membership_id?: string;
   rank?: string;
   station?: string;
   role_ids?: string[];
@@ -245,6 +249,7 @@ export interface TransferResponse {
   success: boolean;
   prospect_id: string;
   user_id: string;
+  membership_number?: string;
   message: string;
 }
 

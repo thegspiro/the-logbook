@@ -414,7 +414,7 @@ async def purge_inactive_prospects(
 # Prospect Endpoints
 # ============================================
 
-@router.get("/prospects", response_model=List[ProspectListResponse])
+@router.get("/prospects")
 async def list_prospects(
     pipeline_id: Optional[UUID] = Query(None, description="Filter by pipeline"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
@@ -426,6 +426,8 @@ async def list_prospects(
 ):
     """
     List prospective members with optional filters.
+
+    Returns paginated results with total count for proper pagination.
 
     **Requires permission: members.view**
     """
@@ -439,9 +441,9 @@ async def list_prospects(
         offset=offset,
     )
 
-    result = []
+    items = []
     for p in prospects:
-        result.append(ProspectListResponse(
+        items.append(ProspectListResponse(
             id=p.id,
             first_name=p.first_name,
             last_name=p.last_name,
@@ -454,7 +456,12 @@ async def list_prospects(
             current_step_name=p.current_step.name if p.current_step else None,
             created_at=p.created_at,
         ))
-    return result
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.post("/prospects/check-existing")
@@ -586,6 +593,28 @@ async def update_prospect(
     if not prospect:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
     return prospect
+
+
+@router.delete("/prospects/{prospect_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_prospect(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+):
+    """
+    Delete a prospective member and all associated data.
+
+    Only prospects with status withdrawn or rejected can be deleted.
+    Active or transferred prospects cannot be deleted.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    deleted = await service.delete_prospect(
+        str(prospect_id), current_user.organization_id, deleted_by=current_user.id
+    )
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found or cannot be deleted")
 
 
 @router.post("/prospects/{prospect_id}/complete-step", response_model=ProspectResponse)

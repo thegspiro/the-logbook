@@ -282,9 +282,12 @@ class TransferProspectRequest(BaseModel):
 class TransferProspectResponse(BaseModel):
     """Response after transferring a prospect"""
     success: bool
-    prospect_id: UUID
-    user_id: UUID
+    prospect_id: Optional[UUID] = None
+    user_id: Optional[UUID] = None
+    membership_number: Optional[str] = None
     message: str
+    existing_member_match: Optional[Dict[str, Any]] = None
+    auto_enrollment: Optional[Dict[str, Any]] = None
 
 
 # --- Activity Log Schema ---
