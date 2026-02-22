@@ -4540,33 +4540,6 @@ export const memberStatusService = {
 };
 
 // ============================================
-// Scheduled Tasks Service
-// ============================================
-
-export interface ScheduledTask {
-  id: string;
-  name: string;
-  description?: string;
-  frequency: string;
-  recommended_time?: string;
-  last_run_at?: string;
-  next_run_at?: string;
-  is_running: boolean;
-  enabled: boolean;
-}
-
-export const scheduledTasksService = {
-  async listTasks(): Promise<{ tasks: ScheduledTask[] }> {
-    const response = await api.get('/scheduled/tasks');
-    return response.data;
-  },
-  async runTask(taskId: string): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduled/run-task', null, { params: { task: taskId } });
-    return response.data;
-  },
-};
-
-// ============================================
 // Department Messages Service
 // ============================================
 
