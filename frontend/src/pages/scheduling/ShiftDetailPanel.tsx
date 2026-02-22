@@ -18,7 +18,7 @@ import {
   Loader2, Phone, ChevronDown, ChevronUp, Pencil, Trash2, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService, memberService } from '../../services/api';
+import { schedulingService, userService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -132,8 +132,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const loadMembers = async () => {
       setLoadingMembers(true);
       try {
-        const data = await memberService.getMembers({ status: 'active', limit: 200 });
-        const members = (data.members || []).map((m: Record<string, unknown>) => ({
+        const users = await userService.getUsers();
+        const members = users.filter((m) => m.status === 'active').map((m) => ({
           id: String(m.id),
           label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || String(m.email || m.id),
         }));

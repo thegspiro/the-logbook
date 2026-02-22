@@ -15,7 +15,7 @@ import { schedulingService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
-import { ASSIGNMENT_ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
+import { ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
 
 interface Assignment {
   id: string;
