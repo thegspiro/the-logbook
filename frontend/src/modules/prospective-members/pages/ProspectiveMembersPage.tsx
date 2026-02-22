@@ -343,7 +343,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       )}
 
       {/* Active / Inactive Tabs */}
-      <div className="flex items-center gap-1 mb-4 border-b border-theme-surface-border">
+      <div className="tab-scroll mb-4">
         <button
           onClick={() => setActiveTab('active')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
@@ -388,7 +388,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Controls Bar (Active tab) */}
       {activeTab === 'active' && (
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         {/* Pipeline Selector */}
         {pipelines.length > 1 && (
           <select
@@ -636,7 +636,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             </div>
           ) : (
             <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden overflow-x-auto">
-              <table className="w-full min-w-[600px]">
+              <table className="w-full">
                 <thead>
                   <tr className="border-b border-theme-surface-border">
                     <th className="w-10 p-3">
@@ -654,9 +654,9 @@ export const ProspectiveMembersPage: React.FC = () => {
                       />
                     </th>
                     <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Email</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Last Stage</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Inactive Since</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Email</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Last Stage</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Inactive Since</th>
                     <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Days Idle</th>
                     <th className="w-28 p-3"></th>
                   </tr>
@@ -693,9 +693,9 @@ export const ProspectiveMembersPage: React.FC = () => {
                           </span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-theme-text-muted">{applicant.email}</td>
-                      <td className="p-3 text-sm text-theme-text-muted">{applicant.current_stage_name ?? '—'}</td>
-                      <td className="p-3 text-sm text-theme-text-muted">
+                      <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.email}</td>
+                      <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.current_stage_name ?? '—'}</td>
+                      <td className="p-3 text-sm text-theme-text-muted table-col-tertiary">
                         {applicant.deactivated_at
                           ? new Date(applicant.deactivated_at).toLocaleDateString('en-US', {
                               month: 'short',
@@ -788,14 +788,14 @@ export const ProspectiveMembersPage: React.FC = () => {
             </div>
           ) : (
             <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden overflow-x-auto">
-              <table className="w-full min-w-[600px]">
+              <table className="w-full">
                 <thead>
                   <tr className="border-b border-theme-surface-border">
                     <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Email</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Last Stage</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Withdrawn Date</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Email</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Last Stage</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Withdrawn Date</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Reason</th>
                     <th className="w-32 p-3"></th>
                   </tr>
                 </thead>
@@ -818,9 +818,9 @@ export const ProspectiveMembersPage: React.FC = () => {
                           </span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-theme-text-muted">{applicant.email}</td>
-                      <td className="p-3 text-sm text-theme-text-muted">{applicant.current_stage_name ?? '—'}</td>
-                      <td className="p-3 text-sm text-theme-text-muted">
+                      <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.email}</td>
+                      <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.current_stage_name ?? '—'}</td>
+                      <td className="p-3 text-sm text-theme-text-muted table-col-tertiary">
                         {applicant.withdrawn_at
                           ? new Date(applicant.withdrawn_at).toLocaleDateString('en-US', {
                               month: 'short',
@@ -830,7 +830,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                             })
                           : '—'}
                       </td>
-                      <td className="p-3 text-sm text-theme-text-muted max-w-[200px] truncate">
+                      <td className="p-3 text-sm text-theme-text-muted max-w-[200px] truncate table-col-tertiary">
                         {applicant.withdrawal_reason ?? '—'}
                       </td>
                       <td className="p-3">

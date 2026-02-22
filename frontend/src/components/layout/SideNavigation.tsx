@@ -301,7 +301,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/50 z-40 mt-16"
+          className="md:hidden fixed top-16 left-0 right-0 bottom-0 bg-black/50 z-40"
           onClick={() => setMobileMenuOpen(false)}
           aria-hidden="true"
         />

@@ -349,7 +349,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       />
 
       {/* Drawer */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-theme-bg border-l border-theme-surface-border z-50 flex flex-col shadow-2xl">
+      <div className="drawer-panel">
         {/* Loading */}
         {isLoadingApplicant && (
           <div className="flex-1 flex items-center justify-center">
@@ -475,7 +475,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
                 {isEditingContact ? (
                   <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="form-grid-2">
                       <input
                         type="text"
                         value={editFields.first_name}
@@ -524,7 +524,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       aria-label="Street address"
                       className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="form-grid-3">
                       <input
                         type="text"
                         value={editFields.address_city}
@@ -1011,7 +1011,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="action-bar">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
                     className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
@@ -1029,7 +1029,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     title="Withdraw application"
                   >
                     <Archive className="w-3.5 h-3.5" />
-                    Withdraw
+                    <span className="action-label">Withdraw</span>
                   </button>
                   <button
                     onClick={handleHold}
@@ -1037,7 +1037,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors disabled:opacity-50"
                   >
                     {isHolding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5" />}
-                    Hold
+                    <span className="action-label">Hold</span>
                   </button>
                   <button
                     onClick={() => setShowRejectConfirm(true)}
@@ -1045,7 +1045,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />
-                    Reject
+                    <span className="action-label">Reject</span>
                   </button>
                   <button
                     onClick={handleAdvance}
@@ -1057,7 +1057,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     ) : (
                       <ArrowRight className="w-3.5 h-3.5" />
                     )}
-                    {isLastStage ? 'Convert to Member' : 'Advance'}
+                    {isLastStage ? 'Convert' : 'Advance'}
                   </button>
                 </div>
               </div>
@@ -1124,7 +1124,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     </div>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
+                <div className="action-bar">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
                     className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
@@ -1140,7 +1140,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     title="Withdraw application"
                   >
                     <Archive className="w-3.5 h-3.5" />
-                    Withdraw
+                    <span className="action-label">Withdraw</span>
                   </button>
                   <button
                     onClick={() => setShowRejectConfirm(true)}
@@ -1148,7 +1148,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />
-                    Reject
+                    <span className="action-label">Reject</span>
                   </button>
                   <button
                     onClick={handleResume}
@@ -1177,7 +1177,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     />
                   </div>
                 )}
-                <div className="flex items-center gap-2">
+                <div className="action-bar">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
                     className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
@@ -1240,7 +1240,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     </div>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
+                <div className="action-bar">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
                     className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
@@ -1255,7 +1255,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />
-                    Reject
+                    <span className="action-label">Reject</span>
                   </button>
                   <button
                     onClick={handleReactivate}

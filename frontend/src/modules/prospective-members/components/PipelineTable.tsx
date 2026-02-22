@@ -55,13 +55,14 @@ const SortableHeader: React.FC<{
   sortField: SortField | null;
   sortDirection: SortDirection;
   onSort: (field: SortField) => void;
-}> = ({ label, field, sortField, sortDirection, onSort }) => {
+  className?: string;
+}> = ({ label, field, sortField, sortDirection, onSort, className }) => {
   const isSorted = sortField === field;
   const ariaSortValue = isSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none';
 
   return (
     <th
-      className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary transition-colors"
+      className={`text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary transition-colors ${className ?? ''}`}
       onClick={() => onSort(field)}
       aria-sort={ariaSortValue}
     >
@@ -221,11 +222,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     <div>
       {/* Bulk Actions Bar */}
       {selected.size > 0 && (
-        <div className="mb-3 flex items-center gap-3 p-3 bg-theme-surface border border-theme-surface-border rounded-lg">
+        <div className="mb-3 flex flex-wrap items-center gap-3 p-3 bg-theme-surface border border-theme-surface-border rounded-lg">
           <span className="text-sm text-theme-text-secondary">
             {selected.size} selected
           </span>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
             <button
               onClick={() => handleBulkAction('advance')}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
@@ -295,12 +296,12 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   </button>
                 </th>
                 <SortableHeader label="Name" field="name" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader label="Email" field="email" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Email" field="email" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-secondary" />
                 <SortableHeader label="Current Stage" field="current_stage_name" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortableHeader label="Status" field="status" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader label="Days in Stage" field="days_in_stage" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader label="Target Type" field="target_membership_type" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader label="Applied" field="created_at" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Days in Stage" field="days_in_stage" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-secondary" />
+                <SortableHeader label="Target Type" field="target_membership_type" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-tertiary" />
+                <SortableHeader label="Applied" field="created_at" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-tertiary" />
                 <th className="w-12 p-3"></th>
               </tr>
             </thead>
@@ -349,7 +350,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         </div>
                       </td>
                       <td
-                        className="p-3 text-sm text-theme-text-muted"
+                        className="p-3 text-sm text-theme-text-muted table-col-secondary"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {applicant.email}
@@ -369,7 +370,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         </span>
                       </td>
                       <td
-                        className="p-3 text-sm text-theme-text-muted"
+                        className="p-3 text-sm text-theme-text-muted table-col-secondary"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         <span className="flex items-center gap-1">
@@ -383,13 +384,13 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         </span>
                       </td>
                       <td
-                        className="p-3 text-sm text-theme-text-muted capitalize"
+                        className="p-3 text-sm text-theme-text-muted capitalize table-col-tertiary"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {applicant.target_membership_type}
                       </td>
                       <td
-                        className="p-3 text-sm text-theme-text-muted"
+                        className="p-3 text-sm text-theme-text-muted table-col-tertiary"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {formatDate(applicant.created_at, tz)}
@@ -515,7 +516,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between p-3 border-t border-theme-surface-border">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-t border-theme-surface-border">
             <p className="text-sm text-theme-text-muted">
               Page {currentPage} of {totalPages} ({totalApplicants} total)
             </p>

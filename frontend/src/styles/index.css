@@ -287,6 +287,95 @@
   .alert-danger {
     @apply bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4;
   }
+
+  /* --- Mobile-Responsive Patterns --- */
+
+  /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */
+  .drawer-panel {
+    @apply fixed top-0 right-0 h-full w-full flex flex-col shadow-2xl z-50;
+    @apply bg-theme-bg border-l border-theme-surface-border;
+    max-width: 100%;
+  }
+  @media (min-width: 640px) {
+    .drawer-panel {
+      max-width: 32rem; /* ~512px, equivalent to max-w-lg */
+    }
+  }
+
+  /* Drawer / modal action-button bars — wrap gracefully on small screens */
+  .action-bar {
+    @apply flex items-center gap-2 flex-wrap;
+  }
+  @media (max-width: 479px) {
+    .action-bar {
+      @apply gap-1.5;
+    }
+    .action-bar .action-label {
+      @apply sr-only;
+    }
+  }
+
+  /* Responsive form grids: 1-col on mobile, multi-col on sm+ */
+  .form-grid-2 {
+    @apply grid grid-cols-1 gap-3;
+  }
+  @media (min-width: 640px) {
+    .form-grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .form-grid-3 {
+    @apply grid grid-cols-1 gap-2;
+  }
+  @media (min-width: 640px) {
+    .form-grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  /* Horizontally-scrollable tab bar with hidden scrollbar */
+  .tab-scroll {
+    @apply flex items-center gap-1 border-b border-theme-surface-border;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .tab-scroll > button {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Table column visibility tiers */
+  .table-col-secondary {
+    display: none;
+  }
+  @media (min-width: 768px) {
+    .table-col-secondary {
+      display: table-cell;
+    }
+  }
+  .table-col-tertiary {
+    display: none;
+  }
+  @media (min-width: 1024px) {
+    .table-col-tertiary {
+      display: table-cell;
+    }
+  }
+
+  /* Mobile-safe modal body — accounts for on-screen keyboard */
+  .modal-body {
+    @apply max-h-[85vh] overflow-y-auto;
+  }
+  @media (min-width: 640px) {
+    .modal-body {
+      max-height: 90vh;
+    }
+  }
 }
 
 /* Smooth scroll behavior — respect reduced motion preference */
