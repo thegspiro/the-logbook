@@ -216,6 +216,18 @@ export const OPERATIONAL_RANK_LABELS: Record<OperationalRank, string> = {
   [OperationalRank.FIREFIGHTER]: 'Firefighter',
 };
 
+/** Dropdown-ready {value, label} list for <select> elements. */
+export const OPERATIONAL_RANKS = Object.values(OperationalRank).map(value => ({
+  value,
+  label: OPERATIONAL_RANK_LABELS[value],
+}));
+
+/** Format a raw rank value (e.g. "fire_chief") to its display label ("Fire Chief"). */
+export function formatRank(rank: string | null | undefined): string {
+  if (!rank) return '';
+  return OPERATIONAL_RANK_LABELS[rank as OperationalRank] ?? rank.replace(/_/g, ' ');
+}
+
 // ============================================
 // Election Voting Methods
 // ============================================

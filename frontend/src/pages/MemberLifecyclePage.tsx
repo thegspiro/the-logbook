@@ -28,6 +28,7 @@ import {
 import { memberStatusService, userService } from '../services/api';
 import type { LeaveOfAbsenceResponse } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatRank } from '../constants/enums';
 import type {
   ArchivedMember,
   OverdueMember,
@@ -115,7 +116,7 @@ const ArchivedMembersPanel: React.FC = () => {
               <tr key={member.user_id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
                 <td className="p-3">
                   <p className="text-theme-text-primary font-medium">{member.name}</p>
-                  {member.rank && <p className="text-xs text-theme-text-muted">{member.rank}</p>}
+                  {member.rank && <p className="text-xs text-theme-text-muted">{formatRank(member.rank)}</p>}
                 </td>
                 <td className="p-3 text-theme-text-secondary">{member.email || '—'}</td>
                 <td className="p-3 text-theme-text-secondary">{member.membership_number || '—'}</td>

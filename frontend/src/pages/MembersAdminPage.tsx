@@ -20,16 +20,7 @@ import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { validatePasswordStrength } from '../utils/passwordValidation';
 import { Modal } from '../components/Modal';
-
-const OPERATIONAL_RANKS = [
-  { value: 'fire_chief', label: 'Fire Chief' },
-  { value: 'deputy_chief', label: 'Deputy Chief' },
-  { value: 'assistant_chief', label: 'Assistant Chief' },
-  { value: 'captain', label: 'Captain' },
-  { value: 'lieutenant', label: 'Lieutenant' },
-  { value: 'engineer', label: 'Engineer' },
-  { value: 'firefighter', label: 'Firefighter' },
-];
+import { OPERATIONAL_RANKS } from '../constants/enums';
 
 type ViewMode = 'by-member' | 'by-role';
 

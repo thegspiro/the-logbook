@@ -22,6 +22,7 @@ import { HelpLink } from '../components/HelpLink';
 import { reportsService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { toLocalDateString } from '../utils/dateFormatting';
+import { formatRank } from '../constants/enums';
 
 interface ReportCard {
   id: string;
@@ -478,7 +479,7 @@ export const ReportsPage: React.FC = () => {
                 {entries.map((e, i) => (
                   <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.member_name ?? '-')}</td>
-                    <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(e.rank ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{formatRank(e.rank) || '-'}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.training_hours ?? 0)}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.shift_hours ?? 0)}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.courses_completed ?? 0)}</td>

@@ -18,6 +18,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { userService, schedulingService, locationsService, trainingSessionService, trainingService } from '../services/api';
+import { formatRank } from '../constants/enums';
 
 /**
  * Create Training Session Page
@@ -545,7 +546,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       <option value="">Select instructor...</option>
                       {members.map(m => (
                         <option key={m.id} value={m.id}>
-                          {m.first_name} {m.last_name}{m.rank ? ` (${m.rank})` : ''}
+                          {m.first_name} {m.last_name}{m.rank ? ` (${formatRank(m.rank)})` : ''}
                         </option>
                       ))}
                     </select>

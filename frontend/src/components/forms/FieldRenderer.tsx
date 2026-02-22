@@ -12,7 +12,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, User, Upload, FileText, X, Trash2 } from 'lucide-react';
 import { formsService } from '../../services/api';
 import type { MemberLookupResult } from '../../services/api';
-import { FieldType } from '../../constants/enums';
+import { FieldType, formatRank } from '../../constants/enums';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -435,7 +435,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
                     <User className="w-4 h-4 flex-shrink-0" />
                     <div>
                       <p className="text-sm font-medium">{member.full_name}</p>
-                      {member.rank && <p className={`text-xs ${isDark ? 'text-theme-text-muted' : 'text-theme-text-muted'}`}>{member.rank}</p>}
+                      {member.rank && <p className={`text-xs ${isDark ? 'text-theme-text-muted' : 'text-theme-text-muted'}`}>{formatRank(member.rank)}</p>}
                     </div>
                   </button>
                 ))}
