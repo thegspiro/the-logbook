@@ -1370,7 +1370,7 @@ class InventoryService:
         limit: int = 20,
     ) -> List[Tuple[InventoryItem, str, str]]:
         """
-        Search items by partial barcode, serial number, or asset tag.
+        Search items by partial barcode, serial number, asset tag, or name.
         Returns a list of (item, matched_field, matched_value) tuples.
         Uses substring matching so partial codes return results.
         """
@@ -1384,11 +1384,12 @@ class InventoryService:
         results: List[Tuple[InventoryItem, str, str]] = []
         seen_ids: set = set()
 
-        # Search barcode, serial_number, asset_tag in order of priority
+        # Search barcode, serial_number, asset_tag, then name in order of priority
         fields = [
             ("barcode", InventoryItem.barcode),
             ("serial_number", InventoryItem.serial_number),
             ("asset_tag", InventoryItem.asset_tag),
+            ("name", InventoryItem.name),
         ]
 
         for field_name, field_col in fields:

@@ -989,17 +989,17 @@ async def get_user_inventory(
 
 @router.get("/lookup", response_model=ScanLookupListResponse)
 async def lookup_item_by_code(
-    code: str = Query(..., min_length=1, description="Barcode, serial number, or asset tag"),
+    code: str = Query(..., min_length=1, description="Barcode, serial number, asset tag, or item name"),
     limit: int = Query(20, ge=1, le=50, description="Maximum results to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
-    Search inventory items by barcode, serial number, or asset tag.
+    Search inventory items by barcode, serial number, asset tag, or name.
 
     Supports partial matching — type part of a barcode, serial number,
-    or asset tag to see all matching items. Searches barcode first,
-    then serial number, then asset tag.
+    asset tag, or item name to see all matching items. Searches barcode
+    first, then serial number, then asset tag, then name.
 
     **Authentication required**
     **Requires permission: inventory.view**
