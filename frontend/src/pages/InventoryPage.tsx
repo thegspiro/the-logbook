@@ -10,6 +10,7 @@ import {
   Tag,
   Layers,
   Barcode,
+  Printer,
 } from 'lucide-react';
 import {
   inventoryService,
@@ -92,6 +93,10 @@ const InventoryPage: React.FC = () => {
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
 
+  // Label printing
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [printingLabels, setPrintingLabels] = useState(false);
+
   // Add item form
   const defaultItemForm: InventoryItemCreate = {
     name: '',
@@ -172,6 +177,7 @@ const InventoryPage: React.FC = () => {
       });
       setItems(data.items);
       setTotalItems(data.total);
+      setSelectedItemIds(new Set());
     } catch (_err: unknown) {
       // Error silently handled - items list will remain unchanged
     }
@@ -221,6 +227,42 @@ const InventoryPage: React.FC = () => {
     return cat?.name || '-';
   };
 
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedItemIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItemIds.size === items.length) {
+      setSelectedItemIds(new Set());
+    } else {
+      setSelectedItemIds(new Set(items.map(i => i.id)));
+    }
+  };
+
+  const handlePrintLabels = async () => {
+    if (selectedItemIds.size === 0) {
+      toast.error('Select at least one item to print labels');
+      return;
+    }
+    setPrintingLabels(true);
+    try {
+      const blob = await inventoryService.generateBarcodeLabels(Array.from(selectedItemIds));
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast.success(`Generated labels for ${selectedItemIds.size} item(s)`);
+    } catch {
+      toast.error('Failed to generate barcode labels');
+    } finally {
+      setPrintingLabels(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -252,6 +294,17 @@ const InventoryPage: React.FC = () => {
           </div>
           {canManage && (
             <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
+              {selectedItemIds.size > 0 && (
+                <button
+                  onClick={handlePrintLabels}
+                  disabled={printingLabels}
+                  className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg transition-colors text-sm disabled:opacity-50"
+                >
+                  <Printer className="w-4 h-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Print Labels ({selectedItemIds.size})</span>
+                  <span className="sm:hidden">Labels ({selectedItemIds.size})</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowAddCategory(true)}
                 className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg transition-colors text-sm"
@@ -411,6 +464,17 @@ const InventoryPage: React.FC = () => {
                   <table className="w-full" aria-label="Inventory items list">
                     <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                       <tr>
+                        {canManage && (
+                          <th scope="col" className="w-10 px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={items.length > 0 && selectedItemIds.size === items.length}
+                              onChange={toggleSelectAll}
+                              className="h-4 w-4 rounded border-theme-input-border text-emerald-600 focus:ring-emerald-500"
+                              aria-label="Select all items"
+                            />
+                          </th>
+                        )}
                         <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Item</th>
                         <th scope="col" className="hidden sm:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Category</th>
                         <th scope="col" className="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Serial #</th>
@@ -423,6 +487,17 @@ const InventoryPage: React.FC = () => {
                     <tbody className="divide-y divide-white/10">
                       {items.map((item) => (
                         <tr key={item.id} className="hover:bg-theme-surface-secondary transition-colors">
+                          {canManage && (
+                            <td className="w-10 px-3 py-4">
+                              <input
+                                type="checkbox"
+                                checked={selectedItemIds.has(item.id)}
+                                onChange={() => toggleItemSelection(item.id)}
+                                className="h-4 w-4 rounded border-theme-input-border text-emerald-600 focus:ring-emerald-500"
+                                aria-label={`Select ${item.name}`}
+                              />
+                            </td>
+                          )}
                           <td className="px-3 sm:px-6 py-4">
                             <div>
                               <div className="text-theme-text-primary font-medium text-sm">{item.name}</div>

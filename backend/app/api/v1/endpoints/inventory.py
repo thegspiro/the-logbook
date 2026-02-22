@@ -1006,6 +1006,53 @@ async def batch_return_items(
 
 
 # ============================================
+# Barcode Label Generation
+# ============================================
+
+@router.post("/labels/generate")
+async def generate_barcode_labels(
+    request: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Generate a PDF of barcode labels for the specified inventory items.
+
+    Accepts a JSON body with `item_ids` (list of item UUIDs).
+    Returns a PDF file with printable Code128 barcode labels.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    from fastapi.responses import StreamingResponse
+
+    item_ids = request.get("item_ids", [])
+    if not item_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="item_ids is required and must not be empty",
+        )
+
+    service = InventoryService(db)
+    try:
+        pdf_buf = await service.generate_barcode_labels(
+            item_ids=[UUID(iid) for iid in item_ids],
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+    return StreamingResponse(
+        pdf_buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=inventory-labels.pdf"},
+    )
+
+
+# ============================================
 # Departure Clearance Endpoints
 # ============================================
 
