@@ -19,6 +19,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
+import { DeleteMemberModal } from '../components/DeleteMemberModal';
 
 interface MemberStats {
   total: number;
@@ -50,6 +51,7 @@ const Members: React.FC = () => {
     show_phone: false,
     show_mobile: false,
   });
+  const [deleteModalMember, setDeleteModalMember] = useState<User | null>(null);
 
   useEffect(() => {
     loadMembers();
@@ -88,18 +90,29 @@ const Members: React.FC = () => {
     }
   };
 
-  const handleDeleteMember = async (member: User) => {
-    const name = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.username;
-    if (!confirm(`Are you sure you want to delete ${name}? This action cannot be easily undone.`)) {
-      return;
-    }
+  const handleDeleteMember = (member: User) => {
+    setDeleteModalMember(member);
+  };
 
+  const handleSoftDelete = async (userId: string) => {
     try {
       setError(null);
-      await userService.deleteUser(member.id);
+      await userService.deleteUserWithMode(userId, false);
+      setDeleteModalMember(null);
       await loadMembers();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to delete the member. Please check your connection and try again.'));
+      setError(getErrorMessage(err, 'Unable to deactivate the member. Please try again.'));
+    }
+  };
+
+  const handleHardDelete = async (userId: string) => {
+    try {
+      setError(null);
+      await userService.deleteUserWithMode(userId, true);
+      setDeleteModalMember(null);
+      await loadMembers();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to permanently delete the member. Please try again.'));
     }
   };
 
@@ -500,6 +513,21 @@ const Members: React.FC = () => {
           </>
         )}
       </main>
+
+      {deleteModalMember && (
+        <DeleteMemberModal
+          isOpen={!!deleteModalMember}
+          onClose={() => setDeleteModalMember(null)}
+          member={deleteModalMember ? {
+            id: deleteModalMember.id,
+            full_name: deleteModalMember.full_name || `${deleteModalMember.first_name || ''} ${deleteModalMember.last_name || ''}`.trim(),
+            username: deleteModalMember.username,
+            status: deleteModalMember.status,
+          } : null}
+          onSoftDelete={handleSoftDelete}
+          onHardDelete={handleHardDelete}
+        />
+      )}
     </div>
   );
 };

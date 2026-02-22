@@ -55,12 +55,16 @@ class UserService:
                 "organization_id": user.organization_id,
                 "username": user.username,
                 "first_name": user.first_name,
+                "middle_name": user.middle_name,
                 "last_name": user.last_name,
                 "full_name": user.full_name,
                 "membership_number": user.membership_number,
                 "photo_url": user.photo_url,
                 "status": user.status.value if user.status else "active",
+                "membership_type": user.membership_type,
                 "hire_date": user.hire_date,
+                "rank": user.rank,
+                "station": user.station,
             }
 
             # Conditionally include contact information based on settings

@@ -91,7 +91,6 @@ class UserUpdate(BaseModel):
     membership_number: Optional[str] = Field(None, max_length=50)
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
-    photo_url: Optional[str] = None
 
     # Department info
     rank: Optional[str] = Field(None, max_length=100)
