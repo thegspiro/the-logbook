@@ -39,7 +39,8 @@ import type {
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS } from '../types';
 
-const api = axios.create({
+/** Shared axios instance for all prospective-members API calls */
+export const api = axios.create({
   baseURL: '/api/v1',
   headers: { 'Content-Type': 'application/json' },
 });
@@ -357,8 +358,8 @@ export const pipelineService = {
       converted_count: d.transferred_count ?? 0,
       rejected_count: d.rejected_count ?? 0,
       withdrawn_count: d.withdrawn_count ?? 0,
-      on_hold_count: 0,
-      inactive_count: 0,
+      on_hold_count: d.on_hold_count ?? 0,
+      inactive_count: d.inactive_count ?? 0,
       warning_count: 0,
       avg_days_to_convert: d.avg_days_to_transfer ?? 0,
       by_stage: (d.by_step || []).map((s: { stage_id: string; stage_name: string; count: number }) => ({
@@ -419,6 +420,31 @@ export const pipelineService = {
       { inactivity_config: config }
     );
     return mapPipelineResponse(response.data);
+  },
+
+  async duplicatePipeline(pipelineId: string, newName: string): Promise<Pipeline> {
+    const response = await api.post(
+      `/prospective-members/pipelines/${pipelineId}/duplicate`,
+      { name: newName }
+    );
+    return mapPipelineResponse(response.data);
+  },
+
+  async seedTemplates(): Promise<void> {
+    await api.post('/prospective-members/pipelines/seed-templates');
+  },
+
+  async getKanbanBoard(pipelineId: string): Promise<{
+    pipeline_id: string;
+    pipeline_name: string;
+    total_prospects: number;
+    columns: Array<{
+      step: { id: string; name: string; step_type: string; is_first_step: boolean; is_final_step: boolean } | null;
+      prospects: Array<{ id: string; first_name: string; last_name: string; email: string; phone?: string; status: string; created_at: string }>;
+    }>;
+  }> {
+    const response = await api.get(`/prospective-members/pipelines/${pipelineId}/kanban`);
+    return response.data;
   },
 };
 
@@ -523,7 +549,6 @@ export const applicantService = {
   },
 
   async deleteApplicant(applicantId: string): Promise<void> {
-    // Backend doesn't have a delete prospect endpoint; this may 404
     await api.delete(`/prospective-members/prospects/${applicantId}`);
   },
 
@@ -577,10 +602,9 @@ export const applicantService = {
     applicantId: string,
     reason?: string
   ): Promise<Applicant> {
-    // Backend doesn't have "on_hold" status; use withdrawn as closest match
     const response = await api.put(
       `/prospective-members/prospects/${applicantId}`,
-      { status: 'withdrawn', notes: reason }
+      { status: 'on_hold', notes: reason }
     );
     return mapProspectToApplicant(response.data);
   },
@@ -625,7 +649,7 @@ export const applicantService = {
     return this.getApplicants({
       filters: {
         pipeline_id: params?.pipeline_id,
-        status: 'withdrawn', // Backend has no "inactive" status; closest is withdrawn
+        status: 'inactive',
         search: params?.search,
       },
       page: params?.page,

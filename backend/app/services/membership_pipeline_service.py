@@ -9,7 +9,7 @@ transfer to full membership.
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, update, delete
+from sqlalchemy import select, func, and_, or_, update, delete
 from sqlalchemy.orm import selectinload
 from uuid import UUID, uuid4
 import secrets
@@ -141,7 +141,7 @@ class MembershipPipelineService:
             await self._unset_default_pipeline(organization_id)
 
         for key, value in data.items():
-            if value is not None and hasattr(pipeline, key):
+            if hasattr(pipeline, key):
                 setattr(pipeline, key, value)
 
         await self.db.commit()
@@ -273,7 +273,13 @@ class MembershipPipelineService:
         return step
 
     async def delete_step(self, step_id: str, pipeline_id: str, organization_id: str) -> bool:
-        """Remove a step from a pipeline"""
+        """Remove a step from a pipeline.
+
+        Preserves progress records by nullifying their step_id reference
+        instead of letting the cascade destroy them.  Also moves any
+        prospect whose current_step_id points to this step to the next
+        available step (or None).
+        """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return False
@@ -281,6 +287,29 @@ class MembershipPipelineService:
         step = next((s for s in pipeline.steps if s.id == step_id), None)
         if not step:
             return False
+
+        # Detach progress records so they survive the cascade
+        await self.db.execute(
+            update(ProspectStepProgress)
+            .where(ProspectStepProgress.step_id == step_id)
+            .values(step_id=None)
+        )
+
+        # Move prospects sitting on this step to the next step (or None)
+        sorted_steps = sorted(pipeline.steps, key=lambda s: s.sort_order)
+        current_idx = next(
+            (i for i, s in enumerate(sorted_steps) if str(s.id) == str(step_id)),
+            -1,
+        )
+        next_step_id = None
+        if current_idx >= 0 and current_idx < len(sorted_steps) - 1:
+            next_step_id = sorted_steps[current_idx + 1].id
+
+        await self.db.execute(
+            update(ProspectiveMember)
+            .where(ProspectiveMember.current_step_id == step_id)
+            .values(current_step_id=next_step_id)
+        )
 
         await self.db.delete(step)
         await self.db.commit()
@@ -381,8 +410,6 @@ class MembershipPipelineService:
         including archived members. Returns a list of matches with their status
         so leadership can decide whether to reactivate instead of creating new.
         """
-        from sqlalchemy import or_
-
         conditions = [
             User.organization_id == organization_id,
             User.deleted_at.is_(None),
@@ -424,7 +451,24 @@ class MembershipPipelineService:
         data: Dict[str, Any],
         created_by: Optional[str] = None,
     ) -> ProspectiveMember:
-        """Create a new prospective member"""
+        """Create a new prospective member.
+
+        Raises ValueError if a prospect with the same email already exists
+        in this organization (regardless of pipeline).
+        """
+        # Enforce per-org email uniqueness at the service level
+        email = data["email"]
+        existing = await self.db.execute(
+            select(ProspectiveMember.id).where(
+                and_(
+                    ProspectiveMember.organization_id == organization_id,
+                    func.lower(ProspectiveMember.email) == email.lower(),
+                )
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise ValueError(f"A prospect with email '{email}' already exists in this organization")
+
         pipeline_id = data.get("pipeline_id")
 
         # Use org default pipeline if none specified
@@ -482,18 +526,24 @@ class MembershipPipelineService:
     async def update_prospect(
         self, prospect_id: str, organization_id: str, data: Dict[str, Any], updated_by: Optional[str] = None
     ) -> Optional[ProspectiveMember]:
-        """Update a prospect's information"""
+        """Update a prospect's information.
+
+        Uses exclude_unset=True at the API layer, so keys present in ``data``
+        were explicitly provided by the caller — even if the value is None
+        (meaning "clear this field").
+        """
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
 
         changes = {}
         for key, value in data.items():
-            if value is not None and hasattr(prospect, key):
-                old_value = getattr(prospect, key)
-                if old_value != value:
-                    changes[key] = {"from": str(old_value), "to": str(value)}
-                    setattr(prospect, key, value)
+            if not hasattr(prospect, key):
+                continue
+            old_value = getattr(prospect, key)
+            if old_value != value:
+                changes[key] = {"from": str(old_value), "to": str(value)}
+                setattr(prospect, key, value)
 
         if changes:
             await self._log_activity(
@@ -1140,6 +1190,7 @@ class MembershipPipelineService:
         total = sum(status_counts.values())
 
         # Count prospects by current step
+        step_ids = [step.id for step in pipeline.steps]
         by_step = []
         for step in sorted(pipeline.steps, key=lambda s: s.sort_order):
             step_count_query = (
@@ -1157,6 +1208,41 @@ class MembershipPipelineService:
                 "stage_id": step.id,
                 "stage_name": step.name,
                 "count": result.scalar() or 0,
+            })
+
+        # Count active prospects whose current_step_id is NULL or doesn't
+        # match any existing step (orphaned due to step deletion)
+        if step_ids:
+            orphan_query = (
+                select(func.count(ProspectiveMember.id))
+                .where(
+                    and_(
+                        ProspectiveMember.pipeline_id == pipeline_id,
+                        ProspectiveMember.status == ProspectStatus.ACTIVE,
+                        or_(
+                            ProspectiveMember.current_step_id.is_(None),
+                            ProspectiveMember.current_step_id.notin_(step_ids),
+                        ),
+                    )
+                )
+            )
+        else:
+            orphan_query = (
+                select(func.count(ProspectiveMember.id))
+                .where(
+                    and_(
+                        ProspectiveMember.pipeline_id == pipeline_id,
+                        ProspectiveMember.status == ProspectStatus.ACTIVE,
+                    )
+                )
+            )
+        orphan_result = await self.db.execute(orphan_query)
+        orphan_count = orphan_result.scalar() or 0
+        if orphan_count > 0:
+            by_step.append({
+                "stage_id": None,
+                "stage_name": "Unassigned",
+                "count": orphan_count,
             })
 
         # Calculate avg days to transfer using portable SQL
@@ -1213,6 +1299,8 @@ class MembershipPipelineService:
             "active_count": status_counts.get("active", 0),
             "approved_count": status_counts.get("approved", 0),
             "rejected_count": status_counts.get("rejected", 0),
+            "on_hold_count": status_counts.get("on_hold", 0),
+            "inactive_count": status_counts.get("inactive", 0),
             "withdrawn_count": status_counts.get("withdrawn", 0),
             "transferred_count": transferred_count,
             "by_step": by_step,

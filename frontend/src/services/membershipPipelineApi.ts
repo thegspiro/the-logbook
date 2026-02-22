@@ -1,46 +1,22 @@
 /**
- * Membership Pipeline API Service
+ * Membership Pipeline API Service — Compatibility Shim
  *
- * Handles all API calls for the prospective member pipeline module.
+ * This file re-exports the canonical API from the prospective-members module.
+ * Pages that still import from here will get the same functionality without
+ * maintaining a second axios client or duplicating request logic.
+ *
+ * New code should import directly from
+ *   '@/modules/prospective-members/services/api'
  */
 
-import axios from 'axios';
+import { api } from '../modules/prospective-members/services/api';
 
-const API_BASE_URL = '/api/v1/prospective-members';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
-
-// Response interceptor for auth errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  },
-);
-
-// --- Types ---
+// ---------------------------------------------------------------------------
+// Re-exported types
+//
+// These mirror the "backend terminology" types that the three legacy pages use.
+// The canonical module types use "applicant/stage" terminology instead.
+// ---------------------------------------------------------------------------
 
 export interface PipelineStep {
   id: string;
@@ -168,8 +144,6 @@ export interface KanbanBoard {
   total_prospects: number;
 }
 
-// --- Create/Update types ---
-
 export interface PipelineStepCreate {
   name: string;
   description?: string;
@@ -253,123 +227,120 @@ export interface TransferResponse {
   message: string;
 }
 
-// --- API Service ---
+// ---------------------------------------------------------------------------
+// Service facade — delegates to the canonical module APIs
+//
+// Method names match the old API so existing pages don't need changes.
+// ---------------------------------------------------------------------------
 
 export const membershipPipelineService = {
-  // Pipeline CRUD
+  // Pipeline CRUD — direct API calls return backend-native shapes
   listPipelines: async (includeTemplates = true): Promise<PipelineListItem[]> => {
-    const { data } = await api.get('/pipelines', { params: { include_templates: includeTemplates } });
+    const { data } = await api.get('/prospective-members/pipelines', {
+      params: { include_templates: includeTemplates },
+    });
     return data;
   },
 
   getPipeline: async (pipelineId: string): Promise<Pipeline> => {
-    const { data } = await api.get(`/pipelines/${pipelineId}`);
+    const { data } = await api.get(`/prospective-members/pipelines/${pipelineId}`);
     return data;
   },
 
   createPipeline: async (payload: PipelineCreate): Promise<Pipeline> => {
-    const { data } = await api.post('/pipelines', payload);
+    const { data } = await api.post('/prospective-members/pipelines', payload);
     return data;
   },
 
   updatePipeline: async (pipelineId: string, payload: PipelineUpdate): Promise<Pipeline> => {
-    const { data } = await api.put(`/pipelines/${pipelineId}`, payload);
+    const { data } = await api.put(`/prospective-members/pipelines/${pipelineId}`, payload);
     return data;
   },
 
   deletePipeline: async (pipelineId: string): Promise<void> => {
-    await api.delete(`/pipelines/${pipelineId}`);
+    await api.delete(`/prospective-members/pipelines/${pipelineId}`);
   },
 
   duplicatePipeline: async (pipelineId: string, name: string): Promise<Pipeline> => {
-    const { data } = await api.post(`/pipelines/${pipelineId}/duplicate`, null, { params: { name } });
+    const { data } = await api.post(`/prospective-members/pipelines/${pipelineId}/duplicate`, null, {
+      params: { name },
+    });
     return data;
   },
 
   seedTemplates: async (): Promise<{ message: string }> => {
-    const { data } = await api.post('/pipelines/default/seed-templates');
+    const { data } = await api.post('/prospective-members/pipelines/default/seed-templates');
     return data;
   },
 
   // Pipeline Steps
-  listSteps: async (pipelineId: string): Promise<PipelineStep[]> => {
-    const { data } = await api.get(`/pipelines/${pipelineId}/steps`);
-    return data;
-  },
-
   addStep: async (pipelineId: string, payload: PipelineStepCreate): Promise<PipelineStep> => {
-    const { data } = await api.post(`/pipelines/${pipelineId}/steps`, payload);
+    const { data } = await api.post(`/prospective-members/pipelines/${pipelineId}/steps`, payload);
     return data;
   },
 
   updateStep: async (pipelineId: string, stepId: string, payload: Partial<PipelineStepCreate>): Promise<PipelineStep> => {
-    const { data } = await api.put(`/pipelines/${pipelineId}/steps/${stepId}`, payload);
+    const { data } = await api.put(`/prospective-members/pipelines/${pipelineId}/steps/${stepId}`, payload);
     return data;
   },
 
   deleteStep: async (pipelineId: string, stepId: string): Promise<void> => {
-    await api.delete(`/pipelines/${pipelineId}/steps/${stepId}`);
+    await api.delete(`/prospective-members/pipelines/${pipelineId}/steps/${stepId}`);
   },
 
   reorderSteps: async (pipelineId: string, stepIds: string[]): Promise<PipelineStep[]> => {
-    const { data } = await api.put(`/pipelines/${pipelineId}/steps/reorder`, { step_ids: stepIds });
+    const { data } = await api.put(`/prospective-members/pipelines/${pipelineId}/steps/reorder`, {
+      step_ids: stepIds,
+    });
     return data;
   },
 
   // Kanban Board
   getKanbanBoard: async (pipelineId: string): Promise<KanbanBoard> => {
-    const { data } = await api.get(`/pipelines/${pipelineId}/kanban`);
+    const { data } = await api.get(`/prospective-members/pipelines/${pipelineId}/kanban`);
     return data;
   },
 
   // Prospects
-  listProspects: async (params?: {
-    pipeline_id?: string;
-    status?: string;
-    search?: string;
-    limit?: number;
-    offset?: number;
-  }): Promise<ProspectListItem[]> => {
-    const { data } = await api.get('/prospects', { params });
-    return data;
-  },
-
   getProspect: async (prospectId: string): Promise<Prospect> => {
-    const { data } = await api.get(`/prospects/${prospectId}`);
+    const { data } = await api.get(`/prospective-members/prospects/${prospectId}`);
     return data;
   },
 
   createProspect: async (payload: ProspectCreate): Promise<Prospect> => {
-    const { data } = await api.post('/prospects', payload);
+    const { data } = await api.post('/prospective-members/prospects', payload);
     return data;
   },
 
   updateProspect: async (prospectId: string, payload: ProspectUpdate): Promise<Prospect> => {
-    const { data } = await api.put(`/prospects/${prospectId}`, payload);
+    const { data } = await api.put(`/prospective-members/prospects/${prospectId}`, payload);
     return data;
   },
 
-  completeStep: async (prospectId: string, stepId: string, notes?: string, actionResult?: Record<string, unknown>): Promise<Prospect> => {
-    const { data } = await api.post(`/prospects/${prospectId}/complete-step`, {
-      step_id: stepId,
-      notes,
-      action_result: actionResult,
+  completeStep: async (prospectId: string, stepId: string, notes?: string): Promise<Prospect> => {
+    const { data } = await api.post(`/prospective-members/prospects/${prospectId}/complete-step`, {
+      step_id: stepId, notes,
     });
     return data;
   },
 
   advanceProspect: async (prospectId: string, notes?: string): Promise<Prospect> => {
-    const { data } = await api.post(`/prospects/${prospectId}/advance`, { notes });
+    const { data } = await api.post(`/prospective-members/prospects/${prospectId}/advance`, { notes });
     return data;
   },
 
   transferProspect: async (prospectId: string, payload: TransferRequest): Promise<TransferResponse> => {
-    const { data } = await api.post(`/prospects/${prospectId}/transfer`, payload);
+    const { data } = await api.post(
+      `/prospective-members/prospects/${prospectId}/transfer`,
+      payload
+    );
     return data;
   },
 
   getProspectActivity: async (prospectId: string, limit = 50): Promise<ActivityLogEntry[]> => {
-    const { data } = await api.get(`/prospects/${prospectId}/activity`, { params: { limit } });
+    const { data } = await api.get(`/prospective-members/prospects/${prospectId}/activity`, {
+      params: { limit },
+    });
     return data;
   },
 };

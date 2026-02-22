@@ -545,11 +545,17 @@ async def create_prospect(
     if "referred_by" in prospect_data and prospect_data["referred_by"]:
         prospect_data["referred_by"] = str(prospect_data["referred_by"])
 
-    prospect = await service.create_prospect(
-        organization_id=current_user.organization_id,
-        data=prospect_data,
-        created_by=current_user.id,
-    )
+    try:
+        prospect = await service.create_prospect(
+            organization_id=current_user.organization_id,
+            data=prospect_data,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
     return prospect
 
 

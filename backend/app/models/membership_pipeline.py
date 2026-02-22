@@ -168,7 +168,6 @@ class MembershipPipelineStep(Base):
     progress_records = relationship(
         "ProspectStepProgress",
         back_populates="step",
-        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
@@ -272,7 +271,7 @@ class ProspectiveMember(Base):
     __table_args__ = (
         Index("idx_prospect_org_status", "organization_id", "status"),
         Index("idx_prospect_org_pipeline", "organization_id", "pipeline_id"),
-        Index("idx_prospect_org_email", "organization_id", "email"),
+        Index("idx_prospect_org_email_unique", "organization_id", "email", unique=True),
     )
 
     @property
@@ -301,8 +300,8 @@ class ProspectStepProgress(Base):
     )
     step_id = Column(
         String(36),
-        ForeignKey("membership_pipeline_steps.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("membership_pipeline_steps.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     status = Column(
