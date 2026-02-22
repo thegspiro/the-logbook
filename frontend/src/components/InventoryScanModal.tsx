@@ -17,7 +17,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Modal } from './Modal';
-import { X, Camera, Keyboard, Check, AlertTriangle, Package, Trash2, Loader2 } from 'lucide-react';
+import { Camera, Keyboard, Check, AlertTriangle, Package, Trash2, Loader2 } from 'lucide-react';
 import {
   inventoryService,
   ScanLookupResponse,
