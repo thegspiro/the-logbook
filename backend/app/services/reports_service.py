@@ -107,7 +107,7 @@ class ReportsService:
 
         return {
             "report_type": "member_roster",
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "total_members": len(members),
             "active_members": active_count,
             "inactive_members": inactive_count,
@@ -225,7 +225,7 @@ class ReportsService:
 
         return {
             "report_type": "training_summary",
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_start": str(start_date) if start_date else None,
             "period_end": str(end_date) if end_date else None,
             "total_courses": total_courses,
@@ -295,7 +295,7 @@ class ReportsService:
 
         return {
             "report_type": "event_attendance",
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_start": str(start_date) if start_date else None,
             "period_end": str(end_date) if end_date else None,
             "total_events": len(event_entries),
@@ -381,7 +381,7 @@ class ReportsService:
 
         return {
             "report_type": "training_progress",
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "total_enrollments": len(entries),
             "status_summary": status_summary,
             "average_progress": round(avg_progress, 1),
@@ -399,7 +399,7 @@ class ReportsService:
     ) -> Dict[str, Any]:
         """Generate an annual training report with hours, completions, shift reports, and member breakdown."""
         # Default to current year if no dates provided
-        year = (filters or {}).get("year", datetime.now().year)
+        year = (filters or {}).get("year", datetime.now(timezone.utc).year)
         if not start_date:
             start_date = date(int(year), 1, 1)
         if not end_date:
@@ -503,7 +503,7 @@ class ReportsService:
 
         return {
             "report_type": "annual_training",
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_start": str(start_date),
             "period_end": str(end_date),
             "year": int(year),
@@ -687,7 +687,7 @@ class ReportsService:
 
         return {
             "report_type": "department_overview",
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_start": str(period_start),
             "period_end": str(period_end),
             "members": {

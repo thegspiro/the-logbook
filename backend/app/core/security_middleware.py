@@ -707,7 +707,7 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Add request ID header
-        request_id = request.headers.get("X-Request-ID", str(hash(f"{client_ip}{datetime.now().timestamp()}")))
+        request_id = request.headers.get("X-Request-ID", str(hash(f"{client_ip}{datetime.now(timezone.utc).timestamp()}")))
         response.headers["X-Request-ID"] = request_id
 
         return response
