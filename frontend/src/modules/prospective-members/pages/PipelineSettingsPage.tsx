@@ -195,7 +195,7 @@ export const PipelineSettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="px-4 sm:px-6 py-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <button
@@ -216,9 +216,9 @@ export const PipelineSettingsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Pipeline List Sidebar */}
-        <div className="col-span-4">
+        <div className="lg:col-span-4">
           <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg">
             <div className="flex items-center justify-between p-4 border-b border-theme-surface-border">
               <h2 className="text-sm font-medium text-theme-text-primary">Pipelines</h2>
@@ -277,7 +277,7 @@ export const PipelineSettingsPage: React.FC = () => {
         </div>
 
         {/* Pipeline Editor */}
-        <div className="col-span-8">
+        <div className="lg:col-span-8">
           {isLoadingPipeline ? (
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
               <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" aria-hidden="true" />

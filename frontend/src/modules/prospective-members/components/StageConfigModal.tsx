@@ -209,7 +209,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       aria-labelledby="stage-config-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-2xl w-full modal-body">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <h2 id="stage-config-modal-title" className="text-xl font-bold text-theme-text-primary">
@@ -264,7 +264,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             <label className="block text-sm font-medium text-theme-text-secondary mb-3">
               Stage Type *
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="form-grid-2">
               {STAGE_TYPE_OPTIONS.map((opt) => {
                 const Icon = opt.icon;
                 const selected = stageType === opt.value;

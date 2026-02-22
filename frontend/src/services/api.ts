@@ -3870,6 +3870,16 @@ export const shiftCompletionService = {
     const response = await api.post(`/training/shift-reports/${reportId}/acknowledge`, { trainee_comments: comments });
     return response.data;
   },
+
+  async getPendingReviewReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get('/training/shift-reports/pending-review');
+    return response.data;
+  },
+
+  async reviewReport(reportId: string, data: { review_status: string; reviewer_notes?: string; redact_fields?: string[] }): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.post(`/training/shift-reports/${reportId}/review`, data);
+    return response.data;
+  },
 };
 
 // ============================================
@@ -4536,33 +4546,6 @@ export const memberStatusService = {
 
   async deleteLeaveOfAbsence(leaveId: string): Promise<void> {
     await api.delete(`/users/leaves-of-absence/${leaveId}`);
-  },
-};
-
-// ============================================
-// Scheduled Tasks Service
-// ============================================
-
-export interface ScheduledTask {
-  id: string;
-  name: string;
-  description?: string;
-  frequency: string;
-  recommended_time?: string;
-  last_run_at?: string;
-  next_run_at?: string;
-  is_running: boolean;
-  enabled: boolean;
-}
-
-export const scheduledTasksService = {
-  async listTasks(): Promise<{ tasks: ScheduledTask[] }> {
-    const response = await api.get('/scheduled/tasks');
-    return response.data;
-  },
-  async runTask(taskId: string): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduled/run-task', null, { params: { task: taskId } });
-    return response.data;
   },
 };
 

@@ -18,7 +18,9 @@ from app.schemas.shift_completion import (
     ShiftCompletionReportCreate,
     ShiftCompletionReportResponse,
     TraineeAcknowledgment,
+    ReportReview,
 )
+from app.services.training_module_config_service import TrainingModuleConfigService
 
 router = APIRouter()
 
@@ -33,12 +35,19 @@ async def create_shift_report(
     Submit a shift completion report for a trainee.
     Auto-updates pipeline requirement progress for shift/call/hour-based requirements.
     Only shift officers / training officers can submit.
+    If report_review_required is enabled, sets review_status to pending_review.
     """
+    # Check if review is required for this organization
+    config_service = TrainingModuleConfigService(db)
+    config = await config_service.get_config(current_user.organization_id)
+    review_status = 'pending_review' if config.report_review_required else 'approved'
+
     service = ShiftCompletionService(db)
     try:
         report = await service.create_report(
             organization_id=current_user.organization_id,
             officer_id=current_user.id,
+            review_status=review_status,
             **data.model_dump(exclude_unset=True),
         )
         return report
@@ -53,7 +62,8 @@ async def get_my_shift_reports(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get shift completion reports where the current user is the trainee."""
+    """Get shift completion reports where the current user is the trainee.
+    Only returns approved reports if review workflow is enabled."""
     service = ShiftCompletionService(db)
     reports = await service.get_reports_for_trainee(
         organization_id=current_user.organization_id,
@@ -61,6 +71,29 @@ async def get_my_shift_reports(
         start_date=start_date,
         end_date=end_date,
     )
+
+    # Filter to only approved reports if review workflow is enabled
+    config_service = TrainingModuleConfigService(db)
+    config = await config_service.get_config(current_user.organization_id)
+    if config.report_review_required:
+        reports = [r for r in reports if r.review_status == 'approved']
+
+    # Strip sensitive fields based on visibility config
+    visibility = config.to_visibility_dict()
+    for report in reports:
+        if not visibility.get('show_performance_rating', True):
+            report.performance_rating = None
+        if not visibility.get('show_officer_narrative', False):
+            report.officer_narrative = None
+        if not visibility.get('show_areas_of_strength', True):
+            report.areas_of_strength = None
+        if not visibility.get('show_areas_for_improvement', True):
+            report.areas_for_improvement = None
+        if not visibility.get('show_skills_observed', True):
+            report.skills_observed = None
+        # Never expose reviewer notes to trainees
+        report.reviewer_notes = None
+
     return reports
 
 
@@ -154,6 +187,19 @@ async def get_all_reports(
     )
 
 
+@router.get("/pending-review", response_model=list[ShiftCompletionReportResponse])
+async def get_pending_review_reports(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Get shift completion reports pending review for this organization."""
+    service = ShiftCompletionService(db)
+    return await service.get_reports_by_status(
+        organization_id=current_user.organization_id,
+        review_status="pending_review",
+    )
+
+
 @router.get("/{report_id}", response_model=ShiftCompletionReportResponse)
 async def get_shift_report(
     report_id: str,
@@ -189,4 +235,27 @@ async def acknowledge_report(
     )
     if not report:
         raise HTTPException(status_code=404, detail="Report not found or not your report")
+    return report
+
+
+@router.post("/{report_id}/review", response_model=ShiftCompletionReportResponse)
+async def review_report(
+    report_id: str,
+    review: ReportReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Review a shift completion report — approve, flag, or redact fields.
+    Redacting clears specified fields before making the report visible to trainee."""
+    service = ShiftCompletionService(db)
+    report = await service.review_report(
+        report_id=report_id,
+        organization_id=current_user.organization_id,
+        reviewer_id=str(current_user.id),
+        review_status=review.review_status,
+        reviewer_notes=review.reviewer_notes,
+        redact_fields=review.redact_fields,
+    )
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
     return report

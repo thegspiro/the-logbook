@@ -132,7 +132,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       aria-labelledby="conversion-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape' && !isConverting) onClose(); }}
     >
-      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full modal-body">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <div className="flex items-center gap-3">
@@ -297,7 +297,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                   Membership Type
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="form-grid-2">
                   <button
                     onClick={() => setMembershipType('probationary')}
                     className={`p-3 rounded-lg border text-left transition-all ${
@@ -324,7 +324,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
               </div>
 
               {/* Rank & Station */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="form-grid-2">
                 <div>
                   <label htmlFor="conv-rank" className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Rank
@@ -354,7 +354,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
               </div>
 
               {/* Middle Name & Hire Date */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="form-grid-2">
                 <div>
                   <label htmlFor="conv-middle" className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Middle Name
@@ -387,7 +387,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                   Emergency Contact (optional)
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="form-grid-3">
                   <input
                     type="text"
                     value={emergencyContact.name}

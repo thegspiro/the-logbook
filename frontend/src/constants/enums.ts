@@ -179,3 +179,62 @@ export const SubmissionStatus = {
   REVISION_REQUESTED: 'revision_requested',
 } as const;
 export type SubmissionStatus = (typeof SubmissionStatus)[keyof typeof SubmissionStatus];
+
+// ============================================
+// Scheduling — Assignment Status
+// ============================================
+export const AssignmentStatus = {
+  ASSIGNED: 'assigned',
+  CONFIRMED: 'confirmed',
+  DECLINED: 'declined',
+  PENDING: 'pending',
+  CANCELLED: 'cancelled',
+  NO_SHOW: 'no_show',
+} as const;
+export type AssignmentStatus = (typeof AssignmentStatus)[keyof typeof AssignmentStatus];
+
+// ============================================
+// Scheduling — Swap / Time-Off Request Status
+// ============================================
+export const RequestStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DENIED: 'denied',
+  CANCELLED: 'cancelled',
+} as const;
+export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
+
+// ============================================
+// Scheduling — Position Labels
+// ============================================
+export const POSITION_LABELS: Record<string, string> = {
+  officer: 'Officer',
+  driver: 'Driver/Operator',
+  firefighter: 'Firefighter',
+  EMS: 'EMS',
+  ems: 'EMS',
+  captain: 'Captain',
+  lieutenant: 'Lieutenant',
+  probationary: 'Probationary',
+  volunteer: 'Volunteer',
+  other: 'Other',
+};
+
+// ============================================
+// Scheduling — Status Badge Colors
+// ============================================
+export const ASSIGNMENT_STATUS_COLORS: Record<string, string> = {
+  assigned: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  confirmed: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
+  no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
+};
+
+export const REQUEST_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+  cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
+};

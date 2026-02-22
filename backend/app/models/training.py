@@ -25,6 +25,7 @@ from datetime import datetime
 import enum
 
 from app.core.utils import generate_uuid
+from app.core.encrypted_types import EncryptedText
 
 from app.core.database import Base
 
@@ -909,11 +910,11 @@ class ShiftCompletionReport(Base):
     calls_responded = Column(Integer, default=0)
     call_types = Column(JSON)  # Array of incident types responded to
 
-    # Performance observations
+    # Performance observations (narratives encrypted at rest via AES-256)
     performance_rating = Column(Integer)  # 1-5 scale
-    areas_of_strength = Column(Text)
-    areas_for_improvement = Column(Text)
-    officer_narrative = Column(Text)  # Free-form description of the shift experience
+    areas_of_strength = Column(EncryptedText)
+    areas_for_improvement = Column(EncryptedText)
+    officer_narrative = Column(EncryptedText)  # Free-form description of the shift experience
 
     # Skills observed
     skills_observed = Column(JSON)  # Array of { skill_name, demonstrated: bool, notes }
@@ -922,6 +923,12 @@ class ShiftCompletionReport(Base):
     # Pipeline linkage
     enrollment_id = Column(String(36), ForeignKey("program_enrollments.id", ondelete="SET NULL"), nullable=True)
     requirements_progressed = Column(JSON)  # Array of { requirement_progress_id, value_added }
+
+    # Review workflow — reports can require approval before trainee visibility
+    review_status = Column(String(20), default='approved')  # draft, pending_review, approved, flagged
+    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewer_notes = Column(EncryptedText, nullable=True)  # Internal notes from reviewer, never shown to trainee
 
     # Trainee acknowledgment
     trainee_acknowledged = Column(Boolean, default=False)
@@ -937,6 +944,7 @@ class ShiftCompletionReport(Base):
         Index('idx_shift_report_officer', 'officer_id'),
         Index('idx_shift_report_enrollment', 'enrollment_id'),
         Index('idx_shift_report_org_date', 'organization_id', 'shift_date'),
+        Index('idx_shift_report_review', 'organization_id', 'review_status'),
     )
 
     def __repr__(self):
@@ -991,6 +999,15 @@ class TrainingModuleConfig(Base):
     # Reports access
     allow_member_report_export = Column(Boolean, default=False)  # Can members download their own data
 
+    # Shift report review workflow
+    report_review_required = Column(Boolean, default=False)  # Must reports be approved before trainee can see?
+    report_review_role = Column(String(50), default='training_officer')  # Who reviews: training_officer, captain, chief
+
+    # Rating customization
+    rating_label = Column(String(100), default='Performance Rating')  # Custom label for the rating field
+    rating_scale_type = Column(String(20), default='stars')  # stars, competency, custom
+    rating_scale_labels = Column(JSON, nullable=True)  # {"1":"Unsatisfactory","2":"Developing","3":"Competent","4":"Proficient","5":"Exemplary"}
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -1016,6 +1033,11 @@ class TrainingModuleConfig(Base):
             "show_skills_observed": self.show_skills_observed,
             "show_submission_history": self.show_submission_history,
             "allow_member_report_export": self.allow_member_report_export,
+            "report_review_required": self.report_review_required,
+            "report_review_role": self.report_review_role,
+            "rating_label": self.rating_label,
+            "rating_scale_type": self.rating_scale_type,
+            "rating_scale_labels": self.rating_scale_labels,
         }
 
 
