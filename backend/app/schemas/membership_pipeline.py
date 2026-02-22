@@ -25,6 +25,8 @@ class PipelineStepBase(BaseModel):
     required: bool = True
     config: Optional[Dict[str, Any]] = Field(None, description="Stage-specific configuration (form settings, election config, etc.)")
     inactivity_timeout_days: Optional[int] = Field(None, description="Per-step inactivity timeout override in days")
+    notify_prospect_on_completion: bool = Field(default=False, description="Send notification to prospect when this step is completed")
+    public_visible: bool = Field(default=True, description="Show this step on the public application status page")
 
 
 class PipelineStepCreate(PipelineStepBase):
@@ -45,6 +47,8 @@ class PipelineStepUpdate(BaseModel):
     required: Optional[bool] = None
     config: Optional[Dict[str, Any]] = None
     inactivity_timeout_days: Optional[int] = None
+    notify_prospect_on_completion: Optional[bool] = None
+    public_visible: Optional[bool] = None
 
 
 class PipelineStepResponse(PipelineStepBase):
@@ -66,6 +70,7 @@ class PipelineBase(BaseModel):
     is_active: bool = True
     auto_transfer_on_approval: bool = False
     inactivity_config: Optional[Dict[str, Any]] = Field(None, description="Inactivity timeout and notification settings")
+    public_status_enabled: bool = Field(default=False, description="Allow prospects to check their status via a public link")
 
 
 class PipelineCreate(PipelineBase):
@@ -81,6 +86,7 @@ class PipelineUpdate(BaseModel):
     is_active: Optional[bool] = None
     auto_transfer_on_approval: Optional[bool] = None
     inactivity_config: Optional[Dict[str, Any]] = None
+    public_status_enabled: Optional[bool] = None
 
 
 class PipelineResponse(PipelineBase):

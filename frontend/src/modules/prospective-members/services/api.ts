@@ -156,6 +156,8 @@ function mapStepToStage(step: any): PipelineStage {
     config: getDefaultStageConfig(stageType),
     sort_order: step.sort_order ?? 0,
     is_required: step.required ?? true,
+    notify_prospect_on_completion: step.notify_prospect_on_completion ?? false,
+    public_visible: step.public_visible ?? true,
     created_at: step.created_at,
     updated_at: step.updated_at,
   };
@@ -172,6 +174,7 @@ function mapPipelineResponse(data: any): Pipeline {
     inactivity_config: data.inactivity_config && Object.keys(data.inactivity_config).length > 0
       ? data.inactivity_config
       : DEFAULT_INACTIVITY_CONFIG,
+    public_status_enabled: data.public_status_enabled ?? false,
     stages: (data.steps || []).map(mapStepToStage),
     applicant_count: data.prospect_count ?? 0,
     created_at: data.created_at,
@@ -194,14 +197,14 @@ function mapPipelineListItem(data: any): PipelineListItem {
 
 /** Map a frontend PipelineStageCreate to a backend step create payload */
 function mapStageCreateToBackend(stage: PipelineStageCreate): any {
-  const { step_type, action_type } = mapStageTypeToBackend(stage.stage_type);
   return {
     name: stage.name,
     description: stage.description,
-    step_type,
-    action_type,
+    ...mapStageTypeToBackend(stage.stage_type),
     sort_order: stage.sort_order,
     required: stage.is_required ?? true,
+    notify_prospect_on_completion: stage.notify_prospect_on_completion ?? false,
+    public_visible: stage.public_visible ?? true,
   };
 }
 
@@ -217,6 +220,8 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): any {
   }
   if (stage.sort_order !== undefined) payload.sort_order = stage.sort_order;
   if (stage.is_required !== undefined) payload.required = stage.is_required;
+  if (stage.notify_prospect_on_completion !== undefined) payload.notify_prospect_on_completion = stage.notify_prospect_on_completion;
+  if (stage.public_visible !== undefined) payload.public_visible = stage.public_visible;
   return payload;
 }
 

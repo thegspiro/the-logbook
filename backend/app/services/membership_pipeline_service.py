@@ -1567,7 +1567,11 @@ class MembershipPipelineService:
     # =========================================================================
 
     async def get_prospect_by_token(self, token: str) -> Optional[Dict[str, Any]]:
-        """Look up a prospect by their public status token. Returns limited public-safe fields."""
+        """Look up a prospect by their public status token. Returns limited public-safe fields.
+
+        Returns None if the pipeline has public_status_enabled=False.
+        Only steps with public_visible=True are included in the timeline.
+        """
         query = (
             select(ProspectiveMember)
             .where(ProspectiveMember.status_token == token)
@@ -1582,25 +1586,43 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
-        # Build stage timeline (names only, no internal IDs)
+        # Check if the pipeline has opted in to public status pages
+        if not prospect.pipeline or not prospect.pipeline.public_status_enabled:
+            return None
+
+        # Collect IDs of steps marked as public_visible
+        public_step_ids = set()
+        if prospect.pipeline and prospect.pipeline.steps:
+            for step in prospect.pipeline.steps:
+                if step.public_visible:
+                    public_step_ids.add(str(step.id))
+
+        # Build stage timeline — only include public-visible steps
         completed_stages = []
         if prospect.step_progress:
             for sp in sorted(prospect.step_progress, key=lambda p: p.created_at):
+                if str(sp.step_id) not in public_step_ids:
+                    continue
                 completed_stages.append({
                     "stage_name": sp.step.name if sp.step else "Unknown",
                     "status": sp.status.value if hasattr(sp.status, "value") else sp.status,
                     "completed_at": sp.completed_at.isoformat() if sp.completed_at else None,
                 })
 
-        total_stages = len(prospect.pipeline.steps) if prospect.pipeline and prospect.pipeline.steps else 0
+        total_public_stages = len(public_step_ids)
+
+        # Current stage name — only show if it's public_visible
+        current_stage_name = None
+        if prospect.current_step and str(prospect.current_step.id) in public_step_ids:
+            current_stage_name = prospect.current_step.name
 
         return {
             "first_name": prospect.first_name,
             "last_name": prospect.last_name,
             "status": prospect.status.value if hasattr(prospect.status, "value") else prospect.status,
-            "current_stage_name": prospect.current_step.name if prospect.current_step else None,
+            "current_stage_name": current_stage_name,
             "pipeline_name": prospect.pipeline.name if prospect.pipeline else None,
-            "total_stages": total_stages,
+            "total_stages": total_public_stages,
             "stage_timeline": completed_stages,
             "applied_at": prospect.created_at.isoformat() if prospect.created_at else None,
         }

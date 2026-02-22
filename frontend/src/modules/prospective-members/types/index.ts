@@ -187,6 +187,8 @@ export interface PipelineStage {
   sort_order: number;
   is_required: boolean;
   inactivity_timeout_days?: number | null; // null = use pipeline default
+  notify_prospect_on_completion: boolean;
+  public_visible: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -199,6 +201,8 @@ export interface PipelineStageCreate {
   sort_order: number;
   is_required?: boolean;
   inactivity_timeout_days?: number | null;
+  notify_prospect_on_completion?: boolean;
+  public_visible?: boolean;
 }
 
 export interface PipelineStageUpdate {
@@ -209,6 +213,8 @@ export interface PipelineStageUpdate {
   sort_order?: number;
   is_required?: boolean;
   inactivity_timeout_days?: number | null;
+  notify_prospect_on_completion?: boolean;
+  public_visible?: boolean;
 }
 
 // =============================================================================
@@ -222,6 +228,7 @@ export interface Pipeline {
   description?: string;
   is_active: boolean;
   inactivity_config: InactivityConfig;
+  public_status_enabled: boolean;
   stages: PipelineStage[];
   applicant_count?: number;
   created_at: string;
@@ -240,6 +247,7 @@ export interface PipelineUpdate {
   description?: string;
   is_active?: boolean;
   inactivity_config?: InactivityConfig;
+  public_status_enabled?: boolean;
 }
 
 export interface PipelineListItem {

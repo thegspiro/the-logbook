@@ -17,6 +17,8 @@ import {
   Vote,
   CheckCircle,
   Loader2,
+  Bell,
+  EyeOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -231,6 +233,18 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                     {stage.is_required && (
                       <span className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
                         Required
+                      </span>
+                    )}
+                    {stage.notify_prospect_on_completion && (
+                      <span className="text-xs text-blue-700 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Notifies prospect on completion">
+                        <Bell className="w-2.5 h-2.5" />
+                        Notify
+                      </span>
+                    )}
+                    {!stage.public_visible && (
+                      <span className="text-xs text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Hidden from public status page">
+                        <EyeOff className="w-2.5 h-2.5" />
+                        Hidden
                       </span>
                     )}
                   </div>
