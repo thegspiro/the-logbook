@@ -11,6 +11,7 @@ from uuid import UUID
 from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.models.training import (
@@ -262,7 +263,7 @@ class TrainingProgramService:
         if not program:
             return None, "Training program not found"
 
-        # Check for duplicate phase numbers
+        # Check for duplicate phase numbers (application-level check for friendly errors)
         existing_phase = await self.db.execute(
             select(ProgramPhase).where(
                 ProgramPhase.program_id == str(phase_data.program_id),
@@ -272,7 +273,7 @@ class TrainingProgramService:
         if existing_phase.scalar_one_or_none():
             return None, f"Phase {phase_data.phase_number} already exists for this program"
 
-        # Create phase
+        # Create phase (DB-level unique constraint prevents race conditions)
         phase = ProgramPhase(
             program_id=phase_data.program_id,
             phase_number=phase_data.phase_number,
@@ -283,7 +284,11 @@ class TrainingProgramService:
         )
 
         self.db.add(phase)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            return None, f"Phase {phase_data.phase_number} already exists for this program"
         await self.db.refresh(phase)
 
         return phase, None
@@ -916,53 +921,62 @@ class TrainingProgramService:
         if not program:
             return [], ["Training program not found"]
 
-        # Check for prerequisite programs
+        # Batch-fetch user names for error messages (single query)
+        user_id_strs = [str(uid) for uid in user_ids]
+        users_result = await self.db.execute(
+            select(User).where(User.id.in_(user_id_strs))
+        )
+        user_map = {str(u.id): u for u in users_result.scalars().all()}
+
+        def _user_name(uid: UUID) -> str:
+            u = user_map.get(str(uid))
+            return f"{u.first_name} {u.last_name}" if u else str(uid)
+
+        # Check for prerequisite programs (batch query instead of O(U*P) queries)
         prerequisite_errors = []
         if program.prerequisite_program_ids:
-            for user_id in user_ids:
-                for prereq_id in program.prerequisite_program_ids:
-                    # Check if user has completed prerequisite
-                    prereq_enrollment = await self.db.execute(
-                        select(ProgramEnrollment)
-                        .join(TrainingProgram)
-                        .where(
-                            ProgramEnrollment.user_id == user_id,
-                            TrainingProgram.id == UUID(prereq_id),
-                            TrainingProgram.organization_id == organization_id
-                        )
-                    )
-                    enrollment = prereq_enrollment.scalar_one_or_none()
-
-                    if not enrollment or enrollment.status != EnrollmentStatus.COMPLETED:
-                        user_result = await self.db.execute(
-                            select(User).where(User.id == str(user_id))
-                        )
-                        user = user_result.scalar_one_or_none()
-                        user_name = f"{user.first_name} {user.last_name}" if user else str(user_id)
-                        prerequisite_errors.append(
-                            f"{user_name} has not completed prerequisite program"
-                        )
-
-        # Check for concurrent enrollment restrictions
-        if not program.allows_concurrent_enrollment:
-            for user_id in user_ids:
-                active_enrollments = await self.db.execute(
-                    select(ProgramEnrollment)
-                    .join(TrainingProgram)
-                    .where(
-                        ProgramEnrollment.user_id == user_id,
-                        ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
-                        TrainingProgram.organization_id == organization_id
-                    )
+            prereq_uuids = [UUID(pid) for pid in program.prerequisite_program_ids]
+            # Single query: fetch all completed prerequisite enrollments for these users
+            completed_prereqs_result = await self.db.execute(
+                select(ProgramEnrollment.user_id, TrainingProgram.id)
+                .join(TrainingProgram)
+                .where(
+                    ProgramEnrollment.user_id.in_(user_id_strs),
+                    TrainingProgram.id.in_([str(p) for p in prereq_uuids]),
+                    TrainingProgram.organization_id == organization_id,
+                    ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
                 )
-                if active_enrollments.scalar_one_or_none():
-                    user_result = await self.db.execute(
-                        select(User).where(User.id == str(user_id))
-                    )
-                    user = user_result.scalar_one_or_none()
-                    user_name = f"{user.first_name} {user.last_name}" if user else str(user_id)
+            )
+            # Build a set of (user_id, program_id) pairs that are completed
+            completed_pairs = {
+                (str(row[0]), str(row[1])) for row in completed_prereqs_result.all()
+            }
+
+            for uid in user_ids:
+                for prereq_id in program.prerequisite_program_ids:
+                    if (str(uid), prereq_id) not in completed_pairs:
+                        prerequisite_errors.append(
+                            f"{_user_name(uid)} has not completed prerequisite program"
+                        )
+                        break  # One missing prereq is enough
+
+        # Check for concurrent enrollment restrictions (batch query)
+        if not program.allows_concurrent_enrollment:
+            active_enrollments_result = await self.db.execute(
+                select(ProgramEnrollment.user_id)
+                .join(TrainingProgram)
+                .where(
+                    ProgramEnrollment.user_id.in_(user_id_strs),
+                    ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                    TrainingProgram.organization_id == organization_id,
+                )
+            )
+            users_with_active = {str(row[0]) for row in active_enrollments_result.all()}
+
+            for uid in user_ids:
+                if str(uid) in users_with_active:
                     prerequisite_errors.append(
-                        f"{user_name} is already enrolled in another program. This program does not allow concurrent enrollment."
+                        f"{_user_name(uid)} is already enrolled in another program. This program does not allow concurrent enrollment."
                     )
 
         enrollments = []

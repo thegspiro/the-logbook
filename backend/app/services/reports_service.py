@@ -199,6 +199,9 @@ class ReportsService:
         course_breakdown = list(course_stats.values())
 
         # ── Per-requirement completion (TC3) ──
+        # Use a single aggregated query instead of N+1 individual queries.
+        # Count COMPLETED and VERIFIED progress per requirement, scoped to
+        # active enrollments for non-deleted users in this organization.
         req_result = await self.db.execute(
             select(TrainingRequirement).where(
                 TrainingRequirement.organization_id == str(organization_id),
@@ -206,21 +209,59 @@ class ReportsService:
             )
         )
         requirements = req_result.scalars().all()
-        requirement_breakdown = []
-        for req in requirements:
-            prog_result = await self.db.execute(
-                select(func.count(RequirementProgress.id)).where(
-                    RequirementProgress.requirement_id == req.id,
-                    RequirementProgress.status == RequirementProgressStatus.COMPLETED,
+        req_ids = [r.id for r in requirements]
+
+        # Batch-fetch completed counts for all requirements at once
+        completed_by_req: Dict[str, int] = {}
+        if req_ids:
+            agg_result = await self.db.execute(
+                select(
+                    RequirementProgress.requirement_id,
+                    func.count(RequirementProgress.id),
+                )
+                .join(ProgramEnrollment, RequirementProgress.enrollment_id == ProgramEnrollment.id)
+                .join(User, User.id == ProgramEnrollment.user_id)
+                .where(
+                    RequirementProgress.requirement_id.in_(req_ids),
+                    RequirementProgress.status.in_([
+                        RequirementProgressStatus.COMPLETED,
+                        RequirementProgressStatus.VERIFIED,
+                    ]),
+                    ProgramEnrollment.organization_id == str(organization_id),
+                    ProgramEnrollment.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]),
+                    User.deleted_at.is_(None),
+                )
+                .group_by(RequirementProgress.requirement_id)
+            )
+            for row in agg_result.all():
+                completed_by_req[str(row[0])] = row[1]
+
+        # Count enrolled (non-deleted) users as the denominator per requirement
+        enrolled_count = 0
+        if req_ids:
+            enrolled_result = await self.db.execute(
+                select(func.count(func.distinct(ProgramEnrollment.user_id)))
+                .join(User, User.id == ProgramEnrollment.user_id)
+                .where(
+                    ProgramEnrollment.organization_id == str(organization_id),
+                    ProgramEnrollment.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]),
+                    User.deleted_at.is_(None),
                 )
             )
-            completed_for_req = prog_result.scalar() or 0
+            enrolled_count = enrolled_result.scalar() or 0
+
+        # Fall back to active user count if no enrollments exist
+        denominator = enrolled_count if enrolled_count > 0 else len(users)
+
+        requirement_breakdown = []
+        for req in requirements:
+            completed_for_req = completed_by_req.get(str(req.id), 0)
             requirement_breakdown.append({
                 "requirement_id": str(req.id),
                 "requirement_name": req.name,
-                "total_members": len(users),
+                "total_members": denominator,
                 "completed": completed_for_req,
-                "completion_pct": round(completed_for_req / len(users) * 100, 1) if users else 0,
+                "completion_pct": round(completed_for_req / denominator * 100, 1) if denominator > 0 else 0,
             })
 
         return {
@@ -260,25 +301,27 @@ class ReportsService:
         events_result = await self.db.execute(events_query)
         events = events_result.scalars().all()
 
+        # Batch-fetch RSVP and attendance counts for all events in a single query
+        event_ids = [e.id for e in events]
+        rsvp_stats: Dict[str, Tuple[int, int]] = {}  # event_id -> (total_rsvps, attended)
+        if event_ids:
+            rsvp_agg = await self.db.execute(
+                select(
+                    EventRSVP.event_id,
+                    func.count(EventRSVP.id),
+                    func.sum(case((EventRSVP.checked_in == True, 1), else_=0)),  # noqa: E712
+                )
+                .where(EventRSVP.event_id.in_(event_ids))
+                .group_by(EventRSVP.event_id)
+            )
+            for row in rsvp_agg.all():
+                rsvp_stats[str(row[0])] = (row[1], int(row[2] or 0))
+
         event_entries = []
         total_attendance_rate = 0
 
         for event in events:
-            # Count RSVPs
-            rsvp_result = await self.db.execute(
-                select(func.count(EventRSVP.id))
-                .where(EventRSVP.event_id == event.id)
-            )
-            total_rsvps = rsvp_result.scalar() or 0
-
-            # Count attended
-            attended_result = await self.db.execute(
-                select(func.count(EventRSVP.id))
-                .where(EventRSVP.event_id == event.id)
-                .where(EventRSVP.checked_in == True)  # noqa: E712
-            )
-            attended = attended_result.scalar() or 0
-
+            total_rsvps, attended = rsvp_stats.get(str(event.id), (0, 0))
             rate = (attended / total_rsvps * 100) if total_rsvps > 0 else 0
 
             event_entries.append({
