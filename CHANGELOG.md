@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory Module Hardening & Comprehensive Overhaul (2026-02-22)
+
+#### Inventory Module Overhaul
+- **Pool / quantity-tracked items**: New `tracking_type` field (`individual` | `pool`) on `InventoryItem`. Pool items support `issue_from_pool` and `return_to_pool` workflows with quantity tracking.
+- **Item issuances**: New `item_issuances` table and full CRUD lifecycle for tracking pool item issue/return with user, quantity, reason, and condition-on-return.
+- **Batch operations**: `batch_checkout` and `batch_return` endpoints support multiple items in a single request with per-item error reporting. Silent condition fallback removed — invalid conditions are now rejected.
+- **Category management**: New `PATCH /inventory/categories/{id}` endpoint for updating category name/description.
+- **Departure clearance**: Full lifecycle (`initiate_clearance` → `resolve_line_item` → `complete_clearance`) for tracking property return when members depart.
+- **Notification netting**: Offsetting actions (assign then unassign, checkout then return) automatically cancel pending notifications instead of creating duplicates.
+- **Label generation**: `POST /inventory/labels/generate` now accepts a typed `LabelGenerateRequest` body with item IDs, label size, and label type.
+- **Thermal printer labels**: Added support for Dymo (2.25×1.25″) and Rollo (4×6″) label sizes using Code128 barcodes via ReportLab.
+- **AssignmentType validation**: `POST /inventory/items/{id}/assign` now validates `assignment_type` against the enum and returns 400 on invalid values.
+- **Lookup by code**: Returns a list of matching items instead of a single result, handling duplicate barcodes/serial numbers gracefully.
+
+#### Inventory Security & Data Integrity Hardening
+- **Row-level locking**: Added `_get_item_locked()` helper using `SELECT FOR UPDATE`. Applied to `update_item`, `unassign_item`, `return_to_pool`, and `checkin_item` to prevent concurrent-modification races.
+- **Expected-user guard**: `unassign_item` accepts optional `expected_user_id` parameter; batch operations pass this to prevent stale-read races where a concurrent assign could cause unassignment of the wrong user.
+- **Read-only overdue query**: `get_overdue_checkouts` no longer performs a bulk `UPDATE` on every call. Overdue status is computed at read time. New `mark_overdue_checkouts` method added for scheduled tasks.
+- **Clearance IDOR fix**: `resolve_line_item` now requires and validates `clearance_id`, preventing resolution of line items from a different clearance via URL manipulation.
+- **Org-scoped unique constraints**: Removed global `unique=True` from `barcode` and `asset_tag` columns. Added composite `UniqueConstraint("organization_id", "barcode")` and `UniqueConstraint("organization_id", "asset_tag")` for proper multi-tenant isolation.
+- **Alembic migration** (`20260222_0200`): Drops old global unique indexes, creates org-scoped unique constraints, and re-creates non-unique single-column indexes for bare-column lookups.
+- **LIKE injection prevention**: Member search in `get_members_inventory_summary` now escapes `%`, `_`, and `\` in user-supplied search strings.
+- **Kwargs injection prevention**: `create_maintenance_record` now uses a whitelist (`_MAINTENANCE_ALLOWED_FIELDS`) to filter incoming kwargs, preventing overwrite of `id`, `organization_id`, or other protected fields.
+
+#### Inventory Performance
+- **Lookup optimization**: `lookup_by_code` combined from 3 serial queries (barcode → serial → asset_tag) into 1 query with `OR`, reducing round-trips by 2/3.
+- **Removed unnecessary eager loads**: `return_to_pool` and `checkin_item` no longer use `selectinload` for the item relationship — the item is fetched separately with a row lock.
+
+#### Inventory Test Coverage
+- **40 new tests** in `test_inventory_extended.py` covering: departure clearance lifecycle, notification netting, batch operations, label generation, category updates, pool item validation, and edge cases.
+- All `resolve_line_item` test calls updated for new `clearance_id` parameter.
+
+#### Frontend — Inventory & Scan Fixes
+- **Scan modal error handling**: Differentiated 404 (item not found) from network errors with distinct user messages.
+- **Camera scan memory leak**: Fixed stale closure in `useCallback` + `setInterval` by using a ref pattern (`handleCodeScannedRef`).
+- **Member detail race condition**: `handleScanComplete` now awaits `loadMembers()` before fetching member detail, preventing stale data display.
+
+### Event System Enhancements (2026-02-22)
+
+#### Event Reminders
+- **End-to-end reminder system**: Events support configurable `reminder_schedule` (array of minutes-before values). Reminders are sent via the notification system at the scheduled times.
+- **Multiple reminder times**: Events can have multiple reminders (e.g., 24 hours before, 1 hour before).
+
+#### Event Notifications
+- **Post-event validation**: Event organizers receive a notification after an event ends, prompting them to review and finalize attendance.
+- **Post-shift validation**: Shift officers receive a notification after their shift ends to validate attendance records.
+
+#### Event UI Improvements
+- **Past events tab**: The `/events` page now hides past events by default. Managers see a **Past Events** tab to browse historical events.
+- **Attendee management**: Event detail page now supports adding/removing attendees directly.
+- **Removed `eligible_roles`**: Simplified event model by removing the unused `eligible_roles` field.
+
+### Notification System Enhancements (2026-02-22)
+
+- **Time-of-day preferences**: Users can configure preferred notification delivery windows.
+- **Notification expiry**: Notifications now support `expires_at` field; expired notifications are automatically hidden.
+- **User notification inbox**: New in-app notification center for viewing and managing notifications.
+- **Database migration** (`20260221_0800`): Added `action_url` column to `notification_logs`.
+- **Database migration** (`20260221_0700`): Added `category` and `expires_at` columns to `notification_logs`.
+
+### UI & Dark Mode Fixes (2026-02-22)
+
+- **Dark mode modal backgrounds**: Fixed `bg-theme-surface` → `bg-theme-surface-modal` across 9 modal/dialog files for proper dark mode contrast.
+- **Record Official Event Times modal**: Fixed dark mode styling.
+- **Members Admin modals**: Refactored to use shared `Modal` component; added rank and station dropdowns replacing free-text inputs.
+- **Training Admin**: Reorganized into 3 sub-pages with inner tabs for better navigation.
+
+### Backend Quality & Security Fixes (2026-02-22)
+
+#### Security Fixes
+- Fixed security vulnerabilities, dead code, and silent error handling identified in comprehensive audit.
+- Fixed quality issues across frontend and backend from audit.
+
+#### DateTime Consistency
+- Replaced all `datetime.utcnow()` calls with `datetime.now(timezone.utc)` across the entire backend (deprecated in Python 3.12+).
+- Fixed offset-naive vs offset-aware datetime comparison bugs across event, training, and scheduling services.
+
+#### Facilities Module
+- Fixed facilities module bugs and added missing CRUD operations for locations and equipment.
+
+#### Module Settings
+- Fixed module selections not persisting from onboarding wizard to organization settings page.
+
 ### Badge Number Consolidation & Field Restrictions (2026-02-21)
 
 #### Consolidate `badge_number` into `membership_number`

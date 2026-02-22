@@ -2,18 +2,21 @@
 
 ## Executive Summary
 
-The Logbook has **252 backend tests** across 10 test files and **7 frontend test files** (~183 test cases) covering the Events module. While the existing tests are well-structured, test coverage is heavily concentrated in a few areas while large portions of the codebase have **zero test coverage**. The most critical gaps are in authentication/security, the API endpoint layer, and the vast majority of frontend pages and modules.
+The Logbook has **292 backend tests** across 11 test files and **7 frontend test files** (~183 test cases) covering the Events module. While the existing tests are well-structured, test coverage is heavily concentrated in a few areas while large portions of the codebase have **zero test coverage**. The most critical gaps are in authentication/security, the API endpoint layer, and the vast majority of frontend pages and modules.
+
+> **Updated 2026-02-22:** Added 40 inventory module tests (`test_inventory_extended.py`) covering departure clearance lifecycle, notification netting, batch operations, label generation, category management, and pool item validation.
 
 ---
 
 ## Current Coverage Inventory
 
-### Backend Tests (252 tests across 10 files)
+### Backend Tests (292 tests across 11 files)
 
 | Test File | Tests | Type | What It Covers |
 |-----------|-------|------|----------------|
 | `test_training.py` | 72 | Unit/Structural | Training models, schemas, enums, registry data |
 | `test_database_schema.py` | 56 | Structural | DB schema integrity, FKs, indexes, naming |
+| `test_inventory_extended.py` | 40 | Integration | Departure clearance, notification netting, batch ops, labels, categories, pool items |
 | `test_docker_config.py` | 35 | Structural | Dockerfiles, compose config, health endpoints |
 | `test_changelog_fixes.py` | 30 | Regression | Cross-module regression catches |
 | `test_docker_integration.py` | 17 | Integration | Docker image builds, container startup |
@@ -44,7 +47,7 @@ The Logbook has **252 backend tests** across 10 test files and **7 frontend test
 | Layer | Total Files | Files With Direct Tests | Coverage |
 |-------|-------------|------------------------|----------|
 | API Endpoints (`api/v1/endpoints/`) | 36 | 0 | **0%** |
-| Services (`services/`) | 47 | 2 (onboarding, QR check-in via event) | **~4%** |
+| Services (`services/`) | 47 | 3 (onboarding, QR check-in via event, inventory) | **~6%** |
 | Models (`models/`) | 22 | 1 (training) | **~5%** |
 | Schemas (`schemas/`) | 27 | 1 (training) | **~4%** |
 | Core (`core/`) | 13 | 0 | **0%** |

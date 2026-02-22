@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document catalogs **every error message** in The Logbook application (94+ errors across all modules), provides troubleshooting steps for each, and identifies messages that need improvement.
+This document catalogs **every error message** in The Logbook application (110+ errors across all modules), provides troubleshooting steps for each, and identifies messages that need improvement.
 
 **Purpose**:
 - ✅ Complete error message reference
@@ -37,6 +37,7 @@ This document catalogs **every error message** in The Logbook application (94+ e
 15. [Scheduling Module Errors](#scheduling-module-errors)
 16. [Reports Module Errors](#reports-module-errors)
 17. [Notifications Module Errors](#notifications-module-errors)
+18. [Inventory Module Errors](#inventory-module-errors)
 
 ---
 
@@ -1704,3 +1705,26 @@ Every error should have:
 - Adding new errors → Follow Error Message Standards section
 - Testing errors → Verify both frontend and backend validation
 - Documentation → Update this file when adding/changing errors
+
+---
+
+## Inventory Module Errors
+
+**Status**: ✅ GOOD - Clear, specific messages added in Feb 2026 overhaul
+
+| Error | Quality | Troubleshooting |
+|-------|---------|-----------------|
+| "Item not found" | ✅ | Item ID does not exist or does not belong to your organization. Verify the item ID. |
+| "Item is already assigned to another user" | ✅ | Unassign or return the item from the current holder before reassigning. |
+| "Item is not assigned to the expected user" | ✅ | A concurrent operation changed the item's assignee. Refresh and retry. |
+| "Invalid assignment type" | ✅ | Must be one of: `permanent`, `temporary`, `checkout`. Check the enum values. |
+| "Invalid condition" | ✅ | Condition must be: `excellent`, `good`, `fair`, `poor`, `damaged`. Previously fell back silently; now rejects invalid values. |
+| "Pool items must have a quantity of at least 1" | ✅ | When creating a pool-type item, set `quantity >= 1`. |
+| "Insufficient quantity available" | ✅ | Cannot issue more units than are currently on hand. Check available pool quantity. |
+| "Clearance line item not found" | ✅ | The line item ID does not belong to the specified clearance. Verify you're resolving items within the correct clearance record. |
+| "Duplicate entry for key 'uq_item_org_barcode'" | ✅ | Another item in the same organization has this barcode. Change the barcode or update the existing item. |
+| "Duplicate entry for key 'uq_item_org_asset_tag'" | ✅ | Another item in the same organization has this asset tag. Change the tag or update the existing item. |
+| "Item not found" (scan modal) | ✅ | The scanned barcode/QR code doesn't match any item. Verify the code is correct. |
+| "Network error - please check your connection" (scan modal) | ✅ | A network error occurred during the scan lookup. Check connectivity and retry. |
+| "Item is not currently checked out" | ✅ | Cannot return an item that has no active checkout. Check the item's current status. |
+| "No items selected for label generation" | ✅ | Select at least one item before generating labels. |

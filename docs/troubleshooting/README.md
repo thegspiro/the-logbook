@@ -29,6 +29,9 @@ This guide covers common issues and their solutions for The Logbook deployment.
 23. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
 24. [Prospective Members Module Issues](#prospective-members-module-issues)
 25. [TypeScript Build Issues](#typescript-build-issues)
+26. [Inventory Module Issues](#inventory-module-issues)
+27. [Events Module Issues](#events-module-issues)
+28. [Notification Issues](#notification-issues)
 
 ---
 
@@ -2632,6 +2635,123 @@ The profile update endpoint did not restrict these fields — any authenticated 
 
 ### Solution
 Pull latest changes. Rank, station, and membership number updates are now restricted to users with `members.manage` permission (leadership, secretary, membership coordinator). Unauthorized attempts return a 403 error, and the corresponding fields are disabled in the UI for regular members.
+
+---
+
+## Inventory Module Issues
+
+### Problem: "Duplicate entry" error when creating an item with barcode or asset tag
+**Error:** `IntegrityError: Duplicate entry for key 'uq_item_org_barcode'`
+
+### Root Cause
+Another item in the same organization already has that barcode or asset tag. Barcodes and asset tags must be unique within each organization (but different organizations can reuse the same codes).
+
+### Solution
+1. Search for the existing item with the same barcode/asset tag.
+2. Either change the new item's code or update the existing item.
+3. If this error appears after upgrading, run the migration:
+```bash
+docker exec intranet-backend alembic upgrade head
+```
+
+---
+
+### Problem: Inventory checkout/return race condition
+**Symptom:** Two users simultaneously checking out or returning the same item causes inconsistent state (e.g., item shows "available" but still has an active checkout).
+
+### Root Cause
+Prior to the latest update, inventory operations did not use row-level locking, allowing concurrent modifications to create inconsistent state.
+
+### Solution
+This has been fixed in the codebase. All inventory mutation operations (`update_item`, `unassign_item`, `return_to_pool`, `checkin_item`) now use `SELECT FOR UPDATE` row-level locking. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
+### Problem: Batch return fails with "Item is not assigned to the expected user"
+**Symptom:** A batch return operation reports this error for one or more items.
+
+### Root Cause
+Between the time the batch return was initiated and when it was processed, the item was concurrently reassigned to a different user. The system now validates the expected assignee to prevent accidental unassignment.
+
+### Solution
+Refresh the page and retry. If the item is now assigned to a different user, that user should return it. This error is a safety feature preventing stale-read races.
+
+---
+
+### Problem: Overdue checkouts not showing up
+**Symptom:** Items past their expected return date don't appear in the overdue list.
+
+### Root Cause
+The overdue checkout query now computes overdue status at read time using `expected_return_at < now`. It no longer performs a bulk UPDATE on each call.
+
+### Solution
+Items with `expected_return_at` in the past and `is_returned = false` will appear in the overdue list automatically. If you need to bulk-update the `is_overdue` flag (for external reporting or scheduled tasks), use the `mark_overdue_checkouts` method via a scheduled task.
+
+---
+
+### Problem: Departure clearance line item returns error "not found"
+**Symptom:** Resolving a line item in a departure clearance fails with a "not found" error.
+
+### Root Cause
+The `clearance_id` validation ensures line items can only be resolved within the correct clearance. If the line item belongs to a different clearance, it will not be found.
+
+### Solution
+Verify you are resolving items within the correct clearance record. Navigate to the departure clearance detail page and resolve items from there.
+
+---
+
+## Events Module Issues
+
+### Problem: Past events still showing on the main events page
+**Symptom:** Events that have already occurred are cluttering the events page.
+
+### Root Cause
+This was the old default behavior. Past events are now hidden from the main events view.
+
+### Solution
+Pull the latest changes. Past events are now hidden by default. Officers and managers see a **Past Events** tab for browsing historical events.
+
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
+### Problem: Event reminders not being sent
+**Symptom:** Members don't receive reminders before events even though reminders are configured.
+
+### Root Cause
+- The event must have a `reminder_schedule` configured (array of minutes-before values).
+- The notification scheduled task must be running.
+- Members must have RSVP'd "Going" or "Maybe".
+
+### Solution
+1. Edit the event and verify reminder times are set.
+2. Check that the notification scheduled task is enabled in **Administration > Scheduled Tasks**.
+3. Verify the member has RSVP'd to the event.
+
+---
+
+## Notification Issues
+
+### Problem: Notifications not appearing in the inbox
+**Symptom:** Expected notifications are not visible in the user's notification center.
+
+### Root Cause
+- Notifications may have expired (past their `expires_at` date).
+- The notification may have been cancelled by a netting event (e.g., an assign followed by unassign cancels the original notification).
+
+### Solution
+1. Check the notification logs via the admin panel.
+2. Expired notifications are automatically hidden. This is by design.
+3. Notification netting is intentional — offsetting actions cancel pending notifications to prevent duplicate alerts.
 
 ---
 

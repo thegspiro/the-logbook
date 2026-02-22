@@ -17,6 +17,8 @@ This guide covers common issues and their solutions for The Logbook deployment.
 11. [Events Module Issues](#events-module-issues)
 12. [Scheduling Module Issues](#scheduling-module-issues)
 13. [TypeScript Quality Issues](#typescript-quality-issues)
+14. [Inventory Module Issues](#inventory-module-issues)
+15. [Notification Issues](#notification-issues)
 
 ---
 
@@ -1330,3 +1332,48 @@ If you find new `as any` assertions, replace them with proper types. See `docs/T
 **Root Cause:** Git merge duplicated JSX blocks within components.
 
 **Solution:** Pull latest changes. If the issue recurs after a merge, check for duplicate return statements or JSX blocks in the affected component.
+
+---
+
+## Inventory Module Issues
+
+### Problem: "Duplicate entry" error when creating an item with barcode or asset tag
+**Error:** `IntegrityError: Duplicate entry for key 'uq_item_org_barcode'`
+
+**Root Cause:** Another item in the same organization already has that barcode or asset tag. Barcodes and asset tags must be unique within each organization.
+
+**Solution:** Search for the existing item with the same code. Either change the new item's code or update the existing one. Run `alembic upgrade head` after upgrading.
+
+---
+
+### Problem: Batch return fails with "Item is not assigned to the expected user"
+
+**Root Cause:** The item was concurrently reassigned to a different user between the time the batch was initiated and processed.
+
+**Solution:** Refresh the page and retry. This validation prevents accidental unassignment of items that were reassigned during the operation.
+
+---
+
+### Problem: Departure clearance line item returns "not found"
+
+**Root Cause:** The `clearance_id` validation ensures line items can only be resolved within the correct clearance. The line item may belong to a different clearance.
+
+**Solution:** Verify you are resolving items within the correct clearance record by navigating to the departure clearance detail page.
+
+---
+
+### Problem: Overdue checkouts not showing up
+
+**Root Cause:** Overdue status is now computed at read time. Items with `expected_return_at` in the past and `is_returned = false` appear automatically.
+
+**Solution:** No action needed — the query is now read-only and always reflects current state. For scheduled reporting, use the `mark_overdue_checkouts` scheduled task.
+
+---
+
+## Notification Issues
+
+### Problem: Notifications not appearing in the inbox
+
+**Root Cause:** Notifications may have expired (past `expires_at`) or been cancelled by notification netting (offsetting actions like assign→unassign cancel each other).
+
+**Solution:** Expired notifications are hidden by design. Notification netting prevents duplicate alerts. Check notification logs via the admin panel for details.
