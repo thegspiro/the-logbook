@@ -28,7 +28,7 @@ import {
 import { memberStatusService, userService } from '../services/api';
 import type { LeaveOfAbsenceResponse } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
-import { formatRank } from '../constants/enums';
+import { useRanks } from '../hooks/useRanks';
 import type {
   ArchivedMember,
   OverdueMember,
@@ -43,6 +43,7 @@ type TabView = 'archived' | 'overdue' | 'tiers' | 'leaves';
 // ==================== Archived Members Tab ====================
 
 const ArchivedMembersPanel: React.FC = () => {
+  const { formatRank } = useRanks();
   const [members, setMembers] = useState<ArchivedMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [reactivatingId, setReactivatingId] = useState<string | null>(null);

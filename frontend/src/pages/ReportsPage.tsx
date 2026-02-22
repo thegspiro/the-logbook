@@ -22,7 +22,7 @@ import { HelpLink } from '../components/HelpLink';
 import { reportsService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { toLocalDateString } from '../utils/dateFormatting';
-import { formatRank } from '../constants/enums';
+import { useRanks } from '../hooks/useRanks';
 
 interface ReportCard {
   id: string;
@@ -72,6 +72,7 @@ const toStr = (v: unknown): string => {
 
 export const ReportsPage: React.FC = () => {
   const tz = useTimezone();
+  const { formatRank } = useRanks();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [reportData, setReportData] = useState<Record<string, unknown> | null>(null);

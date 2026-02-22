@@ -45,6 +45,7 @@ from app.api.v1.endpoints import (
     scheduled,
     training_waivers,
     member_leaves,
+    operational_ranks,
 )
 
 api_router = APIRouter()
@@ -87,6 +88,7 @@ api_router.include_router(integrations.router, prefix="/integrations", tags=["in
 api_router.include_router(scheduled.router, prefix="/scheduled", tags=["scheduled-tasks"])
 api_router.include_router(training_waivers.router, prefix="/training/waivers", tags=["training-waivers"])
 api_router.include_router(member_leaves.router, prefix="/users", tags=["member-leaves"])
+api_router.include_router(operational_ranks.router, prefix="/operational-ranks", tags=["operational-ranks"])
 api_router.include_router(public_portal_admin.router)
 
 # Placeholder routes

@@ -9,7 +9,7 @@
 import React, { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
-import { formatRank } from '../constants/enums';
+import { useRanks } from '../hooks/useRanks';
 import {
   BarChart3,
   Clock,
@@ -176,6 +176,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon }) => (
 // ============================================
 
 export const SchedulingReportsPage: React.FC = () => {
+  const { formatRank } = useRanks();
   const [activeTab, setActiveTab] = useState<TabView>('member-hours');
 
   // Date ranges

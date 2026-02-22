@@ -3537,6 +3537,69 @@ export const locationsService = {
 };
 
 // ============================================
+// Operational Ranks Service
+// ============================================
+
+export interface OperationalRankResponse {
+  id: string;
+  organization_id: string;
+  rank_code: string;
+  display_name: string;
+  description: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OperationalRankCreate {
+  rank_code: string;
+  display_name: string;
+  description?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export interface OperationalRankUpdate {
+  rank_code?: string;
+  display_name?: string;
+  description?: string | null;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export const ranksService = {
+  async getRanks(params?: { is_active?: boolean }): Promise<OperationalRankResponse[]> {
+    const response = await api.get<OperationalRankResponse[]>('/operational-ranks', { params });
+    return response.data;
+  },
+
+  async getRank(rankId: string): Promise<OperationalRankResponse> {
+    const response = await api.get<OperationalRankResponse>(`/operational-ranks/${rankId}`);
+    return response.data;
+  },
+
+  async createRank(data: OperationalRankCreate): Promise<OperationalRankResponse> {
+    const response = await api.post<OperationalRankResponse>('/operational-ranks', data);
+    return response.data;
+  },
+
+  async updateRank(rankId: string, data: OperationalRankUpdate): Promise<OperationalRankResponse> {
+    const response = await api.patch<OperationalRankResponse>(`/operational-ranks/${rankId}`, data);
+    return response.data;
+  },
+
+  async deleteRank(rankId: string): Promise<void> {
+    await api.delete(`/operational-ranks/${rankId}`);
+  },
+
+  async reorderRanks(ranks: { id: string; sort_order: number }[]): Promise<OperationalRankResponse[]> {
+    const response = await api.post<OperationalRankResponse[]>('/operational-ranks/reorder', { ranks });
+    return response.data;
+  },
+};
+
+// ============================================
 // Security Monitoring Service
 // ============================================
 

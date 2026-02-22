@@ -17,12 +17,13 @@ import type { PasswordChangeData } from '../types/auth';
 import type { UserProfileUpdate } from '../types/user';
 import type { UserWithRoles } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
-import { OPERATIONAL_RANKS } from '../constants/enums';
+import { useRanks } from '../hooks/useRanks';
 
 type TabType = 'account' | 'password' | 'appearance' | 'notifications';
 
 export const UserSettingsPage: React.FC = () => {
   const { user, loadUser, checkPermission } = useAuthStore();
+  const { rankOptions } = useRanks();
   const canManageMembers = checkPermission('members.manage');
   const { theme, setTheme } = useTheme();
   const location = useLocation();
@@ -364,7 +365,7 @@ export const UserSettingsPage: React.FC = () => {
                         disabled={savingProfile || !canManageMembers}
                       >
                         <option value="">Select Rank</option>
-                        {OPERATIONAL_RANKS.map((r) => (
+                        {rankOptions.map((r) => (
                           <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
                       </select>

@@ -20,7 +20,7 @@ import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../utils/dateFormatting';
-import { OPERATIONAL_RANKS } from '../constants/enums';
+import { useRanks } from '../hooks/useRanks';
 import {
   ArrowLeft,
   User,
@@ -60,6 +60,7 @@ export const ProspectDetailPage: React.FC = () => {
   const [stepNotes, setStepNotes] = useState('');
   const [activeTab, setActiveTab] = useState<'progress' | 'info' | 'activity'>('progress');
 
+  const { rankOptions } = useRanks();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('members.manage');
   const tz = useTimezone();
@@ -552,7 +553,7 @@ export const ProspectDetailPage: React.FC = () => {
                     className="form-input w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   >
                     <option value="">Select Rank</option>
-                    {OPERATIONAL_RANKS.map((r) => (
+                    {rankOptions.map((r) => (
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>

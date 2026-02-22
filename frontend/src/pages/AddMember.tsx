@@ -20,11 +20,12 @@ import type { Location } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
-import { OPERATIONAL_RANKS } from '../constants/enums';
+import { useRanks } from '../hooks/useRanks';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { rankOptions } = useRanks();
   const [isSaving, setIsSaving] = useState(false);
   const [membershipIdPreview, setMembershipIdPreview] = useState<string | null>(null);
   const [membershipIdOverride, setMembershipIdOverride] = useState('');
@@ -713,7 +714,7 @@ const AddMember: React.FC = () => {
                   className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select Rank</option>
-                  {OPERATIONAL_RANKS.map((r) => (
+                  {rankOptions.map((r) => (
                     <option key={r.value} value={r.value}>{r.label}</option>
                   ))}
                 </select>

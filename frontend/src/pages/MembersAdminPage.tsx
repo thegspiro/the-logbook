@@ -20,7 +20,7 @@ import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { validatePasswordStrength } from '../utils/passwordValidation';
 import { Modal } from '../components/Modal';
-import { OPERATIONAL_RANKS } from '../constants/enums';
+import { useRanks } from '../hooks/useRanks';
 
 type ViewMode = 'by-member' | 'by-role';
 
@@ -37,6 +37,7 @@ interface EditProfileForm {
 
 export const MembersAdminPage: React.FC = () => {
   const { checkPermission, user: currentUser } = useAuthStore();
+  const { rankOptions } = useRanks();
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -757,7 +758,7 @@ export const MembersAdminPage: React.FC = () => {
                 disabled={savingProfile}
               >
                 <option value="">Select Rank</option>
-                {OPERATIONAL_RANKS.map((r) => (
+                {rankOptions.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
               </select>
