@@ -1893,10 +1893,15 @@ export interface InventoryCategoryCreate {
 }
 
 // Scan / Quick-Action Types
-export interface ScanLookupResponse {
+export interface ScanLookupResult {
   item: InventoryItem;
   matched_field: string;
   matched_value: string;
+}
+
+export interface ScanLookupResponse {
+  results: ScanLookupResult[];
+  total: number;
 }
 
 export interface BatchScanItem {

@@ -57,6 +57,7 @@ from app.schemas.inventory import (
     CompleteClearanceRequest,
     # Scan / quick-action schemas
     ScanLookupResponse,
+    ScanLookupListResponse,
     BatchCheckoutRequest,
     BatchCheckoutResponse,
     BatchReturnRequest,
@@ -878,40 +879,40 @@ async def get_user_inventory(
 # Barcode Scan & Quick-Action Endpoints
 # ============================================
 
-@router.get("/lookup", response_model=ScanLookupResponse)
+@router.get("/lookup", response_model=ScanLookupListResponse)
 async def lookup_item_by_code(
     code: str = Query(..., min_length=1, description="Barcode, serial number, or asset tag"),
+    limit: int = Query(20, ge=1, le=50, description="Maximum results to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
-    Look up an inventory item by barcode, serial number, or asset tag.
+    Search inventory items by barcode, serial number, or asset tag.
 
-    Designed for barcode scanner workflows — pass whatever the scanner
-    reads and this endpoint will find the matching item. Checks barcode
-    first, then serial number, then asset tag.
+    Supports partial matching — type part of a barcode, serial number,
+    or asset tag to see all matching items. Searches barcode first,
+    then serial number, then asset tag.
 
     **Authentication required**
     **Requires permission: inventory.view**
     """
     service = InventoryService(db)
-    result = await service.lookup_by_code(
+    matches = await service.search_by_code(
         code=code,
         organization_id=current_user.organization_id,
+        limit=limit,
     )
 
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No item found matching '{code}'",
+    results = [
+        ScanLookupResponse(
+            item=item,
+            matched_field=matched_field,
+            matched_value=matched_value,
         )
+        for item, matched_field, matched_value in matches
+    ]
 
-    item, matched_field, matched_value = result
-    return ScanLookupResponse(
-        item=item,
-        matched_field=matched_field,
-        matched_value=matched_value,
-    )
+    return ScanLookupListResponse(results=results, total=len(results))
 
 
 @router.post("/batch-checkout", response_model=BatchCheckoutResponse)

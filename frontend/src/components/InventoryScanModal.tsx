@@ -173,16 +173,22 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     setLookupError(null);
 
     try {
-      const result: ScanLookupResponse = await inventoryService.lookupByCode(trimmed);
+      const response: ScanLookupResponse = await inventoryService.lookupByCode(trimmed);
+      if (response.results.length === 0) {
+        setLookupError(`No item found for "${trimmed}"`);
+        setTimeout(() => setLookupError(null), 3000);
+        return;
+      }
+      const match = response.results[0];
       setScannedItems((prev) => [
         ...prev,
         {
           code: trimmed,
-          itemId: result.item.id,
-          itemName: result.item.name,
-          matchedField: result.matched_field,
-          status: result.item.status,
-          trackingType: result.item.tracking_type,
+          itemId: match.item.id,
+          itemName: match.item.name,
+          matchedField: match.matched_field,
+          status: match.item.status,
+          trackingType: match.item.tracking_type,
           quantity: 1,
           returnCondition: 'good',
         },

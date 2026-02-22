@@ -1120,6 +1120,55 @@ class InventoryService:
 
         return None
 
+    async def search_by_code(
+        self,
+        code: str,
+        organization_id: UUID,
+        limit: int = 20,
+    ) -> List[Tuple[InventoryItem, str, str]]:
+        """
+        Search items by partial barcode, serial number, or asset tag.
+        Returns a list of (item, matched_field, matched_value) tuples.
+        Uses substring matching so partial codes return results.
+        """
+        code = code.strip()
+        if not code:
+            return []
+
+        org_id = str(organization_id)
+        search_term = f"%{code}%"
+        results: List[Tuple[InventoryItem, str, str]] = []
+        seen_ids: set = set()
+
+        # Search barcode, serial_number, asset_tag in order of priority
+        fields = [
+            ("barcode", InventoryItem.barcode),
+            ("serial_number", InventoryItem.serial_number),
+            ("asset_tag", InventoryItem.asset_tag),
+        ]
+
+        for field_name, field_col in fields:
+            if len(results) >= limit:
+                break
+
+            result = await self.db.execute(
+                select(InventoryItem)
+                .where(
+                    InventoryItem.organization_id == org_id,
+                    field_col.ilike(search_term),
+                    InventoryItem.active == True,
+                )
+                .options(selectinload(InventoryItem.category))
+                .limit(limit - len(results))
+            )
+            for item in result.scalars().all():
+                if item.id not in seen_ids:
+                    seen_ids.add(item.id)
+                    matched_value = getattr(item, field_name) or ""
+                    results.append((item, field_name, matched_value))
+
+        return results
+
     # ============================================
     # Batch Checkout (scan-to-assign)
     # ============================================

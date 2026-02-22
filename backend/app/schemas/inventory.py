@@ -569,6 +569,12 @@ class ScanLookupResponse(BaseModel):
     matched_value: str
 
 
+class ScanLookupListResponse(BaseModel):
+    """Response from searching items by partial barcode, serial, or asset tag"""
+    results: List[ScanLookupResponse]
+    total: int
+
+
 class BatchScanItem(BaseModel):
     """A single scanned item in a batch operation"""
     code: str = Field(..., description="Barcode, serial number, or asset tag that was scanned")
