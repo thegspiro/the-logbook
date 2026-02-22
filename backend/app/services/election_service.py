@@ -2563,7 +2563,8 @@ Best regards,
             return None, None, "Invalid voting token"
 
         # Check if token has expired
-        if datetime.now(timezone.utc) > voting_token.expires_at:
+        token_exp = voting_token.expires_at.replace(tzinfo=timezone.utc) if voting_token.expires_at.tzinfo is None else voting_token.expires_at
+        if datetime.now(timezone.utc) > token_exp:
             return None, None, "Voting token has expired"
 
         # Check if token has already been fully used
