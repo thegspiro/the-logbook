@@ -651,8 +651,8 @@ Response: {
 **Authentication**: The application stores the auth token as `access_token` in localStorage (not `auth_token`). The AppLayout checks this key to verify authentication status. Logout clears both `access_token` and `refresh_token`.
 
 **Post-Onboarding Settings Navigation**:
-- `/settings/account` - User account settings
-- `/settings` - Organization settings
+- `/account` - User account settings (profile, password, appearance, notifications)
+- `/settings` - Organization settings (requires `settings.manage`)
 - `/settings/roles` - Role management (create/edit/delete roles)
 - `/admin/members` - Member administration (assign roles)
 - `/admin/public-portal` - Public portal configuration

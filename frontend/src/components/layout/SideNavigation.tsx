@@ -175,6 +175,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     },
     { label: 'Notifications', path: '/notifications', icon: Bell },
 
+    // ── Personal settings (always visible) ──
+    { label: 'My Account', path: '/account', icon: UserCog },
+
     // ── Administration section (only shown to users with admin perms) ──
     ...(hasAnyAdminPermission ? [
       { label: 'Administration', path: '#', icon: Shield, isSectionLabel: true } as NavItem,
@@ -205,9 +208,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       } as NavItem,
       { label: 'Reports', path: '/reports', icon: BarChart3 } as NavItem,
       {
-        label: 'Settings',
+        label: 'Organization Settings',
         path: '/settings',
         icon: Settings,
+        permission: 'settings.manage',
         subItems: [
           { label: 'Organization', path: '/settings', icon: Building2 },
           { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'positions.manage_permissions' },
@@ -217,9 +221,6 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         ],
       } as NavItem,
     ] : []),
-
-    // ── Always-visible personal settings ──
-    { label: 'My Account', path: '/settings/account', icon: UserCog },
   ];
 
   const isActive = (path: string) => {

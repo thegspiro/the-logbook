@@ -138,7 +138,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     } as NavItem] : []),
 
     // ── Always-visible personal ──
-    { label: 'My Account', path: '/settings/account' },
+    { label: 'My Account', path: '/account' },
   ];
 
   const isActive = (path: string) => {

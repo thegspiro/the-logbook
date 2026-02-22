@@ -49,7 +49,9 @@ Each step shows its completion status. You can return to any step to update the 
 
 **Required Permission:** `settings.manage`
 
-Navigate to **Settings > Organization** to manage department-wide settings.
+Navigate to **Administration > Organization Settings > Organization** to manage department-wide settings.
+
+> **Note:** Organization Settings are separate from user account settings. Organization Settings require the `settings.manage` permission and are only visible to administrators. Individual users manage their own profile, password, and preferences at **My Account** (`/account`).
 
 ### General Settings
 

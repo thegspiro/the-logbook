@@ -105,18 +105,20 @@ If you have administrative permissions (officers, IT Manager, etc.), you will se
 | **Forms** | Build and manage custom forms |
 | **Integrations** | Connect to external services |
 | **Reports** | Generate department reports |
-| **Settings** | Organization settings, roles, public portal |
+| **Organization Settings** | Organization settings, roles, public portal |
 
 > **Screenshot placeholder:**
 > _[Screenshot of the sidebar with the Administration section expanded, showing all admin-only menu items]_
 
-### Bottom Section
+### Personal Section
 
-At the bottom of the sidebar you will find:
+Below the member-facing pages and above the Administration section, you will find:
 
-- **My Account** - Your personal profile and settings
-- **Theme** - Switch between light and dark mode
+- **My Account** (`/account`) - Your personal profile, password, appearance, and notification settings
+- **Theme** - Switch between light and dark mode (also available in My Account > Appearance)
 - **Sign Out** - Log out of the system
+
+> **Note:** My Account is accessible to all users and is separate from the Organization Settings, which are only visible to administrators.
 
 ---
 
@@ -139,7 +141,7 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 
 ## Account Settings
 
-To update your personal settings, click **My Account** at the bottom of the sidebar or navigate to **Settings > Account**.
+To update your personal settings, click **My Account** in the sidebar. This takes you to `/account`, which is separate from the organization settings.
 
 From here you can:
 
