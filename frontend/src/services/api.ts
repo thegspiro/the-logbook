@@ -366,6 +366,24 @@ export interface ModuleSettingsData {
   facilities: boolean;
 }
 
+export interface OrganizationProfile {
+  name: string;
+  timezone: string;
+  phone: string;
+  email: string;
+  website: string;
+  county: string;
+  founded_year: number | null;
+  logo: string | null;
+  mailing_address: {
+    line1: string;
+    line2: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
+}
+
 export interface EnabledModulesResponse {
   enabled_modules: string[];
   module_settings: ModuleSettingsData;
@@ -437,6 +455,16 @@ export const organizationService = {
 
   async getAddress(): Promise<{ address: string; city: string; state: string; zip: string }> {
     const response = await api.get<{ address: string; city: string; state: string; zip: string }>('/organization/address');
+    return response.data;
+  },
+
+  async getProfile(): Promise<OrganizationProfile> {
+    const response = await api.get<OrganizationProfile>('/organization/profile');
+    return response.data;
+  },
+
+  async updateProfile(updates: Partial<OrganizationProfile>): Promise<OrganizationProfile> {
+    const response = await api.patch<OrganizationProfile>('/organization/profile', updates);
     return response.data;
   },
 };

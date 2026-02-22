@@ -48,15 +48,16 @@ class OrganizationService:
         onboarding before modules were written to org.settings, we
         perform a one-time migration from OnboardingStatus.enabled_modules
         and persist the result so subsequent reads are fast and consistent.
+
+        Safety net: if org.settings.modules exists but ALL configurable
+        modules are False AND the dict was NOT explicitly saved by the
+        Settings page (_user_configured flag), we check OnboardingStatus
+        to recover from failed dual-writes during onboarding.
         """
         modules = settings_dict.get("modules")
 
-        # Happy path: org.settings.modules has been explicitly configured.
-        # Check that the key exists and is a non-empty dict.  We intentionally
-        # do NOT require any value to be True — the user may have deliberately
-        # disabled every optional module and that choice must be respected.
         if isinstance(modules, dict) and len(modules) > 0:
-            return ModuleSettings(
+            ms = ModuleSettings(
                 training=bool(modules.get("training", False)),
                 inventory=bool(modules.get("inventory", False)),
                 scheduling=bool(modules.get("scheduling", False)),
@@ -70,7 +71,21 @@ class OrganizationService:
                 facilities=bool(modules.get("facilities", False)),
             )
 
-        # ── One-time migration from legacy OnboardingStatus ──
+            # If at least one module is enabled, or the user explicitly
+            # configured modules via the Settings page, trust the dict.
+            any_enabled = any([
+                ms.training, ms.inventory, ms.scheduling, ms.elections,
+                ms.minutes, ms.reports, ms.notifications, ms.mobile,
+                ms.forms, ms.integrations, ms.facilities,
+            ])
+            if any_enabled or modules.get("_user_configured"):
+                return ms
+
+            # ALL modules are False and not user-confirmed — fall through
+            # to check OnboardingStatus as a safety net for failed
+            # dual-writes during onboarding.
+
+        # ── Migration from OnboardingStatus ──
         onboarding_result = await self.db.execute(select(OnboardingStatus).limit(1))
         onboarding = onboarding_result.scalar_one_or_none()
 
@@ -106,6 +121,7 @@ class OrganizationService:
                     "forms": migrated.forms,
                     "integrations": migrated.integrations,
                     "facilities": migrated.facilities,
+                    "_user_configured": True,
                 }
                 org.settings = new_settings
                 flag_modified(org, "settings")
@@ -290,8 +306,8 @@ class OrganizationService:
             "facilities": resolved.facilities,
         })
 
-        # Merge the incoming toggles
-        updated_modules = {**current_modules, **module_updates}
+        # Merge the incoming toggles and mark as explicitly configured
+        updated_modules = {**current_modules, **module_updates, "_user_configured": True}
         current_settings["modules"] = updated_modules
 
         # Update in database — flag_modified needed for plain JSON column
