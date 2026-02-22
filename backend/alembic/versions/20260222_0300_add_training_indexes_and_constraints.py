@@ -1,8 +1,8 @@
 """Add index on training_records.course_id and unique constraint on program_phases(program_id, phase_number)
 
-Revision ID: 20260222_0100
-Revises: 20260221_0800
-Create Date: 2026-02-22 01:00:00.000000
+Revision ID: 20260222_0300
+Revises: 20260222_0200
+Create Date: 2026-02-22 03:00:00.000000
 
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "20260222_0100"
-down_revision: Union[str, None] = "20260221_0800"
+revision: str = "20260222_0300"
+down_revision: Union[str, None] = "20260222_0200"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
