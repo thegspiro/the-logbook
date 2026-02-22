@@ -11,6 +11,7 @@ from sqlalchemy import select, func
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
+from app.core.utils import safe_error_detail
 from app.schemas.organization import (
     OrganizationSettingsResponse,
     OrganizationSettingsUpdate,
@@ -101,7 +102,7 @@ async def update_organization_settings(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -151,7 +152,7 @@ async def update_contact_info_settings(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -199,7 +200,7 @@ async def update_membership_id_settings(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -274,7 +275,7 @@ async def update_module_settings(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 

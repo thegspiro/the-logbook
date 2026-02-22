@@ -33,6 +33,9 @@ export function useIdleTimer() {
     } catch {
       // Logout may fail if session already expired
     }
+    // Clear all auth tokens from both storage mechanisms
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     sessionStorage.clear();
     navigate('/login', { state: { reason: 'timeout' }, replace: true });
   }, [logout, navigate]);
@@ -75,7 +78,7 @@ export function useIdleTimer() {
 
     // Fetch session timeout from backend
     axios
-      .get('/api/v1/auth/session-settings')
+      .get('/api/v1/auth/session-settings', { withCredentials: true })
       .then((res) => {
         const minutes = res.data.session_timeout_minutes || DEFAULT_TIMEOUT_MINUTES;
         timeoutMsRef.current = minutes * 60 * 1000;

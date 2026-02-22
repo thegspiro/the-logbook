@@ -11,6 +11,7 @@ from uuid import UUID
 from datetime import datetime, timedelta
 
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.location import (
     LocationCreate,
@@ -96,7 +97,7 @@ async def create_location(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return LocationResponse(
         id=UUID(location.id),
@@ -191,7 +192,7 @@ async def update_location(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not location:
         raise HTTPException(
@@ -246,7 +247,7 @@ async def delete_location(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(

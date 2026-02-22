@@ -4,11 +4,12 @@ Authentication API Endpoints
 Endpoints for user authentication, registration, and session management.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, status, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from typing import List
+from typing import List, Optional
 
 from app.core.database import get_db
 from app.schemas.auth import (
@@ -30,6 +31,51 @@ from app.core.permissions import get_rank_default_permissions
 
 
 router = APIRouter()
+
+
+def _set_auth_cookies(
+    response: JSONResponse,
+    access_token: str,
+    refresh_token: str,
+) -> None:
+    """Set httpOnly, Secure, SameSite auth cookies on *response*."""
+    import secrets as _secrets
+    is_production = settings.ENVIRONMENT == "production"
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=is_production,
+        samesite="strict",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=is_production,
+        samesite="strict",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/api/v1/auth",  # Only sent to auth endpoints
+    )
+    # Double-submit CSRF token (readable by JS, validated server-side)
+    response.set_cookie(
+        key="csrf_token",
+        value=_secrets.token_urlsafe(32),
+        httponly=False,  # Must be readable by JavaScript
+        secure=is_production,
+        samesite="strict",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+
+def _clear_auth_cookies(response: JSONResponse) -> None:
+    """Remove auth cookies from *response*."""
+    response.delete_cookie(key="access_token", path="/")
+    response.delete_cookie(key="refresh_token", path="/api/v1/auth")
+    response.delete_cookie(key="csrf_token", path="/")
 
 
 @router.get("/branding")
@@ -166,12 +212,16 @@ async def register(
         user_agent=request.headers.get("user-agent"),
     )
 
-    return TokenResponse(
+    body = TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
+    ).model_dump()
+
+    response = JSONResponse(content=body)
+    _set_auth_cookies(response, access_token, refresh_token)
+    return response
 
 
 @router.post("/login", response_model=TokenResponse, dependencies=[Depends(check_rate_limit)])
@@ -216,21 +266,28 @@ async def login(
         user_agent=request.headers.get("user-agent"),
     )
 
-    return TokenResponse(
+    body = TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
+    ).model_dump()
+
+    response = JSONResponse(content=body)
+    _set_auth_cookies(response, access_token, refresh_token)
+    return response
 
 
 @router.post("/refresh", response_model=dict, dependencies=[Depends(check_rate_limit)])
 async def refresh_token(
-    token_data: TokenRefresh,
+    token_data: Optional[TokenRefresh] = None,
+    refresh_token_cookie: Optional[str] = Cookie(None, alias="refresh_token"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Refresh an access token using a refresh token.
+
+    Accepts refresh token from httpOnly cookie (preferred) or request body.
 
     Implements token rotation: a new refresh token is issued on every use
     and the old one is invalidated.  Clients MUST store and use the new
@@ -238,11 +295,17 @@ async def refresh_token(
 
     Rate limited to 5 requests per minute per IP address.
     """
+    # Prefer cookie, fall back to body
+    rt = refresh_token_cookie or (token_data.refresh_token if token_data else None)
+    if not rt:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No refresh token provided.",
+        )
+
     auth_service = AuthService(db)
 
-    new_access_token, new_refresh_token = await auth_service.refresh_access_token(
-        token_data.refresh_token
-    )
+    new_access_token, new_refresh_token = await auth_service.refresh_access_token(rt)
 
     if not new_access_token:
         raise HTTPException(
@@ -251,30 +314,40 @@ async def refresh_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return {
+    body = {
         "access_token": new_access_token,
         "refresh_token": new_refresh_token,
         "token_type": "bearer",
         "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     }
 
+    response = JSONResponse(content=body)
+    _set_auth_cookies(response, new_access_token, new_refresh_token)
+    return response
+
 
 @router.post("/logout")
 async def logout(
     request: Request,
     current_user: User = Depends(get_current_user),
+    access_token_cookie: Optional[str] = Cookie(None, alias="access_token"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Logout the current user
 
-    Invalidates the current session/token.
+    Invalidates the current session/token and clears auth cookies.
     """
-    # Extract token from header
-    authorization = request.headers.get("authorization", "")
-    try:
-        _, token = authorization.split()
-    except ValueError:
+    # Resolve token: prefer cookie, fall back to Authorization header
+    token: Optional[str] = access_token_cookie
+    if not token:
+        authorization = request.headers.get("authorization", "")
+        try:
+            _, token = authorization.split()
+        except ValueError:
+            token = None
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unable to process logout. Please clear your browser data and log in again."
@@ -289,7 +362,9 @@ async def logout(
             detail="Unable to end your session. Please close your browser and log in again."
         )
 
-    return {"message": "Successfully logged out"}
+    response = JSONResponse(content={"message": "Successfully logged out"})
+    _clear_auth_cookies(response)
+    return response
 
 
 @router.get("/me", response_model=CurrentUser)
@@ -362,12 +437,17 @@ async def get_current_user_info(
 
 
 @router.get("/session-settings")
-async def get_session_settings():
+async def get_session_settings(
+    current_user: User = Depends(get_current_user),
+):
     """
     Return HIPAA session timeout and password policy settings.
 
     The frontend uses this to configure its inactivity timer and
     to warn users about expiring passwords.
+
+    **Authentication required** — prevents unauthenticated enumeration
+    of security configuration.
     """
     return {
         "session_timeout_minutes": settings.HIPAA_SESSION_TIMEOUT_MINUTES,
@@ -499,7 +579,9 @@ async def forgot_password(
     if user and raw_token:
         from app.services.email_service import EmailService
 
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={raw_token}"
+        # Use URL fragment (#) instead of query param so the token is
+        # never sent to the server in Referer headers or logged in access logs.
+        reset_url = f"{settings.FRONTEND_URL}/reset-password#token={raw_token}"
         org_name = organization.name
         expiry_minutes = RESET_TOKEN_EXPIRY_MINUTES
 
@@ -620,4 +702,5 @@ async def validate_reset_token(
             detail="This password reset link is invalid or has expired. Please request a new one from the login page."
         )
 
-    return {"valid": True, "email": email}
+    # Return only validity status; omit email to prevent user enumeration.
+    return {"valid": True}

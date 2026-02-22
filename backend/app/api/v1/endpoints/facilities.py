@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date, datetime
 
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.facilities import (
     # Facility Type
@@ -160,7 +161,7 @@ async def create_facility_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return facility_type
 
@@ -187,7 +188,7 @@ async def update_facility_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not facility_type:
         raise HTTPException(
@@ -220,7 +221,7 @@ async def delete_facility_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(
@@ -275,7 +276,7 @@ async def create_facility_status(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return facility_status
 
@@ -302,7 +303,7 @@ async def update_facility_status(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not facility_status:
         raise HTTPException(
@@ -335,7 +336,7 @@ async def delete_facility_status(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(
@@ -397,7 +398,7 @@ async def create_facility(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     # Reload with relations
     facility = await service.get_facility(
@@ -458,7 +459,7 @@ async def update_facility(
             updated_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not facility:
         raise HTTPException(
@@ -496,7 +497,7 @@ async def archive_facility(
             archived_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not facility:
         raise HTTPException(
@@ -527,7 +528,7 @@ async def restore_facility(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not facility:
         raise HTTPException(
@@ -590,7 +591,7 @@ async def create_facility_photo(
             uploaded_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return photo
 
@@ -703,7 +704,7 @@ async def create_facility_document(
             uploaded_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return document
 
@@ -810,7 +811,7 @@ async def create_facility_maintenance_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return maint_type
 
@@ -837,7 +838,7 @@ async def update_facility_maintenance_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not maint_type:
         raise HTTPException(
@@ -868,7 +869,7 @@ async def delete_facility_maintenance_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(
@@ -941,7 +942,7 @@ async def create_facility_maintenance_record(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return record
 
@@ -996,7 +997,7 @@ async def update_facility_maintenance_record(
             updated_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not record:
         raise HTTPException(
@@ -1086,7 +1087,7 @@ async def create_facility_system(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return system
 
@@ -1140,7 +1141,7 @@ async def update_facility_system(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not system:
         raise HTTPException(
@@ -1229,7 +1230,7 @@ async def create_facility_inspection(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return inspection
 
@@ -1283,7 +1284,7 @@ async def update_facility_inspection(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not inspection:
         raise HTTPException(
@@ -1373,7 +1374,7 @@ async def create_facility_utility_account(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return account
 
@@ -1427,7 +1428,7 @@ async def update_facility_utility_account(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not account:
         raise HTTPException(
@@ -1521,7 +1522,7 @@ async def create_facility_utility_reading(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return reading
 
@@ -1637,7 +1638,7 @@ async def create_facility_access_key(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return key
 
@@ -1691,7 +1692,7 @@ async def update_facility_access_key(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not key:
         raise HTTPException(
@@ -1783,7 +1784,7 @@ async def create_facility_room(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return room
 
@@ -1838,7 +1839,7 @@ async def update_facility_room(
             updated_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not room:
         raise HTTPException(
@@ -1928,7 +1929,7 @@ async def create_facility_emergency_contact(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return contact
 
@@ -1982,7 +1983,7 @@ async def update_facility_emergency_contact(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not contact:
         raise HTTPException(
@@ -2070,7 +2071,7 @@ async def create_facility_shutoff_location(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return location
 
@@ -2124,7 +2125,7 @@ async def update_facility_shutoff_location(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not location:
         raise HTTPException(
@@ -2214,7 +2215,7 @@ async def create_facility_capital_project(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return project
 
@@ -2268,7 +2269,7 @@ async def update_facility_capital_project(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not project:
         raise HTTPException(
@@ -2358,7 +2359,7 @@ async def create_facility_insurance_policy(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return policy
 
@@ -2412,7 +2413,7 @@ async def update_facility_insurance_policy(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not policy:
         raise HTTPException(
@@ -2500,7 +2501,7 @@ async def create_facility_occupant(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return occupant
 
@@ -2554,7 +2555,7 @@ async def update_facility_occupant(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not occupant:
         raise HTTPException(
@@ -2644,7 +2645,7 @@ async def create_facility_compliance_checklist(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return checklist
 
@@ -2698,7 +2699,7 @@ async def update_facility_compliance_checklist(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not checklist:
         raise HTTPException(
@@ -2786,7 +2787,7 @@ async def create_facility_compliance_item(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     return item
 
@@ -2813,7 +2814,7 @@ async def update_facility_compliance_item(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not item:
         raise HTTPException(

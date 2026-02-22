@@ -17,6 +17,7 @@ from datetime import datetime, timezone as dt_timezone
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
+from app.core.utils import safe_error_detail
 from app.models.event import Event, EventRSVP, EventType, RSVPStatus
 from app.models.user import User
 from app.schemas.event import (
@@ -212,7 +213,7 @@ async def create_event(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -302,7 +303,7 @@ async def update_event(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -419,7 +420,7 @@ async def cancel_event(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 

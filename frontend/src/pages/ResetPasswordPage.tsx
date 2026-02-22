@@ -4,8 +4,8 @@
  * Allows users to set a new password using a reset token from email.
  */
 
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, CheckCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/api';
 import { validatePasswordStrength } from '../utils/passwordValidation';
@@ -13,8 +13,14 @@ import { getErrorMessage } from '../utils/errorHandling';
 
 export const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get('token');
+  const location = useLocation();
+  // Read token from URL fragment (#token=...) so it's never sent to the
+  // server in Referer headers or logged in access logs.
+  const token = useMemo(() => {
+    const hash = location.hash.replace(/^#/, '');
+    const params = new URLSearchParams(hash);
+    return params.get('token');
+  }, [location.hash]);
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -25,7 +31,6 @@ export const ResetPasswordPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [tokenValid, setTokenValid] = useState(false);
-  const [userEmail, setUserEmail] = useState<string>('');
 
   // Validate token on mount
   useEffect(() => {
@@ -40,7 +45,6 @@ export const ResetPasswordPage: React.FC = () => {
         const result = await authService.validateResetToken(token);
         if (result.valid) {
           setTokenValid(true);
-          setUserEmail(result.email || '');
         } else {
           setError('This password reset link is invalid or has expired');
         }
@@ -178,11 +182,9 @@ export const ResetPasswordPage: React.FC = () => {
           <h1 className="text-3xl font-extrabold text-theme-text-primary mb-2">
             Set New Password
           </h1>
-          {userEmail && (
-            <p className="text-theme-text-secondary">
-              for <strong className="text-theme-text-primary">{userEmail}</strong>
-            </p>
-          )}
+          <p className="text-theme-text-secondary">
+            Choose a strong, unique password
+          </p>
         </div>
 
         <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-8">

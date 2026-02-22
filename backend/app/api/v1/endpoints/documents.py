@@ -16,6 +16,7 @@ import logging
 import magic
 
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.models.document import Document, DocumentStatus
 from app.schemas.documents import (
@@ -105,7 +106,7 @@ async def create_folder(
         )
     except Exception as e:
         logger.error(f"Failed to create folder: {e}")
-        raise HTTPException(status_code=400, detail=f"Unable to create folder: {e}")
+        raise HTTPException(status_code=400, detail=safe_error_detail(e, "Unable to create folder"))
     return result
 
 
@@ -261,7 +262,7 @@ async def upload_document(
         except OSError:
             logger.warning(f"Failed to clean up file after document creation error: {file_path}")
         logger.error(f"Failed to create document record: {e}")
-        raise HTTPException(status_code=400, detail=f"Unable to save document: {e}")
+        raise HTTPException(status_code=400, detail=safe_error_detail(e, "Unable to save document"))
 
     return document
 

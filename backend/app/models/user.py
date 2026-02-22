@@ -253,10 +253,53 @@ class User(Base):
     email_verified = Column(Boolean, default=False)
     email_verified_at = Column(DateTime(timezone=True))
 
-    # MFA
+    # MFA — secret and backup codes are encrypted at rest via
+    # application-layer AES-256 (Fernet) to protect against DB compromise.
     mfa_enabled = Column(Boolean, default=False)
-    mfa_secret = Column(String(32))
-    mfa_backup_codes = Column(JSON)
+    _mfa_secret_encrypted = Column("mfa_secret", String(255))
+    _mfa_backup_codes_encrypted = Column("mfa_backup_codes", JSON)
+
+    @property
+    def mfa_secret(self) -> str | None:
+        if not self._mfa_secret_encrypted:
+            return None
+        try:
+            from app.core.security import decrypt_data
+            return decrypt_data(self._mfa_secret_encrypted)
+        except Exception:
+            # Fallback for pre-encryption plaintext values
+            return self._mfa_secret_encrypted
+
+    @mfa_secret.setter
+    def mfa_secret(self, value: str | None) -> None:
+        if value is None:
+            self._mfa_secret_encrypted = None
+        else:
+            from app.core.security import encrypt_data
+            self._mfa_secret_encrypted = encrypt_data(value)
+
+    @property
+    def mfa_backup_codes(self) -> list | None:
+        import json as _json
+        raw = self._mfa_backup_codes_encrypted
+        if raw is None:
+            return None
+        # If stored as a list of encrypted strings, decrypt each
+        if isinstance(raw, list) and raw and isinstance(raw[0], str) and len(raw[0]) > 40:
+            try:
+                from app.core.security import decrypt_data
+                return [decrypt_data(c) for c in raw]
+            except Exception:
+                return raw
+        return raw
+
+    @mfa_backup_codes.setter
+    def mfa_backup_codes(self, value: list | None) -> None:
+        if value is None:
+            self._mfa_backup_codes_encrypted = None
+        else:
+            from app.core.security import encrypt_data
+            self._mfa_backup_codes_encrypted = [encrypt_data(c) for c in value]
 
     # Password Management
     password_changed_at = Column(DateTime(timezone=True))

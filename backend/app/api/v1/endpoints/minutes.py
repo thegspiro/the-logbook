@@ -13,6 +13,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.minute import (
     MinutesCreate,
@@ -214,7 +215,7 @@ async def update_minutes(
     try:
         minutes = await service.update_minutes(minutes_id, current_user.organization_id, data)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not minutes:
         raise HTTPException(
@@ -252,7 +253,7 @@ async def delete_minutes(
     try:
         deleted = await service.delete_minutes(minutes_id, current_user.organization_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(
@@ -294,7 +295,7 @@ async def submit_minutes(
             minutes_id, current_user.organization_id, current_user.id
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not minutes:
         raise HTTPException(
@@ -334,7 +335,7 @@ async def approve_minutes(
             minutes_id, current_user.organization_id, current_user.id
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not minutes:
         raise HTTPException(
@@ -375,7 +376,7 @@ async def reject_minutes(
             minutes_id, current_user.organization_id, current_user.id, data.reason
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not minutes:
         raise HTTPException(
@@ -413,7 +414,7 @@ async def add_motion(
     try:
         motion = await service.add_motion(minutes_id, current_user.organization_id, data)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not motion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting minutes not found")
@@ -435,7 +436,7 @@ async def update_motion(
     try:
         motion = await service.update_motion(motion_id, minutes_id, current_user.organization_id, data)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not motion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Motion not found")
@@ -456,7 +457,7 @@ async def delete_motion(
     try:
         deleted = await service.delete_motion(motion_id, minutes_id, current_user.organization_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Motion not found")
@@ -479,7 +480,7 @@ async def add_action_item(
     try:
         item = await service.add_action_item(minutes_id, current_user.organization_id, data)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting minutes not found")
@@ -501,7 +502,7 @@ async def update_action_item(
     try:
         item = await service.update_action_item(item_id, minutes_id, current_user.organization_id, data)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Action item not found")
@@ -522,7 +523,7 @@ async def delete_action_item(
     try:
         deleted = await service.delete_action_item(item_id, minutes_id, current_user.organization_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Action item not found")
@@ -548,7 +549,7 @@ async def publish_minutes(
     try:
         doc = await doc_service.publish_minutes(minutes, current_user.organization_id, current_user.id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
 
     await log_audit_event(
         db=db,

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.api.dependencies import get_current_user, require_permission
 from app.models.user import User
 from app.services.training_submission_service import TrainingSubmissionService
@@ -74,7 +75,7 @@ async def create_submission(
         )
         return submission
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
 @router.get("/my", response_model=list[TrainingSubmissionResponse])
@@ -179,9 +180,9 @@ async def update_submission(
         )
         return submission
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
 
 
 @router.delete("/{submission_id}", status_code=204)
@@ -195,9 +196,9 @@ async def delete_submission(
     try:
         await service.delete_submission(submission_id, current_user.id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
 
 
 # ==================== Officer Review ====================
@@ -224,4 +225,4 @@ async def review_submission(
         )
         return submission
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))

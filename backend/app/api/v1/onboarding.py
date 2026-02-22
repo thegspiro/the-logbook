@@ -20,6 +20,7 @@ from functools import partial
 
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit
+from app.core.utils import safe_error_detail
 from app.services.onboarding import OnboardingService
 from app.services.auth_service import AuthService
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
@@ -456,7 +457,7 @@ async def validate_session(
         csrf_token = request.headers.get('X-CSRF-Token')
         stored_csrf = session.data.get('csrf_token') if session.data else None
 
-        if not csrf_token or csrf_token != stored_csrf:
+        if not csrf_token or not stored_csrf or not secrets.compare_digest(csrf_token, stored_csrf):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="CSRF validation failed. Please refresh and try again."
@@ -631,7 +632,7 @@ async def start_onboarding(
     )
 
 
-@router.get("/system-info", response_model=SystemInfoResponse)
+@router.get("/system-info", response_model=SystemInfoResponse, dependencies=[Depends(check_rate_limit)])
 async def get_system_info(
     db: AsyncSession = Depends(get_db)
 ):
@@ -644,7 +645,7 @@ async def get_system_info(
     return await service.get_system_info()
 
 
-@router.get("/security-check", response_model=SecurityCheckResponse)
+@router.get("/security-check", response_model=SecurityCheckResponse, dependencies=[Depends(check_rate_limit)])
 async def verify_security(
     db: AsyncSession = Depends(get_db)
 ):
@@ -672,7 +673,7 @@ async def verify_security(
     return result
 
 
-@router.get("/database-check", response_model=DatabaseCheckResponse)
+@router.get("/database-check", response_model=DatabaseCheckResponse, dependencies=[Depends(check_rate_limit)])
 async def verify_database(
     db: AsyncSession = Depends(get_db)
 ):
@@ -738,7 +739,7 @@ async def create_organization(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -834,7 +835,7 @@ async def create_system_owner(
         logger.error(f"Admin user creation failed with ValueError: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
     except Exception as e:
         # Log full details server-side, return generic message to client
@@ -872,7 +873,7 @@ async def configure_modules(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -942,7 +943,7 @@ async def complete_onboarding(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
 
 
@@ -1081,8 +1082,8 @@ async def test_email_configuration(
 
         return EmailTestResponse(
             success=False,
-            message=f"Failed to test email configuration: {str(e)}",
-            details={"error": str(e)}
+            message=safe_error_detail(e, "Failed to test email configuration"),
+            details={"error": "internal_error"}
         )
 
 
@@ -1441,7 +1442,7 @@ async def save_session_organization(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=safe_error_detail(e)
         )
     except Exception as e:
         logger.error(f"Error creating organization during onboarding: {e}")

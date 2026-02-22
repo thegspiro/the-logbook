@@ -531,7 +531,7 @@ async def is_rate_limited(
     key: str,
     limit: int,
     window_seconds: int,
-    fail_closed: bool = False,
+    fail_closed: bool = True,
 ) -> bool:
     """
     Check if a key has exceeded rate limit using Redis sliding window.
@@ -542,8 +542,9 @@ async def is_rate_limited(
         key: Unique key to track (e.g., IP address, user ID)
         limit: Maximum number of requests allowed in the window
         window_seconds: Time window in seconds
-        fail_closed: If True, deny requests when Redis is unavailable.
-                     Use True for security-critical paths (login, registration).
+        fail_closed: If True (default), deny requests when Redis is
+                     unavailable.  This is the safe default for
+                     security-critical paths (login, registration).
 
     Returns:
         True if rate limit exceeded, False otherwise

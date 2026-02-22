@@ -11,6 +11,7 @@ from typing import Optional
 from datetime import date
 
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.api.dependencies import get_current_user, require_permission
 from app.models.user import User
 from app.services.shift_completion_service import ShiftCompletionService
@@ -52,7 +53,7 @@ async def create_shift_report(
         )
         return report
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
 @router.get("/my-reports", response_model=list[ShiftCompletionReportResponse])
