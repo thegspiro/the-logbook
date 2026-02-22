@@ -205,6 +205,7 @@ class DepartureClearanceService:
     async def resolve_line_item(
         self,
         clearance_item_id: str,
+        clearance_id: str,
         organization_id: str,
         resolved_by: str,
         disposition: str,
@@ -227,11 +228,12 @@ class DepartureClearanceService:
             if disp == ClearanceLineDisposition.PENDING:
                 return None, "Cannot set disposition back to 'pending'"
 
-            # Load the line item
+            # Load the line item — verify it belongs to the expected clearance
             result = await self.db.execute(
                 select(DepartureClearanceItem)
                 .where(
                     DepartureClearanceItem.id == clearance_item_id,
+                    DepartureClearanceItem.clearance_id == clearance_id,
                     DepartureClearanceItem.organization_id == organization_id,
                 )
                 .options(selectinload(DepartureClearanceItem.clearance))

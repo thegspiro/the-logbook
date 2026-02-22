@@ -327,12 +327,38 @@ class InventoryService:
         )
         return result.scalar_one_or_none()
 
+    async def _get_item_locked(
+        self, item_id: UUID, organization_id: UUID
+    ) -> Optional[InventoryItem]:
+        """Get item by ID with a row-level lock (SELECT FOR UPDATE).
+
+        Use this instead of get_item_by_id when the caller intends to
+        mutate the item's status, condition, quantity, or assignment
+        fields, to prevent concurrent-modification races.
+        """
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(InventoryItem.id == str(item_id))
+            .where(InventoryItem.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def update_item(
         self, item_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
         """Update an inventory item"""
         try:
-            item = await self.get_item_by_id(item_id, organization_id)
+            # Lock the row when status, condition, or assignment changes to
+            # prevent concurrent mutations from creating inconsistent state.
+            needs_lock = bool(
+                {"status", "condition", "assigned_to_user_id", "quantity", "quantity_issued"}
+                & update_data.keys()
+            )
+            if needs_lock:
+                item = await self._get_item_locked(item_id, organization_id)
+            else:
+                item = await self.get_item_by_id(item_id, organization_id)
             if not item:
                 return None, "Item not found"
 
@@ -478,15 +504,25 @@ class InventoryService:
         returned_by: UUID,
         return_condition: Optional[ItemCondition] = None,
         return_notes: Optional[str] = None,
+        expected_user_id: Optional[UUID] = None,
     ) -> Tuple[bool, Optional[str]]:
-        """Unassign an item from its current user"""
+        """Unassign an item from its current user.
+
+        If *expected_user_id* is provided, the operation will fail when the
+        item is assigned to a different user — preventing stale-read races
+        in batch operations.
+        """
         try:
-            item = await self.get_item_by_id(item_id, organization_id)
+            # Lock the item row to prevent concurrent assign/unassign races
+            item = await self._get_item_locked(item_id, organization_id)
             if not item:
                 return False, "Item not found"
 
             if not item.assigned_to_user_id:
                 return False, "Item is not currently assigned"
+
+            if expected_user_id and str(item.assigned_to_user_id) != str(expected_user_id):
+                return False, "Item is not assigned to the expected user"
 
             # Capture user_id before clearing assignment (needed for auto-archive check)
             previous_user_id = str(item.assigned_to_user_id)
@@ -635,7 +671,6 @@ class InventoryService:
                 select(ItemIssuance)
                 .where(ItemIssuance.id == str(issuance_id))
                 .where(ItemIssuance.organization_id == str(organization_id))
-                .options(selectinload(ItemIssuance.item))
             )
             issuance = result.scalar_one_or_none()
 
@@ -652,8 +687,14 @@ class InventoryService:
             # Capture user_id for auto-archive check
             issuance_user_id = str(issuance.user_id)
 
-            # Update pool item counts
-            item = issuance.item
+            # Lock the item row before modifying pool counts to prevent
+            # concurrent returns from losing updates via read-modify-write
+            item = await self._get_item_locked(
+                UUID(str(issuance.item_id)), UUID(str(organization_id))
+            )
+            if not item:
+                return False, "Associated pool item not found"
+
             item.quantity += qty
             item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
 
@@ -798,7 +839,6 @@ class InventoryService:
                 select(CheckOutRecord)
                 .where(CheckOutRecord.id == str(checkout_id))
                 .where(CheckOutRecord.organization_id == str(organization_id))
-                .options(selectinload(CheckOutRecord.item))
             )
             checkout = result.scalar_one_or_none()
 
@@ -819,8 +859,13 @@ class InventoryService:
             checkout.is_returned = True
             checkout.is_overdue = False
 
-            # Update item
-            item = checkout.item
+            # Lock the item row before mutating status/condition to prevent
+            # concurrent checkout/checkin from creating inconsistent state
+            item = await self._get_item_locked(
+                UUID(str(checkout.item_id)), organization_id
+            )
+            if not item:
+                return False, "Associated item not found"
             item.status = ItemStatus.AVAILABLE
             item.condition = return_condition
 
@@ -870,24 +915,20 @@ class InventoryService:
     async def get_overdue_checkouts(
         self, organization_id: UUID
     ) -> List[CheckOutRecord]:
-        """Get all overdue checkouts"""
+        """Get all overdue checkouts.
+
+        Computes overdue status at read time using the expected_return_at
+        date instead of performing a bulk UPDATE on every call.
+        """
         now = datetime.now(timezone.utc)
 
-        # Update overdue status
-        await self.db.execute(
-            update(CheckOutRecord)
-            .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
-            .where(CheckOutRecord.expected_return_at < now)
-            .values(is_overdue=True)
-        )
-        await self.db.commit()
-
-        # Get overdue items
         result = await self.db.execute(
             select(CheckOutRecord)
-            .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_overdue == True)  # noqa: E712
+            .where(
+                CheckOutRecord.organization_id == str(organization_id),
+                CheckOutRecord.is_returned == False,  # noqa: E712
+                CheckOutRecord.expected_return_at < now,
+            )
             .options(
                 selectinload(CheckOutRecord.item),
                 selectinload(CheckOutRecord.user),
@@ -896,9 +937,36 @@ class InventoryService:
         )
         return result.scalars().all()
 
+    async def mark_overdue_checkouts(self, organization_id: UUID) -> int:
+        """Batch-mark overdue checkouts.  Call from a scheduled task, not from
+        read endpoints, to avoid write-on-read overhead.
+        """
+        now = datetime.now(timezone.utc)
+        result = await self.db.execute(
+            update(CheckOutRecord)
+            .where(
+                CheckOutRecord.organization_id == str(organization_id),
+                CheckOutRecord.is_returned == False,  # noqa: E712
+                CheckOutRecord.expected_return_at < now,
+                CheckOutRecord.is_overdue == False,  # noqa: E712
+            )
+            .values(is_overdue=True)
+        )
+        await self.db.commit()
+        return result.rowcount
+
     # ============================================
     # Maintenance Management
     # ============================================
+
+    # Fields allowed via kwargs when creating a maintenance record.
+    # Prevents callers from overwriting id, organization_id, etc.
+    _MAINTENANCE_ALLOWED_FIELDS = {
+        "maintenance_type", "scheduled_date", "completed_date", "next_due_date",
+        "performed_by", "vendor_name", "cost", "condition_before", "condition_after",
+        "description", "parts_replaced", "parts_cost", "labor_hours",
+        "passed", "notes", "issues_found", "attachments", "is_completed",
+    }
 
     async def create_maintenance_record(
         self,
@@ -909,11 +977,15 @@ class InventoryService:
     ) -> Tuple[Optional[MaintenanceRecord], Optional[str]]:
         """Create a maintenance record"""
         try:
+            safe_data = {
+                k: v for k, v in maintenance_data.items()
+                if k in self._MAINTENANCE_ALLOWED_FIELDS
+            }
             maintenance = MaintenanceRecord(
                 organization_id=organization_id,
                 item_id=item_id,
                 created_by=created_by,
-                **maintenance_data
+                **safe_data
             )
             self.db.add(maintenance)
 
@@ -1208,7 +1280,8 @@ class InventoryService:
         )
 
         if search:
-            pattern = f"%{search}%"
+            safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{safe}%"
             query = query.where(
                 or_(
                     User.username.ilike(pattern),
@@ -1252,7 +1325,9 @@ class InventoryService:
         """
         Look up an item by barcode, serial number, or asset tag.
         Returns (item, matched_field, matched_value) or None.
-        Checks barcode first, then serial_number, then asset_tag.
+
+        Uses a single query with OR to avoid up to 3 round-trips,
+        then determines the matched field from the result.
         """
         code = code.strip()
         if not code:
@@ -1260,49 +1335,33 @@ class InventoryService:
 
         org_id = str(organization_id)
 
-        # Try barcode
         result = await self.db.execute(
             select(InventoryItem)
             .where(
                 InventoryItem.organization_id == org_id,
-                InventoryItem.barcode == code,
                 InventoryItem.active == True,  # noqa: E712
+                or_(
+                    InventoryItem.barcode == code,
+                    InventoryItem.serial_number == code,
+                    InventoryItem.asset_tag == code,
+                ),
             )
             .options(selectinload(InventoryItem.category))
+            .limit(3)  # at most one per field in a well-constrained DB
         )
-        item = result.scalar_one_or_none()
-        if item:
-            return item, "barcode", code
+        items = result.scalars().all()
 
-        # Try serial number
-        result = await self.db.execute(
-            select(InventoryItem)
-            .where(
-                InventoryItem.organization_id == org_id,
-                InventoryItem.serial_number == code,
-                InventoryItem.active == True,  # noqa: E712
-            )
-            .options(selectinload(InventoryItem.category))
-        )
-        item = result.scalar_one_or_none()
-        if item:
-            return item, "serial_number", code
+        if not items:
+            return None
 
-        # Try asset tag
-        result = await self.db.execute(
-            select(InventoryItem)
-            .where(
-                InventoryItem.organization_id == org_id,
-                InventoryItem.asset_tag == code,
-                InventoryItem.active == True,  # noqa: E712
-            )
-            .options(selectinload(InventoryItem.category))
-        )
-        item = result.scalar_one_or_none()
-        if item:
-            return item, "asset_tag", code
+        # Return the best match by priority: barcode > serial > asset_tag
+        for field in ("barcode", "serial_number", "asset_tag"):
+            for item in items:
+                if getattr(item, field) == code:
+                    return item, field, code
 
-        return None
+        # Fallback (shouldn't happen if query is correct)
+        return items[0], "barcode", code
 
     async def search_by_code(
         self,
@@ -1538,6 +1597,7 @@ class InventoryService:
                         returned_by=performed_by,
                         return_condition=condition,
                         return_notes=damage_notes or notes,
+                        expected_user_id=user_id,
                     )
                     if err:
                         results.append({

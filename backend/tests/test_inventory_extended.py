@@ -191,6 +191,7 @@ class TestDepartureClearance:
         # Resolve as returned
         resolved, err = await clr_svc.resolve_line_item(
             clearance_item_id=str(line_item.id),
+            clearance_id=str(clearance.id),
             organization_id=org_id,
             resolved_by=user_id,
             disposition="returned",
@@ -233,6 +234,7 @@ class TestDepartureClearance:
 
         resolved, err = await clr_svc.resolve_line_item(
             clearance_item_id=str(line_item.id),
+            clearance_id=str(clearance.id),
             organization_id=org_id,
             resolved_by=user_id,
             disposition="written_off",
@@ -274,6 +276,7 @@ class TestDepartureClearance:
         # Resolve once
         await clr_svc.resolve_line_item(
             clearance_item_id=str(line_item.id),
+            clearance_id=str(clearance.id),
             organization_id=org_id,
             resolved_by=user_id,
             disposition="waived",
@@ -282,6 +285,7 @@ class TestDepartureClearance:
         # Try to resolve again
         _, err = await clr_svc.resolve_line_item(
             clearance_item_id=str(line_item.id),
+            clearance_id=str(clearance.id),
             organization_id=org_id,
             resolved_by=user_id,
             disposition="returned",
@@ -317,6 +321,7 @@ class TestDepartureClearance:
         # Resolve the line item
         await clr_svc.resolve_line_item(
             clearance_item_id=str(line_item.id),
+            clearance_id=str(clearance.id),
             organization_id=org_id,
             resolved_by=user_id,
             disposition="returned",
@@ -488,6 +493,7 @@ class TestDepartureClearance:
 
         _, err = await clr_svc.resolve_line_item(
             clearance_item_id=str(line_item.id),
+            clearance_id=str(clearance.id),
             organization_id=org_id,
             resolved_by=user_id,
             disposition="invalid_value",
@@ -522,6 +528,7 @@ class TestDepartureClearance:
 
         _, err = await clr_svc.resolve_line_item(
             clearance_item_id=str(line_item.id),
+            clearance_id=str(clearance.id),
             organization_id=org_id,
             resolved_by=user_id,
             disposition="pending",
