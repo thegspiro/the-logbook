@@ -27,8 +27,27 @@ from app.models.inventory import (
     MaintenanceType,
     AssignmentType,
     TrackingType,
+    InventoryActionType,
 )
 from app.models.user import User
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Valid status→condition combinations.  If a status is listed here,
+# only the listed conditions are allowed.
+_VALID_STATE_COMBOS: dict[ItemStatus, set[ItemCondition] | None] = {
+    ItemStatus.RETIRED: {ItemCondition.RETIRED},
+}
+
+# Conditions that are forced when entering a status
+_FORCED_CONDITION: dict[ItemStatus, ItemCondition] = {
+    ItemStatus.RETIRED: ItemCondition.RETIRED,
+}
+
+# Statuses that require assigned_to_user_id to be set
+_REQUIRES_ASSIGNED_USER = {ItemStatus.ASSIGNED}
 
 
 class InventoryService:
@@ -68,6 +87,41 @@ class InventoryService:
             from loguru import logger
             logger.warning(f"Failed to queue inventory notification: {e}")
 
+    # ------------------------------------------------------------------
+    # State validation helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_item_state(
+        status_val: ItemStatus, condition_val: ItemCondition, assigned_to_user_id=None
+    ) -> Optional[str]:
+        """Return an error string if the status/condition combination is invalid."""
+        allowed = _VALID_STATE_COMBOS.get(status_val)
+        if allowed is not None and condition_val not in allowed:
+            return (
+                f"Invalid state: status '{status_val.value}' requires condition "
+                f"in {[c.value for c in allowed]}, got '{condition_val.value}'"
+            )
+        if status_val in _REQUIRES_ASSIGNED_USER and not assigned_to_user_id:
+            return f"Status '{status_val.value}' requires an assigned user"
+        return None
+
+    async def _validate_category_requirements(
+        self, item_data: Dict[str, Any], organization_id
+    ) -> Optional[str]:
+        """Validate that item_data satisfies category requires_* flags."""
+        cat_id = item_data.get("category_id")
+        if not cat_id:
+            return None
+        category = await self.get_category_by_id(cat_id, organization_id)
+        if not category:
+            return None
+        if category.requires_serial_number and not item_data.get("serial_number"):
+            return f"Category '{category.name}' requires a serial number"
+        if category.requires_maintenance and not item_data.get("inspection_interval_days"):
+            return f"Category '{category.name}' requires an inspection interval"
+        return None
+
     # ============================================
     # Category Management
     # ============================================
@@ -94,9 +148,14 @@ class InventoryService:
             return None, str(e)
 
     async def get_categories(
-        self, organization_id: UUID, item_type: Optional[ItemType] = None, active_only: bool = True
+        self,
+        organization_id: UUID,
+        item_type: Optional[ItemType] = None,
+        active_only: bool = True,
+        skip: int = 0,
+        limit: int = 200,
     ) -> List[InventoryCategory]:
-        """Get all categories for an organization"""
+        """Get categories for an organization with pagination"""
         query = select(InventoryCategory).where(
             InventoryCategory.organization_id == organization_id
         )
@@ -107,7 +166,7 @@ class InventoryService:
         if active_only:
             query = query.where(InventoryCategory.active == True)  # noqa: E712
 
-        query = query.order_by(InventoryCategory.name)
+        query = query.order_by(InventoryCategory.name).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -132,9 +191,21 @@ class InventoryService:
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
         """Create a new inventory item"""
         try:
+            # Validate category requirements
+            cat_err = await self._validate_category_requirements(item_data, organization_id)
+            if cat_err:
+                return None, cat_err
+
+            # Validate status/condition state
+            status_val = ItemStatus(item_data.get("status", "available"))
+            condition_val = ItemCondition(item_data.get("condition", "good"))
+            state_err = self._validate_item_state(status_val, condition_val)
+            if state_err:
+                return None, state_err
+
             # Calculate depreciation if purchase info provided
             if "purchase_price" in item_data and "expected_lifetime_years" in item_data:
-                item_data["current_value"] = item_data["purchase_price"]  # Will be calculated over time
+                item_data["current_value"] = item_data["purchase_price"]
 
             item = InventoryItem(
                 organization_id=organization_id,
@@ -233,6 +304,21 @@ class InventoryService:
             if not item:
                 return None, "Item not found"
 
+            # Validate category requirements if category is changing
+            if "category_id" in update_data:
+                merged = {**{"serial_number": item.serial_number, "inspection_interval_days": item.inspection_interval_days}, **update_data}
+                cat_err = await self._validate_category_requirements(merged, organization_id)
+                if cat_err:
+                    return None, cat_err
+
+            # Validate resulting state
+            new_status = ItemStatus(update_data["status"]) if "status" in update_data else item.status
+            new_condition = ItemCondition(update_data["condition"]) if "condition" in update_data else item.condition
+            assigned_user = update_data.get("assigned_to_user_id", item.assigned_to_user_id)
+            state_err = self._validate_item_state(new_status, new_condition, assigned_user)
+            if state_err:
+                return None, state_err
+
             for key, value in update_data.items():
                 setattr(item, key, value)
 
@@ -246,11 +332,34 @@ class InventoryService:
     async def retire_item(
         self, item_id: UUID, organization_id: UUID, notes: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
-        """Retire an item (soft delete)"""
+        """Retire an item (soft delete). Blocks if item has active checkouts or assignments."""
         try:
             item = await self.get_item_by_id(item_id, organization_id)
             if not item:
                 return False, "Item not found"
+
+            # Block retirement if item has active assignments
+            if item.assigned_to_user_id:
+                return False, "Cannot retire: item is currently assigned. Unassign it first."
+
+            # Block if item has active (unreturned) checkouts
+            active_co = await self.db.execute(
+                select(func.count(CheckOutRecord.id))
+                .where(CheckOutRecord.item_id == str(item_id))
+                .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            )
+            if active_co.scalar():
+                return False, "Cannot retire: item has active checkouts. Check it in first."
+
+            # Block if pool item has unreturned issuances
+            if item.tracking_type == TrackingType.POOL:
+                active_iss = await self.db.execute(
+                    select(func.count(ItemIssuance.id))
+                    .where(ItemIssuance.item_id == str(item_id))
+                    .where(ItemIssuance.is_returned == False)  # noqa: E712
+                )
+                if active_iss.scalar():
+                    return False, "Cannot retire: item has unreturned pool issuances."
 
             item.status = ItemStatus.RETIRED
             item.condition = ItemCondition.RETIRED
@@ -280,8 +389,14 @@ class InventoryService:
     ) -> Tuple[Optional[ItemAssignment], Optional[str]]:
         """Assign an item to a user"""
         try:
-            # Get the item
-            item = await self.get_item_by_id(item_id, organization_id)
+            # Lock the item row to prevent concurrent modifications
+            lock_result = await self.db.execute(
+                select(InventoryItem)
+                .where(InventoryItem.id == str(item_id))
+                .where(InventoryItem.organization_id == str(organization_id))
+                .with_for_update()
+            )
+            item = lock_result.scalar_one_or_none()
             if not item:
                 return None, "Item not found"
 
@@ -312,7 +427,6 @@ class InventoryService:
             item.status = ItemStatus.ASSIGNED
 
             # Queue notification
-            from app.models.inventory import InventoryActionType
             await self._queue_inventory_notification(
                 organization_id, user_id, InventoryActionType.ASSIGNED,
                 item, performed_by=assigned_by,
@@ -370,7 +484,6 @@ class InventoryService:
                 item.condition = return_condition
 
             # Queue notification
-            from app.models.inventory import InventoryActionType
             await self._queue_inventory_notification(
                 organization_id, previous_user_id, InventoryActionType.UNASSIGNED,
                 item, performed_by=returned_by,
@@ -388,9 +501,14 @@ class InventoryService:
             return False, str(e)
 
     async def get_user_assignments(
-        self, user_id: UUID, organization_id: UUID, active_only: bool = True
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+        active_only: bool = True,
+        skip: int = 0,
+        limit: int = 200,
     ) -> List[ItemAssignment]:
-        """Get all items assigned to a user"""
+        """Get items assigned to a user with pagination"""
         query = (
             select(ItemAssignment)
             .where(ItemAssignment.user_id == str(user_id))
@@ -401,7 +519,7 @@ class InventoryService:
         if active_only:
             query = query.where(ItemAssignment.is_active == True)  # noqa: E712
 
-        query = query.order_by(ItemAssignment.assigned_date.desc())
+        query = query.order_by(ItemAssignment.assigned_date.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -421,7 +539,14 @@ class InventoryService:
     ) -> Tuple[Optional["ItemIssuance"], Optional[str]]:
         """Issue units from a pool-tracked item to a member."""
         try:
-            item = await self.get_item_by_id(item_id, organization_id)
+            # Lock the item row to prevent concurrent issuance race conditions
+            lock_result = await self.db.execute(
+                select(InventoryItem)
+                .where(InventoryItem.id == str(item_id))
+                .where(InventoryItem.organization_id == str(organization_id))
+                .with_for_update()
+            )
+            item = lock_result.scalar_one_or_none()
             if not item:
                 return None, "Item not found"
 
@@ -451,7 +576,6 @@ class InventoryService:
             self.db.add(issuance)
 
             # Queue notification
-            from app.models.inventory import InventoryActionType
             await self._queue_inventory_notification(
                 organization_id, user_id, InventoryActionType.ISSUED,
                 item, quantity=quantity, performed_by=issued_by,
@@ -514,7 +638,6 @@ class InventoryService:
                 issuance.return_notes = return_notes
 
             # Queue notification
-            from app.models.inventory import InventoryActionType
             await self._queue_inventory_notification(
                 organization_id, issuance_user_id, InventoryActionType.RETURNED,
                 item, quantity=qty, performed_by=returned_by,
@@ -586,7 +709,14 @@ class InventoryService:
     ) -> Tuple[Optional[CheckOutRecord], Optional[str]]:
         """Check out an item to a user"""
         try:
-            item = await self.get_item_by_id(item_id, organization_id)
+            # Lock the item row to prevent concurrent checkouts
+            lock_result = await self.db.execute(
+                select(InventoryItem)
+                .where(InventoryItem.id == str(item_id))
+                .where(InventoryItem.organization_id == str(organization_id))
+                .with_for_update()
+            )
+            item = lock_result.scalar_one_or_none()
             if not item:
                 return None, "Item not found"
 
@@ -610,7 +740,6 @@ class InventoryService:
             item.status = ItemStatus.CHECKED_OUT
 
             # Queue notification
-            from app.models.inventory import InventoryActionType
             await self._queue_inventory_notification(
                 organization_id, user_id, InventoryActionType.CHECKED_OUT,
                 item, performed_by=checked_out_by,
@@ -664,7 +793,6 @@ class InventoryService:
             item.condition = return_condition
 
             # Queue notification
-            from app.models.inventory import InventoryActionType
             await self._queue_inventory_notification(
                 organization_id, checkout_user_id, InventoryActionType.CHECKED_IN,
                 item, performed_by=checked_in_by,
@@ -682,9 +810,13 @@ class InventoryService:
             return False, str(e)
 
     async def get_active_checkouts(
-        self, organization_id: UUID, user_id: Optional[UUID] = None
+        self,
+        organization_id: UUID,
+        user_id: Optional[UUID] = None,
+        skip: int = 0,
+        limit: int = 200,
     ) -> List[CheckOutRecord]:
-        """Get all active (not returned) checkouts"""
+        """Get active (not returned) checkouts with pagination"""
         query = (
             select(CheckOutRecord)
             .where(CheckOutRecord.organization_id == str(organization_id))
@@ -698,7 +830,7 @@ class InventoryService:
         if user_id:
             query = query.where(CheckOutRecord.user_id == str(user_id))
 
-        query = query.order_by(CheckOutRecord.checked_out_at.desc())
+        query = query.order_by(CheckOutRecord.checked_out_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -753,13 +885,22 @@ class InventoryService:
             )
             self.db.add(maintenance)
 
-            # If maintenance is completed, update item
-            if maintenance_data.get("is_completed") and maintenance_data.get("condition_after"):
+            # If maintenance is completed, update item condition and schedule
+            if maintenance_data.get("is_completed"):
                 item = await self.get_item_by_id(item_id, organization_id)
                 if item:
-                    item.condition = maintenance_data["condition_after"]
-                    if maintenance_data.get("completed_date"):
-                        item.last_inspection_date = maintenance_data["completed_date"]
+                    if maintenance_data.get("condition_after"):
+                        item.condition = maintenance_data["condition_after"]
+                    completed = maintenance_data.get("completed_date")
+                    if completed:
+                        item.last_inspection_date = completed
+                        # Auto-calculate next_inspection_due from interval
+                        if item.inspection_interval_days:
+                            if isinstance(completed, str):
+                                completed = date.fromisoformat(completed)
+                            item.next_inspection_due = completed + timedelta(days=item.inspection_interval_days)
+                        elif maintenance_data.get("next_due_date"):
+                            item.next_inspection_due = maintenance_data["next_due_date"]
 
             await self.db.commit()
             await self.db.refresh(maintenance)
@@ -785,15 +926,21 @@ class InventoryService:
         return result.scalars().all()
 
     async def get_item_maintenance_history(
-        self, item_id: UUID, organization_id: UUID
+        self,
+        item_id: UUID,
+        organization_id: UUID,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[MaintenanceRecord]:
-        """Get maintenance history for an item"""
+        """Get maintenance history for an item with pagination"""
         result = await self.db.execute(
             select(MaintenanceRecord)
             .where(MaintenanceRecord.item_id == str(item_id))
             .where(MaintenanceRecord.organization_id == str(organization_id))
             .options(selectinload(MaintenanceRecord.technician))
             .order_by(MaintenanceRecord.completed_date.desc())
+            .offset(skip)
+            .limit(limit)
         )
         return result.scalars().all()
 
@@ -960,18 +1107,77 @@ class InventoryService:
         """
         Return every active member in the organization with counts of their
         permanent assignments, active checkouts, active issuances, and overdue items.
+
+        Uses subquery aggregation to produce the result in a single round-trip.
         """
         org_id = str(organization_id)
 
-        # Base query: all active users in the organization
-        user_q = (
-            select(User)
+        # Subqueries for per-user counts
+        assign_sub = (
+            select(
+                ItemAssignment.user_id.label("uid"),
+                func.count(ItemAssignment.id).label("cnt"),
+            )
+            .where(ItemAssignment.organization_id == org_id)
+            .where(ItemAssignment.is_active == True)  # noqa: E712
+            .group_by(ItemAssignment.user_id)
+        ).subquery("a_sub")
+
+        checkout_sub = (
+            select(
+                CheckOutRecord.user_id.label("uid"),
+                func.count(CheckOutRecord.id).label("cnt"),
+            )
+            .where(CheckOutRecord.organization_id == org_id)
+            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            .group_by(CheckOutRecord.user_id)
+        ).subquery("co_sub")
+
+        overdue_sub = (
+            select(
+                CheckOutRecord.user_id.label("uid"),
+                func.count(CheckOutRecord.id).label("cnt"),
+            )
+            .where(CheckOutRecord.organization_id == org_id)
+            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            .where(CheckOutRecord.is_overdue == True)  # noqa: E712
+            .group_by(CheckOutRecord.user_id)
+        ).subquery("od_sub")
+
+        issue_sub = (
+            select(
+                ItemIssuance.user_id.label("uid"),
+                func.count(ItemIssuance.id).label("cnt"),
+            )
+            .where(ItemIssuance.organization_id == org_id)
+            .where(ItemIssuance.is_returned == False)  # noqa: E712
+            .group_by(ItemIssuance.user_id)
+        ).subquery("i_sub")
+
+        # Main query: LEFT JOIN user to each subquery
+        query = (
+            select(
+                User.id,
+                User.username,
+                User.first_name,
+                User.last_name,
+                User.membership_number,
+                func.coalesce(assign_sub.c.cnt, 0).label("permanent_count"),
+                func.coalesce(checkout_sub.c.cnt, 0).label("checkout_count"),
+                func.coalesce(overdue_sub.c.cnt, 0).label("overdue_count"),
+                func.coalesce(issue_sub.c.cnt, 0).label("issued_count"),
+            )
+            .outerjoin(assign_sub, User.id == assign_sub.c.uid)
+            .outerjoin(checkout_sub, User.id == checkout_sub.c.uid)
+            .outerjoin(overdue_sub, User.id == overdue_sub.c.uid)
+            .outerjoin(issue_sub, User.id == issue_sub.c.uid)
             .where(User.organization_id == org_id)
             .where(User.status == "active")
         )
+
         if search:
             pattern = f"%{search}%"
-            user_q = user_q.where(
+            query = query.where(
                 or_(
                     User.username.ilike(pattern),
                     User.first_name.ilike(pattern),
@@ -979,82 +1185,27 @@ class InventoryService:
                     User.membership_number.ilike(pattern),
                 )
             )
-        user_q = user_q.order_by(User.last_name, User.first_name)
-        users_result = await self.db.execute(user_q)
-        users = users_result.scalars().all()
 
-        if not users:
-            return []
-
-        user_ids = [str(u.id) for u in users]
-
-        # Count permanent assignments per user
-        assign_q = await self.db.execute(
-            select(
-                ItemAssignment.user_id,
-                func.count(ItemAssignment.id).label("cnt"),
-            )
-            .where(ItemAssignment.user_id.in_(user_ids))
-            .where(ItemAssignment.is_active == True)  # noqa: E712
-            .group_by(ItemAssignment.user_id)
-        )
-        assign_counts = {row.user_id: row.cnt for row in assign_q.all()}
-
-        # Count active checkouts per user
-        checkout_q = await self.db.execute(
-            select(
-                CheckOutRecord.user_id,
-                func.count(CheckOutRecord.id).label("cnt"),
-            )
-            .where(CheckOutRecord.user_id.in_(user_ids))
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
-            .group_by(CheckOutRecord.user_id)
-        )
-        checkout_counts = {row.user_id: row.cnt for row in checkout_q.all()}
-
-        # Count overdue checkouts per user
-        overdue_q = await self.db.execute(
-            select(
-                CheckOutRecord.user_id,
-                func.count(CheckOutRecord.id).label("cnt"),
-            )
-            .where(CheckOutRecord.user_id.in_(user_ids))
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
-            .where(CheckOutRecord.is_overdue == True)  # noqa: E712
-            .group_by(CheckOutRecord.user_id)
-        )
-        overdue_counts = {row.user_id: row.cnt for row in overdue_q.all()}
-
-        # Count active issuances per user
-        issue_q = await self.db.execute(
-            select(
-                ItemIssuance.user_id,
-                func.count(ItemIssuance.id).label("cnt"),
-            )
-            .where(ItemIssuance.user_id.in_(user_ids))
-            .where(ItemIssuance.is_returned == False)  # noqa: E712
-            .group_by(ItemIssuance.user_id)
-        )
-        issue_counts = {row.user_id: row.cnt for row in issue_q.all()}
+        query = query.order_by(User.last_name, User.first_name)
+        rows = await self.db.execute(query)
 
         result = []
-        for u in users:
-            uid = str(u.id)
-            perm = assign_counts.get(uid, 0)
-            co = checkout_counts.get(uid, 0)
-            iss = issue_counts.get(uid, 0)
-            full_name = " ".join(filter(None, [u.first_name, u.last_name])) or None
+        for row in rows.all():
+            perm = row.permanent_count
+            co = row.checkout_count
+            iss = row.issued_count
+            full_name = " ".join(filter(None, [row.first_name, row.last_name])) or None
             result.append({
-                "user_id": u.id,
-                "username": u.username,
-                "first_name": u.first_name,
-                "last_name": u.last_name,
+                "user_id": row.id,
+                "username": row.username,
+                "first_name": row.first_name,
+                "last_name": row.last_name,
                 "full_name": full_name,
-                "membership_number": u.membership_number,
+                "membership_number": row.membership_number,
                 "permanent_count": perm,
                 "checkout_count": co,
                 "issued_count": iss,
-                "overdue_count": overdue_counts.get(uid, 0),
+                "overdue_count": row.overdue_count,
                 "total_items": perm + co + iss,
             })
         return result

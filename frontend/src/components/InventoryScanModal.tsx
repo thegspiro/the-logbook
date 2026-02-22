@@ -77,6 +77,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ResultItem[] | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -140,6 +141,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         }
       }, 300);
     } catch {
+      setLookupError('Camera access denied. Please allow camera permissions, or type codes manually.');
+      setTimeout(() => setLookupError(null), 5000);
       setCameraActive(false);
     }
   }, []); // handleCodeScanned is stable via ref pattern below
@@ -228,8 +231,14 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
   // ── Batch submit ─────────────────────────────────────────────
 
+  const confirmAndSubmit = () => {
+    if (scannedItems.length === 0) return;
+    setShowConfirm(true);
+  };
+
   const handleSubmit = async () => {
     if (scannedItems.length === 0) return;
+    setShowConfirm(false);
     setSubmitting(true);
 
     try {
@@ -474,7 +483,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                   Cancel
                 </button>
                 <button
-                  onClick={handleSubmit}
+                  onClick={confirmAndSubmit}
                   disabled={submitting}
                   className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm"
                 >
@@ -490,6 +499,36 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               </div>
             )}
           </>
+        )}
+        {/* Confirmation overlay */}
+        {showConfirm && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg z-10">
+            <div className="bg-theme-surface-modal border border-theme-surface-border rounded-lg p-5 max-w-sm mx-4 shadow-xl">
+              <h4 className="text-theme-text-primary font-medium mb-2">
+                Confirm {mode === 'checkout' ? 'Checkout' : 'Return'}
+              </h4>
+              <p className="text-theme-text-secondary text-sm mb-4">
+                {mode === 'checkout'
+                  ? `Check out ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} to ${memberName}?`
+                  : `Return ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} from ${memberName}?`}
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setShowConfirm(false)} className="px-3 py-1.5 border border-theme-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-secondary text-sm">
+                  Cancel
+                </button>
+                <button onClick={handleSubmit} className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Browser compatibility warning */}
+        {!hasBarcodeDetector && (
+          <p className="text-xs text-theme-text-muted text-center mt-2">
+            Camera scanning is not supported in this browser. Use manual entry instead.
+          </p>
         )}
       </div>
     </Modal>

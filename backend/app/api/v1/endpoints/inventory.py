@@ -397,6 +397,20 @@ async def assign_item(
             detail=error,
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="inventory_item_assigned",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(assignment_data.item_id),
+            "user_id": str(assignment_data.user_id),
+            "assignment_type": assignment_data.assignment_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return assignment
 
 
@@ -434,6 +448,16 @@ async def unassign_item(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_item_unassigned",
+        event_category="inventory",
+        severity="info",
+        event_data={"item_id": str(item_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return {"message": "Item unassigned successfully"}
 
@@ -548,6 +572,16 @@ async def return_to_pool(
             detail=error,
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="inventory_pool_returned",
+        event_category="inventory",
+        severity="info",
+        event_data={"issuance_id": str(issuance_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return {"message": "Items returned to pool successfully"}
 
 
@@ -627,6 +661,20 @@ async def checkout_item(
             detail=error,
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="inventory_item_checked_out",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(checkout_data.item_id),
+            "user_id": str(checkout_data.user_id),
+            "checkout_id": str(checkout.id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return checkout
 
 
@@ -662,6 +710,16 @@ async def checkin_item(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_item_checked_in",
+        event_category="inventory",
+        severity="info",
+        event_data={"checkout_id": str(checkout_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return {"message": "Item checked in successfully"}
 
@@ -733,6 +791,20 @@ async def create_maintenance_record(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_maintenance_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(maintenance_data.item_id),
+            "maintenance_type": maintenance_data.maintenance_type,
+            "is_completed": maintenance_data.is_completed,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return maintenance
 

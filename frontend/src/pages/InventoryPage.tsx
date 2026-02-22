@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Package,
   Plus,
@@ -11,6 +11,9 @@ import {
   Layers,
   Barcode,
   Printer,
+  Pencil,
+  Archive,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   inventoryService,
@@ -137,6 +140,17 @@ const InventoryPage: React.FC = () => {
 
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Edit/Detail/Retire state
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [editForm, setEditForm] = useState<Partial<InventoryItemCreate>>({});
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showRetireConfirm, setShowRetireConfirm] = useState<InventoryItem | null>(null);
+  const [retireNotes, setRetireNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Confirmation dialog for batch submit in scan modal
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -178,8 +192,8 @@ const InventoryPage: React.FC = () => {
       setItems(data.items);
       setTotalItems(data.total);
       setSelectedItemIds(new Set());
-    } catch (_err: unknown) {
-      // Error silently handled - items list will remain unchanged
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to refresh items'));
     }
   };
 
@@ -220,6 +234,76 @@ const InventoryPage: React.FC = () => {
       setFormError(getErrorMessage(err, 'Unable to create the category. Please check your input and try again.'));
     }
   };
+
+  const openEditModal = (item: InventoryItem) => {
+    setEditingItem(item);
+    setEditForm({
+      name: item.name,
+      description: item.description || '',
+      category_id: item.category_id || '',
+      tracking_type: item.tracking_type,
+      manufacturer: item.manufacturer || '',
+      model_number: item.model_number || '',
+      serial_number: item.serial_number || '',
+      asset_tag: item.asset_tag || '',
+      barcode: item.barcode || '',
+      storage_location: item.storage_location || '',
+      station: item.station || '',
+      condition: item.condition,
+      status: item.status,
+      quantity: item.quantity,
+      notes: item.notes || '',
+    });
+    setFormError(null);
+    setShowEditModal(true);
+  };
+
+  const handleUpdateItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      const payload: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(editForm)) {
+        if (value !== '' && value !== undefined && value !== null) {
+          payload[key] = value;
+        }
+      }
+      await inventoryService.updateItem(editingItem.id, payload as Partial<InventoryItemCreate>);
+      setShowEditModal(false);
+      setEditingItem(null);
+      loadData();
+      toast.success('Item updated successfully');
+    } catch (err: unknown) {
+      setFormError(getErrorMessage(err, 'Unable to update the item.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRetireItem = async () => {
+    if (!showRetireConfirm) return;
+    setSubmitting(true);
+    try {
+      await inventoryService.retireItem(showRetireConfirm.id, retireNotes || undefined);
+      setShowRetireConfirm(null);
+      setRetireNotes('');
+      loadData();
+      toast.success('Item retired successfully');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Unable to retire item.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Client-side validation helper
+  const getSelectedCategory = useCallback(() => {
+    const catId = itemForm.category_id;
+    if (!catId) return null;
+    return categories.find(c => c.id === catId) || null;
+  }, [itemForm.category_id, categories]);
 
   const getCategoryName = (categoryId?: string) => {
     if (!categoryId) return '-';
@@ -482,13 +566,21 @@ const InventoryPage: React.FC = () => {
                         <th scope="col" className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Condition</th>
                         <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Status</th>
                         <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Qty</th>
+                        {canManage && <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {items.map((item) => (
-                        <tr key={item.id} className="hover:bg-theme-surface-secondary transition-colors">
+                        <tr
+                          key={item.id}
+                          className="hover:bg-theme-surface-secondary transition-colors cursor-pointer"
+                          onClick={() => canManage && openEditModal(item)}
+                          role={canManage ? 'button' : undefined}
+                          tabIndex={canManage ? 0 : undefined}
+                          onKeyDown={(e) => { if (canManage && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openEditModal(item); } }}
+                        >
                           {canManage && (
-                            <td className="w-10 px-3 py-4">
+                            <td className="w-10 px-3 py-4" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
                                 checked={selectedItemIds.has(item.id)}
@@ -522,6 +614,20 @@ const InventoryPage: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-3 sm:px-6 py-4 text-theme-text-primary text-sm">{item.quantity}</td>
+                          {canManage && (
+                            <td className="px-3 py-4" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => openEditModal(item)} className="p-1.5 text-theme-text-muted hover:text-emerald-500 rounded" title="Edit item" aria-label={`Edit ${item.name}`}>
+                                  <Pencil className="w-4 h-4" aria-hidden="true" />
+                                </button>
+                                {item.status !== 'retired' && (
+                                  <button onClick={() => setShowRetireConfirm(item)} className="p-1.5 text-theme-text-muted hover:text-red-500 rounded" title="Retire item" aria-label={`Retire ${item.name}`}>
+                                    <Archive className="w-4 h-4" aria-hidden="true" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -677,6 +783,24 @@ const InventoryPage: React.FC = () => {
                         />
                       </div>
 
+                      {/* Category requirement hints */}
+                      {(() => {
+                        const cat = getSelectedCategory();
+                        if (!cat) return null;
+                        const hints: string[] = [];
+                        if (cat.requires_serial_number) hints.push('Serial number required');
+                        if (cat.requires_maintenance) hints.push('Inspection interval required');
+                        if (hints.length === 0) return null;
+                        return (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <AlertCircle className="w-4 h-4 text-blue-700 dark:text-blue-400 mt-0.5 shrink-0" aria-hidden="true" />
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              This category requires: {hints.join(', ')}
+                            </p>
+                          </div>
+                        );
+                      })()}
+
                       {/* ── Identification & Tracking ── */}
                       <fieldset>
                         <legend className="flex items-center gap-1.5 text-xs font-semibold uppercase text-theme-text-muted mb-2">
@@ -684,7 +808,9 @@ const InventoryPage: React.FC = () => {
                         </legend>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div>
-                            <label htmlFor="item-serial-number" className="block text-sm font-medium text-theme-text-secondary mb-1">Serial Number</label>
+                            <label htmlFor="item-serial-number" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                              Serial Number{getSelectedCategory()?.requires_serial_number ? ' *' : ''}
+                            </label>
                             <input
                               id="item-serial-number"
                               type="text" value={itemForm.serial_number}
@@ -1049,6 +1175,146 @@ const InventoryPage: React.FC = () => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Edit Item Modal */}
+        {showEditModal && editingItem && (
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-item-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowEditModal(false); }}
+          >
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowEditModal(false)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border">
+                <form onSubmit={handleUpdateItem}>
+                  <div className="px-4 sm:px-6 pt-5 pb-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 id="edit-item-title" className="text-lg font-medium text-theme-text-primary flex items-center gap-2">
+                        <Pencil className="w-5 h-5" aria-hidden="true" />
+                        Edit Item
+                      </h3>
+                      <button type="button" onClick={() => setShowEditModal(false)} className="text-theme-text-muted hover:text-theme-text-primary p-1 min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Close dialog">
+                        <X className="w-5 h-5" aria-hidden="true" />
+                      </button>
+                    </div>
+
+                    {formError && (
+                      <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                        <p className="text-sm text-red-700 dark:text-red-300">{formError}</p>
+                      </div>
+                    )}
+
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                      <div>
+                        <label htmlFor="edit-item-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
+                        <input id="edit-item-name" type="text" required value={editForm.name || ''} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="edit-item-category" className="block text-sm font-medium text-theme-text-secondary mb-1">Category</label>
+                          <select id="edit-item-category" value={editForm.category_id || ''} onChange={(e) => setEditForm({ ...editForm, category_id: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="">No Category</option>
+                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="edit-item-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Condition</label>
+                          <select id="edit-item-condition" value={editForm.condition || 'good'} onChange={(e) => setEditForm({ ...editForm, condition: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            {CONDITION_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label htmlFor="edit-item-serial" className="block text-sm font-medium text-theme-text-secondary mb-1">Serial Number</label>
+                          <input id="edit-item-serial" type="text" value={editForm.serial_number || ''} onChange={(e) => setEditForm({ ...editForm, serial_number: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="edit-item-asset-tag" className="block text-sm font-medium text-theme-text-secondary mb-1">Asset Tag</label>
+                          <input id="edit-item-asset-tag" type="text" value={editForm.asset_tag || ''} onChange={(e) => setEditForm({ ...editForm, asset_tag: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="edit-item-barcode" className="block text-sm font-medium text-theme-text-secondary mb-1">Barcode</label>
+                          <input id="edit-item-barcode" type="text" value={editForm.barcode || ''} onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="edit-item-manufacturer" className="block text-sm font-medium text-theme-text-secondary mb-1">Manufacturer</label>
+                          <input id="edit-item-manufacturer" type="text" value={editForm.manufacturer || ''} onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="edit-item-storage" className="block text-sm font-medium text-theme-text-secondary mb-1">Storage Location</label>
+                          <input id="edit-item-storage" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="edit-item-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
+                        <textarea id="edit-item-notes" rows={2} value={editForm.notes || ''} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between rounded-b-lg">
+                    <div>
+                      {editingItem.status !== 'retired' && (
+                        <button type="button" onClick={() => { setShowEditModal(false); setShowRetireConfirm(editingItem); }} className="px-4 py-2 text-red-600 hover:bg-red-500/10 rounded-lg transition-colors text-sm flex items-center gap-2">
+                          <Archive className="w-4 h-4" aria-hidden="true" /> Retire Item
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex gap-2 sm:gap-3">
+                      <button type="button" onClick={() => setShowEditModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                      <button type="submit" disabled={submitting} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                        {submitting ? 'Saving...' : 'Save Changes'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Retire Confirmation Dialog */}
+        {showRetireConfirm && (
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="retire-confirm-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') { setShowRetireConfirm(null); setRetireNotes(''); } }}
+          >
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => { setShowRetireConfirm(null); setRetireNotes(''); }} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+                <div className="px-6 pt-5 pb-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-red-500/10 p-2 rounded-full">
+                      <AlertCircle className="w-5 h-5 text-red-600" aria-hidden="true" />
+                    </div>
+                    <h3 id="retire-confirm-title" className="text-lg font-medium text-theme-text-primary">Retire Item</h3>
+                  </div>
+                  <p className="text-theme-text-secondary text-sm mb-4">
+                    Are you sure you want to retire <strong>{showRetireConfirm.name}</strong>?
+                    This will mark the item as inactive and hide it from inventory lists.
+                    Items with active checkouts or assignments cannot be retired.
+                  </p>
+                  <div>
+                    <label htmlFor="retire-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Retirement Notes (optional)</label>
+                    <textarea id="retire-notes" rows={2} value={retireNotes} onChange={(e) => setRetireNotes(e.target.value)} placeholder="Reason for retirement..." className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  </div>
+                </div>
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => { setShowRetireConfirm(null); setRetireNotes(''); }} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={handleRetireItem} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Retiring...' : 'Retire Item'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
