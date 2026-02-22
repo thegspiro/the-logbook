@@ -797,3 +797,80 @@ This is an automated reminder from {self._smtp_config['from_name']}"""
         )
 
         return success_count > 0
+
+    async def send_inactivity_warning(
+        self,
+        to_emails: List[str],
+        prospect_name: str,
+        current_stage: str,
+        days_inactive: int,
+        timeout_days: int,
+        organization_name: str,
+    ) -> bool:
+        """
+        Send an inactivity warning email to coordinator(s) about a stalled prospect.
+
+        Args:
+            to_emails: Coordinator email address(es)
+            prospect_name: Full name of the prospect
+            current_stage: Name of the stage they are stalled on
+            days_inactive: Number of days since last activity
+            timeout_days: Configured inactivity timeout
+            organization_name: Organization display name
+        """
+        subject = f"Inactivity Warning: {prospect_name} — {days_inactive} days"
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 0; background: #f9fafb; }}
+  .container {{ max-width: 560px; margin: 20px auto; background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; overflow: hidden; }}
+  .header {{ background: #dc2626; color: #fff; padding: 20px 24px; }}
+  .content {{ padding: 24px; color: #374151; line-height: 1.6; }}
+  .details {{ background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0; }}
+  .footer {{ padding: 16px 24px; font-size: 12px; color: #9ca3af; border-top: 1px solid #f3f4f6; }}
+</style></head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2 style="margin:0;">Inactivity Warning</h2>
+    </div>
+    <div class="content">
+      <p>A prospective member's application has been inactive and may require your attention.</p>
+      <div class="details">
+        <p><strong>Applicant:</strong> {prospect_name}</p>
+        <p><strong>Current Stage:</strong> {current_stage}</p>
+        <p><strong>Days Inactive:</strong> {days_inactive} days</p>
+        <p><strong>Timeout Threshold:</strong> {timeout_days} days</p>
+      </div>
+      <p>Please review this application and take appropriate action.</p>
+    </div>
+    <div class="footer">
+      <p>Automated notification from {organization_name}.</p>
+    </div>
+  </div>
+</body>
+</html>"""
+
+        text_body = f"""Inactivity Warning — {organization_name}
+
+A prospective member's application has been inactive.
+
+Applicant: {prospect_name}
+Current Stage: {current_stage}
+Days Inactive: {days_inactive} days
+Timeout Threshold: {timeout_days} days
+
+Please review this application and take appropriate action.
+
+---
+Automated notification from {organization_name}."""
+
+        success_count, _ = await self.send_email(
+            to_emails=to_emails,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
+        return success_count > 0

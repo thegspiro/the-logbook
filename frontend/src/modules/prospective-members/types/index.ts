@@ -310,6 +310,7 @@ export interface Applicant {
   target_role_id?: string;
   target_role_name?: string;
   form_submission_id?: string;
+  status_token?: string;
   status: ApplicantStatus;
   notes?: string;
   stage_history: StageHistoryEntry[];
@@ -405,6 +406,20 @@ export interface ConvertApplicantRequest {
   target_role_id?: string;
   send_welcome_email: boolean;
   notes?: string;
+  // Two-step wizard fields
+  middle_name?: string;
+  hire_date?: string;
+  rank?: string;
+  station?: string;
+  emergency_contacts?: EmergencyContact[];
+}
+
+export interface EmergencyContact {
+  name: string;
+  relationship: string;
+  phone: string;
+  email?: string;
+  is_primary?: boolean;
 }
 
 export interface ConvertApplicantResponse {
@@ -412,6 +427,22 @@ export interface ConvertApplicantResponse {
   user_id: string;
   membership_type: TargetMembershipType;
   message: string;
+}
+
+// Public application status
+export interface ApplicationStatus {
+  first_name: string;
+  last_name: string;
+  status: string;
+  current_stage_name?: string;
+  pipeline_name?: string;
+  total_stages: number;
+  stage_timeline: {
+    stage_name: string;
+    status: string;
+    completed_at?: string;
+  }[];
+  applied_at?: string;
 }
 
 // =============================================================================

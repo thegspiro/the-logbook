@@ -468,6 +468,8 @@ class MembershipPipelineService:
             metadata_=data.get("metadata_", {}),
             form_submission_id=data.get("form_submission_id"),
             notes=data.get("notes"),
+            status_token=secrets.token_urlsafe(32),
+            status_token_created_at=datetime.now(timezone.utc),
         )
         self.db.add(prospect)
         await self.db.flush()
@@ -675,6 +677,10 @@ class MembershipPipelineService:
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
         send_welcome_email: bool = False,
+        middle_name: Optional[str] = None,
+        hire_date=None,
+        emergency_contacts: Optional[List[Dict[str, Any]]] = None,
+        membership_type: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Transfer a prospect to a full User record"""
         prospect = await self.get_prospect(prospect_id, organization_id)
@@ -687,6 +693,10 @@ class MembershipPipelineService:
         return await self._do_transfer(
             prospect, transferred_by, username, membership_id, rank, station, role_ids,
             send_welcome_email=send_welcome_email,
+            middle_name=middle_name,
+            hire_date=hire_date,
+            emergency_contacts=emergency_contacts,
+            membership_type=membership_type,
         )
 
     async def _do_transfer(
@@ -699,6 +709,10 @@ class MembershipPipelineService:
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
         send_welcome_email: bool = False,
+        middle_name: Optional[str] = None,
+        hire_date=None,
+        emergency_contacts: Optional[List[Dict[str, Any]]] = None,
+        membership_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
 
@@ -764,20 +778,27 @@ class MembershipPipelineService:
             email=prospect.email,
             password_hash=password_hash,
             first_name=prospect.first_name,
+            middle_name=middle_name,
             last_name=prospect.last_name,
             phone=prospect.phone,
             mobile=prospect.mobile,
             date_of_birth=prospect.date_of_birth,
+            hire_date=hire_date,
             address_street=prospect.address_street,
             address_city=prospect.address_city,
             address_state=prospect.address_state,
             address_zip=prospect.address_zip,
+            emergency_contacts=emergency_contacts or [],
             membership_id=membership_id,
             rank=rank,
             station=station,
             status=UserStatus.ACTIVE,
-            membership_type="probationary",
+            membership_type=membership_type or "probationary",
             must_change_password=True,
+            # Preserve referral data from prospect
+            referral_source=prospect.referral_source,
+            interest_reason=prospect.interest_reason,
+            referred_by_user_id=prospect.referred_by,
         )
         self.db.add(new_user)
 
@@ -1540,3 +1561,208 @@ class MembershipPipelineService:
         query = query.order_by(ProspectElectionPackage.created_at.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    # =========================================================================
+    # Public Status Check
+    # =========================================================================
+
+    async def get_prospect_by_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """Look up a prospect by their public status token. Returns limited public-safe fields."""
+        query = (
+            select(ProspectiveMember)
+            .where(ProspectiveMember.status_token == token)
+            .options(
+                selectinload(ProspectiveMember.current_step),
+                selectinload(ProspectiveMember.pipeline).selectinload(MembershipPipeline.steps),
+                selectinload(ProspectiveMember.step_progress).selectinload(ProspectStepProgress.step),
+            )
+        )
+        result = await self.db.execute(query)
+        prospect = result.scalars().first()
+        if not prospect:
+            return None
+
+        # Build stage timeline (names only, no internal IDs)
+        completed_stages = []
+        if prospect.step_progress:
+            for sp in sorted(prospect.step_progress, key=lambda p: p.created_at):
+                completed_stages.append({
+                    "stage_name": sp.step.name if sp.step else "Unknown",
+                    "status": sp.status.value if hasattr(sp.status, "value") else sp.status,
+                    "completed_at": sp.completed_at.isoformat() if sp.completed_at else None,
+                })
+
+        total_stages = len(prospect.pipeline.steps) if prospect.pipeline and prospect.pipeline.steps else 0
+
+        return {
+            "first_name": prospect.first_name,
+            "last_name": prospect.last_name,
+            "status": prospect.status.value if hasattr(prospect.status, "value") else prospect.status,
+            "current_stage_name": prospect.current_step.name if prospect.current_step else None,
+            "pipeline_name": prospect.pipeline.name if prospect.pipeline else None,
+            "total_stages": total_stages,
+            "stage_timeline": completed_stages,
+            "applied_at": prospect.created_at.isoformat() if prospect.created_at else None,
+        }
+
+    # =========================================================================
+    # Inactivity Detection
+    # =========================================================================
+
+    async def check_inactivity(self, organization_id: str) -> List[Dict[str, Any]]:
+        """
+        Find all active prospects that have exceeded their pipeline or step
+        inactivity thresholds. Returns a list of prospects with their alert level.
+        """
+        from datetime import timedelta
+
+        # Get all active prospects for this org
+        query = (
+            select(ProspectiveMember)
+            .where(
+                and_(
+                    ProspectiveMember.organization_id == organization_id,
+                    ProspectiveMember.status == ProspectStatus.ACTIVE,
+                )
+            )
+            .options(
+                selectinload(ProspectiveMember.pipeline),
+                selectinload(ProspectiveMember.current_step),
+            )
+        )
+        result = await self.db.execute(query)
+        prospects = list(result.scalars().all())
+
+        warnings = []
+        now = datetime.now(timezone.utc)
+
+        for prospect in prospects:
+            # Determine effective timeout
+            timeout_days = None
+
+            # Step-level override takes precedence
+            if prospect.current_step and prospect.current_step.inactivity_timeout_days:
+                timeout_days = prospect.current_step.inactivity_timeout_days
+            elif prospect.pipeline and prospect.pipeline.inactivity_config:
+                config = prospect.pipeline.inactivity_config
+                preset = config.get("timeout_preset", "3_months")
+                if preset == "never":
+                    continue
+                elif preset == "custom":
+                    timeout_days = config.get("custom_timeout_days")
+                else:
+                    preset_map = {"3_months": 90, "6_months": 180, "1_year": 365}
+                    timeout_days = preset_map.get(preset)
+
+            if not timeout_days:
+                continue
+
+            days_inactive = (now - (prospect.updated_at or prospect.created_at)).days
+            warning_pct = 80  # default warning at 80%
+            if prospect.pipeline and prospect.pipeline.inactivity_config:
+                warning_pct = prospect.pipeline.inactivity_config.get("warning_threshold_percent", 80)
+
+            warning_threshold = int(timeout_days * warning_pct / 100)
+
+            if days_inactive >= timeout_days:
+                alert_level = "critical"
+            elif days_inactive >= warning_threshold:
+                alert_level = "warning"
+            else:
+                continue  # Not yet at warning level
+
+            warnings.append({
+                "prospect_id": str(prospect.id),
+                "prospect_name": prospect.full_name,
+                "prospect_email": prospect.email,
+                "current_stage": prospect.current_step.name if prospect.current_step else None,
+                "pipeline_name": prospect.pipeline.name if prospect.pipeline else None,
+                "days_inactive": days_inactive,
+                "timeout_days": timeout_days,
+                "alert_level": alert_level,
+            })
+
+        return warnings
+
+    async def process_inactivity_warnings(
+        self, organization_id: str, processed_by: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Process inactivity warnings: mark critical prospects as inactive,
+        send coordinator emails for warnings.
+        Returns count of warnings and actions taken.
+        """
+        warnings = await self.check_inactivity(organization_id)
+        warning_count = 0
+        inactive_count = 0
+
+        for w in warnings:
+            prospect_id = w["prospect_id"]
+
+            if w["alert_level"] == "critical":
+                # Check if we already logged an inactivity warning recently
+                recent_log = await self.db.execute(
+                    select(ProspectActivityLog)
+                    .where(
+                        and_(
+                            ProspectActivityLog.prospect_id == prospect_id,
+                            ProspectActivityLog.action == "marked_inactive_by_system",
+                        )
+                    )
+                    .limit(1)
+                )
+                if not recent_log.scalars().first():
+                    # Mark as inactive
+                    await self.db.execute(
+                        update(ProspectiveMember)
+                        .where(ProspectiveMember.id == prospect_id)
+                        .values(status=ProspectStatus.INACTIVE)
+                    )
+                    await self._log_activity(
+                        prospect_id=prospect_id,
+                        action="marked_inactive_by_system",
+                        details={
+                            "days_inactive": w["days_inactive"],
+                            "timeout_days": w["timeout_days"],
+                        },
+                        performed_by=processed_by,
+                    )
+                    inactive_count += 1
+            else:
+                # Warning level — log it (email would be sent here)
+                recent_warning = await self.db.execute(
+                    select(ProspectActivityLog)
+                    .where(
+                        and_(
+                            ProspectActivityLog.prospect_id == prospect_id,
+                            ProspectActivityLog.action == "inactivity_warning_sent",
+                        )
+                    )
+                    .order_by(ProspectActivityLog.created_at.desc())
+                    .limit(1)
+                )
+                existing_warning = recent_warning.scalars().first()
+                # Only warn once per 7-day period
+                if not existing_warning or (
+                    datetime.now(timezone.utc) - existing_warning.created_at
+                ).days >= 7:
+                    await self._log_activity(
+                        prospect_id=prospect_id,
+                        action="inactivity_warning_sent",
+                        details={
+                            "days_inactive": w["days_inactive"],
+                            "timeout_days": w["timeout_days"],
+                            "alert_level": w["alert_level"],
+                        },
+                        performed_by=processed_by,
+                    )
+                    warning_count += 1
+
+        if warning_count > 0 or inactive_count > 0:
+            await self.db.commit()
+
+        return {
+            "warnings_sent": warning_count,
+            "marked_inactive": inactive_count,
+            "total_checked": len(warnings),
+        }

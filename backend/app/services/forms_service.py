@@ -749,8 +749,12 @@ class FormsService:
     ) -> Dict[str, Any]:
         """
         Process a membership interest form submission.
-        Stores the interest record with mapped fields for admin review.
+        Maps form fields to prospect fields and auto-creates a
+        ProspectiveMember record in the org's default pipeline.
         """
+        from app.services.membership_pipeline_service import MembershipPipelineService
+        from loguru import logger
+
         mappings = integration.field_mappings or {}
         mapped_data = {}
 
@@ -758,12 +762,48 @@ class FormsService:
             if field_id in submission.data:
                 mapped_data[target_field] = submission.data[field_id]
 
-        # The submission itself serves as the membership interest record.
-        # Admins can review it in the submissions view with the mapped data.
+        # Auto-create a prospect if we have at least first_name, last_name, email
+        prospect_id = None
+        if mapped_data.get("first_name") and mapped_data.get("last_name") and mapped_data.get("email"):
+            try:
+                pipeline_service = MembershipPipelineService(self.db)
+                prospect_data = {
+                    "first_name": mapped_data.get("first_name", ""),
+                    "last_name": mapped_data.get("last_name", ""),
+                    "email": mapped_data.get("email", ""),
+                    "phone": mapped_data.get("phone"),
+                    "mobile": mapped_data.get("mobile"),
+                    "date_of_birth": mapped_data.get("date_of_birth"),
+                    "address_street": mapped_data.get("address_street"),
+                    "address_city": mapped_data.get("address_city"),
+                    "address_state": mapped_data.get("address_state"),
+                    "address_zip": mapped_data.get("address_zip"),
+                    "interest_reason": mapped_data.get("interest_reason"),
+                    "referral_source": mapped_data.get("referral_source"),
+                    "form_submission_id": str(submission.id),
+                    "metadata_": mapped_data,
+                }
+                prospect = await pipeline_service.create_prospect(
+                    organization_id=str(submission.organization_id),
+                    data=prospect_data,
+                    created_by=None,  # System-created
+                )
+                prospect_id = str(prospect.id)
+                logger.info(
+                    f"Auto-created prospect {prospect_id} from form submission {submission.id}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to auto-create prospect from form submission {submission.id}: {e}"
+                )
+
         return {
             "success": True,
             "mapped_data": mapped_data,
-            "message": "Membership interest recorded for admin review",
+            "prospect_id": prospect_id,
+            "message": "Prospect auto-created from membership interest form"
+            if prospect_id
+            else "Membership interest recorded (prospect creation skipped — missing required fields)",
         }
 
     async def _process_equipment_assignment(

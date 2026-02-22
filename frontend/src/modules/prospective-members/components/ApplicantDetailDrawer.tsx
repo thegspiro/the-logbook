@@ -32,6 +32,8 @@ import {
   Eye,
   Archive,
   Activity,
+  Pencil,
+  Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -103,6 +105,21 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
 
+  // Editable contact info state
+  const [isEditingContact, setIsEditingContact] = useState(false);
+  const [isSavingContact, setIsSavingContact] = useState(false);
+  const [editFields, setEditFields] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    date_of_birth: '',
+    address_street: '',
+    address_city: '',
+    address_state: '',
+    address_zip: '',
+  });
+
   const isOnElectionStage = applicant?.current_stage_type === StageTypeEnum.ELECTION_VOTE && applicant?.status === ApplicantStatus.ACTIVE;
 
   // Reset action notes and confirm state when applicant changes
@@ -111,7 +128,55 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     setShowNotesInput(false);
     setShowRejectConfirm(false);
     setShowWithdrawConfirm(false);
+    setIsEditingContact(false);
   }, [applicant?.id]);
+
+  const startEditingContact = () => {
+    if (!applicant) return;
+    setEditFields({
+      first_name: applicant.first_name,
+      last_name: applicant.last_name,
+      email: applicant.email,
+      phone: applicant.phone ?? '',
+      date_of_birth: applicant.date_of_birth ?? '',
+      address_street: applicant.address?.street ?? '',
+      address_city: applicant.address?.city ?? '',
+      address_state: applicant.address?.state ?? '',
+      address_zip: applicant.address?.zip_code ?? '',
+    });
+    setIsEditingContact(true);
+  };
+
+  const saveContactEdits = async () => {
+    if (!applicant) return;
+    setIsSavingContact(true);
+    try {
+      await applicantService.updateApplicant(applicant.id, {
+        first_name: editFields.first_name,
+        last_name: editFields.last_name,
+        email: editFields.email,
+        phone: editFields.phone || undefined,
+        date_of_birth: editFields.date_of_birth || undefined,
+        address: {
+          street: editFields.address_street || undefined,
+          city: editFields.address_city || undefined,
+          state: editFields.address_state || undefined,
+          zip_code: editFields.address_zip || undefined,
+        },
+      });
+      toast.success('Contact info updated');
+      setIsEditingContact(false);
+      // Refresh the applicant data
+      const { refreshApplicant } = useProspectiveMembersStore.getState();
+      if (refreshApplicant) {
+        refreshApplicant(applicant.id);
+      }
+    } catch {
+      toast.error('Failed to update contact info');
+    } finally {
+      setIsSavingContact(false);
+    }
+  };
 
   // Load election package when applicant is on an election stage
   useEffect(() => {
@@ -374,41 +439,141 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             <div className="flex-1 overflow-y-auto">
               {/* Contact Info */}
               <div className="p-4 border-b border-theme-surface-border">
-                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
-                  Contact Information
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail className="w-4 h-4 text-theme-text-muted" />
-                    <span className="text-theme-text-secondary">{maskValue(applicant.email)}</span>
-                  </div>
-                  {applicant.phone && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Phone className="w-4 h-4 text-theme-text-muted" />
-                      <span className="text-theme-text-secondary">{maskValue(applicant.phone)}</span>
-                    </div>
-                  )}
-                  {applicant.date_of_birth && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="w-4 h-4 text-theme-text-muted" />
-                      <span className="text-theme-text-secondary">
-                        DOB: {showPii ? formatDate(applicant.date_of_birth, tz) : '••/••/••••'}
-                      </span>
-                    </div>
-                  )}
-                  {applicant.address?.city && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPin className="w-4 h-4 text-theme-text-muted" />
-                      <span className="text-theme-text-secondary">
-                        {showPii
-                          ? [applicant.address.street, applicant.address.city, applicant.address.state, applicant.address.zip_code]
-                              .filter(Boolean)
-                              .join(', ')
-                          : '••••••••'}
-                      </span>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    Contact Information
+                  </h3>
+                  {!isEditingContact ? (
+                    <button
+                      onClick={startEditingContact}
+                      className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Edit
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsEditingContact(false)}
+                        className="text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={saveContactEdits}
+                        disabled={isSavingContact}
+                        className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-500 disabled:opacity-50 transition-colors"
+                      >
+                        {isSavingContact ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                        Save
+                      </button>
                     </div>
                   )}
                 </div>
+
+                {isEditingContact ? (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={editFields.first_name}
+                        onChange={(e) => setEditFields((f) => ({ ...f, first_name: e.target.value }))}
+                        placeholder="First name"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                      />
+                      <input
+                        type="text"
+                        value={editFields.last_name}
+                        onChange={(e) => setEditFields((f) => ({ ...f, last_name: e.target.value }))}
+                        placeholder="Last name"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                      />
+                    </div>
+                    <input
+                      type="email"
+                      value={editFields.email}
+                      onChange={(e) => setEditFields((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="Email"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                    />
+                    <input
+                      type="text"
+                      value={editFields.phone}
+                      onChange={(e) => setEditFields((f) => ({ ...f, phone: e.target.value }))}
+                      placeholder="Phone"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                    />
+                    <input
+                      type="date"
+                      value={editFields.date_of_birth}
+                      onChange={(e) => setEditFields((f) => ({ ...f, date_of_birth: e.target.value }))}
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                    />
+                    <input
+                      type="text"
+                      value={editFields.address_street}
+                      onChange={(e) => setEditFields((f) => ({ ...f, address_street: e.target.value }))}
+                      placeholder="Street address"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        value={editFields.address_city}
+                        onChange={(e) => setEditFields((f) => ({ ...f, address_city: e.target.value }))}
+                        placeholder="City"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                      />
+                      <input
+                        type="text"
+                        value={editFields.address_state}
+                        onChange={(e) => setEditFields((f) => ({ ...f, address_state: e.target.value }))}
+                        placeholder="State"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                      />
+                      <input
+                        type="text"
+                        value={editFields.address_zip}
+                        onChange={(e) => setEditFields((f) => ({ ...f, address_zip: e.target.value }))}
+                        placeholder="ZIP"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="w-4 h-4 text-theme-text-muted" />
+                      <span className="text-theme-text-secondary">{maskValue(applicant.email)}</span>
+                    </div>
+                    {applicant.phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="w-4 h-4 text-theme-text-muted" />
+                        <span className="text-theme-text-secondary">{maskValue(applicant.phone)}</span>
+                      </div>
+                    )}
+                    {applicant.date_of_birth && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="w-4 h-4 text-theme-text-muted" />
+                        <span className="text-theme-text-secondary">
+                          DOB: {showPii ? formatDate(applicant.date_of_birth, tz) : '••/••/••••'}
+                        </span>
+                      </div>
+                    )}
+                    {applicant.address?.city && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <MapPin className="w-4 h-4 text-theme-text-muted" />
+                        <span className="text-theme-text-secondary">
+                          {showPii
+                            ? [applicant.address.street, applicant.address.city, applicant.address.state, applicant.address.zip_code]
+                                .filter(Boolean)
+                                .join(', ')
+                            : '••••••••'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Current Stage */}

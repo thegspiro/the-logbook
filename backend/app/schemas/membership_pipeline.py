@@ -223,6 +223,7 @@ class ProspectResponse(ProspectBase):
     status: str
     metadata_: Optional[Dict[str, Any]] = Field(None, alias="metadata")
     form_submission_id: Optional[UUID] = None
+    status_token: Optional[str] = None
     transferred_user_id: Optional[UUID] = None
     transferred_at: Optional[datetime] = None
     created_at: datetime
@@ -285,6 +286,11 @@ class TransferProspectRequest(BaseModel):
     station: Optional[str] = Field(None, description="Station to assign")
     role_ids: Optional[List[UUID]] = Field(None, description="Role IDs to assign to the new member")
     send_welcome_email: bool = Field(default=False, description="Send welcome email with credentials")
+    # Two-step wizard fields
+    middle_name: Optional[str] = Field(None, max_length=100, description="Middle name for the new member")
+    hire_date: Optional[date] = Field(None, description="Hire/join date for the new member")
+    emergency_contacts: Optional[List[Dict[str, Any]]] = Field(None, description="Emergency contacts for the new member")
+    membership_type: Optional[str] = Field(None, description="Membership type: probationary or administrative")
 
 
 class TransferProspectResponse(BaseModel):
@@ -382,3 +388,26 @@ class ElectionPackageResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Public Status Check Schema ---
+
+class PublicApplicationStatusResponse(BaseModel):
+    """Public-safe response for prospect status check via token"""
+    first_name: str
+    last_name: str
+    status: str
+    current_stage_name: Optional[str] = None
+    pipeline_name: Optional[str] = None
+    total_stages: int = 0
+    stage_timeline: List[Dict[str, Any]] = []
+    applied_at: Optional[str] = None
+
+
+# --- Inactivity Check Schemas ---
+
+class InactivityCheckResponse(BaseModel):
+    """Response from processing inactivity warnings"""
+    warnings_sent: int
+    marked_inactive: int
+    total_checked: int

@@ -678,6 +678,10 @@ async def transfer_prospect(
         station=data.station,
         role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,
         send_welcome_email=data.send_welcome_email,
+        middle_name=data.middle_name,
+        hire_date=data.hire_date,
+        emergency_contacts=[ec for ec in data.emergency_contacts] if data.emergency_contacts else None,
+        membership_type=data.membership_type,
     )
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
@@ -906,3 +910,27 @@ async def list_election_packages(
         status_filter=status_filter,
     )
     return packages
+
+
+# ============================================
+# Inactivity Check Endpoint
+# ============================================
+
+@router.post("/prospects/process-inactivity")
+async def process_inactivity(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+):
+    """
+    Process inactivity warnings for all prospects in the organization.
+    Marks critical prospects as inactive and logs warnings.
+    Can be triggered manually or via a scheduled job.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    result = await service.process_inactivity_warnings(
+        organization_id=current_user.organization_id,
+        processed_by=current_user.id,
+    )
+    return result

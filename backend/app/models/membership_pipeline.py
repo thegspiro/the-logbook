@@ -240,6 +240,10 @@ class ProspectiveMember(Base):
         ForeignKey("form_submissions.id", ondelete="SET NULL"),
     )
 
+    # Public status check token
+    status_token = Column(String(64), unique=True, index=True)
+    status_token_created_at = Column(DateTime(timezone=True))
+
     # Transfer tracking
     transferred_user_id = Column(
         String(36),

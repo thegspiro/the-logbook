@@ -5,10 +5,12 @@
  * server-side pagination, and bulk actions.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   CheckSquare,
   Square,
   Forward,
@@ -17,6 +19,7 @@ import {
   MoreHorizontal,
   AlertTriangle,
   Loader2,
+  ChevronsUpDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { ApplicantListItem, ApplicantStatus } from '../types';
@@ -43,6 +46,35 @@ const STATUS_BADGES: Record<ApplicantStatus, { label: string; className: string 
   inactive: { label: 'Inactive', className: 'bg-theme-surface-hover text-theme-text-muted' },
 };
 
+type SortField = 'name' | 'email' | 'current_stage_name' | 'status' | 'days_in_stage' | 'target_membership_type' | 'created_at';
+type SortDirection = 'asc' | 'desc';
+
+const SortableHeader: React.FC<{
+  label: string;
+  field: SortField;
+  sortField: SortField | null;
+  sortDirection: SortDirection;
+  onSort: (field: SortField) => void;
+}> = ({ label, field, sortField, sortDirection, onSort }) => (
+  <th
+    className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary transition-colors"
+    onClick={() => onSort(field)}
+  >
+    <span className="flex items-center gap-1">
+      {label}
+      {sortField === field ? (
+        sortDirection === 'asc' ? (
+          <ChevronUp className="w-3 h-3" />
+        ) : (
+          <ChevronDown className="w-3 h-3" />
+        )
+      ) : (
+        <ChevronsUpDown className="w-3 h-3 opacity-30" />
+      )}
+    </span>
+  </th>
+);
+
 export const PipelineTable: React.FC<PipelineTableProps> = ({
   applicants,
   totalApplicants,
@@ -59,6 +91,59 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
   const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
   const [withdrawConfirmId, setWithdrawConfirmId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedApplicants = useMemo(() => {
+    if (!sortField) return applicants;
+    const sorted = [...applicants].sort((a, b) => {
+      let valA: string | number = '';
+      let valB: string | number = '';
+      switch (sortField) {
+        case 'name':
+          valA = `${a.first_name} ${a.last_name}`.toLowerCase();
+          valB = `${b.first_name} ${b.last_name}`.toLowerCase();
+          break;
+        case 'email':
+          valA = a.email.toLowerCase();
+          valB = b.email.toLowerCase();
+          break;
+        case 'current_stage_name':
+          valA = (a.current_stage_name ?? '').toLowerCase();
+          valB = (b.current_stage_name ?? '').toLowerCase();
+          break;
+        case 'status':
+          valA = a.status;
+          valB = b.status;
+          break;
+        case 'days_in_stage':
+          valA = a.days_in_stage;
+          valB = b.days_in_stage;
+          break;
+        case 'target_membership_type':
+          valA = a.target_membership_type;
+          valB = b.target_membership_type;
+          break;
+        case 'created_at':
+          valA = a.created_at;
+          valB = b.created_at;
+          break;
+      }
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [applicants, sortField, sortDirection]);
 
   // Clear selection when page changes
   useEffect(() => {
@@ -203,39 +288,25 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                     )}
                   </button>
                 </th>
-                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Email
-                </th>
-                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Current Stage
-                </th>
-                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Days in Stage
-                </th>
-                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Target Type
-                </th>
-                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Applied
-                </th>
+                <SortableHeader label="Name" field="name" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Email" field="email" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Current Stage" field="current_stage_name" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Status" field="status" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Days in Stage" field="days_in_stage" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Target Type" field="target_membership_type" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Applied" field="created_at" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <th className="w-12 p-3"></th>
               </tr>
             </thead>
             <tbody>
-              {applicants.length === 0 ? (
+              {sortedApplicants.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="text-center py-12 text-theme-text-muted">
                     No applicants found
                   </td>
                 </tr>
               ) : (
-                applicants.map((applicant) => {
+                sortedApplicants.map((applicant) => {
                   const statusBadge = STATUS_BADGES[applicant.status];
                   const isSelected = selected.has(applicant.id);
 

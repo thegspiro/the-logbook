@@ -244,6 +244,7 @@ function mapProspectToApplicant(data: any): any {
     })),
     stage_entered_at: data.created_at,
     target_membership_type: 'probationary',
+    status_token: data.status_token,
     status: typeof data.status === 'object' ? data.status.value ?? data.status : data.status,
     last_activity_at: data.updated_at,
   };
@@ -673,10 +674,16 @@ export const applicantService = {
     // Backend uses /transfer endpoint with different payload shape
     const payload: Record<string, unknown> = {
       send_welcome_email: data.send_welcome_email,
+      membership_type: data.target_membership_type,
     };
     if (data.target_role_id) {
       payload.role_ids = [data.target_role_id];
     }
+    if (data.middle_name) payload.middle_name = data.middle_name;
+    if (data.hire_date) payload.hire_date = data.hire_date;
+    if (data.rank) payload.rank = data.rank;
+    if (data.station) payload.station = data.station;
+    if (data.emergency_contacts?.length) payload.emergency_contacts = data.emergency_contacts;
     const response = await api.post(
       `/prospective-members/prospects/${applicantId}/transfer`,
       payload
@@ -817,6 +824,26 @@ export const applicantService = {
 // =============================================================================
 // Election Package Service (cross-module query for Elections module)
 // =============================================================================
+
+// =============================================================================
+// Public Application Status (no auth required)
+// =============================================================================
+
+export const publicStatusService = {
+  async getApplicationStatus(token: string): Promise<{
+    first_name: string;
+    last_name: string;
+    status: string;
+    current_stage_name?: string;
+    pipeline_name?: string;
+    total_stages: number;
+    stage_timeline: { stage_name: string; status: string; completed_at?: string }[];
+    applied_at?: string;
+  }> {
+    const response = await axios.get(`/api/public/v1/application-status/${token}`);
+    return response.data;
+  },
+};
 
 export const electionPackageService = {
   async getPendingPackages(pipelineId?: string): Promise<ElectionPackage[]> {
