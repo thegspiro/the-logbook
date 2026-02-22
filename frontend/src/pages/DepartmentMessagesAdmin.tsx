@@ -186,7 +186,7 @@ const DepartmentMessagesAdmin: React.FC = () => {
       {/* Compose Modal */}
       {showCompose && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface rounded-xl border border-theme-surface-border max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-surface-modal rounded-xl border border-theme-surface-border max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-theme-surface-border">
               <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
                 <Send className="w-5 h-5 text-amber-400" />

@@ -55,7 +55,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
       aria-labelledby="create-api-key-title"
       onKeyDown={(e) => { if (e.key === 'Escape' && !isSubmitting) onClose(); }}
     >
-      <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full p-6">
+      <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 id="create-api-key-title" className="text-lg font-semibold text-theme-text-primary">Create API Key</h3>
           <button
@@ -186,7 +186,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
       aria-labelledby="api-key-created-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface rounded-lg shadow-xl max-w-2xl w-full p-6">
+      <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full p-6">
         <div className="mb-4">
           <h3 id="api-key-created-title" className="text-lg font-semibold text-theme-text-primary">API Key Created Successfully</h3>
         </div>
@@ -283,7 +283,7 @@ const RevokeConfirmModal: React.FC<RevokeConfirmModalProps> = ({
       aria-labelledby="revoke-api-key-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
     >
-      <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full p-6">
+      <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full p-6">
         <h3 id="revoke-api-key-title" className="text-lg font-semibold text-theme-text-primary mb-4">Revoke API Key?</h3>
 
         <p className="text-theme-text-secondary mb-4">

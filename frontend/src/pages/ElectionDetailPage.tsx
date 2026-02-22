@@ -960,7 +960,7 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="send-email-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowSendEmailModal(false); setSendEmailError(null); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="send-email-modal-title" className="text-lg font-medium text-theme-text-primary">
                 {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
@@ -1056,7 +1056,7 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="delete-election-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowDeleteModal(false); setDeleteReason(''); setDeleteError(null); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full">
             <div className={`px-6 py-4 border-b ${isDraft ? 'border-theme-surface-border' : 'border-red-500/30 bg-red-500/10'}`}>
               <h3 id="delete-election-modal-title" className={`text-lg font-medium ${isDraft ? 'text-theme-text-primary' : 'text-red-300'}`}>
                 {isDraft ? 'Delete Draft Election' : 'DELETE ACTIVE ELECTION'}
@@ -1182,7 +1182,7 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="extend-election-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowExtendModal(false); setNewEndDate(''); setExtendError(null); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="extend-election-modal-title" className="text-lg font-medium text-theme-text-primary">Extend Election Time</h3>
             </div>
@@ -1454,7 +1454,7 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="rollback-election-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowRollbackModal(false); setRollbackReason(''); setRollbackError(null); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="rollback-election-modal-title" className="text-lg font-medium text-theme-text-primary">Rollback Election</h3>
             </div>

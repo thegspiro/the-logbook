@@ -536,7 +536,7 @@ const DocumentsPage: React.FC = () => {
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowUploadModal(false)} />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-medium text-theme-text-primary">Upload Document</h3>
@@ -642,7 +642,7 @@ const DocumentsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateFolder(false)} aria-hidden="true" />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="create-folder-title" className="text-lg font-medium text-theme-text-primary">Create Folder</h3>
@@ -705,7 +705,7 @@ const DocumentsPage: React.FC = () => {
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setDeleteConfirm(null)} />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex items-start space-x-3">
                     <div className="bg-red-500/10 rounded-full p-2">

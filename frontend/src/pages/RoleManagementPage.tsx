@@ -233,7 +233,7 @@ export const RoleManagementPage: React.FC = () => {
             aria-labelledby="role-modal-title"
             onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
           >
-            <div className="bg-theme-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
               <div className="px-6 py-4 border-b border-theme-surface-border">
                 <h3 id="role-modal-title" className="text-lg font-medium text-theme-text-primary">
                   {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}

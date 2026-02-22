@@ -719,7 +719,7 @@ export const ReportsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-black/60" onClick={closeModal} />
-            <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-4xl w-full border border-theme-surface-border">
+            <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-4xl w-full border border-theme-surface-border">
               <div className="px-6 pt-5 pb-4">
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center space-x-3">
