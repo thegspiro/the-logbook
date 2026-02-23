@@ -1251,7 +1251,7 @@ class InventoryService:
         issue_sub = (
             select(
                 ItemIssuance.user_id.label("uid"),
-                func.count(ItemIssuance.id).label("cnt"),
+                func.coalesce(func.sum(ItemIssuance.quantity_issued), 0).label("cnt"),
             )
             .where(ItemIssuance.organization_id == org_id)
             .where(ItemIssuance.is_returned == False)  # noqa: E712
