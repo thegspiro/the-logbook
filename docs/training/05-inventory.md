@@ -147,7 +147,12 @@ For items that are temporarily loaned (not permanently assigned), use the checko
 
 1. Open the item or scan its barcode.
 2. Click **Return**.
-3. Note the condition upon return.
+3. Set the return condition:
+   - **Excellent** — like new
+   - **Good** — normal wear
+   - **Fair** — noticeable wear but functional
+   - **Poor** — significant wear, may need repair
+   - **Damaged** — needs repair or replacement
 4. Confirm.
 
 > **Screenshot placeholder:**
@@ -210,10 +215,13 @@ Generate barcode labels for inventory items to attach to equipment.
 
 1. Select one or more items from the inventory list.
 2. Click **Print Labels**.
-3. Choose the label size:
-   - **Standard** (2×1″) — general-purpose adhesive labels
-   - **Dymo** (2.25×1.25″) — for Dymo thermal printers
-   - **Rollo** (4×6″) — for Rollo shipping-label printers
+3. Choose the label format:
+   - **Letter (8.5×11)** — Standard letter sheet with 2×5 grid of labels
+   - **Dymo 30252** (1.125×3.5″) — Dymo address labels
+   - **Dymo 30256** (2.3125×4″) — Dymo shipping labels
+   - **Dymo 30334** (1.25×2.25″) — Dymo multi-purpose labels
+   - **Rollo 4×6** (4×6″) — Rollo shipping-label printers
+   - **Custom** — Specify your own width and height in inches
 4. Click **Generate** to download the PDF.
 5. Print the PDF on your label printer.
 
@@ -271,9 +279,10 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 2. Click **Create Departure Clearance** for the departing member.
 3. The system generates a list of all items assigned to or checked out by the member.
 4. For each line item, choose a **disposition**:
-   - **Returned** — item received back in inventory
+   - **Returned** — item received back in acceptable condition
+   - **Returned Damaged** — item received back but in damaged condition
    - **Written Off** — item cannot be recovered (lost, destroyed)
-   - **Waived** — item return requirement waived by an officer
+   - **Waived** — department chose not to require return
 5. When all items are accounted for, click **Complete Clearance**.
 
 ### Clearance Lifecycle
@@ -283,6 +292,7 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 | **Initiated** | Clearance created, items pending resolution |
 | **In Progress** | Some items resolved, others still pending |
 | **Completed** | All items resolved, clearance finalized |
+| **Closed Incomplete** | Closed by an administrator with some items still outstanding (write-off) |
 
 > **Screenshot placeholder:**
 > _[Screenshot of a departure clearance record showing the member's name, departure date, a checklist of outstanding items with disposition dropdowns, and resolve/complete buttons]_
@@ -300,9 +310,26 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 Navigate to **Inventory Admin > Members** to see a per-member view of all equipment assignments across the department.
 
 This view shows:
-- Each member and their assigned items
-- Checkout history
-- Outstanding returns
+- Each member with summary counts (permanent assignments, active checkouts, issued items, overdue count)
+- Expandable rows showing detailed inventory per member
+- **Assign Items** and **Return Items** buttons per member
+
+### Assigning Items from the Members Tab
+
+1. Click the **Assign** button next to a member's name.
+2. In the modal, type a name, barcode, serial number, or asset tag into the search field.
+3. Matching items appear in a **live dropdown** as you type — click an item to add it.
+4. You can also scan barcodes with your device camera (if supported).
+5. Repeat for all items to assign.
+6. Click **Assign X Items** and confirm.
+
+### Returning Items from the Members Tab
+
+1. Click the **Return** button next to a member's name.
+2. The modal shows all items currently held by that member.
+3. Select items to return using the checkboxes.
+4. Set a return condition for each item.
+5. Click **Return Selected Items**.
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Members inventory tab showing a list of members with their assigned item counts, expandable to show individual items with assignment dates and conditions]_

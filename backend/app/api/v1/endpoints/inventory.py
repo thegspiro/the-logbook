@@ -572,6 +572,8 @@ async def unassign_item(
 async def get_user_assignments(
     user_id: UUID,
     active_only: bool = True,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -586,6 +588,8 @@ async def get_user_assignments(
         user_id=user_id,
         organization_id=current_user.organization_id,
         active_only=active_only,
+        skip=skip,
+        limit=limit,
     )
     return assignments
 
@@ -717,6 +721,8 @@ async def get_item_issuances(
 async def get_user_issuances(
     user_id: UUID,
     active_only: bool = True,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -731,6 +737,8 @@ async def get_user_issuances(
         user_id=user_id,
         organization_id=current_user.organization_id,
         active_only=active_only,
+        skip=skip,
+        limit=limit,
     )
     return issuances
 
@@ -833,6 +841,8 @@ async def checkin_item(
 @router.get("/checkout/active")
 async def get_active_checkouts(
     user_id: Optional[UUID] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -846,6 +856,8 @@ async def get_active_checkouts(
     checkouts = await service.get_active_checkouts(
         organization_id=current_user.organization_id,
         user_id=user_id,
+        skip=skip,
+        limit=limit,
     )
     return {
         "checkouts": [
@@ -863,11 +875,15 @@ async def get_active_checkouts(
             for c in checkouts
         ],
         "total": len(checkouts),
+        "skip": skip,
+        "limit": limit,
     }
 
 
 @router.get("/checkout/overdue")
 async def get_overdue_checkouts(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -879,7 +895,9 @@ async def get_overdue_checkouts(
     """
     service = InventoryService(db)
     checkouts = await service.get_overdue_checkouts(
-        organization_id=current_user.organization_id
+        organization_id=current_user.organization_id,
+        skip=skip,
+        limit=limit,
     )
     return {
         "checkouts": [
@@ -897,6 +915,8 @@ async def get_overdue_checkouts(
             for c in checkouts
         ],
         "total": len(checkouts),
+        "skip": skip,
+        "limit": limit,
     }
 
 
@@ -947,9 +967,56 @@ async def create_maintenance_record(
     return maintenance
 
 
+@router.patch("/items/{item_id}/maintenance/{record_id}", response_model=MaintenanceRecordResponse)
+async def update_maintenance_record(
+    item_id: UUID,
+    record_id: UUID,
+    update_data: MaintenanceRecordUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update a maintenance record
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    updated_record, error = await service.update_maintenance_record(
+        record_id=record_id,
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+        update_data=update_data.model_dump(exclude_unset=True),
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_maintenance_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "record_id": str(record_id),
+            "fields_updated": list(update_data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return updated_record
+
+
 @router.get("/items/{item_id}/maintenance", response_model=List[MaintenanceRecordResponse])
 async def get_item_maintenance_history(
     item_id: UUID,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -963,6 +1030,8 @@ async def get_item_maintenance_history(
     maintenance_records = await service.get_item_maintenance_history(
         item_id=item_id,
         organization_id=current_user.organization_id,
+        skip=skip,
+        limit=limit,
     )
     return maintenance_records
 
@@ -1597,6 +1666,8 @@ async def create_equipment_request(
 async def list_equipment_requests(
     status_filter: Optional[str] = Query(None, alias="status"),
     mine_only: bool = Query(False),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1627,7 +1698,7 @@ async def list_equipment_requests(
     if status_filter:
         query = query.where(EquipmentRequest.status == status_filter)
 
-    query = query.order_by(EquipmentRequest.created_at.desc()).limit(100)
+    query = query.order_by(EquipmentRequest.created_at.desc()).offset(skip).limit(limit)
 
     result = await db.execute(query)
     requests = result.scalars().all()
@@ -1656,6 +1727,8 @@ async def list_equipment_requests(
             for r in requests
         ],
         "total": len(requests),
+        "skip": skip,
+        "limit": limit,
     }
 
 

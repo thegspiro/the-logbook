@@ -610,6 +610,14 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 <h4 className="text-sm font-medium text-theme-text-primary">
                   Scanned Items ({scannedItems.length})
                 </h4>
+                {scannedItems.length > 1 && (
+                  <button
+                    onClick={() => setScannedItems([])}
+                    className="text-xs text-theme-text-muted hover:text-red-600 transition-colors"
+                  >
+                    Clear All
+                  </button>
+                )}
               </div>
 
               {scannedItems.length === 0 ? (

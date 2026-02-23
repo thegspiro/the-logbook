@@ -20,6 +20,7 @@ import {
   ClipboardList,
   Check,
   XCircle,
+  Loader2,
 } from 'lucide-react';
 import {
   inventoryService,
@@ -95,6 +96,7 @@ const InventoryPage: React.FC = () => {
   const [summary, setSummary] = useState<InventorySummary | null>(null);
   const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Rooms (locations with room_number or building set) for storage location dropdown
@@ -192,6 +194,7 @@ const InventoryPage: React.FC = () => {
   const [showRequestsPanel, setShowRequestsPanel] = useState(false);
   const [reviewingRequest, setReviewingRequest] = useState<EquipmentRequestItem | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
+  const [showApproveConfirm, setShowApproveConfirm] = useState<EquipmentRequestItem | null>(null);
 
   useEffect(() => {
     loadData();
@@ -218,7 +221,7 @@ const InventoryPage: React.FC = () => {
       const [summaryData, categoriesData, itemsData, formatsData, locationsData] = await Promise.all([
         inventoryService.getSummary(),
         inventoryService.getCategories(),
-        inventoryService.getItems({ limit: 100 }),
+        inventoryService.getItems({ limit: 50 }),
         inventoryService.getLabelFormats(),
         locationsService.getLocations({ is_active: true }),
       ]);
@@ -253,13 +256,32 @@ const InventoryPage: React.FC = () => {
         search: searchQuery || undefined,
         status: statusFilter || undefined,
         category_id: categoryFilter || undefined,
-        limit: 100,
+        limit: 50,
       });
       setItems(data.items);
       setTotalItems(data.total);
       setSelectedItemIds(new Set());
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to refresh items'));
+    }
+  };
+
+  const loadMoreItems = async () => {
+    setLoadingMore(true);
+    try {
+      const data = await inventoryService.getItems({
+        search: searchQuery || undefined,
+        status: statusFilter || undefined,
+        category_id: categoryFilter || undefined,
+        skip: items.length,
+        limit: 50,
+      });
+      setItems(prev => [...prev, ...data.items]);
+      setTotalItems(data.total);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load more items'));
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -757,7 +779,7 @@ const InventoryPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
-                      onClick={() => handleReviewRequest(req.id, 'approved')}
+                      onClick={() => setShowApproveConfirm(req)}
                       className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg"
                       title="Approve"
                     >
@@ -795,6 +817,37 @@ const InventoryPage: React.FC = () => {
                   <button onClick={() => setReviewingRequest(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
                   <button onClick={() => handleReviewRequest(reviewingRequest.id, 'denied')} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Denying...' : 'Deny Request'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Request Approve Confirmation Modal */}
+        {showApproveConfirm && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setShowApproveConfirm(null); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowApproveConfirm(null)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+                <div className="px-6 pt-5 pb-4">
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-2">Approve Request</h3>
+                  <p className="text-theme-text-secondary text-sm mb-4">
+                    Are you sure you want to approve the request for <span className="font-medium text-theme-text-primary">{showApproveConfirm.item_name}</span>{showApproveConfirm.quantity > 1 ? ` x${showApproveConfirm.quantity}` : ''} requested by <span className="font-medium text-theme-text-primary">{showApproveConfirm.requester_name || 'Unknown'}</span>?
+                  </p>
+                </div>
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setShowApproveConfirm(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button
+                    onClick={() => {
+                      const reqId = showApproveConfirm.id;
+                      setShowApproveConfirm(null);
+                      handleReviewRequest(reqId, 'approved');
+                    }}
+                    disabled={submitting}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {submitting ? 'Approving...' : 'Approve Request'}
                   </button>
                 </div>
               </div>
@@ -1029,6 +1082,27 @@ const InventoryPage: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                <div className="text-center py-2 text-xs text-theme-text-muted">
+                  Showing {items.length} of {totalItems} items
+                </div>
+                {items.length < totalItems && (
+                  <div className="flex justify-center py-4">
+                    <button
+                      onClick={loadMoreItems}
+                      disabled={loadingMore}
+                      className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors disabled:opacity-50"
+                    >
+                      {loadingMore ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        `Load More (${totalItems - items.length} remaining)`
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>

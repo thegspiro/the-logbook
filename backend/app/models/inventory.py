@@ -594,6 +594,7 @@ class InventoryActionType(str, enum.Enum):
     RETURNED = "returned"          # Pool item units returned to pool
     CHECKED_OUT = "checked_out"    # Individual item temporarily checked out
     CHECKED_IN = "checked_in"     # Individual item checked back in
+    RETIRED = "retired"            # Item retired / decommissioned
 
 
 class InventoryNotificationQueue(Base):

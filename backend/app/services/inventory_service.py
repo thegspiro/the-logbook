@@ -425,6 +425,20 @@ class InventoryService:
             if notes:
                 item.status_notes = notes
 
+            # Log audit event for retirement within the service transaction
+            from app.core.audit import log_audit_event
+            await log_audit_event(
+                db=self.db,
+                event_type="inventory_item_retired",
+                event_category="inventory",
+                severity="warning",
+                event_data={
+                    "item_id": str(item_id),
+                    "item_name": item.name,
+                    "notes": notes,
+                },
+            )
+
             await self.db.commit()
             return True, None
         except Exception as e:
@@ -752,8 +766,10 @@ class InventoryService:
         user_id: UUID,
         organization_id: UUID,
         active_only: bool = True,
+        skip: int = 0,
+        limit: int = 200,
     ) -> List["ItemIssuance"]:
-        """Get all active issuances for a user."""
+        """Get all active issuances for a user with pagination."""
         query = (
             select(ItemIssuance)
             .where(ItemIssuance.user_id == str(user_id))
@@ -762,7 +778,7 @@ class InventoryService:
         )
         if active_only:
             query = query.where(ItemIssuance.is_returned == False)  # noqa: E712
-        query = query.order_by(ItemIssuance.issued_at.desc())
+        query = query.order_by(ItemIssuance.issued_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -913,9 +929,12 @@ class InventoryService:
         return result.scalars().all()
 
     async def get_overdue_checkouts(
-        self, organization_id: UUID
+        self,
+        organization_id: UUID,
+        skip: int = 0,
+        limit: int = 200,
     ) -> List[CheckOutRecord]:
-        """Get all overdue checkouts.
+        """Get all overdue checkouts with pagination.
 
         Computes overdue status at read time using the expected_return_at
         date instead of performing a bulk UPDATE on every call.
@@ -934,6 +953,8 @@ class InventoryService:
                 selectinload(CheckOutRecord.user),
             )
             .order_by(CheckOutRecord.expected_return_at)
+            .offset(skip)
+            .limit(limit)
         )
         return result.scalars().all()
 
@@ -1009,6 +1030,60 @@ class InventoryService:
             await self.db.commit()
             await self.db.refresh(maintenance)
             return maintenance, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def update_maintenance_record(
+        self,
+        record_id: UUID,
+        item_id: UUID,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
+    ) -> Tuple[Optional[MaintenanceRecord], Optional[str]]:
+        """Update an existing maintenance record"""
+        try:
+            result = await self.db.execute(
+                select(MaintenanceRecord)
+                .where(MaintenanceRecord.id == str(record_id))
+                .where(MaintenanceRecord.item_id == str(item_id))
+                .where(MaintenanceRecord.organization_id == str(organization_id))
+            )
+            record = result.scalar_one_or_none()
+
+            if not record:
+                return None, "Maintenance record not found"
+
+            # Only allow updating known safe fields
+            safe_data = {
+                k: v for k, v in update_data.items()
+                if k in self._MAINTENANCE_ALLOWED_FIELDS
+            }
+
+            was_completed_before = record.is_completed
+
+            for key, value in safe_data.items():
+                setattr(record, key, value)
+
+            # If is_completed just changed to True, update item inspection dates
+            if safe_data.get("is_completed") and not was_completed_before:
+                item = await self.get_item_by_id(item_id, organization_id)
+                if item:
+                    if safe_data.get("condition_after"):
+                        item.condition = safe_data["condition_after"]
+                    completed = safe_data.get("completed_date") or record.completed_date
+                    if completed:
+                        item.last_inspection_date = completed
+                        if item.inspection_interval_days:
+                            if isinstance(completed, str):
+                                completed = date.fromisoformat(completed)
+                            item.next_inspection_due = completed + timedelta(days=item.inspection_interval_days)
+                        elif safe_data.get("next_due_date") or record.next_due_date:
+                            item.next_inspection_due = safe_data.get("next_due_date") or record.next_due_date
+
+            await self.db.commit()
+            await self.db.refresh(record)
+            return record, None
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
