@@ -56,6 +56,21 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.href = '/dashboard';
   };
 
+  handleRetry = (): void => {
+    // Try to recover by resetting the error state (#65)
+    this.setState({ hasError: false, error: null, errorInfo: null });
+  };
+
+  handleCopyError = (): void => {
+    const errorText = [
+      `Error: ${this.state.error?.toString()}`,
+      `\nComponent Stack: ${this.state.errorInfo?.componentStack}`,
+      `\nURL: ${window.location.href}`,
+      `\nTime: ${new Date().toISOString()}`,
+    ].join('');
+    navigator.clipboard.writeText(errorText).catch(() => { /* clipboard not available */ });
+  };
+
   override render(): ReactNode {
     if (this.state.hasError) {
       return (
@@ -106,45 +121,38 @@ export class ErrorBoundary extends Component<Props, State> {
                 </details>
               )}
 
-              {/* Action Buttons */}
+              {/* Action Buttons (#65 — improved recovery) */}
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
-                  onClick={this.handleReload}
+                  onClick={this.handleRetry}
                   className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
                 >
-                  <svg
-                    className="mr-2 h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
+                  <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
+                  Try Again
+                </button>
+                <button
+                  onClick={this.handleReload}
+                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] focus:ring-red-500 transition-colors"
+                >
                   Reload Page
                 </button>
                 <button
                   onClick={this.handleGoHome}
                   className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] focus:ring-red-500 transition-colors"
                 >
-                  <svg
-                    className="mr-2 h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                    />
-                  </svg>
                   Go to Dashboard
+                </button>
+              </div>
+
+              {/* Copy error & report (#65) */}
+              <div className="mt-4 flex flex-col items-center gap-2">
+                <button
+                  onClick={this.handleCopyError}
+                  className="text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                >
+                  Copy error details to clipboard
                 </button>
               </div>
             </div>

@@ -21,8 +21,13 @@ import {
   Check,
   XCircle,
   Loader2,
+  Wrench,
+  Calendar,
+  CheckCircle2,
+  Clock,
   FileX,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import {
   inventoryService,
   locationsService,
@@ -35,6 +40,9 @@ import {
   type InventoryCategoryCreate,
   type LabelFormat,
   type Location,
+  type MaintenanceRecord,
+  type MaintenanceRecordCreate,
+  type StorageAreaResponse,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -81,7 +89,7 @@ const getConditionColor = (condition: string) => {
   }
 };
 
-type Tab = 'items' | 'categories';
+type Tab = 'items' | 'categories' | 'maintenance';
 
 const InventoryPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -99,6 +107,9 @@ const InventoryPage: React.FC = () => {
 
   // Rooms (locations with room_number or building set) for storage location dropdown
   const [rooms, setRooms] = useState<Location[]>([]);
+
+  // Structured storage areas
+  const [storageAreas, setStorageAreas] = useState<StorageAreaResponse[]>([]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,6 +140,7 @@ const InventoryPage: React.FC = () => {
     barcode: '',
     location_id: '',
     storage_location: '',
+    storage_area_id: '',
     station: '',
     size: '',
     color: '',
@@ -185,7 +197,7 @@ const InventoryPage: React.FC = () => {
   const [members, setMembers] = useState<Array<{ id: string; name: string }>>([]);
 
   // Low stock alerts
-  const [lowStockAlerts, setLowStockAlerts] = useState<Array<{ category_id: string; category_name: string; item_type: string; current_stock: number; threshold: number }>>([]);
+  const [lowStockAlerts, setLowStockAlerts] = useState<Array<{ category_id: string; category_name: string; item_type: string; current_stock: number; threshold: number; items?: Array<{ name: string; quantity: number }> }>>([]);
 
   // Equipment requests (admin view)
   const [pendingRequests, setPendingRequests] = useState<EquipmentRequestItem[]>([]);
@@ -193,6 +205,19 @@ const InventoryPage: React.FC = () => {
   const [reviewingRequest, setReviewingRequest] = useState<EquipmentRequestItem | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [showApproveConfirm, setShowApproveConfirm] = useState<EquipmentRequestItem | null>(null);
+
+  // Maintenance tracking
+  const [maintenanceDueItems, setMaintenanceDueItems] = useState<InventoryItem[]>([]);
+  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [maintenanceItem, setMaintenanceItem] = useState<InventoryItem | null>(null);
+  const [maintenanceForm, setMaintenanceForm] = useState<Partial<MaintenanceRecordCreate>>({
+    maintenance_type: 'inspection',
+    description: '',
+    notes: '',
+    is_completed: false,
+  });
 
   // Write-off requests
   const [writeOffRequests, setWriteOffRequests] = useState<WriteOffRequestItem[]>([]);
@@ -234,15 +259,17 @@ const InventoryPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryData, categoriesData, itemsData, formatsData, locationsData] = await Promise.all([
+      const [summaryData, categoriesData, itemsData, formatsData, locationsData, storageAreasData] = await Promise.all([
         inventoryService.getSummary(),
         inventoryService.getCategories(),
         inventoryService.getItems({ limit: 50 }),
         inventoryService.getLabelFormats(),
         locationsService.getLocations({ is_active: true }),
+        inventoryService.getStorageAreas({ flat: true }).catch(() => [] as StorageAreaResponse[]),
       ]);
       setSummary(summaryData);
       setCategories(categoriesData);
+      setStorageAreas(storageAreasData);
       setItems(itemsData.items);
       setTotalItems(itemsData.total);
       setLabelFormats(formatsData.formats);
@@ -285,6 +312,60 @@ const InventoryPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to refresh items'));
     } finally {
       setFilterLoading(false);
+    }
+  };
+
+  const loadMaintenanceData = async () => {
+    setMaintenanceLoading(true);
+    try {
+      const dueItems = await inventoryService.getMaintenanceDueItems(90);
+      setMaintenanceDueItems(dueItems);
+      // Also load items currently in maintenance status
+      const inMaintenanceData = await inventoryService.getItems({ status: 'in_maintenance', limit: 100 });
+      // Merge: due items + in-maintenance items (deduplicated)
+      const dueIds = new Set(dueItems.map(i => i.id));
+      const combined = [...dueItems, ...inMaintenanceData.items.filter(i => !dueIds.has(i.id))];
+      setMaintenanceDueItems(combined);
+    } catch {
+      toast.error('Failed to load maintenance data');
+    } finally {
+      setMaintenanceLoading(false);
+    }
+  };
+
+  const loadItemMaintenanceHistory = async (itemId: string) => {
+    try {
+      const records = await inventoryService.getItemMaintenanceHistory(itemId);
+      setMaintenanceRecords(records);
+    } catch {
+      setMaintenanceRecords([]);
+    }
+  };
+
+  const handleCreateMaintenanceRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!maintenanceItem) return;
+    setSubmitting(true);
+    try {
+      await inventoryService.createMaintenanceRecord({
+        item_id: maintenanceItem.id,
+        maintenance_type: maintenanceForm.maintenance_type || 'inspection',
+        description: maintenanceForm.description || undefined,
+        notes: maintenanceForm.notes || undefined,
+        completed_date: maintenanceForm.is_completed ? new Date().toISOString().split('T')[0] : undefined,
+        is_completed: maintenanceForm.is_completed || false,
+        condition_after: maintenanceForm.condition_after || undefined,
+        next_due_date: maintenanceForm.next_due_date || undefined,
+      } as MaintenanceRecordCreate);
+      toast.success('Maintenance record created');
+      setShowMaintenanceModal(false);
+      setMaintenanceForm({ maintenance_type: 'inspection', description: '', notes: '', is_completed: false });
+      loadMaintenanceData();
+      loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to create maintenance record'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -359,6 +440,7 @@ const InventoryPage: React.FC = () => {
       barcode: item.barcode || '',
       location_id: item.location_id || '',
       storage_location: item.storage_location || '',
+      storage_area_id: item.storage_area_id || '',
       station: item.station || '',
       condition: item.condition,
       status: item.status,
@@ -742,6 +824,13 @@ const InventoryPage: React.FC = () => {
                   )}
                 </div>
               )}
+              <Link
+                to="/inventory/storage-areas"
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg transition-colors text-sm"
+              >
+                <Layers className="w-4 h-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Storage Areas</span>
+              </Link>
               <button
                 onClick={() => setShowAddCategory(true)}
                 className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg transition-colors text-sm"
@@ -829,11 +918,25 @@ const InventoryPage: React.FC = () => {
               <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">Low Stock Alerts</h3>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="space-y-3">
               {lowStockAlerts.map(alert => (
-                <div key={alert.category_id} className="flex items-center gap-2 bg-yellow-500/10 rounded-lg px-3 py-1.5">
-                  <span className="text-sm text-yellow-700 dark:text-yellow-300 font-medium">{alert.category_name}</span>
-                  <span className="text-xs text-yellow-600 dark:text-yellow-400">{alert.current_stock} / {alert.threshold} threshold</span>
+                <div key={alert.category_id} className="bg-yellow-500/10 rounded-lg px-3 py-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm text-yellow-700 dark:text-yellow-300 font-medium">{alert.category_name}</span>
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400">
+                      {alert.current_stock} qty / {alert.threshold} threshold
+                    </span>
+                  </div>
+                  {alert.items && alert.items.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {alert.items.map((item, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 text-xs bg-yellow-500/15 rounded px-2 py-0.5 text-yellow-700 dark:text-yellow-300">
+                          {item.name}
+                          <span className="text-yellow-600 dark:text-yellow-400 font-medium">({item.quantity})</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1041,6 +1144,24 @@ const InventoryPage: React.FC = () => {
             }`}
           >
             Categories ({categories.length})
+          </button>
+          <button
+            onClick={() => { setActiveTab('maintenance'); loadMaintenanceData(); }}
+            role="tab"
+            aria-selected={activeTab === 'maintenance'}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              activeTab === 'maintenance'
+                ? 'bg-emerald-600 text-white'
+                : 'text-theme-text-muted hover:text-theme-text-primary'
+            }`}
+          >
+            <Wrench className="w-4 h-4" />
+            Maintenance
+            {summary && summary.maintenance_due_count > 0 && (
+              <span className="px-1.5 py-0.5 text-xs rounded-full bg-orange-500/20 text-orange-700 dark:text-orange-400">
+                {summary.maintenance_due_count}
+              </span>
+            )}
           </button>
         </div>
 
@@ -1342,6 +1463,191 @@ const InventoryPage: React.FC = () => {
           </>
         )}
 
+        {/* Maintenance Tab */}
+        {activeTab === 'maintenance' && (
+          <>
+            {maintenanceLoading ? (
+              <div className="bg-theme-surface rounded-lg p-12 border border-theme-surface-border text-center">
+                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin mx-auto mb-3" />
+                <p className="text-theme-text-secondary text-sm">Loading maintenance data...</p>
+              </div>
+            ) : maintenanceDueItems.length === 0 ? (
+              <div className="bg-theme-surface rounded-lg p-12 border border-theme-surface-border text-center">
+                <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                <h3 className="text-theme-text-primary text-xl font-bold mb-2">All Clear</h3>
+                <p className="text-theme-text-secondary">No items currently need maintenance or inspection.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Overdue / Due Soon / In Maintenance sections */}
+                {(() => {
+                  const today = new Date().toISOString().split('T')[0];
+                  const overdue = maintenanceDueItems.filter(i => i.next_inspection_due && i.next_inspection_due < today);
+                  const dueSoon = maintenanceDueItems.filter(i => i.next_inspection_due && i.next_inspection_due >= today);
+                  const inMaintenance = maintenanceDueItems.filter(i => i.status === 'in_maintenance' && !i.next_inspection_due);
+
+                  const renderSection = (title: string, icon: React.ReactNode, sectionItems: InventoryItem[], colorClass: string) => {
+                    if (sectionItems.length === 0) return null;
+                    return (
+                      <div>
+                        <h3 className={`text-sm font-semibold ${colorClass} mb-3 flex items-center gap-2`}>
+                          {icon} {title} ({sectionItems.length})
+                        </h3>
+                        <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
+                                <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
+                                <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Category</th>
+                                <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Condition</th>
+                                <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Due Date</th>
+                                <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
+                                {canManage && <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sectionItems.map(item => (
+                                <tr key={item.id} className="border-b border-theme-surface-border">
+                                  <td className="p-3">
+                                    <span className="text-theme-text-primary font-medium">{item.name}</span>
+                                    {item.serial_number && <p className="text-theme-text-muted text-xs font-mono mt-0.5">SN: {item.serial_number}</p>}
+                                  </td>
+                                  <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{getCategoryName(item.category_id)}</td>
+                                  <td className="p-3">
+                                    <span className={`text-xs capitalize ${getConditionColor(item.condition)}`}>{item.condition.replace('_', ' ')}</span>
+                                  </td>
+                                  <td className="hidden sm:table-cell p-3 text-theme-text-secondary text-xs">
+                                    {item.next_inspection_due || '--'}
+                                  </td>
+                                  <td className="p-3">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(item.status)}`}>
+                                      {item.status.replace('_', ' ')}
+                                    </span>
+                                  </td>
+                                  {canManage && (
+                                    <td className="p-3">
+                                      <button
+                                        onClick={() => {
+                                          setMaintenanceItem(item);
+                                          setMaintenanceForm({
+                                            maintenance_type: 'inspection',
+                                            description: '',
+                                            notes: '',
+                                            is_completed: false,
+                                            condition_after: item.condition,
+                                          });
+                                          loadItemMaintenanceHistory(item.id);
+                                          setShowMaintenanceModal(true);
+                                        }}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg transition-colors"
+                                      >
+                                        <Wrench className="w-3.5 h-3.5" /> Log Maintenance
+                                      </button>
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <>
+                      {renderSection('Overdue', <AlertCircle className="w-4 h-4" />, overdue, 'text-red-700 dark:text-red-400')}
+                      {renderSection('Due Soon', <Clock className="w-4 h-4" />, dueSoon, 'text-yellow-700 dark:text-yellow-400')}
+                      {renderSection('In Maintenance', <Wrench className="w-4 h-4" />, inMaintenance, 'text-orange-700 dark:text-orange-400')}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Log Maintenance Modal */}
+        {showMaintenanceModal && maintenanceItem && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setShowMaintenanceModal(false); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowMaintenanceModal(false)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border max-h-[90vh] overflow-y-auto">
+                <form onSubmit={handleCreateMaintenanceRecord}>
+                  <div className="px-4 sm:px-6 pt-5 pb-4">
+                    <h3 className="text-lg font-medium text-theme-text-primary mb-1">Log Maintenance</h3>
+                    <p className="text-theme-text-muted text-sm mb-4">{maintenanceItem.name}{maintenanceItem.serial_number ? ` (SN: ${maintenanceItem.serial_number})` : ''}</p>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="maint-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Type *</label>
+                          <select id="maint-type" value={maintenanceForm.maintenance_type || 'inspection'} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, maintenance_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="inspection">Inspection</option>
+                            <option value="repair">Repair</option>
+                            <option value="cleaning">Cleaning</option>
+                            <option value="testing">Testing</option>
+                            <option value="calibration">Calibration</option>
+                            <option value="replacement">Replacement</option>
+                            <option value="preventive">Preventive</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="maint-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Condition After</label>
+                          <select id="maint-condition" value={maintenanceForm.condition_after || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, condition_after: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="">No change</option>
+                            {CONDITION_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="maint-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
+                        <textarea id="maint-description" rows={2} value={maintenanceForm.description || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="What was done?" />
+                      </div>
+                      <div>
+                        <label htmlFor="maint-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
+                        <textarea id="maint-notes" rows={2} value={maintenanceForm.notes || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, notes: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Any additional notes..." />
+                      </div>
+                      <div>
+                        <label htmlFor="maint-next-due" className="block text-sm font-medium text-theme-text-secondary mb-1">Next Due Date</label>
+                        <input id="maint-next-due" type="date" value={maintenanceForm.next_due_date || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, next_due_date: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input id="maint-completed" type="checkbox" checked={maintenanceForm.is_completed || false} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, is_completed: e.target.checked })} className="rounded border-theme-input-border text-emerald-600 focus:ring-emerald-500" />
+                        <label htmlFor="maint-completed" className="text-sm text-theme-text-secondary">Mark as completed</label>
+                      </div>
+
+                      {/* Maintenance History */}
+                      {maintenanceRecords.length > 0 && (
+                        <div className="border-t border-theme-surface-border pt-4">
+                          <h4 className="text-xs font-semibold text-theme-text-muted uppercase mb-2">Previous Maintenance</h4>
+                          <div className="space-y-2 max-h-40 overflow-y-auto">
+                            {maintenanceRecords.slice(0, 5).map(record => (
+                              <div key={record.id} className="text-xs bg-theme-surface-secondary rounded-lg px-3 py-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-theme-text-primary font-medium capitalize">{record.maintenance_type}</span>
+                                  <span className="text-theme-text-muted">{record.completed_date || record.scheduled_date || '--'}</span>
+                                </div>
+                                {record.description && <p className="text-theme-text-secondary mt-0.5">{record.description}</p>}
+                                {record.notes && <p className="text-theme-text-muted mt-0.5">{record.notes}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                    <button type="button" onClick={() => setShowMaintenanceModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                    <button type="submit" disabled={submitting} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                      {submitting ? 'Saving...' : 'Save Record'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Add Item Modal */}
         {showAddItem && (
           <div
@@ -1582,13 +1888,29 @@ const InventoryPage: React.FC = () => {
                         </div>
                         <div>
                           <label htmlFor="item-storage-area" className="block text-sm font-medium text-theme-text-secondary mb-1">Storage Area</label>
-                          <input
-                            id="item-storage-area"
-                            type="text" value={itemForm.storage_location}
-                            onChange={(e) => setItemForm({ ...itemForm, storage_location: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            placeholder="e.g., Shelf 5, Secure Closet 2"
-                          />
+                          {storageAreas.length > 0 ? (
+                            <select
+                              id="item-storage-area"
+                              value={itemForm.storage_area_id || ''}
+                              onChange={(e) => setItemForm({ ...itemForm, storage_area_id: e.target.value })}
+                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                              <option value="">Select storage area</option>
+                              {storageAreas.map(sa => (
+                                <option key={sa.id} value={sa.id}>
+                                  {sa.location_name ? `${sa.location_name} — ` : ''}{sa.parent_name ? `${sa.parent_name} → ` : ''}{sa.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              id="item-storage-area"
+                              type="text" value={itemForm.storage_location}
+                              onChange={(e) => setItemForm({ ...itemForm, storage_location: e.target.value })}
+                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              placeholder="e.g., Shelf 5, Closet B, Room 201"
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -1984,7 +2306,18 @@ const InventoryPage: React.FC = () => {
                         </div>
                         <div>
                           <label htmlFor="edit-item-storage-area" className="block text-sm font-medium text-theme-text-secondary mb-1">Storage Area</label>
-                          <input id="edit-item-storage-area" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Shelf 5, Secure Closet 2" />
+                          {storageAreas.length > 0 ? (
+                            <select id="edit-item-storage-area" value={editForm.storage_area_id || ''} onChange={(e) => setEditForm({ ...editForm, storage_area_id: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                              <option value="">Select storage area</option>
+                              {storageAreas.map(sa => (
+                                <option key={sa.id} value={sa.id}>
+                                  {sa.location_name ? `${sa.location_name} — ` : ''}{sa.parent_name ? `${sa.parent_name} → ` : ''}{sa.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input id="edit-item-storage-area" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Shelf 5, Closet B, Room 201" />
+                          )}
                         </div>
                       </div>
 

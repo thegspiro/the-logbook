@@ -1856,6 +1856,8 @@ export interface UserInventoryItem {
   asset_tag?: string;
   condition: string;
   assigned_date: string;
+  category_name?: string;
+  quantity?: number;
 }
 
 export interface UserCheckoutItem {
@@ -1877,6 +1879,7 @@ export interface UserIssuedItem {
   quantity_issued: number;
   issued_at: string;
   size?: string;
+  category_name?: string;
 }
 
 export interface UserInventoryResponse {
@@ -1918,6 +1921,7 @@ export interface InventoryItem {
   warranty_expiration?: string;
   location_id?: string;
   storage_location?: string;
+  storage_area_id?: string;
   size?: string;
   color?: string;
   station?: string;
@@ -1945,6 +1949,84 @@ export interface LowStockAlert {
   item_type: string;
   current_stock: number;
   threshold: number;
+  items?: Array<{ name: string; quantity: number }>;
+}
+
+export interface MaintenanceRecord {
+  id: string;
+  organization_id: string;
+  item_id: string;
+  maintenance_type: string;
+  scheduled_date?: string;
+  completed_date?: string;
+  next_due_date?: string;
+  performed_by?: string;
+  vendor_name?: string;
+  cost?: number;
+  condition_before?: string;
+  condition_after?: string;
+  description?: string;
+  parts_replaced?: string[];
+  parts_cost?: number;
+  labor_hours?: number;
+  passed?: boolean;
+  notes?: string;
+  issues_found?: string[];
+  is_completed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MaintenanceRecordCreate {
+  item_id: string;
+  maintenance_type: string;
+  scheduled_date?: string;
+  completed_date?: string;
+  next_due_date?: string;
+  performed_by?: string;
+  vendor_name?: string;
+  cost?: number;
+  condition_before?: string;
+  condition_after?: string;
+  description?: string;
+  parts_replaced?: string[];
+  parts_cost?: number;
+  labor_hours?: number;
+  passed?: boolean;
+  notes?: string;
+  issues_found?: string[];
+  is_completed?: boolean;
+}
+
+export interface StorageAreaResponse {
+  id: string;
+  organization_id: string;
+  name: string;
+  label?: string;
+  description?: string;
+  storage_type: string;
+  parent_id?: string;
+  location_id?: string;
+  barcode?: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  children: StorageAreaResponse[];
+  item_count: number;
+  location_name?: string;
+  parent_name?: string;
+}
+
+export interface StorageAreaCreate {
+  name: string;
+  label?: string;
+  description?: string;
+  storage_type: string;
+  parent_id?: string;
+  location_id?: string;
+  barcode?: string;
+  sort_order?: number;
 }
 
 export interface EquipmentRequestItem {
@@ -2008,6 +2090,7 @@ export interface InventoryItemCreate {
   weight?: number;
   location_id?: string;
   storage_location?: string;
+  storage_area_id?: string;
   station?: string;
   condition?: string;
   status?: string;
@@ -2263,6 +2346,46 @@ export const inventoryService = {
   async getLowStockItems(): Promise<LowStockAlert[]> {
     const response = await api.get<LowStockAlert[]>('/inventory/low-stock');
     return response.data;
+  },
+
+  async getMaintenanceDueItems(daysAhead: number = 30): Promise<InventoryItem[]> {
+    const response = await api.get<InventoryItem[]>('/inventory/maintenance/due', { params: { days_ahead: daysAhead } });
+    return response.data;
+  },
+
+  async getItemMaintenanceHistory(itemId: string): Promise<MaintenanceRecord[]> {
+    const response = await api.get<MaintenanceRecord[]>(`/inventory/items/${itemId}/maintenance`);
+    return response.data;
+  },
+
+  async createMaintenanceRecord(data: MaintenanceRecordCreate): Promise<MaintenanceRecord> {
+    const response = await api.post<MaintenanceRecord>('/inventory/maintenance', data);
+    return response.data;
+  },
+
+  async updateMaintenanceRecord(recordId: string, data: Partial<MaintenanceRecordCreate>): Promise<MaintenanceRecord> {
+    const response = await api.put<MaintenanceRecord>(`/inventory/maintenance/${recordId}`, data);
+    return response.data;
+  },
+
+  // Storage Areas
+  async getStorageAreas(params?: { location_id?: string; parent_id?: string; flat?: boolean }): Promise<StorageAreaResponse[]> {
+    const response = await api.get<StorageAreaResponse[]>('/inventory/storage-areas', { params });
+    return response.data;
+  },
+
+  async createStorageArea(data: StorageAreaCreate): Promise<StorageAreaResponse> {
+    const response = await api.post<StorageAreaResponse>('/inventory/storage-areas', data);
+    return response.data;
+  },
+
+  async updateStorageArea(areaId: string, data: Partial<StorageAreaCreate>): Promise<StorageAreaResponse> {
+    const response = await api.put<StorageAreaResponse>(`/inventory/storage-areas/${areaId}`, data);
+    return response.data;
+  },
+
+  async deleteStorageArea(areaId: string): Promise<void> {
+    await api.delete(`/inventory/storage-areas/${areaId}`);
   },
 
   // Pool item issuance

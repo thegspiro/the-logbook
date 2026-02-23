@@ -18,7 +18,9 @@ import {
   Loader2,
   FileText,
   Wrench,
+  CheckCheck,
 } from 'lucide-react';
+import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime } from '../utils/dateFormatting';
@@ -213,13 +215,24 @@ const NotificationsPage: React.FC = () => {
     (r.description || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Batch management: mark all as read (#76)
+  const handleMarkAllRead = async () => {
+    try {
+      const unreadLogs = logs.filter((l) => !l.read);
+      await Promise.all(unreadLogs.map((l) => notificationsService.markAsRead(l.id)));
+      setLogs((prev) => prev.map((l) => ({ ...l, read: true })));
+    } catch {
+      setError('Failed to mark all as read');
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
-          <p className="text-theme-text-secondary text-sm">Loading notifications...</p>
-        </div>
+      <div className="min-h-screen">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <Breadcrumbs />
+          <SkeletonPage rows={6} />
+        </main>
       </div>
     );
   }
@@ -227,6 +240,8 @@ const NotificationsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <Breadcrumbs />
+
         {/* Page Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
@@ -427,6 +442,18 @@ const NotificationsPage: React.FC = () => {
 
         {activeTab === 'log' && (
           <>
+            {/* Batch management (#76) */}
+            {logs.some((l) => !l.read) && (
+              <div className="flex items-center justify-end mb-4">
+                <button
+                  onClick={handleMarkAllRead}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  Mark all as read
+                </button>
+              </div>
+            )}
             {logs.length === 0 ? (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
                 <Clock className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />

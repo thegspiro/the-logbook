@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -20,6 +20,9 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
+import { Breadcrumbs, SkeletonPage, EmptyState, Pagination } from '../components/ux';
+import { SortableHeader, sortItems } from '../components/ux/SortableHeader';
+import type { SortDirection } from '../components/ux/SortableHeader';
 
 interface MemberStats {
   total: number;
@@ -52,6 +55,14 @@ const Members: React.FC = () => {
     show_mobile: false,
   });
   const [deleteModalMember, setDeleteModalMember] = useState<User | null>(null);
+
+  // Sorting state (#30)
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
+  // Pagination state (#11)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   useEffect(() => {
     loadMembers();
@@ -116,23 +127,54 @@ const Members: React.FC = () => {
     }
   };
 
-  const filteredMembers = members.filter((member) => {
-    const fullName = `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase();
-    const searchLower = searchQuery.toLowerCase();
+  const filteredMembers = useMemo(() => {
+    let result = members.filter((member) => {
+      const fullName = `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase();
+      const searchLower = searchQuery.toLowerCase();
 
-    const matchesSearch =
-      fullName.includes(searchLower) ||
-      (member.username && member.username.toLowerCase().includes(searchLower)) ||
-      (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
-      (member.email && member.email.toLowerCase().includes(searchLower));
+      const matchesSearch =
+        fullName.includes(searchLower) ||
+        (member.username && member.username.toLowerCase().includes(searchLower)) ||
+        (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
+        (member.email && member.email.toLowerCase().includes(searchLower));
 
-    const matchesFilter =
-      filterStatus === 'all' ||
-      member.status === filterStatus ||
-      (filterStatus === 'leave' && (member.status === 'leave' || member.status === 'on_leave'));
+      const matchesFilter =
+        filterStatus === 'all' ||
+        member.status === filterStatus ||
+        (filterStatus === 'leave' && (member.status === 'leave' || member.status === 'on_leave'));
 
-    return matchesSearch && matchesFilter;
-  });
+      return matchesSearch && matchesFilter;
+    });
+
+    // Apply sorting (#30)
+    result = sortItems(result, sortField, sortDirection, (item, field) => {
+      switch (field) {
+        case 'name': return `${item.first_name || ''} ${item.last_name || ''}`;
+        case 'status': return item.status;
+        case 'hire_date': return item.hire_date || '';
+        case 'membership_number': return item.membership_number || '';
+        default: return (item as unknown as Record<string, unknown>)[field] as string;
+      }
+    });
+
+    return result;
+  }, [members, searchQuery, filterStatus, sortField, sortDirection]);
+
+  // Paginated subset (#11)
+  const paginatedMembers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredMembers.slice(start, start + pageSize);
+  }, [filteredMembers, currentPage, pageSize]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterStatus, sortField, sortDirection]);
+
+  const handleSort = (field: string, direction: SortDirection) => {
+    setSortField(direction ? field : null);
+    setSortDirection(direction);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -159,6 +201,8 @@ const Members: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <Breadcrumbs />
+
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div className="flex items-center space-x-3">
@@ -275,41 +319,32 @@ const Members: React.FC = () => {
 
         {/* Members Table */}
         {loading ? (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-            <p className="text-theme-text-secondary">Loading members...</p>
-          </div>
+          <SkeletonPage rows={8} showStats={false} />
         ) : filteredMembers.length === 0 ? (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-            <Users className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
-            <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Members Found</h3>
-            <p className="text-theme-text-secondary mb-6">
-              {searchQuery || filterStatus !== 'all'
-                ? 'Try adjusting your search or filters'
-                : 'Get started by adding your first member or importing from CSV'}
-            </p>
-            <div className="flex items-center justify-center space-x-3">
-              <button
-                onClick={() => navigate('/members/import')}
-                className="flex items-center space-x-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-              >
-                <Upload className="w-5 h-5" />
-                <span>Import CSV</span>
-              </button>
-              <button
-                onClick={() => navigate('/members/add')}
-                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-              >
-                <UserPlus className="w-5 h-5" />
-                <span>Add Member</span>
-              </button>
-            </div>
+          <div className="card p-12">
+            <EmptyState
+              icon={Users}
+              title="No Members Found"
+              description={
+                searchQuery || filterStatus !== 'all'
+                  ? 'Try adjusting your search or filters'
+                  : 'Get started by adding your first member or importing from CSV'
+              }
+              actions={
+                !(searchQuery || filterStatus !== 'all')
+                  ? [
+                      { label: 'Import CSV', onClick: () => navigate('/members/import'), icon: Upload, variant: 'secondary' },
+                      { label: 'Add Member', onClick: () => navigate('/members/add'), icon: UserPlus },
+                    ]
+                  : undefined
+              }
+            />
           </div>
         ) : (
           <>
           {/* Mobile card view */}
           <div className="md:hidden space-y-3">
-            {filteredMembers.map((member) => (
+            {paginatedMembers.map((member) => (
               <div
                 key={member.id}
                 className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-4"
@@ -387,22 +422,22 @@ const Members: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
-                      Member
+                    <th className="px-6 py-3 text-left">
+                      <SortableHeader label="Member" field="name" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
-                      Member #
+                    <th className="px-6 py-3 text-left">
+                      <SortableHeader label="Member #" field="membership_number" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
                     </th>
                     {contactInfoEnabled.enabled && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Contact
                       </th>
                     )}
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
-                      Status
+                    <th className="px-6 py-3 text-left">
+                      <SortableHeader label="Status" field="status" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
-                      Hire Date
+                    <th className="px-6 py-3 text-left">
+                      <SortableHeader label="Hire Date" field="hire_date" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                       Actions
@@ -410,7 +445,7 @@ const Members: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-theme-surface-border">
-                  {filteredMembers.map((member) => (
+                  {paginatedMembers.map((member) => (
                     <tr key={member.id} className="hover:bg-theme-surface-secondary transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -510,6 +545,15 @@ const Members: React.FC = () => {
               </table>
             </div>
           </div>
+          {/* Pagination (#11) */}
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredMembers.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+            className="mt-4"
+          />
           </>
         )}
       </main>

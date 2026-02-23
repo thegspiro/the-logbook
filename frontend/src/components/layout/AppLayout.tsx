@@ -6,6 +6,8 @@ import { SideNavigation } from './SideNavigation';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 import { useAuthStore } from '../../stores/authStore';
 import { useIdleTimer } from '../../hooks/useIdleTimer';
+import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
+import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -25,6 +27,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   // Session inactivity timeout (configurable, fetched from backend, with warning toast)
   useIdleTimer();
+
+  // Keyboard shortcuts for navigation (#39)
+  useNavigationShortcuts();
 
   useEffect(() => {
     // Load branding from localStorage first (persists across sessions/logout)
@@ -97,6 +102,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   if (navigationLayout === 'left') {
     return (
       <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+        <TopProgressBar />
+        <CommandPalette />
         {/* Skip to main content link for keyboard users */}
         <a
           href="#main-content"
@@ -111,7 +118,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         />
         <div className="md:ml-64 min-h-screen flex flex-col pt-16 md:pt-0">
           <div className="flex-1" id="main-content" role="main">
-            {content}
+            <PageTransition>
+              {content}
+            </PageTransition>
           </div>
           <div className="md:ml-0">{footer}</div>
         </div>
@@ -126,6 +135,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+      <TopProgressBar />
+      <CommandPalette />
       {/* Skip to main content link for keyboard users */}
       <a
         href="#main-content"
@@ -139,7 +150,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         onLogout={handleLogoutClick}
       />
       <div className="flex-1" id="main-content" role="main">
-        {content}
+        <PageTransition>
+          {content}
+        </PageTransition>
       </div>
       {footer}
       <LogoutConfirmModal

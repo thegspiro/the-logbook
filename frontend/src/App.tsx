@@ -70,6 +70,7 @@ const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const InventoryAdminHub = lazy(() => import('./pages/InventoryAdminHub').then(m => ({ default: m.InventoryAdminHub })));
 const InventoryCheckoutsPage = lazy(() => import('./pages/InventoryCheckoutsPage'));
 const MyEquipmentPage = lazy(() => import('./pages/MyEquipmentPage'));
+const StorageAreasPage = lazy(() => import('./pages/StorageAreasPage'));
 
 // Scheduling Module
 const SchedulingPage = lazy(() => import('./pages/SchedulingPage'));
@@ -203,6 +204,7 @@ function App() {
               <Route path="/inventory/my-equipment" element={<MyEquipmentPage />} />
               <Route path="/inventory/admin" element={<ProtectedRoute requiredPermission="inventory.manage"><InventoryAdminHub /></ProtectedRoute>} />
               <Route path="/inventory/checkouts" element={<ProtectedRoute requiredPermission="inventory.manage"><InventoryCheckoutsPage /></ProtectedRoute>} />
+              <Route path="/inventory/storage-areas" element={<StorageAreasPage />} />
 
               {/* Scheduling Module */}
               <Route path="/scheduling" element={<SchedulingPage />} />

@@ -198,6 +198,14 @@ const MyEquipmentPage: React.FC = () => {
                     <div key={item.assignment_id} className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border">
                       <h3 className="text-theme-text-primary font-medium text-sm">{item.item_name}</h3>
                       <div className="mt-2 space-y-1">
+                        {item.category_name && (
+                          <p className="text-theme-text-secondary text-xs">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-theme-surface-secondary text-theme-text-muted text-xs">{item.category_name}</span>
+                          </p>
+                        )}
+                        {(item.quantity ?? 1) > 1 && (
+                          <p className="text-theme-text-secondary text-xs">Qty: {item.quantity}</p>
+                        )}
                         {item.serial_number && <p className="text-theme-text-muted text-xs font-mono">SN: {item.serial_number}</p>}
                         {item.asset_tag && <p className="text-theme-text-muted text-xs font-mono">Tag: {item.asset_tag}</p>}
                         <p className={`text-xs capitalize ${CONDITION_COLORS[item.condition] || 'text-theme-text-secondary'}`}>
@@ -272,6 +280,7 @@ const MyEquipmentPage: React.FC = () => {
                       <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
                         <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
                         <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Qty</th>
+                        <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Category</th>
                         <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Size</th>
                         <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Issued</th>
                       </tr>
@@ -281,6 +290,7 @@ const MyEquipmentPage: React.FC = () => {
                         <tr key={iss.issuance_id} className="border-b border-theme-surface-border">
                           <td className="p-3 text-theme-text-primary font-medium">{iss.item_name}</td>
                           <td className="p-3 text-theme-text-secondary">{iss.quantity_issued}</td>
+                          <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{iss.category_name || '--'}</td>
                           <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{iss.size || '--'}</td>
                           <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{formatDate(iss.issued_at)}</td>
                         </tr>

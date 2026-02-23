@@ -178,7 +178,8 @@ class InventoryItem(Base):
 
     # Location
     location_id = Column(String(36), ForeignKey("locations.id", ondelete="SET NULL"), index=True)  # Room reference
-    storage_location = Column(String(255))  # Storage area within the room (e.g., Shelf B-3, Secure Closet 2)
+    storage_location = Column(String(255))  # Free-text storage area (legacy, e.g., Shelf B-3)
+    storage_area_id = Column(String(36), ForeignKey("storage_areas.id", ondelete="SET NULL"), index=True)  # Structured storage area
     station = Column(String(100))  # Which station it's assigned to
 
     # Condition & Status
@@ -224,6 +225,7 @@ class InventoryItem(Base):
     # Relationships
     category = relationship("InventoryCategory", back_populates="items", foreign_keys=[category_id])
     location = relationship("Location", foreign_keys=[location_id])
+    storage_area = relationship("StorageArea", foreign_keys=[storage_area_id])
     assigned_to_user = relationship("User", foreign_keys=[assigned_to_user_id])
     checkout_records = relationship("CheckOutRecord", back_populates="item", cascade="all, delete-orphan")
     maintenance_records = relationship("MaintenanceRecord", back_populates="item", cascade="all, delete-orphan")
@@ -756,6 +758,78 @@ class EquipmentRequest(Base):
     __table_args__ = (
         Index("idx_equip_requests_org_status", "organization_id", "status"),
         Index("idx_equip_requests_requester", "requester_id", "status"),
+    )
+
+
+class StorageLocationType(str, enum.Enum):
+    """Type of storage location in the hierarchy"""
+    RACK = "rack"              # Storage rack or closet
+    SHELF = "shelf"            # Shelf within a rack/closet
+    BOX = "box"                # Box (may be on a shelf or standalone)
+    CABINET = "cabinet"        # Cabinet or locker
+    DRAWER = "drawer"          # Drawer within a cabinet
+    BIN = "bin"                # Bin or container
+    OTHER = "other"
+
+
+class StorageArea(Base):
+    """
+    Storage Area model
+
+    Provides structured storage location hierarchy within rooms/locations.
+    Hierarchy: Room (Location) → Storage Area → Rack/Closet → Shelf → Box
+
+    Each storage area can have a parent, enabling flexible nesting:
+    - A rack belongs to a room (via location_id)
+    - A shelf belongs to a rack (via parent_id)
+    - A box belongs to a shelf (via parent_id) or directly to a room
+    """
+
+    __tablename__ = "storage_areas"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Name and label (e.g., "Rack A", "Shelf 3", "Box 12")
+    name = Column(String(255), nullable=False)
+    label = Column(String(100))  # Short label/number for quick reference
+    description = Column(Text)
+
+    # Type of storage location
+    storage_type = Column(
+        Enum(StorageLocationType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+
+    # Hierarchy: parent storage area (e.g., shelf's parent = rack)
+    parent_id = Column(String(36), ForeignKey("storage_areas.id", ondelete="CASCADE"), index=True)
+
+    # Room/location this storage area belongs to (top-level only; children inherit)
+    location_id = Column(String(36), ForeignKey("locations.id", ondelete="SET NULL"), index=True)
+
+    # Optional: barcode or QR code for scanning
+    barcode = Column(String(255))
+
+    # Ordering within parent
+    sort_order = Column(Integer, default=0)
+
+    # Status
+    is_active = Column(Boolean, default=True, index=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    parent = relationship("StorageArea", remote_side=[id], foreign_keys=[parent_id])
+    children = relationship("StorageArea", foreign_keys=[parent_id], cascade="all, delete-orphan")
+    location = relationship("Location", foreign_keys=[location_id])
+
+    __table_args__ = (
+        Index("idx_storage_areas_org", "organization_id"),
+        Index("idx_storage_areas_parent", "parent_id"),
+        Index("idx_storage_areas_location", "location_id"),
     )
 
 

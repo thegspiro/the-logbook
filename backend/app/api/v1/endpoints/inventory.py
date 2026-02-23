@@ -71,12 +71,16 @@ from app.schemas.inventory import (
     EquipmentRequestCreate,
     EquipmentRequestReview,
     EquipmentRequestResponse,
+    # Storage area schemas
+    StorageAreaCreate,
+    StorageAreaUpdate,
+    StorageAreaResponse,
     # Write-off schemas
     WriteOffRequestCreate,
     WriteOffReview,
     WriteOffRequestResponse,
 )
-from app.models.inventory import EquipmentRequest, RequestStatus
+from app.models.inventory import EquipmentRequest, RequestStatus, StorageArea
 from app.services.inventory_service import InventoryService
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.api.dependencies import get_current_user, require_permission
@@ -1866,6 +1870,229 @@ async def review_equipment_request(
         "status": review_data.status,
         "message": f"Request {review_data.status}",
     }
+
+
+# ============================================
+# Storage Area Endpoints
+# ============================================
+
+@router.get("/storage-areas", response_model=List[StorageAreaResponse])
+async def list_storage_areas(
+    location_id: Optional[str] = Query(None, description="Filter by room/location"),
+    parent_id: Optional[str] = Query(None, description="Filter by parent storage area"),
+    flat: bool = Query(False, description="Return flat list instead of tree"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    List storage areas, optionally filtered by location or parent.
+    Returns a hierarchical tree by default, or flat list if flat=true.
+    """
+    from sqlalchemy import select, func as sqlfunc
+    from sqlalchemy.orm import selectinload
+
+    query = (
+        select(StorageArea)
+        .where(StorageArea.organization_id == str(current_user.organization_id))
+        .where(StorageArea.is_active == True)  # noqa: E712
+        .order_by(StorageArea.sort_order, StorageArea.name)
+    )
+
+    if location_id:
+        query = query.where(StorageArea.location_id == location_id)
+    if parent_id:
+        query = query.where(StorageArea.parent_id == parent_id)
+    elif not flat and not location_id:
+        # For tree view, start with top-level items
+        query = query.where(StorageArea.parent_id.is_(None))
+
+    result = await db.execute(query)
+    areas = result.scalars().all()
+
+    # Count items per storage area
+    from app.models.inventory import InventoryItem
+    count_result = await db.execute(
+        select(InventoryItem.storage_area_id, sqlfunc.count(InventoryItem.id).label("cnt"))
+        .where(InventoryItem.organization_id == str(current_user.organization_id))
+        .where(InventoryItem.active == True)  # noqa: E712
+        .where(InventoryItem.storage_area_id.isnot(None))
+        .group_by(InventoryItem.storage_area_id)
+    )
+    item_counts = {row.storage_area_id: row.cnt for row in count_result.all()}
+
+    # Load locations for names
+    from app.models.location import Location
+    loc_result = await db.execute(
+        select(Location.id, Location.name)
+        .where(Location.organization_id == str(current_user.organization_id))
+    )
+    loc_names = {row.id: row.name for row in loc_result.all()}
+
+    def build_response(area: StorageArea) -> dict:
+        resp = {
+            "id": area.id,
+            "organization_id": area.organization_id,
+            "name": area.name,
+            "label": area.label,
+            "description": area.description,
+            "storage_type": area.storage_type.value if hasattr(area.storage_type, 'value') else area.storage_type,
+            "parent_id": area.parent_id,
+            "location_id": area.location_id,
+            "barcode": area.barcode,
+            "sort_order": area.sort_order or 0,
+            "is_active": area.is_active,
+            "created_at": area.created_at,
+            "updated_at": area.updated_at,
+            "created_by": area.created_by,
+            "children": [],
+            "item_count": item_counts.get(area.id, 0),
+            "location_name": loc_names.get(area.location_id) if area.location_id else None,
+            "parent_name": None,
+        }
+        return resp
+
+    if flat:
+        return [build_response(a) for a in areas]
+
+    # Build tree: load all areas for this org to build complete tree
+    all_result = await db.execute(
+        select(StorageArea)
+        .where(StorageArea.organization_id == str(current_user.organization_id))
+        .where(StorageArea.is_active == True)  # noqa: E712
+        .order_by(StorageArea.sort_order, StorageArea.name)
+    )
+    all_areas = all_result.scalars().all()
+    area_map = {a.id: build_response(a) for a in all_areas}
+
+    # Attach children to parents
+    roots = []
+    for a in all_areas:
+        resp = area_map[a.id]
+        if a.parent_id and a.parent_id in area_map:
+            resp["parent_name"] = area_map[a.parent_id]["name"]
+            area_map[a.parent_id]["children"].append(resp)
+        else:
+            roots.append(resp)
+
+    return roots
+
+
+@router.post("/storage-areas", response_model=StorageAreaResponse, status_code=status.HTTP_201_CREATED)
+async def create_storage_area(
+    data: StorageAreaCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Create a new storage area"""
+    from app.core.utils import generate_uuid
+
+    area = StorageArea(
+        id=generate_uuid(),
+        organization_id=str(current_user.organization_id),
+        name=data.name,
+        label=data.label,
+        description=data.description,
+        storage_type=data.storage_type,
+        parent_id=str(data.parent_id) if data.parent_id else None,
+        location_id=str(data.location_id) if data.location_id else None,
+        barcode=data.barcode,
+        sort_order=data.sort_order,
+        created_by=str(current_user.id),
+    )
+    db.add(area)
+    await db.commit()
+    await db.refresh(area)
+
+    return {
+        "id": area.id,
+        "organization_id": area.organization_id,
+        "name": area.name,
+        "label": area.label,
+        "description": area.description,
+        "storage_type": area.storage_type.value if hasattr(area.storage_type, 'value') else area.storage_type,
+        "parent_id": area.parent_id,
+        "location_id": area.location_id,
+        "barcode": area.barcode,
+        "sort_order": area.sort_order or 0,
+        "is_active": area.is_active,
+        "created_at": area.created_at,
+        "updated_at": area.updated_at,
+        "created_by": area.created_by,
+        "children": [],
+        "item_count": 0,
+        "location_name": None,
+        "parent_name": None,
+    }
+
+
+@router.put("/storage-areas/{area_id}", response_model=StorageAreaResponse)
+async def update_storage_area(
+    area_id: UUID,
+    data: StorageAreaUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Update a storage area"""
+    from sqlalchemy import select
+    result = await db.execute(
+        select(StorageArea)
+        .where(StorageArea.id == str(area_id))
+        .where(StorageArea.organization_id == str(current_user.organization_id))
+    )
+    area = result.scalar_one_or_none()
+    if not area:
+        raise HTTPException(status_code=404, detail="Storage area not found")
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if field in ("parent_id", "location_id") and value is not None:
+            value = str(value)
+        setattr(area, field, value)
+
+    await db.commit()
+    await db.refresh(area)
+
+    return {
+        "id": area.id,
+        "organization_id": area.organization_id,
+        "name": area.name,
+        "label": area.label,
+        "description": area.description,
+        "storage_type": area.storage_type.value if hasattr(area.storage_type, 'value') else area.storage_type,
+        "parent_id": area.parent_id,
+        "location_id": area.location_id,
+        "barcode": area.barcode,
+        "sort_order": area.sort_order or 0,
+        "is_active": area.is_active,
+        "created_at": area.created_at,
+        "updated_at": area.updated_at,
+        "created_by": area.created_by,
+        "children": [],
+        "item_count": 0,
+        "location_name": None,
+        "parent_name": None,
+    }
+
+
+@router.delete("/storage-areas/{area_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_storage_area(
+    area_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Delete (deactivate) a storage area"""
+    from sqlalchemy import select
+    result = await db.execute(
+        select(StorageArea)
+        .where(StorageArea.id == str(area_id))
+        .where(StorageArea.organization_id == str(current_user.organization_id))
+    )
+    area = result.scalar_one_or_none()
+    if not area:
+        raise HTTPException(status_code=404, detail="Storage area not found")
+
+    area.is_active = False
+    await db.commit()
 
 
 # ============================================
