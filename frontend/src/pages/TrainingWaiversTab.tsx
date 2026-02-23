@@ -125,7 +125,7 @@ const TrainingWaiversTab: React.FC = () => {
         requirement_ids: w.requirement_ids,
         granted_by_name: grantedByMember?.full_name || grantedByMember?.username || '',
         active: w.active,
-        source: linkedLeave ? 'leave_linked' : 'standalone',
+        source: linkedLeave ? 'leave_linked' as const : 'standalone' as const,
         leave_id: linkedLeave?.id,
       };
     }).sort((a, b) => b.start_date.localeCompare(a.start_date));
