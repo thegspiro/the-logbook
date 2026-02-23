@@ -4,8 +4,8 @@ Adds the equipment_requests table to support the equipment request
 workflow where members can request checkouts, issuances, or purchases
 and admins can review and approve/deny them.
 
-Revision ID: 20260222_0400
-Revises: 20260222_0300
+Revision ID: 20260222_0450
+Revises: 20260222_0400
 Create Date: 2026-02-22 04:00:00.000000
 
 """
@@ -13,8 +13,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '20260222_0400'
-down_revision = '20260222_0300'
+revision = '20260222_0450'
+down_revision = '20260222_0400'
 branch_labels = None
 depends_on = None
 

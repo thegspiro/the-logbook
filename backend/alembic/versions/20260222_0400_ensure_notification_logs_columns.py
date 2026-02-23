@@ -7,7 +7,7 @@ was stamped at head before these ALTER TABLE migrations actually ran.
 This migration fills the gap idempotently.
 
 Revision ID: 20260222_0400
-Revises: 20260222_0300
+Revises: 20260222_0350
 Create Date: 2026-02-22 04:00:00.000000
 
 """
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "20260222_0400"
-down_revision: Union[str, None] = "20260222_0300"
+down_revision: Union[str, None] = "20260222_0350"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

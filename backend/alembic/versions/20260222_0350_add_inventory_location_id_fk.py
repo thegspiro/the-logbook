@@ -4,8 +4,8 @@ Links inventory items to specific rooms (locations) so that storage
 location can be tracked as a structured room + storage area instead
 of free-text only.
 
-Revision ID: 20260222_0300
-Revises: 20260222_0200
+Revision ID: 20260222_0350
+Revises: 20260222_0300
 Create Date: 2026-02-22 03:00:00.000000
 
 """
@@ -13,8 +13,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '20260222_0300'
-down_revision = '20260222_0200'
+revision = '20260222_0350'
+down_revision = '20260222_0300'
 branch_labels = None
 depends_on = None
 

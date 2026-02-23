@@ -1,7 +1,7 @@
 """Add missing model columns and tables across the application
 
-Revision ID: 20260218_0200
-Revises: 20260218_0100
+Revision ID: 20260218_0300
+Revises: 20260218_0200
 Create Date: 2026-02-18
 
 Adds columns and tables that exist in SQLAlchemy models but were never
@@ -21,8 +21,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '20260218_0200'
-down_revision = '20260218_0100'
+revision = '20260218_0300'
+down_revision = '20260218_0200'
 branch_labels = None
 depends_on = None
 
