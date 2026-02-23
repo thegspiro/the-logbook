@@ -90,7 +90,7 @@ export const MembersAdminPage: React.FC = () => {
     locationsService.getLocations({ is_active: true }).then((locs) => {
       const stations = locs.filter((l: Location) => l.address && !l.room_number);
       setAvailableStations(stations);
-    }).catch(() => {});
+    }).catch(() => { /* non-critical UI data */ });
   }, []);
 
   const fetchData = async () => {

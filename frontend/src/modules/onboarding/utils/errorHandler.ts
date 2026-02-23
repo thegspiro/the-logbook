@@ -21,30 +21,32 @@ export interface ApiError {
  * @param context - Optional context for more specific messages
  * @returns User-friendly error message
  */
-export function handleApiError(error: any, context?: string): string {
+export function handleApiError(error: unknown, context?: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const err = error as Record<string, any>;
   // Network errors (no response from server)
-  if (error.message === 'Failed to fetch' || error.name === 'NetworkError') {
+  if (err.message === 'Failed to fetch' || err.name === 'NetworkError') {
     return 'Cannot connect to server. Please check your internet connection and try again.';
   }
 
   // Timeout errors
-  if (error.name === 'TimeoutError' || error.message?.includes('timeout')) {
+  if (err.name === 'TimeoutError' || err.message?.includes('timeout')) {
     return 'Request timed out. The server is taking too long to respond. Please try again.';
   }
 
   // CORS errors
-  if (error.message?.includes('CORS')) {
+  if (err.message?.includes('CORS')) {
     return 'Connection blocked by security policy. Please contact your administrator.';
   }
 
   // Parse HTTP status codes
-  if (error.response) {
-    const status = error.response.status;
+  if (err.response) {
+    const status = err.response.status;
 
     switch (status) {
       case 400:
         // Bad request - use backend message if available
-        return error.response.data?.detail || error.response.data?.message || 'Invalid request. Please check your input and try again.';
+        return err.response.data?.detail || err.response.data?.message || 'Invalid request. Please check your input and try again.';
 
       case 401:
         return 'Session expired. Please log in again.';
@@ -59,11 +61,11 @@ export function handleApiError(error: any, context?: string): string {
 
       case 409:
         // Conflict - usually duplicate entry
-        return error.response.data?.detail || 'This item already exists. Please use a different value.';
+        return err.response.data?.detail || 'This item already exists. Please use a different value.';
 
       case 422:
         // Validation error - use backend message
-        return error.response.data?.detail || 'Validation failed. Please check your input.';
+        return err.response.data?.detail || 'Validation failed. Please check your input.';
 
       case 429:
         return 'Too many requests. Please wait a moment and try again.';
@@ -78,24 +80,24 @@ export function handleApiError(error: any, context?: string): string {
 
       default:
         // Use backend error message if available
-        if (error.response.data?.detail) {
-          return error.response.data.detail;
+        if (err.response.data?.detail) {
+          return err.response.data.detail;
         }
-        if (error.response.data?.message) {
-          return error.response.data.message;
+        if (err.response.data?.message) {
+          return err.response.data.message;
         }
         return `Request failed with status ${status}. Please try again.`;
     }
   }
 
   // Extract backend error message if present
-  if (error.detail) {
-    return error.detail;
+  if (err.detail) {
+    return err.detail;
   }
 
-  if (error.message) {
+  if (err.message) {
     // Clean up common error messages
-    const message = error.message;
+    const message = err.message;
 
     // Database connection errors
     if (message.includes('database') || message.includes('connection pool')) {
@@ -150,15 +152,15 @@ function containsTechnicalJargon(message: string): boolean {
  * @param validationErrors - Array of validation error objects
  * @returns User-friendly error message
  */
-export function formatValidationErrors(validationErrors: any[]): string {
+export function formatValidationErrors(validationErrors: Array<{ loc?: string[]; msg?: string }>): string {
   if (!validationErrors || validationErrors.length === 0) {
     return 'Validation failed. Please check your input.';
   }
 
   if (validationErrors.length === 1) {
-    const error = validationErrors[0];
+    const error = validationErrors[0]!;
     const field = error.loc?.[error.loc.length - 1] || 'field';
-    return `${capitalizeFirst(field)}: ${error.msg}`;
+    return `${capitalizeFirst(field)}: ${error.msg ?? ''}`;
   }
 
   // Multiple errors
@@ -181,32 +183,38 @@ function capitalizeFirst(str: string): string {
 /**
  * Check if an error is a network error
  */
-export function isNetworkError(error: any): boolean {
+export function isNetworkError(error: unknown): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const err = error as Record<string, any>;
   return (
-    error.message === 'Failed to fetch' ||
-    error.name === 'NetworkError' ||
-    error.name === 'TypeError' && error.message.includes('fetch')
+    err.message === 'Failed to fetch' ||
+    err.name === 'NetworkError' ||
+    err.name === 'TypeError' && err.message?.includes('fetch')
   );
 }
 
 /**
  * Check if an error is an authentication error
  */
-export function isAuthError(error: any): boolean {
-  return error.response?.status === 401 || error.response?.status === 403;
+export function isAuthError(error: unknown): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const err = error as Record<string, any>;
+  return err.response?.status === 401 || err.response?.status === 403;
 }
 
 /**
  * Check if an error is a validation error
  */
-export function isValidationError(error: any): boolean {
-  return error.response?.status === 422 || error.response?.status === 400;
+export function isValidationError(error: unknown): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const err = error as Record<string, any>;
+  return err.response?.status === 422 || err.response?.status === 400;
 }
 
 /**
  * Get a user-friendly message for common onboarding errors
  */
-export function getOnboardingErrorMessage(error: any, step?: string): string {
+export function getOnboardingErrorMessage(error: unknown, step?: string): string {
   const baseMessage = handleApiError(error, step);
 
   // Add step-specific guidance

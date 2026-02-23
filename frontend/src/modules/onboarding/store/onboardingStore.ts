@@ -17,7 +17,7 @@ export interface OnboardingError {
   step: string;
   action: string;
   errorMessage: string;
-  errorDetails?: any;
+  errorDetails?: unknown;
   userContext?: string;
   recovered: boolean;
 }
@@ -111,9 +111,6 @@ export interface OnboardingActions {
 
   // Position Actions
   setPositionsConfig: (positions: OnboardingState['positionsConfig']) => void;
-  /** @deprecated Use setPositionsConfig */
-  setRolesConfig: (positions: OnboardingState['positionsConfig']) => void;
-
   // Module Actions
   setSelectedModules: (modules: string[]) => void;
   toggleModule: (moduleId: string) => void;
@@ -266,12 +263,6 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
 
       // Position Actions
       setPositionsConfig: (positions) => {
-        set({ positionsConfig: positions });
-        get().triggerAutoSave();
-      },
-
-      // Backward-compatible alias
-      setRolesConfig: (positions) => {
         set({ positionsConfig: positions });
         get().triggerAutoSave();
       },

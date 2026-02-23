@@ -583,10 +583,58 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
                 logger.debug("Could not re-enable FOREIGN_KEY_CHECKS during fast-path init", exc_info=True)
 
     # 6. Stamp alembic to head so future startups skip all migrations
-    command.stamp(alembic_cfg, "head")
+    try:
+        command.stamp(alembic_cfg, "head")
+    except Exception as stamp_err:
+        # If the revision graph is broken (missing migration file), stamp
+        # directly with the manually-resolved head revision ID.
+        logger.warning(
+            f"command.stamp('head') failed ({stamp_err}). "
+            "Falling back to manual head resolution for stamp."
+        )
+        import re as _stamp_re
+        _rev_pat = _stamp_re.compile(
+            r"^revision\s*[:=]\s*['\"](.+?)['\"]", _stamp_re.MULTILINE
+        )
+        _down_pat = _stamp_re.compile(
+            r"^down_revision\s*[:=]\s*['\"](.+?)['\"]", _stamp_re.MULTILINE
+        )
+        _versions_dir = os.path.join(base_dir, "alembic", "versions")
+        _all_revs = {}
+        _all_down = set()
+        for _fn in os.listdir(_versions_dir):
+            if not _fn.endswith('.py') or _fn.startswith('_'):
+                continue
+            try:
+                with open(os.path.join(_versions_dir, _fn)) as _mf:
+                    _c = _mf.read(2048)
+                _rm = _rev_pat.search(_c)
+                _dm = _down_pat.search(_c)
+                if _rm:
+                    _all_revs[_rm.group(1)] = _dm.group(1) if _dm else None
+                    if _dm:
+                        _all_down.add(_dm.group(1))
+            except Exception:
+                continue
+        _heads = sorted([r for r in _all_revs if r not in _all_down])
+        if _heads:
+            _manual_head = _heads[-1]
+            logger.info(f"Stamping alembic_version to {_manual_head} via SQL")
+            with engine.connect() as _sc:
+                _sc.execute(text("DELETE FROM alembic_version"))
+                _sc.execute(
+                    text("INSERT INTO alembic_version (version_num) VALUES (:rev)"),
+                    {"rev": _manual_head},
+                )
+                _sc.commit()
+        else:
+            logger.error("Could not determine head revision for stamp")
 
-    head_rev = ScriptDirectory.from_config(alembic_cfg).get_current_head()
-    logger.info(f"Database stamped to head revision: {head_rev}")
+    try:
+        head_rev = ScriptDirectory.from_config(alembic_cfg).get_current_head()
+        logger.info(f"Database stamped to head revision: {head_rev}")
+    except Exception:
+        logger.info("Database stamped (could not resolve head for display)")
     logger.info("Fast-path database initialization complete")
 
 
@@ -648,68 +696,22 @@ def run_migrations():
                 )
 
     if not _walk_ok:
-
-        # --- Diagnostic: figure out why Alembic can't load a revision ---
-        import importlib.util as _ilu
         missing_rev = str(_walk_err).strip("'\"")
         py_files = sorted(
             f for f in os.listdir(versions_dir)
             if f.endswith('.py') and not f.startswith('_')
         )
-        logger.info(
-            f"Migration diagnostic: {len(py_files)} .py files in {versions_dir}"
+        # Check if the referenced migration file physically exists
+        found = any(missing_rev in f for f in py_files)
+        logger.warning(
+            f"Revision '{missing_rev}' missing from graph. "
+            f"{len(py_files)} .py files in versions dir. "
+            f"File on disk: {found}"
         )
-        # Find and test-import the file(s) that declare the missing revision
-        for fname in py_files:
-            if missing_rev in fname:
-                fpath = os.path.join(versions_dir, fname)
-                logger.info(
-                    f"  File exists: {fname} "
-                    f"(size={os.path.getsize(fpath)}, "
-                    f"readable={os.access(fpath, os.R_OK)})"
-                )
-                try:
-                    spec = _ilu.spec_from_file_location(
-                        f"_diag_{fname.replace('.', '_')}", fpath
-                    )
-                    if spec is None or spec.loader is None:
-                        logger.error(f"  importlib returned None spec for {fname}")
-                        continue
-                    mod = _ilu.module_from_spec(spec)
-                    spec.loader.exec_module(mod)
-                    logger.info(
-                        f"  Manual import OK: revision={getattr(mod, 'revision', '?')}"
-                    )
-                except Exception as imp_err:
-                    logger.error(
-                        f"  Manual import FAILED for {fname}: "
-                        f"{type(imp_err).__name__}: {imp_err}"
-                    )
-        # Also check if any OTHER file declares the same revision (hidden dup)
-        import re as _re
-        _rev_re = _re.compile(
-            r"^revision\s*[:=]\s*['\"](.+?)['\"]", _re.MULTILINE
-        )
-        for fname in py_files:
-            fpath = os.path.join(versions_dir, fname)
-            try:
-                with open(fpath, 'r') as _f:
-                    content = _f.read(2048)
-                m = _rev_re.search(content)
-                if m and m.group(1) == missing_rev and missing_rev not in fname:
-                    logger.error(
-                        f"  HIDDEN DUPLICATE: {fname} also declares "
-                        f"revision='{missing_rev}'"
-                    )
-            except Exception:
-                pass
-        # --- End diagnostic ---
 
-        # The failed walk leaves a broken cached revision map on script_dir.
-        # Create a fresh ScriptDirectory so that get_current_head() below
-        # doesn't re-raise the same error.
+        # Create a fresh ScriptDirectory (the failed walk corrupts the
+        # cached revision map on the old one).
         script_dir = ScriptDirectory.from_config(alembic_cfg)
-        # Fall back to counting .py migration files
         total_migrations = len(py_files)
     startup_status.migrations_total = total_migrations
 

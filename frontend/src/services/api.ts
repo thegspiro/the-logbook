@@ -5,6 +5,7 @@
  */
 
 import axios from 'axios';
+import { API_TIMEOUT_MS } from '../constants/config';
 import type { User, ContactInfoSettings, ContactInfoUpdate, UserProfileUpdate } from '../types/user';
 import type {
   Role,
@@ -101,7 +102,7 @@ const API_BASE_URL = '/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: API_TIMEOUT_MS,
   withCredentials: true,  // Send httpOnly auth cookies with every request
   headers: {
     'Content-Type': 'application/json',
