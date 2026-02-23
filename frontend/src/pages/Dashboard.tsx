@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { formatRelativeTime } from '../hooks/useRelativeTime';
 import {
   Bell,
   Calendar,
@@ -610,8 +611,8 @@ const Dashboard: React.FC = () => {
                         <p className="text-xs text-theme-text-muted mt-0.5 truncate">{notification.message || ''}</p>
                       </div>
                       <div className="flex items-center ml-2 shrink-0">
-                        <span className="text-xs text-theme-text-muted whitespace-nowrap">
-                          {formatDate(notification.sent_at, tz)}
+                        <span className="text-xs text-theme-text-muted whitespace-nowrap" title={formatDate(notification.sent_at, tz)}>
+                          {formatRelativeTime(notification.sent_at)}
                         </span>
                         {notification.action_url && (
                           <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted ml-1" />

@@ -266,6 +266,23 @@
            focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50;
   }
 
+  /* --- Standardized Button Sizes (#79) --- */
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs rounded-md;
+  }
+  .btn-md {
+    @apply px-4 py-2 text-sm rounded-lg;
+  }
+  .btn-lg {
+    @apply px-6 py-3 text-base rounded-lg;
+  }
+  .btn-icon {
+    @apply p-2 rounded-lg min-w-[36px] min-h-[36px] inline-flex items-center justify-center;
+  }
+  .btn-icon-sm {
+    @apply p-1.5 rounded-md min-w-[28px] min-h-[28px] inline-flex items-center justify-center;
+  }
+
   /* --- Stat Cards --- */
   .stat-card {
     @apply bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border;

@@ -2,16 +2,20 @@
  * Events Page
  *
  * Lists all events with filtering by type.
+ * Enhanced with skeleton loading, empty states, breadcrumbs, and relative time.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Calendar, Plus } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventListItem, EventType } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
+import { Breadcrumbs, SkeletonCardGrid, EmptyState } from '../components/ux';
+import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
 
 export const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<EventListItem[]>([]);
@@ -53,9 +57,13 @@ export const EventsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-        <span className="sr-only">Loading events...</span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Breadcrumbs />
+        <div className="mb-6">
+          <div className="h-8 w-32 bg-theme-surface-hover rounded animate-pulse mb-2" />
+          <div className="h-4 w-64 bg-theme-surface-hover rounded animate-pulse" />
+        </div>
+        <SkeletonCardGrid count={6} />
       </div>
     );
   }
@@ -79,6 +87,8 @@ export const EventsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <Breadcrumbs />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <div>
@@ -91,7 +101,7 @@ export const EventsPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <Link
               to="/events/admin"
-              className="inline-flex items-center px-3 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              className="btn-secondary btn-icon"
               title="Module Settings"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -101,11 +111,9 @@ export const EventsPage: React.FC = () => {
             </Link>
             <Link
               to="/events/new"
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              className="btn-primary inline-flex items-center gap-2"
             >
-              <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <Plus className="h-5 w-5" aria-hidden="true" />
               Create Event
             </Link>
           </div>
@@ -133,28 +141,19 @@ export const EventsPage: React.FC = () => {
 
       {/* Events List */}
       {filteredEvents.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-          <svg
-            className="mx-auto h-12 w-12 text-theme-text-muted"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          <h3 className="mt-2 text-sm font-medium text-theme-text-primary">No events found</h3>
-          <p className="mt-1 text-sm text-theme-text-muted">
-            {typeFilter === 'all'
+        <EmptyState
+          icon={Calendar}
+          title="No events found"
+          description={
+            typeFilter === 'all'
               ? 'Get started by creating a new event.'
-              : `No ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`}
-          </p>
-        </div>
+              : `No ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`
+          }
+          actions={canManage ? [
+            { label: 'Create Event', onClick: () => window.location.href = '/events/new', icon: Plus },
+          ] : undefined}
+          className="bg-theme-surface-secondary rounded-lg"
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredEvents.map((event) => (
@@ -197,7 +196,12 @@ export const EventsPage: React.FC = () => {
                     <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    {formatShortDateTime(event.start_datetime, tz)}
+                    <span title={formatAbsoluteDate(event.start_datetime, tz)}>
+                      {formatShortDateTime(event.start_datetime, tz)}
+                      <span className="text-theme-text-muted ml-1">
+                        ({formatRelativeTime(event.start_datetime)})
+                      </span>
+                    </span>
                   </div>
 
                   {(event.location_name || event.location) && (
