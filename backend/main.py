@@ -496,7 +496,7 @@ def _run_migration_file(engine_or_conn, migration_path):
                 module.upgrade()
 
 
-def _fast_path_init(engine, alembic_cfg, base_dir):
+def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
     """
     Fast-path database initialization for fresh installs.
 
@@ -880,7 +880,7 @@ def run_migrations():
             for attempt in range(1, max_attempts + 1):
                 try:
                     with timeout_context(1200, "Fast-path database initialization"):
-                        _fast_path_init(engine, alembic_cfg, base_dir)
+                        _fast_path_init(engine, alembic_cfg, base_dir, head_revision)
                     break  # Success
                 except Exception as init_error:
                     if attempt < max_attempts:
@@ -934,7 +934,7 @@ def run_migrations():
 
         try:
             with timeout_context(1800, "Database migrations"):
-                command.upgrade(alembic_cfg, "head")
+                command.upgrade(alembic_cfg, head_revision)
 
             startup_status.migrations_completed = total_migrations
             startup_status.set_phase("migrations", "Database migrations complete")
@@ -950,15 +950,37 @@ def run_migrations():
             )
         except Exception as upgrade_error:
             error_str = str(upgrade_error).lower()
-            if "already exists" in error_str or "duplicate" in error_str:
+            # Recoverable errors: table/index already exists, or Alembic
+            # revision graph is broken (common on Unraid union filesystems
+            # where bind-mounted files are transiently invisible).
+            _is_dup = "already exists" in error_str or "duplicate" in error_str
+            _is_graph = not _walk_ok  # revision graph was already broken
+            if _is_dup or _is_graph:
                 logger.warning(
                     f"Migration failed ({upgrade_error}). Stamping to head..."
                 )
+                if _is_graph:
+                    # Ensure all model-defined tables exist since individual
+                    # migrations couldn't run.
+                    try:
+                        _import_all_models()
+                        from app.core.database import Base as _Base
+                        _Base.metadata.create_all(engine, checkfirst=True)
+                    except Exception as create_err:
+                        logger.warning(f"create_all fallback failed: {create_err}")
                 try:
-                    command.stamp(alembic_cfg, "head")
+                    # Use direct SQL to stamp — Alembic's command.stamp()
+                    # re-builds the revision graph which can fail on union
+                    # filesystems (Unraid shfs) when files are invisible.
+                    with engine.begin() as stamp_conn:
+                        stamp_conn.execute(text("DELETE FROM alembic_version"))
+                        stamp_conn.execute(
+                            text("INSERT INTO alembic_version (version_num) VALUES (:rev)"),
+                            {"rev": head_revision},
+                        )
                     schema_was_stamped = True
                     startup_status.migrations_completed = total_migrations
-                    logger.info("Stamped database to head")
+                    logger.info(f"Stamped database to {head_revision}")
                 except Exception as stamp_error:
                     logger.warning(f"Could not stamp database: {stamp_error}")
                     startup_status.add_error(f"Migration stamp failed: {stamp_error}")
