@@ -2,16 +2,32 @@
 Inventory Service Unit Tests
 
 Tests for InventoryService business logic using mocked database sessions.
+
+Covers:
+  - State-validation logic (_validate_item_state)
+  - Category requirement enforcement (_validate_category_requirements)
+  - Create item validation paths (state, category, serial, pool quantity)
+  - Create / update / rename categories
+  - Serial number uniqueness checks
+  - Update item validation paths (not found, invalid state, negative pool qty)
+  - Retire item precondition checks (assigned, checked-out, pool issuances)
+  - Checkout / check-in item logic
+  - Assign / unassign availability checks
+  - Pool issuance stock validation
+  - Status transition matrix
 """
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from uuid import uuid4, UUID
+from datetime import datetime, timezone
 
 from app.services.inventory_service import InventoryService
 from app.models.inventory import (
     ItemStatus,
     ItemCondition,
+    TrackingType,
+    AssignmentType,
 )
 
 
