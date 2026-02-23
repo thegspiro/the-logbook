@@ -3,15 +3,15 @@
 Creates the inventory_write_offs table for tracking write-off requests
 with supervisor approval workflow.
 
-Revision ID: 20260223_0200
-Revises: 20260223_0100
-Create Date: 2026-02-23 02:00:00.000000
+Revision ID: 20260223_0300
+Revises: 20260223_0200
+Create Date: 2026-02-23 03:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20260223_0200"
-down_revision = "20260223_0100"
+revision = "20260223_0300"
+down_revision = "20260223_0200"
 branch_labels = None
 depends_on = None
 
@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column(
             "requested_by",
             sa.String(36),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.ForeignKey("users.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(

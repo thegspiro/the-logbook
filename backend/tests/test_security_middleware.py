@@ -276,7 +276,7 @@ class TestInputSanitizer:
     @pytest.mark.unit
     def test_sanitize_email_too_long(self):
         """Email exceeding 254 characters should raise ValueError."""
-        long_email = "a" * 245 + "@test.com"
+        long_email = "a" * 246 + "@test.com"  # 255 chars, exceeds 254 limit
         with pytest.raises(ValueError, match="[Tt]oo long"):
             InputSanitizer.sanitize_email(long_email)
 
