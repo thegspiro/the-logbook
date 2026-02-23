@@ -310,7 +310,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
   // ── Render ───────────────────────────────────────────────────
 
-  const title = mode === 'checkout' ? 'Check-out Items' : 'Return Items';
+  const title = mode === 'checkout' ? 'Assign Items' : 'Return Items';
   const showResults = results !== null;
 
   return (
@@ -321,7 +321,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           <Package className="h-5 w-5 text-theme-text-muted" />
           <div>
             <span className="text-sm text-theme-text-muted">
-              {mode === 'checkout' ? 'Checking out to' : 'Returning from'}:
+              {mode === 'checkout' ? 'Assigning to' : 'Returning from'}:
             </span>
             <span className="ml-2 font-medium text-theme-text-primary">{memberName}</span>
           </div>
@@ -531,7 +531,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                     <Check className="h-4 w-4" />
                   )}
                   {mode === 'checkout'
-                    ? `Check Out ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`
+                    ? `Assign ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`
                     : `Return ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`}
                 </button>
               </div>
@@ -543,11 +543,11 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg z-10">
             <div className="bg-theme-surface-modal border border-theme-surface-border rounded-lg p-5 max-w-sm mx-4 shadow-xl">
               <h4 className="text-theme-text-primary font-medium mb-2">
-                Confirm {mode === 'checkout' ? 'Checkout' : 'Return'}
+                Confirm {mode === 'checkout' ? 'Assignment' : 'Return'}
               </h4>
               <p className="text-theme-text-secondary text-sm mb-4">
                 {mode === 'checkout'
-                  ? `Check out ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} to ${memberName}?`
+                  ? `Assign ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} to ${memberName}?`
                   : `Return ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} from ${memberName}?`}
               </p>
               <div className="flex justify-end gap-3">

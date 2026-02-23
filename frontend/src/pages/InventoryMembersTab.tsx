@@ -4,7 +4,7 @@
  * Shows all members with their inventory holdings so the Quartermaster can see
  * what items have been assigned to each individual. Each member row is
  * expandable to show assignment details, and has buttons to launch the
- * barcode-based check-out / return modal.
+ * barcode-based assign modal or the item-list return modal.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -27,6 +27,7 @@ import {
   type UserInventoryResponse,
 } from '../services/api';
 import { InventoryScanModal } from '../components/InventoryScanModal';
+import { ReturnItemsModal } from '../components/ReturnItemsModal';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
@@ -44,13 +45,20 @@ const InventoryMembersTab: React.FC = () => {
   const [memberDetail, setMemberDetail] = useState<UserInventoryResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // Scan modal
+  // Scan modal (assign / checkout)
   const [scanModal, setScanModal] = useState<{
     isOpen: boolean;
     mode: 'checkout' | 'return';
     userId: string;
     memberName: string;
   }>({ isOpen: false, mode: 'checkout', userId: '', memberName: '' });
+
+  // Return modal
+  const [returnModal, setReturnModal] = useState<{
+    isOpen: boolean;
+    userId: string;
+    memberName: string;
+  }>({ isOpen: false, userId: '', memberName: '' });
 
   // Debounce search
   useEffect(() => {
@@ -94,10 +102,18 @@ const InventoryMembersTab: React.FC = () => {
     }
   };
 
-  const openScanModal = (mode: 'checkout' | 'return', member: MemberInventorySummary) => {
+  const openScanModal = (member: MemberInventorySummary) => {
     setScanModal({
       isOpen: true,
-      mode,
+      mode: 'checkout',
+      userId: member.user_id,
+      memberName: member.full_name || member.username,
+    });
+  };
+
+  const openReturnModal = (member: MemberInventorySummary) => {
+    setReturnModal({
+      isOpen: true,
       userId: member.user_id,
       memberName: member.full_name || member.username,
     });
@@ -269,15 +285,15 @@ const InventoryMembersTab: React.FC = () => {
                       <td className="px-2 sm:px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1 sm:gap-2">
                           <button
-                            onClick={() => openScanModal('checkout', member)}
+                            onClick={() => openScanModal(member)}
                             className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
-                            title="Check out items to this member"
+                            title="Assign items to this member"
                           >
-                            <ArrowDownToLine className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Check Out</span><span className="sm:hidden">Out</span>
+                            <ArrowDownToLine className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Assign</span><span className="sm:hidden">Assign</span>
                           </button>
                           {member.total_items > 0 && (
                             <button
-                              onClick={() => openScanModal('return', member)}
+                              onClick={() => openReturnModal(member)}
                               className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
                               title="Return items from this member"
                             >
@@ -398,13 +414,22 @@ const InventoryMembersTab: React.FC = () => {
         </div>
       )}
 
-      {/* Scan Modal */}
+      {/* Scan Modal (Assign) */}
       <InventoryScanModal
         isOpen={scanModal.isOpen}
         onClose={() => setScanModal((prev) => ({ ...prev, isOpen: false }))}
         mode={scanModal.mode}
         userId={scanModal.userId}
         memberName={scanModal.memberName}
+        onComplete={handleScanComplete}
+      />
+
+      {/* Return Items Modal */}
+      <ReturnItemsModal
+        isOpen={returnModal.isOpen}
+        onClose={() => setReturnModal((prev) => ({ ...prev, isOpen: false }))}
+        userId={returnModal.userId}
+        memberName={returnModal.memberName}
         onComplete={handleScanComplete}
       />
     </div>
