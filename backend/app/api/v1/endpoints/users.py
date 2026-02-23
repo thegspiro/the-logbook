@@ -5,11 +5,11 @@ Endpoints for user management and listing.
 """
 
 from datetime import datetime, timezone
-from typing import List
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from typing import List, Optional
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func, or_
 from sqlalchemy.orm import selectinload
 from uuid import UUID
 
@@ -23,11 +23,14 @@ from app.schemas.user import (
     AdminUserCreate,
     AdminPasswordReset,
     UserUpdate,
+    MemberAuditLogEntry,
+    DeletionImpactResponse,
 )
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.services.user_service import UserService
 from app.services.organization_service import OrganizationService
 from app.models.user import User, Role, UserStatus, user_roles
+from app.models.audit import AuditLog
 from app.api.dependencies import get_current_user, require_permission, _collect_user_permissions, _has_permission
 from app.core.config import settings
 # NOTE: Authentication is now implemented
@@ -884,7 +887,7 @@ async def update_user_profile(
     # Allowlist of safe fields to prevent mass-assignment of sensitive columns
     ALLOWED_PROFILE_FIELDS = {
         "first_name", "middle_name", "last_name", "membership_number", "phone", "mobile",
-        "date_of_birth", "hire_date", "rank", "station",
+        "personal_email", "date_of_birth", "hire_date", "rank", "station",
         "address_street", "address_city", "address_state", "address_zip", "address_country",
     }
     for field, value in update_data.items():
@@ -924,11 +927,13 @@ async def update_user_profile(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: UUID,
+    hard: bool = Query(False, description="Permanently delete the member and all associated records"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):
     """
-    Soft-delete a member by setting their deleted_at timestamp.
+    Delete a member. By default this is a soft-delete (sets deleted_at).
+    Pass `hard=true` to permanently delete the member and all associated records.
 
     Requires `members.manage` permission.
 
@@ -940,12 +945,15 @@ async def delete_user(
             detail="You cannot delete your own account",
         )
 
-    result = await db.execute(
-        select(User)
-        .where(User.id == str(user_id))
-        .where(User.organization_id == str(current_user.organization_id))
-        .where(User.deleted_at.is_(None))
+    # For hard delete, include soft-deleted users too
+    query = select(User).where(
+        User.id == str(user_id),
+        User.organization_id == str(current_user.organization_id),
     )
+    if not hard:
+        query = query.where(User.deleted_at.is_(None))
+
+    result = await db.execute(query)
     user = result.scalar_one_or_none()
 
     if not user:
@@ -954,26 +962,50 @@ async def delete_user(
             detail="User not found",
         )
 
-    # Capture values before commit expires the ORM object
+    # Capture values before delete/commit
     deleted_username = user.username
     deleted_full_name = user.full_name
 
-    user.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
+    if hard:
+        # Remove role assignments first
+        await db.execute(
+            delete(user_roles).where(user_roles.c.user_id == str(user_id))
+        )
+        # Hard delete the user record
+        await db.delete(user)
+        await db.commit()
 
-    await log_audit_event(
-        db=db,
-        event_type="user_deleted",
-        event_category="user_management",
-        severity="warning",
-        event_data={
-            "deleted_user_id": str(user_id),
-            "deleted_username": deleted_username,
-            "deleted_full_name": deleted_full_name,
-        },
-        user_id=str(current_user.id),
-        username=current_user.username,
-    )
+        await log_audit_event(
+            db=db,
+            event_type="user_hard_deleted",
+            event_category="user_management",
+            severity="critical",
+            event_data={
+                "deleted_user_id": str(user_id),
+                "deleted_username": deleted_username,
+                "deleted_full_name": deleted_full_name,
+                "action": "permanent_deletion",
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    else:
+        user.deleted_at = datetime.now(timezone.utc)
+        await db.commit()
+
+        await log_audit_event(
+            db=db,
+            event_type="user_deleted",
+            event_category="user_management",
+            severity="warning",
+            event_data={
+                "deleted_user_id": str(user_id),
+                "deleted_username": deleted_username,
+                "deleted_full_name": deleted_full_name,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
 
 
 @router.post("/{user_id}/reset-password", status_code=status.HTTP_200_OK)
@@ -1052,3 +1084,382 @@ async def admin_reset_password(
     )
 
     return {"message": f"Password has been reset for {target_username}"}
+
+
+@router.get("/{user_id}/deletion-impact", response_model=DeletionImpactResponse)
+async def get_deletion_impact(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Get the impact of deleting a member (how many records would be affected).
+
+    Requires `members.manage` permission.
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Count training records
+    training_count = 0
+    try:
+        from app.models.training import TrainingRecord as TrainingRecordModel
+        tr_result = await db.execute(
+            select(func.count()).select_from(TrainingRecordModel).where(
+                TrainingRecordModel.user_id == str(user_id)
+            )
+        )
+        training_count = tr_result.scalar() or 0
+    except Exception:
+        pass
+
+    # Count inventory assignments
+    inventory_count = 0
+    try:
+        from app.models.inventory import InventoryAssignment
+        inv_result = await db.execute(
+            select(func.count()).select_from(InventoryAssignment).where(
+                InventoryAssignment.user_id == str(user_id),
+                InventoryAssignment.returned_at.is_(None),
+            )
+        )
+        inventory_count = inv_result.scalar() or 0
+    except Exception:
+        pass
+
+    total = training_count + inventory_count
+
+    return DeletionImpactResponse(
+        user_id=str(user_id),
+        full_name=user.full_name,
+        status=user.status.value if hasattr(user.status, 'value') else str(user.status),
+        training_records=training_count,
+        inventory_items=inventory_count,
+        total_records=total,
+    )
+
+
+@router.post("/{user_id}/photo", status_code=status.HTTP_200_OK)
+async def upload_photo(
+    user_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload a profile photo for a member.
+
+    Security measures:
+    - MIME type validation (only jpeg, png, webp)
+    - File size limit (5MB)
+    - Image re-encoding to prevent polyglot attacks
+    - EXIF metadata stripping
+    - Resize to max 512x512
+
+    Self-upload allowed; admins with `members.manage` can upload for others.
+
+    **Authentication required**
+    """
+    import io
+    import base64
+
+    # Permission check
+    is_self = str(current_user.id) == str(user_id)
+    if not is_self:
+        perm_result = await db.execute(
+            select(User).where(User.id == current_user.id).options(selectinload(User.positions))
+        )
+        perm_user = perm_result.scalar_one()
+        user_permissions = _collect_user_permissions(perm_user)
+        if not _has_permission("members.manage", user_permissions):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only upload your own photo",
+            )
+
+    # File size check (5MB)
+    MAX_SIZE = 5 * 1024 * 1024
+    contents = await file.read()
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size must be under 5MB",
+        )
+
+    # MIME type validation using file content (not just extension)
+    ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+    try:
+        import magic
+        detected_mime = magic.from_buffer(contents, mime=True)
+    except ImportError:
+        # Fallback: check file header bytes
+        if contents[:8] == b'\x89PNG\r\n\x1a\n':
+            detected_mime = "image/png"
+        elif contents[:2] == b'\xff\xd8':
+            detected_mime = "image/jpeg"
+        elif contents[:4] == b'RIFF' and contents[8:12] == b'WEBP':
+            detected_mime = "image/webp"
+        else:
+            detected_mime = "unknown"
+
+    if detected_mime not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed: JPEG, PNG, WebP. Detected: {detected_mime}",
+        )
+
+    # Re-encode image using Pillow (strips EXIF, prevents polyglot attacks)
+    try:
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(contents))
+
+        # Convert to RGB if necessary (handles RGBA, palette, etc.)
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+            # Create white background for transparency
+            background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+            background.paste(img, mask=img.split()[-1])
+            img = background.convert("RGB")
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Resize to max 512x512 maintaining aspect ratio
+        img.thumbnail((512, 512), Image.LANCZOS)
+
+        # Re-encode as JPEG (strips all metadata)
+        output = io.BytesIO()
+        img.save(output, format="JPEG", quality=85, optimize=True)
+        output.seek(0)
+        clean_contents = output.read()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unable to process image: {str(e)}",
+        )
+
+    # Store as base64 data URI
+    photo_data_uri = f"data:image/jpeg;base64,{base64.b64encode(clean_contents).decode()}"
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.photo_url = photo_data_uri
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="user_photo_updated",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "is_self_update": is_self,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {"message": "Photo uploaded successfully", "photo_url": photo_data_uri}
+
+
+@router.delete("/{user_id}/photo", status_code=status.HTTP_200_OK)
+async def delete_photo(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Remove a member's profile photo.
+
+    Self-removal allowed; admins with `members.manage` can remove for others.
+
+    **Authentication required**
+    """
+    is_self = str(current_user.id) == str(user_id)
+    if not is_self:
+        perm_result = await db.execute(
+            select(User).where(User.id == current_user.id).options(selectinload(User.positions))
+        )
+        perm_user = perm_result.scalar_one()
+        user_permissions = _collect_user_permissions(perm_user)
+        if not _has_permission("members.manage", user_permissions):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only remove your own photo",
+            )
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.photo_url = None
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="user_photo_removed",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "is_self_update": is_self,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {"message": "Photo removed successfully"}
+
+
+# Human-readable descriptions for audit event types
+_AUDIT_EVENT_DESCRIPTIONS = {
+    "user_created": "Member account created",
+    "user_deleted": "Member account deactivated (soft delete)",
+    "user_hard_deleted": "Member account permanently deleted",
+    "user_profile_updated": "Member profile updated",
+    "user_updated": "Member contact information updated",
+    "user_role_assigned": "Member role assignment changed",
+    "user_role_removed": "Role removed from member",
+    "user_viewed": "Member profile viewed",
+    "admin_password_reset": "Password reset by administrator",
+    "user_photo_updated": "Profile photo updated",
+    "user_photo_removed": "Profile photo removed",
+    "member_status_changed": "Member status changed",
+    "membership_type_changed": "Membership type changed",
+    "member_archived": "Member archived",
+    "member_reactivated": "Member reactivated",
+    "leave_of_absence_created": "Leave of absence created",
+    "leave_of_absence_updated": "Leave of absence updated",
+    "leave_of_absence_deleted": "Leave of absence deactivated",
+}
+
+
+@router.get("/{user_id}/audit-history", response_model=List[MemberAuditLogEntry])
+async def get_member_audit_history(
+    user_id: UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Get audit history for a specific member.
+
+    Returns a chronological log of changes to the member's record including
+    who made each change, what was changed, and when.
+
+    Requires `members.manage` permission.
+
+    **Authentication required**
+    """
+    # Verify the target user exists in the same org
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Relevant event types for member history
+    member_event_types = list(_AUDIT_EVENT_DESCRIPTIONS.keys())
+
+    # Query audit logs where this user is the target (in event_data)
+    # We search for the user_id appearing in the JSON event_data
+    user_id_str = str(user_id)
+    query = (
+        select(AuditLog)
+        .where(AuditLog.event_type.in_(member_event_types))
+        .where(AuditLog.event_category == "user_management")
+        .where(
+            or_(
+                # User was the target of the action
+                AuditLog.event_data["target_user_id"].as_string() == user_id_str,
+                AuditLog.event_data["new_user_id"].as_string() == user_id_str,
+                AuditLog.event_data["updated_user_id"].as_string() == user_id_str,
+                AuditLog.event_data["deleted_user_id"].as_string() == user_id_str,
+                AuditLog.event_data["viewed_user_id"].as_string() == user_id_str,
+                # User performed the action on themselves
+                AuditLog.user_id == user_id_str,
+            )
+        )
+        .order_by(AuditLog.timestamp.desc())
+    )
+
+    if event_type:
+        query = query.where(AuditLog.event_type == event_type)
+
+    # Paginate
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
+    result = await db.execute(query)
+    logs = result.scalars().all()
+
+    # Convert to response format
+    entries = []
+    for log in logs:
+        description = _AUDIT_EVENT_DESCRIPTIONS.get(log.event_type, log.event_type)
+
+        # Enhance description with details from event_data
+        data = log.event_data or {}
+        if log.event_type == "user_profile_updated":
+            fields = data.get("fields_updated", [])
+            if fields:
+                description += f": {', '.join(fields)}"
+        elif log.event_type == "user_role_assigned":
+            action = data.get("action", "")
+            role_name = data.get("role_name", "")
+            if action == "role_added" and role_name:
+                description = f"Role added: {role_name}"
+            elif action == "role_removed" and role_name:
+                description = f"Role removed: {role_name}"
+            elif action == "roles_replaced":
+                description = "All roles replaced"
+        elif log.event_type == "member_status_changed":
+            prev = data.get("previous_status", "")
+            new = data.get("new_status", "")
+            if prev and new:
+                description = f"Status changed: {prev} → {new}"
+
+        entries.append(MemberAuditLogEntry(
+            id=log.id,
+            timestamp=log.timestamp,
+            event_type=log.event_type,
+            severity=log.severity.value if hasattr(log.severity, 'value') else str(log.severity),
+            description=description,
+            changed_by_username=log.username,
+            changed_by_user_id=log.user_id,
+            event_data=data,
+        ))
+
+    return entries

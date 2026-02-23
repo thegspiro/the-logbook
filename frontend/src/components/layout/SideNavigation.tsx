@@ -32,6 +32,7 @@ import {
   Send,
   MapPin,
   Rocket,
+  ShieldCheck,
 } from 'lucide-react';
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -192,6 +193,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           { label: 'Prospective', path: '/prospective-members', icon: UserPlus, permission: 'prospective_members.manage' },
           { label: 'Pipeline Settings', path: '/prospective-members/settings', icon: Settings, permission: 'prospective_members.manage' },
           { label: 'Member Management', path: '/members/admin', icon: UserCog, permission: 'members.manage' },
+          { label: 'Waivers', path: '/members/admin/waivers', icon: ShieldCheck, permission: 'members.manage' },
         ],
       } as NavItem,
       { label: 'Events Admin', path: '/events/admin', icon: Calendar, permission: 'events.manage' } as NavItem,

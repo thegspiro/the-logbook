@@ -22,6 +22,7 @@ import { LayoutDashboard, ClipboardList, Settings } from 'lucide-react';
 const TrainingOfficerDashboard = lazy(() => import('./TrainingOfficerDashboard'));
 const ComplianceMatrixTab = lazy(() => import('./ComplianceMatrixTab'));
 const ExpiringCertsTab = lazy(() => import('./ExpiringCertsTab'));
+const TrainingWaiversTab = lazy(() => import('./TrainingWaiversTab'));
 
 const ReviewSubmissionsPage = lazy(() => import('./ReviewSubmissionsPage'));
 const CreateTrainingSessionPage = lazy(() => import('./CreateTrainingSessionPage'));
@@ -62,6 +63,7 @@ const pages: PageDef[] = [
       { id: 'overview', label: 'Overview' },
       { id: 'compliance', label: 'Compliance Matrix' },
       { id: 'expiring-certs', label: 'Expiring Certs' },
+      { id: 'waivers', label: 'Training Waivers' },
     ],
     defaultTab: 'overview',
   },
@@ -97,6 +99,7 @@ const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
   'dashboard': { page: 'dashboard', tab: 'overview' },
   'compliance': { page: 'dashboard', tab: 'compliance' },
   'expiring-certs': { page: 'dashboard', tab: 'expiring-certs' },
+  'waivers': { page: 'dashboard', tab: 'waivers' },
   'submissions': { page: 'records', tab: 'submissions' },
   'sessions': { page: 'records', tab: 'sessions' },
   'shift-reports': { page: 'records', tab: 'shift-reports' },
@@ -130,6 +133,7 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
     if (tab === 'overview') return <TrainingOfficerDashboard />;
     if (tab === 'compliance') return <ComplianceMatrixTab />;
     if (tab === 'expiring-certs') return <ExpiringCertsTab />;
+    if (tab === 'waivers') return <TrainingWaiversTab />;
   }
 
   // Records sub-page

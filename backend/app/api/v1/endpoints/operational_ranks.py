@@ -16,6 +16,7 @@ from app.schemas.operational_rank import (
     RankUpdate,
     RankResponse,
     RankReorderRequest,
+    RankValidationResponse,
 )
 from app.services.operational_rank_service import OperationalRankService
 from app.api.dependencies import get_current_user, require_permission
@@ -84,6 +85,24 @@ async def create_rank(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return _rank_to_response(rank)
+
+
+@router.get("/validate", response_model=RankValidationResponse)
+async def validate_ranks(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Check for active members whose rank does not match any configured rank.
+
+    Archived, retired, and dropped members are excluded — only members
+    who are still actively interacting with the platform are checked.
+
+    **Authentication required**
+    """
+    service = OperationalRankService(db)
+    issues = await service.validate_ranks(current_user.organization_id)
+    return RankValidationResponse(issues=issues, total=len(issues))
 
 
 @router.get("/{rank_id}", response_model=RankResponse)

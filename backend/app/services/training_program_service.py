@@ -26,7 +26,10 @@ from app.schemas.training_program import (
     ProgramRequirementCreate, ProgramMilestoneCreate, ProgramEnrollmentCreate,
     RequirementProgressUpdate, SkillEvaluationCreate, SkillCheckoffCreate
 )
+from app.models.notification import NotificationChannel, NotificationCategory
 from app.services.training_waiver_service import fetch_user_waivers, adjust_required
+from app.services.notifications_service import NotificationsService
+from loguru import logger
 
 
 class TrainingProgramService:
@@ -34,6 +37,133 @@ class TrainingProgramService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    # ==================== Notification Helpers ====================
+
+    async def _notify_enrollment(
+        self,
+        enrollment: ProgramEnrollment,
+        program: TrainingProgram,
+        user: User,
+        organization_id: UUID,
+    ) -> None:
+        """Send enrollment notification to the member and their mentors/officers."""
+        notif_service = NotificationsService(self.db)
+
+        # Notify the member
+        await notif_service.log_notification(
+            organization_id=organization_id,
+            log_data={
+                "recipient_id": str(user.id),
+                "channel": NotificationChannel.IN_APP,
+                "subject": f"Enrolled in Training Program: {program.name}",
+                "message": (
+                    f"You have been enrolled in the {program.name} training program. "
+                    f"{'Target completion: ' + str(enrollment.target_completion_date) if enrollment.target_completion_date else 'Check your training dashboard for details.'}"
+                ),
+                "category": NotificationCategory.TRAINING,
+                "action_url": f"/training/programs/{program.id}/progress",
+                "delivered": True,
+                "sent_at": datetime.now(timezone.utc),
+            },
+        )
+
+        # Notify mentor/assigned officer if configured on the enrollment
+        if getattr(enrollment, 'mentor_id', None):
+            await notif_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "recipient_id": str(enrollment.mentor_id),
+                    "channel": NotificationChannel.IN_APP,
+                    "subject": f"New Trainee Enrolled: {user.full_name} - {program.name}",
+                    "message": f"{user.full_name} has been enrolled in {program.name}. You are assigned as their mentor.",
+                    "category": NotificationCategory.TRAINING,
+                    "action_url": f"/training/programs/{program.id}/enrollments",
+                    "delivered": True,
+                    "sent_at": datetime.now(timezone.utc),
+                },
+            )
+
+    async def _notify_phase_advancement(
+        self,
+        enrollment: ProgramEnrollment,
+        program: TrainingProgram,
+        user: User,
+        new_phase_name: str,
+        organization_id: UUID,
+    ) -> None:
+        """Send phase advancement notification."""
+        notif_service = NotificationsService(self.db)
+
+        await notif_service.log_notification(
+            organization_id=organization_id,
+            log_data={
+                "recipient_id": str(user.id),
+                "channel": NotificationChannel.IN_APP,
+                "subject": f"Phase Advanced: {program.name}",
+                "message": f"Congratulations! You have advanced to {new_phase_name} in {program.name}.",
+                "category": NotificationCategory.TRAINING,
+                "action_url": f"/training/programs/{program.id}/progress",
+                "delivered": True,
+                "sent_at": datetime.now(timezone.utc),
+            },
+        )
+
+        # Notify mentor
+        if getattr(enrollment, 'mentor_id', None):
+            await notif_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "recipient_id": str(enrollment.mentor_id),
+                    "channel": NotificationChannel.IN_APP,
+                    "subject": f"Trainee Advanced: {user.full_name} - {program.name}",
+                    "message": f"{user.full_name} has advanced to {new_phase_name} in {program.name}.",
+                    "category": NotificationCategory.TRAINING,
+                    "action_url": f"/training/programs/{program.id}/enrollments",
+                    "delivered": True,
+                    "sent_at": datetime.now(timezone.utc),
+                },
+            )
+
+    async def _notify_program_completion(
+        self,
+        enrollment: ProgramEnrollment,
+        program: TrainingProgram,
+        user: User,
+        organization_id: UUID,
+    ) -> None:
+        """Send program completion notification."""
+        notif_service = NotificationsService(self.db)
+
+        await notif_service.log_notification(
+            organization_id=organization_id,
+            log_data={
+                "recipient_id": str(user.id),
+                "channel": NotificationChannel.IN_APP,
+                "subject": f"Program Completed: {program.name}",
+                "message": f"Congratulations! You have completed the {program.name} training program.",
+                "category": NotificationCategory.TRAINING,
+                "action_url": f"/training/programs/{program.id}/progress",
+                "delivered": True,
+                "sent_at": datetime.now(timezone.utc),
+            },
+        )
+
+        # Notify mentor
+        if getattr(enrollment, 'mentor_id', None):
+            await notif_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "recipient_id": str(enrollment.mentor_id),
+                    "channel": NotificationChannel.IN_APP,
+                    "subject": f"Trainee Completed: {user.full_name} - {program.name}",
+                    "message": f"{user.full_name} has completed {program.name}!",
+                    "category": NotificationCategory.TRAINING,
+                    "action_url": f"/training/programs/{program.id}/enrollments",
+                    "delivered": True,
+                    "sent_at": datetime.now(timezone.utc),
+                },
+            )
 
     # ==================== Training Requirement Methods ====================
 
@@ -525,6 +655,12 @@ class TrainingProgramService:
         await self.db.commit()
         await self.db.refresh(enrollment)
 
+        # Send enrollment notification
+        try:
+            await self._notify_enrollment(enrollment, program, user, organization_id)
+        except Exception as e:
+            logger.error(f"Failed to send enrollment notification: {e}")
+
         return enrollment, None
 
     async def get_member_enrollments(
@@ -685,8 +821,20 @@ class TrainingProgramService:
         enrollment_id: UUID,
     ) -> None:
         """
-        Recalculate overall progress percentage for an enrollment
+        Recalculate overall progress percentage for an enrollment.
+        Sends notifications on program completion.
         """
+        # Get enrollment before update to detect state changes
+        enrollment_result = await self.db.execute(
+            select(ProgramEnrollment)
+            .where(ProgramEnrollment.id == str(enrollment_id))
+        )
+        enrollment = enrollment_result.scalar_one_or_none()
+        if not enrollment:
+            return
+
+        was_completed = enrollment.status == EnrollmentStatus.COMPLETED
+
         # Get all requirement progress for this enrollment
         result = await self.db.execute(
             select(RequirementProgress)
@@ -727,6 +875,26 @@ class TrainingProgramService:
             )
 
         await self.db.commit()
+
+        # Send completion notification if newly completed
+        if avg_percentage >= 100.0 and not was_completed:
+            try:
+                # Re-fetch enrollment for notification
+                await self.db.refresh(enrollment)
+                program_result = await self.db.execute(
+                    select(TrainingProgram).where(TrainingProgram.id == str(enrollment.program_id))
+                )
+                program = program_result.scalar_one_or_none()
+                user_result = await self.db.execute(
+                    select(User).where(User.id == str(enrollment.user_id))
+                )
+                user = user_result.scalar_one_or_none()
+                if program and user:
+                    await self._notify_program_completion(
+                        enrollment, program, user, UUID(str(program.organization_id))
+                    )
+            except Exception as e:
+                logger.error(f"Failed to send program completion notification: {e}")
 
     # ==================== Program Duplication Methods ====================
 

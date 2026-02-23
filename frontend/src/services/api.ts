@@ -78,6 +78,11 @@ import type {
   HistoricalImportParseResponse,
   HistoricalImportConfirmRequest,
   HistoricalImportResult,
+  // Bulk Training Record Creation
+  BulkTrainingRecordCreate,
+  BulkTrainingRecordResult,
+  // Compliance Summary
+  ComplianceSummary,
 } from '../types/training';
 import type {
   Event,
@@ -349,6 +354,61 @@ export const userService = {
     await api.patch(`/users/${userId}/contact-info`, {
       notification_preferences: preferences,
     });
+  },
+
+  /**
+   * Get deletion impact assessment for a member
+   */
+  async getDeletionImpact(userId: string): Promise<import('../types/user').DeletionImpact> {
+    const response = await api.get(`/users/${userId}/deletion-impact`);
+    return response.data;
+  },
+
+  /**
+   * Delete a user (soft or hard delete)
+   */
+  async deleteUserWithMode(userId: string, hard: boolean = false): Promise<void> {
+    await api.delete(`/users/${userId}`, { params: { hard } });
+  },
+
+  /**
+   * Upload a profile photo for a member
+   */
+  async uploadPhoto(userId: string, file: File): Promise<{ message: string; photo_url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post(`/users/${userId}/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /**
+   * Remove a member's profile photo
+   */
+  async deletePhoto(userId: string): Promise<void> {
+    await api.delete(`/users/${userId}/photo`);
+  },
+
+  /**
+   * Change a member's membership type
+   */
+  async changeMembershipType(userId: string, membershipType: string, reason?: string): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/users/${userId}/membership-type`, {
+      membership_type: membershipType,
+      reason,
+    });
+    return response.data;
+  },
+
+  /**
+   * Get audit history for a member
+   */
+  async getMemberAuditHistory(userId: string, page: number = 1, eventType?: string): Promise<import('../types/user').MemberAuditLogEntry[]> {
+    const response = await api.get(`/users/${userId}/audit-history`, {
+      params: { page, page_size: 50, event_type: eventType || undefined },
+    });
+    return response.data;
   },
 };
 
@@ -729,6 +789,14 @@ export const trainingService = {
   },
 
   /**
+   * Create training records for multiple members at once (bulk)
+   */
+  async createRecordsBulk(payload: BulkTrainingRecordCreate): Promise<BulkTrainingRecordResult> {
+    const response = await api.post<BulkTrainingRecordResult>('/training/records/bulk', payload);
+    return response.data;
+  },
+
+  /**
    * Import training records from a CSV file
    */
   async importCSV(file: File): Promise<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }> {
@@ -842,6 +910,14 @@ export const trainingService = {
    */
   async getUserStats(userId: string): Promise<UserTrainingStats> {
     const response = await api.get<UserTrainingStats>(`/training/stats/user/${userId}`);
+    return response.data;
+  },
+
+  /**
+   * Get compliance summary for a member's profile card
+   */
+  async getComplianceSummary(userId: string): Promise<ComplianceSummary> {
+    const response = await api.get<ComplianceSummary>(`/training/compliance-summary/${userId}`);
     return response.data;
   },
 
@@ -3669,6 +3745,17 @@ export interface OperationalRankUpdate {
   is_active?: boolean;
 }
 
+export interface RankValidationIssue {
+  member_id: string;
+  member_name: string;
+  rank_code: string;
+}
+
+export interface RankValidationResponse {
+  issues: RankValidationIssue[];
+  total: number;
+}
+
 export const ranksService = {
   async getRanks(params?: { is_active?: boolean }): Promise<OperationalRankResponse[]> {
     const response = await api.get<OperationalRankResponse[]>('/operational-ranks', { params });
@@ -3696,6 +3783,11 @@ export const ranksService = {
 
   async reorderRanks(ranks: { id: string; sort_order: number }[]): Promise<OperationalRankResponse[]> {
     const response = await api.post<OperationalRankResponse[]>('/operational-ranks/reorder', { ranks });
+    return response.data;
+  },
+
+  async validateRanks(): Promise<RankValidationResponse> {
+    const response = await api.get<RankValidationResponse>('/operational-ranks/validate');
     return response.data;
   },
 };
@@ -4562,6 +4654,24 @@ export interface LeaveOfAbsenceResponse {
   granted_by: string | null;
   granted_at: string | null;
   active: boolean;
+  exempt_from_training_waiver: boolean;
+  linked_training_waiver_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface TrainingWaiverResponse {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  waiver_type: string;
+  reason: string | null;
+  start_date: string;
+  end_date: string;
+  requirement_ids: string[] | null;
+  granted_by: string | null;
+  granted_at: string | null;
+  active: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -4629,6 +4739,7 @@ export const memberStatusService = {
     reason?: string;
     start_date: string;
     end_date: string;
+    exempt_from_training_waiver?: boolean;
   }): Promise<LeaveOfAbsenceResponse> {
     const response = await api.post('/users/leaves-of-absence', data);
     return response.data;
@@ -4640,6 +4751,7 @@ export const memberStatusService = {
     start_date?: string;
     end_date?: string;
     active?: boolean;
+    exempt_from_training_waiver?: boolean;
   }): Promise<LeaveOfAbsenceResponse> {
     const response = await api.patch(`/users/leaves-of-absence/${leaveId}`, data);
     return response.data;
@@ -4647,6 +4759,40 @@ export const memberStatusService = {
 
   async deleteLeaveOfAbsence(leaveId: string): Promise<void> {
     await api.delete(`/users/leaves-of-absence/${leaveId}`);
+  },
+
+  // Training Waivers
+  async listTrainingWaivers(params?: { user_id?: string; active_only?: boolean }): Promise<TrainingWaiverResponse[]> {
+    const response = await api.get('/training/waivers', { params });
+    return response.data;
+  },
+
+  async createTrainingWaiver(data: {
+    user_id: string;
+    waiver_type: string;
+    reason?: string;
+    start_date: string;
+    end_date: string;
+    requirement_ids?: string[];
+  }): Promise<TrainingWaiverResponse> {
+    const response = await api.post('/training/waivers', data);
+    return response.data;
+  },
+
+  async updateTrainingWaiver(waiverId: string, data: {
+    waiver_type?: string;
+    reason?: string;
+    start_date?: string;
+    end_date?: string;
+    requirement_ids?: string[];
+    active?: boolean;
+  }): Promise<TrainingWaiverResponse> {
+    const response = await api.patch(`/training/waivers/${waiverId}`, data);
+    return response.data;
+  },
+
+  async deleteTrainingWaiver(waiverId: string): Promise<void> {
+    await api.delete(`/training/waivers/${waiverId}`);
   },
 };
 

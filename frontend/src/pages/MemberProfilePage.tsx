@@ -14,7 +14,7 @@
  * Module sections are conditionally rendered based on AVAILABLE_MODULES.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { userService, organizationService, trainingService, inventoryService, memberStatusService } from '../services/api';
 import type { LeaveOfAbsenceResponse } from '../services/api';
@@ -23,8 +23,8 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import type { UserWithRoles } from '../types/role';
-import type { ContactInfoUpdate, NotificationPreferences } from '../types/user';
-import type { TrainingRecord } from '../types/training';
+import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
+import type { TrainingRecord, ComplianceSummary } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
 
 // Types for inventory data
@@ -72,9 +72,31 @@ export const MemberProfilePage: React.FC = () => {
     },
   });
 
+  // Photo upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Address edit state
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressForm, setAddressForm] = useState({
+    address_street: '',
+    address_city: '',
+    address_state: '',
+    address_zip: '',
+    address_country: 'USA',
+    personal_email: '',
+  });
+
+  // Emergency contacts edit state
+  const [editingContacts, setEditingContacts] = useState(false);
+  const [savingContacts, setSavingContacts] = useState(false);
+  const [contactsForm, setContactsForm] = useState<EmergencyContact[]>([]);
+
   // Module data states
   const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
   const [trainingsLoading, setTrainingsLoading] = useState(false);
+  const [complianceSummary, setComplianceSummary] = useState<ComplianceSummary | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [activeLeaves, setActiveLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
@@ -89,6 +111,7 @@ export const MemberProfilePage: React.FC = () => {
       fetchLeaves();
       if (trainingEnabled) {
         fetchTrainingRecords();
+        fetchComplianceSummary();
       }
     }
   }, [userId, trainingEnabled]);
@@ -131,6 +154,15 @@ export const MemberProfilePage: React.FC = () => {
       // Don't set error - show empty state
     } finally {
       setTrainingsLoading(false);
+    }
+  };
+
+  const fetchComplianceSummary = async () => {
+    try {
+      const summary = await trainingService.getComplianceSummary(userId!);
+      setComplianceSummary(summary);
+    } catch (_err) {
+      // Don't set error - compliance summary is optional
     }
   };
 
@@ -260,6 +292,131 @@ export const MemberProfilePage: React.FC = () => {
     }));
   };
 
+  // Photo upload handlers
+  const handlePhotoClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+
+    // Client-side validation
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Please select a JPEG, PNG, or WebP image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be under 5MB.');
+      return;
+    }
+
+    try {
+      setUploadingPhoto(true);
+      setError(null);
+      const result = await userService.uploadPhoto(userId, file);
+      setUser((prev) => prev ? { ...prev, photo_url: result.photo_url } : prev);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to upload photo.'));
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePhotoRemove = async () => {
+    if (!userId) return;
+    try {
+      setUploadingPhoto(true);
+      setError(null);
+      await userService.deletePhoto(userId);
+      setUser((prev) => prev ? { ...prev, photo_url: undefined } : prev);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to remove photo.'));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Address edit handlers
+  const handleEditAddress = () => {
+    setAddressForm({
+      address_street: user?.address_street || '',
+      address_city: user?.address_city || '',
+      address_state: user?.address_state || '',
+      address_zip: user?.address_zip || '',
+      address_country: user?.address_country || 'USA',
+      personal_email: user?.personal_email || '',
+    });
+    setEditingAddress(true);
+  };
+
+  const handleSaveAddress = async () => {
+    if (!user || !userId) return;
+    try {
+      setSavingAddress(true);
+      setError(null);
+      const updateData: UserProfileUpdate = {
+        address_street: addressForm.address_street || undefined,
+        address_city: addressForm.address_city || undefined,
+        address_state: addressForm.address_state || undefined,
+        address_zip: addressForm.address_zip || undefined,
+        address_country: addressForm.address_country || undefined,
+        personal_email: addressForm.personal_email || undefined,
+      };
+      const updated = await userService.updateUserProfile(userId, updateData);
+      setUser(updated);
+      setEditingAddress(false);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to update address.'));
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  // Emergency contacts handlers
+  const handleEditEmergencyContacts = () => {
+    setContactsForm(user?.emergency_contacts?.length
+      ? user.emergency_contacts.map((ec) => ({ ...ec }))
+      : [{ name: '', relationship: '', phone: '', email: '', is_primary: true }]
+    );
+    setEditingContacts(true);
+  };
+
+  const handleAddContact = () => {
+    setContactsForm((prev) => [...prev, { name: '', relationship: '', phone: '', email: '', is_primary: false }]);
+  };
+
+  const handleRemoveContact = (index: number) => {
+    setContactsForm((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleContactChange = (index: number, field: keyof EmergencyContact, value: string | boolean) => {
+    setContactsForm((prev) => prev.map((c, i) => i === index ? { ...c, [field]: value } : c));
+  };
+
+  const handleSaveEmergencyContacts = async () => {
+    if (!user || !userId) return;
+    // Validate at least name and phone for each contact
+    const valid = contactsForm.every((c) => c.name.trim() && c.phone.trim());
+    if (!valid) {
+      setError('Each emergency contact must have a name and phone number.');
+      return;
+    }
+    try {
+      setSavingContacts(true);
+      setError(null);
+      const updated = await userService.updateUserProfile(userId, { emergency_contacts: contactsForm });
+      setUser(updated);
+      setEditingContacts(false);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to update emergency contacts.'));
+    } finally {
+      setSavingContacts(false);
+    }
+  };
+
   // Check if current user can edit this profile (self or admin)
   const isAdmin = checkPermission('users.update') || checkPermission('members.manage');
   const canEdit = currentUser?.id === userId || isAdmin;
@@ -316,10 +473,53 @@ export const MemberProfilePage: React.FC = () => {
         <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
-              <div className="h-20 w-20 rounded-full bg-indigo-100 flex items-center justify-center">
-                <span className="text-2xl font-bold text-indigo-600">
-                  {(user.first_name?.[0] || user.username?.[0] || '?').toUpperCase()}
-                </span>
+              {/* Profile Photo with Upload */}
+              <div className="relative group">
+                {user.photo_url ? (
+                  <img
+                    src={user.photo_url}
+                    alt={user.full_name || user.username}
+                    className="h-20 w-20 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="h-20 w-20 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <span className="text-2xl font-bold text-indigo-600">
+                      {(user.first_name?.[0] || user.username?.[0] || '?').toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                {canEdit && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                    />
+                    {uploadingPhoto ? (
+                      <span className="text-white text-xs">Uploading...</span>
+                    ) : (
+                      <button
+                        onClick={handlePhotoClick}
+                        className="text-white text-xs font-medium"
+                        aria-label="Upload photo"
+                      >
+                        {user.photo_url ? 'Change' : 'Upload'}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {canEdit && user.photo_url && (
+                  <button
+                    onClick={handlePhotoRemove}
+                    className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                    aria-label="Remove photo"
+                    title="Remove photo"
+                  >
+                    &times;
+                  </button>
+                )}
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-theme-text-primary">
@@ -363,6 +563,66 @@ export const MemberProfilePage: React.FC = () => {
           {/* Training & Certifications */}
           {trainingEnabled && (
             <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              {/* Compliance Summary Card */}
+              {complianceSummary && (
+                <div className="mb-6">
+                  <div className={`rounded-lg p-4 border ${
+                    complianceSummary.compliance_status === 'green'
+                      ? 'border-green-500/30 bg-green-500/5'
+                      : complianceSummary.compliance_status === 'yellow'
+                      ? 'border-yellow-500/30 bg-yellow-500/5'
+                      : 'border-red-500/30 bg-red-500/5'
+                  }`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-theme-text-primary uppercase tracking-wider">
+                        Compliance Summary
+                      </h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        complianceSummary.compliance_status === 'green'
+                          ? 'bg-green-500/20 text-green-400'
+                          : complianceSummary.compliance_status === 'yellow'
+                          ? 'bg-yellow-500/20 text-yellow-400'
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {complianceSummary.compliance_label}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-theme-text-muted">Requirements</p>
+                        <p className="text-lg font-semibold text-theme-text-primary">
+                          {complianceSummary.requirements_met}/{complianceSummary.requirements_total}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-theme-text-muted">Hours (YTD)</p>
+                        <p className="text-lg font-semibold text-theme-text-primary">
+                          {complianceSummary.hours_this_year.toFixed(1)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-theme-text-muted">Active Certs</p>
+                        <p className="text-lg font-semibold text-theme-text-primary">
+                          {complianceSummary.active_certifications}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-theme-text-muted">Expiring Soon</p>
+                        <p className={`text-lg font-semibold ${
+                          complianceSummary.certs_expiring_soon > 0 ? 'text-yellow-400' :
+                          complianceSummary.certs_expired > 0 ? 'text-red-400' : 'text-theme-text-primary'
+                        }`}>
+                          {complianceSummary.certs_expiring_soon}
+                          {complianceSummary.certs_expired > 0 && (
+                            <span className="text-red-400 text-sm ml-1">({complianceSummary.certs_expired} expired)</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-theme-text-primary">
                   Training & Certifications
@@ -640,6 +900,211 @@ export const MemberProfilePage: React.FC = () => {
                     {error}
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* Address & Personal Email */}
+          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-theme-text-primary">Address</h2>
+              {canEdit && !editingAddress && (
+                <button onClick={handleEditAddress} className="text-sm text-blue-400 hover:text-blue-300 font-medium">
+                  Edit
+                </button>
+              )}
+            </div>
+            {!editingAddress ? (
+              <div className="space-y-3">
+                {user.personal_email && (
+                  <div>
+                    <p className="text-xs text-theme-text-muted uppercase font-medium">Personal Email</p>
+                    <p className="text-sm text-theme-text-primary mt-1">{user.personal_email}</p>
+                  </div>
+                )}
+                {(user.address_street || user.address_city) ? (
+                  <div>
+                    <p className="text-xs text-theme-text-muted uppercase font-medium">Mailing Address</p>
+                    <p className="text-sm text-theme-text-primary mt-1">
+                      {user.address_street && <>{user.address_street}<br /></>}
+                      {user.address_city}{user.address_state ? `, ${user.address_state}` : ''} {user.address_zip}
+                      {user.address_country && user.address_country !== 'USA' && <><br />{user.address_country}</>}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-theme-text-muted">No address on file.</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Personal Email</label>
+                  <input
+                    type="email"
+                    value={addressForm.personal_email}
+                    onChange={(e) => setAddressForm((p) => ({ ...p, personal_email: e.target.value }))}
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Home email for post-separation contact"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Street</label>
+                  <input
+                    type="text"
+                    value={addressForm.address_street}
+                    onChange={(e) => setAddressForm((p) => ({ ...p, address_street: e.target.value }))}
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">City</label>
+                    <input
+                      type="text"
+                      value={addressForm.address_city}
+                      onChange={(e) => setAddressForm((p) => ({ ...p, address_city: e.target.value }))}
+                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">State</label>
+                    <input
+                      type="text"
+                      value={addressForm.address_state}
+                      onChange={(e) => setAddressForm((p) => ({ ...p, address_state: e.target.value }))}
+                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">ZIP</label>
+                    <input
+                      type="text"
+                      value={addressForm.address_zip}
+                      onChange={(e) => setAddressForm((p) => ({ ...p, address_zip: e.target.value }))}
+                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Country</label>
+                    <input
+                      type="text"
+                      value={addressForm.address_country}
+                      onChange={(e) => setAddressForm((p) => ({ ...p, address_country: e.target.value }))}
+                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button onClick={handleSaveAddress} disabled={savingAddress} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50">
+                    {savingAddress ? 'Saving...' : 'Save'}
+                  </button>
+                  <button onClick={() => setEditingAddress(false)} disabled={savingAddress} className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Emergency Contacts */}
+          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-theme-text-primary">Emergency Contacts</h2>
+              {canEdit && !editingContacts && (
+                <button onClick={handleEditEmergencyContacts} className="text-sm text-blue-400 hover:text-blue-300 font-medium">
+                  Edit
+                </button>
+              )}
+            </div>
+            {!editingContacts ? (
+              <div className="space-y-3">
+                {(user.emergency_contacts && user.emergency_contacts.length > 0) ? (
+                  user.emergency_contacts.map((ec, i) => (
+                    <div key={i} className="border border-theme-surface-border rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-theme-text-primary">{ec.name}</p>
+                        {ec.is_primary && (
+                          <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 rounded">Primary</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-theme-text-secondary mt-1">{ec.relationship}</p>
+                      <p className="text-xs text-theme-text-secondary">{ec.phone}</p>
+                      {ec.email && <p className="text-xs text-theme-text-secondary">{ec.email}</p>}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-theme-text-muted">No emergency contacts on file.</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {contactsForm.map((ec, i) => (
+                  <div key={i} className="border border-theme-surface-border rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-theme-text-muted">Contact {i + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1 text-xs text-theme-text-secondary cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={ec.is_primary}
+                            onChange={(e) => handleContactChange(i, 'is_primary', e.target.checked)}
+                            className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
+                          />
+                          Primary
+                        </label>
+                        {contactsForm.length > 1 && (
+                          <button onClick={() => handleRemoveContact(i)} className="text-red-400 hover:text-red-300 text-xs">Remove</button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Name *"
+                        value={ec.name}
+                        onChange={(e) => handleContactChange(i, 'name', e.target.value)}
+                        className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Relationship"
+                        value={ec.relationship}
+                        onChange={(e) => handleContactChange(i, 'relationship', e.target.value)}
+                        className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="tel"
+                        placeholder="Phone *"
+                        value={ec.phone}
+                        onChange={(e) => handleContactChange(i, 'phone', e.target.value)}
+                        className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={ec.email || ''}
+                        onChange={(e) => handleContactChange(i, 'email', e.target.value)}
+                        className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button onClick={handleAddContact} className="w-full px-3 py-2 text-sm text-blue-400 border border-dashed border-theme-surface-border rounded-md hover:bg-theme-surface-hover">
+                  + Add Contact
+                </button>
+                <div className="flex gap-2">
+                  <button onClick={handleSaveEmergencyContacts} disabled={savingContacts} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50">
+                    {savingContacts ? 'Saving...' : 'Save'}
+                  </button>
+                  <button onClick={() => setEditingContacts(false)} disabled={savingContacts} className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50">
+                    Cancel
+                  </button>
+                </div>
+                {error && <div className="text-sm text-red-400">{error}</div>}
               </div>
             )}
           </div>

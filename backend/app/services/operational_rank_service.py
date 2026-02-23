@@ -4,14 +4,25 @@ Operational Rank Service
 Business logic for per-organization operational rank management.
 """
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.operational_rank import OperationalRank
+from app.models.user import User, UserStatus
 from app.schemas.operational_rank import RankCreate, RankUpdate
+
+# Statuses considered non-active for rank validation purposes.
+# Members with these statuses are no longer interacting with the platform,
+# so an outdated rank on their record should not surface as an error.
+_INACTIVE_STATUSES = {
+    UserStatus.RETIRED,
+    UserStatus.ARCHIVED,
+    UserStatus.DROPPED_VOLUNTARY,
+    UserStatus.DROPPED_INVOLUNTARY,
+}
 
 
 # Default ranks seeded for new organizations.
@@ -169,3 +180,52 @@ class OperationalRankService:
                 rank.sort_order = item["sort_order"]
         await self.db.commit()
         return await self.list_ranks(organization_id)
+
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
+
+    async def validate_ranks(
+        self,
+        organization_id: str,
+    ) -> List[Dict]:
+        """Return active members whose rank code does not match any
+        configured rank for the organization.
+
+        Only members with statuses that indicate they are still actively
+        interacting with the platform are checked.  Archived, retired,
+        and dropped members are intentionally excluded so that outdated
+        rank values on historical records do not surface as errors.
+
+        Returns a list of dicts:
+            [{ "member_id", "member_name", "rank_code" }, ...]
+        """
+        # Collect all configured rank codes for the org.
+        result = await self.db.execute(
+            select(OperationalRank.rank_code).where(
+                OperationalRank.organization_id == organization_id,
+            )
+        )
+        valid_codes = {row[0] for row in result.all()}
+
+        # Find active-status members whose rank is set but unrecognised.
+        members_q = (
+            select(User.id, User.first_name, User.last_name, User.rank)
+            .where(
+                User.organization_id == organization_id,
+                User.rank.isnot(None),
+                User.rank != "",
+                User.status.notin_([s.value for s in _INACTIVE_STATUSES]),
+                User.deleted_at.is_(None),
+            )
+        )
+        members_result = await self.db.execute(members_q)
+        issues: List[Dict] = []
+        for row in members_result.all():
+            if row.rank not in valid_codes:
+                issues.append({
+                    "member_id": row.id,
+                    "member_name": f"{row.first_name or ''} {row.last_name or ''}".strip(),
+                    "rank_code": row.rank,
+                })
+        return issues

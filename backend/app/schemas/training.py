@@ -148,6 +148,8 @@ class TrainingRecordBase(BaseModel):
     location: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
     attachments: Optional[List[str]] = None
+    rank_at_completion: Optional[str] = Field(None, max_length=100)
+    station_at_completion: Optional[str] = Field(None, max_length=100)
 
 
 class TrainingRecordCreate(TrainingRecordBase):
@@ -300,6 +302,19 @@ class RequirementProgress(BaseModel):
     due_date: Optional[date]
     due_date_type: Optional[DueDateType] = None
     days_until_due: Optional[int] = None  # Negative if overdue
+
+
+class ComplianceSummary(BaseModel):
+    """Compliance summary for a member's profile card"""
+    user_id: UUID
+    requirements_met: int
+    requirements_total: int
+    certs_expiring_soon: int  # Within 90 days
+    certs_expired: int
+    compliance_status: str  # "green", "yellow", "red"
+    compliance_label: str  # "Compliant", "At Risk", "Non-Compliant"
+    hours_this_year: float
+    active_certifications: int
 
 
 # ============================================
@@ -668,3 +683,58 @@ class HistoricalImportResult(BaseModel):
     skipped: int
     failed: int
     errors: List[str]
+
+
+# ============================================
+# Bulk Training Record Creation
+# ============================================
+
+
+class BulkTrainingRecordEntry(BaseModel):
+    """A single entry in a bulk training record creation request"""
+    user_id: UUID
+    course_name: str = Field(..., min_length=1, max_length=255)
+    course_code: Optional[str] = Field(None, max_length=50)
+    course_id: Optional[UUID] = None
+    training_type: str = "continuing_education"
+    completion_date: Optional[date] = None
+    expiration_date: Optional[date] = None
+    hours_completed: float = Field(..., ge=0)
+    credit_hours: Optional[float] = Field(None, ge=0)
+    certification_number: Optional[str] = Field(None, max_length=100)
+    issuing_agency: Optional[str] = Field(None, max_length=255)
+    status: str = "completed"
+    score: Optional[float] = Field(None, ge=0, le=100)
+    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    passed: Optional[bool] = None
+    instructor: Optional[str] = Field(None, max_length=255)
+    location: Optional[str] = Field(None, max_length=255)
+    notes: Optional[str] = None
+
+
+class BulkTrainingRecordCreate(BaseModel):
+    """Request to create training records for multiple members at once"""
+    records: List[BulkTrainingRecordEntry] = Field(..., min_length=1, max_length=500)
+    skip_duplicates: bool = False  # If True, silently skip duplicates instead of flagging
+    override_duplicates: bool = False  # If True, create even if duplicates detected
+
+
+class DuplicateWarning(BaseModel):
+    """Warning about a potential duplicate training record"""
+    user_id: UUID
+    course_name: str
+    completion_date: Optional[date] = None
+    existing_record_id: UUID
+    existing_completion_date: Optional[date] = None
+    message: str
+
+
+class BulkTrainingRecordResult(BaseModel):
+    """Result of a bulk training record creation"""
+    total: int
+    created: int
+    skipped: int
+    failed: int
+    duplicate_warnings: List[DuplicateWarning] = []
+    errors: List[str] = []
+    created_record_ids: List[str] = []

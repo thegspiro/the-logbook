@@ -35,10 +35,11 @@ import {
   Shield,
   Users,
   Hash,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationService, ranksService } from '../services/api';
-import type { ModuleSettingsData, OperationalRankResponse, OrganizationProfile } from '../services/api';
+import type { ModuleSettingsData, OperationalRankResponse, OrganizationProfile, RankValidationIssue } from '../services/api';
 import type { ContactInfoSettings, MembershipIdSettings } from '../types/user';
 import { invalidateRanksCache } from '../hooks/useRanks';
 
@@ -154,7 +155,19 @@ export const SettingsPage: React.FC = () => {
   const [rankSaving, setRankSaving] = useState(false);
   const [deletingRankId, setDeletingRankId] = useState<string | null>(null);
 
+  // Rank validation state
+  const [rankValidationIssues, setRankValidationIssues] = useState<RankValidationIssue[]>([]);
+
   // ── Data loading ──
+
+  const fetchRankValidation = useCallback(async () => {
+    try {
+      const result = await ranksService.validateRanks();
+      setRankValidationIssues(result.issues);
+    } catch {
+      // Silently ignore – validation is non-blocking
+    }
+  }, []);
 
   const fetchRanks = useCallback(async () => {
     try {
@@ -165,7 +178,9 @@ export const SettingsPage: React.FC = () => {
     } catch { /* empty state shown */ } finally {
       setRanksLoading(false);
     }
-  }, []);
+    // Re-run validation whenever the rank list changes
+    await fetchRankValidation();
+  }, [fetchRankValidation]);
 
   useEffect(() => {
     const load = async () => {
@@ -857,6 +872,35 @@ export const SettingsPage: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Rank validation issues */}
+            {rankValidationIssues.length > 0 && (
+              <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                      {rankValidationIssues.length} active member{rankValidationIssues.length !== 1 ? 's' : ''} with unrecognised rank{rankValidationIssues.length !== 1 ? 's' : ''}
+                    </p>
+                    <p className="text-xs text-theme-text-muted mt-1">
+                      The following members have a rank assigned that no longer matches any configured rank.
+                      Update their profile or re-add the missing rank to resolve.
+                    </p>
+                    <ul className="mt-3 space-y-1.5">
+                      {rankValidationIssues.map((issue) => (
+                        <li key={issue.member_id} className="flex items-center gap-2 text-sm">
+                          <span className="text-theme-text-primary font-medium">{issue.member_name}</span>
+                          <span className="text-xs text-theme-text-muted">&mdash;</span>
+                          <code className="text-xs bg-theme-surface-secondary px-1.5 py-0.5 rounded text-amber-600 dark:text-amber-400">
+                            {issue.rank_code}
+                          </code>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               </div>
             )}
           </div>

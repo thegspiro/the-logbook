@@ -62,3 +62,18 @@ class RankReorderRequest(BaseModel):
     """Batch-reorder ranks."""
 
     ranks: List[RankReorderItem] = Field(..., min_length=1)
+
+
+class RankValidationIssue(BaseModel):
+    """A single rank-validation issue (member with unrecognised rank)."""
+
+    member_id: str
+    member_name: str
+    rank_code: str
+
+
+class RankValidationResponse(BaseModel):
+    """Result of rank validation across active members."""
+
+    issues: List[RankValidationIssue]
+    total: int

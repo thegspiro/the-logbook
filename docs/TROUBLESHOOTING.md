@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-21 (includes training waiver consistency across all compliance views, meeting attendance Leave of Absence exclusion, shared training waiver service, DateTime timezone consistency, CI pipeline; hardcoded value elimination across 43 files, centralized constants for role groups/event types/folder slugs, CSS variable consolidation for toast/status colors, dependency version bumps; comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique membership number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
+**Last Updated**: 2026-02-23 (includes LOA–training waiver auto-linking, waiver management page, compliance summary card, bulk training record creation with duplicate detection, certification expiration alert tiers, rank/station snapshot on training records, member admin edit/audit history/delete modal, rank validation, 15-minute time increment enforcement; plus training waiver consistency across all compliance views, meeting attendance Leave of Absence exclusion, shared training waiver service, DateTime timezone consistency, CI pipeline; hardcoded value elimination across 43 files, centralized constants for role groups/event types/folder slugs, CSS variable consolidation for toast/status colors, dependency version bumps; comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique membership number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
 
 ---
 
@@ -2308,6 +2308,76 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 - Try "Last Year" if training was recorded in the prior year
 - Verify training records exist with `completed_date` within the selected range
 - For shift data, verify shift completion reports exist with `shift_date` in range
+
+#### LOA Created But Training Requirements Not Adjusted (Added 2026-02-23)
+
+**Symptoms**: A Leave of Absence was created but the member's training requirements were not reduced
+
+**Causes**:
+1. The leave has `exempt_from_training_waiver = true` set
+2. The auto-linked training waiver was not created (backend service error)
+3. The leave does not cover ≥15 days of any calendar month
+
+**Solutions**:
+- Check the leave record — if `exempt_from_training_waiver` is true, the LOA intentionally does not create a training waiver. Update the leave to disable this flag, or create a standalone training waiver from the Waiver Management page.
+- Check `linked_training_waiver_id` on the leave — if null, the auto-link did not fire. Create a standalone training waiver manually.
+- A month is only waived if the leave covers 15+ days of that month. A leave from Jan 20–Jan 31 (12 days) will not waive January.
+
+#### Duplicate Training Record Warning (Added 2026-02-23)
+
+**Symptoms**: When creating a training record (single or bulk), the system warns about potential duplicates
+
+**Cause**: A record with the same member + course name (case-insensitive) + completion date (±1 day) already exists.
+
+**Solutions**:
+- Review the warning — if this is truly a new record, proceed with creation
+- If using bulk upload, set `skip_duplicates: true` to silently skip known duplicates
+- The warning is informational; it does not block creation
+
+#### Compliance Summary Card Shows Wrong Status (Added 2026-02-23)
+
+**Symptoms**: The green/yellow/red compliance indicator on a member's profile seems incorrect
+
+**Causes**:
+1. Stale data — the card reflects the last calculation
+2. A waiver was recently created or deactivated
+3. A certification just expired
+
+**Status logic**:
+- **Red**: Any expired certification OR fewer than 50% of requirements met
+- **Yellow**: Any certification expiring within 90 days OR fewer than 100% of requirements met
+- **Green**: All requirements met and no certification issues
+
+**Solutions**:
+- Refresh the page to trigger a recalculation
+- Check individual requirement progress to identify which requirements are not met
+- Verify waiver adjustments are correctly applied (see Training Admin > Training Waivers tab)
+
+#### Certification Expiration Alerts Not Sent (Added 2026-02-23)
+
+**Symptoms**: A certification is expiring but the member has not received alert notifications
+
+**Causes**:
+1. The alert for that tier was already sent (each tier sends only once)
+2. The certification is more than 90 days away (alerts start at 90 days)
+3. The member has email notifications disabled
+
+**Solutions**:
+- Check the training record's `alert_90_sent_at`, `alert_60_sent_at`, `alert_30_sent_at`, `alert_7_sent_at` fields — if already set, that tier was sent
+- Verify the expiration date is within 90 days of today
+- Check the member's email preferences and ensure email is enabled
+- Run `POST /training/certifications/process-alerts/all-orgs` to trigger a manual alert processing
+
+#### Rank Validation Shows Members With Unrecognized Ranks (Added 2026-02-23)
+
+**Symptoms**: Members appear in the rank validation list even though their rank seems correct
+
+**Cause**: The member's rank does not exactly match any of the organization's configured operational ranks (case-sensitive comparison).
+
+**Solutions**:
+- Navigate to Settings to review configured operational ranks
+- Edit the member's profile to set their rank to an exact match
+- If the rank should be valid, add it to the organization's operational ranks configuration
 
 ---
 

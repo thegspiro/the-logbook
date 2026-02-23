@@ -260,6 +260,10 @@ class TrainingRecord(Base):
     # Cross-module link: which apparatus was used for this training
     apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
 
+    # Snapshot of member's rank and station at time of training completion
+    rank_at_completion = Column(String(100), nullable=True)
+    station_at_completion = Column(String(100), nullable=True)
+
     # Additional Information
     notes = Column(Text)
     attachments = Column(JSON)  # List of file URLs or references

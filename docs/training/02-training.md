@@ -242,6 +242,71 @@ You can trigger notification emails to members with expiring certifications by c
 > **Screenshot placeholder:**
 > _[Screenshot of the Expiring Certifications page showing a table of upcoming expirations sorted by date, with color coding (yellow for 30-90 days, red for under 30 days) and a "Process Alerts" button]_
 
+### Automated Certification Alerts
+
+The system automatically sends tiered notifications as certifications approach expiration:
+
+| Days Before Expiration | Recipients | Channels |
+|------------------------|-----------|----------|
+| 90 days | Member only | In-app + email |
+| 60 days | Member only | In-app + email |
+| 30 days | Member + training officer | In-app + email (CC) |
+| 7 days | Member + training + compliance officers | In-app + email (CC) |
+| Expired | Member + all escalation officers | In-app + email (CC) |
+
+Each tier is sent only once per certification. Expired certifications trigger escalation to training, compliance, and chief officers with both primary and personal email addresses.
+
+---
+
+## Waiver Management
+
+**Required Permission:** `members.manage`
+
+Navigate to **Members > Admin > Waivers** to manage all waivers across the department.
+
+This unified page covers:
+- **Training waivers** — adjust training requirements for members on leave
+- **Meeting waivers** — exclude meetings during leave periods from attendance calculations
+- **Shift waivers** — exclude members from scheduling during leave
+
+### Creating a Waiver
+
+1. Click the **Create Waiver** tab.
+2. Select the member, leave type, and date range.
+3. Choose the **Applies To** scope:
+   - **All (LOA + Training Waiver)** — Creates a Leave of Absence and automatically links a training waiver. This is the most common option.
+   - **Training Only** — Creates a standalone training waiver without affecting meeting attendance or scheduling.
+   - **Meetings & Shifts Only** — Creates a Leave of Absence with `exempt_from_training_waiver` enabled, so training requirements are not adjusted.
+4. Click **Create Waiver**.
+
+### Training Waivers Tab (Officer View)
+
+Training officers also have a dedicated **Training Waivers** tab within the **Training Admin > Dashboard**. This view shows:
+- Summary cards (Active / Future / Expired / Total counts)
+- Filterable table with status badges (Active, Future, Expired, Deactivated)
+- Source tracking: **Auto (LOA)** for waivers auto-created from leaves, **Manual** for standalone waivers
+- Links to the full Waiver Management page
+
+---
+
+## Compliance Summary
+
+Each member's profile page displays a **compliance summary card** showing their current training status at a glance:
+
+| Indicator | Meaning |
+|-----------|---------|
+| **Green (Compliant)** | All requirements met, no certification issues |
+| **Yellow (At Risk)** | Some requirements incomplete or certifications expiring within 90 days |
+| **Red (Non-Compliant)** | Expired certifications or fewer than 50% of requirements met |
+
+The card also shows:
+- Requirements met / total
+- Training hours completed this year
+- Active certifications count
+- Certifications expiring soon
+
+> For the full technical details of how compliance is calculated, see [Training Compliance Calculations](../../docs/training-compliance-calculations.md).
+
 ---
 
 ## Shift Completion Reports
@@ -306,6 +371,11 @@ Navigate to **Training Admin > Import History** to import historical training re
 | Program progress not updating after a shift | Shift completion reports must be filed by the shift officer. Auto-progression only works for enrolled members with matching requirement types. |
 | Compliance matrix shows incorrect data | Check the requirement's frequency and due date type settings. Rolling periods use today's date as the reference point. |
 | Member on leave still shows as non-compliant | Verify the Leave of Absence is active in Member Lifecycle. The leave must cover ≥15 days of a month for that month to be waived. Only hours, shifts, and calls requirements are adjusted. |
+| LOA created but training not adjusted | Check that `exempt_from_training_waiver` is not set on the leave. The auto-linked training waiver should appear in the Training Waivers tab. If missing, create a standalone training waiver from the Waiver Management page. |
+| Duplicate training record warning | The system detects records with the same member + course name (case-insensitive) + completion date within ±1 day. Review the warning and either proceed or skip the duplicate. |
+| Compliance card shows wrong color | Red = expired certs or <50% requirements met; Yellow = expiring certs or <100% requirements met; Green = all met. Check individual requirement progress for details. |
+| Certification alert not received | Alerts are sent once per tier (90/60/30/7 days). Check the record's `alert_*_sent_at` fields. If all tiers are already sent, no further alerts will be triggered. |
+| Rank shows as unrecognized | Navigate to Members Admin to see rank validation results. Update the member's rank to match one of the configured operational ranks in Settings. |
 | Cannot see the Training module | Training is an optional module. Your department administrator must enable it in Settings > Modules. |
 | External integration not syncing | Check the integration configuration and sync logs. Ensure user mappings are correctly set up. |
 

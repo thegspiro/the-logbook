@@ -1303,7 +1303,7 @@ export const EventDetailPage: React.FC = () => {
                       </label>
                       <input
                         type="datetime-local"
-                        step="60"
+                        step="900"
                         id="override_check_in"
                         value={overrideCheckIn}
                         onChange={(e) => setOverrideCheckIn(e.target.value)}
@@ -1317,7 +1317,7 @@ export const EventDetailPage: React.FC = () => {
                       </label>
                       <input
                         type="datetime-local"
-                        step="60"
+                        step="900"
                         id="override_check_out"
                         value={overrideCheckOut}
                         onChange={(e) => setOverrideCheckOut(e.target.value)}

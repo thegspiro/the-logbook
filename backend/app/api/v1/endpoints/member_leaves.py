@@ -37,6 +37,7 @@ class LeaveOfAbsenceCreate(BaseModel):
     reason: Optional[str] = None
     start_date: date
     end_date: date
+    exempt_from_training_waiver: bool = False  # Override: keep training requirements active
 
 
 class LeaveOfAbsenceUpdate(BaseModel):
@@ -45,6 +46,7 @@ class LeaveOfAbsenceUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     active: Optional[bool] = None
+    exempt_from_training_waiver: Optional[bool] = None
 
 
 class LeaveOfAbsenceResponse(BaseModel):
@@ -58,6 +60,8 @@ class LeaveOfAbsenceResponse(BaseModel):
     granted_by: Optional[str] = None
     granted_at: Optional[datetime] = None
     active: bool
+    exempt_from_training_waiver: bool = False
+    linked_training_waiver_id: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -78,6 +82,8 @@ def _to_response(leave) -> LeaveOfAbsenceResponse:
         granted_by=str(leave.granted_by) if leave.granted_by else None,
         granted_at=leave.granted_at,
         active=leave.active,
+        exempt_from_training_waiver=leave.exempt_from_training_waiver,
+        linked_training_waiver_id=leave.linked_training_waiver_id,
         created_at=leave.created_at,
         updated_at=leave.updated_at,
     )
@@ -104,6 +110,7 @@ async def create_leave_of_absence(
         leave_type=data.leave_type,
         reason=data.reason,
         granted_by=str(current_user.id),
+        exempt_from_training_waiver=data.exempt_from_training_waiver,
     )
     return _to_response(leave)
 

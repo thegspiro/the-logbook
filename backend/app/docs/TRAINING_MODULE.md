@@ -125,6 +125,8 @@ Individual member training history.
 - `location_id`: FK to `locations` table (optional) — references a wizard-created location. When set, provides consistent location data across the app. The existing `location` text field is preserved as a fallback for "Other Location" or legacy records.
 - `location`: Free-text location string (fallback for non-standard locations)
 - `apparatus_id`: FK to apparatus used for this training (optional)
+- `rank_at_completion`: Member's rank at the time the record was created (auto-populated, VARCHAR 100)
+- `station_at_completion`: Member's station at the time the record was created (auto-populated, VARCHAR 100)
 
 ### TrainingRequirement
 Requirements that members must complete.
@@ -525,6 +527,64 @@ Returns `(adjusted_required, waived_months_count, active_months_count)` using th
 - `training_program_service.py` — Program Enrollment Progress
 
 ## API Endpoints
+
+### Records
+
+```
+POST   /api/v1/training/records              # Create a training record
+GET    /api/v1/training/records              # List training records
+POST   /api/v1/training/records/bulk         # Bulk create up to 500 records (with duplicate detection)
+GET    /api/v1/training/compliance-summary/{user_id}  # Get member compliance summary (green/yellow/red)
+```
+
+**Bulk Create Request:**
+```json
+{
+  "records": [
+    {
+      "user_id": "uuid",
+      "course_name": "Hose Operations",
+      "completion_date": "2026-02-15",
+      "hours_completed": 4.0
+    }
+  ],
+  "skip_duplicates": true
+}
+```
+
+**Duplicate Detection:**
+A record is flagged as a potential duplicate when another record exists with:
+- Same `user_id`
+- Same `course_name` (case-insensitive)
+- `completion_date` within ±1 day
+
+The response includes `duplicate_warnings` listing each potential conflict.
+
+**Compliance Summary Response:**
+```json
+{
+  "user_id": "uuid",
+  "requirements_met": 5,
+  "requirements_total": 7,
+  "certs_expiring_soon": 1,
+  "certs_expired": 0,
+  "compliance_status": "yellow",
+  "compliance_label": "At Risk",
+  "hours_this_year": 42.5,
+  "active_certifications": 3
+}
+```
+
+### Certification Alert Processing
+
+```
+POST   /api/v1/training/certifications/process-alerts/all-orgs  # Run daily cert alert cron
+```
+
+Processes certification expiration alerts for all organizations:
+- 90/60/30/7-day tiered notifications (in-app + email)
+- Expired certification escalation to training, compliance, and chief officers
+- Each tier sent only once per certification (tracked by `alert_*_sent_at` timestamps)
 
 ### Categories
 
@@ -1147,4 +1207,4 @@ Using SQLAlchemy ORM:
 
 ---
 
-*Last Updated: February 18, 2026*
+*Last Updated: February 23, 2026*

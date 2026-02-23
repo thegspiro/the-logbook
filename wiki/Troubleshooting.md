@@ -19,6 +19,8 @@ This guide covers common issues and their solutions for The Logbook deployment.
 13. [TypeScript Quality Issues](#typescript-quality-issues)
 14. [Inventory Module Issues](#inventory-module-issues)
 15. [Notification Issues](#notification-issues)
+16. [Training & Compliance Issues](#training--compliance-issues)
+17. [Membership Admin Issues](#membership-admin-issues)
 
 ---
 
@@ -1377,3 +1379,57 @@ If you find new `as any` assertions, replace them with proper types. See `docs/T
 **Root Cause:** Notifications may have expired (past `expires_at`) or been cancelled by notification netting (offsetting actions like assign→unassign cancel each other).
 
 **Solution:** Expired notifications are hidden by design. Notification netting prevents duplicate alerts. Check notification logs via the admin panel for details.
+
+---
+
+## Training & Compliance Issues
+
+### Problem: LOA created but training requirements not adjusted
+
+**Root Cause:** The leave has `exempt_from_training_waiver` set to true, or the auto-linked training waiver was not created.
+
+**Solution:**
+1. Check the leave record — if `exempt_from_training_waiver` is true, update the leave or create a standalone training waiver from **Members > Admin > Waivers**
+2. A month is only waived if the leave covers ≥15 days of that month
+3. Only hours, shifts, and calls requirements are adjusted — certifications and courses are not
+
+### Problem: Compliance card shows wrong color
+
+**Root Cause:** The compliance summary uses this logic:
+- **Red**: Expired certs OR <50% requirements met
+- **Yellow**: Expiring certs (within 90 days) OR <100% requirements met
+- **Green**: All requirements met, no cert issues
+
+**Solution:** Refresh the page. Check individual requirement progress. Verify waiver adjustments in Training Admin > Training Waivers.
+
+### Problem: Certification alert not received
+
+**Root Cause:** Each alert tier (90/60/30/7 days) is sent only once per certification.
+
+**Solution:** Check the record's `alert_*_sent_at` timestamps. If already set, that tier was sent. Run `POST /training/certifications/process-alerts/all-orgs` for manual processing.
+
+### Problem: Duplicate training record warning during bulk upload
+
+**Root Cause:** A record with the same member + course name (case-insensitive) + completion date (±1 day) exists.
+
+**Solution:** Review the warning. Set `skip_duplicates: true` in the bulk request to skip known duplicates.
+
+---
+
+## Membership Admin Issues
+
+### Problem: Cannot find the member edit page
+
+**Solution:** Navigate to **Members > Admin**, click a member, then click **Edit** to go to `/members/admin/edit/:userId`.
+
+### Problem: Rank validation shows unexpected results
+
+**Root Cause:** The member's rank does not exactly match any configured operational rank (case-sensitive).
+
+**Solution:** Edit the member's rank to match a configured rank, or add the rank to the organization's operational ranks in Settings.
+
+### Problem: Member audit history is empty
+
+**Root Cause:** Audit entries are only created for changes made after the audit history feature was deployed.
+
+**Solution:** Changes made before the feature was added will not appear. Future changes will be tracked automatically.
