@@ -16,7 +16,6 @@
  *   />
  */
 import { useState, useEffect, useCallback } from 'react';
-import DOMPurify from 'dompurify';
 import { Send, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import FieldRenderer from './FieldRenderer';
 import { formsService } from '../../services/api';
@@ -232,7 +231,8 @@ const FormRenderer = ({
       setSubmitting(true);
       setError(null);
 
-      // Sanitize all form values before submission
+      // Sanitize all form values before submission (lazy-loaded to reduce initial bundle)
+      const DOMPurify = (await import('dompurify')).default;
       const sanitizedData: Record<string, string> = {};
       for (const [key, value] of Object.entries(formData)) {
         sanitizedData[key] = DOMPurify.sanitize(value, { ALLOWED_TAGS: [] });

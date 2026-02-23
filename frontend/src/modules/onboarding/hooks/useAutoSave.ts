@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { AUTO_SAVE_INTERVAL_MS } from '../../../constants/config';
 
 interface UseAutoSaveOptions<T> {
   data: T;
@@ -34,15 +35,25 @@ interface UseAutoSaveOptions<T> {
 export function useAutoSave<T>({
   data,
   onSave,
-  interval = 30000, // 30 seconds default
+  interval = AUTO_SAVE_INTERVAL_MS,
   enabled = true
 }: UseAutoSaveOptions<T>) {
-  const savedDataRef = useRef<T>(data);
+  const savedDataRef = useRef<string>(JSON.stringify(data));
+  const dataRef = useRef<T>(data);
+  const onSaveRef = useRef(onSave);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Keep refs in sync without resetting the interval
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
 
   useEffect(() => {
     if (!enabled) {
-      // Clear interval if auto-save is disabled
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -50,32 +61,23 @@ export function useAutoSave<T>({
       return;
     }
 
-    // Start auto-save interval
     intervalRef.current = setInterval(async () => {
-      // Only save if data has changed
-      const currentDataString = JSON.stringify(data);
-      const savedDataString = JSON.stringify(savedDataRef.current);
+      const currentDataString = JSON.stringify(dataRef.current);
 
-      if (currentDataString !== savedDataString) {
+      if (currentDataString !== savedDataRef.current) {
         try {
-          await onSave(data);
-          savedDataRef.current = data;
+          await onSaveRef.current(dataRef.current);
+          savedDataRef.current = currentDataString;
         } catch (error) {
           console.error('Auto-save failed:', error);
         }
       }
     }, interval);
 
-    // Cleanup on unmount or when dependencies change
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [data, onSave, interval, enabled]);
-
-  // Update saved data ref when data changes (for comparison)
-  useEffect(() => {
-    savedDataRef.current = data;
-  }, [data]);
+  }, [interval, enabled]);
 }

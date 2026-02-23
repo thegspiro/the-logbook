@@ -72,14 +72,34 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false, // Disabled in production to prevent source code exposure
-    // Temporarily disable manual code splitting to diagnose bundling issue
-    // rollupOptions: {
-    //   output: {
-    //     manualChunks: ...
-    //   },
-    // },
-    // Additional optimizations
-    chunkSizeWarningLimit: 1000, // Warn for chunks > 1MB
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-dom') || id.includes('/react/')) {
+              return 'vendor-react';
+            }
+            if (id.includes('react-router') || id.includes('@remix-run')) {
+              return 'vendor-router';
+            }
+            if (id.includes('lucide-react') || id.includes('@headlessui')) {
+              return 'vendor-ui';
+            }
+            if (id.includes('recharts') || id.includes('d3-')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('date-fns')) {
+              return 'vendor-date';
+            }
+            if (id.includes('zustand')) {
+              return 'vendor-state';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600, // Warn for chunks > 600KB
     minify: 'esbuild', // Fast minification
   },
   preview: {

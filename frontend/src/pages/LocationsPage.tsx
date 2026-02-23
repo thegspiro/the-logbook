@@ -1018,7 +1018,7 @@ export default function LocationsPage() {
             organizationService.getSettings().then(settings => {
               const mode = (settings as Record<string, unknown>).station_mode as StationMode;
               setStationMode(mode || null);
-            }).catch(() => {});
+            }).catch(() => { /* non-critical settings reload */ });
           }}
         />
       )}
