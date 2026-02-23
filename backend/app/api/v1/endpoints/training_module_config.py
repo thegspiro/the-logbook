@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List
-import calendar
 from datetime import date
 
 from app.core.database import get_db
@@ -21,14 +20,13 @@ from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.models.user import User, UserStatus
 from app.models.training import (
     TrainingRecord, TrainingStatus,
-    TrainingRequirement, RequirementFrequency,
+    TrainingRequirement,
     ProgramEnrollment, RequirementProgress,
     ShiftCompletionReport, TrainingSubmission,
     SubmissionStatus,
 )
-from app.services.training_waiver_service import (
-    fetch_user_waivers, adjust_required,
-)
+from app.services.training_waiver_service import fetch_user_waivers
+from app.services.training_service import TrainingService
 from app.schemas.training_module_config import (
     TrainingModuleConfigResponse,
     TrainingModuleConfigUpdate,
@@ -183,114 +181,34 @@ async def get_my_training_summary(
     # --- Fetch active waivers + leaves of absence for this user ---
     user_waivers = await fetch_user_waivers(db, org_id, user_id)
 
-    # Check progress for each applicable requirement
+    # --- Pre-fetch all training records for this user (no date filter —
+    # the shared evaluator handles date windowing per requirement) ---
+    all_records_result = await db.execute(
+        select(TrainingRecord)
+        .where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.user_id == user_id,
+        )
+    )
+    member_records = list(all_records_result.scalars().all())
+
+    # Evaluate every applicable requirement using the shared helper which
+    # handles all requirement types (hours, courses, certification,
+    # shifts, calls, fallback) and rolling period windows.
     today = date.today()
-    current_year = today.year
     met_count = 0
     total_progress_pct = 0.0
+    requirements_detail: List[Dict[str, Any]] = []
 
     for req in applicable:
-        freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
-
-        # Determine the evaluation window based on frequency
-        if freq == "one_time":
-            # One-time: no date window, just check if any completed record exists
-            start_date = None
-            end_date = None
-        elif freq == "biannual":
-            # Biannual: look at all records (no date window restriction) —
-            # compliance is based on having a non-expired certification
-            start_date = None
-            end_date = None
-        elif freq == "quarterly":
-            # Quarterly: current quarter
-            quarter_month = ((today.month - 1) // 3) * 3 + 1
-            start_date = date(current_year, quarter_month, 1)
-            end_month = quarter_month + 2
-            end_year = current_year
-            if end_month > 12:
-                end_month -= 12
-                end_year += 1
-            end_day = calendar.monthrange(end_year, end_month)[1]
-            end_date = date(end_year, end_month, end_day)
-        elif freq == "monthly":
-            # Monthly: current month
-            start_date = date(current_year, today.month, 1)
-            end_day = calendar.monthrange(current_year, today.month)[1]
-            end_date = date(current_year, today.month, end_day)
-        else:
-            # Annual (default)
-            start_date = date(req.year, 1, 1) if req.year else date(current_year, 1, 1)
-            end_date = date(req.year, 12, 31) if req.year else date(current_year, 12, 31)
-
-        req_hours_query = (
-            select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0))
-            .where(
-                TrainingRecord.organization_id == org_id,
-                TrainingRecord.user_id == user_id,
-                TrainingRecord.status == TrainingStatus.COMPLETED,
-            )
+        detail = TrainingService.evaluate_requirement_detail(
+            req, member_records, today, waivers=user_waivers,
         )
-        # Apply date window (one_time has no window)
-        if start_date and end_date:
-            req_hours_query = req_hours_query.where(
-                TrainingRecord.completion_date >= start_date,
-                TrainingRecord.completion_date <= end_date,
-            )
-        if req.training_type:
-            req_hours_query = req_hours_query.where(
-                TrainingRecord.training_type == req.training_type
-            )
-
-        req_hours_result = await db.execute(req_hours_query)
-        completed_hours = float(req_hours_result.scalar() or 0)
-
-        required = req.required_hours or 0
-        # Adjust required hours for waived months
-        if required > 0 and start_date and end_date and user_waivers:
-            adjusted_required, _, _ = adjust_required(
-                required, start_date, end_date, user_waivers, str(req.id)
-            )
-        else:
-            adjusted_required = required
-
-        if adjusted_required > 0:
-            pct = min(completed_hours / adjusted_required * 100, 100)
-        else:
-            pct = 100.0
-
-        # For biannual requirements, check if the latest cert is expired.
-        # Filter by training_type when set; otherwise match by requirement name
-        # to avoid picking up an unrelated cert (e.g. CPR cert satisfying EMS req).
-        if freq == "biannual":
-            cert_q = (
-                select(TrainingRecord.expiration_date)
-                .where(
-                    TrainingRecord.organization_id == org_id,
-                    TrainingRecord.user_id == user_id,
-                    TrainingRecord.status == TrainingStatus.COMPLETED,
-                    TrainingRecord.expiration_date.isnot(None),
-                )
-                .order_by(TrainingRecord.expiration_date.desc())
-                .limit(1)
-            )
-            if req.training_type:
-                cert_q = cert_q.where(
-                    TrainingRecord.training_type == req.training_type
-                )
-            elif req.name:
-                # Fallback: match by course_name containing the requirement name
-                cert_q = cert_q.where(
-                    TrainingRecord.course_name.ilike(f"%{req.name}%")
-                )
-            cert_r = await db.execute(cert_q)
-            latest_exp = cert_r.scalar_one_or_none()
-            if not latest_exp or latest_exp < today:
-                pct = 0.0  # Expired or missing cert — not met
-
+        pct = detail["progress_percentage"]
         total_progress_pct += pct
-        if pct >= 100:
+        if detail["is_met"]:
             met_count += 1
+        requirements_detail.append(detail)
 
     total_reqs = len(applicable)
     avg_compliance = round(total_progress_pct / total_reqs, 1) if total_reqs > 0 else None
@@ -300,140 +218,6 @@ async def get_my_training_summary(
         "met_requirements": met_count,
         "avg_compliance": avg_compliance,
     }
-
-    # --- Detailed Requirements Breakdown (always included) ---
-    requirements_detail: List[Dict[str, Any]] = []
-    for req in applicable:
-        freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
-
-        # Determine evaluation window (same logic as summary above)
-        if freq == "one_time":
-            r_start_date = None
-            r_end_date = None
-        elif freq == "biannual":
-            # Biannual: no date window restriction —
-            # compliance is based on having a non-expired certification
-            r_start_date = None
-            r_end_date = None
-        elif freq == "quarterly":
-            quarter_month = ((today.month - 1) // 3) * 3 + 1
-            r_start_date = date(current_year, quarter_month, 1)
-            end_month = quarter_month + 2
-            r_end_year = current_year
-            if end_month > 12:
-                end_month -= 12
-                r_end_year += 1
-            r_end_day = calendar.monthrange(r_end_year, end_month)[1]
-            r_end_date = date(r_end_year, end_month, r_end_day)
-        elif freq == "monthly":
-            r_start_date = date(current_year, today.month, 1)
-            r_end_day = calendar.monthrange(current_year, today.month)[1]
-            r_end_date = date(current_year, today.month, r_end_day)
-        else:
-            r_start_date = date(req.year, 1, 1) if req.year else date(current_year, 1, 1)
-            r_end_date = date(req.year, 12, 31) if req.year else date(current_year, 12, 31)
-
-        rq_hours_query = (
-            select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0))
-            .where(
-                TrainingRecord.organization_id == org_id,
-                TrainingRecord.user_id == user_id,
-                TrainingRecord.status == TrainingStatus.COMPLETED,
-            )
-        )
-        if r_start_date and r_end_date:
-            rq_hours_query = rq_hours_query.where(
-                TrainingRecord.completion_date >= r_start_date,
-                TrainingRecord.completion_date <= r_end_date,
-            )
-        if req.training_type:
-            rq_hours_query = rq_hours_query.where(
-                TrainingRecord.training_type == req.training_type
-            )
-
-        rq_hours_result = await db.execute(rq_hours_query)
-        rq_completed_hours = float(rq_hours_result.scalar() or 0)
-        rq_base_required = req.required_hours or 0
-
-        # Adjust for waivers
-        rq_waived = 0
-        rq_active = 0
-        if rq_base_required > 0 and r_start_date and r_end_date and user_waivers:
-            rq_adjusted, rq_waived, rq_active = adjust_required(
-                rq_base_required, r_start_date, r_end_date, user_waivers, str(req.id)
-            )
-        else:
-            rq_adjusted = rq_base_required
-
-        rq_pct = min(rq_completed_hours / rq_adjusted * 100, 100) if rq_adjusted > 0 else 100.0
-
-        # For biannual requirements, determine due date from the most recent
-        # matching certification record's expiration date rather than a fixed
-        # calendar window.  An expired certification means the requirement is
-        # immediately overdue and should block activity (e.g., shift signups).
-        effective_due_date = req.due_date if req.due_date else (r_end_date if r_end_date else None)
-        cert_expired = False
-        blocks_activity = False
-
-        if freq == "biannual":
-            # Find the most recent matching certification record
-            cert_query = (
-                select(TrainingRecord)
-                .where(
-                    TrainingRecord.organization_id == org_id,
-                    TrainingRecord.user_id == user_id,
-                    TrainingRecord.status == TrainingStatus.COMPLETED,
-                    TrainingRecord.expiration_date.isnot(None),
-                )
-                .order_by(TrainingRecord.expiration_date.desc())
-                .limit(1)
-            )
-            if req.training_type:
-                cert_query = cert_query.where(
-                    TrainingRecord.training_type == req.training_type
-                )
-            elif req.name:
-                cert_query = cert_query.where(
-                    TrainingRecord.course_name.ilike(f"%{req.name}%")
-                )
-            cert_result = await db.execute(cert_query)
-            latest_cert = cert_result.scalar_one_or_none()
-
-            if latest_cert and latest_cert.expiration_date:
-                effective_due_date = latest_cert.expiration_date
-                if latest_cert.expiration_date < today:
-                    cert_expired = True
-                    blocks_activity = True
-                    # Override progress — expired cert means requirement is not met
-                    rq_pct = 0.0
-            else:
-                # No certification record at all — overdue immediately
-                effective_due_date = today
-                cert_expired = True
-                blocks_activity = True
-                rq_pct = 0.0
-
-        days_until_due = (effective_due_date - today).days if effective_due_date else None
-
-        detail_entry: Dict[str, Any] = {
-            "id": str(req.id),
-            "name": req.name,
-            "description": req.description,
-            "frequency": freq,
-            "training_type": req.training_type.value if req.training_type and hasattr(req.training_type, 'value') else (str(req.training_type) if req.training_type else None),
-            "required_hours": rq_adjusted,
-            "original_required_hours": rq_base_required,
-            "completed_hours": rq_completed_hours,
-            "progress_percentage": round(rq_pct, 1),
-            "is_met": rq_pct >= 100 and not cert_expired,
-            "due_date": str(effective_due_date) if effective_due_date else None,
-            "days_until_due": days_until_due,
-            "waived_months": rq_waived,
-            "active_months": rq_active,
-            "cert_expired": cert_expired,
-            "blocks_activity": blocks_activity,
-        }
-        requirements_detail.append(detail_entry)
 
     result["requirements_detail"] = requirements_detail
 

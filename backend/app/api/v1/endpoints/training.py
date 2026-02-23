@@ -52,7 +52,7 @@ from app.schemas.training import (
 )
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import (
-    WaiverPeriod, fetch_org_waivers, adjust_required,
+    WaiverPeriod, fetch_user_waivers, fetch_org_waivers, adjust_required,
 )
 from app.api.dependencies import get_current_user, require_permission
 
@@ -822,10 +822,14 @@ async def get_compliance_summary(
 
     Returns requirements met/total, cert expiration counts, and a
     green/yellow/red compliance indicator.
+
+    Uses ``_evaluate_member_requirement()`` for consistent per-type
+    evaluation (hours, certification, shifts, calls, courses, fallback).
+    Only requirements applicable to the member (via ``applies_to_all``
+    or ``required_roles``) are counted.
     """
     org_id = current_user.organization_id
     today = date.today()
-    year_start = date(today.year, 1, 1)
 
     # Get user stats for hours and cert counts
     training_service = TrainingService(db)
@@ -833,73 +837,51 @@ async def get_compliance_summary(
         user_id=user_id, organization_id=org_id
     )
 
-    # Get requirement progress to count met/total
+    # Load user with roles for requirement applicability filtering
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .options(selectinload(User.roles))
+    )
+    target_user = user_result.scalar_one_or_none()
+    user_role_ids = [str(r.id) for r in target_user.roles] if target_user and target_user.roles else []
+
+    # Get all active requirements
     requirements_result = await db.execute(
         select(TrainingRequirement)
         .where(TrainingRequirement.organization_id == org_id)
         .where(TrainingRequirement.active == True)  # noqa: E712
     )
-    requirements = list(requirements_result.scalars().all())
+    all_requirements = list(requirements_result.scalars().all())
 
-    # Calculate progress for each requirement (simplified: use hours-based for now)
+    # Filter to requirements applicable to this user
+    requirements = []
+    for req in all_requirements:
+        if req.applies_to_all:
+            requirements.append(req)
+        elif req.required_roles and any(rid in user_role_ids for rid in req.required_roles):
+            requirements.append(req)
+
+    # Pre-fetch all completed records for the user (no date filter —
+    # _evaluate_member_requirement handles windowing internally)
     records_result = await db.execute(
         select(TrainingRecord)
         .where(TrainingRecord.organization_id == org_id)
         .where(TrainingRecord.user_id == str(user_id))
-        .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-        .where(TrainingRecord.completion_date >= year_start)
     )
-    records = list(records_result.scalars().all())
+    member_records = list(records_result.scalars().all())
 
-    # Count how many requirements are met
+    # Fetch waivers
+    waivers = await fetch_user_waivers(db, str(org_id), str(user_id))
+
+    # Evaluate each applicable requirement using the shared evaluator
     requirements_met = 0
     requirements_total = len(requirements)
 
-    from app.services.training_waiver_service import fetch_user_waivers, adjust_required
-
-    waivers = await fetch_user_waivers(db, str(org_id), str(user_id))
-
     for req in requirements:
-        if req.requirement_type.value == "hours" and req.required_hours:
-            # Calculate evaluation period
-            if req.due_date_type and req.due_date_type.value == "rolling" and req.rolling_period_months:
-                from dateutil.relativedelta import relativedelta
-                period_start = today - relativedelta(months=req.rolling_period_months)
-                period_end = today
-            else:
-                period_start = year_start
-                period_end = date(today.year, 12, 31)
-
-            # Apply waiver adjustments
-            adjusted_req, _, _ = adjust_required(
-                req.required_hours, period_start, period_end, waivers, str(req.id)
-            )
-
-            # Sum hours from matching records within the period
-            matching_hours = sum(
-                r.hours_completed for r in records
-                if r.completion_date and r.completion_date >= period_start
-                and r.completion_date <= period_end
-                and (
-                    not req.category_ids
-                    or (r.course_id and str(r.course_id) in (req.category_ids or []))
-                )
-            )
-            if matching_hours >= adjusted_req:
-                requirements_met += 1
-        elif req.requirement_type.value == "certification":
-            # Check if member has a valid (non-expired) cert
-            has_valid = any(
-                r.expiration_date and r.expiration_date >= today
-                for r in records
-                if r.certification_number
-            )
-            if has_valid:
-                requirements_met += 1
-        else:
-            # For other types, mark met if they have any record this year
-            if records:
-                requirements_met += 1
+        status_val, _, _ = _evaluate_member_requirement(req, member_records, today, waivers=waivers)
+        if status_val == "completed":
+            requirements_met += 1
 
     # Determine compliance status
     certs_expiring_soon = stats.expiring_soon
@@ -1706,7 +1688,22 @@ class MemberComplianceRow(BaseModel):
 
 
 def _get_requirement_date_window(req, today: date):
-    """Return (start_date, end_date) for evaluating a requirement's compliance window."""
+    """Return (start_date, end_date) for evaluating a requirement's compliance window.
+
+    Handles rolling periods: when ``due_date_type`` is ``rolling`` and
+    ``rolling_period_months`` is set, the window spans from
+    ``today - rolling_period_months`` to ``today``.
+    """
+    # Check for rolling period first (overrides frequency-based window)
+    due_date_type = getattr(req, 'due_date_type', None)
+    if due_date_type:
+        due_date_type = due_date_type.value if hasattr(due_date_type, 'value') else str(due_date_type)
+    rolling_months = getattr(req, 'rolling_period_months', None)
+
+    if due_date_type == 'rolling' and rolling_months:
+        from dateutil.relativedelta import relativedelta
+        return today - relativedelta(months=rolling_months), today
+
     freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
     current_year = today.year
 
