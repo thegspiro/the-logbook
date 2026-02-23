@@ -651,7 +651,7 @@ def run_migrations():
 
         # --- Diagnostic: figure out why Alembic can't load a revision ---
         import importlib.util as _ilu
-        missing_rev = str(walk_err).strip("'\"")
+        missing_rev = str(_walk_err).strip("'\"")
         py_files = sorted(
             f for f in os.listdir(versions_dir)
             if f.endswith('.py') and not f.startswith('_')
