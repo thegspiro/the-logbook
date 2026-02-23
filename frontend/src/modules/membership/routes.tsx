@@ -51,6 +51,11 @@ const MemberAuditHistoryPage = lazy(() =>
     default: m.MemberAuditHistoryPage,
   }))
 );
+const WaiverManagementPage = lazy(() =>
+  import('../../pages/WaiverManagementPage').then((m) => ({
+    default: m.WaiverManagementPage,
+  }))
+);
 
 export const getMembershipRoutes = () => {
   return (
@@ -84,6 +89,16 @@ export const getMembershipRoutes = () => {
         element={
           <ProtectedRoute requiredPermission="members.manage">
             <MemberAuditHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Waiver Management */}
+      <Route
+        path="/members/admin/waivers"
+        element={
+          <ProtectedRoute requiredPermission="members.manage">
+            <WaiverManagementPage />
           </ProtectedRoute>
         }
       />

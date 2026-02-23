@@ -4654,6 +4654,24 @@ export interface LeaveOfAbsenceResponse {
   granted_by: string | null;
   granted_at: string | null;
   active: boolean;
+  exempt_from_training_waiver: boolean;
+  linked_training_waiver_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface TrainingWaiverResponse {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  waiver_type: string;
+  reason: string | null;
+  start_date: string;
+  end_date: string;
+  requirement_ids: string[] | null;
+  granted_by: string | null;
+  granted_at: string | null;
+  active: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -4721,6 +4739,7 @@ export const memberStatusService = {
     reason?: string;
     start_date: string;
     end_date: string;
+    exempt_from_training_waiver?: boolean;
   }): Promise<LeaveOfAbsenceResponse> {
     const response = await api.post('/users/leaves-of-absence', data);
     return response.data;
@@ -4732,6 +4751,7 @@ export const memberStatusService = {
     start_date?: string;
     end_date?: string;
     active?: boolean;
+    exempt_from_training_waiver?: boolean;
   }): Promise<LeaveOfAbsenceResponse> {
     const response = await api.patch(`/users/leaves-of-absence/${leaveId}`, data);
     return response.data;
@@ -4739,6 +4759,40 @@ export const memberStatusService = {
 
   async deleteLeaveOfAbsence(leaveId: string): Promise<void> {
     await api.delete(`/users/leaves-of-absence/${leaveId}`);
+  },
+
+  // Training Waivers
+  async listTrainingWaivers(params?: { user_id?: string; active_only?: boolean }): Promise<TrainingWaiverResponse[]> {
+    const response = await api.get('/training/waivers', { params });
+    return response.data;
+  },
+
+  async createTrainingWaiver(data: {
+    user_id: string;
+    waiver_type: string;
+    reason?: string;
+    start_date: string;
+    end_date: string;
+    requirement_ids?: string[];
+  }): Promise<TrainingWaiverResponse> {
+    const response = await api.post('/training/waivers', data);
+    return response.data;
+  },
+
+  async updateTrainingWaiver(waiverId: string, data: {
+    waiver_type?: string;
+    reason?: string;
+    start_date?: string;
+    end_date?: string;
+    requirement_ids?: string[];
+    active?: boolean;
+  }): Promise<TrainingWaiverResponse> {
+    const response = await api.patch(`/training/waivers/${waiverId}`, data);
+    return response.data;
+  },
+
+  async deleteTrainingWaiver(waiverId: string): Promise<void> {
+    await api.delete(`/training/waivers/${waiverId}`);
   },
 };
 
