@@ -1617,7 +1617,10 @@ async def list_equipment_requests(
         )
     )
 
-    can_manage = current_user.has_permission("inventory.manage")
+    can_manage = any(
+        "inventory.manage" in (role.permissions or [])
+        for role in current_user.roles
+    )
     if mine_only or not can_manage:
         query = query.where(EquipmentRequest.requester_id == str(current_user.id))
 
