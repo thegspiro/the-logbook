@@ -1319,6 +1319,38 @@ class InventoryService:
     # Barcode / Serial / Asset Tag Lookup
     # ============================================
 
+    async def _lookup_by_item_id(
+        self, item_id: str, organization_id: UUID
+    ) -> Optional[Tuple[InventoryItem, str, str]]:
+        """
+        Look up an item directly by its ID.
+        Returns (item, matched_field, matched_value) or None.
+        Used by batch operations when the frontend already knows the item ID.
+        """
+        org_id = str(organization_id)
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(
+                InventoryItem.id == str(item_id),
+                InventoryItem.organization_id == org_id,
+                InventoryItem.active == True,  # noqa: E712
+            )
+            .options(selectinload(InventoryItem.category))
+            .limit(1)
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            return None
+
+        # Return the best identifier for the matched_field
+        if item.barcode:
+            return item, "barcode", item.barcode
+        if item.serial_number:
+            return item, "serial_number", item.serial_number
+        if item.asset_tag:
+            return item, "asset_tag", item.asset_tag
+        return item, "name", item.name
+
     async def lookup_by_code(
         self, code: str, organization_id: UUID
     ) -> Optional[Tuple[InventoryItem, str, str]]:
@@ -1440,8 +1472,15 @@ class InventoryService:
         for scan in items:
             code = scan["code"]
             quantity = scan.get("quantity", 1)
+            scan_item_id = scan.get("item_id")
 
-            lookup = await self.lookup_by_code(code, organization_id)
+            # Prefer direct item_id lookup when available (avoids
+            # mismatch when item was found by name search)
+            lookup = None
+            if scan_item_id:
+                lookup = await self._lookup_by_item_id(scan_item_id, organization_id)
+            if not lookup:
+                lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
                 results.append({
                     "code": code,
@@ -1561,8 +1600,14 @@ class InventoryService:
             condition_str = scan.get("return_condition", "good")
             damage_notes = scan.get("damage_notes")
             quantity = scan.get("quantity", 1)
+            scan_item_id = scan.get("item_id")
 
-            lookup = await self.lookup_by_code(code, organization_id)
+            # Prefer direct item_id lookup when available
+            lookup = None
+            if scan_item_id:
+                lookup = await self._lookup_by_item_id(scan_item_id, organization_id)
+            if not lookup:
+                lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
                 results.append({
                     "code": code, "item_name": "Unknown", "item_id": "",

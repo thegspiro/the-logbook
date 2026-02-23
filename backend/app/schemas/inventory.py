@@ -580,6 +580,7 @@ class ScanLookupListResponse(BaseModel):
 class BatchScanItem(BaseModel):
     """A single scanned item in a batch operation"""
     code: str = Field(..., description="Barcode, serial number, or asset tag that was scanned")
+    item_id: Optional[UUID] = Field(default=None, description="Item ID for direct lookup (bypasses code search)")
     quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
 
 
@@ -612,6 +613,7 @@ class BatchCheckoutResponse(BaseModel):
 class BatchReturnItem(BaseModel):
     """A single scanned item being returned"""
     code: str = Field(..., description="Barcode, serial number, or asset tag")
+    item_id: Optional[UUID] = Field(default=None, description="Item ID for direct lookup (bypasses code search)")
     return_condition: str = Field(default="good", description="Condition at return")
     damage_notes: Optional[str] = None
     quantity: int = Field(default=1, ge=1, description="Quantity returned (for pool items)")

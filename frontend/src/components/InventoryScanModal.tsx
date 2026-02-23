@@ -17,10 +17,11 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Modal } from './Modal';
-import { Camera, Keyboard, Check, AlertTriangle, Package, Trash2, Loader2 } from 'lucide-react';
+import { Camera, Check, AlertTriangle, Package, Trash2, Loader2, Search } from 'lucide-react';
 import {
   inventoryService,
   ScanLookupResponse,
+  ScanLookupResult,
   BatchCheckoutResponse,
   BatchReturnResponse,
 } from '../services/api';
@@ -78,6 +79,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ResultItem[] | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [searchResults, setSearchResults] = useState<ScanLookupResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [activeDropdownIndex, setActiveDropdownIndex] = useState(-1);
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -85,6 +90,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const detectorRef = useRef<BarcodeDetector | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleCodeScannedRef = useRef<(code: string) => void>(() => {});
 
   // ── Camera scanning ──────────────────────────────────────────
@@ -173,6 +180,9 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       setManualCode('');
       setLookupError(null);
       setResults(null);
+      setSearchResults([]);
+      setShowDropdown(false);
+      setActiveDropdownIndex(-1);
     }
   }, [isOpen, stopCamera]);
 
@@ -184,7 +194,87 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     return () => cancelAnimationFrame(id);
   }, [isOpen]);
 
+  // ── Live search ────────────────────────────────────────────────
+  useEffect(() => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+
+    const trimmed = manualCode.trim();
+    if (trimmed.length < 2) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const response: ScanLookupResponse = await inventoryService.lookupByCode(trimmed);
+        setSearchResults(response.results);
+        setShowDropdown(response.results.length > 0);
+        setActiveDropdownIndex(-1);
+      } catch {
+        setSearchResults([]);
+        setShowDropdown(false);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    };
+  }, [manualCode]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // ── Code lookup ──────────────────────────────────────────────
+
+  // Add an item from a search result directly (used by live dropdown and barcode scan)
+  const addItemFromResult = (match: ScanLookupResult) => {
+    // Don't add duplicates (check by item ID)
+    if (scannedItems.some((si) => si.itemId === match.item.id)) {
+      setLookupError(`"${match.item.name}" is already in the list`);
+      setTimeout(() => setLookupError(null), 2000);
+      return;
+    }
+
+    setScannedItems((prev) => [
+      ...prev,
+      {
+        code: match.matched_value,
+        itemId: match.item.id,
+        itemName: match.item.name,
+        matchedField: match.matched_field,
+        status: match.item.status,
+        trackingType: match.item.tracking_type,
+        quantity: 1,
+        returnCondition: 'good',
+      },
+    ]);
+    setManualCode('');
+    setShowDropdown(false);
+    setSearchResults([]);
+    inputRef.current?.focus();
+  };
 
   // Keep ref in sync so startCamera's interval always calls the latest version
   const handleCodeScanned = async (code: string) => {
@@ -208,20 +298,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         setTimeout(() => setLookupError(null), 3000);
         return;
       }
-      const match = response.results[0];
-      setScannedItems((prev) => [
-        ...prev,
-        {
-          code: trimmed,
-          itemId: match.item.id,
-          itemName: match.item.name,
-          matchedField: match.matched_field,
-          status: match.item.status,
-          trackingType: match.item.tracking_type,
-          quantity: 1,
-          returnCondition: 'good',
-        },
-      ]);
+      addItemFromResult(response.results[0]);
     } catch (err: unknown) {
       const is404 =
         err instanceof Error &&
@@ -243,6 +320,17 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // If dropdown is showing and an item is highlighted, add it
+    if (showDropdown && activeDropdownIndex >= 0 && searchResults[activeDropdownIndex]) {
+      addItemFromResult(searchResults[activeDropdownIndex]);
+      return;
+    }
+    // If dropdown is showing with results, add the first one
+    if (showDropdown && searchResults.length > 0) {
+      addItemFromResult(searchResults[0]);
+      return;
+    }
+    // Fallback: search by what was typed
     if (manualCode.trim()) {
       handleCodeScanned(manualCode);
       setManualCode('');
@@ -250,19 +338,38 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     }
   };
 
-  const removeItem = (code: string) => {
-    setScannedItems((prev) => prev.filter((si) => si.code !== code));
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+    if (!showDropdown || searchResults.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveDropdownIndex((prev) =>
+        prev < searchResults.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveDropdownIndex((prev) =>
+        prev > 0 ? prev - 1 : searchResults.length - 1
+      );
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+      setActiveDropdownIndex(-1);
+    }
   };
 
-  const updateQuantity = (code: string, qty: number) => {
+  const removeItem = (itemId: string) => {
+    setScannedItems((prev) => prev.filter((si) => si.itemId !== itemId));
+  };
+
+  const updateQuantity = (itemId: string, qty: number) => {
     setScannedItems((prev) =>
-      prev.map((si) => (si.code === code ? { ...si, quantity: Math.max(1, qty) } : si))
+      prev.map((si) => (si.itemId === itemId ? { ...si, quantity: Math.max(1, qty) } : si))
     );
   };
 
-  const updateCondition = (code: string, condition: string) => {
+  const updateCondition = (itemId: string, condition: string) => {
     setScannedItems((prev) =>
-      prev.map((si) => (si.code === code ? { ...si, returnCondition: condition } : si))
+      prev.map((si) => (si.itemId === itemId ? { ...si, returnCondition: condition } : si))
     );
   };
 
@@ -284,6 +391,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           user_id: userId,
           items: scannedItems.map((si) => ({
             code: si.code,
+            item_id: si.itemId,
             quantity: si.quantity,
           })),
         });
@@ -294,6 +402,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           user_id: userId,
           items: scannedItems.map((si) => ({
             code: si.code,
+            item_id: si.itemId,
             return_condition: si.returnCondition,
             quantity: si.quantity,
           })),
@@ -389,16 +498,75 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 )}
                 <form onSubmit={handleManualSubmit} className="flex-1 flex gap-2">
                   <div className="relative flex-1">
-                    <Keyboard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" />
                     <input
                       ref={inputRef}
                       type="text"
                       value={manualCode}
                       onChange={(e) => setManualCode(e.target.value)}
-                      placeholder="Type or scan barcode / serial / asset tag / name..."
-                      className="w-full pl-9 pr-3 py-2 border border-theme-border rounded-lg bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      onKeyDown={handleInputKeyDown}
+                      onFocus={() => {
+                        if (searchResults.length > 0) setShowDropdown(true);
+                      }}
+                      placeholder="Search by name, barcode, serial, or asset tag..."
+                      className="w-full pl-9 pr-8 py-2 border border-theme-border rounded-lg bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      autoComplete="off"
                       autoFocus
                     />
+                    {searchLoading && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-theme-text-muted" />
+                    )}
+
+                    {/* Live search dropdown */}
+                    {showDropdown && searchResults.length > 0 && (
+                      <div
+                        ref={dropdownRef}
+                        className="absolute z-20 left-0 right-0 top-full mt-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                      >
+                        {searchResults.map((result, i) => {
+                          const isAlreadyAdded = scannedItems.some((si) => si.itemId === result.item.id);
+                          return (
+                            <button
+                              key={result.item.id}
+                              type="button"
+                              disabled={isAlreadyAdded}
+                              onClick={() => !isAlreadyAdded && addItemFromResult(result)}
+                              className={`w-full text-left px-3 py-2.5 flex items-center justify-between gap-2 border-b border-theme-border last:border-b-0 transition-colors ${
+                                isAlreadyAdded
+                                  ? 'opacity-50 cursor-not-allowed bg-theme-surface-secondary'
+                                  : i === activeDropdownIndex
+                                    ? 'bg-red-50 dark:bg-red-900/20'
+                                    : 'hover:bg-theme-surface-secondary cursor-pointer'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-theme-text-primary truncate">
+                                  {result.item.name}
+                                </p>
+                                <p className="text-xs text-theme-text-muted truncate">
+                                  {result.matched_field.replace(/_/g, ' ')}: {result.matched_value}
+                                  {result.item.tracking_type === 'pool' ? ' (pool)' : ''}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                  result.item.status === 'available'
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                    : result.item.status === 'assigned'
+                                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
+                                }`}>
+                                  {result.item.status}
+                                </span>
+                                {isAlreadyAdded && (
+                                  <Check className="h-3.5 w-3.5 text-green-600" />
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   <button
                     type="submit"
@@ -454,7 +622,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {scannedItems.map((si) => (
                     <div
-                      key={si.code}
+                      key={si.itemId}
                       className="flex items-center justify-between p-3 rounded-lg border border-theme-border bg-theme-surface"
                     >
                       <div className="flex-1 min-w-0">
@@ -474,7 +642,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                             type="number"
                             min={1}
                             value={si.quantity}
-                            onChange={(e) => updateQuantity(si.code, parseInt(e.target.value) || 1)}
+                            onChange={(e) => updateQuantity(si.itemId, parseInt(e.target.value) || 1)}
                             className="w-16 px-2 py-1 border border-theme-border rounded text-sm text-center bg-theme-surface text-theme-text-primary"
                             title="Quantity"
                           />
@@ -484,7 +652,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                         {mode === 'return' && (
                           <select
                             value={si.returnCondition}
-                            onChange={(e) => updateCondition(si.code, e.target.value)}
+                            onChange={(e) => updateCondition(si.itemId, e.target.value)}
                             className="px-2 py-1 border border-theme-border rounded text-sm bg-theme-surface text-theme-text-primary"
                             title="Return condition"
                           >
@@ -497,10 +665,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                         )}
 
                         <button
-                          onClick={() => removeItem(si.code)}
+                          onClick={() => removeItem(si.itemId)}
                           className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-red-600 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
                           title="Remove"
-                          aria-label={`Remove item ${si.code}`}
+                          aria-label={`Remove item ${si.itemName}`}
                         >
                           <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </button>

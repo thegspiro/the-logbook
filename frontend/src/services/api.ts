@@ -2057,6 +2057,7 @@ export interface ScanLookupResponse {
 
 export interface BatchScanItem {
   code: string;
+  item_id?: string;
   quantity?: number;
 }
 
@@ -2085,6 +2086,7 @@ export interface BatchCheckoutResponse {
 
 export interface BatchReturnItem {
   code: string;
+  item_id?: string;
   return_condition?: string;
   damage_notes?: string;
   quantity?: number;
