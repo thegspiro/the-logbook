@@ -6,6 +6,7 @@ Endpoints for training management including courses, records, requirements, and 
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 import csv
@@ -44,6 +45,10 @@ from app.schemas.training import (
     TrainingReport,
     RequirementProgress,
     HistoricalImportConfirmRequest,
+    BulkTrainingRecordCreate,
+    BulkTrainingRecordResult,
+    DuplicateWarning,
+    ComplianceSummary,
 )
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import (
@@ -240,6 +245,27 @@ async def create_record(
             day = min(comp.day, calendar.monthrange(year, month)[1])
             record_data["expiration_date"] = date(year, month, day)
 
+    # Auto-populate rank/station from member's current profile if not explicitly set
+    if not record_data.get("rank_at_completion") or not record_data.get("station_at_completion"):
+        member_result = await db.execute(
+            select(User).where(User.id == str(record_data["user_id"]))
+        )
+        member = member_result.scalar_one_or_none()
+        if member:
+            if not record_data.get("rank_at_completion"):
+                record_data["rank_at_completion"] = member.rank
+            if not record_data.get("station_at_completion"):
+                record_data["station_at_completion"] = member.station
+
+    # Check for potential duplicates and include warning in response
+    dupes = await _check_duplicate_records(
+        db,
+        str(current_user.organization_id),
+        str(record_data["user_id"]),
+        record_data["course_name"],
+        record_data.get("completion_date"),
+    )
+
     new_record = TrainingRecord(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
@@ -258,12 +284,182 @@ async def create_record(
         event_data={
             "record_id": str(new_record.id),
             "user_id": str(new_record.user_id),
+            "duplicate_warning": bool(dupes),
         },
         user_id=str(current_user.id),
         username=current_user.username,
     )
 
-    return new_record
+    response = TrainingRecordResponse.model_validate(new_record)
+    response_data = response.model_dump(mode="json")
+    if dupes:
+        response_data["_duplicate_warning"] = {
+            "message": f"Potential duplicate: '{record_data['course_name']}' already recorded for this member on {dupes[0].completion_date}",
+            "existing_record_id": str(dupes[0].id),
+        }
+    return response_data
+
+
+# ------------------------------------------------------------------
+# Duplicate Detection Helper
+# ------------------------------------------------------------------
+
+async def _check_duplicate_records(
+    db: AsyncSession,
+    organization_id: str,
+    user_id: str,
+    course_name: str,
+    completion_date: date | None,
+) -> list[TrainingRecord]:
+    """
+    Check for potential duplicate training records.
+
+    A duplicate is defined as: same member + same course name (case-insensitive)
+    + same completion date (or within 1 day).
+    """
+    if not completion_date:
+        return []
+
+    query = (
+        select(TrainingRecord)
+        .where(TrainingRecord.organization_id == organization_id)
+        .where(TrainingRecord.user_id == user_id)
+        .where(func.lower(TrainingRecord.course_name) == course_name.lower())
+        .where(TrainingRecord.completion_date >= completion_date - timedelta(days=1))
+        .where(TrainingRecord.completion_date <= completion_date + timedelta(days=1))
+    )
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+# ------------------------------------------------------------------
+# Bulk Training Record Creation
+# ------------------------------------------------------------------
+
+@router.post("/records/bulk", response_model=BulkTrainingRecordResult, status_code=status.HTTP_201_CREATED)
+async def create_records_bulk(
+    payload: BulkTrainingRecordCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Create training records for multiple members at once.
+
+    Supports company drills, walk-in training, tabletop exercises, and
+    other ad-hoc training events that aren't pre-scheduled.
+
+    Includes duplicate detection: flags records where the same member
+    already has a record with the same course name on the same date.
+    Use ``override_duplicates=true`` to create anyway, or
+    ``skip_duplicates=true`` to silently skip them.
+
+    **Requires permission: training.manage**
+    """
+    org_id = str(current_user.organization_id)
+    created = 0
+    skipped = 0
+    failed = 0
+    duplicate_warnings: list[DuplicateWarning] = []
+    errors: list[str] = []
+    created_ids: list[str] = []
+
+    # Pre-fetch member rank/station for all unique user_ids
+    unique_user_ids = list({str(r.user_id) for r in payload.records})
+    members_result = await db.execute(
+        select(User).where(User.id.in_(unique_user_ids))
+    )
+    members_by_id = {str(m.id): m for m in members_result.scalars().all()}
+
+    for idx, entry in enumerate(payload.records):
+        user_id_str = str(entry.user_id)
+
+        # Check for duplicates
+        dupes = await _check_duplicate_records(
+            db, org_id, user_id_str, entry.course_name, entry.completion_date,
+        )
+        if dupes:
+            dupe = dupes[0]
+            warning = DuplicateWarning(
+                user_id=entry.user_id,
+                course_name=entry.course_name,
+                completion_date=entry.completion_date,
+                existing_record_id=dupe.id,
+                existing_completion_date=dupe.completion_date,
+                message=f"Row {idx + 1}: Potential duplicate — '{entry.course_name}' already recorded for this member on {dupe.completion_date}",
+            )
+            duplicate_warnings.append(warning)
+
+            if payload.skip_duplicates:
+                skipped += 1
+                continue
+            if not payload.override_duplicates:
+                skipped += 1
+                continue
+
+        # Build record data
+        member = members_by_id.get(user_id_str)
+        record_data = entry.model_dump()
+
+        # Auto-populate rank/station from member
+        if member:
+            record_data.setdefault("rank_at_completion", member.rank)
+            record_data.setdefault("station_at_completion", member.station)
+
+        # Auto-calculate expiration from course
+        if not record_data.get("expiration_date") and record_data.get("course_id") and record_data.get("completion_date"):
+            course_result = await db.execute(
+                select(TrainingCourse).where(TrainingCourse.id == str(record_data["course_id"]))
+            )
+            course_obj = course_result.scalar_one_or_none()
+            if course_obj and course_obj.expiration_months:
+                comp = record_data["completion_date"]
+                month = comp.month - 1 + course_obj.expiration_months
+                year = comp.year + month // 12
+                month = month % 12 + 1
+                day = min(comp.day, calendar.monthrange(year, month)[1])
+                record_data["expiration_date"] = date(year, month, day)
+
+        try:
+            new_record = TrainingRecord(
+                organization_id=org_id,
+                created_by=current_user.id,
+                **record_data,
+            )
+            db.add(new_record)
+            await db.flush()
+            created_ids.append(str(new_record.id))
+            created += 1
+        except Exception as e:
+            errors.append(f"Row {idx + 1}: {str(e)}")
+            failed += 1
+
+    await db.commit()
+
+    if created > 0:
+        await log_audit_event(
+            db=db,
+            event_type="training_records_bulk_created",
+            event_category="training",
+            severity="info",
+            event_data={
+                "total": len(payload.records),
+                "created": created,
+                "skipped": skipped,
+                "duplicates_found": len(duplicate_warnings),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return BulkTrainingRecordResult(
+        total=len(payload.records),
+        created=created,
+        skipped=skipped,
+        failed=failed,
+        duplicate_warnings=duplicate_warnings,
+        errors=errors,
+        created_record_ids=created_ids,
+    )
 
 
 @router.patch("/records/{record_id}", response_model=TrainingRecordResponse)
@@ -615,6 +811,123 @@ async def get_user_stats(
     return stats
 
 
+@router.get("/compliance-summary/{user_id}", response_model=ComplianceSummary)
+async def get_compliance_summary(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get a compliance summary for a member's profile card.
+
+    Returns requirements met/total, cert expiration counts, and a
+    green/yellow/red compliance indicator.
+    """
+    org_id = current_user.organization_id
+    today = date.today()
+    year_start = date(today.year, 1, 1)
+
+    # Get user stats for hours and cert counts
+    training_service = TrainingService(db)
+    stats = await training_service.get_user_training_stats(
+        user_id=user_id, organization_id=org_id
+    )
+
+    # Get requirement progress to count met/total
+    requirements_result = await db.execute(
+        select(TrainingRequirement)
+        .where(TrainingRequirement.organization_id == org_id)
+        .where(TrainingRequirement.active == True)  # noqa: E712
+    )
+    requirements = list(requirements_result.scalars().all())
+
+    # Calculate progress for each requirement (simplified: use hours-based for now)
+    records_result = await db.execute(
+        select(TrainingRecord)
+        .where(TrainingRecord.organization_id == org_id)
+        .where(TrainingRecord.user_id == str(user_id))
+        .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+        .where(TrainingRecord.completion_date >= year_start)
+    )
+    records = list(records_result.scalars().all())
+
+    # Count how many requirements are met
+    requirements_met = 0
+    requirements_total = len(requirements)
+
+    from app.services.training_waiver_service import fetch_user_waivers, adjust_required
+
+    waivers = await fetch_user_waivers(db, str(org_id), str(user_id))
+
+    for req in requirements:
+        if req.requirement_type.value == "hours" and req.required_hours:
+            # Calculate evaluation period
+            if req.due_date_type and req.due_date_type.value == "rolling" and req.rolling_period_months:
+                from dateutil.relativedelta import relativedelta
+                period_start = today - relativedelta(months=req.rolling_period_months)
+                period_end = today
+            else:
+                period_start = year_start
+                period_end = date(today.year, 12, 31)
+
+            # Apply waiver adjustments
+            adjusted_req, _, _ = adjust_required(
+                req.required_hours, period_start, period_end, waivers, str(req.id)
+            )
+
+            # Sum hours from matching records within the period
+            matching_hours = sum(
+                r.hours_completed for r in records
+                if r.completion_date and r.completion_date >= period_start
+                and r.completion_date <= period_end
+                and (
+                    not req.category_ids
+                    or (r.course_id and str(r.course_id) in (req.category_ids or []))
+                )
+            )
+            if matching_hours >= adjusted_req:
+                requirements_met += 1
+        elif req.requirement_type.value == "certification":
+            # Check if member has a valid (non-expired) cert
+            has_valid = any(
+                r.expiration_date and r.expiration_date >= today
+                for r in records
+                if r.certification_number
+            )
+            if has_valid:
+                requirements_met += 1
+        else:
+            # For other types, mark met if they have any record this year
+            if records:
+                requirements_met += 1
+
+    # Determine compliance status
+    certs_expiring_soon = stats.expiring_soon
+    certs_expired = stats.expired
+
+    if certs_expired > 0 or (requirements_total > 0 and requirements_met < requirements_total * 0.5):
+        compliance_status = "red"
+        compliance_label = "Non-Compliant"
+    elif certs_expiring_soon > 0 or (requirements_total > 0 and requirements_met < requirements_total):
+        compliance_status = "yellow"
+        compliance_label = "At Risk"
+    else:
+        compliance_status = "green"
+        compliance_label = "Compliant"
+
+    return ComplianceSummary(
+        user_id=user_id,
+        requirements_met=requirements_met,
+        requirements_total=requirements_total,
+        certs_expiring_soon=certs_expiring_soon,
+        certs_expired=certs_expired,
+        compliance_status=compliance_status,
+        compliance_label=compliance_label,
+        hours_this_year=stats.hours_this_year,
+        active_certifications=stats.active_certifications,
+    )
+
+
 @router.get("/reports/user/{user_id}", response_model=TrainingReport)
 async def generate_user_report(
     user_id: UUID,
@@ -727,16 +1040,17 @@ async def process_certification_alerts(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Trigger the certification expiration alert pipeline.
+    Trigger the certification expiration alert pipeline for this organization.
 
-    Sends tiered notifications for expiring and expired certifications:
+    Sends both in-app notifications (always) and email (unless member has
+    disabled email). Tiered alerts:
     - 90/60 days: notify member only
     - 30 days: notify member + CC training officer
     - 7 days: notify member + CC training + compliance officers
-    - Expired: escalation with CC to chief
+    - Expired: escalation with CC to chief + optional personal email
 
     This endpoint is idempotent — each tier is sent only once.
-    In production, wire this to a daily cron job.
+    Also triggered automatically by the daily cron job.
 
     Requires `training.manage` permission.
     """
@@ -744,6 +1058,25 @@ async def process_certification_alerts(
 
     service = CertAlertService(db)
     result = await service.process_alerts(current_user.organization_id)
+    return result
+
+
+@router.post("/certifications/process-alerts/all-orgs")
+async def process_all_org_certification_alerts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("system.admin")),
+):
+    """
+    Run daily certification expiration alerts for ALL organizations.
+
+    Intended for cron job / system scheduler. Processes every organization
+    that has cert alerts enabled.
+
+    Requires `system.admin` permission (cron service account).
+    """
+    from app.services.cert_alert_service import run_daily_cert_alerts
+
+    result = await run_daily_cert_alerts(db)
     return result
 
 

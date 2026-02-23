@@ -530,6 +530,13 @@ class MemberLeaveOfAbsence(Base):
 
     active = Column(Boolean, default=True, nullable=False)
 
+    # When True, no training waiver is auto-created for this leave.
+    # Officers can set this to keep training requirements active during the leave.
+    exempt_from_training_waiver = Column(Boolean, default=False, nullable=False)
+
+    # Back-reference to the auto-created training waiver (if any)
+    linked_training_waiver_id = Column(String(36), nullable=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

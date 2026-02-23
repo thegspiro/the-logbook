@@ -78,6 +78,11 @@ import type {
   HistoricalImportParseResponse,
   HistoricalImportConfirmRequest,
   HistoricalImportResult,
+  // Bulk Training Record Creation
+  BulkTrainingRecordCreate,
+  BulkTrainingRecordResult,
+  // Compliance Summary
+  ComplianceSummary,
 } from '../types/training';
 import type {
   Event,
@@ -784,6 +789,14 @@ export const trainingService = {
   },
 
   /**
+   * Create training records for multiple members at once (bulk)
+   */
+  async createRecordsBulk(payload: BulkTrainingRecordCreate): Promise<BulkTrainingRecordResult> {
+    const response = await api.post<BulkTrainingRecordResult>('/training/records/bulk', payload);
+    return response.data;
+  },
+
+  /**
    * Import training records from a CSV file
    */
   async importCSV(file: File): Promise<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }> {
@@ -897,6 +910,14 @@ export const trainingService = {
    */
   async getUserStats(userId: string): Promise<UserTrainingStats> {
     const response = await api.get<UserTrainingStats>(`/training/stats/user/${userId}`);
+    return response.data;
+  },
+
+  /**
+   * Get compliance summary for a member's profile card
+   */
+  async getComplianceSummary(userId: string): Promise<ComplianceSummary> {
+    const response = await api.get<ComplianceSummary>(`/training/compliance-summary/${userId}`);
     return response.data;
   },
 

@@ -24,7 +24,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
-import type { TrainingRecord } from '../types/training';
+import type { TrainingRecord, ComplianceSummary } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
 
 // Types for inventory data
@@ -96,6 +96,7 @@ export const MemberProfilePage: React.FC = () => {
   // Module data states
   const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
   const [trainingsLoading, setTrainingsLoading] = useState(false);
+  const [complianceSummary, setComplianceSummary] = useState<ComplianceSummary | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [activeLeaves, setActiveLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
@@ -110,6 +111,7 @@ export const MemberProfilePage: React.FC = () => {
       fetchLeaves();
       if (trainingEnabled) {
         fetchTrainingRecords();
+        fetchComplianceSummary();
       }
     }
   }, [userId, trainingEnabled]);
@@ -152,6 +154,15 @@ export const MemberProfilePage: React.FC = () => {
       // Don't set error - show empty state
     } finally {
       setTrainingsLoading(false);
+    }
+  };
+
+  const fetchComplianceSummary = async () => {
+    try {
+      const summary = await trainingService.getComplianceSummary(userId!);
+      setComplianceSummary(summary);
+    } catch (_err) {
+      // Don't set error - compliance summary is optional
     }
   };
 
@@ -552,6 +563,66 @@ export const MemberProfilePage: React.FC = () => {
           {/* Training & Certifications */}
           {trainingEnabled && (
             <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              {/* Compliance Summary Card */}
+              {complianceSummary && (
+                <div className="mb-6">
+                  <div className={`rounded-lg p-4 border ${
+                    complianceSummary.compliance_status === 'green'
+                      ? 'border-green-500/30 bg-green-500/5'
+                      : complianceSummary.compliance_status === 'yellow'
+                      ? 'border-yellow-500/30 bg-yellow-500/5'
+                      : 'border-red-500/30 bg-red-500/5'
+                  }`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-theme-text-primary uppercase tracking-wider">
+                        Compliance Summary
+                      </h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        complianceSummary.compliance_status === 'green'
+                          ? 'bg-green-500/20 text-green-400'
+                          : complianceSummary.compliance_status === 'yellow'
+                          ? 'bg-yellow-500/20 text-yellow-400'
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {complianceSummary.compliance_label}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-theme-text-muted">Requirements</p>
+                        <p className="text-lg font-semibold text-theme-text-primary">
+                          {complianceSummary.requirements_met}/{complianceSummary.requirements_total}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-theme-text-muted">Hours (YTD)</p>
+                        <p className="text-lg font-semibold text-theme-text-primary">
+                          {complianceSummary.hours_this_year.toFixed(1)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-theme-text-muted">Active Certs</p>
+                        <p className="text-lg font-semibold text-theme-text-primary">
+                          {complianceSummary.active_certifications}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-theme-text-muted">Expiring Soon</p>
+                        <p className={`text-lg font-semibold ${
+                          complianceSummary.certs_expiring_soon > 0 ? 'text-yellow-400' :
+                          complianceSummary.certs_expired > 0 ? 'text-red-400' : 'text-theme-text-primary'
+                        }`}>
+                          {complianceSummary.certs_expiring_soon}
+                          {complianceSummary.certs_expired > 0 && (
+                            <span className="text-red-400 text-sm ml-1">({complianceSummary.certs_expired} expired)</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-theme-text-primary">
                   Training & Certifications

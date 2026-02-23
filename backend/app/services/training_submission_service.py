@@ -11,6 +11,9 @@ from typing import List, Optional
 from datetime import datetime, date, timezone
 import calendar
 
+from sqlalchemy import func as sa_func
+from datetime import timedelta
+
 from app.models.training import (
     TrainingSubmission,
     SelfReportConfig,
@@ -20,6 +23,7 @@ from app.models.training import (
     TrainingType,
     SubmissionStatus,
 )
+from app.models.user import User
 from app.core.utils import generate_uuid
 from loguru import logger
 
@@ -257,8 +261,17 @@ class TrainingSubmissionService:
 
             await self.db.commit()
 
+            # Check for duplicate before creating record
+            duplicate_info = await self._check_duplicate(submission)
+
             # Create training record from the approved submission
-            await self._create_record_from_submission(submission)
+            record = await self._create_record_from_submission(submission)
+
+            if duplicate_info:
+                logger.warning(
+                    f"Duplicate detected on approval: submission={submission.id} "
+                    f"existing_record={duplicate_info['existing_record_id']}"
+                )
 
         elif action == "reject":
             submission.status = SubmissionStatus.REJECTED
@@ -297,6 +310,30 @@ class TrainingSubmissionService:
 
     # ==================== Internal ====================
 
+    async def _check_duplicate(
+        self, submission: TrainingSubmission
+    ) -> Optional[dict]:
+        """Check for potential duplicate training records for this submission."""
+        if not submission.completion_date:
+            return None
+
+        result = await self.db.execute(
+            select(TrainingRecord)
+            .where(TrainingRecord.organization_id == submission.organization_id)
+            .where(TrainingRecord.user_id == submission.submitted_by)
+            .where(sa_func.lower(TrainingRecord.course_name) == submission.course_name.lower())
+            .where(TrainingRecord.completion_date >= submission.completion_date - timedelta(days=1))
+            .where(TrainingRecord.completion_date <= submission.completion_date + timedelta(days=1))
+        )
+        existing = result.scalars().first()
+        if existing:
+            return {
+                "existing_record_id": str(existing.id),
+                "existing_completion_date": str(existing.completion_date),
+                "message": f"Potential duplicate: '{submission.course_name}' already recorded on {existing.completion_date}",
+            }
+        return None
+
     async def _create_record_from_submission(
         self, submission: TrainingSubmission
     ) -> TrainingRecord:
@@ -320,6 +357,17 @@ class TrainingSubmissionService:
                 day = min(comp.day, calendar.monthrange(year, month)[1])
                 expiration_date = date(year, month, day)
 
+        # Capture member's current rank/station
+        rank_at_completion = None
+        station_at_completion = None
+        member_result = await self.db.execute(
+            select(User).where(User.id == submission.submitted_by)
+        )
+        member = member_result.scalar_one_or_none()
+        if member:
+            rank_at_completion = member.rank
+            station_at_completion = member.station
+
         record = TrainingRecord(
             id=generate_uuid(),
             organization_id=submission.organization_id,
@@ -338,6 +386,8 @@ class TrainingSubmissionService:
             attachments=submission.attachments,
             status=TrainingStatus.COMPLETED,
             expiration_date=expiration_date,
+            rank_at_completion=rank_at_completion,
+            station_at_completion=station_at_completion,
             created_by=submission.submitted_by,
         )
         self.db.add(record)

@@ -239,6 +239,8 @@ export interface TrainingRecord {
   location?: string;
   notes?: string;
   attachments?: string[];
+  rank_at_completion?: string;
+  station_at_completion?: string;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -265,6 +267,8 @@ export interface TrainingRecordCreate {
   location?: string;
   notes?: string;
   attachments?: string[];
+  rank_at_completion?: string;
+  station_at_completion?: string;
 }
 
 export interface TrainingRecordUpdate {
@@ -286,6 +290,66 @@ export interface TrainingRecordUpdate {
   location?: string;
   notes?: string;
   attachments?: string[];
+}
+
+// Bulk Training Record Creation
+export interface BulkTrainingRecordEntry {
+  user_id: string;
+  course_name: string;
+  course_code?: string;
+  course_id?: string;
+  training_type?: string;
+  completion_date?: string;
+  expiration_date?: string;
+  hours_completed: number;
+  credit_hours?: number;
+  certification_number?: string;
+  issuing_agency?: string;
+  status?: string;
+  score?: number;
+  passing_score?: number;
+  passed?: boolean;
+  instructor?: string;
+  location?: string;
+  notes?: string;
+}
+
+export interface BulkTrainingRecordCreate {
+  records: BulkTrainingRecordEntry[];
+  skip_duplicates?: boolean;
+  override_duplicates?: boolean;
+}
+
+export interface DuplicateWarning {
+  user_id: string;
+  course_name: string;
+  completion_date?: string;
+  existing_record_id: string;
+  existing_completion_date?: string;
+  message: string;
+}
+
+export interface BulkTrainingRecordResult {
+  total: number;
+  created: number;
+  skipped: number;
+  failed: number;
+  duplicate_warnings: DuplicateWarning[];
+  errors: string[];
+  created_record_ids: string[];
+}
+
+// Compliance Summary
+export interface ComplianceSummary {
+  user_id: string;
+  requirements_met: number;
+  requirements_total: number;
+  certs_expiring_soon: number;
+  certs_expired: number;
+  compliance_status: 'green' | 'yellow' | 'red';
+  compliance_label: string;
+  hours_this_year: number;
+  active_certifications: number;
 }
 
 export interface TrainingRequirement {
