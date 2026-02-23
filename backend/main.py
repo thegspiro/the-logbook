@@ -363,11 +363,27 @@ def _cleanup_duplicate_revisions(versions_dir):
     Stale migration files can appear when Docker images cache old COPY layers,
     or from incomplete git operations. Duplicate revision IDs crash Alembic's
     revision graph walker with "overlaps with other requested revisions".
+
+    Also removes stale __pycache__ bytecode in the versions directory.  When
+    the host Python version differs from the container version (e.g. 3.11 vs
+    3.13), leftover .pyc files can confuse module loaders and cause Alembic
+    to silently skip revision scripts.
     """
     import re
+    import shutil
 
     if not os.path.isdir(versions_dir):
         return
+
+    # Remove __pycache__ to avoid stale bytecode from a different Python
+    # version (common with Docker bind mounts).
+    pycache_dir = os.path.join(versions_dir, "__pycache__")
+    if os.path.isdir(pycache_dir):
+        try:
+            shutil.rmtree(pycache_dir)
+            logger.info("Removed stale __pycache__ from migration versions directory")
+        except Exception as e:
+            logger.debug(f"Could not remove versions __pycache__: {e}")
 
     revision_re = re.compile(r"^revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
     down_revision_re = re.compile(
@@ -610,6 +626,10 @@ def run_migrations():
         total_migrations = len(all_revisions)
     except Exception as walk_err:
         logger.warning(f"Could not walk revision graph: {walk_err}")
+        # The failed walk may leave a broken cached revision map on
+        # script_dir.  Create a fresh ScriptDirectory so that
+        # get_current_head() below doesn't re-raise the same error.
+        script_dir = ScriptDirectory.from_config(alembic_cfg)
         # Fall back to counting .py migration files
         total_migrations = len([
             f for f in os.listdir(versions_dir)
@@ -617,7 +637,15 @@ def run_migrations():
         ])
     startup_status.migrations_total = total_migrations
 
-    head_revision = script_dir.get_current_head()
+    try:
+        head_revision = script_dir.get_current_head()
+    except Exception as head_err:
+        logger.error(
+            f"Failed to determine migration head revision: {head_err}. "
+            f"This usually means a referenced down_revision is missing. "
+            f"Check that all migration files in {versions_dir} are present."
+        )
+        raise
     # NullPool avoids connection pool overhead during DDL-heavy initialization.
     # Matches Alembic's own env.py strategy (pool is discarded after migrations).
     engine = create_engine(settings.SYNC_DATABASE_URL, poolclass=NullPool)
