@@ -26,6 +26,7 @@ import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
+import { MAX_AVATAR_SIZE } from '../constants/config';
 
 // Types for inventory data
 interface InventoryItem {
@@ -307,7 +308,7 @@ export const MemberProfilePage: React.FC = () => {
       setError('Please select a JPEG, PNG, or WebP image.');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_AVATAR_SIZE) {
       setError('Image must be under 5MB.');
       return;
     }
