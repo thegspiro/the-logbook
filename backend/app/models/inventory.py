@@ -237,9 +237,10 @@ class InventoryItem(Base):
         Index("idx_inventory_items_assigned_to", "assigned_to_user_id"),
         Index("idx_inventory_items_next_inspection", "next_inspection_due"),
         Index("idx_inventory_items_tracking_type", "organization_id", "tracking_type"),
-        # Barcode and asset_tag uniqueness scoped per organization (multi-tenant)
+        # Barcode, asset_tag, and serial_number uniqueness scoped per organization (multi-tenant)
         UniqueConstraint("organization_id", "barcode", name="uq_item_org_barcode"),
         UniqueConstraint("organization_id", "asset_tag", name="uq_item_org_asset_tag"),
+        UniqueConstraint("organization_id", "serial_number", name="uq_item_org_serial_number"),
     )
 
 

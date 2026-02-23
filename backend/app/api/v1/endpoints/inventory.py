@@ -539,7 +539,13 @@ async def unassign_item(
     from app.models.inventory import ItemCondition
     return_condition = None
     if unassign_data.return_condition:
-        return_condition = ItemCondition(unassign_data.return_condition)
+        try:
+            return_condition = ItemCondition(unassign_data.return_condition)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid return condition: '{unassign_data.return_condition}'",
+            )
 
     success, error = await service.unassign_item(
         item_id=item_id,
@@ -664,7 +670,13 @@ async def return_to_pool(
     from app.models.inventory import ItemCondition
     return_condition = None
     if return_data.return_condition:
-        return_condition = ItemCondition(return_data.return_condition)
+        try:
+            return_condition = ItemCondition(return_data.return_condition)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid return condition: '{return_data.return_condition}'",
+            )
 
     service = InventoryService(db)
     success, error = await service.return_to_pool(
@@ -809,7 +821,13 @@ async def checkin_item(
 
     # Convert condition string to enum
     from app.models.inventory import ItemCondition
-    return_condition = ItemCondition(checkin_data.return_condition)
+    try:
+        return_condition = ItemCondition(checkin_data.return_condition)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid return condition: '{checkin_data.return_condition}'",
+        )
 
     success, error = await service.checkin_item(
         checkout_id=checkout_id,

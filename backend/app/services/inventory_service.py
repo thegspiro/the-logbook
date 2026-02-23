@@ -213,6 +213,27 @@ class InventoryService:
     # Item Management
     # ============================================
 
+    async def _check_serial_number_unique(
+        self, serial_number: str, organization_id: UUID, exclude_item_id: Optional[UUID] = None
+    ) -> Optional[str]:
+        """Check that serial_number is unique within the organization."""
+        if not serial_number:
+            return None
+        query = (
+            select(func.count(InventoryItem.id))
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.serial_number == serial_number,
+                InventoryItem.active == True,  # noqa: E712
+            )
+        )
+        if exclude_item_id:
+            query = query.where(InventoryItem.id != str(exclude_item_id))
+        result = await self.db.execute(query)
+        if result.scalar():
+            return f"Serial number '{serial_number}' is already in use by another item in this organization"
+        return None
+
     async def create_item(
         self, organization_id: UUID, item_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
@@ -227,6 +248,13 @@ class InventoryService:
             tracking = item_data.get("tracking_type", "individual")
             if tracking == "pool" and item_data.get("quantity", 1) < 1:
                 return None, "Pool items must have a quantity of at least 1"
+
+            # Validate serial number uniqueness within the organization
+            sn_err = await self._check_serial_number_unique(
+                item_data.get("serial_number", ""), organization_id
+            )
+            if sn_err:
+                return None, sn_err
 
             # Validate status/condition state
             status_val = ItemStatus(item_data.get("status", "available"))
@@ -368,6 +396,20 @@ class InventoryService:
                 cat_err = await self._validate_category_requirements(merged, organization_id)
                 if cat_err:
                     return None, cat_err
+
+            # Validate serial number uniqueness if changing
+            if "serial_number" in update_data and update_data["serial_number"] != item.serial_number:
+                sn_err = await self._check_serial_number_unique(
+                    update_data["serial_number"], organization_id, exclude_item_id=item_id
+                )
+                if sn_err:
+                    return None, sn_err
+
+            # Validate pool quantity constraints
+            if item.tracking_type == TrackingType.POOL and "quantity" in update_data:
+                new_qty = update_data["quantity"]
+                if new_qty < 0:
+                    return None, "Pool item quantity cannot be negative"
 
             # Validate resulting state
             new_status = ItemStatus(update_data["status"]) if "status" in update_data else item.status
@@ -573,9 +615,14 @@ class InventoryService:
 
             await self.db.commit()
 
-            # Check if the dropped member should be auto-archived
-            from app.services.member_archive_service import check_and_auto_archive
-            await check_and_auto_archive(self.db, previous_user_id, str(organization_id))
+            # Check if the dropped member should be auto-archived.
+            # Wrapped in try/except so a failure here doesn't mask
+            # the already-committed unassign operation.
+            try:
+                from app.services.member_archive_service import check_and_auto_archive
+                await check_and_auto_archive(self.db, previous_user_id, str(organization_id))
+            except Exception as e:
+                logger.warning(f"Auto-archive check failed after unassign: {e}")
 
             return True, None
         except Exception as e:
@@ -715,6 +762,14 @@ class InventoryService:
             # Handle partial return: reduce issuance quantity_issued and leave open
             if qty < issuance.quantity_issued:
                 issuance.quantity_issued -= qty
+                # Record partial return details so they aren't lost
+                partial_note = f"Partial return: {qty} unit(s) returned"
+                if return_condition:
+                    partial_note += f" in {return_condition.value} condition"
+                if return_notes:
+                    partial_note += f" — {return_notes}"
+                existing = issuance.return_notes or ""
+                issuance.return_notes = (existing + "\n" + partial_note).strip()
                 # issuance stays open (is_returned=False) for the remaining units
             else:
                 # Full return
@@ -732,9 +787,14 @@ class InventoryService:
 
             await self.db.commit()
 
-            # Check if the dropped member should be auto-archived
-            from app.services.member_archive_service import check_and_auto_archive
-            await check_and_auto_archive(self.db, issuance_user_id, str(organization_id))
+            # Check if the dropped member should be auto-archived.
+            # Wrapped in try/except so a failure here doesn't mask
+            # the already-committed pool return operation.
+            try:
+                from app.services.member_archive_service import check_and_auto_archive
+                await check_and_auto_archive(self.db, issuance_user_id, str(organization_id))
+            except Exception as e:
+                logger.warning(f"Auto-archive check failed after pool return: {e}")
 
             return True, None
         except Exception as e:
@@ -893,9 +953,14 @@ class InventoryService:
 
             await self.db.commit()
 
-            # Check if the dropped member should be auto-archived
-            from app.services.member_archive_service import check_and_auto_archive
-            await check_and_auto_archive(self.db, checkout_user_id, str(organization_id))
+            # Check if the dropped member should be auto-archived.
+            # Wrapped in try/except so a failure here doesn't mask
+            # the already-committed checkin operation.
+            try:
+                from app.services.member_archive_service import check_and_auto_archive
+                await check_and_auto_archive(self.db, checkout_user_id, str(organization_id))
+            except Exception as e:
+                logger.warning(f"Auto-archive check failed after checkin: {e}")
 
             return True, None
         except Exception as e:
@@ -1010,9 +1075,11 @@ class InventoryService:
             )
             self.db.add(maintenance)
 
-            # If maintenance is completed, update item condition and schedule
+            # If maintenance is completed, update item condition and schedule.
+            # Lock the item row to prevent concurrent maintenance from
+            # creating a lost-update race on condition/inspection dates.
             if maintenance_data.get("is_completed"):
-                item = await self.get_item_by_id(item_id, organization_id)
+                item = await self._get_item_locked(item_id, organization_id)
                 if item:
                     if maintenance_data.get("condition_after"):
                         item.condition = maintenance_data["condition_after"]
@@ -1065,9 +1132,10 @@ class InventoryService:
             for key, value in safe_data.items():
                 setattr(record, key, value)
 
-            # If is_completed just changed to True, update item inspection dates
+            # If is_completed just changed to True, update item inspection dates.
+            # Lock the item row to prevent concurrent updates from racing.
             if safe_data.get("is_completed") and not was_completed_before:
-                item = await self.get_item_by_id(item_id, organization_id)
+                item = await self._get_item_locked(item_id, organization_id)
                 if item:
                     if safe_data.get("condition_after"):
                         item.condition = safe_data["condition_after"]
