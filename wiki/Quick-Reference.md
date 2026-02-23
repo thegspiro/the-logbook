@@ -178,6 +178,41 @@ tar -xzf uploads-backup.tar.gz -C /path/to/uploads/
 
 ---
 
+## 🏥 Training & Compliance Quick Tips
+
+### Check Member Compliance
+```bash
+# Via API
+curl http://localhost:3001/api/v1/training/compliance-summary/{user_id}
+# Returns: requirements_met, requirements_total, compliance_status (green/yellow/red)
+```
+
+### Manage Waivers
+- **UI**: Members > Admin > Waivers (unified page for training, meeting, and shift waivers)
+- **Training-specific**: Training Admin > Dashboard > Training Waivers tab
+
+### Bulk Create Training Records
+```bash
+curl -X POST http://localhost:3001/api/v1/training/records/bulk \
+  -H "Content-Type: application/json" \
+  -d '{"records": [...], "skip_duplicates": true}'
+# Up to 500 records per request with duplicate detection
+```
+
+### Process Certification Alerts
+```bash
+# Run daily alert processing (90/60/30/7-day tiers + expired escalation)
+curl -X POST http://localhost:3001/api/v1/training/certifications/process-alerts/all-orgs
+```
+
+### Check Rank Validation
+```bash
+curl http://localhost:3001/api/v1/users/rank-validation
+# Lists active members with ranks not matching configured operational ranks
+```
+
+---
+
 ## 🔍 Troubleshooting
 
 ### Container Won't Start

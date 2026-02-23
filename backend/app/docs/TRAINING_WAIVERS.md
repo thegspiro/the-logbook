@@ -14,13 +14,17 @@ calculations, and what members see on their end.
 
 1. A **training officer** creates a Leave of Absence for the member with a
    start date, end date, and leave type.
-2. The system counts how many **calendar months** fall within the leave period.
-3. Every rolling-period requirement (annual hours, quarterly shifts, etc.) has
+2. Unless `exempt_from_training_waiver` is set, the system **automatically
+   creates a linked training waiver** with matching dates. Changes to the
+   leave's dates sync to the linked waiver, and deactivating the leave also
+   deactivates the waiver.
+3. The system counts how many **calendar months** fall within the leave period.
+4. Every rolling-period requirement (annual hours, quarterly shifts, etc.) has
    its required value **reduced proportionally**:
 
        adjusted_required = base_required x (active_months / total_months)
 
-4. The member's compliance percentage and met/not-met status are recalculated
+5. The member's compliance percentage and met/not-met status are recalculated
    everywhere: the member's own training page, the compliance matrix, the
    competency matrix, training reports, and program enrollment progress.
 
@@ -28,21 +32,34 @@ calculations, and what members see on their end.
 
 ## Step-by-Step: Granting a Leave of Absence
 
-### From the UI (recommended)
+### From the Waiver Management Page (recommended)
+
+1. Navigate to **Members > Admin > Waivers** (or use the sidebar link).
+2. Click the **Create Waiver** tab.
+3. Fill in the form:
+
+   | Field           | Description |
+   |-----------------|-------------|
+   | **Member**      | Select the member from the dropdown (sorted by last name). |
+   | **Applies To**  | Choose scope: *All (LOA + Training Waiver)*, *Training Only*, or *Meetings & Shifts Only*. |
+   | **Leave Type**  | Choose one: *Leave of Absence*, *Medical*, *Military*, *Personal*, *Administrative*, or *Other*. |
+   | **Start Date**  | First day the member is on leave. |
+   | **End Date**    | Last day the member is on leave (must be on or after start date). |
+   | **Reason**      | Optional free-text explanation. |
+
+4. Click **Create Waiver**.
+
+**Applies To options:**
+- **All**: Creates a Leave of Absence and automatically creates a linked training waiver with matching dates. This is the most common choice.
+- **Training Only**: Creates a standalone training waiver without a Leave of Absence. The member's meeting attendance and shift scheduling are not affected.
+- **Meetings & Shifts Only**: Creates a Leave of Absence with `exempt_from_training_waiver = true`. Training requirements are not adjusted.
+
+### From the Member Lifecycle page (alternative)
 
 1. Navigate to **Administration > Member Lifecycle**.
 2. Select the **Leave of Absence** tab.
 3. Click the **Add Leave of Absence** button (top-right).
-4. Fill in the form:
-
-   | Field       | Description |
-   |-------------|-------------|
-   | **Member**  | Select the member from the dropdown (sorted by last name). |
-   | **Leave Type** | Choose one: *Leave of Absence*, *Medical*, *Military*, *Personal*, *Administrative*, or *Other*. |
-   | **Start Date** | First day the member is on leave. |
-   | **End Date**   | Last day the member is on leave (must be on or after start date). |
-   | **Reason**     | Optional free-text explanation. |
-
+4. Fill in the form (Member, Leave Type, Start/End Date, Reason).
 5. Click **Create Leave**.
 
 The leave immediately appears in the table and the system begins excluding
@@ -242,19 +259,46 @@ Both are subtracted from the denominator independently.
 
 ---
 
+## Auto-Linking: LOA ↔ Training Waiver
+
+When a Leave of Absence is created (and `exempt_from_training_waiver` is not
+set), the system automatically creates a linked training waiver:
+
+1. **On LOA creation**: A `TrainingWaiver` record is created with the same
+   `start_date` and `end_date`. The LOA stores the waiver ID in
+   `linked_training_waiver_id`.
+
+2. **On LOA date change**: If the LOA's dates are updated, the linked waiver's
+   dates are updated to match.
+
+3. **On LOA deactivation**: The linked training waiver is also deactivated.
+
+4. **On exempt toggle**: If `exempt_from_training_waiver` is set to `true` on
+   an existing LOA that has a linked waiver, the linked waiver is deactivated.
+   If set back to `false`, a new waiver is created.
+
+This ensures that creating an LOA from the Member Lifecycle page or the Waiver
+Management page both produce consistent results without requiring manual
+creation of separate training waivers.
+
+---
+
 ## FAQ
 
 **Q: Do I need to create both a Leave of Absence and a Training Waiver?**
 
-No.  A Leave of Absence (created via Member Lifecycle) automatically applies
-to all training requirements.  You only need a separate Training Waiver if you
-want to waive specific requirements while keeping others active.
+No.  When you create a Leave of Absence (from any UI), the system
+automatically creates a linked training waiver unless you explicitly opt out
+with the `exempt_from_training_waiver` flag.  You only need a separate
+standalone Training Waiver if you want to waive specific requirements while
+keeping others active (use the "Training Only" option in the Waiver Management
+page).
 
 **Q: What happens if I deactivate a leave?**
 
-The leave is soft-deleted and the member's requirements revert to the full
-unadjusted values.  Their compliance status is recalculated on the next page
-load.
+The leave is soft-deleted, and its linked training waiver (if any) is also
+deactivated. The member's requirements revert to the full unadjusted values.
+Their compliance status is recalculated on the next page load.
 
 **Q: Can a leave cover only part of a month?**
 
@@ -273,3 +317,16 @@ member from scheduling during the leave period.
 No.  The Leave of Absence automatically excludes all meetings during the leave
 period.  Per-meeting waivers are only needed for one-off absences outside a
 formal leave.
+
+**Q: Where can I see all waivers across the department?**
+
+Navigate to **Members > Admin > Waivers** for a unified view of all waivers
+(training, meetings, shifts). Training officers can also see training-specific
+waivers in the **Training Admin > Dashboard > Training Waivers** tab.
+
+**Q: What is the compliance summary card on member profiles?**
+
+The profile card shows a green/yellow/red compliance indicator based on
+requirements met, certification expirations, and training hours. Red means
+non-compliant (expired certs or <50% requirements met), yellow means at risk
+(expiring certs or incomplete requirements), and green means fully compliant.

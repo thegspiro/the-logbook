@@ -118,6 +118,19 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### February 2026 (Feb 23) - Training Compliance, Waiver Management & Membership Enhancements
+- **LOA–Training Waiver auto-linking**: Leaves of absence automatically create linked training waivers; date changes sync; deactivation cascades; opt-out with `exempt_from_training_waiver`
+- **Waiver Management Page** (`/members/admin/waivers`): Unified page for managing training, meeting, and shift waivers with Active/Create/History tabs
+- **Training Waivers officer tab**: New tab in Training Admin Dashboard with summary cards, status filtering, and source tracking
+- **Compliance summary card**: Member profiles show green/yellow/red compliance indicator
+- **Bulk training record creation**: Up to 500 records per request with duplicate detection
+- **Certification expiration alerts**: Tiered in-app + email notifications at 90/60/30/7 days with expired cert escalation
+- **Rank & station snapshot**: Training records capture `rank_at_completion` and `station_at_completion`
+- **Member Admin Edit, audit history, delete modal, photo upload**: Full admin member management
+- **Rank validation**: Surfaces active members with unrecognized ranks
+- **Compliance calculations document**: `docs/training-compliance-calculations.md`
+- **15-minute time increments**: All date/time pickers enforce 15-minute steps
+
 ### February 2026 (Week of Feb 22) - Inventory Overhaul, Event Reminders & Security Hardening
 - **Inventory module overhaul**: Pool/quantity-tracked items, item issuances, batch checkout/return, departure clearance lifecycle, notification netting, thermal label printing (Dymo/Rollo), barcode label generation
 - **Inventory security hardening**: Row-level locking on all mutation operations, IDOR fix on clearance line items, org-scoped unique constraints, LIKE injection prevention, kwargs whitelist

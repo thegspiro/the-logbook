@@ -27,6 +27,7 @@
 
 ### 📦 Modules
 - [Training](Module-Training)
+- [Training Compliance](../docs/training-compliance-calculations.md)
 - [Elections](Module-Elections)
 - [Events](Module-Events)
 - [Scheduling](Module-Scheduling)

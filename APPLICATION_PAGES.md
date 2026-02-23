@@ -73,6 +73,16 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `add` | Add Member | `members.create` |
 | `import` | Import Members | `members.create` |
 
+### Members Admin Pages
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/members/admin/edit/:userId` | Admin Member Edit | `members.manage` |
+| `/members/admin/history/:userId` | Member Audit History | `members.manage` |
+| `/members/admin/waivers` | Waiver Management | `members.manage` |
+
+> **Admin Edit** provides full member editing (all fields, rank/station dropdowns, status, roles). **Audit History** shows timestamped change log. **Waiver Management** is a unified page covering training, meeting, and shift waivers with Active/Create/History tabs.
+
 **Legacy redirects:**
 - `/admin/members` → `/members/admin`
 - `/members/add` → `/members/admin?tab=add`
@@ -185,6 +195,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 | Tab | Label |
 |-----|-------|
 | `dashboard` | Officer Dashboard |
+| `waivers` | Training Waivers |
 | `submissions` | Review Submissions |
 | `requirements` | Requirements |
 | `sessions` | Create Session |
@@ -194,6 +205,8 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `shift-reports` | Shift Reports |
 | `integrations` | Integrations |
 | `import` | Import History |
+
+> The **Training Waivers** tab (within Officer Dashboard) shows all training waivers with summary cards, status filtering, and source tracking (Auto LOA vs Manual).
 
 **Legacy redirects:**
 - `/training/officer` → `/training/admin?tab=dashboard`
@@ -334,4 +347,4 @@ Tab-based interface with the following views:
 
 ---
 
-**Total: ~75 direct routes + 25 admin hub tabs across 16 modules**
+**Total: ~80 direct routes + 25 admin hub tabs across 16 modules**

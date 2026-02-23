@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Compliance & Waiver Management (2026-02-23)
+
+#### Training Module Enhancements
+- **LOA–Training Waiver auto-linking**: Creating a Leave of Absence now automatically creates a linked training waiver with matching dates. Changes to the leave's dates sync to the waiver. Deactivating the leave also deactivates the linked waiver. Opt out per-leave with the `exempt_from_training_waiver` flag.
+- **Rank & station snapshot on training records**: `rank_at_completion` and `station_at_completion` are now captured automatically when a training record is created or a submission is approved.
+- **Bulk training record creation**: New `POST /training/records/bulk` endpoint accepts up to 500 records per request with per-record error reporting and duplicate detection.
+- **Duplicate detection**: Single and bulk record creation now warns when a record with the same member + course name (case-insensitive) + completion date (±1 day) already exists.
+- **Compliance summary card**: Member profile page now shows a compliance indicator (green/yellow/red) with requirements met/total, hours this year, active certs, and expiring certs.
+- **Certification expiration alerts**: Tiered in-app and email notifications at 90, 60, 30, and 7 days before expiration with escalation to officers. Expired certs trigger escalation to training, compliance, and chief officers.
+- **Program enrollment notifications**: Members now receive in-app notifications when enrolled in a training program and when they complete a program.
+- **Compliance calculations document**: New `docs/training-compliance-calculations.md` documents every formula, edge case, and integration point for training compliance.
+
+#### Waiver Management
+- **Waiver Management Page** (`/members/admin/waivers`): New unified page for managing all waivers (training, meetings, shifts). Three tabs: Active Waivers, Create Waiver, and All Waivers (history). Create form supports "Applies To" selector for choosing All (LOA + auto training waiver), Training Only, or Meetings & Shifts Only.
+- **Training Waivers officer tab**: New tab in the Training Admin Dashboard showing all training waivers with summary cards (Active/Future/Expired/Total), status badges, filterable by status and member search, and source tracking (Auto LOA vs Manual).
+- **Navigation**: Waivers link added under Members in the sidebar.
+
+#### Membership Module Enhancements
+- **Member Admin Edit page** (`/members/admin/edit/:userId`): Full admin member editing with all fields, rank/station dropdowns, status management, and role assignment.
+- **Member self-edit**: Members can now edit their own limited profile fields (phone, email, address, emergency contacts) from their profile page.
+- **Photo upload**: Profile photo upload with image preview and crop.
+- **Delete member modal**: Confirmation dialog for member deletion with clear warnings about irreversible data loss.
+- **Audit history page** (`/members/admin/history/:userId`): View complete change history for a member with timestamped entries showing who made each change.
+- **Data consistency fixes**: Added missing `list_ids`, `committee_ids`, `group_ids` fields; removed unused `photo_url` column; wired up delete modal across admin views.
+
+#### Rank Validation
+- **Rank validation endpoint**: New `GET /users/rank-validation` surfaces active members whose rank does not match any of the organization's configured operational ranks.
+- **Admin visibility**: Rank mismatches are surfaced in the Members Admin Hub for training officers and administrators to review and correct.
+
+#### UI & UX
+- **15-minute time increments**: All date/time pickers in the application now enforce 15-minute step increments (`step="900"`), including the check-in/check-out override pickers which previously allowed 1-minute granularity.
+
+#### Database Migration
+- **`20260223_0100`**: Adds `rank_at_completion` and `station_at_completion` to `training_records`; adds `exempt_from_training_waiver` and `linked_training_waiver_id` to `member_leaves_of_absence`.
+
 ### Inventory Module Hardening & Comprehensive Overhaul (2026-02-22)
 
 #### Inventory Module Overhaul
