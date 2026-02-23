@@ -21,6 +21,7 @@ import {
   Check,
   XCircle,
   Loader2,
+  FileX,
 } from 'lucide-react';
 import {
   inventoryService,
@@ -28,6 +29,7 @@ import {
   type InventoryItem,
   type InventoryCategory,
   type EquipmentRequestItem,
+  type WriteOffRequestItem,
   type InventorySummary,
   type InventoryItemCreate,
   type InventoryCategoryCreate,
@@ -37,6 +39,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
+import { useInventoryWebSocket } from '../hooks/useInventoryWebSocket';
 import toast from 'react-hot-toast';
 
 const ITEM_TYPES = [
@@ -191,6 +194,15 @@ const InventoryPage: React.FC = () => {
   const [reviewNotes, setReviewNotes] = useState('');
   const [showApproveConfirm, setShowApproveConfirm] = useState<EquipmentRequestItem | null>(null);
 
+  // Write-off requests
+  const [writeOffRequests, setWriteOffRequests] = useState<WriteOffRequestItem[]>([]);
+  const [showWriteOffsPanel, setShowWriteOffsPanel] = useState(false);
+  const [showWriteOffModal, setShowWriteOffModal] = useState(false);
+  const [writeOffItem, setWriteOffItem] = useState<InventoryItem | null>(null);
+  const [writeOffForm, setWriteOffForm] = useState({ reason: 'lost', description: '' });
+  const [reviewingWriteOff, setReviewingWriteOff] = useState<WriteOffRequestItem | null>(null);
+  const [writeOffReviewNotes, setWriteOffReviewNotes] = useState('');
+
   useEffect(() => {
     loadData();
   }, []);
@@ -208,6 +220,15 @@ const InventoryPage: React.FC = () => {
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, [showLabelMenu]);
+
+  // Real-time updates via WebSocket
+  useInventoryWebSocket({
+    onEvent: useCallback(() => {
+      // Refresh item list and summary when another user makes a change
+      loadItems();
+      inventoryService.getSummary().then(setSummary).catch(() => {});
+    }, [searchQuery, statusFilter, categoryFilter]),
+  });
 
   const loadData = async () => {
     setLoading(true);
@@ -236,6 +257,9 @@ const InventoryPage: React.FC = () => {
         }).catch(() => {});
         inventoryService.getEquipmentRequests({ status: 'pending' }).then(data => {
           setPendingRequests(data.requests || []);
+        }).catch(() => {});
+        inventoryService.getWriteOffRequests({ status: 'pending' }).then(data => {
+          setWriteOffRequests(data || []);
         }).catch(() => {});
       }
     } catch (err: unknown) {
@@ -584,6 +608,58 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  // Write-off handlers
+  const openWriteOffModal = (item: InventoryItem) => {
+    setWriteOffItem(item);
+    setWriteOffForm({ reason: 'lost', description: '' });
+    setFormError(null);
+    setShowWriteOffModal(true);
+  };
+
+  const handleCreateWriteOff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!writeOffItem) return;
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await inventoryService.createWriteOffRequest({
+        item_id: writeOffItem.id,
+        reason: writeOffForm.reason,
+        description: writeOffForm.description,
+      });
+      toast.success('Write-off request submitted for approval');
+      setShowWriteOffModal(false);
+      setWriteOffItem(null);
+      // Refresh write-off list
+      inventoryService.getWriteOffRequests({ status: 'pending' }).then(data => {
+        setWriteOffRequests(data || []);
+      }).catch(() => {});
+    } catch (err: unknown) {
+      setFormError(getErrorMessage(err, 'Failed to create write-off request'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReviewWriteOff = async (writeOffId: string, decision: 'approved' | 'denied') => {
+    setSubmitting(true);
+    try {
+      await inventoryService.reviewWriteOff(writeOffId, {
+        status: decision,
+        review_notes: writeOffReviewNotes || undefined,
+      });
+      toast.success(`Write-off ${decision}`);
+      setWriteOffRequests(prev => prev.filter(w => w.id !== writeOffId));
+      setReviewingWriteOff(null);
+      setWriteOffReviewNotes('');
+      if (decision === 'approved') loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to review write-off'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -682,6 +758,17 @@ const InventoryPage: React.FC = () => {
                 <span className="hidden sm:inline">Add Item</span>
                 <span className="sm:hidden">Item</span>
               </button>
+              {writeOffRequests.length > 0 && (
+                <button
+                  onClick={() => setShowWriteOffsPanel(!showWriteOffsPanel)}
+                  className="flex items-center space-x-1.5 px-3 py-2 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-700 dark:text-red-400 rounded-lg transition-colors text-sm"
+                  title="Pending write-off requests"
+                >
+                  <FileX className="w-4 h-4" />
+                  <span className="hidden sm:inline">Write-offs</span>
+                  <span className="px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">{writeOffRequests.length}</span>
+                </button>
+              )}
               {pendingRequests.length > 0 && (
                 <button
                   onClick={() => setShowRequestsPanel(!showRequestsPanel)}
@@ -749,6 +836,82 @@ const InventoryPage: React.FC = () => {
                   <span className="text-xs text-yellow-600 dark:text-yellow-400">{alert.current_stock} / {alert.threshold} threshold</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Pending Write-Off Requests Panel */}
+        {showWriteOffsPanel && writeOffRequests.length > 0 && (
+          <div className="mb-6 bg-theme-surface rounded-lg border border-red-500/30 overflow-hidden">
+            <div className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-red-700 dark:text-red-300 flex items-center gap-2">
+                <FileX className="w-4 h-4" /> Pending Write-Off Requests
+              </h3>
+              <button onClick={() => setShowWriteOffsPanel(false)} className="text-theme-text-muted hover:text-theme-text-primary p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="divide-y divide-theme-surface-border">
+              {writeOffRequests.map(wo => (
+                <div key={wo.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-theme-text-primary text-sm font-medium">
+                      {wo.item_name}
+                      {wo.item_serial_number && <span className="text-theme-text-muted font-mono ml-2 text-xs">SN: {wo.item_serial_number}</span>}
+                    </p>
+                    <p className="text-theme-text-muted text-xs">
+                      {wo.requester_name || 'Unknown'} &middot;
+                      <span className="capitalize"> {wo.reason.replace(/_/g, ' ')}</span>
+                      {wo.item_value != null && <span> &middot; ${wo.item_value.toFixed(2)}</span>}
+                    </p>
+                    {wo.description && <p className="text-theme-text-secondary text-xs mt-0.5 truncate">{wo.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleReviewWriteOff(wo.id, 'approved')}
+                      disabled={submitting}
+                      className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50"
+                      title="Approve write-off"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => { setReviewingWriteOff(wo); setWriteOffReviewNotes(''); }}
+                      className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+                      title="Deny (with notes)"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Write-Off Deny Modal */}
+        {reviewingWriteOff && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setReviewingWriteOff(null); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setReviewingWriteOff(null)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+                <div className="px-6 pt-5 pb-4">
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-2">Deny Write-Off</h3>
+                  <p className="text-theme-text-secondary text-sm mb-4">
+                    {reviewingWriteOff.item_name} — {reviewingWriteOff.reason.replace(/_/g, ' ')}
+                  </p>
+                  <div>
+                    <label htmlFor="wo-deny-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason for denial</label>
+                    <textarea id="wo-deny-notes" rows={3} value={writeOffReviewNotes} onChange={(e) => setWriteOffReviewNotes(e.target.value)} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Explain why this write-off is being denied..." />
+                  </div>
+                </div>
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setReviewingWriteOff(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={() => handleReviewWriteOff(reviewingWriteOff.id, 'denied')} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Denying...' : 'Deny Write-Off'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1071,6 +1234,11 @@ const InventoryPage: React.FC = () => {
                                 {item.tracking_type === 'pool' && item.status !== 'retired' && (
                                   <button onClick={() => openPoolIssueModal(item)} className="p-1.5 text-theme-text-muted hover:text-purple-500 rounded" title="Issue from pool" aria-label={`Issue ${item.name}`}>
                                     <Send className="w-4 h-4" aria-hidden="true" />
+                                  </button>
+                                )}
+                                {item.status !== 'retired' && (
+                                  <button onClick={() => openWriteOffModal(item)} className="p-1.5 text-theme-text-muted hover:text-orange-500 rounded" title="Write off item" aria-label={`Write off ${item.name}`}>
+                                    <FileX className="w-4 h-4" aria-hidden="true" />
                                   </button>
                                 )}
                                 {item.status !== 'retired' && (
@@ -2097,6 +2265,55 @@ const InventoryPage: React.FC = () => {
                     {submitting ? 'Issuing...' : 'Issue Items'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Write-Off Request Modal */}
+        {showWriteOffModal && writeOffItem && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setShowWriteOffModal(false); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowWriteOffModal(false)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+                <form onSubmit={handleCreateWriteOff}>
+                  <div className="px-6 pt-5 pb-4">
+                    <h3 className="text-lg font-medium text-theme-text-primary mb-2">Request Write-Off</h3>
+                    <p className="text-theme-text-secondary text-sm mb-4">
+                      <span className="font-medium text-theme-text-primary">{writeOffItem.name}</span>
+                      {writeOffItem.serial_number && <span className="text-xs font-mono ml-2">SN: {writeOffItem.serial_number}</span>}
+                      {writeOffItem.purchase_price != null && <span className="text-xs ml-2">Value: ${writeOffItem.purchase_price}</span>}
+                    </p>
+
+                    {formError && (
+                      <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                        <p className="text-sm text-red-700 dark:text-red-300">{formError}</p>
+                      </div>
+                    )}
+
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="wo-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
+                        <select id="wo-reason" value={writeOffForm.reason} onChange={(e) => setWriteOffForm({ ...writeOffForm, reason: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500">
+                          <option value="lost">Lost</option>
+                          <option value="stolen">Stolen</option>
+                          <option value="damaged_beyond_repair">Damaged Beyond Repair</option>
+                          <option value="obsolete">Obsolete</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="wo-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
+                        <textarea id="wo-description" rows={3} required value={writeOffForm.description} onChange={(e) => setWriteOffForm({ ...writeOffForm, description: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Describe the circumstances..." />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                    <button type="button" onClick={() => setShowWriteOffModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                    <button type="submit" disabled={submitting || !writeOffForm.description.trim()} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                      {submitting ? 'Submitting...' : 'Submit Write-Off Request'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>

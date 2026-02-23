@@ -32,6 +32,7 @@ import { ReturnItemsModal } from '../components/ReturnItemsModal';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { useInventoryWebSocket } from '../hooks/useInventoryWebSocket';
 
 type SortOption = 'name' | 'total_items' | 'overdue' | 'assigned';
 
@@ -93,6 +94,13 @@ const InventoryMembersTab: React.FC = () => {
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
+
+  // Real-time updates via WebSocket
+  useInventoryWebSocket({
+    onEvent: useCallback(() => {
+      loadMembers();
+    }, [loadMembers]),
+  });
 
   const handleExpand = async (userId: string) => {
     if (expandedUserId === userId) {

@@ -6,13 +6,14 @@ checkouts, maintenance, and reporting.
 """
 
 from typing import Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from datetime import datetime
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
+from app.core.websocket_manager import ws_manager
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.models.inventory import ItemStatus, AssignmentType
@@ -70,6 +71,10 @@ from app.schemas.inventory import (
     EquipmentRequestCreate,
     EquipmentRequestReview,
     EquipmentRequestResponse,
+    # Write-off schemas
+    WriteOffRequestCreate,
+    WriteOffReview,
+    WriteOffRequestResponse,
 )
 from app.models.inventory import EquipmentRequest, RequestStatus
 from app.services.inventory_service import InventoryService
@@ -77,6 +82,18 @@ from app.services.departure_clearance_service import DepartureClearanceService
 from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
+
+
+async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
+    """Publish a real-time inventory event to WebSocket clients."""
+    try:
+        await ws_manager.publish_event(org_id, {
+            "type": "inventory_changed",
+            "action": action,
+            "data": data or {},
+        })
+    except Exception:
+        pass  # Never let WS publishing break an API response
 
 
 # ============================================
@@ -281,6 +298,11 @@ async def create_item(
         username=current_user.username,
     )
 
+    await _publish_inventory_event(
+        str(current_user.organization_id), "item_created",
+        {"item_id": str(new_item.id), "item_name": new_item.name},
+    )
+
     return new_item
 
 
@@ -414,6 +436,11 @@ async def update_item(
         username=current_user.username,
     )
 
+    await _publish_inventory_event(
+        str(current_user.organization_id), "item_updated",
+        {"item_id": str(item_id)},
+    )
+
     return updated_item
 
 
@@ -454,6 +481,11 @@ async def retire_item(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    await _publish_inventory_event(
+        str(current_user.organization_id), "item_retired",
+        {"item_id": str(item_id)},
     )
 
     return {"message": "Item retired successfully"}
@@ -517,6 +549,11 @@ async def assign_item(
         username=current_user.username,
     )
 
+    await _publish_inventory_event(
+        str(current_user.organization_id), "item_assigned",
+        {"item_id": str(assignment_data.item_id), "user_id": str(assignment_data.user_id)},
+    )
+
     return assignment
 
 
@@ -569,6 +606,11 @@ async def unassign_item(
         event_data={"item_id": str(item_id)},
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    await _publish_inventory_event(
+        str(current_user.organization_id), "item_unassigned",
+        {"item_id": str(item_id)},
     )
 
     return {"message": "Item unassigned successfully"}
@@ -649,6 +691,11 @@ async def issue_from_pool(
         username=current_user.username,
     )
 
+    await _publish_inventory_event(
+        str(current_user.organization_id), "pool_issued",
+        {"item_id": str(item_id), "user_id": str(issuance_data.user_id)},
+    )
+
     return issuance
 
 
@@ -702,6 +749,11 @@ async def return_to_pool(
         event_data={"issuance_id": str(issuance_id)},
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    await _publish_inventory_event(
+        str(current_user.organization_id), "pool_returned",
+        {"issuance_id": str(issuance_id)},
     )
 
     return {"message": "Items returned to pool successfully"}
@@ -801,6 +853,11 @@ async def checkout_item(
         username=current_user.username,
     )
 
+    await _publish_inventory_event(
+        str(current_user.organization_id), "item_checked_out",
+        {"item_id": str(checkout_data.item_id), "user_id": str(checkout_data.user_id)},
+    )
+
     return checkout
 
 
@@ -851,6 +908,11 @@ async def checkin_item(
         event_data={"checkout_id": str(checkout_id)},
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    await _publish_inventory_event(
+        str(current_user.organization_id), "item_checked_in",
+        {"checkout_id": str(checkout_id)},
     )
 
     return {"message": "Item checked in successfully"}
@@ -1255,6 +1317,11 @@ async def batch_checkout_items(
             username=current_user.username,
         )
 
+        await _publish_inventory_event(
+            str(current_user.organization_id), "batch_checkout",
+            {"user_id": str(request.user_id), "successful": result["successful"]},
+        )
+
     return result
 
 
@@ -1298,6 +1365,11 @@ async def batch_return_items(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+        )
+
+        await _publish_inventory_event(
+            str(current_user.organization_id), "batch_return",
+            {"user_id": str(request.user_id), "successful": result["successful"]},
         )
 
     return result
@@ -1794,3 +1866,172 @@ async def review_equipment_request(
         "status": review_data.status,
         "message": f"Request {review_data.status}",
     }
+
+
+# ============================================
+# Write-Off Endpoints
+# ============================================
+
+@router.post("/write-offs", response_model=WriteOffRequestResponse)
+async def create_write_off_request(
+    data: WriteOffRequestCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create a write-off request for an inventory item.
+
+    Write-off reasons: lost, damaged_beyond_repair, obsolete, stolen, other.
+    The request is created in 'pending' status and must be approved by a
+    supervisor before the item is retired from inventory.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    result, error = await service.create_write_off_request(
+        item_id=str(data.item_id),
+        organization_id=str(current_user.organization_id),
+        requested_by=str(current_user.id),
+        reason=data.reason,
+        description=data.description,
+    )
+
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="write_off_requested",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "write_off_id": result["id"],
+            "item_name": result["item_name"],
+            "reason": data.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return result
+
+
+@router.get("/write-offs", response_model=List[WriteOffRequestResponse])
+async def list_write_off_requests(
+    write_off_status: Optional[str] = Query(None, alias="status"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    List write-off requests for the organization.
+
+    Optionally filter by status: pending, approved, denied.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_write_off_requests(
+        organization_id=str(current_user.organization_id),
+        status_filter=write_off_status,
+    )
+
+
+@router.put("/write-offs/{write_off_id}/review")
+async def review_write_off_request(
+    write_off_id: UUID,
+    review_data: WriteOffReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Approve or deny a write-off request.
+
+    On approval, the item is automatically marked as lost/stolen or retired
+    depending on the write-off reason.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    result, error = await service.review_write_off(
+        write_off_id=str(write_off_id),
+        organization_id=str(current_user.organization_id),
+        reviewed_by=str(current_user.id),
+        decision=review_data.status,
+        review_notes=review_data.review_notes,
+    )
+
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type=f"write_off_{review_data.status}",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "write_off_id": str(write_off_id),
+            "item_name": result["item_name"],
+            "decision": review_data.status,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    await _publish_inventory_event(
+        str(current_user.organization_id), "write_off_reviewed",
+        {"write_off_id": str(write_off_id), "decision": review_data.status},
+    )
+
+    return result
+
+
+# ============================================
+# WebSocket — Real-Time Inventory Updates
+# ============================================
+
+@router.websocket("/ws")
+async def inventory_websocket(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None),
+):
+    """
+    WebSocket endpoint for real-time inventory change notifications.
+
+    Connect with a JWT token as a query parameter:
+        ws://host/api/v1/inventory/ws?token=<jwt>
+
+    Events pushed to clients:
+        { "type": "inventory_changed", "action": "...", "data": {...} }
+
+    Actions: item_created, item_updated, item_assigned, item_unassigned,
+             item_checked_out, item_checked_in, batch_checkout, batch_return,
+             pool_issued, pool_returned, item_retired, write_off_reviewed
+    """
+    if not token:
+        await websocket.close(code=4001, reason="Missing token")
+        return
+
+    # Validate JWT
+    try:
+        from app.core.security import decode_token
+        payload = decode_token(token)
+        org_id = payload.get("org_id")
+        if not org_id:
+            await websocket.close(code=4003, reason="Invalid token")
+            return
+    except Exception:
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+
+    await ws_manager.connect(websocket, org_id)
+    try:
+        while True:
+            # Keep alive — clients can send pings or we just wait
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        ws_manager.disconnect(websocket, org_id)

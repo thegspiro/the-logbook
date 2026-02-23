@@ -21,6 +21,8 @@ from app.models.inventory import (
     ItemIssuance,
     CheckOutRecord,
     MaintenanceRecord,
+    WriteOffRequest,
+    WriteOffStatus,
     ItemType,
     ItemCondition,
     ItemStatus,
@@ -2208,3 +2210,192 @@ class InventoryService:
         c.save()
         buf.seek(0)
         return buf
+
+    # ------------------------------------------------------------------
+    # Write-off requests
+    # ------------------------------------------------------------------
+
+    async def create_write_off_request(
+        self,
+        item_id: str,
+        organization_id: str,
+        requested_by: str,
+        reason: str,
+        description: str,
+        clearance_id: Optional[str] = None,
+        clearance_item_id: Optional[str] = None,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Create a write-off request for an inventory item."""
+        try:
+            result = await self.db.execute(
+                select(InventoryItem).where(
+                    InventoryItem.id == item_id,
+                    InventoryItem.organization_id == organization_id,
+                )
+            )
+            item = result.scalar_one_or_none()
+            if not item:
+                return None, "Item not found"
+
+            if item.status == ItemStatus.RETIRED:
+                return None, "Item is already retired"
+
+            valid_reasons = {"lost", "damaged_beyond_repair", "obsolete", "stolen", "other"}
+            if reason not in valid_reasons:
+                return None, f"Invalid reason. Must be one of: {', '.join(sorted(valid_reasons))}"
+
+            write_off = WriteOffRequest(
+                organization_id=organization_id,
+                item_id=item_id,
+                item_name=item.name,
+                item_serial_number=item.serial_number,
+                item_asset_tag=item.asset_tag,
+                item_value=item.purchase_price,
+                reason=reason,
+                description=description,
+                status=WriteOffStatus.PENDING,
+                requested_by=requested_by,
+                clearance_id=clearance_id,
+                clearance_item_id=clearance_item_id,
+            )
+            self.db.add(write_off)
+            await self.db.commit()
+            await self.db.refresh(write_off)
+
+            return {
+                "id": write_off.id,
+                "item_id": write_off.item_id,
+                "item_name": write_off.item_name,
+                "item_value": float(write_off.item_value) if write_off.item_value else None,
+                "reason": write_off.reason,
+                "description": write_off.description,
+                "status": write_off.status.value,
+                "created_at": write_off.created_at.isoformat() if write_off.created_at else None,
+            }, None
+
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to create write-off request: {e}")
+            return None, str(e)
+
+    async def get_write_off_requests(
+        self,
+        organization_id: str,
+        status_filter: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List write-off requests for the organization."""
+        query = (
+            select(WriteOffRequest)
+            .where(WriteOffRequest.organization_id == organization_id)
+            .order_by(WriteOffRequest.created_at.desc())
+        )
+        if status_filter:
+            query = query.where(WriteOffRequest.status == WriteOffStatus(status_filter))
+
+        result = await self.db.execute(query)
+        rows = result.scalars().all()
+
+        requests = []
+        for wo in rows:
+            # Load requester name
+            requester_name = None
+            if wo.requested_by:
+                u = await self.db.execute(select(User).where(User.id == wo.requested_by))
+                user = u.scalar_one_or_none()
+                if user:
+                    requester_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+
+            reviewer_name = None
+            if wo.reviewed_by:
+                u = await self.db.execute(select(User).where(User.id == wo.reviewed_by))
+                user = u.scalar_one_or_none()
+                if user:
+                    reviewer_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+
+            requests.append({
+                "id": wo.id,
+                "item_id": wo.item_id,
+                "item_name": wo.item_name,
+                "item_serial_number": wo.item_serial_number,
+                "item_asset_tag": wo.item_asset_tag,
+                "item_value": float(wo.item_value) if wo.item_value else None,
+                "reason": wo.reason,
+                "description": wo.description,
+                "status": wo.status.value,
+                "requested_by": wo.requested_by,
+                "requester_name": requester_name,
+                "reviewed_by": wo.reviewed_by,
+                "reviewer_name": reviewer_name,
+                "reviewed_at": wo.reviewed_at.isoformat() if wo.reviewed_at else None,
+                "review_notes": wo.review_notes,
+                "clearance_id": wo.clearance_id,
+                "created_at": wo.created_at.isoformat() if wo.created_at else None,
+            })
+        return requests
+
+    async def review_write_off(
+        self,
+        write_off_id: str,
+        organization_id: str,
+        reviewed_by: str,
+        decision: str,
+        review_notes: Optional[str] = None,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Approve or deny a write-off request. On approval, retire the item."""
+        try:
+            if decision not in ("approved", "denied"):
+                return None, "Decision must be 'approved' or 'denied'"
+
+            result = await self.db.execute(
+                select(WriteOffRequest).where(
+                    WriteOffRequest.id == write_off_id,
+                    WriteOffRequest.organization_id == organization_id,
+                )
+            )
+            wo = result.scalar_one_or_none()
+            if not wo:
+                return None, "Write-off request not found"
+
+            if wo.status != WriteOffStatus.PENDING:
+                return None, f"Request already {wo.status.value}"
+
+            now = datetime.now(timezone.utc)
+            wo.status = WriteOffStatus(decision)
+            wo.reviewed_by = reviewed_by
+            wo.reviewed_at = now
+            wo.review_notes = review_notes
+
+            # On approval, mark the item as lost/retired
+            if decision == "approved" and wo.item_id:
+                item_result = await self.db.execute(
+                    select(InventoryItem).where(
+                        InventoryItem.id == wo.item_id,
+                        InventoryItem.organization_id == organization_id,
+                    )
+                )
+                item = item_result.scalar_one_or_none()
+                if item and item.status != ItemStatus.RETIRED:
+                    if wo.reason in ("lost", "stolen"):
+                        item.status = ItemStatus.LOST if wo.reason == "lost" else ItemStatus.STOLEN
+                    else:
+                        item.status = ItemStatus.RETIRED
+                        item.condition = ItemCondition.RETIRED
+                    item.notes = (item.notes or "") + f"\n[Write-off approved: {wo.reason}] {wo.description}"
+
+            await self.db.commit()
+            await self.db.refresh(wo)
+
+            return {
+                "id": wo.id,
+                "item_id": wo.item_id,
+                "item_name": wo.item_name,
+                "status": wo.status.value,
+                "reviewed_by": wo.reviewed_by,
+                "reviewed_at": wo.reviewed_at.isoformat() if wo.reviewed_at else None,
+                "review_notes": wo.review_notes,
+            }, None
+
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to review write-off: {e}")
+            return None, str(e)
