@@ -831,3 +831,75 @@ class StorageArea(Base):
         Index("idx_storage_areas_parent", "parent_id"),
         Index("idx_storage_areas_location", "location_id"),
     )
+
+
+class WriteOffStatus(str, enum.Enum):
+    """Status of a write-off request"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+
+
+class WriteOffRequest(Base):
+    """
+    Write-Off Request model
+
+    When an inventory item is lost, damaged beyond repair, or otherwise needs
+    to be removed from active inventory, a write-off request is created.
+    Items above a configurable value threshold require supervisor approval
+    before the write-off is finalized. Lower-value items may be auto-approved
+    by quartermasters.
+    """
+
+    __tablename__ = "inventory_write_offs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # The item being written off
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"))
+    item_name = Column(String(255), nullable=False)
+    item_serial_number = Column(String(255))
+    item_asset_tag = Column(String(255))
+    item_value = Column(Numeric(10, 2))
+
+    # Reason / justification
+    reason = Column(
+        String(50),
+        nullable=False,
+        default="lost",
+    )  # lost, damaged_beyond_repair, obsolete, stolen, other
+    description = Column(Text, nullable=False)
+
+    # Approval status
+    status = Column(
+        Enum(WriteOffStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=WriteOffStatus.PENDING,
+        index=True,
+    )
+
+    # Who requested and who reviewed
+    requested_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
+    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at = Column(DateTime(timezone=True))
+    review_notes = Column(Text)
+
+    # Optional link to departure clearance
+    clearance_id = Column(String(36), ForeignKey("departure_clearances.id", ondelete="SET NULL"))
+    clearance_item_id = Column(String(36))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+    requester = relationship("User", foreign_keys=[requested_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    clearance = relationship("DepartureClearance", foreign_keys=[clearance_id])
+
+    __table_args__ = (
+        Index("idx_write_off_org_status", "organization_id", "status"),
+        Index("idx_write_off_item", "item_id"),
+    )

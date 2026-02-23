@@ -1011,6 +1011,10 @@ async def lifespan(app: FastAPI):
 
     logger.info("✓ Parallel service initialization complete")
 
+    # Start WebSocket pub/sub listener (after Redis is connected)
+    from app.core.websocket_manager import ws_manager
+    await ws_manager.start_listener()
+
     # Defer audit log verification to background (only in production, don't block startup)
     if settings.ENVIRONMENT == "production":
         async def verify_audit_logs_background():
@@ -1054,6 +1058,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down gracefully...")
+    await ws_manager.stop_listener()
     await database_manager.disconnect()
     await cache_manager.disconnect()
     logger.info("Shutdown complete")

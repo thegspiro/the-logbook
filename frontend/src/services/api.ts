@@ -2049,6 +2049,26 @@ export interface EquipmentRequestItem {
   updated_at: string;
 }
 
+export interface WriteOffRequestItem {
+  id: string;
+  item_id?: string;
+  item_name: string;
+  item_serial_number?: string;
+  item_asset_tag?: string;
+  item_value?: number;
+  reason: string;
+  description: string;
+  status: string;
+  requested_by?: string;
+  requester_name?: string;
+  reviewed_by?: string;
+  reviewer_name?: string;
+  reviewed_at?: string;
+  review_notes?: string;
+  clearance_id?: string;
+  created_at?: string;
+}
+
 export interface InventoryItemCreate {
   category_id?: string;
   name: string;
@@ -2464,6 +2484,22 @@ export const inventoryService = {
 
   async reviewEquipmentRequest(requestId: string, data: { status: string; review_notes?: string }): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put(`/inventory/requests/${requestId}/review`, data);
+    return response.data;
+  },
+
+  // Write-off requests
+  async getWriteOffRequests(params?: { status?: string }): Promise<WriteOffRequestItem[]> {
+    const response = await api.get('/inventory/write-offs', { params });
+    return response.data;
+  },
+
+  async createWriteOffRequest(data: { item_id: string; reason: string; description: string }): Promise<WriteOffRequestItem> {
+    const response = await api.post('/inventory/write-offs', data);
+    return response.data;
+  },
+
+  async reviewWriteOff(writeOffId: string, data: { status: string; review_notes?: string }): Promise<{ id: string; status: string; message: string }> {
+    const response = await api.put(`/inventory/write-offs/${writeOffId}/review`, data);
     return response.data;
   },
 };

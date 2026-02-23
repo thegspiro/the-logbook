@@ -765,3 +765,43 @@ class StorageAreaResponse(BaseModel):
     parent_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# Write-Off Schemas
+# ============================================
+
+class WriteOffRequestCreate(BaseModel):
+    """Create a write-off request"""
+    item_id: UUID
+    reason: str  # lost, damaged_beyond_repair, obsolete, stolen, other
+    description: str
+
+
+class WriteOffReview(BaseModel):
+    """Approve or deny a write-off request"""
+    status: str  # approved, denied
+    review_notes: Optional[str] = None
+
+
+class WriteOffRequestResponse(BaseModel):
+    """Write-off request response"""
+    id: str
+    item_id: Optional[str] = None
+    item_name: str
+    item_serial_number: Optional[str] = None
+    item_asset_tag: Optional[str] = None
+    item_value: Optional[float] = None
+    reason: str
+    description: str
+    status: str
+    requested_by: Optional[str] = None
+    requester_name: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewer_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_notes: Optional[str] = None
+    clearance_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
