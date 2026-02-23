@@ -208,20 +208,25 @@ describe('errorHandling', () => {
     });
 
     it('uses provided fallback when toAppError yields an empty message', () => {
-      // toAppError for null yields "An unknown error occurred" which is non-empty,
-      // so we need something that yields empty. Create an axios-like response
-      // with empty strings everywhere.
-      const axiosError = {
-        response: { data: { detail: '', message: '' }, statusText: '' },
-      };
-      expect(getErrorMessage(axiosError, 'Custom fallback')).toBe('Custom fallback');
+      // Construct an AppError-like object with an empty message string.
+      // A plain object with message: '' is not an Error and has no response,
+      // so toAppError's isAppError path returns it as-is with an empty message.
+      const emptyError = { message: '' };
+      expect(getErrorMessage(emptyError, 'Custom fallback')).toBe('Custom fallback');
     });
 
     it('returns the default fallback string when no custom fallback is provided and message is empty', () => {
+      const emptyError = { message: '' };
+      expect(getErrorMessage(emptyError)).toBe('An error occurred');
+    });
+
+    it('returns "Request failed" for axios-like error with all empty strings', () => {
+      // When detail, message, and statusText are all empty strings,
+      // the || chain in toAppError falls through to "Request failed".
       const axiosError = {
         response: { data: { detail: '', message: '' }, statusText: '' },
       };
-      expect(getErrorMessage(axiosError)).toBe('An error occurred');
+      expect(getErrorMessage(axiosError)).toBe('Request failed');
     });
   });
 });

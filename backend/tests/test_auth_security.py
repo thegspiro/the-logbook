@@ -8,11 +8,13 @@ Covers:
   - JWT access token creation and decoding
   - JWT refresh token creation and decoding
   - Token expiration validation
-  - Invalid token handling
-  - Data encryption / decryption
+  - Invalid / tampered token handling
+  - Data encryption and decryption (AES-256)
   - Secure token and verification code generation
   - SHA-256 hashing and hash chain verification
   - Input sanitization and data masking
+  - Rehash detection
+  - Unicode and special-character handling
 """
 
 import pytest
@@ -532,3 +534,148 @@ class TestSanitizationAndMasking:
         from app.core.security import mask_sensitive_data
 
         assert mask_sensitive_data("") == "***"
+
+    @pytest.mark.unit
+    def test_mask_sensitive_data_custom_visible_chars(self):
+        """Custom visible_chars parameter should be respected."""
+        from app.core.security import mask_sensitive_data
+
+        result = mask_sensitive_data("1234567890", visible_chars=2)
+        assert result.endswith("90")
+        assert result.count("*") == 8
+
+
+# ---------------------------------------------------------------------------
+# Additional Edge Cases
+# ---------------------------------------------------------------------------
+
+class TestPasswordEdgeCases:
+    """Edge-case coverage for password-related functions."""
+
+    @pytest.mark.unit
+    def test_hash_and_verify_unicode_password(self):
+        """Passwords with Unicode characters should hash and verify correctly."""
+        from app.core.security import hash_password, verify_password
+
+        password = "M\u00fcnchenP@ss9!xZ"  # Munchen with umlaut
+        hashed = hash_password(password, skip_validation=True)
+        matches, _ = verify_password(password, hashed)
+        assert matches is True
+
+    @pytest.mark.unit
+    def test_verify_password_empty_password(self):
+        """verify_password with an empty password should return False."""
+        from app.core.security import hash_password, verify_password
+
+        hashed = hash_password("V@lid_Passw0rd!X")
+        matches, _ = verify_password("", hashed)
+        assert matches is False
+
+    @pytest.mark.unit
+    def test_validate_password_strength_firefighter_common(self):
+        """Fire-department-specific common passwords should be rejected."""
+        from app.core.security import validate_password_strength
+
+        is_valid, err = validate_password_strength("firefighter")
+        assert is_valid is False
+
+
+class TestJWTEdgeCases:
+    """Edge-case coverage for JWT token functions."""
+
+    @pytest.mark.unit
+    def test_create_access_token_preserves_custom_claims(self):
+        """Custom claims beyond 'sub' should survive encode/decode."""
+        from app.core.security import create_access_token, decode_token
+
+        data = {"sub": "user-1", "role": "admin", "org_id": "org-99"}
+        token = create_access_token(data)
+        payload = decode_token(token)
+        assert payload["role"] == "admin"
+        assert payload["org_id"] == "org-99"
+
+    @pytest.mark.unit
+    def test_access_token_default_expiry_within_expected_range(self):
+        """Default access token expiry should match ACCESS_TOKEN_EXPIRE_MINUTES."""
+        from app.core.security import create_access_token, decode_token
+        from app.core.config import settings
+
+        token = create_access_token({"sub": "user-1"})
+        payload = decode_token(token)
+        exp_dt = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        iat_dt = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
+        diff_minutes = (exp_dt - iat_dt).total_seconds() / 60
+        # Should be close to the configured value
+        assert abs(diff_minutes - settings.ACCESS_TOKEN_EXPIRE_MINUTES) < 1
+
+    @pytest.mark.unit
+    def test_refresh_token_expiry_matches_config(self):
+        """Refresh token expiry should match REFRESH_TOKEN_EXPIRE_DAYS."""
+        from app.core.security import create_refresh_token, decode_token
+        from app.core.config import settings
+
+        token = create_refresh_token({"sub": "user-1"})
+        payload = decode_token(token)
+        exp_dt = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        iat_dt = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
+        diff_days = (exp_dt - iat_dt).total_seconds() / 86400
+        assert abs(diff_days - settings.REFRESH_TOKEN_EXPIRE_DAYS) < 0.1
+
+    @pytest.mark.unit
+    def test_decode_token_empty_string(self):
+        """decode_token with an empty string should raise."""
+        from app.core.security import decode_token
+
+        with pytest.raises(Exception):
+            decode_token("")
+
+
+class TestEncryptionEdgeCases:
+    """Edge-case coverage for encryption functions."""
+
+    @pytest.mark.unit
+    def test_encrypt_decrypt_unicode(self):
+        """Unicode data should round-trip through encryption."""
+        from app.core.security import encrypt_data, decrypt_data
+
+        text = "Patientendaten: \u00e4\u00f6\u00fc\u00df \u2603"
+        assert decrypt_data(encrypt_data(text)) == text
+
+    @pytest.mark.unit
+    def test_encrypt_decrypt_long_string(self):
+        """Large payloads should encrypt and decrypt correctly."""
+        from app.core.security import encrypt_data, decrypt_data
+
+        text = "A" * 100_000
+        assert decrypt_data(encrypt_data(text)) == text
+
+    @pytest.mark.unit
+    def test_decrypt_invalid_ciphertext_raises(self):
+        """Decrypting garbage data should raise an exception."""
+        from app.core.security import decrypt_data
+        from cryptography.fernet import InvalidToken
+
+        with pytest.raises(Exception):
+            decrypt_data("this-is-not-valid-ciphertext")
+
+
+class TestSanitizeInputEdgeCases:
+    """Additional edge cases for sanitize_input."""
+
+    @pytest.mark.unit
+    def test_sanitize_input_removes_control_characters(self):
+        """Control characters (except common whitespace) should be stripped."""
+        from app.core.security import sanitize_input
+
+        result = sanitize_input("hello\x01\x02\x03world")
+        assert "\x01" not in result
+        assert "\x02" not in result
+        assert "helloworld" == result
+
+    @pytest.mark.unit
+    def test_sanitize_input_strips_leading_trailing_whitespace(self):
+        """Leading and trailing whitespace should be stripped."""
+        from app.core.security import sanitize_input
+
+        result = sanitize_input("  hello world  ")
+        assert result == "hello world"
