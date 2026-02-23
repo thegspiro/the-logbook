@@ -1,7 +1,7 @@
 /**
  * Storage Areas Page
  *
- * Manages structured storage locations: Rack/Closet → Shelf → Box hierarchy.
+ * Manages structured storage locations: boxes can live on a shelf, in a closet, or directly in a room.
  * Each storage area belongs to a Room (Location) and can contain child areas.
  */
 

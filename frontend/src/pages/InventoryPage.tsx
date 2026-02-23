@@ -1740,7 +1740,7 @@ const InventoryPage: React.FC = () => {
                               type="text" value={itemForm.storage_location}
                               onChange={(e) => setItemForm({ ...itemForm, storage_location: e.target.value })}
                               className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                              placeholder="e.g., Shelf 5, Secure Closet 2"
+                              placeholder="e.g., Shelf 5, Closet B, Room 201"
                             />
                           )}
                         </div>
@@ -2148,7 +2148,7 @@ const InventoryPage: React.FC = () => {
                               ))}
                             </select>
                           ) : (
-                            <input id="edit-item-storage-area" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Shelf 5, Secure Closet 2" />
+                            <input id="edit-item-storage-area" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Shelf 5, Closet B, Room 201" />
                           )}
                         </div>
                       </div>
