@@ -1,7 +1,7 @@
 """Add cross-module foreign keys and event_external_attendees table
 
 Revision ID: 20260218_0400
-Revises: 20260218_0200
+Revises: 20260218_0300
 Create Date: 2026-02-18
 
 Adds missing cross-module relationships:
@@ -28,7 +28,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '20260218_0400'
-down_revision = '20260218_0200'
+down_revision = '20260218_0300'
 branch_labels = None
 depends_on = None
 
