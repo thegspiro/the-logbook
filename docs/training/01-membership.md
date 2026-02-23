@@ -10,12 +10,17 @@ The Membership module is the foundation of The Logbook. It manages your departme
 2. [Member Profiles](#member-profiles)
 3. [Adding Members](#adding-members)
 4. [Importing Members from CSV](#importing-members-from-csv)
-5. [Prospective Members Pipeline](#prospective-members-pipeline)
-6. [Member Status Management](#member-status-management)
-7. [Leave of Absence](#leave-of-absence)
-8. [Membership Tiers](#membership-tiers)
-9. [Member Lifecycle Management](#member-lifecycle-management)
-10. [Troubleshooting](#troubleshooting)
+5. [Member Admin Edit](#member-admin-edit)
+6. [Member Audit History](#member-audit-history)
+7. [Deleting Members](#deleting-members)
+8. [Prospective Members Pipeline](#prospective-members-pipeline)
+9. [Member Status Management](#member-status-management)
+10. [Leave of Absence](#leave-of-absence)
+11. [Waiver Management](#waiver-management)
+12. [Rank Validation](#rank-validation)
+13. [Membership Tiers](#membership-tiers)
+14. [Member Lifecycle Management](#member-lifecycle-management)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -53,6 +58,8 @@ Click on any member in the directory to view their profile. The profile page inc
 
 **Left Column:**
 - **Basic Information** - Name, rank, membership number, hire date, station
+- **Profile Photo** - Member photo with upload/change capability
+- **Compliance Summary** - Green/yellow/red indicator showing training compliance status, requirements met/total, hours this year, active certifications, and expiring certifications
 - **Training Records** - Recent training completions and course history
 - **Assigned Inventory** - Equipment currently assigned to the member
 
@@ -64,9 +71,33 @@ Click on any member in the directory to view their profile. The profile page inc
 - **Leave of Absence** - Any active leave periods (shown if applicable)
 
 > **Screenshot placeholder:**
-> _[Screenshot of a member profile page showing the two-column layout. Left side shows basic info card and training records table. Right side shows contact info, emergency contacts, and roles sections]_
+> _[Screenshot of a member profile page showing the two-column layout. Left side shows profile photo, compliance summary card (green/yellow/red indicator), basic info card, and training records table. Right side shows contact info, emergency contacts, and roles sections]_
 
-> **Hint:** Members can edit their own contact information and notification preferences. Officers with the `members.manage` permission can edit any member's profile.
+### Profile Photo Upload
+
+Members and officers can upload a profile photo:
+
+1. Click the **photo area** on the member's profile (or the camera icon).
+2. Select an image file (JPEG, PNG, or WebP).
+3. Preview and crop the image.
+4. Click **Upload** to save.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the photo upload modal showing the image preview with crop controls and Upload/Cancel buttons]_
+
+### Member Self-Edit
+
+Members can edit their own limited profile fields directly from their profile page:
+
+- Phone number, mobile number
+- Personal email address
+- Home address
+- Emergency contacts
+- Notification preferences
+
+Click the **Edit** button (pencil icon) on the relevant section to make changes. Officers with `members.manage` permission can edit all fields for any member.
+
+> **Hint:** Members can edit their own contact information and notification preferences. Officers with the `members.manage` permission can edit any member's profile using the full Admin Edit page.
 
 ---
 
@@ -122,6 +153,73 @@ For bulk onboarding, you can import members from a CSV file:
 - `hire_date` (format: YYYY-MM-DD)
 
 > **Troubleshooting:** If rows fail validation, the preview will highlight the issues. Common problems include duplicate emails, missing required fields, or incorrectly formatted dates.
+
+---
+
+## Member Admin Edit
+
+**Required Permission:** `members.manage`
+
+Navigate to **Members > Admin**, click on a member, then click **Edit** to open the full Admin Edit page at `/members/admin/edit/:userId`.
+
+The Admin Edit page provides complete control over all member fields:
+
+- **Personal Information** - First name, last name, email, username, phone, mobile, address
+- **Department Information** - Rank (dropdown from configured operational ranks), station (dropdown from configured stations), membership number, hire date
+- **Status Management** - Change member status (Active, Inactive, Suspended, Probationary, etc.) with reason
+- **Role Assignment** - Assign or remove positions/roles and their associated permissions
+- **Emergency Contacts** - Add, edit, or remove emergency contact entries
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Admin Member Edit page showing the form sections: personal info fields at top, department info with rank/station dropdowns, status management section, and role assignment checkboxes]_
+
+> **Hint:** Rank and station fields use dropdowns populated from the organization's configured values, ensuring consistency across all member records.
+
+---
+
+## Member Audit History
+
+**Required Permission:** `members.manage`
+
+Navigate to **Members > Admin**, click on a member, then click **History** to view the full audit trail at `/members/admin/history/:userId`.
+
+The audit history page shows a chronological list of all changes made to a member's record, including:
+
+- **What changed** - Which field was modified (e.g., rank, status, station)
+- **Old value → New value** - The before and after values
+- **Who made the change** - The user who performed the edit
+- **When** - Timestamp of the change
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Member Audit History page showing a timeline of changes with entries like "Rank changed from 'Firefighter' to 'Lieutenant' by John Smith on 2026-02-15 14:30"]_
+
+> **Note:** Audit entries are only created for changes made after the audit history feature was deployed. Earlier changes will not appear in the history.
+
+---
+
+## Deleting Members
+
+**Required Permission:** `members.manage`
+
+To permanently delete a member:
+
+1. Navigate to the member's profile or the Admin Edit page.
+2. Click the **Delete Member** button (typically at the bottom of the page).
+3. A confirmation dialog will appear with clear warnings about the irreversible nature of the action.
+4. Type the member's name or confirm to proceed.
+5. Click **Delete** to permanently remove the member.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Delete Member confirmation modal showing the warning text "This action cannot be undone. All data associated with this member will be permanently deleted." and the confirmation input field]_
+
+**What gets deleted:**
+- Member profile and all personal information
+- Training records and certifications
+- Inventory assignments (items are unassigned, not deleted)
+- Event attendance records
+- Shift assignments
+
+> **Important:** Deletion is permanent and cannot be undone. Consider changing the member's status to **Archived** instead if you may need their records in the future. Archived members can be reactivated from the Member Lifecycle page.
 
 ---
 
@@ -235,6 +333,81 @@ For rolling-period requirements (e.g., "12 hours of training over 12 months"):
 
 > **Hint:** Deactivating a leave does not delete it -- it becomes inactive and remains in the history. You can toggle "Show inactive leaves" to review past records.
 
+### LOA and Training Waiver Auto-Linking
+
+When a Leave of Absence is created, the system **automatically creates a linked training waiver** with matching dates. This means:
+
+- You do **not** need to separately create a training waiver after creating an LOA
+- If the LOA dates are updated, the linked training waiver dates sync automatically
+- If the LOA is deactivated, the linked training waiver is also deactivated
+- To opt out of auto-linking for a specific leave, set `exempt_from_training_waiver` on the leave (available via the "Meetings & Shifts Only" option in the Waiver Management page)
+
+> For detailed technical documentation on how waivers adjust training compliance, see [Training Waivers & Leaves of Absence](../../backend/app/docs/TRAINING_WAIVERS.md).
+
+---
+
+## Waiver Management
+
+**Required Permission:** `members.manage`
+
+Navigate to **Members > Admin > Waivers** to access the unified Waiver Management page. This page consolidates all waiver types into a single interface.
+
+### Tabs
+
+| Tab | Purpose |
+|-----|---------|
+| **Active Waivers** | View all currently active waivers across the department |
+| **Create Waiver** | Create a new waiver for a member |
+| **All Waivers** | View full history including expired and deactivated waivers |
+
+### Creating a Waiver
+
+1. Click the **Create Waiver** tab.
+2. Select the **member** from the dropdown.
+3. Choose the **Applies To** scope:
+   - **All (LOA + Training Waiver)** — Creates a Leave of Absence and automatically links a training waiver. This is the most common choice.
+   - **Training Only** — Creates a standalone training waiver without affecting meeting attendance or scheduling.
+   - **Meetings & Shifts Only** — Creates a Leave of Absence with training waiver opt-out. Training requirements are not adjusted.
+4. Select the **leave type** and set the **date range**.
+5. Optionally provide a **reason**.
+6. Click **Create Waiver**.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Create Waiver form showing the member dropdown, "Applies To" radio buttons (All, Training Only, Meetings & Shifts Only), leave type selector, date range pickers, and reason text area]_
+
+### Training Waivers Officer View
+
+Training officers can also view training-specific waivers from **Training Admin > Dashboard > Training Waivers** tab. This view includes:
+
+- Summary cards showing Active, Future, Expired, and Total waiver counts
+- Filterable table with status badges (Active, Future, Expired, Deactivated)
+- Source tracking showing whether each waiver was auto-created from an LOA or manually created
+- Links back to the full Waiver Management page
+
+---
+
+## Rank Validation
+
+**Required Permission:** `members.manage`
+
+The rank validation feature helps identify members whose rank does not match any of the organization's configured operational ranks.
+
+### How It Works
+
+The system compares each active member's rank against the organization's configured list of operational ranks. Members whose rank does not match (case-sensitive) are flagged for review.
+
+### Viewing Rank Mismatches
+
+Rank validation results are visible in the **Members Admin Hub**. Members with unrecognized ranks are surfaced with their current rank and the list of valid ranks to choose from.
+
+### Resolving Mismatches
+
+1. Navigate to the flagged member's profile or Admin Edit page.
+2. Use the **rank dropdown** to select the correct operational rank.
+3. Save the changes.
+
+> **Hint:** If a member's rank is legitimate but not in the system, add it to the organization's operational ranks in **Settings** before correcting individual member records.
+
 ---
 
 ## Membership Tiers
@@ -292,6 +465,12 @@ The **Member Lifecycle Management** page (found under Members Admin) consolidate
 | Member still showing as active after being dropped | The status change may not have been saved. Verify from the member's profile. |
 | Property return report not generating | The member must have inventory items assigned. If none are assigned, no report is generated. |
 | Membership tier not advancing | Verify the member has a **hire_date** set and that auto-advance is enabled. The member must have an Active status. |
+| LOA created but training not adjusted | Check that the LOA does not have `exempt_from_training_waiver` set. The auto-linked training waiver should appear in the Training Waivers tab. If missing, create a standalone waiver from the Waiver Management page. |
+| Rank shows as unrecognized in validation | The member's rank must exactly match a configured operational rank (case-sensitive). Edit the member's rank or add the rank to the organization's configuration. |
+| Audit history is empty | Audit entries are only tracked for changes made after the feature was deployed. Earlier changes will not appear. |
+| Cannot find Admin Edit page | Navigate to Members > Admin, click a member, then click **Edit**. The page is at `/members/admin/edit/:userId`. |
+| Photo upload fails | Check the file type (JPEG, PNG, WebP only) and file size. Ensure the backend has sufficient disk space for uploads. |
+| Compliance card shows wrong status | Refresh the page. Red = expired certs or <50% requirements met; Yellow = expiring certs or incomplete requirements; Green = fully compliant. |
 
 ---
 
