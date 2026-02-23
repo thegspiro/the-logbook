@@ -70,7 +70,8 @@ class TestTrainingEnums:
         assert RequirementType.CALLS.value == "calls"
         assert RequirementType.SKILLS_EVALUATION.value == "skills_evaluation"
         assert RequirementType.CHECKLIST.value == "checklist"
-        assert len(RequirementType) == 7
+        assert RequirementType.KNOWLEDGE_TEST.value == "knowledge_test"
+        assert len(RequirementType) == 8
 
     def test_requirement_source_values(self):
         """Verify RequirementSource values"""
@@ -108,8 +109,10 @@ class TestTrainingEnums:
         assert EnrollmentStatus.ACTIVE.value == "active"
         assert EnrollmentStatus.COMPLETED.value == "completed"
         assert EnrollmentStatus.EXPIRED.value == "expired"
+        assert EnrollmentStatus.ON_HOLD.value == "on_hold"
         assert EnrollmentStatus.WITHDRAWN.value == "withdrawn"
-        assert len(EnrollmentStatus) == 4
+        assert EnrollmentStatus.FAILED.value == "failed"
+        assert len(EnrollmentStatus) == 6
 
     def test_requirement_progress_status_values(self):
         """Verify RequirementProgressStatus values"""
@@ -117,7 +120,8 @@ class TestTrainingEnums:
         assert RequirementProgressStatus.IN_PROGRESS.value == "in_progress"
         assert RequirementProgressStatus.COMPLETED.value == "completed"
         assert RequirementProgressStatus.VERIFIED.value == "verified"
-        assert len(RequirementProgressStatus) == 4
+        assert RequirementProgressStatus.WAIVED.value == "waived"
+        assert len(RequirementProgressStatus) == 5
 
     def test_approval_status_values(self):
         """Verify ApprovalStatus values"""
@@ -683,7 +687,7 @@ class TestTrainingSchemas:
             instructor="John Smith",
             max_participants=30,
             materials_required=["Turnout gear", "SCBA"],
-            category_ids=[uuid4()],
+            category_ids=[str(uuid4())],
         )
         assert schema.name == "Firefighter I"
         assert schema.training_type == "certification"
@@ -805,6 +809,7 @@ class TestTrainingSchemas:
         schema = TrainingRequirementCreate(
             name="Annual Fire Training",
             description="Required annual hours",
+            requirement_type="hours",
             training_type="continuing_education",
             required_hours=36.0,
             frequency="annual",
@@ -813,7 +818,7 @@ class TestTrainingSchemas:
             due_date_type="calendar_period",
             period_start_month=1,
             period_start_day=1,
-            category_ids=[uuid4()],
+            category_ids=[str(uuid4())],
         )
         assert schema.name == "Annual Fire Training"
         assert schema.required_hours == 36.0
@@ -824,6 +829,7 @@ class TestTrainingSchemas:
         """TrainingRequirementCreate with only required fields"""
         schema = TrainingRequirementCreate(
             name="Basic Requirement",
+            requirement_type="hours",
             frequency="annual",
         )
         assert schema.name == "Basic Requirement"
