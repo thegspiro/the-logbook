@@ -642,7 +642,9 @@ class InventoryService:
             select(ItemAssignment)
             .where(ItemAssignment.user_id == str(user_id))
             .where(ItemAssignment.organization_id == str(organization_id))
-            .options(selectinload(ItemAssignment.item))
+            .options(
+                selectinload(ItemAssignment.item).selectinload(InventoryItem.category),
+            )
         )
 
         if active_only:
@@ -834,7 +836,9 @@ class InventoryService:
             select(ItemIssuance)
             .where(ItemIssuance.user_id == str(user_id))
             .where(ItemIssuance.organization_id == str(organization_id))
-            .options(selectinload(ItemIssuance.item))
+            .options(
+                selectinload(ItemIssuance.item).selectinload(InventoryItem.category),
+            )
         )
         if active_only:
             query = query.where(ItemIssuance.is_returned == False)  # noqa: E712
@@ -1198,29 +1202,46 @@ class InventoryService:
     async def get_low_stock_items(
         self, organization_id: UUID
     ) -> List[Dict[str, Any]]:
-        """Get categories with low stock"""
+        """Get categories with low stock, using the sum of item quantities
+        rather than a simple row count, and include the names of low-stock items."""
+        org_id = str(organization_id)
+
+        # Sum the quantity field per category (handles pool items correctly)
         result = await self.db.execute(
             select(
                 InventoryCategory,
-                func.count(InventoryItem.id).label("current_stock"),
+                func.coalesce(func.sum(InventoryItem.quantity), 0).label("current_stock"),
             )
             .join(InventoryItem, InventoryCategory.id == InventoryItem.category_id)
-            .where(InventoryCategory.organization_id == str(organization_id))
+            .where(InventoryCategory.organization_id == org_id)
             .where(InventoryCategory.active == True)  # noqa: E712
             .where(InventoryItem.active == True)  # noqa: E712
             .where(InventoryCategory.low_stock_threshold.isnot(None))
             .group_by(InventoryCategory.id)
-            .having(func.count(InventoryItem.id) <= InventoryCategory.low_stock_threshold)
+            .having(func.coalesce(func.sum(InventoryItem.quantity), 0) <= InventoryCategory.low_stock_threshold)
         )
 
         low_stock_items = []
         for category, current_stock in result.all():
+            # Fetch item names in this low-stock category
+            items_result = await self.db.execute(
+                select(InventoryItem.name, InventoryItem.quantity)
+                .where(InventoryItem.category_id == category.id)
+                .where(InventoryItem.active == True)  # noqa: E712
+                .order_by(InventoryItem.quantity.asc())
+                .limit(5)
+            )
+            item_details = [
+                {"name": row.name, "quantity": row.quantity}
+                for row in items_result.all()
+            ]
             low_stock_items.append({
                 "category_id": category.id,
                 "category_name": category.name,
                 "item_type": category.item_type,
-                "current_stock": current_stock,
+                "current_stock": int(current_stock),
                 "threshold": category.low_stock_threshold,
+                "items": item_details,
             })
 
         return low_stock_items
@@ -1288,14 +1309,22 @@ class InventoryService:
         # Maintenance due
         maintenance_due = await self.get_maintenance_due(organization_id, days_ahead=7)
 
+        # Use the larger of checkout records vs items with checked_out status
+        # to ensure the dashboard reflects reality regardless of sync state
+        items_checked_out = items_by_status.get("checked_out", 0)
+        effective_checkouts = max(active_checkouts or 0, items_checked_out)
+
+        # Items currently in maintenance status
+        items_in_maintenance = items_by_status.get("in_maintenance", 0)
+
         return {
             "total_items": total_items,
             "items_by_status": items_by_status,
             "items_by_condition": items_by_condition,
             "total_value": float(total_value),
-            "active_checkouts": active_checkouts,
-            "overdue_checkouts": overdue_checkouts,
-            "maintenance_due_count": len(maintenance_due),
+            "active_checkouts": effective_checkouts,
+            "overdue_checkouts": overdue_checkouts or 0,
+            "maintenance_due_count": len(maintenance_due) + items_in_maintenance,
         }
 
     async def get_user_inventory(
@@ -1321,6 +1350,8 @@ class InventoryService:
                     "asset_tag": a.item.asset_tag,
                     "condition": a.item.condition.value,
                     "assigned_date": a.assigned_date,
+                    "category_name": a.item.category.name if a.item.category else None,
+                    "quantity": a.item.quantity,
                 }
                 for a in assignments
             ],
@@ -1343,6 +1374,7 @@ class InventoryService:
                     "quantity_issued": i.quantity_issued,
                     "issued_at": i.issued_at,
                     "size": i.item.size,
+                    "category_name": i.item.category.name if i.item.category else None,
                 }
                 for i in issuances
             ],

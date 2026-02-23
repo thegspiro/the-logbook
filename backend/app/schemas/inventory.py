@@ -87,6 +87,7 @@ class InventoryItemBase(BaseModel):
     weight: Optional[float] = Field(None, ge=0)
     location_id: Optional[UUID] = None
     storage_location: Optional[str] = Field(None, max_length=255)
+    storage_area_id: Optional[UUID] = None
     station: Optional[str] = Field(None, max_length=100)
     condition: str = "good"
     status: str = "available"
@@ -127,6 +128,7 @@ class InventoryItemUpdate(BaseModel):
     weight: Optional[float] = Field(None, ge=0)
     location_id: Optional[UUID] = None
     storage_location: Optional[str] = Field(None, max_length=255)
+    storage_area_id: Optional[UUID] = None
     station: Optional[str] = Field(None, max_length=100)
     condition: Optional[str] = None
     status: Optional[str] = None
@@ -363,6 +365,12 @@ class MaintenanceRecordResponse(MaintenanceRecordBase):
 # Summary & Reporting Schemas
 # ============================================
 
+class LowStockItemDetail(BaseModel):
+    """Schema for an individual item in a low stock category"""
+    name: str
+    quantity: int
+
+
 class LowStockItem(BaseModel):
     """Schema for low stock alert"""
     category_id: UUID
@@ -370,6 +378,7 @@ class LowStockItem(BaseModel):
     item_type: str
     current_stock: int
     threshold: int
+    items: List[LowStockItemDetail] = []
 
 
 class InventorySummary(BaseModel):
@@ -392,6 +401,8 @@ class UserInventoryItem(BaseModel):
     asset_tag: Optional[str] = None
     condition: str
     assigned_date: datetime
+    category_name: Optional[str] = None
+    quantity: int = 1
 
 
 class UserCheckoutItem(BaseModel):
@@ -412,6 +423,7 @@ class UserIssuedItem(BaseModel):
     quantity_issued: int
     issued_at: datetime
     size: Optional[str] = None
+    category_name: Optional[str] = None
 
 
 class UserInventoryResponse(BaseModel):
@@ -697,5 +709,59 @@ class EquipmentRequestResponse(BaseModel):
     review_notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# Storage Area Schemas
+# ============================================
+
+class StorageAreaCreate(BaseModel):
+    """Schema for creating a storage area"""
+    name: str = Field(..., min_length=1, max_length=255)
+    label: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = None
+    storage_type: str  # "rack", "shelf", "box", "cabinet", "drawer", "bin", "other"
+    parent_id: Optional[UUID] = None
+    location_id: Optional[UUID] = None
+    barcode: Optional[str] = Field(None, max_length=255)
+    sort_order: int = 0
+
+
+class StorageAreaUpdate(BaseModel):
+    """Schema for updating a storage area"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    label: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = None
+    storage_type: Optional[str] = None
+    parent_id: Optional[UUID] = None
+    location_id: Optional[UUID] = None
+    barcode: Optional[str] = Field(None, max_length=255)
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class StorageAreaResponse(BaseModel):
+    """Schema for storage area response"""
+    id: UUID
+    organization_id: UUID
+    name: str
+    label: Optional[str] = None
+    description: Optional[str] = None
+    storage_type: str
+    parent_id: Optional[UUID] = None
+    location_id: Optional[UUID] = None
+    barcode: Optional[str] = None
+    sort_order: int = 0
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[UUID] = None
+    # Populated by the API for tree views
+    children: List["StorageAreaResponse"] = []
+    item_count: int = 0
+    location_name: Optional[str] = None
+    parent_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

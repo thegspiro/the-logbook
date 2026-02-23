@@ -185,6 +185,8 @@ from app.models.inventory import (
     ItemCondition,
     ItemStatus,
     AssignmentType,
+    StorageArea,
+    StorageLocationType,
 )
 
 from app.models.membership_pipeline import (
@@ -386,6 +388,8 @@ __all__ = [
     "ItemCondition",
     "ItemStatus",
     "AssignmentType",
+    "StorageArea",
+    "StorageLocationType",
     # Membership pipeline models
     "MembershipPipeline",
     "MembershipPipelineStep",
