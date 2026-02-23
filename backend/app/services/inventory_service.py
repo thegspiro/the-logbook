@@ -21,6 +21,8 @@ from app.models.inventory import (
     ItemIssuance,
     CheckOutRecord,
     MaintenanceRecord,
+    WriteOffRequest,
+    WriteOffStatus,
     ItemType,
     ItemCondition,
     ItemStatus,
@@ -213,6 +215,27 @@ class InventoryService:
     # Item Management
     # ============================================
 
+    async def _check_serial_number_unique(
+        self, serial_number: str, organization_id: UUID, exclude_item_id: Optional[UUID] = None
+    ) -> Optional[str]:
+        """Check that serial_number is unique within the organization."""
+        if not serial_number:
+            return None
+        query = (
+            select(func.count(InventoryItem.id))
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.serial_number == serial_number,
+                InventoryItem.active == True,  # noqa: E712
+            )
+        )
+        if exclude_item_id:
+            query = query.where(InventoryItem.id != str(exclude_item_id))
+        result = await self.db.execute(query)
+        if result.scalar():
+            return f"Serial number '{serial_number}' is already in use by another item in this organization"
+        return None
+
     async def create_item(
         self, organization_id: UUID, item_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
@@ -227,6 +250,13 @@ class InventoryService:
             tracking = item_data.get("tracking_type", "individual")
             if tracking == "pool" and item_data.get("quantity", 1) < 1:
                 return None, "Pool items must have a quantity of at least 1"
+
+            # Validate serial number uniqueness within the organization
+            sn_err = await self._check_serial_number_unique(
+                item_data.get("serial_number", ""), organization_id
+            )
+            if sn_err:
+                return None, sn_err
 
             # Validate status/condition state
             status_val = ItemStatus(item_data.get("status", "available"))
@@ -369,6 +399,20 @@ class InventoryService:
                 if cat_err:
                     return None, cat_err
 
+            # Validate serial number uniqueness if changing
+            if "serial_number" in update_data and update_data["serial_number"] != item.serial_number:
+                sn_err = await self._check_serial_number_unique(
+                    update_data["serial_number"], organization_id, exclude_item_id=item_id
+                )
+                if sn_err:
+                    return None, sn_err
+
+            # Validate pool quantity constraints
+            if item.tracking_type == TrackingType.POOL and "quantity" in update_data:
+                new_qty = update_data["quantity"]
+                if new_qty < 0:
+                    return None, "Pool item quantity cannot be negative"
+
             # Validate resulting state
             new_status = ItemStatus(update_data["status"]) if "status" in update_data else item.status
             new_condition = ItemCondition(update_data["condition"]) if "condition" in update_data else item.condition
@@ -424,6 +468,20 @@ class InventoryService:
             item.active = False
             if notes:
                 item.status_notes = notes
+
+            # Log audit event for retirement within the service transaction
+            from app.core.audit import log_audit_event
+            await log_audit_event(
+                db=self.db,
+                event_type="inventory_item_retired",
+                event_category="inventory",
+                severity="warning",
+                event_data={
+                    "item_id": str(item_id),
+                    "item_name": item.name,
+                    "notes": notes,
+                },
+            )
 
             await self.db.commit()
             return True, None
@@ -559,9 +617,14 @@ class InventoryService:
 
             await self.db.commit()
 
-            # Check if the dropped member should be auto-archived
-            from app.services.member_archive_service import check_and_auto_archive
-            await check_and_auto_archive(self.db, previous_user_id, str(organization_id))
+            # Check if the dropped member should be auto-archived.
+            # Wrapped in try/except so a failure here doesn't mask
+            # the already-committed unassign operation.
+            try:
+                from app.services.member_archive_service import check_and_auto_archive
+                await check_and_auto_archive(self.db, previous_user_id, str(organization_id))
+            except Exception as e:
+                logger.warning(f"Auto-archive check failed after unassign: {e}")
 
             return True, None
         except Exception as e:
@@ -701,6 +764,14 @@ class InventoryService:
             # Handle partial return: reduce issuance quantity_issued and leave open
             if qty < issuance.quantity_issued:
                 issuance.quantity_issued -= qty
+                # Record partial return details so they aren't lost
+                partial_note = f"Partial return: {qty} unit(s) returned"
+                if return_condition:
+                    partial_note += f" in {return_condition.value} condition"
+                if return_notes:
+                    partial_note += f" — {return_notes}"
+                existing = issuance.return_notes or ""
+                issuance.return_notes = (existing + "\n" + partial_note).strip()
                 # issuance stays open (is_returned=False) for the remaining units
             else:
                 # Full return
@@ -718,9 +789,14 @@ class InventoryService:
 
             await self.db.commit()
 
-            # Check if the dropped member should be auto-archived
-            from app.services.member_archive_service import check_and_auto_archive
-            await check_and_auto_archive(self.db, issuance_user_id, str(organization_id))
+            # Check if the dropped member should be auto-archived.
+            # Wrapped in try/except so a failure here doesn't mask
+            # the already-committed pool return operation.
+            try:
+                from app.services.member_archive_service import check_and_auto_archive
+                await check_and_auto_archive(self.db, issuance_user_id, str(organization_id))
+            except Exception as e:
+                logger.warning(f"Auto-archive check failed after pool return: {e}")
 
             return True, None
         except Exception as e:
@@ -752,8 +828,10 @@ class InventoryService:
         user_id: UUID,
         organization_id: UUID,
         active_only: bool = True,
+        skip: int = 0,
+        limit: int = 200,
     ) -> List["ItemIssuance"]:
-        """Get all active issuances for a user."""
+        """Get all active issuances for a user with pagination."""
         query = (
             select(ItemIssuance)
             .where(ItemIssuance.user_id == str(user_id))
@@ -762,7 +840,7 @@ class InventoryService:
         )
         if active_only:
             query = query.where(ItemIssuance.is_returned == False)  # noqa: E712
-        query = query.order_by(ItemIssuance.issued_at.desc())
+        query = query.order_by(ItemIssuance.issued_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -877,9 +955,14 @@ class InventoryService:
 
             await self.db.commit()
 
-            # Check if the dropped member should be auto-archived
-            from app.services.member_archive_service import check_and_auto_archive
-            await check_and_auto_archive(self.db, checkout_user_id, str(organization_id))
+            # Check if the dropped member should be auto-archived.
+            # Wrapped in try/except so a failure here doesn't mask
+            # the already-committed checkin operation.
+            try:
+                from app.services.member_archive_service import check_and_auto_archive
+                await check_and_auto_archive(self.db, checkout_user_id, str(organization_id))
+            except Exception as e:
+                logger.warning(f"Auto-archive check failed after checkin: {e}")
 
             return True, None
         except Exception as e:
@@ -913,9 +996,12 @@ class InventoryService:
         return result.scalars().all()
 
     async def get_overdue_checkouts(
-        self, organization_id: UUID
+        self,
+        organization_id: UUID,
+        skip: int = 0,
+        limit: int = 200,
     ) -> List[CheckOutRecord]:
-        """Get all overdue checkouts.
+        """Get all overdue checkouts with pagination.
 
         Computes overdue status at read time using the expected_return_at
         date instead of performing a bulk UPDATE on every call.
@@ -934,6 +1020,8 @@ class InventoryService:
                 selectinload(CheckOutRecord.user),
             )
             .order_by(CheckOutRecord.expected_return_at)
+            .offset(skip)
+            .limit(limit)
         )
         return result.scalars().all()
 
@@ -989,9 +1077,11 @@ class InventoryService:
             )
             self.db.add(maintenance)
 
-            # If maintenance is completed, update item condition and schedule
+            # If maintenance is completed, update item condition and schedule.
+            # Lock the item row to prevent concurrent maintenance from
+            # creating a lost-update race on condition/inspection dates.
             if maintenance_data.get("is_completed"):
-                item = await self.get_item_by_id(item_id, organization_id)
+                item = await self._get_item_locked(item_id, organization_id)
                 if item:
                     if maintenance_data.get("condition_after"):
                         item.condition = maintenance_data["condition_after"]
@@ -1009,6 +1099,61 @@ class InventoryService:
             await self.db.commit()
             await self.db.refresh(maintenance)
             return maintenance, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def update_maintenance_record(
+        self,
+        record_id: UUID,
+        item_id: UUID,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
+    ) -> Tuple[Optional[MaintenanceRecord], Optional[str]]:
+        """Update an existing maintenance record"""
+        try:
+            result = await self.db.execute(
+                select(MaintenanceRecord)
+                .where(MaintenanceRecord.id == str(record_id))
+                .where(MaintenanceRecord.item_id == str(item_id))
+                .where(MaintenanceRecord.organization_id == str(organization_id))
+            )
+            record = result.scalar_one_or_none()
+
+            if not record:
+                return None, "Maintenance record not found"
+
+            # Only allow updating known safe fields
+            safe_data = {
+                k: v for k, v in update_data.items()
+                if k in self._MAINTENANCE_ALLOWED_FIELDS
+            }
+
+            was_completed_before = record.is_completed
+
+            for key, value in safe_data.items():
+                setattr(record, key, value)
+
+            # If is_completed just changed to True, update item inspection dates.
+            # Lock the item row to prevent concurrent updates from racing.
+            if safe_data.get("is_completed") and not was_completed_before:
+                item = await self._get_item_locked(item_id, organization_id)
+                if item:
+                    if safe_data.get("condition_after"):
+                        item.condition = safe_data["condition_after"]
+                    completed = safe_data.get("completed_date") or record.completed_date
+                    if completed:
+                        item.last_inspection_date = completed
+                        if item.inspection_interval_days:
+                            if isinstance(completed, str):
+                                completed = date.fromisoformat(completed)
+                            item.next_inspection_due = completed + timedelta(days=item.inspection_interval_days)
+                        elif safe_data.get("next_due_date") or record.next_due_date:
+                            item.next_inspection_due = safe_data.get("next_due_date") or record.next_due_date
+
+            await self.db.commit()
+            await self.db.refresh(record)
+            return record, None
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
@@ -1319,6 +1464,38 @@ class InventoryService:
     # Barcode / Serial / Asset Tag Lookup
     # ============================================
 
+    async def _lookup_by_item_id(
+        self, item_id: str, organization_id: UUID
+    ) -> Optional[Tuple[InventoryItem, str, str]]:
+        """
+        Look up an item directly by its ID.
+        Returns (item, matched_field, matched_value) or None.
+        Used by batch operations when the frontend already knows the item ID.
+        """
+        org_id = str(organization_id)
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(
+                InventoryItem.id == str(item_id),
+                InventoryItem.organization_id == org_id,
+                InventoryItem.active == True,  # noqa: E712
+            )
+            .options(selectinload(InventoryItem.category))
+            .limit(1)
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            return None
+
+        # Return the best identifier for the matched_field
+        if item.barcode:
+            return item, "barcode", item.barcode
+        if item.serial_number:
+            return item, "serial_number", item.serial_number
+        if item.asset_tag:
+            return item, "asset_tag", item.asset_tag
+        return item, "name", item.name
+
     async def lookup_by_code(
         self, code: str, organization_id: UUID
     ) -> Optional[Tuple[InventoryItem, str, str]]:
@@ -1440,8 +1617,15 @@ class InventoryService:
         for scan in items:
             code = scan["code"]
             quantity = scan.get("quantity", 1)
+            scan_item_id = scan.get("item_id")
 
-            lookup = await self.lookup_by_code(code, organization_id)
+            # Prefer direct item_id lookup when available (avoids
+            # mismatch when item was found by name search)
+            lookup = None
+            if scan_item_id:
+                lookup = await self._lookup_by_item_id(scan_item_id, organization_id)
+            if not lookup:
+                lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
                 results.append({
                     "code": code,
@@ -1561,8 +1745,14 @@ class InventoryService:
             condition_str = scan.get("return_condition", "good")
             damage_notes = scan.get("damage_notes")
             quantity = scan.get("quantity", 1)
+            scan_item_id = scan.get("item_id")
 
-            lookup = await self.lookup_by_code(code, organization_id)
+            # Prefer direct item_id lookup when available
+            lookup = None
+            if scan_item_id:
+                lookup = await self._lookup_by_item_id(scan_item_id, organization_id)
+            if not lookup:
+                lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
                 results.append({
                     "code": code, "item_name": "Unknown", "item_id": "",
@@ -2020,3 +2210,192 @@ class InventoryService:
         c.save()
         buf.seek(0)
         return buf
+
+    # ------------------------------------------------------------------
+    # Write-off requests
+    # ------------------------------------------------------------------
+
+    async def create_write_off_request(
+        self,
+        item_id: str,
+        organization_id: str,
+        requested_by: str,
+        reason: str,
+        description: str,
+        clearance_id: Optional[str] = None,
+        clearance_item_id: Optional[str] = None,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Create a write-off request for an inventory item."""
+        try:
+            result = await self.db.execute(
+                select(InventoryItem).where(
+                    InventoryItem.id == item_id,
+                    InventoryItem.organization_id == organization_id,
+                )
+            )
+            item = result.scalar_one_or_none()
+            if not item:
+                return None, "Item not found"
+
+            if item.status == ItemStatus.RETIRED:
+                return None, "Item is already retired"
+
+            valid_reasons = {"lost", "damaged_beyond_repair", "obsolete", "stolen", "other"}
+            if reason not in valid_reasons:
+                return None, f"Invalid reason. Must be one of: {', '.join(sorted(valid_reasons))}"
+
+            write_off = WriteOffRequest(
+                organization_id=organization_id,
+                item_id=item_id,
+                item_name=item.name,
+                item_serial_number=item.serial_number,
+                item_asset_tag=item.asset_tag,
+                item_value=item.purchase_price,
+                reason=reason,
+                description=description,
+                status=WriteOffStatus.PENDING,
+                requested_by=requested_by,
+                clearance_id=clearance_id,
+                clearance_item_id=clearance_item_id,
+            )
+            self.db.add(write_off)
+            await self.db.commit()
+            await self.db.refresh(write_off)
+
+            return {
+                "id": write_off.id,
+                "item_id": write_off.item_id,
+                "item_name": write_off.item_name,
+                "item_value": float(write_off.item_value) if write_off.item_value else None,
+                "reason": write_off.reason,
+                "description": write_off.description,
+                "status": write_off.status.value,
+                "created_at": write_off.created_at.isoformat() if write_off.created_at else None,
+            }, None
+
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to create write-off request: {e}")
+            return None, str(e)
+
+    async def get_write_off_requests(
+        self,
+        organization_id: str,
+        status_filter: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List write-off requests for the organization."""
+        query = (
+            select(WriteOffRequest)
+            .where(WriteOffRequest.organization_id == organization_id)
+            .order_by(WriteOffRequest.created_at.desc())
+        )
+        if status_filter:
+            query = query.where(WriteOffRequest.status == WriteOffStatus(status_filter))
+
+        result = await self.db.execute(query)
+        rows = result.scalars().all()
+
+        requests = []
+        for wo in rows:
+            # Load requester name
+            requester_name = None
+            if wo.requested_by:
+                u = await self.db.execute(select(User).where(User.id == wo.requested_by))
+                user = u.scalar_one_or_none()
+                if user:
+                    requester_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+
+            reviewer_name = None
+            if wo.reviewed_by:
+                u = await self.db.execute(select(User).where(User.id == wo.reviewed_by))
+                user = u.scalar_one_or_none()
+                if user:
+                    reviewer_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+
+            requests.append({
+                "id": wo.id,
+                "item_id": wo.item_id,
+                "item_name": wo.item_name,
+                "item_serial_number": wo.item_serial_number,
+                "item_asset_tag": wo.item_asset_tag,
+                "item_value": float(wo.item_value) if wo.item_value else None,
+                "reason": wo.reason,
+                "description": wo.description,
+                "status": wo.status.value,
+                "requested_by": wo.requested_by,
+                "requester_name": requester_name,
+                "reviewed_by": wo.reviewed_by,
+                "reviewer_name": reviewer_name,
+                "reviewed_at": wo.reviewed_at.isoformat() if wo.reviewed_at else None,
+                "review_notes": wo.review_notes,
+                "clearance_id": wo.clearance_id,
+                "created_at": wo.created_at.isoformat() if wo.created_at else None,
+            })
+        return requests
+
+    async def review_write_off(
+        self,
+        write_off_id: str,
+        organization_id: str,
+        reviewed_by: str,
+        decision: str,
+        review_notes: Optional[str] = None,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Approve or deny a write-off request. On approval, retire the item."""
+        try:
+            if decision not in ("approved", "denied"):
+                return None, "Decision must be 'approved' or 'denied'"
+
+            result = await self.db.execute(
+                select(WriteOffRequest).where(
+                    WriteOffRequest.id == write_off_id,
+                    WriteOffRequest.organization_id == organization_id,
+                )
+            )
+            wo = result.scalar_one_or_none()
+            if not wo:
+                return None, "Write-off request not found"
+
+            if wo.status != WriteOffStatus.PENDING:
+                return None, f"Request already {wo.status.value}"
+
+            now = datetime.now(timezone.utc)
+            wo.status = WriteOffStatus(decision)
+            wo.reviewed_by = reviewed_by
+            wo.reviewed_at = now
+            wo.review_notes = review_notes
+
+            # On approval, mark the item as lost/retired
+            if decision == "approved" and wo.item_id:
+                item_result = await self.db.execute(
+                    select(InventoryItem).where(
+                        InventoryItem.id == wo.item_id,
+                        InventoryItem.organization_id == organization_id,
+                    )
+                )
+                item = item_result.scalar_one_or_none()
+                if item and item.status != ItemStatus.RETIRED:
+                    if wo.reason in ("lost", "stolen"):
+                        item.status = ItemStatus.LOST if wo.reason == "lost" else ItemStatus.STOLEN
+                    else:
+                        item.status = ItemStatus.RETIRED
+                        item.condition = ItemCondition.RETIRED
+                    item.notes = (item.notes or "") + f"\n[Write-off approved: {wo.reason}] {wo.description}"
+
+            await self.db.commit()
+            await self.db.refresh(wo)
+
+            return {
+                "id": wo.id,
+                "item_id": wo.item_id,
+                "item_name": wo.item_name,
+                "status": wo.status.value,
+                "reviewed_by": wo.reviewed_by,
+                "reviewed_at": wo.reviewed_at.isoformat() if wo.reviewed_at else None,
+                "review_notes": wo.review_notes,
+            }, None
+
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to review write-off: {e}")
+            return None, str(e)

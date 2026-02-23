@@ -238,3 +238,26 @@ export const REQUEST_STATUS_COLORS: Record<string, string> = {
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
 };
+
+// ============================================
+// Inventory — Item Condition
+// ============================================
+
+/** All condition options for admin/edit forms (includes out_of_service). */
+export const ITEM_CONDITION_OPTIONS = [
+  { value: 'excellent', label: 'Excellent' },
+  { value: 'good', label: 'Good' },
+  { value: 'fair', label: 'Fair' },
+  { value: 'poor', label: 'Poor' },
+  { value: 'damaged', label: 'Damaged' },
+  { value: 'out_of_service', label: 'Out of Service' },
+] as const;
+
+/** Condition options for return workflows (no out_of_service). */
+export const RETURN_CONDITION_OPTIONS = [
+  { value: 'excellent', label: 'Excellent' },
+  { value: 'good', label: 'Good' },
+  { value: 'fair', label: 'Fair' },
+  { value: 'poor', label: 'Poor' },
+  { value: 'damaged', label: 'Damaged' },
+] as const;

@@ -16,6 +16,7 @@ import {
   Loader2,
   RotateCcw,
 } from 'lucide-react';
+import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
 import {
   inventoryService,
   type UserInventoryResponse,
@@ -61,15 +62,9 @@ interface ReturnItemsModalProps {
   onComplete?: () => void;
 }
 
-// ── Condition options ──────────────────────────────────────────────
+// ── Condition options (shared from constants/enums) ──────────────────
 
-const CONDITION_OPTIONS = [
-  { value: 'excellent', label: 'Excellent' },
-  { value: 'good', label: 'Good' },
-  { value: 'fair', label: 'Fair' },
-  { value: 'poor', label: 'Poor' },
-  { value: 'damaged', label: 'Damaged' },
-];
+const CONDITION_OPTIONS = RETURN_CONDITION_OPTIONS;
 
 // ── Component ──────────────────────────────────────────────────────
 
@@ -294,9 +289,27 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
         {/* Results view */}
         {showResults ? (
           <div className="space-y-3">
-            <h4 className="font-medium text-theme-text-primary">Results</h4>
+            {/* Summary counts */}
+            {(() => {
+              const successCount = results.filter((r) => r.success).length;
+              const failCount = results.length - successCount;
+              return (
+                <div className="flex items-center gap-3">
+                  <h4 className="font-medium text-theme-text-primary">Results</h4>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30">
+                    {successCount} returned
+                  </span>
+                  {failCount > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30">
+                      {failCount} failed
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+            {/* Failed items first, then successes */}
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {results.map((r, i) => (
+              {[...results].sort((a, b) => Number(a.success) - Number(b.success)).map((r, i) => (
                 <div
                   key={i}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
@@ -307,18 +320,18 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                 >
                   <div className="flex items-center gap-2">
                     {r.success ? (
-                      <Check className="h-4 w-4 text-green-600" />
+                      <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
                     ) : (
-                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                      <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                     )}
                     <div>
                       <p className="text-sm font-medium text-theme-text-primary">{r.itemName}</p>
                       {!r.success && (
-                        <p className="text-xs text-red-600 dark:text-red-400">{r.error}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 font-medium">{r.error}</p>
                       )}
                     </div>
                   </div>
-                  <span className="text-xs text-theme-text-muted">
+                  <span className={`text-xs ${r.success ? 'text-theme-text-muted' : 'text-red-600 dark:text-red-400 font-medium'}`}>
                     {r.success ? 'Returned' : 'Failed'}
                   </span>
                 </div>

@@ -580,6 +580,7 @@ class ScanLookupListResponse(BaseModel):
 class BatchScanItem(BaseModel):
     """A single scanned item in a batch operation"""
     code: str = Field(..., description="Barcode, serial number, or asset tag that was scanned")
+    item_id: Optional[UUID] = Field(default=None, description="Item ID for direct lookup (bypasses code search)")
     quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
 
 
@@ -612,6 +613,7 @@ class BatchCheckoutResponse(BaseModel):
 class BatchReturnItem(BaseModel):
     """A single scanned item being returned"""
     code: str = Field(..., description="Barcode, serial number, or asset tag")
+    item_id: Optional[UUID] = Field(default=None, description="Item ID for direct lookup (bypasses code search)")
     return_condition: str = Field(default="good", description="Condition at return")
     damage_notes: Optional[str] = None
     quantity: int = Field(default=1, ge=1, description="Quantity returned (for pool items)")
@@ -695,5 +697,45 @@ class EquipmentRequestResponse(BaseModel):
     review_notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# Write-Off Schemas
+# ============================================
+
+class WriteOffRequestCreate(BaseModel):
+    """Create a write-off request"""
+    item_id: UUID
+    reason: str  # lost, damaged_beyond_repair, obsolete, stolen, other
+    description: str
+
+
+class WriteOffReview(BaseModel):
+    """Approve or deny a write-off request"""
+    status: str  # approved, denied
+    review_notes: Optional[str] = None
+
+
+class WriteOffRequestResponse(BaseModel):
+    """Write-off request response"""
+    id: str
+    item_id: Optional[str] = None
+    item_name: str
+    item_serial_number: Optional[str] = None
+    item_asset_tag: Optional[str] = None
+    item_value: Optional[float] = None
+    reason: str
+    description: str
+    status: str
+    requested_by: Optional[str] = None
+    requester_name: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewer_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_notes: Optional[str] = None
+    clearance_id: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
