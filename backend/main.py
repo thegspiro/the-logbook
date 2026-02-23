@@ -626,15 +626,69 @@ def run_migrations():
         total_migrations = len(all_revisions)
     except Exception as walk_err:
         logger.warning(f"Could not walk revision graph: {walk_err}")
-        # The failed walk may leave a broken cached revision map on
-        # script_dir.  Create a fresh ScriptDirectory so that
-        # get_current_head() below doesn't re-raise the same error.
+
+        # --- Diagnostic: figure out why Alembic can't load a revision ---
+        import importlib.util as _ilu
+        missing_rev = str(walk_err).strip("'\"")
+        py_files = sorted(
+            f for f in os.listdir(versions_dir)
+            if f.endswith('.py') and not f.startswith('_')
+        )
+        logger.info(
+            f"Migration diagnostic: {len(py_files)} .py files in {versions_dir}"
+        )
+        # Find and test-import the file(s) that declare the missing revision
+        for fname in py_files:
+            if missing_rev in fname:
+                fpath = os.path.join(versions_dir, fname)
+                logger.info(
+                    f"  File exists: {fname} "
+                    f"(size={os.path.getsize(fpath)}, "
+                    f"readable={os.access(fpath, os.R_OK)})"
+                )
+                try:
+                    spec = _ilu.spec_from_file_location(
+                        f"_diag_{fname.replace('.', '_')}", fpath
+                    )
+                    if spec is None or spec.loader is None:
+                        logger.error(f"  importlib returned None spec for {fname}")
+                        continue
+                    mod = _ilu.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    logger.info(
+                        f"  Manual import OK: revision={getattr(mod, 'revision', '?')}"
+                    )
+                except Exception as imp_err:
+                    logger.error(
+                        f"  Manual import FAILED for {fname}: "
+                        f"{type(imp_err).__name__}: {imp_err}"
+                    )
+        # Also check if any OTHER file declares the same revision (hidden dup)
+        import re as _re
+        _rev_re = _re.compile(
+            r"^revision\s*[:=]\s*['\"](.+?)['\"]", _re.MULTILINE
+        )
+        for fname in py_files:
+            fpath = os.path.join(versions_dir, fname)
+            try:
+                with open(fpath, 'r') as _f:
+                    content = _f.read(2048)
+                m = _rev_re.search(content)
+                if m and m.group(1) == missing_rev and missing_rev not in fname:
+                    logger.error(
+                        f"  HIDDEN DUPLICATE: {fname} also declares "
+                        f"revision='{missing_rev}'"
+                    )
+            except Exception:
+                pass
+        # --- End diagnostic ---
+
+        # The failed walk leaves a broken cached revision map on script_dir.
+        # Create a fresh ScriptDirectory so that get_current_head() below
+        # doesn't re-raise the same error.
         script_dir = ScriptDirectory.from_config(alembic_cfg)
         # Fall back to counting .py migration files
-        total_migrations = len([
-            f for f in os.listdir(versions_dir)
-            if f.endswith('.py') and not f.startswith('__')
-        ])
+        total_migrations = len(py_files)
     startup_status.migrations_total = total_migrations
 
     try:
