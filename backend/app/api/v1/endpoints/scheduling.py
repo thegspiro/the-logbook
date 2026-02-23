@@ -961,7 +961,7 @@ async def get_coverage_report(
 async def get_call_volume_report(
     start_date: str = Query(...),
     end_date: str = Query(...),
-    group_by: str = Query("day", regex="^(day|week|month)$"),
+    group_by: str = Query("day", pattern="^(day|week|month)$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.report")),
 ):

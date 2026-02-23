@@ -880,7 +880,7 @@ class WriteOffRequest(Base):
     )
 
     # Who requested and who reviewed
-    requested_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
+    requested_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
     reviewed_at = Column(DateTime(timezone=True))
     review_notes = Column(Text)

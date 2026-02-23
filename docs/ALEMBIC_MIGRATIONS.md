@@ -18,17 +18,17 @@
 
 | Field | Value |
 |-------|-------|
-| **Head revision** | `20260223_0200` |
-| **Head file** | `20260223_0200_add_storage_areas.py` |
-| **Head down_revision** | `20260223_0100` |
+| **Head revision** | `20260223_0300` |
+| **Head file** | `20260223_0300_add_inventory_write_off_requests.py` |
+| **Head down_revision** | `20260223_0200` |
 
 **To add a new migration**, use the next available sequence for today's date. For
 example, if today is 2026-02-23, the next file would be:
 
 ```
-20260223_0300_your_description.py
-revision = "20260223_0300"
-down_revision = "20260223_0200"
+20260223_0400_your_description.py
+revision = "20260223_0400"
+down_revision = "20260223_0300"
 ```
 
 ## Full Revision Chain
@@ -149,6 +149,7 @@ down_revision = "20260223_0200"
 | 112 | `20260222_1000` | `20260222_0900` | `20260222_1000_encrypt_sensitive_report_fields.py` | Encrypt sensitive shift report fields at rest |
 | 113 | `20260223_0100` | `20260222_1000` | `20260223_0100_add_training_rank_station_and_loa_waiver_link.py` | Add rank/station to training records, LOA-waiver link |
 | 114 | `20260223_0200` | `20260223_0100` | `20260223_0200_add_storage_areas.py` | Add storage_areas table and storage_area_id FK |
+| 115 | `20260223_0300` | `20260223_0200` | `20260223_0300_add_inventory_write_off_requests.py` | Add inventory write-off requests table |
 
 ## Known Non-Standard Revision IDs
 
