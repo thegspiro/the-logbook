@@ -7,7 +7,7 @@
  * barcode-based assign modal or the item-list return modal.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Search,
   ChevronDown,
@@ -18,6 +18,7 @@ import {
   RefreshCw,
   ArrowDownToLine,
   ArrowUpFromLine,
+  ArrowUpDown,
   Loader2,
   Shield,
 } from 'lucide-react';
@@ -32,6 +33,15 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 
+type SortOption = 'name' | 'total_items' | 'overdue' | 'assigned';
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'name', label: 'Name (A–Z)' },
+  { value: 'total_items', label: 'Total Items' },
+  { value: 'overdue', label: 'Overdue First' },
+  { value: 'assigned', label: 'Most Assigned' },
+];
+
 const InventoryMembersTab: React.FC = () => {
   const tz = useTimezone();
   const [members, setMembers] = useState<MemberInventorySummary[]>([]);
@@ -39,6 +49,7 @@ const InventoryMembersTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDebounce, setSearchDebounce] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('name');
 
   // Expanded member detail
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
@@ -136,6 +147,28 @@ const InventoryMembersTab: React.FC = () => {
     }
   };
 
+  // Sort members
+  const sortedMembers = useMemo(() => {
+    const sorted = [...members];
+    switch (sortBy) {
+      case 'name':
+        sorted.sort((a, b) =>
+          (a.full_name || a.username).localeCompare(b.full_name || b.username)
+        );
+        break;
+      case 'total_items':
+        sorted.sort((a, b) => b.total_items - a.total_items);
+        break;
+      case 'overdue':
+        sorted.sort((a, b) => b.overdue_count - a.overdue_count || b.total_items - a.total_items);
+        break;
+      case 'assigned':
+        sorted.sort((a, b) => b.permanent_count - a.permanent_count);
+        break;
+    }
+    return sorted;
+  }, [members, sortBy]);
+
   // Count members with items
   const membersWithItems = members.filter((m) => m.total_items > 0).length;
   const membersOverdue = members.filter((m) => m.overdue_count > 0).length;
@@ -172,6 +205,18 @@ const InventoryMembersTab: React.FC = () => {
               placeholder="Search by name, username, or membership number..."
               className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
             />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <ArrowUpDown className="w-4 h-4 text-theme-text-muted" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="px-2 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
           <button
             onClick={loadMembers}
@@ -224,7 +269,7 @@ const InventoryMembersTab: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-theme-surface-border">
-              {members.map((member) => {
+              {sortedMembers.map((member) => {
                 const isExpanded = expandedUserId === member.user_id;
                 return (
                   <React.Fragment key={member.user_id}>

@@ -36,6 +36,7 @@ import {
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
+import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
 import toast from 'react-hot-toast';
 
 const ITEM_TYPES = [
@@ -58,14 +59,7 @@ const STATUS_OPTIONS = [
   { value: 'retired', label: 'Retired', color: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border' },
 ];
 
-const CONDITION_OPTIONS = [
-  { value: 'excellent', label: 'Excellent' },
-  { value: 'good', label: 'Good' },
-  { value: 'fair', label: 'Fair' },
-  { value: 'poor', label: 'Poor' },
-  { value: 'damaged', label: 'Damaged' },
-  { value: 'out_of_service', label: 'Out of Service' },
-];
+const CONDITION_OPTIONS = ITEM_CONDITION_OPTIONS;
 
 const getStatusStyle = (status: string) => {
   const found = STATUS_OPTIONS.find(s => s.value === status);
@@ -97,6 +91,7 @@ const InventoryPage: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [filterLoading, setFilterLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Rooms (locations with room_number or building set) for storage location dropdown
@@ -251,6 +246,7 @@ const InventoryPage: React.FC = () => {
   };
 
   const loadItems = async () => {
+    setFilterLoading(true);
     try {
       const data = await inventoryService.getItems({
         search: searchQuery || undefined,
@@ -263,6 +259,8 @@ const InventoryPage: React.FC = () => {
       setSelectedItemIds(new Set());
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to refresh items'));
+    } finally {
+      setFilterLoading(false);
     }
   };
 
@@ -961,7 +959,13 @@ const InventoryPage: React.FC = () => {
             </div>
 
             {/* Items Table */}
-            {items.length === 0 ? (
+            {filterLoading && (
+              <div className="flex items-center justify-center py-3 mb-4">
+                <Loader2 className="w-5 h-5 animate-spin text-emerald-500 mr-2" />
+                <span className="text-sm text-theme-text-muted">Updating results...</span>
+              </div>
+            )}
+            {items.length === 0 && !filterLoading ? (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
                 <Package className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Items Found</h3>

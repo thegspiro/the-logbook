@@ -18,6 +18,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Modal } from './Modal';
 import { Camera, Check, AlertTriangle, Package, Trash2, Loader2, Search } from 'lucide-react';
+import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
 import {
   inventoryService,
   ScanLookupResponse,
@@ -439,9 +440,27 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         {/* Results view */}
         {showResults ? (
           <div className="space-y-3">
-            <h4 className="font-medium text-theme-text-primary">Results</h4>
+            {/* Summary counts */}
+            {(() => {
+              const successCount = results.filter((r) => r.success).length;
+              const failCount = results.length - successCount;
+              return (
+                <div className="flex items-center gap-3">
+                  <h4 className="font-medium text-theme-text-primary">Results</h4>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30">
+                    {successCount} succeeded
+                  </span>
+                  {failCount > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30">
+                      {failCount} failed
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+            {/* Failed items first, then successes */}
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {results.map((r, i) => (
+              {[...results].sort((a, b) => Number(a.success) - Number(b.success)).map((r, i) => (
                 <div
                   key={i}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
@@ -452,13 +471,13 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 >
                   <div className="flex items-center gap-2">
                     {r.success ? (
-                      <Check className="h-4 w-4 text-green-600" />
+                      <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
                     ) : (
-                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                      <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                     )}
                     <div>
                       <p className="text-sm font-medium text-theme-text-primary">{r.item_name}</p>
-                      <p className="text-xs text-theme-text-muted">
+                      <p className={`text-xs ${r.success ? 'text-theme-text-muted' : 'text-red-600 dark:text-red-400 font-medium'}`}>
                         {r.success ? r.action.replace(/_/g, ' ') : r.error}
                       </p>
                     </div>
@@ -664,11 +683,9 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                             className="px-2 py-1 border border-theme-border rounded text-sm bg-theme-surface text-theme-text-primary"
                             title="Return condition"
                           >
-                            <option value="excellent">Excellent</option>
-                            <option value="good">Good</option>
-                            <option value="fair">Fair</option>
-                            <option value="poor">Poor</option>
-                            <option value="damaged">Damaged</option>
+                            {RETURN_CONDITION_OPTIONS.map((c) => (
+                              <option key={c.value} value={c.value}>{c.label}</option>
+                            ))}
                           </select>
                         )}
 
