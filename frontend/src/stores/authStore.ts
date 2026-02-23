@@ -5,6 +5,7 @@
  */
 
 import { create } from 'zustand';
+import { decodeJwt } from 'jose';
 import { authService } from '../services/api';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
@@ -107,7 +108,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Check if token is expired by decoding the payload
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      const payload = decodeJwt(token);
       if (payload.exp && payload.exp * 1000 < Date.now()) {
         // Token expired — clear and stop
         localStorage.removeItem('access_token');

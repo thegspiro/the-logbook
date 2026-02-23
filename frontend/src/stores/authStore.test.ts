@@ -1,0 +1,391 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act } from '@testing-library/react';
+
+// ---- Mocks (must be declared before importing the store) ----
+
+const mockLogin = vi.fn();
+const mockRegister = vi.fn();
+const mockLogout = vi.fn();
+const mockGetCurrentUser = vi.fn();
+
+vi.mock('../services/api', () => ({
+  authService: {
+    login: (...args: unknown[]) => mockLogin(...args),
+    register: (...args: unknown[]) => mockRegister(...args),
+    logout: (...args: unknown[]) => mockLogout(...args),
+    getCurrentUser: (...args: unknown[]) => mockGetCurrentUser(...args),
+  },
+}));
+
+const mockDecodeJwt = vi.fn();
+
+vi.mock('jose', () => ({
+  decodeJwt: (...args: unknown[]) => mockDecodeJwt(...args),
+}));
+
+// ---- Import store AFTER mocks are in place ----
+import { useAuthStore } from './authStore';
+
+// ---- Helpers ----
+
+function getState() {
+  return useAuthStore.getState();
+}
+
+const fakeTokenResponse = {
+  access_token: 'fake-access-token',
+  refresh_token: 'fake-refresh-token',
+  token_type: 'bearer',
+  expires_in: 3600,
+};
+
+const fakeUser = {
+  id: 'u1',
+  username: 'testuser',
+  email: 'test@example.com',
+  first_name: 'Test',
+  last_name: 'User',
+  full_name: 'Test User',
+  organization_id: 'org1',
+  timezone: 'UTC',
+  roles: ['member'],
+  positions: ['member'],
+  rank: null,
+  membership_type: 'member',
+  permissions: ['events.view', 'settings.*'],
+  is_active: true,
+  email_verified: true,
+  mfa_enabled: false,
+  password_expired: false,
+  must_change_password: false,
+};
+
+// ---- Tests ----
+
+describe('authStore', () => {
+  beforeEach(() => {
+    // Reset the store to its initial state between tests
+    useAuthStore.setState({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+    });
+
+    // Clear all mocks
+    vi.clearAllMocks();
+
+    // Clear localStorage
+    localStorage.clear();
+  });
+
+  // ---- Initial State ----
+
+  describe('initial state', () => {
+    it('is unauthenticated with no user, no error, and not loading', () => {
+      const state = getState();
+      expect(state.user).toBeNull();
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.isLoading).toBe(false);
+      expect(state.error).toBeNull();
+    });
+  });
+
+  // ---- login ----
+
+  describe('login', () => {
+    it('stores tokens in localStorage and calls loadUser on success', async () => {
+      mockLogin.mockResolvedValue(fakeTokenResponse);
+      mockDecodeJwt.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 });
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().login({ username: 'testuser', password: 'password123' });
+      });
+
+      expect(mockLogin).toHaveBeenCalledWith({ username: 'testuser', password: 'password123' });
+      expect(localStorage.getItem('access_token')).toBe('fake-access-token');
+      expect(localStorage.getItem('refresh_token')).toBe('fake-refresh-token');
+      expect(mockGetCurrentUser).toHaveBeenCalled();
+
+      const state = getState();
+      expect(state.isAuthenticated).toBe(true);
+      expect(state.user).not.toBeNull();
+      expect(state.user!.username).toBe('testuser');
+      expect(state.isLoading).toBe(false);
+    });
+
+    it('sets error on failure and re-throws', async () => {
+      mockLogin.mockRejectedValue(new Error('Invalid credentials'));
+
+      await expect(
+        act(async () => {
+          await getState().login({ username: 'bad', password: 'wrong' });
+        }),
+      ).rejects.toBeDefined();
+
+      const state = getState();
+      expect(state.isLoading).toBe(false);
+      expect(state.error).toBe('Invalid credentials');
+      expect(state.isAuthenticated).toBe(false);
+    });
+  });
+
+  // ---- register ----
+
+  describe('register', () => {
+    it('stores tokens and loads user on success', async () => {
+      mockRegister.mockResolvedValue(fakeTokenResponse);
+      mockDecodeJwt.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 });
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().register({
+          username: 'newuser',
+          email: 'new@example.com',
+          password: 'securePass1',
+          first_name: 'New',
+          last_name: 'User',
+        });
+      });
+
+      expect(mockRegister).toHaveBeenCalled();
+      expect(localStorage.getItem('access_token')).toBe('fake-access-token');
+      expect(getState().isAuthenticated).toBe(true);
+    });
+
+    it('sets error on failure and re-throws', async () => {
+      mockRegister.mockRejectedValue(new Error('Email already taken'));
+
+      await expect(
+        act(async () => {
+          await getState().register({
+            username: 'dup',
+            email: 'dup@example.com',
+            password: 'pass',
+            first_name: 'D',
+            last_name: 'U',
+          });
+        }),
+      ).rejects.toBeDefined();
+
+      expect(getState().error).toBe('Email already taken');
+    });
+  });
+
+  // ---- logout ----
+
+  describe('logout', () => {
+    it('calls authService.logout, clears localStorage, and resets state', async () => {
+      // Set up an authenticated state first
+      localStorage.setItem('access_token', 'token');
+      localStorage.setItem('refresh_token', 'refresh');
+      useAuthStore.setState({ user: fakeUser, isAuthenticated: true });
+
+      mockLogout.mockResolvedValue(undefined);
+
+      await act(async () => {
+        await getState().logout();
+      });
+
+      expect(mockLogout).toHaveBeenCalled();
+      expect(localStorage.getItem('access_token')).toBeNull();
+      expect(localStorage.getItem('refresh_token')).toBeNull();
+
+      const state = getState();
+      expect(state.user).toBeNull();
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.error).toBeNull();
+    });
+
+    it('clears tokens even when authService.logout throws', async () => {
+      localStorage.setItem('access_token', 'token');
+      useAuthStore.setState({ user: fakeUser, isAuthenticated: true });
+
+      mockLogout.mockRejectedValue(new Error('Network error'));
+
+      await act(async () => {
+        await getState().logout();
+      });
+
+      expect(localStorage.getItem('access_token')).toBeNull();
+      expect(getState().isAuthenticated).toBe(false);
+    });
+  });
+
+  // ---- loadUser ----
+
+  describe('loadUser', () => {
+    it('returns early and sets unauthenticated when no token in localStorage', async () => {
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockDecodeJwt).not.toHaveBeenCalled();
+      expect(mockGetCurrentUser).not.toHaveBeenCalled();
+      expect(getState().isAuthenticated).toBe(false);
+      expect(getState().user).toBeNull();
+    });
+
+    it('clears tokens and returns early when token is expired', async () => {
+      localStorage.setItem('access_token', 'expired-token');
+      localStorage.setItem('refresh_token', 'refresh');
+
+      // exp in the past
+      mockDecodeJwt.mockReturnValue({ exp: Math.floor(Date.now() / 1000) - 3600 });
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(localStorage.getItem('access_token')).toBeNull();
+      expect(localStorage.getItem('refresh_token')).toBeNull();
+      expect(mockGetCurrentUser).not.toHaveBeenCalled();
+      expect(getState().isAuthenticated).toBe(false);
+    });
+
+    it('fetches user data when token is valid', async () => {
+      localStorage.setItem('access_token', 'valid-token');
+
+      mockDecodeJwt.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 });
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockGetCurrentUser).toHaveBeenCalled();
+
+      const state = getState();
+      expect(state.isAuthenticated).toBe(true);
+      expect(state.user).not.toBeNull();
+      expect(state.user!.id).toBe('u1');
+      expect(state.isLoading).toBe(false);
+    });
+
+    it('proceeds to API call if decodeJwt throws (lets API validate)', async () => {
+      localStorage.setItem('access_token', 'opaque-token');
+
+      mockDecodeJwt.mockImplementation(() => {
+        throw new Error('Invalid token format');
+      });
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockGetCurrentUser).toHaveBeenCalled();
+      expect(getState().isAuthenticated).toBe(true);
+    });
+
+    it('clears tokens when getCurrentUser fails', async () => {
+      localStorage.setItem('access_token', 'valid-token');
+      localStorage.setItem('refresh_token', 'refresh');
+
+      mockDecodeJwt.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 });
+      mockGetCurrentUser.mockRejectedValue(new Error('Unauthorized'));
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(localStorage.getItem('access_token')).toBeNull();
+      expect(localStorage.getItem('refresh_token')).toBeNull();
+      expect(getState().isAuthenticated).toBe(false);
+      expect(getState().user).toBeNull();
+    });
+  });
+
+  // ---- checkPermission ----
+
+  describe('checkPermission', () => {
+    it('returns false when user is null', () => {
+      expect(getState().checkPermission('events.view')).toBe(false);
+    });
+
+    it('returns true for global wildcard "*"', () => {
+      useAuthStore.setState({ user: { ...fakeUser, permissions: ['*'] } });
+      expect(getState().checkPermission('anything.here')).toBe(true);
+    });
+
+    it('returns true for module wildcard (e.g. "settings.*" matches "settings.manage")', () => {
+      useAuthStore.setState({ user: { ...fakeUser, permissions: ['settings.*'] } });
+      expect(getState().checkPermission('settings.manage')).toBe(true);
+      expect(getState().checkPermission('settings.view')).toBe(true);
+    });
+
+    it('returns true for exact match', () => {
+      useAuthStore.setState({ user: { ...fakeUser, permissions: ['events.view'] } });
+      expect(getState().checkPermission('events.view')).toBe(true);
+    });
+
+    it('returns false when permission does not match', () => {
+      useAuthStore.setState({ user: { ...fakeUser, permissions: ['events.view'] } });
+      expect(getState().checkPermission('events.edit')).toBe(false);
+    });
+
+    it('returns false when user has no permissions array', () => {
+      useAuthStore.setState({
+        user: { ...fakeUser, permissions: undefined } as unknown as typeof fakeUser,
+      });
+      expect(getState().checkPermission('events.view')).toBe(false);
+    });
+
+    it('module wildcard does not match permissions without a dot', () => {
+      useAuthStore.setState({ user: { ...fakeUser, permissions: ['settings.*'] } });
+      expect(getState().checkPermission('admin')).toBe(false);
+    });
+  });
+
+  // ---- hasRole ----
+
+  describe('hasRole', () => {
+    it('returns true when role is in roles array', () => {
+      useAuthStore.setState({ user: { ...fakeUser, roles: ['admin', 'member'], positions: [] } });
+      expect(getState().hasRole('admin')).toBe(true);
+    });
+
+    it('returns true when role is in positions array', () => {
+      useAuthStore.setState({ user: { ...fakeUser, roles: [], positions: ['captain'] } });
+      expect(getState().hasRole('captain')).toBe(true);
+    });
+
+    it('returns false when role is in neither array', () => {
+      useAuthStore.setState({ user: { ...fakeUser, roles: ['member'], positions: ['member'] } });
+      expect(getState().hasRole('admin')).toBe(false);
+    });
+
+    it('returns false when user is null', () => {
+      expect(getState().hasRole('admin')).toBe(false);
+    });
+  });
+
+  // ---- hasPosition ----
+
+  describe('hasPosition', () => {
+    it('returns true when position is found', () => {
+      useAuthStore.setState({ user: { ...fakeUser, positions: ['captain', 'lieutenant'] } });
+      expect(getState().hasPosition('captain')).toBe(true);
+    });
+
+    it('returns false when position is not found', () => {
+      useAuthStore.setState({ user: { ...fakeUser, positions: ['member'] } });
+      expect(getState().hasPosition('captain')).toBe(false);
+    });
+
+    it('returns false when user is null', () => {
+      expect(getState().hasPosition('captain')).toBe(false);
+    });
+  });
+
+  // ---- clearError ----
+
+  describe('clearError', () => {
+    it('sets error to null', () => {
+      useAuthStore.setState({ error: 'Something bad' });
+      getState().clearError();
+      expect(getState().error).toBeNull();
+    });
+  });
+});
