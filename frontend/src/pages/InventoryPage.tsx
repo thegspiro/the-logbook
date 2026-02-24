@@ -546,6 +546,8 @@ const InventoryPage: React.FC = () => {
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       const fmt = labelFormats.find(f => f.id === labelFormat);
       toast.success(`Generated ${fmt?.description || labelFormat} labels for ${selectedItemIds.size} item(s)`);
+      // Refresh items so auto-populated barcode values are visible in edit form
+      loadData();
     } catch {
       toast.error('Failed to generate barcode labels');
     } finally {

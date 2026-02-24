@@ -265,8 +265,8 @@ class InventoryService:
             if state_err:
                 return None, state_err
 
-            # Calculate depreciation if purchase info provided
-            if "purchase_price" in item_data and "expected_lifetime_years" in item_data:
+            # Initialize current_value from purchase_price so it counts in Total Value
+            if "purchase_price" in item_data and "current_value" not in item_data:
                 item_data["current_value"] = item_data["purchase_price"]
 
             item = InventoryItem(
@@ -423,6 +423,10 @@ class InventoryService:
 
             for key, value in update_data.items():
                 setattr(item, key, value)
+
+            # Keep current_value in sync when purchase_price changes
+            if "purchase_price" in update_data and "current_value" not in update_data:
+                item.current_value = update_data["purchase_price"]
 
             await self.db.commit()
             await self.db.refresh(item)
