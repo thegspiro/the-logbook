@@ -20,6 +20,11 @@ def UUID():
     return str(uuid.uuid4())
 
 
+def _utc_iso() -> str:
+    """UTC timestamp as a 26-char naive ISO string (fits String(26) columns)."""
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')
+
+
 class PublicPortalConfig(Base):
     """
     Configuration for the public portal module.
@@ -54,12 +59,12 @@ class PublicPortalConfig(Base):
     settings = Column(JSON, default=dict, nullable=False)
 
     # Timestamps
-    created_at = Column(String(26), nullable=False, default=lambda: datetime.now(timezone.utc).isoformat())
+    created_at = Column(String(26), nullable=False, default=_utc_iso)
     updated_at = Column(
         String(26),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc).isoformat(),
-        onupdate=lambda: datetime.now(timezone.utc).isoformat()
+        default=_utc_iso,
+        onupdate=_utc_iso
     )
 
     # Relationships
@@ -135,7 +140,7 @@ class PublicPortalAPIKey(Base):
     )
 
     # Timestamps
-    created_at = Column(String(26), nullable=False, default=lambda: datetime.now(timezone.utc).isoformat())
+    created_at = Column(String(26), nullable=False, default=_utc_iso)
 
     # Relationships
     organization = relationship("Organization")
@@ -220,7 +225,7 @@ class PublicPortalAccessLog(Base):
     referer = Column(String(500), nullable=True)
 
     # Timestamp of the request
-    timestamp = Column(String(26), nullable=False, default=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp = Column(String(26), nullable=False, default=_utc_iso)
 
     # Security flags
     flagged_suspicious = Column(Boolean, default=False, nullable=False)
@@ -275,12 +280,12 @@ class PublicPortalDataWhitelist(Base):
     is_enabled = Column(Boolean, default=False, nullable=False)
 
     # Timestamps
-    created_at = Column(String(26), nullable=False, default=lambda: datetime.now(timezone.utc).isoformat())
+    created_at = Column(String(26), nullable=False, default=_utc_iso)
     updated_at = Column(
         String(26),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc).isoformat(),
-        onupdate=lambda: datetime.now(timezone.utc).isoformat()
+        default=_utc_iso,
+        onupdate=_utc_iso
     )
 
     # Relationships
