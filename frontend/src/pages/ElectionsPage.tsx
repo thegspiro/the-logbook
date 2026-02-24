@@ -13,6 +13,7 @@ import { ElectionStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { HelpLink } from '../components/HelpLink';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -190,11 +191,17 @@ export const ElectionsPage: React.FC = () => {
     <div className="min-h-screen">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-theme-text-primary">Elections</h2>
-          <p className="mt-1 text-sm text-theme-text-muted">
-            Manage elections and view results
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h2 className="text-2xl font-bold text-theme-text-primary">Elections</h2>
+            <p className="mt-1 text-sm text-theme-text-muted">
+              Manage elections and view results
+            </p>
+          </div>
+          <HelpLink
+            topic="elections"
+            tooltip="Create and manage department elections. Set up voting methods, add candidates, configure ballots, and track results. Supports ranked choice, plurality, and approval voting."
+          />
         </div>
         {canManage && (
           <button

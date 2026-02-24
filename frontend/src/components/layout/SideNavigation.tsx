@@ -277,7 +277,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
                   src={logoPreview}
-                  alt=""
+                  alt={`${departmentName} logo`}
                   className="max-w-full max-h-full object-contain"
                 />
               </div>
@@ -334,7 +334,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                         <img
                           src={logoPreview}
-                          alt=""
+                          alt={`${departmentName} logo`}
                           className="max-w-full max-h-full object-contain"
                         />
                       </div>
@@ -360,7 +360,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                       <img
                         src={logoPreview}
-                        alt=""
+                        alt={`${departmentName} logo`}
                         className="max-w-full max-h-full object-contain"
                       />
                     </div>

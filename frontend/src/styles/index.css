@@ -560,7 +560,14 @@ option {
   }
 }
 
-/* Focus visible for accessibility */
+/* Focus visible for accessibility (#70) —
+   Show focus rings ONLY on keyboard navigation, not mouse clicks */
+*:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+  --tw-ring-shadow: none;
+}
+
 *:focus-visible {
   @apply outline-none ring-2 ring-red-500 ring-offset-2;
   --tw-ring-offset-color: var(--ring-offset-bg);

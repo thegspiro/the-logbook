@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -12,6 +12,7 @@ import {
   Mail,
   AlertCircle,
   RefreshCw,
+  Download,
 } from 'lucide-react';
 import { userService } from '../services/api';
 import { User } from '../types/user';
@@ -55,6 +56,9 @@ const Members: React.FC = () => {
     show_mobile: false,
   });
   const [deleteModalMember, setDeleteModalMember] = useState<User | null>(null);
+
+  // Bulk selection state (#33)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Sorting state (#30)
   const [sortField, setSortField] = useState<string | null>(null);
@@ -176,6 +180,48 @@ const Members: React.FC = () => {
     setSortDirection(direction);
   };
 
+  // #33: Bulk selection helpers
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedIds.size === paginatedMembers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(paginatedMembers.map(m => m.id)));
+    }
+  }, [paginatedMembers, selectedIds.size]);
+
+  // #48: CSV export for members (also used for bulk export of selected)
+  const handleExportCSV = useCallback(() => {
+    const exportSet = selectedIds.size > 0
+      ? filteredMembers.filter(m => selectedIds.has(m.id))
+      : filteredMembers;
+    const headers = ['First Name', 'Last Name', 'Username', 'Email', 'Status', 'Membership #', 'Hire Date'];
+    const rows = exportSet.map(m => [
+      m.first_name || '',
+      m.last_name || '',
+      m.username || '',
+      m.email || '',
+      m.status || '',
+      m.membership_number || '',
+      m.hire_date ? formatDate(m.hire_date, tz) : '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `members-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filteredMembers, tz]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -214,6 +260,16 @@ const Members: React.FC = () => {
               <p className="text-theme-text-muted text-sm hidden sm:block">Manage department members and records</p>
             </div>
           </div>
+          {filteredMembers.length > 0 && (
+            <button
+              onClick={handleExportCSV}
+              className="btn-secondary inline-flex items-center gap-2"
+              title="Export to CSV"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          )}
         </div>
         {/* Error Banner */}
         {error && (
@@ -354,7 +410,7 @@ const Members: React.FC = () => {
                     {member.photo_url ? (
                       <img
                         src={member.photo_url}
-                        alt=""
+                        alt={`${member.first_name} ${member.last_name}`}
                         className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                       />
                     ) : (
@@ -416,12 +472,45 @@ const Members: React.FC = () => {
             ))}
           </div>
 
+          {/* Bulk action bar (#33) */}
+          {selectedIds.size > 0 && (
+            <div className="hidden md:flex items-center gap-3 mb-3 bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-2">
+              <span className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                {selectedIds.size} selected
+              </span>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={handleExportCSV}
+                  className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors inline-flex items-center gap-1"
+                >
+                  <Download className="w-3 h-3" />
+                  Export Selected
+                </button>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Desktop table view */}
           <div className="hidden md:block bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                   <tr>
+                    <th className="pl-4 pr-1 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={paginatedMembers.length > 0 && selectedIds.size === paginatedMembers.length}
+                        onChange={toggleSelectAll}
+                        className="rounded border-theme-input-border text-blue-600 focus:ring-blue-500"
+                        aria-label="Select all members"
+                      />
+                    </th>
                     <th className="px-6 py-3 text-left">
                       <SortableHeader label="Member" field="name" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
                     </th>
@@ -446,13 +535,22 @@ const Members: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-theme-surface-border">
                   {paginatedMembers.map((member) => (
-                    <tr key={member.id} className="hover:bg-theme-surface-secondary transition-colors">
+                    <tr key={member.id} className={`hover:bg-theme-surface-secondary transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}>
+                      <td className="pl-4 pr-1 py-4 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(member.id)}
+                          onChange={() => toggleSelect(member.id)}
+                          className="rounded border-theme-input-border text-blue-600 focus:ring-blue-500"
+                          aria-label={`Select ${member.first_name} ${member.last_name}`}
+                        />
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           {member.photo_url ? (
                             <img
                               src={member.photo_url}
-                              alt=""
+                              alt={`${member.first_name} ${member.last_name}`}
                               className="w-10 h-10 rounded-full object-cover"
                             />
                           ) : (

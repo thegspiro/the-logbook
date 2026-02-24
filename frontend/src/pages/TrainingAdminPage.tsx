@@ -17,6 +17,7 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LayoutDashboard, ClipboardList, Settings } from 'lucide-react';
+import { HelpLink } from '../components/HelpLink';
 
 // Lazy-loaded tab components
 const TrainingOfficerDashboard = lazy(() => import('./TrainingOfficerDashboard'));
@@ -209,11 +210,17 @@ export const TrainingAdminPage: React.FC = () => {
     <div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         {/* Page Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-theme-text-primary">Training Administration</h1>
-          <p className="mt-1 text-sm text-theme-text-muted">
-            Manage training submissions, requirements, sessions, and more
-          </p>
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-theme-text-primary">Training Administration</h1>
+            <p className="mt-1 text-sm text-theme-text-muted">
+              Manage training submissions, requirements, sessions, and more
+            </p>
+          </div>
+          <HelpLink
+            topic="training"
+            tooltip="Track NFPA compliance, manage training requirements, review submissions, and set up certification pipelines. The compliance matrix shows department-wide training status."
+          />
         </div>
 
         {/* Top-level sub-page selector */}
