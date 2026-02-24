@@ -33,6 +33,11 @@ const ITTeamBackupAccess: React.FC = () => {
   const secondaryAdminEmail = useOnboardingStore(state => state.secondaryAdminEmail);
   const setSecondaryAdminEmail = useOnboardingStore(state => state.setSecondaryAdminEmail);
 
+  // System Owner info for auto-populating primary IT contact
+  const systemOwnerFirstName = useOnboardingStore(state => state.systemOwnerFirstName);
+  const systemOwnerLastName = useOnboardingStore(state => state.systemOwnerLastName);
+  const systemOwnerEmail = useOnboardingStore(state => state.systemOwnerEmail);
+
   // Validation errors (local state - no need to persist)
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -41,6 +46,21 @@ const ITTeamBackupAccess: React.FC = () => {
       navigate('/onboarding/start');
       return;
     }
+
+    // Auto-populate primary IT contact from System Owner if the fields are empty
+    if (systemOwnerFirstName && itTeam.length > 0) {
+      const primary = itTeam[0];
+      if (!primary.name && !primary.email) {
+        const updatedPrimary = {
+          ...primary,
+          name: `${systemOwnerFirstName} ${systemOwnerLastName}`.trim(),
+          email: systemOwnerEmail,
+          role: 'IT Manager',
+        };
+        setItTeam([updatedPrimary, ...itTeam.slice(1)]);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate, departmentName]);
 
   const addITMember = () => {
@@ -195,7 +215,7 @@ const ITTeamBackupAccess: React.FC = () => {
         <div className="max-w-4xl w-full">
           {/* Navigation Buttons */}
           <div className="flex justify-between items-center mb-6">
-            <BackButton to="/onboarding/authentication" />
+            <BackButton to="/onboarding/system-owner" />
             <ResetProgressButton />
           </div>
 
@@ -477,7 +497,7 @@ const ITTeamBackupAccess: React.FC = () => {
             </div>
 
             {/* Progress Indicator */}
-            <ProgressIndicator currentStep={7} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
+            <ProgressIndicator currentStep={8} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </form>
         </div>

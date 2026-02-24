@@ -167,8 +167,8 @@ const AuthenticationChoice: React.FC = () => {
     if (data) {
       toast.success('Authentication platform saved');
 
-      // Route to IT team and backup access setup
-      navigate('/onboarding/it-team');
+      // Route to System Owner account creation
+      navigate('/onboarding/system-owner');
     }
   };
 
