@@ -18,14 +18,14 @@ sqlalchemy==2.0.46
 alembic==1.18.4
 pymysql==1.1.1
 aiomysql==0.2.0
-greenlet==3.3.1  # Required by SQLAlchemy for async operations
-cryptography==43.0.3  # Required by PyMySQL for secure connections
+greenlet==3.3.2  # Required by SQLAlchemy for async operations
+cryptography==44.0.0  # Required by PyMySQL for secure connections
 
 # ============================================
 # Redis & Caching
 # ============================================
 redis==5.2.1
-hiredis==3.0.0
+hiredis==3.1.0
 
 # ============================================
 # Authentication & Security
@@ -38,13 +38,13 @@ qrcode==8.0
 
 # OAuth & SSO
 authlib==1.4.0
-python-ldap==3.4.4
-pysaml2==7.5.0
+python-ldap==3.4.5
+pysaml2==7.5.4
 
 # ============================================
 # Encryption & Security
 # ============================================
-argon2-cffi==23.1.0
+argon2-cffi==25.1.0
 
 # ============================================
 # Email
@@ -70,9 +70,9 @@ python-magic==0.4.27
 # ============================================
 python-docx==1.1.2
 openpyxl==3.1.5
-reportlab==4.2.5
+reportlab==4.3.0
 pypdf==5.1.0
-Pillow==11.1.0
+Pillow==11.3.0
 
 # ============================================
 # API & Networking
@@ -99,7 +99,7 @@ stripe==11.4.0
 # ============================================
 loguru==0.7.3
 sentry-sdk==2.53.0
-psutil==6.1.1  # System monitoring for health checks
+psutil==7.0.0  # System monitoring for health checks
 
 # ============================================
 # Task Queue
@@ -120,13 +120,13 @@ google-api-python-client==2.159.0
 # Development & Testing
 # ============================================
 pytest==8.3.4
-pytest-asyncio==0.24.0
+pytest-asyncio==0.25.0
 pytest-cov==6.0.0
 faker==33.3.0
 
 # Code Quality
-black==24.10.0
-flake8==7.1.1
+black==25.1.0
+flake8==7.2.0
 mypy==1.19.1
 isort==5.13.2
 pylint==3.3.4

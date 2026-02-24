@@ -230,8 +230,25 @@ async def upload_document(
     org_dir = os.path.join(UPLOAD_DIR, str(current_user.organization_id))
     os.makedirs(org_dir, exist_ok=True)
 
-    # Generate unique filename
-    ext = os.path.splitext(file.filename or "")[1]
+    # Derive file extension from detected MIME type (not user-supplied filename)
+    # to prevent double-extension attacks (e.g. report.pdf.exe)
+    MIME_TO_EXT = {
+        "application/pdf": ".pdf",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        "application/vnd.ms-excel": ".xls",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        "application/vnd.ms-powerpoint": ".ppt",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+        "text/plain": ".txt",
+        "text/csv": ".csv",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+        "application/zip": ".zip",
+    }
+    ext = MIME_TO_EXT.get(detected_mime, os.path.splitext(file.filename or "")[1])
     unique_name = f"{uuid_lib.uuid4().hex}{ext}"
     file_path = os.path.join(org_dir, unique_name)
 

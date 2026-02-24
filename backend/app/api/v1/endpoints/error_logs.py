@@ -4,8 +4,10 @@ Error Logs API Endpoints
 Endpoints for logging and retrieving application errors.
 """
 
-from typing import Optional
+import json
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 
@@ -16,23 +18,43 @@ from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
+# Maximum size for the context field (4 KB)
+MAX_CONTEXT_SIZE = 4096
+
+
+class ErrorLogCreate(BaseModel):
+    """Validated schema for error log creation."""
+    error_type: str = Field(default="UNKNOWN_ERROR", max_length=100)
+    error_message: str = Field(default="", max_length=2000)
+    user_message: Optional[str] = Field(default=None, max_length=500)
+    troubleshooting_steps: List[str] = Field(default_factory=list, max_length=20)
+    context: Dict[str, Any] = Field(default_factory=dict)
+    event_id: Optional[str] = Field(default=None, max_length=100)
+
+    @field_validator("context")
+    @classmethod
+    def validate_context_size(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+        if len(json.dumps(v)) > MAX_CONTEXT_SIZE:
+            raise ValueError(f"context must be less than {MAX_CONTEXT_SIZE} bytes")
+        return v
+
 
 @router.post("/log")
 async def log_error(
-    data: dict,
+    data: ErrorLogCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Log an application error"""
     error = ErrorLog(
         organization_id=current_user.organization_id,
-        error_type=data.get("error_type", "UNKNOWN_ERROR"),
-        error_message=data.get("error_message", ""),
-        user_message=data.get("user_message"),
-        troubleshooting_steps=data.get("troubleshooting_steps", []),
-        context=data.get("context", {}),
+        error_type=data.error_type,
+        error_message=data.error_message,
+        user_message=data.user_message,
+        troubleshooting_steps=data.troubleshooting_steps,
+        context=data.context,
         user_id=str(current_user.id),
-        event_id=data.get("event_id"),
+        event_id=data.event_id,
     )
     db.add(error)
     await db.commit()

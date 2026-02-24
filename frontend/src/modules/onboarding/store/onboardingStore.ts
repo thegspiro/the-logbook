@@ -397,7 +397,10 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
     {
       name: 'onboarding-storage', // localStorage key
       storage: createJSONStorage(() => localStorage),
-      // Only persist non-sensitive data
+      // Only persist non-sensitive data.
+      // PII fields (itTeamMembers, backupEmail, backupPhone, secondaryAdminEmail)
+      // are intentionally excluded to prevent sensitive contact details from
+      // lingering in localStorage after onboarding completes.
       partialize: (state) => ({
         departmentName: state.departmentName,
         logoData: state.logoData,
@@ -407,10 +410,6 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         fileStoragePlatform: state.fileStoragePlatform,
         authPlatform: state.authPlatform,
         itTeamConfigured: state.itTeamConfigured,
-        itTeamMembers: state.itTeamMembers,
-        backupEmail: state.backupEmail,
-        backupPhone: state.backupPhone,
-        secondaryAdminEmail: state.secondaryAdminEmail,
         positionsConfig: state.positionsConfig,
         selectedModules: state.selectedModules,
         moduleStatuses: state.moduleStatuses,
@@ -418,8 +417,9 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         currentStep: state.currentStep,
         completedSteps: state.completedSteps,
         lastSaved: state.lastSaved,
-        // Exclude sensitive data from persistence
-        // sessionId, csrfToken, errors are NOT persisted
+        // Exclude sensitive data from persistence:
+        // sessionId, csrfToken, errors, itTeamMembers, backupEmail,
+        // backupPhone, secondaryAdminEmail are NOT persisted
       }),
     }
   )

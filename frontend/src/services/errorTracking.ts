@@ -148,7 +148,7 @@ class ErrorTrackingService {
         eventId: context.eventId,
         userId: context.userId,
         userAgent: navigator.userAgent,
-        url: window.location.href,
+        url: window.location.origin + window.location.pathname,
       },
     };
 

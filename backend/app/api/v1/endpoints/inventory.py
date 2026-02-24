@@ -2043,8 +2043,14 @@ async def update_storage_area(
     if not area:
         raise HTTPException(status_code=404, detail="Storage area not found")
 
+    ALLOWED_AREA_FIELDS = {
+        "name", "label", "description", "storage_type",
+        "parent_id", "location_id", "barcode", "sort_order", "is_active",
+    }
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
+        if field not in ALLOWED_AREA_FIELDS:
+            continue
         if field in ("parent_id", "location_id") and value is not None:
             value = str(value)
         setattr(area, field, value)
@@ -2227,8 +2233,9 @@ async def inventory_websocket(
     """
     WebSocket endpoint for real-time inventory change notifications.
 
-    Connect with a JWT token as a query parameter:
-        ws://host/api/v1/inventory/ws?token=<jwt>
+    Authentication: Prefer httpOnly cookies (sent automatically by browsers
+    during the WebSocket handshake). Falls back to a query-param token for
+    non-browser clients.
 
     Events pushed to clients:
         { "type": "inventory_changed", "action": "...", "data": {...} }
@@ -2237,18 +2244,40 @@ async def inventory_websocket(
              item_checked_out, item_checked_in, batch_checkout, batch_return,
              pool_issued, pool_returned, item_retired, write_off_reviewed
     """
+    # Prefer httpOnly cookie, fall back to query param for non-browser clients
+    if not token:
+        token = websocket.cookies.get("access_token")
     if not token:
         await websocket.close(code=4001, reason="Missing token")
         return
 
-    # Validate JWT
+    # Validate JWT and verify the user session is still active
     try:
         from app.core.security import decode_token
         payload = decode_token(token)
         org_id = payload.get("org_id")
+        user_id = payload.get("sub")
         if not org_id:
             await websocket.close(code=4003, reason="Invalid token")
             return
+
+        # Verify user is still active (not revoked/deactivated)
+        from app.core.database import async_session_factory
+        from app.models.user import User as UserModel
+        from sqlalchemy import select as sa_select
+        async with async_session_factory() as db:
+            result = await db.execute(
+                sa_select(UserModel).where(
+                    UserModel.id == user_id,
+                    UserModel.organization_id == org_id,
+                    UserModel.is_active.is_(True),
+                    UserModel.deleted_at.is_(None),
+                )
+            )
+            user = result.scalar_one_or_none()
+            if not user:
+                await websocket.close(code=4001, reason="Invalid or revoked session")
+                return
     except Exception:
         await websocket.close(code=4001, reason="Invalid or expired token")
         return

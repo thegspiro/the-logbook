@@ -115,15 +115,11 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]!) : null;
 }
 
-// Request interceptor — httpOnly cookies are sent automatically.
-// We keep the Authorization header as a fallback during the migration
-// period so existing localStorage tokens continue to work.
+// Request interceptor — httpOnly cookies are sent automatically via
+// withCredentials. No tokens are stored in localStorage or sent via
+// Authorization header; the browser handles cookie transport.
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     // Double-submit CSRF token for state-changing requests
     const method = (config.method || '').toUpperCase();
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
@@ -146,7 +142,7 @@ api.interceptors.request.use(
 // replay attack and the backend revokes all sessions.  By sharing a
 // single promise, only one refresh request is made and all waiting
 // callers receive the same new access token.
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<void> | null = null;
 
 // Response interceptor to handle token expiration
 api.interceptors.response.use(
@@ -162,30 +158,22 @@ api.interceptors.response.use(
         // If a refresh is already in flight, wait for it
         if (!refreshPromise) {
           // POST to /auth/refresh — the httpOnly refresh_token cookie
-          // is sent automatically via withCredentials.
+          // is sent automatically via withCredentials. The new tokens
+          // are set as httpOnly cookies in the response.
           refreshPromise = axios
             .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
-            .then((response) => {
-              const { access_token, refresh_token: new_refresh_token } = response.data;
-              // Sync localStorage for backward compatibility
-              if (access_token) localStorage.setItem('access_token', access_token);
-              if (new_refresh_token) localStorage.setItem('refresh_token', new_refresh_token);
-              return access_token as string | null;
+            .then(() => {
+              // New cookies are set by the backend response
             })
             .finally(() => {
               refreshPromise = null;
             });
         }
 
-        const newAccessToken = await refreshPromise;
-        if (newAccessToken) {
-          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-        }
+        await refreshPromise;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, clear tokens and redirect to login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        // Refresh failed, redirect to login
         window.location.href = '/login';
         return Promise.reject(refreshError instanceof Error ? refreshError : new Error(String(refreshError)));
       }
@@ -1588,7 +1576,7 @@ export const electionService = {
    * Submit a ballot using a voting token
    */
   async submitBallot(token: string, votes: import('../types/election').BallotItemVote[]): Promise<import('../types/election').BallotSubmissionResponse> {
-    const response = await api.post<import('../types/election').BallotSubmissionResponse>('/elections/ballot/vote/bulk', { votes }, { params: { token } });
+    const response = await api.post<import('../types/election').BallotSubmissionResponse>('/elections/ballot/vote/bulk', { votes, token });
     return response.data;
   },
 
