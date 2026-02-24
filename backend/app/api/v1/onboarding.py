@@ -367,7 +367,7 @@ async def get_or_create_session(
         HTTPException: If session is invalid or expired
     """
     # Guard: if an organization already exists, block new onboarding sessions
-    from app.models.organization import Organization
+    from app.models.user import Organization
     org_result = await db.execute(select(Organization).limit(1))
     if org_result.scalar_one_or_none() is not None:
         raise HTTPException(
