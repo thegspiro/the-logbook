@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The Logbook demonstrates a strong security posture overall with proper authentication, role-based access control, organization isolation, and comprehensive audit logging. However, the analysis identified **17 findings** across varying severity levels that an insider could exploit. The most critical findings involve JWT tokens stored in localStorage (XSS-accessible), a WebSocket endpoint that skips session validation, and several endpoints with missing or insufficient permission checks that allow information leakage.
+The Logbook demonstrates a strong security posture overall with proper authentication, role-based access control, organization isolation, and comprehensive audit logging. However, the analysis identified **19 findings** across varying severity levels that an insider could exploit. The most critical findings involve JWT tokens stored in localStorage (XSS-accessible), a WebSocket endpoint that skips session validation, and several endpoints with missing or insufficient permission checks that allow information leakage.
 
 ---
 
@@ -396,6 +396,57 @@ This is then sent to the `POST /api/v1/errors/log` endpoint (Finding 6), meaning
 
 ---
 
+### FINDING 18 — Raw SQL with String Interpolation in Schema Repair (MEDIUM)
+
+**File:** `backend/main.py:580-581`
+
+**Description:** The schema repair code constructs SQL dynamically using f-strings:
+
+```python
+drop_list = ", ".join(f"`{t}`" for t in tables_to_drop)
+conn.execute(text(f"DROP TABLE IF EXISTS {drop_list}"))
+```
+
+Similarly, ALTER TABLE statements at line 349 use f-string interpolation:
+```python
+stmt = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NULL"
+conn.execute(text(stmt))
+```
+
+**Insider Attack:** An insider with direct database access could create a table with a name containing a backtick escape sequence (e.g., `` `; DROP DATABASE intranet_db; -- ``). When the schema repair function runs (triggered by schema drift on startup), the malicious table name would be interpolated into the DROP TABLE statement without parameterization, potentially executing arbitrary SQL. The `col_type` in the ALTER TABLE path is also unquoted.
+
+**Fix:** Use SQLAlchemy's DDL API (`DropTable`, `AddColumn`) instead of raw SQL strings, or iterate with individual parameterized statements.
+
+---
+
+### FINDING 19 — Election Update Uses Unrestricted setattr() (LOW-MEDIUM)
+
+**File:** `backend/app/api/v1/endpoints/elections.py:469-470`
+
+**Description:** Multiple endpoints use `setattr()` in a loop to apply updates from Pydantic models:
+
+```python
+update_data = election_update.model_dump(exclude_unset=True)
+for field, value in update_data.items():
+    setattr(election, field, value)
+```
+
+This pattern appears in elections.py (lines 469, 808), organizations.py (line 630), events.py (line 1554), external_training.py (line 210), and inventory.py (line 2050).
+
+While Pydantic schema validation limits which fields appear in `update_data`, this is unlike the user profile endpoint which uses an explicit `ALLOWED_PROFILE_FIELDS` allowlist. If the Pydantic schema is ever expanded (e.g., adding a `status` or `organization_id` field for read purposes), it could inadvertently become writable through the setattr loop.
+
+**Insider Attack:** An insider with `elections.manage` permission could potentially set fields that should be read-only (like `created_by`, `organization_id`, or `voter_anonymity_salt`) if those fields are added to the Pydantic update schema in the future. The user profile endpoint's allowlist pattern is the safer approach.
+
+**Fix:** Apply the same allowlist pattern used in the user profile endpoint:
+```python
+ALLOWED_ELECTION_UPDATE_FIELDS = {"title", "description", "start_date", "end_date", ...}
+for field, value in update_data.items():
+    if field in ALLOWED_ELECTION_UPDATE_FIELDS:
+        setattr(election, field, value)
+```
+
+---
+
 ## Positive Security Controls Observed
 
 The following security measures are well-implemented and represent strong insider threat defenses:
@@ -422,8 +473,8 @@ The following security measures are well-implemented and represent strong inside
 | Severity | Count | Findings |
 |----------|-------|----------|
 | HIGH     | 2     | #1 (localStorage tokens), #2 (WebSocket session bypass) |
-| MEDIUM   | 8     | #3 (user list no perms), #4 (role query no perms), #5 (profile no perms), #6 (error log injection), #7 (cross-org auth), #8 (CSRF dead code), #15 (WS token in URL), #16 (IT PII in localStorage) |
-| LOW-MED  | 2     | #9 (onboarding re-access), #10 (tokens in response body) |
+| MEDIUM   | 9     | #3 (user list no perms), #4 (role query no perms), #5 (profile no perms), #6 (error log injection), #7 (cross-org auth), #8 (CSRF dead code), #15 (WS token in URL), #16 (IT PII in localStorage), #18 (raw SQL interpolation) |
+| LOW-MED  | 3     | #9 (onboarding re-access), #10 (tokens in response body), #19 (unrestricted setattr) |
 | LOW      | 5     | #11 (default creds), #12 (MinIO creds), #13 (voting token in URL), #14 (file extension), #17 (error tracking logs tokens) |
 
 ---
