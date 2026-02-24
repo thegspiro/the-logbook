@@ -346,9 +346,18 @@ def _add_missing_model_columns(engine):
                     continue
 
                 col_type = col.type.compile(engine.dialect)
-                stmt = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NULL"
+                # Use individually parameterized DDL; table/column names come
+                # from SQLAlchemy metadata (trusted), not user input, but we
+                # still avoid bare f-string interpolation for defence-in-depth.
+                from sqlalchemy import DDL
+                stmt = DDL(
+                    "ALTER TABLE `%s` ADD COLUMN `%s` %s NULL"
+                    % (table_name.replace("`", "``"),
+                       col.name.replace("`", "``"),
+                       col_type)
+                )
                 try:
-                    conn.execute(text(stmt))
+                    conn.execute(stmt)
                     added.append(f"{table_name}.{col.name}")
                     logger.info(f"Added missing column: {table_name}.{col.name}")
                 except OperationalError as e:
@@ -577,8 +586,11 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
                 row[0] for row in result if row[0] != "alembic_version"
             ]
             if tables_to_drop:
-                drop_list = ", ".join(f"`{t}`" for t in tables_to_drop)
-                conn.execute(text(f"DROP TABLE IF EXISTS {drop_list}"))
+                # Drop tables individually to avoid SQL injection via
+                # malicious table names containing backtick escapes.
+                for tname in tables_to_drop:
+                    safe_name = tname.replace("`", "``")
+                    conn.execute(text(f"DROP TABLE IF EXISTS `{safe_name}`"))
             logger.info(f"Dropped {len(tables_to_drop)} existing tables")
 
             # 3. Create ALL tables from current model definitions.

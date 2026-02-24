@@ -4,7 +4,9 @@ API Router v1
 Combines all API route modules into a single router.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.core.security_middleware import verify_csrf_token
 
 # Import route modules
 from app.api.v1 import onboarding, public_portal_admin
@@ -48,7 +50,7 @@ from app.api.v1.endpoints import (
     operational_ranks,
 )
 
-api_router = APIRouter()
+api_router = APIRouter(dependencies=[Depends(verify_csrf_token)])
 
 # Include route modules
 api_router.include_router(onboarding.router)

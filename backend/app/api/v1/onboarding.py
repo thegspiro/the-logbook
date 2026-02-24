@@ -366,6 +366,15 @@ async def get_or_create_session(
     Raises:
         HTTPException: If session is invalid or expired
     """
+    # Guard: if an organization already exists, block new onboarding sessions
+    from app.models.organization import Organization
+    org_result = await db.execute(select(Organization).limit(1))
+    if org_result.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Onboarding has already been completed"
+        )
+
     session_id = request.headers.get('X-Session-ID')
 
     if session_id:

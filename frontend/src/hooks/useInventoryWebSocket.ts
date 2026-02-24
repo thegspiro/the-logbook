@@ -3,7 +3,10 @@
  *
  * Connects to the inventory WebSocket endpoint and triggers a callback
  * whenever an inventory change event is received.  Handles auto-reconnect
- * with exponential backoff, JWT auth via query param, and graceful cleanup.
+ * with exponential backoff, cookie-based auth, and graceful cleanup.
+ *
+ * Authentication: The browser sends httpOnly cookies during the WebSocket
+ * handshake automatically. No tokens are placed in the URL.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
@@ -35,13 +38,10 @@ export function useInventoryWebSocket({ onEvent, enabled = true }: UseInventoryW
   const connect = useCallback(() => {
     if (!enabledRef.current) return;
 
-    // Get JWT token for auth
-    const token = localStorage.getItem('access_token');
-    if (!token) return;
-
-    // Build WebSocket URL
+    // Build WebSocket URL — httpOnly cookies are sent automatically
+    // during the handshake (no token in the URL).
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}/api/v1/inventory/ws?token=${encodeURIComponent(token)}`;
+    const url = `${protocol}//${window.location.host}/api/v1/inventory/ws`;
 
     try {
       const ws = new WebSocket(url);

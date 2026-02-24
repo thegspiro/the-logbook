@@ -258,10 +258,14 @@ async def get_ballot_candidates(
     return result.scalars().all()
 
 
+class VoteWithToken(VoteCreate):
+    """Vote payload that includes the voting token in the body (not URL)."""
+    token: str
+
+
 @router.post("/ballot/vote", response_model=VoteResponse, status_code=status.HTTP_201_CREATED)
 async def cast_vote_with_token(
-    vote_data: VoteCreate,
-    token: str,
+    vote_data: VoteWithToken,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
@@ -271,8 +275,12 @@ async def cast_vote_with_token(
     This endpoint is public (no authentication required) and uses the
     secure hashed token to cast anonymous votes.
 
+    The token must be provided in the request body (not as a query parameter)
+    to avoid leaking it in server/proxy logs and browser history.
+
     **No authentication required**
     """
+    token = vote_data.token
     service = ElectionService(db)
     vote, error = await service.cast_vote_with_token(
         token=token,
@@ -299,10 +307,14 @@ async def cast_vote_with_token(
     )
 
 
+class BallotSubmissionWithToken(BallotSubmission):
+    """Ballot submission that includes the voting token in the body."""
+    token: str
+
+
 @router.post("/ballot/vote/bulk", response_model=BallotSubmissionResponse, status_code=status.HTTP_201_CREATED)
 async def submit_ballot_with_token(
-    ballot: BallotSubmission,
-    token: str,
+    ballot: BallotSubmissionWithToken,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
@@ -312,8 +324,12 @@ async def submit_ballot_with_token(
     Submits all ballot item votes atomically. Each vote can be an
     approval, denial, candidate selection, write-in, or abstention.
 
+    The token must be provided in the request body (not as a query parameter)
+    to avoid leaking it in server/proxy logs and browser history.
+
     **No authentication required** — uses voting token from email link.
     """
+    token = ballot.token
     service = ElectionService(db)
     result, error = await service.submit_ballot_with_token(
         token=token,
@@ -465,9 +481,20 @@ async def update_election(
     if "eligible_voters" in update_data and update_data["eligible_voters"]:
         update_data["eligible_voters"] = [str(v) for v in update_data["eligible_voters"]]
 
-    # Update fields
+    # Update fields — explicit allowlist prevents writing to read-only columns
+    # (e.g. organization_id, created_by, voter_anonymity_salt) if the Pydantic
+    # schema is ever inadvertently expanded.
+    ALLOWED_ELECTION_UPDATE_FIELDS = {
+        "title", "description", "election_type", "positions", "ballot_items",
+        "position_eligibility", "meeting_date", "start_date", "end_date",
+        "anonymous_voting", "allow_write_ins", "max_votes_per_position",
+        "results_visible_immediately", "eligible_voters", "voting_method",
+        "victory_condition", "victory_threshold", "victory_percentage",
+        "enable_runoffs", "runoff_type", "max_runoff_rounds",
+    }
     for field, value in update_data.items():
-        setattr(election, field, value)
+        if field in ALLOWED_ELECTION_UPDATE_FIELDS:
+            setattr(election, field, value)
 
     election.updated_at = datetime.now(timezone.utc)
 

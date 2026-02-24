@@ -1549,9 +1549,11 @@ async def update_external_attendee(
     if not attendee:
         raise HTTPException(status_code=404, detail="External attendee not found")
 
+    ALLOWED_ATTENDEE_FIELDS = {"name", "email", "phone", "organization_name", "notes"}
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(attendee, field, value)
+        if field in ALLOWED_ATTENDEE_FIELDS:
+            setattr(attendee, field, value)
 
     await db.commit()
     await db.refresh(attendee)

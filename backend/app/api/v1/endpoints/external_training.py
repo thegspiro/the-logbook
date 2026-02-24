@@ -206,8 +206,14 @@ async def update_provider(
         if field in update_data and update_data[field]:
             update_data[field] = encrypt_data(update_data[field])
 
+    ALLOWED_PROVIDER_FIELDS = {
+        "name", "description", "api_base_url", "api_key", "api_secret",
+        "client_id", "client_secret", "auth_type", "config",
+        "auto_sync_enabled", "sync_interval_hours", "default_category_id", "active",
+    }
     for field, value in update_data.items():
-        setattr(provider, field, value)
+        if field in ALLOWED_PROVIDER_FIELDS:
+            setattr(provider, field, value)
 
     # Reset connection verification if credentials changed
     if any(k in update_data for k in ['api_key', 'api_secret', 'client_id', 'client_secret', 'api_base_url']):

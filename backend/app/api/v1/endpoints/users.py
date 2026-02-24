@@ -44,7 +44,7 @@ router = APIRouter()
 @router.get("", response_model=List[UserListResponse])
 async def list_users(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("users.view", "members.manage")),
 ):
     """
     List all members in the organization
@@ -372,7 +372,7 @@ async def list_users_with_roles(
 async def get_user_roles(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("users.view", "members.manage")),
 ):
     """
     Get roles assigned to a specific user
@@ -665,7 +665,7 @@ async def remove_role_from_user(
 async def get_user_with_roles(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("users.view", "members.manage")),
 ):
     """
     Get a specific user with their assigned roles and notification preferences

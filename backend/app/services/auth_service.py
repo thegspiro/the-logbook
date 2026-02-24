@@ -85,8 +85,13 @@ class AuthService:
         Returns:
             Tuple of (User, None) on success, or (None, error_message) on failure
         """
-        # Try to find user by username or email
-        result = await self.db.execute(
+        # Try to find user by username or email, scoped to the single org
+        # to prevent cross-organization auth if multiple orgs ever exist.
+        from app.models.organization import Organization
+        org_result = await self.db.execute(select(Organization).limit(1))
+        org = org_result.scalar_one_or_none()
+
+        query = (
             select(User)
             .where(
                 (User.username == username) | (User.email == username)
@@ -94,6 +99,10 @@ class AuthService:
             .where(User.deleted_at.is_(None))
             .options(selectinload(User.roles))
         )
+        if org:
+            query = query.where(User.organization_id == str(org.id))
+
+        result = await self.db.execute(query)
         user = result.scalar_one_or_none()
 
         if not user:
