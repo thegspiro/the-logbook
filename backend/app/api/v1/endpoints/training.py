@@ -24,8 +24,6 @@ from app.models.training import (
     TrainingRequirement,
     TrainingCategory,
     TrainingStatus,
-    RequirementType,
-    RequirementFrequency,
 )
 from app.models.user import User
 from app.schemas.training import (
@@ -52,7 +50,11 @@ from app.schemas.training import (
 )
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import (
-    WaiverPeriod, fetch_user_waivers, fetch_org_waivers, adjust_required,
+    fetch_user_waivers, fetch_org_waivers,
+)
+from app.services.training_compliance import (
+    get_requirement_date_window,
+    evaluate_member_requirement,
 )
 from app.api.dependencies import get_current_user, require_permission
 
@@ -1687,243 +1689,9 @@ class MemberComplianceRow(BaseModel):
     completion_pct: float
 
 
-def _get_requirement_date_window(req, today: date):
-    """Return (start_date, end_date) for evaluating a requirement's compliance window.
-
-    Handles rolling periods: when ``due_date_type`` is ``rolling`` and
-    ``rolling_period_months`` is set, the window spans from
-    ``today - rolling_period_months`` to ``today``.
-    """
-    # Check for rolling period first (overrides frequency-based window)
-    due_date_type = getattr(req, 'due_date_type', None)
-    if due_date_type:
-        due_date_type = due_date_type.value if hasattr(due_date_type, 'value') else str(due_date_type)
-    rolling_months = getattr(req, 'rolling_period_months', None)
-
-    if due_date_type == 'rolling' and rolling_months:
-        from dateutil.relativedelta import relativedelta
-        return today - relativedelta(months=rolling_months), today
-
-    freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
-    current_year = today.year
-
-    if freq == RequirementFrequency.ONE_TIME.value:
-        return None, None
-    elif freq == RequirementFrequency.BIANNUAL.value:
-        # Biannual: no date window — compliance is based on having a
-        # non-expired certification (checked in _evaluate_member_requirement)
-        return None, None
-    elif freq == RequirementFrequency.QUARTERLY.value:
-        quarter_month = ((today.month - 1) // 3) * 3 + 1
-        start_date = date(current_year, quarter_month, 1)
-        end_month = quarter_month + 2
-        end_year = current_year
-        if end_month > 12:
-            end_month -= 12
-            end_year += 1
-        end_day = calendar.monthrange(end_year, end_month)[1]
-        return start_date, date(end_year, end_month, end_day)
-    elif freq == RequirementFrequency.MONTHLY.value:
-        start_date = date(current_year, today.month, 1)
-        end_day = calendar.monthrange(current_year, today.month)[1]
-        return start_date, date(current_year, today.month, end_day)
-    else:
-        # Annual (default)
-        yr = req.year if req.year else current_year
-        return date(yr, 1, 1), date(yr, 12, 31)
-
-
-def _evaluate_member_requirement(req, member_records, today: date, waivers=None):
-    """
-    Evaluate a single member's status for a single requirement.
-
-    Returns (status, latest_completion_date, latest_expiry_date).
-
-    When *waivers* is provided, required hours/shifts/calls are adjusted
-    for waived months so members on leave are not penalised.
-
-    Matching strategy depends on requirement_type:
-    - HOURS:          Sum hours of completed records matching training_type within date window
-    - COURSES:        Check if required course IDs are all completed
-    - CERTIFICATION:  Check for matching certification records (by name or training_type)
-    - SHIFTS/CALLS:   Count matching records within date window
-    - Others:         Match by training_type or name
-    """
-    req_type = req.requirement_type.value if hasattr(req.requirement_type, 'value') else str(req.requirement_type)
-    freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
-    start_date, end_date = _get_requirement_date_window(req, today)
-    _waivers = waivers or []
-
-    # Filter completed records within the date window
-    completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
-    if start_date and end_date:
-        windowed = [
-            r for r in completed
-            if r.completion_date and start_date <= r.completion_date <= end_date
-        ]
-    else:
-        windowed = completed
-
-    # ---- HOURS requirements: sum hours by training_type ----
-    if req_type == RequirementType.HOURS.value:
-        type_matched = windowed
-        if req.training_type:
-            type_matched = [r for r in windowed if r.training_type == req.training_type]
-        # Also include records whose categories match this requirement's category_ids
-        if req.category_ids and not req.training_type:
-            type_matched = windowed  # All completed records count if no specific type
-
-        total_hours = sum(r.hours_completed or 0 for r in type_matched)
-        required = req.required_hours or 0
-
-        # Adjust required hours for waived months
-        if required > 0 and start_date and end_date and _waivers:
-            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
-
-        latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
-        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
-        latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
-
-        # For biannual requirements, check if the latest matching record with
-        # an expiration date has expired — an expired cert overrides hours met.
-        if freq == RequirementFrequency.BIANNUAL.value and type_matched:
-            with_exp = [r for r in type_matched if r.expiration_date]
-            if with_exp:
-                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
-                if newest_cert.expiration_date < today:
-                    exp_comp = newest_cert.completion_date.isoformat() if newest_cert.completion_date else latest_comp
-                    exp_exp = newest_cert.expiration_date.isoformat()
-                    return "expired", exp_comp, exp_exp
-
-        if required > 0 and total_hours >= required:
-            return "completed", latest_comp, latest_exp
-        elif total_hours > 0:
-            return "in_progress", latest_comp, latest_exp
-        else:
-            return "not_started", None, None
-
-    # ---- COURSES requirements: check required course IDs ----
-    if req_type == RequirementType.COURSES.value:
-        course_ids = req.required_courses or []
-        if not course_ids:
-            return "not_started", None, None
-
-        completed_course_ids = {str(r.course_id) for r in windowed if r.course_id}
-        matched_count = sum(1 for cid in course_ids if cid in completed_course_ids)
-
-        latest = max(windowed, key=lambda r: r.completion_date or date.min) if windowed else None
-        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
-        latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
-
-        # For biannual requirements, expired cert overrides course completion
-        if freq == RequirementFrequency.BIANNUAL.value and windowed:
-            with_exp = [r for r in windowed if r.expiration_date]
-            if with_exp:
-                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
-                if newest_cert.expiration_date < today:
-                    exp_comp = newest_cert.completion_date.isoformat() if newest_cert.completion_date else latest_comp
-                    exp_exp = newest_cert.expiration_date.isoformat()
-                    return "expired", exp_comp, exp_exp
-
-        if matched_count >= len(course_ids):
-            return "completed", latest_comp, latest_exp
-        elif matched_count > 0:
-            return "in_progress", latest_comp, latest_exp
-        else:
-            return "not_started", None, None
-
-    # ---- CERTIFICATION requirements: match by name, training_type, or cert number ----
-    if req_type == RequirementType.CERTIFICATION.value:
-        matching = [
-            r for r in completed
-            if (
-                (req.training_type and r.training_type == req.training_type)
-                or (r.course_name and req.name and req.name.lower() in r.course_name.lower())
-                or (r.certification_number and req.registry_code
-                    and req.registry_code.lower() in r.certification_number.lower())
-            )
-        ]
-        if matching:
-            latest = max(matching, key=lambda r: r.completion_date or date.min)
-            latest_comp = latest.completion_date.isoformat() if latest.completion_date else None
-            latest_exp = latest.expiration_date.isoformat() if latest.expiration_date else None
-            if latest.expiration_date and latest.expiration_date < today:
-                return "expired", latest_comp, latest_exp
-            return "completed", latest_comp, latest_exp
-        return "not_started", None, None
-
-    # ---- SHIFTS requirements ----
-    if req_type == RequirementType.SHIFTS.value:
-        type_matched = windowed
-        if req.training_type:
-            type_matched = [r for r in windowed if r.training_type == req.training_type]
-        count = len(type_matched)
-        required = req.required_shifts or 0
-
-        # Adjust required shifts for waived months
-        if required > 0 and start_date and end_date and _waivers:
-            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
-
-        latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
-        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
-        latest_exp = None
-
-        if required > 0 and count >= required:
-            return "completed", latest_comp, latest_exp
-        elif count > 0:
-            return "in_progress", latest_comp, latest_exp
-        return "not_started", None, None
-
-    # ---- CALLS requirements ----
-    if req_type == RequirementType.CALLS.value:
-        type_matched = windowed
-        if req.training_type:
-            type_matched = [r for r in windowed if r.training_type == req.training_type]
-        count = len(type_matched)
-        required = req.required_calls or 0
-
-        # Adjust required calls for waived months
-        if required > 0 and start_date and end_date and _waivers:
-            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
-
-        latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
-        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
-        latest_exp = None
-
-        if required > 0 and count >= required:
-            return "completed", latest_comp, latest_exp
-        elif count > 0:
-            return "in_progress", latest_comp, latest_exp
-        return "not_started", None, None
-
-    # ---- Fallback (skills_evaluation, checklist, knowledge_test, etc.) ----
-    matching = []
-    if req.training_type:
-        matching = [r for r in windowed if r.training_type == req.training_type]
-    if not matching and req.name:
-        matching = [
-            r for r in windowed
-            if r.course_name and req.name.lower() in r.course_name.lower()
-        ]
-
-    if matching:
-        latest = max(matching, key=lambda r: r.completion_date or date.min)
-        latest_comp = latest.completion_date.isoformat() if latest.completion_date else None
-        latest_exp = latest.expiration_date.isoformat() if latest.expiration_date else None
-        if latest.expiration_date and latest.expiration_date < today:
-            return "expired", latest_comp, latest_exp
-        return "completed", latest_comp, latest_exp
-    else:
-        # Check for in-progress records
-        in_progress = [r for r in member_records if r.status == TrainingStatus.IN_PROGRESS]
-        ip_matching = []
-        if req.training_type:
-            ip_matching = [r for r in in_progress if r.training_type == req.training_type]
-        if not ip_matching and req.name:
-            ip_matching = [r for r in in_progress if r.course_name and req.name.lower() in r.course_name.lower()]
-        if ip_matching:
-            return "in_progress", None, None
-    return "not_started", None, None
+# Aliases for the shared compliance utilities (kept for local references)
+_get_requirement_date_window = get_requirement_date_window
+_evaluate_member_requirement = evaluate_member_requirement
 
 
 @router.get("/compliance-matrix")
