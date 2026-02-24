@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter, mockQRCheckInData, createMockApiResponse, createMockApiError } from '../test/utils';
+import { renderWithRouter, mockQRCheckInData, createMockApiError } from '../test/utils';
 import EventQRCodePage from './EventQRCodePage';
 import type { QRCheckInData } from '../types/event';
 import * as apiModule from '../services/api';
