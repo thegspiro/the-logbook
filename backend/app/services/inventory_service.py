@@ -1379,9 +1379,9 @@ class InventoryService:
 
     async def get_inventory_summary(self, organization_id: UUID) -> Dict[str, Any]:
         """Get overall inventory summary statistics"""
-        # Total items
+        # Total items (sum quantities so pool items with quantity > 1 are counted correctly)
         total_result = await self.db.execute(
-            select(func.count(InventoryItem.id))
+            select(func.coalesce(func.sum(InventoryItem.quantity), 0))
             .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active == True)  # noqa: E712
         )
@@ -1413,9 +1413,9 @@ class InventoryService:
             row.condition.value: row.count for row in condition_result.all()
         }
 
-        # Total value
+        # Total value (multiply per-unit value by quantity for accurate totals)
         value_result = await self.db.execute(
-            select(func.sum(InventoryItem.current_value))
+            select(func.coalesce(func.sum(InventoryItem.current_value * InventoryItem.quantity), 0))
             .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active == True)  # noqa: E712
         )
