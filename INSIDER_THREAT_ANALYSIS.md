@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The Logbook demonstrates a strong security posture overall with proper authentication, role-based access control, organization isolation, and comprehensive audit logging. However, the analysis identified **14 findings** across varying severity levels that an insider could exploit. The most critical findings involve JWT tokens stored in localStorage (XSS-accessible), a WebSocket endpoint that skips session validation, and several endpoints with missing or insufficient permission checks that allow information leakage.
+The Logbook demonstrates a strong security posture overall with proper authentication, role-based access control, organization isolation, and comprehensive audit logging. However, the analysis identified **17 findings** across varying severity levels that an insider could exploit. The most critical findings involve JWT tokens stored in localStorage (XSS-accessible), a WebSocket endpoint that skips session validation, and several endpoints with missing or insufficient permission checks that allow information leakage.
 
 ---
 
@@ -339,6 +339,63 @@ ext = MIME_TO_EXT.get(detected_mime, "")
 
 ---
 
+### FINDING 15 — JWT Token Exposed in WebSocket URL Query Parameter (MEDIUM)
+
+**File:** `frontend/src/hooks/useInventoryWebSocket.ts:39,44`
+
+**Description:** The frontend passes the JWT access token as a URL query parameter when connecting to the WebSocket:
+
+```typescript
+const token = localStorage.getItem('access_token');
+const url = `${protocol}//${window.location.host}/api/v1/inventory/ws?token=${encodeURIComponent(token)}`;
+```
+
+**Insider Attack:** URL query parameters are logged in multiple places — Nginx access logs, browser history, and proxy logs. An insider with access to any of these log sources (e.g., someone with `admin.access` who can view server logs, or even a shared workstation where browser history is accessible) can extract valid JWT tokens and impersonate other users. This is separate from Finding 2 (backend not validating sessions) and compounds the risk.
+
+**Fix:** Pass the token via the WebSocket protocol's first message after connection, or use a short-lived ticket exchanged for a WebSocket session server-side.
+
+---
+
+### FINDING 16 — IT Team PII Persisted in localStorage (MEDIUM)
+
+**File:** `frontend/src/modules/onboarding/store/onboardingStore.ts:410-413`
+
+**Description:** During onboarding, IT team member PII (names, emails, phone numbers) and backup access credentials are persisted to localStorage:
+
+```typescript
+itTeamMembers: state.itTeamMembers,  // Array of { id, name, email, phone, role }
+backupEmail: state.backupEmail,
+backupPhone: state.backupPhone,
+secondaryAdminEmail: state.secondaryAdminEmail,
+```
+
+**Insider Attack:** Anyone with physical access to the machine where onboarding was performed (or XSS access) can read the IT team's personal contact details from localStorage. This data persists indefinitely after onboarding completes.
+
+**Fix:** Clear this data from localStorage after onboarding completes. The `clearLegacySensitiveData()` function exists but should be extended to cover onboarding PII. Better yet, never persist PII in localStorage — fetch from the server when needed.
+
+---
+
+### FINDING 17 — Error Tracking Logs Full URLs Including Token Parameters (LOW)
+
+**File:** `frontend/src/services/errorTracking.ts:151`
+
+**Description:** The error tracking service captures the full URL when logging errors:
+
+```typescript
+context: {
+  ...context.additionalContext,
+  url: window.location.href,  // Captures tokens in ballot/voting URLs
+}
+```
+
+This is then sent to the `POST /api/v1/errors/log` endpoint (Finding 6), meaning voting tokens from ballot URLs and any other URL-based secrets end up stored in the error log database, viewable by anyone with `audit.view` permission.
+
+**Insider Attack:** An insider with `audit.view` permission could mine error logs for voting tokens (from ballot pages that threw errors), then use those tokens to cast unauthorized votes.
+
+**Fix:** Sanitize URLs before logging — strip query parameters, or at minimum redact known sensitive parameters like `token`.
+
+---
+
 ## Positive Security Controls Observed
 
 The following security measures are well-implemented and represent strong insider threat defenses:
@@ -365,9 +422,9 @@ The following security measures are well-implemented and represent strong inside
 | Severity | Count | Findings |
 |----------|-------|----------|
 | HIGH     | 2     | #1 (localStorage tokens), #2 (WebSocket session bypass) |
-| MEDIUM   | 6     | #3 (user list no perms), #4 (role query no perms), #5 (profile no perms), #6 (error log injection), #7 (cross-org auth), #8 (CSRF dead code) |
+| MEDIUM   | 8     | #3 (user list no perms), #4 (role query no perms), #5 (profile no perms), #6 (error log injection), #7 (cross-org auth), #8 (CSRF dead code), #15 (WS token in URL), #16 (IT PII in localStorage) |
 | LOW-MED  | 2     | #9 (onboarding re-access), #10 (tokens in response body) |
-| LOW      | 4     | #11 (default creds), #12 (MinIO creds), #13 (voting token in URL), #14 (file extension) |
+| LOW      | 5     | #11 (default creds), #12 (MinIO creds), #13 (voting token in URL), #14 (file extension), #17 (error tracking logs tokens) |
 
 ---
 
