@@ -10,15 +10,16 @@ event time, and the check-in URL. The actual check-in requires authentication
 on the scanning user's device.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timedelta
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import get_db
-from app.services.location_service import LocationService
-from app.schemas.location import LocationDisplayInfo
 from app.schemas.event import QRCheckInData
+from app.schemas.location import LocationDisplayInfo
+from app.services.location_service import LocationService
 
 router = APIRouter(prefix="/public/v1/display", tags=["public-display"])
 
@@ -73,7 +74,9 @@ async def get_public_location_display(
                 event_description=None,  # Don't expose description publicly
                 start_datetime=event.start_datetime.isoformat(),
                 end_datetime=event.end_datetime.isoformat(),
-                actual_end_time=event.actual_end_time.isoformat() if event.actual_end_time else None,
+                actual_end_time=(
+                    event.actual_end_time.isoformat() if event.actual_end_time else None
+                ),
                 check_in_start=check_in_start.isoformat(),
                 check_in_end=check_in_end.isoformat(),
                 is_valid=True,

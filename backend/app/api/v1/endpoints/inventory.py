@@ -5,85 +5,81 @@ Endpoints for inventory management including categories, items, assignments,
 checkouts, maintenance, and reporting.
 """
 
-from typing import Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect
-from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
 from datetime import datetime
+from typing import Dict, List, Optional
+from uuid import UUID
 
-from app.core.database import get_db
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
-from app.core.websocket_manager import ws_manager
+from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.core.websocket_manager import ws_manager
+from app.models.inventory import (
+    AssignmentType,
+    EquipmentRequest,
+    ItemStatus,
+    StorageArea,
+)
 from app.models.user import User
-from app.models.inventory import ItemStatus, AssignmentType
-from app.schemas.inventory import (
-    # Category schemas
-    InventoryCategoryCreate,
-    InventoryCategoryUpdate,
-    InventoryCategoryResponse,
-    # Item schemas
-    InventoryItemCreate,
-    InventoryItemUpdate,
-    InventoryItemResponse,
-    InventoryItemDetailResponse,
-    ItemsListResponse,
-    ItemRetireRequest,
-    # Assignment schemas
-    ItemAssignmentCreate,
-    ItemAssignmentResponse,
-    UnassignItemRequest,
-    # Issuance schemas
-    ItemIssuanceCreate,
-    ItemIssuanceResponse,
-    ItemIssuanceReturnRequest,
-    # Checkout schemas
-    CheckOutCreate,
-    CheckOutRecordResponse,
-    CheckInRequest,
-    # Maintenance schemas
-    MaintenanceRecordCreate,
-    MaintenanceRecordUpdate,
-    MaintenanceRecordResponse,
-    MaintenanceDueItem,
-    # Summary schemas
-    InventorySummary,
-    LowStockItem,
-    UserInventoryResponse,
-    # Departure clearance schemas
-    DepartureClearanceCreate,
-    DepartureClearanceResponse,
-    DepartureClearanceSummaryResponse,
-    ClearanceLineItemResponse,
-    ResolveClearanceItemRequest,
-    CompleteClearanceRequest,
-    # Scan / quick-action schemas
-    ScanLookupResponse,
-    ScanLookupListResponse,
+from app.schemas.inventory import (  # Category schemas; Item schemas; Assignment schemas; Issuance schemas; Checkout schemas; Maintenance schemas; Summary schemas; Departure clearance schemas; Scan / quick-action schemas; Members summary; Equipment request schemas; Storage area schemas; Write-off schemas
     BatchCheckoutRequest,
     BatchCheckoutResponse,
     BatchReturnRequest,
     BatchReturnResponse,
-    LabelGenerateRequest,
-    # Members summary
-    MembersInventoryListResponse,
-    # Equipment request schemas
+    CheckInRequest,
+    CheckOutCreate,
+    CheckOutRecordResponse,
+    ClearanceLineItemResponse,
+    CompleteClearanceRequest,
+    DepartureClearanceCreate,
+    DepartureClearanceResponse,
     EquipmentRequestCreate,
     EquipmentRequestReview,
-    EquipmentRequestResponse,
-    # Storage area schemas
+    InventoryCategoryCreate,
+    InventoryCategoryResponse,
+    InventoryCategoryUpdate,
+    InventoryItemCreate,
+    InventoryItemResponse,
+    InventoryItemUpdate,
+    InventorySummary,
+    ItemAssignmentCreate,
+    ItemAssignmentResponse,
+    ItemIssuanceCreate,
+    ItemIssuanceResponse,
+    ItemIssuanceReturnRequest,
+    ItemRetireRequest,
+    ItemsListResponse,
+    LabelGenerateRequest,
+    LowStockItem,
+    MaintenanceRecordCreate,
+    MaintenanceRecordResponse,
+    MaintenanceRecordUpdate,
+    MembersInventoryListResponse,
+    ResolveClearanceItemRequest,
+    ScanLookupListResponse,
+    ScanLookupResponse,
     StorageAreaCreate,
-    StorageAreaUpdate,
     StorageAreaResponse,
-    # Write-off schemas
+    StorageAreaUpdate,
+    UnassignItemRequest,
+    UserInventoryResponse,
     WriteOffRequestCreate,
-    WriteOffReview,
     WriteOffRequestResponse,
+    WriteOffReview,
 )
-from app.models.inventory import EquipmentRequest, RequestStatus, StorageArea
-from app.services.inventory_service import InventoryService
 from app.services.departure_clearance_service import DepartureClearanceService
-from app.api.dependencies import get_current_user, require_permission
+from app.services.inventory_service import InventoryService
 
 router = APIRouter()
 
@@ -91,11 +87,14 @@ router = APIRouter()
 async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
     """Publish a real-time inventory event to WebSocket clients."""
     try:
-        await ws_manager.publish_event(org_id, {
-            "type": "inventory_changed",
-            "action": action,
-            "data": data or {},
-        })
+        await ws_manager.publish_event(
+            org_id,
+            {
+                "type": "inventory_changed",
+                "action": action,
+                "data": data or {},
+            },
+        )
     except Exception:
         pass  # Never let WS publishing break an API response
 
@@ -103,6 +102,7 @@ async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
 # ============================================
 # Category Endpoints
 # ============================================
+
 
 @router.get("/categories", response_model=List[InventoryCategoryResponse])
 async def list_categories(
@@ -126,7 +126,11 @@ async def list_categories(
     return categories
 
 
-@router.post("/categories", response_model=InventoryCategoryResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/categories",
+    response_model=InventoryCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_category(
     category: InventoryCategoryCreate,
     db: AsyncSession = Depends(get_db),
@@ -214,6 +218,7 @@ async def get_category(
 # Item Endpoints
 # ============================================
 
+
 @router.get("/items", response_model=ItemsListResponse)
 async def list_items(
     category_id: Optional[UUID] = None,
@@ -264,7 +269,9 @@ async def list_items(
     )
 
 
-@router.post("/items", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/items", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_item(
     item: InventoryItemCreate,
     db: AsyncSession = Depends(get_db),
@@ -303,7 +310,8 @@ async def create_item(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "item_created",
+        str(current_user.organization_id),
+        "item_created",
         {"item_id": str(new_item.id), "item_name": new_item.name},
     )
 
@@ -321,12 +329,14 @@ async def export_items_csv(
     """Export inventory items as CSV."""
     import csv
     import io
+
     from starlette.responses import StreamingResponse
 
     service = InventoryService(db)
     status_enum = None
     if status:
         from app.models.inventory import ItemStatus
+
         try:
             status_enum = ItemStatus(status)
         except ValueError:
@@ -343,28 +353,64 @@ async def export_items_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "Name", "Category", "Serial Number", "Asset Tag", "Barcode",
-        "Status", "Condition", "Storage Location", "Station",
-        "Manufacturer", "Model Number", "Quantity", "Tracking Type",
-        "Purchase Date", "Purchase Price", "Vendor", "Warranty Expiration",
-        "Notes",
-    ])
+    writer.writerow(
+        [
+            "Name",
+            "Category",
+            "Serial Number",
+            "Asset Tag",
+            "Barcode",
+            "Status",
+            "Condition",
+            "Storage Location",
+            "Station",
+            "Manufacturer",
+            "Model Number",
+            "Quantity",
+            "Tracking Type",
+            "Purchase Date",
+            "Purchase Price",
+            "Vendor",
+            "Warranty Expiration",
+            "Notes",
+        ]
+    )
     for item in items:
         cat_name = item.category.name if item.category else ""
-        writer.writerow([
-            item.name, cat_name, item.serial_number or "", item.asset_tag or "",
-            item.barcode or "", item.status.value if hasattr(item.status, 'value') else str(item.status),
-            item.condition.value if hasattr(item.condition, 'value') else str(item.condition),
-            item.storage_location or "", item.station or "",
-            item.manufacturer or "", item.model_number or "",
-            item.quantity, item.tracking_type.value if hasattr(item.tracking_type, 'value') else str(item.tracking_type),
-            str(item.purchase_date) if item.purchase_date else "",
-            str(item.purchase_price) if item.purchase_price else "",
-            item.vendor or "",
-            str(item.warranty_expiration) if item.warranty_expiration else "",
-            item.notes or "",
-        ])
+        writer.writerow(
+            [
+                item.name,
+                cat_name,
+                item.serial_number or "",
+                item.asset_tag or "",
+                item.barcode or "",
+                (
+                    item.status.value
+                    if hasattr(item.status, "value")
+                    else str(item.status)
+                ),
+                (
+                    item.condition.value
+                    if hasattr(item.condition, "value")
+                    else str(item.condition)
+                ),
+                item.storage_location or "",
+                item.station or "",
+                item.manufacturer or "",
+                item.model_number or "",
+                item.quantity,
+                (
+                    item.tracking_type.value
+                    if hasattr(item.tracking_type, "value")
+                    else str(item.tracking_type)
+                ),
+                str(item.purchase_date) if item.purchase_date else "",
+                str(item.purchase_price) if item.purchase_price else "",
+                item.vendor or "",
+                str(item.warranty_expiration) if item.warranty_expiration else "",
+                item.notes or "",
+            ]
+        )
 
     output.seek(0)
     return StreamingResponse(
@@ -441,7 +487,8 @@ async def update_item(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "item_updated",
+        str(current_user.organization_id),
+        "item_updated",
         {"item_id": str(item_id)},
     )
 
@@ -488,7 +535,8 @@ async def retire_item(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "item_retired",
+        str(current_user.organization_id),
+        "item_retired",
         {"item_id": str(item_id)},
     )
 
@@ -498,6 +546,7 @@ async def retire_item(
 # ============================================
 # Assignment Endpoints
 # ============================================
+
 
 @router.post("/items/{item_id}/assign", response_model=ItemAssignmentResponse)
 async def assign_item(
@@ -554,8 +603,12 @@ async def assign_item(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "item_assigned",
-        {"item_id": str(assignment_data.item_id), "user_id": str(assignment_data.user_id)},
+        str(current_user.organization_id),
+        "item_assigned",
+        {
+            "item_id": str(assignment_data.item_id),
+            "user_id": str(assignment_data.user_id),
+        },
     )
 
     return assignment
@@ -578,6 +631,7 @@ async def unassign_item(
 
     # Convert condition string to enum if provided
     from app.models.inventory import ItemCondition
+
     return_condition = None
     if unassign_data.return_condition:
         try:
@@ -613,7 +667,8 @@ async def unassign_item(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "item_unassigned",
+        str(current_user.organization_id),
+        "item_unassigned",
         {"item_id": str(item_id)},
     )
 
@@ -650,7 +705,12 @@ async def get_user_assignments(
 # Pool Item Issuance Endpoints
 # ============================================
 
-@router.post("/items/{item_id}/issue", response_model=ItemIssuanceResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/items/{item_id}/issue",
+    response_model=ItemIssuanceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def issue_from_pool(
     item_id: UUID,
     issuance_data: ItemIssuanceCreate,
@@ -696,7 +756,8 @@ async def issue_from_pool(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "pool_issued",
+        str(current_user.organization_id),
+        "pool_issued",
         {"item_id": str(item_id), "user_id": str(issuance_data.user_id)},
     )
 
@@ -719,6 +780,7 @@ async def return_to_pool(
     **Requires permission: inventory.manage**
     """
     from app.models.inventory import ItemCondition
+
     return_condition = None
     if return_data.return_condition:
         try:
@@ -756,7 +818,8 @@ async def return_to_pool(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "pool_returned",
+        str(current_user.organization_id),
+        "pool_returned",
         {"issuance_id": str(issuance_id)},
     )
 
@@ -815,7 +878,12 @@ async def get_user_issuances(
 # Check-Out/Check-In Endpoints
 # ============================================
 
-@router.post("/checkout", response_model=CheckOutRecordResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/checkout",
+    response_model=CheckOutRecordResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def checkout_item(
     checkout_data: CheckOutCreate,
     db: AsyncSession = Depends(get_db),
@@ -858,7 +926,8 @@ async def checkout_item(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "item_checked_out",
+        str(current_user.organization_id),
+        "item_checked_out",
         {"item_id": str(checkout_data.item_id), "user_id": str(checkout_data.user_id)},
     )
 
@@ -882,6 +951,7 @@ async def checkin_item(
 
     # Convert condition string to enum
     from app.models.inventory import ItemCondition
+
     try:
         return_condition = ItemCondition(checkin_data.return_condition)
     except ValueError:
@@ -915,7 +985,8 @@ async def checkin_item(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "item_checked_in",
+        str(current_user.organization_id),
+        "item_checked_in",
         {"checkout_id": str(checkout_id)},
     )
 
@@ -950,9 +1021,17 @@ async def get_active_checkouts(
                 "item_id": c.item_id,
                 "item_name": c.item.name if c.item else "Unknown",
                 "user_id": c.user_id,
-                "user_name": f"{c.user.first_name} {c.user.last_name}".strip() if c.user else "Unknown",
-                "checked_out_at": c.checked_out_at.isoformat() if c.checked_out_at else None,
-                "expected_return_at": c.expected_return_at.isoformat() if c.expected_return_at else None,
+                "user_name": (
+                    f"{c.user.first_name} {c.user.last_name}".strip()
+                    if c.user
+                    else "Unknown"
+                ),
+                "checked_out_at": (
+                    c.checked_out_at.isoformat() if c.checked_out_at else None
+                ),
+                "expected_return_at": (
+                    c.expected_return_at.isoformat() if c.expected_return_at else None
+                ),
                 "is_overdue": c.is_overdue,
                 "checkout_reason": c.checkout_reason,
             }
@@ -990,9 +1069,17 @@ async def get_overdue_checkouts(
                 "item_id": c.item_id,
                 "item_name": c.item.name if c.item else "Unknown",
                 "user_id": c.user_id,
-                "user_name": f"{c.user.first_name} {c.user.last_name}".strip() if c.user else "Unknown",
-                "checked_out_at": c.checked_out_at.isoformat() if c.checked_out_at else None,
-                "expected_return_at": c.expected_return_at.isoformat() if c.expected_return_at else None,
+                "user_name": (
+                    f"{c.user.first_name} {c.user.last_name}".strip()
+                    if c.user
+                    else "Unknown"
+                ),
+                "checked_out_at": (
+                    c.checked_out_at.isoformat() if c.checked_out_at else None
+                ),
+                "expected_return_at": (
+                    c.expected_return_at.isoformat() if c.expected_return_at else None
+                ),
                 "is_overdue": c.is_overdue,
                 "checkout_reason": c.checkout_reason,
             }
@@ -1008,7 +1095,12 @@ async def get_overdue_checkouts(
 # Maintenance Endpoints
 # ============================================
 
-@router.post("/maintenance", response_model=MaintenanceRecordResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/maintenance",
+    response_model=MaintenanceRecordResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_maintenance_record(
     maintenance_data: MaintenanceRecordCreate,
     db: AsyncSession = Depends(get_db),
@@ -1024,7 +1116,9 @@ async def create_maintenance_record(
     maintenance, error = await service.create_maintenance_record(
         item_id=maintenance_data.item_id,
         organization_id=current_user.organization_id,
-        maintenance_data=maintenance_data.model_dump(exclude={"item_id"}, exclude_unset=True),
+        maintenance_data=maintenance_data.model_dump(
+            exclude={"item_id"}, exclude_unset=True
+        ),
         created_by=current_user.id,
     )
 
@@ -1051,7 +1145,9 @@ async def create_maintenance_record(
     return maintenance
 
 
-@router.patch("/items/{item_id}/maintenance/{record_id}", response_model=MaintenanceRecordResponse)
+@router.patch(
+    "/items/{item_id}/maintenance/{record_id}", response_model=MaintenanceRecordResponse
+)
 async def update_maintenance_record(
     item_id: UUID,
     record_id: UUID,
@@ -1096,7 +1192,9 @@ async def update_maintenance_record(
     return updated_record
 
 
-@router.get("/items/{item_id}/maintenance", response_model=List[MaintenanceRecordResponse])
+@router.get(
+    "/items/{item_id}/maintenance", response_model=List[MaintenanceRecordResponse]
+)
 async def get_item_maintenance_history(
     item_id: UUID,
     skip: int = Query(0, ge=0),
@@ -1144,6 +1242,7 @@ async def get_maintenance_due(
 # Reporting & Analytics Endpoints
 # ============================================
 
+
 @router.get("/summary", response_model=InventorySummary)
 async def get_inventory_summary(
     db: AsyncSession = Depends(get_db),
@@ -1182,7 +1281,9 @@ async def get_low_stock_alerts(
 
 @router.get("/members-summary", response_model=MembersInventoryListResponse)
 async def get_members_inventory_summary(
-    search: Optional[str] = Query(None, description="Search by name, username, or membership number"),
+    search: Optional[str] = Query(
+        None, description="Search by name, username, or membership number"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -1221,8 +1322,7 @@ async def get_user_inventory(
     if str(user_id) != str(current_user.id):
         # Check if user has inventory.view permission
         has_permission = any(
-            "inventory.view" in (role.permissions or [])
-            for role in current_user.roles
+            "inventory.view" in (role.permissions or []) for role in current_user.roles
         )
         if not has_permission:
             raise HTTPException(
@@ -1242,9 +1342,12 @@ async def get_user_inventory(
 # Barcode Scan & Quick-Action Endpoints
 # ============================================
 
+
 @router.get("/lookup", response_model=ScanLookupListResponse)
 async def lookup_item_by_code(
-    code: str = Query(..., min_length=1, description="Barcode, serial number, asset tag, or item name"),
+    code: str = Query(
+        ..., min_length=1, description="Barcode, serial number, asset tag, or item name"
+    ),
     limit: int = Query(20, ge=1, le=50, description="Maximum results to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
@@ -1322,7 +1425,8 @@ async def batch_checkout_items(
         )
 
         await _publish_inventory_event(
-            str(current_user.organization_id), "batch_checkout",
+            str(current_user.organization_id),
+            "batch_checkout",
             {"user_id": str(request.user_id), "successful": result["successful"]},
         )
 
@@ -1372,7 +1476,8 @@ async def batch_return_items(
         )
 
         await _publish_inventory_event(
-            str(current_user.organization_id), "batch_return",
+            str(current_user.organization_id),
+            "batch_return",
             {"user_id": str(request.user_id), "successful": result["successful"]},
         )
 
@@ -1382,6 +1487,7 @@ async def batch_return_items(
 # ============================================
 # Barcode Label Generation
 # ============================================
+
 
 @router.get("/labels/formats")
 async def get_label_formats(
@@ -1400,11 +1506,13 @@ async def get_label_formats(
             entry["width"] = fmt["width"]
             entry["height"] = fmt["height"]
         formats.append(entry)
-    formats.append({
-        "id": "custom",
-        "description": "Custom label size (specify width and height in inches)",
-        "type": "thermal",
-    })
+    formats.append(
+        {
+            "id": "custom",
+            "description": "Custom label size (specify width and height in inches)",
+            "type": "thermal",
+        }
+    )
     return {"formats": formats}
 
 
@@ -1451,7 +1559,12 @@ async def generate_barcode_labels(
 # Departure Clearance Endpoints
 # ============================================
 
-@router.post("/clearances", response_model=DepartureClearanceResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/clearances",
+    response_model=DepartureClearanceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def initiate_departure_clearance(
     clearance_data: DepartureClearanceCreate,
     db: AsyncSession = Depends(get_db),
@@ -1575,8 +1688,7 @@ async def get_user_departure_clearance(
     """
     if str(user_id) != str(current_user.id):
         has_permission = any(
-            "inventory.view" in (role.permissions or [])
-            for role in current_user.roles
+            "inventory.view" in (role.permissions or []) for role in current_user.roles
         )
         if not has_permission:
             raise HTTPException(
@@ -1661,7 +1773,9 @@ async def resolve_clearance_item(
     return line_item
 
 
-@router.post("/clearances/{clearance_id}/complete", response_model=DepartureClearanceResponse)
+@router.post(
+    "/clearances/{clearance_id}/complete", response_model=DepartureClearanceResponse
+)
 async def complete_departure_clearance(
     clearance_id: UUID,
     complete_data: CompleteClearanceRequest,
@@ -1718,6 +1832,7 @@ async def complete_departure_clearance(
 # ============================================
 # Equipment Request Endpoints
 # ============================================
+
 
 @router.post("/requests", status_code=status.HTTP_201_CREATED)
 async def create_equipment_request(
@@ -1783,8 +1898,7 @@ async def list_equipment_requests(
     )
 
     can_manage = any(
-        "inventory.manage" in (role.permissions or [])
-        for role in current_user.roles
+        "inventory.manage" in (role.permissions or []) for role in current_user.roles
     )
     if mine_only or not can_manage:
         query = query.where(EquipmentRequest.requester_id == str(current_user.id))
@@ -1802,17 +1916,31 @@ async def list_equipment_requests(
             {
                 "id": r.id,
                 "requester_id": r.requester_id,
-                "requester_name": f"{r.requester.first_name} {r.requester.last_name}".strip() if r.requester else None,
+                "requester_name": (
+                    f"{r.requester.first_name} {r.requester.last_name}".strip()
+                    if r.requester
+                    else None
+                ),
                 "item_name": r.item_name,
                 "item_id": r.item_id,
                 "category_id": r.category_id,
                 "quantity": r.quantity,
-                "request_type": r.request_type if isinstance(r.request_type, str) else r.request_type.value,
-                "priority": r.priority if isinstance(r.priority, str) else r.priority.value,
+                "request_type": (
+                    r.request_type
+                    if isinstance(r.request_type, str)
+                    else r.request_type.value
+                ),
+                "priority": (
+                    r.priority if isinstance(r.priority, str) else r.priority.value
+                ),
                 "reason": r.reason,
                 "status": r.status if isinstance(r.status, str) else r.status.value,
                 "reviewed_by": r.reviewed_by,
-                "reviewer_name": f"{r.reviewer.first_name} {r.reviewer.last_name}".strip() if r.reviewer else None,
+                "reviewer_name": (
+                    f"{r.reviewer.first_name} {r.reviewer.last_name}".strip()
+                    if r.reviewer
+                    else None
+                ),
                 "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
                 "review_notes": r.review_notes,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
@@ -1853,10 +1981,14 @@ async def review_equipment_request(
 
     current_status = req.status if isinstance(req.status, str) else req.status.value
     if current_status != "pending":
-        raise HTTPException(status_code=400, detail="Only pending requests can be reviewed")
+        raise HTTPException(
+            status_code=400, detail="Only pending requests can be reviewed"
+        )
 
     if review_data.status not in ("approved", "denied"):
-        raise HTTPException(status_code=400, detail="Status must be 'approved' or 'denied'")
+        raise HTTPException(
+            status_code=400, detail="Status must be 'approved' or 'denied'"
+        )
 
     req.status = review_data.status
     req.reviewed_by = str(current_user.id)
@@ -1876,6 +2008,7 @@ async def review_equipment_request(
 # Storage Area Endpoints
 # ============================================
 
+
 @router.get("/storage-areas", response_model=List[StorageAreaResponse])
 async def list_storage_areas(
     location_id: Optional[str] = Query(None, description="Filter by room/location"),
@@ -1888,8 +2021,8 @@ async def list_storage_areas(
     List storage areas, optionally filtered by location or parent.
     Returns a hierarchical tree by default, or flat list if flat=true.
     """
-    from sqlalchemy import select, func as sqlfunc
-    from sqlalchemy.orm import selectinload
+    from sqlalchemy import func as sqlfunc
+    from sqlalchemy import select
 
     query = (
         select(StorageArea)
@@ -1911,8 +2044,11 @@ async def list_storage_areas(
 
     # Count items per storage area
     from app.models.inventory import InventoryItem
+
     count_result = await db.execute(
-        select(InventoryItem.storage_area_id, sqlfunc.count(InventoryItem.id).label("cnt"))
+        select(
+            InventoryItem.storage_area_id, sqlfunc.count(InventoryItem.id).label("cnt")
+        )
         .where(InventoryItem.organization_id == str(current_user.organization_id))
         .where(InventoryItem.active == True)  # noqa: E712
         .where(InventoryItem.storage_area_id.isnot(None))
@@ -1922,9 +2058,11 @@ async def list_storage_areas(
 
     # Load locations for names
     from app.models.location import Location
+
     loc_result = await db.execute(
-        select(Location.id, Location.name)
-        .where(Location.organization_id == str(current_user.organization_id))
+        select(Location.id, Location.name).where(
+            Location.organization_id == str(current_user.organization_id)
+        )
     )
     loc_names = {row.id: row.name for row in loc_result.all()}
 
@@ -1935,7 +2073,11 @@ async def list_storage_areas(
             "name": area.name,
             "label": area.label,
             "description": area.description,
-            "storage_type": area.storage_type.value if hasattr(area.storage_type, 'value') else area.storage_type,
+            "storage_type": (
+                area.storage_type.value
+                if hasattr(area.storage_type, "value")
+                else area.storage_type
+            ),
             "parent_id": area.parent_id,
             "location_id": area.location_id,
             "barcode": area.barcode,
@@ -1946,7 +2088,9 @@ async def list_storage_areas(
             "created_by": area.created_by,
             "children": [],
             "item_count": item_counts.get(area.id, 0),
-            "location_name": loc_names.get(area.location_id) if area.location_id else None,
+            "location_name": (
+                loc_names.get(area.location_id) if area.location_id else None
+            ),
             "parent_name": None,
         }
         return resp
@@ -1977,7 +2121,11 @@ async def list_storage_areas(
     return roots
 
 
-@router.post("/storage-areas", response_model=StorageAreaResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/storage-areas",
+    response_model=StorageAreaResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_storage_area(
     data: StorageAreaCreate,
     db: AsyncSession = Depends(get_db),
@@ -2009,7 +2157,11 @@ async def create_storage_area(
         "name": area.name,
         "label": area.label,
         "description": area.description,
-        "storage_type": area.storage_type.value if hasattr(area.storage_type, 'value') else area.storage_type,
+        "storage_type": (
+            area.storage_type.value
+            if hasattr(area.storage_type, "value")
+            else area.storage_type
+        ),
         "parent_id": area.parent_id,
         "location_id": area.location_id,
         "barcode": area.barcode,
@@ -2034,6 +2186,7 @@ async def update_storage_area(
 ):
     """Update a storage area"""
     from sqlalchemy import select
+
     result = await db.execute(
         select(StorageArea)
         .where(StorageArea.id == str(area_id))
@@ -2044,8 +2197,15 @@ async def update_storage_area(
         raise HTTPException(status_code=404, detail="Storage area not found")
 
     ALLOWED_AREA_FIELDS = {
-        "name", "label", "description", "storage_type",
-        "parent_id", "location_id", "barcode", "sort_order", "is_active",
+        "name",
+        "label",
+        "description",
+        "storage_type",
+        "parent_id",
+        "location_id",
+        "barcode",
+        "sort_order",
+        "is_active",
     }
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -2064,7 +2224,11 @@ async def update_storage_area(
         "name": area.name,
         "label": area.label,
         "description": area.description,
-        "storage_type": area.storage_type.value if hasattr(area.storage_type, 'value') else area.storage_type,
+        "storage_type": (
+            area.storage_type.value
+            if hasattr(area.storage_type, "value")
+            else area.storage_type
+        ),
         "parent_id": area.parent_id,
         "location_id": area.location_id,
         "barcode": area.barcode,
@@ -2088,6 +2252,7 @@ async def delete_storage_area(
 ):
     """Delete (deactivate) a storage area"""
     from sqlalchemy import select
+
     result = await db.execute(
         select(StorageArea)
         .where(StorageArea.id == str(area_id))
@@ -2104,6 +2269,7 @@ async def delete_storage_area(
 # ============================================
 # Write-Off Endpoints
 # ============================================
+
 
 @router.post("/write-offs", response_model=WriteOffRequestResponse)
 async def create_write_off_request(
@@ -2214,7 +2380,8 @@ async def review_write_off_request(
     )
 
     await _publish_inventory_event(
-        str(current_user.organization_id), "write_off_reviewed",
+        str(current_user.organization_id),
+        "write_off_reviewed",
         {"write_off_id": str(write_off_id), "decision": review_data.status},
     )
 
@@ -2224,6 +2391,7 @@ async def review_write_off_request(
 # ============================================
 # WebSocket — Real-Time Inventory Updates
 # ============================================
+
 
 @router.websocket("/ws")
 async def inventory_websocket(
@@ -2254,6 +2422,7 @@ async def inventory_websocket(
     # Validate JWT and verify the user session is still active
     try:
         from app.core.security import decode_token
+
         payload = decode_token(token)
         org_id = payload.get("org_id")
         user_id = payload.get("sub")
@@ -2262,9 +2431,11 @@ async def inventory_websocket(
             return
 
         # Verify user is still active (not revoked/deactivated)
+        from sqlalchemy import select as sa_select
+
         from app.core.database import async_session_factory
         from app.models.user import User as UserModel
-        from sqlalchemy import select as sa_select
+
         async with async_session_factory() as db:
             result = await db.execute(
                 sa_select(UserModel).where(

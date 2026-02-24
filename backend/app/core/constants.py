@@ -9,7 +9,6 @@ All configurable values should be referenced by constant, never by raw string.
 
 from typing import List
 
-
 # ============================================
 # Role Group Constants
 # ============================================

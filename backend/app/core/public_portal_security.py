@@ -5,23 +5,19 @@ Security middleware and utilities for the public portal API including
 API key authentication, rate limiting, and access logging.
 """
 
-from fastapi import Request, HTTPException, status, Depends
-from fastapi.security import APIKeyHeader
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from typing import Optional, Tuple
-from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Tuple
+
 import bcrypt
-import hashlib
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyHeader
 from loguru import logger
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.public_portal import (
-    PublicPortalAPIKey,
-    PublicPortalConfig,
-    PublicPortalAccessLog
-)
+from app.models.public_portal import PublicPortalAccessLog, PublicPortalAPIKey
 
 # API Key header scheme
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -46,8 +42,8 @@ def hash_api_key(api_key: str) -> str:
         The bcrypt hash of the API key
     """
     salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(api_key.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
+    hashed = bcrypt.hashpw(api_key.encode("utf-8"), salt)
+    return hashed.decode("utf-8")
 
 
 def verify_api_key(api_key: str, key_hash: str) -> bool:
@@ -62,7 +58,7 @@ def verify_api_key(api_key: str, key_hash: str) -> bool:
         True if the key matches, False otherwise
     """
     try:
-        return bcrypt.checkpw(api_key.encode('utf-8'), key_hash.encode('utf-8'))
+        return bcrypt.checkpw(api_key.encode("utf-8"), key_hash.encode("utf-8"))
     except Exception as e:
         logger.error(f"Error verifying API key: {e}")
         return False
@@ -77,6 +73,7 @@ def generate_api_key() -> Tuple[str, str]:
     """
     # Generate a secure random key (32 bytes = 64 hex chars)
     import secrets
+
     api_key = f"logbook_{secrets.token_urlsafe(32)}"
     key_prefix = api_key[:8]
     return api_key, key_prefix
@@ -97,9 +94,7 @@ async def get_current_minute_timestamp() -> int:
 
 
 async def check_rate_limit(
-    api_key_id: str,
-    rate_limit: int,
-    db: AsyncSession
+    api_key_id: str, rate_limit: int, db: AsyncSession
 ) -> Tuple[bool, int, int]:
     """
     Check if an API key has exceeded its rate limit.
@@ -122,11 +117,10 @@ async def check_rate_limit(
         # Count requests in the current hour from database
         one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
         result = await db.execute(
-            select(func.count(PublicPortalAccessLog.id))
-            .where(
+            select(func.count(PublicPortalAccessLog.id)).where(
                 and_(
                     PublicPortalAccessLog.api_key_id == api_key_id,
-                    PublicPortalAccessLog.timestamp >= one_hour_ago.isoformat()
+                    PublicPortalAccessLog.timestamp >= one_hour_ago.isoformat(),
                 )
             )
         )
@@ -147,8 +141,7 @@ async def check_rate_limit(
 
 
 async def check_ip_rate_limit(
-    ip_address: str,
-    limit: int = 100
+    ip_address: str, limit: int = 100
 ) -> Tuple[bool, int, int]:
     """
     Check if an IP address has exceeded its rate limit.
@@ -184,7 +177,7 @@ async def log_access(
     response_time_ms: Optional[int],
     db: AsyncSession,
     flagged_suspicious: bool = False,
-    flag_reason: Optional[str] = None
+    flag_reason: Optional[str] = None,
 ):
     """
     Log an access attempt to the public portal.
@@ -220,7 +213,7 @@ async def log_access(
         user_agent=user_agent,
         referer=referer,
         flagged_suspicious=flagged_suspicious,
-        flag_reason=flag_reason
+        flag_reason=flag_reason,
     )
 
     db.add(access_log)
@@ -235,9 +228,7 @@ async def log_access(
 
 
 async def detect_anomalies(
-    ip_address: str,
-    api_key_id: Optional[str],
-    db: AsyncSession
+    ip_address: str, api_key_id: Optional[str], db: AsyncSession
 ) -> Tuple[bool, Optional[str]]:
     """
     Detect anomalous behavior patterns.
@@ -253,11 +244,10 @@ async def detect_anomalies(
     # Check for rapid requests from same IP (last minute)
     one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id))
-        .where(
+        select(func.count(PublicPortalAccessLog.id)).where(
             and_(
                 PublicPortalAccessLog.ip_address == ip_address,
-                PublicPortalAccessLog.timestamp >= one_minute_ago.isoformat()
+                PublicPortalAccessLog.timestamp >= one_minute_ago.isoformat(),
             )
         )
     )
@@ -269,12 +259,11 @@ async def detect_anomalies(
     # Check for failed authentication attempts (last 5 minutes)
     five_minutes_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id))
-        .where(
+        select(func.count(PublicPortalAccessLog.id)).where(
             and_(
                 PublicPortalAccessLog.ip_address == ip_address,
                 PublicPortalAccessLog.status_code == 401,
-                PublicPortalAccessLog.timestamp >= five_minutes_ago.isoformat()
+                PublicPortalAccessLog.timestamp >= five_minutes_ago.isoformat(),
             )
         )
     )
@@ -285,11 +274,10 @@ async def detect_anomalies(
 
     # Check for suspicious patterns: accessing many different endpoints rapidly
     result = await db.execute(
-        select(func.count(func.distinct(PublicPortalAccessLog.endpoint)))
-        .where(
+        select(func.count(func.distinct(PublicPortalAccessLog.endpoint))).where(
             and_(
                 PublicPortalAccessLog.ip_address == ip_address,
-                PublicPortalAccessLog.timestamp >= one_minute_ago.isoformat()
+                PublicPortalAccessLog.timestamp >= one_minute_ago.isoformat(),
             )
         )
     )
@@ -302,8 +290,7 @@ async def detect_anomalies(
 
 
 async def authenticate_api_key(
-    api_key: Optional[str] = Depends(api_key_header),
-    db: AsyncSession = Depends(get_db)
+    api_key: Optional[str] = Depends(api_key_header), db: AsyncSession = Depends(get_db)
 ) -> PublicPortalAPIKey:
     """
     Authenticate an API key for public portal access.
@@ -324,7 +311,7 @@ async def authenticate_api_key(
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key required. Include X-API-Key header."
+            detail="API key required. Include X-API-Key header.",
         )
 
     # Extract key prefix for lookup
@@ -332,44 +319,37 @@ async def authenticate_api_key(
 
     # Find API key by prefix (fast lookup)
     result = await db.execute(
-        select(PublicPortalAPIKey)
-        .where(PublicPortalAPIKey.key_prefix == key_prefix)
+        select(PublicPortalAPIKey).where(PublicPortalAPIKey.key_prefix == key_prefix)
     )
     api_key_obj = result.scalar_one_or_none()
 
     if not api_key_obj:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
         )
 
     # Verify the full key hash
     if not verify_api_key(api_key, api_key_obj.key_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
         )
 
     # Check if key is active
     if not api_key_obj.is_active:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key has been revoked"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="API key has been revoked"
         )
 
     # Check if key is expired
     if api_key_obj.is_expired:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key has expired"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="API key has expired"
         )
 
     # Check rate limit
     rate_limit = api_key_obj.effective_rate_limit
     is_allowed, current_count, limit = await check_rate_limit(
-        str(api_key_obj.id),
-        rate_limit,
-        db
+        str(api_key_obj.id), rate_limit, db
     )
 
     if not is_allowed:
@@ -379,8 +359,8 @@ async def authenticate_api_key(
             headers={
                 "X-RateLimit-Limit": str(limit),
                 "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(await get_current_hour_timestamp() + 3600)
-            }
+                "X-RateLimit-Reset": str(await get_current_hour_timestamp() + 3600),
+            },
         )
 
     # Update last used timestamp
@@ -410,10 +390,7 @@ async def validate_ip_rate_limit(request: Request):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"IP rate limit exceeded. Max {limit} requests per minute.",
-            headers={
-                "X-RateLimit-Limit": str(limit),
-                "X-RateLimit-Remaining": "0"
-            }
+            headers={"X-RateLimit-Limit": str(limit), "X-RateLimit-Remaining": "0"},
         )
 
 

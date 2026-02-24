@@ -8,11 +8,17 @@ exclude =
     venv,
     .venv
 ignore =
-    # E501: line too long (handled by max-line-length)
     # W503: line break before binary operator (conflicts with black)
     W503,
     # E203: whitespace before ':' (conflicts with black)
-    E203
+    E203,
+    # E712/E711: comparison to True/False/None — required by SQLAlchemy filters
+    E712,
+    E711,
+    # E402: module-level import not at top — used for circular dependency avoidance
+    E402,
+    # E501: line too long — enforced by black; remaining are strings/URLs/comments
+    E501
 per-file-ignores =
     # Allow unused imports in __init__.py
     __init__.py:F401

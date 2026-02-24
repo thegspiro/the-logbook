@@ -4,31 +4,39 @@ Authentication API Endpoints
 Endpoints for user authentication, registration, and session management.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, status, Request
+from typing import Optional
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Cookie,
+    Depends,
+    HTTPException,
+    Request,
+    status,
+)
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from typing import List, Optional
 
+from app.api.dependencies import get_current_active_user, get_current_user
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.permissions import get_rank_default_permissions
+from app.core.security_middleware import check_rate_limit
+from app.models.user import Organization, User
 from app.schemas.auth import (
-    UserLogin,
-    UserRegister,
-    TokenResponse,
-    TokenRefresh,
     CurrentUser,
     PasswordChange,
-    PasswordResetRequest,
     PasswordReset,
+    PasswordResetRequest,
+    TokenRefresh,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
 )
-from app.services.auth_service import AuthService, RESET_TOKEN_EXPIRY_MINUTES
-from app.api.dependencies import get_current_user, get_current_active_user
-from app.models.user import User, Organization
-from app.core.config import settings
-from app.core.security_middleware import check_rate_limit
-from app.core.permissions import get_rank_default_permissions
-
+from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
 
 router = APIRouter()
 
@@ -40,6 +48,7 @@ def _set_auth_cookies(
 ) -> None:
     """Set httpOnly, Secure, SameSite auth cookies on *response*."""
     import secrets as _secrets
+
     is_production = settings.ENVIRONMENT == "production"
     response.set_cookie(
         key="access_token",
@@ -131,7 +140,9 @@ async def get_oauth_config(
         if not row or not row.settings:
             return {"googleEnabled": False, "microsoftEnabled": False}
 
-        auth_settings = row.settings.get("auth", {}) if isinstance(row.settings, dict) else {}
+        auth_settings = (
+            row.settings.get("auth", {}) if isinstance(row.settings, dict) else {}
+        )
         provider = auth_settings.get("provider", "local")
 
         return {
@@ -142,7 +153,12 @@ async def get_oauth_config(
         return {"googleEnabled": False, "microsoftEnabled": False}
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(check_rate_limit)])
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(check_rate_limit)],
+)
 async def register(
     user_data: UserRegister,
     request: Request,
@@ -166,7 +182,7 @@ async def register(
     if not settings.REGISTRATION_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Self-registration is disabled. Please contact your administrator to create an account."
+            detail="Self-registration is disabled. Please contact your administrator to create an account.",
         )
 
     auth_service = AuthService(db)
@@ -174,6 +190,7 @@ async def register(
     # Look up the organization from the database
     # This is a single-org system — onboarding creates exactly one organization
     from sqlalchemy import select
+
     org_result = await db.execute(
         select(Organization)
         .where(Organization.active == True)  # noqa: E712
@@ -185,7 +202,7 @@ async def register(
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="No organization found. Please complete onboarding first."
+            detail="No organization found. Please complete onboarding first.",
         )
 
     # Register user
@@ -200,10 +217,7 @@ async def register(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     # Create tokens
     access_token, refresh_token = await auth_service.create_user_tokens(
@@ -224,7 +238,9 @@ async def register(
     return response
 
 
-@router.post("/login", response_model=TokenResponse, dependencies=[Depends(check_rate_limit)])
+@router.post(
+    "/login", response_model=TokenResponse, dependencies=[Depends(check_rate_limit)]
+)
 async def login(
     credentials: UserLogin,
     request: Request,
@@ -350,7 +366,7 @@ async def logout(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to process logout. Please clear your browser data and log in again."
+            detail="Unable to process logout. Please clear your browser data and log in again.",
         )
 
     auth_service = AuthService(db)
@@ -359,7 +375,7 @@ async def logout(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to end your session. Please close your browser and log in again."
+            detail="Unable to end your session. Please close your browser and log in again.",
         )
 
     response = JSONResponse(content={"message": "Successfully logged out"})
@@ -408,6 +424,7 @@ async def get_current_user_info(
 
     # Get organization timezone
     from app.models.user import Organization
+
     org_result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
@@ -477,7 +494,7 @@ async def change_password(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error or "Password change failed"
+            detail=error or "Password change failed",
         )
 
     return {"message": "Password changed successfully"}
@@ -515,10 +532,11 @@ async def forgot_password(
 
     Rate limited to prevent abuse. Always returns 200 to avoid email enumeration.
     """
-    from sqlalchemy import select
-    from app.schemas.organization import AuthSettings
-    from app.core.audit import log_audit_event
     from loguru import logger
+    from sqlalchemy import select
+
+    from app.core.audit import log_audit_event
+    from app.schemas.organization import AuthSettings
 
     ip_address = request.client.host if request.client else None
 
@@ -533,7 +551,9 @@ async def forgot_password(
 
     if not organization:
         # No org — return generic success to avoid leaking info
-        return {"message": "If an account with that email exists, a reset link has been sent."}
+        return {
+            "message": "If an account with that email exists, a reset link has been sent."
+        }
 
     # Check auth provider
     org_settings = organization.settings or {}
@@ -548,7 +568,7 @@ async def forgot_password(
         provider_label = provider_names.get(auth_config.provider, auth_config.provider)
         return {
             "message": f"This organization uses {provider_label} for authentication. "
-                       f"Please reset your password through {provider_label}.",
+            f"Please reset your password through {provider_label}.",
             "auth_provider": auth_config.provider,
         }
 
@@ -607,10 +627,7 @@ async def forgot_password(
             try:
                 it_team = org_settings.get("it_team", {})
                 it_members = it_team.get("members", [])
-                it_emails = [
-                    m["email"] for m in it_members
-                    if m.get("email")
-                ]
+                it_emails = [m["email"] for m in it_members if m.get("email")]
                 if not it_emails:
                     return
 
@@ -618,7 +635,8 @@ async def forgot_password(
                 await email_svc.send_it_password_reset_notification(
                     to_emails=it_emails,
                     user_email=user.email,
-                    user_name=f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username,
+                    user_name=f"{user.first_name or ''} {user.last_name or ''}".strip()
+                    or user.username,
                     organization_name=org_name,
                     ip_address=ip_address,
                 )
@@ -628,7 +646,9 @@ async def forgot_password(
         background_tasks.add_task(_notify_it_team)
 
     # Always return the same message to prevent email enumeration
-    return {"message": "If an account with that email exists, a reset link has been sent."}
+    return {
+        "message": "If an account with that email exists, a reset link has been sent."
+    }
 
 
 @router.post("/reset-password", dependencies=[Depends(check_rate_limit)])
@@ -656,7 +676,9 @@ async def reset_password(
     # Audit log the outcome
     await log_audit_event(
         db=db,
-        event_type="auth.password_reset_completed" if success else "auth.password_reset_failed",
+        event_type=(
+            "auth.password_reset_completed" if success else "auth.password_reset_failed"
+        ),
         event_category="auth",
         severity="INFO" if success else "WARNING",
         event_data={
@@ -670,10 +692,12 @@ async def reset_password(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error or "Password reset failed"
+            detail=error or "Password reset failed",
         )
 
-    return {"message": "Password has been reset successfully. You can now log in with your new password."}
+    return {
+        "message": "Password has been reset successfully. You can now log in with your new password."
+    }
 
 
 @router.post("/validate-reset-token", dependencies=[Depends(check_rate_limit)])
@@ -690,7 +714,7 @@ async def validate_reset_token(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid password reset link. Please request a new reset link from the login page."
+            detail="Invalid password reset link. Please request a new reset link from the login page.",
         )
 
     auth_service = AuthService(db)
@@ -699,7 +723,7 @@ async def validate_reset_token(
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This password reset link is invalid or has expired. Please request a new one from the login page."
+            detail="This password reset link is invalid or has expired. Please request a new one from the login page.",
         )
 
     # Return only validity status; omit email to prevent user enumeration.

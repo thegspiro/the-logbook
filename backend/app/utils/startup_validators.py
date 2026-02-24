@@ -10,24 +10,24 @@ These validators help prevent production issues by catching problems like:
 - Database schema inconsistencies
 """
 
+import enum
 import logging
 from typing import List, Tuple
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.user import OrganizationType, IdentifierType
-import enum
+
+from app.models.user import IdentifierType, OrganizationType
 
 logger = logging.getLogger(__name__)
 
 
 class StartupValidationError(Exception):
     """Raised when a critical startup validation fails"""
-    pass
 
 
 class StartupValidationWarning(Exception):
     """Raised when a non-critical startup validation fails"""
-    pass
 
 
 async def validate_enum_consistency(db: AsyncSession) -> Tuple[bool, List[str]]:
@@ -59,12 +59,7 @@ async def validate_enum_consistency(db: AsyncSession) -> Tuple[bool, List[str]]:
             """)
 
             result = await db.execute(
-                query,
-                {
-                    'schema': settings.DB_NAME,
-                    'table': table,
-                    'column': column
-                }
+                query, {"schema": settings.DB_NAME, "table": table, "column": column}
             )
             row = result.fetchone()
 
@@ -73,18 +68,16 @@ async def validate_enum_consistency(db: AsyncSession) -> Tuple[bool, List[str]]:
 
             # Parse enum('value1','value2') format
             import re
+
             column_type = row[0]
-            if not column_type.startswith('enum('):
+            if not column_type.startswith("enum("):
                 return []
 
             values = re.findall(r"'([^']+)'", column_type)
             return values
 
         async def check_enum(
-            enum_class: type[enum.Enum],
-            table: str,
-            column: str,
-            name: str
+            enum_class: type[enum.Enum], table: str, column: str, name: str
         ) -> bool:
             """Check single enum for consistency"""
             expected = set(item.value for item in enum_class)
@@ -107,17 +100,11 @@ async def validate_enum_consistency(db: AsyncSession) -> Tuple[bool, List[str]]:
 
         # Check critical onboarding enums
         org_type_ok = await check_enum(
-            OrganizationType,
-            'organizations',
-            'organization_type',
-            'OrganizationType'
+            OrganizationType, "organizations", "organization_type", "OrganizationType"
         )
 
         identifier_type_ok = await check_enum(
-            IdentifierType,
-            'organizations',
-            'identifier_type',
-            'IdentifierType'
+            IdentifierType, "organizations", "identifier_type", "IdentifierType"
         )
 
         all_valid = org_type_ok and identifier_type_ok
@@ -125,7 +112,9 @@ async def validate_enum_consistency(db: AsyncSession) -> Tuple[bool, List[str]]:
         if all_valid:
             logger.info("✅ Enum consistency check passed")
         else:
-            logger.warning(f"⚠️  Enum consistency check failed with {len(warnings)} warning(s)")
+            logger.warning(
+                f"⚠️  Enum consistency check failed with {len(warnings)} warning(s)"
+            )
 
         return all_valid, warnings
 
@@ -197,10 +186,11 @@ async def validate_enum_case_convention(db: AsyncSession) -> Tuple[bool, List[st
             AND DATA_TYPE = 'enum'
         """)
 
-        result = await db.execute(query, {'schema': settings.DB_NAME})
+        result = await db.execute(query, {"schema": settings.DB_NAME})
         results = result.fetchall()
 
         import re
+
         for table, column, column_type in results:
             # Parse enum values
             values = re.findall(r"'([^']+)'", column_type)

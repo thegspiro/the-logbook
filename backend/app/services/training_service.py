@@ -5,30 +5,32 @@ Business logic for training management including courses, records, requirements,
 """
 
 import calendar
-from typing import List, Optional, Dict, Tuple
-from datetime import datetime, date, timedelta, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
+from datetime import date, datetime, timedelta, timezone
+from typing import Dict, List, Optional
 from uuid import UUID
 
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.models.training import (
-    TrainingCourse,
+    RequirementFrequency,
     TrainingRecord,
     TrainingRequirement,
     TrainingStatus,
-    TrainingType,
-    RequirementFrequency,
 )
 from app.models.user import User
 from app.schemas.training import (
-    UserTrainingStats,
+    RequirementProgress,
     TrainingHoursSummary,
     TrainingReport,
-    RequirementProgress,
+    UserTrainingStats,
 )
 from app.services.training_waiver_service import (
-    WaiverPeriod, fetch_user_waivers, adjust_required, get_rolling_period_months,
+    WaiverPeriod,
+    adjust_required,
+    fetch_user_waivers,
+    get_rolling_period_months,
 )
 
 
@@ -74,16 +76,13 @@ class TrainingService:
         ninety_days = today + timedelta(days=90)
 
         active_certifications = sum(
-            1
-            for r in certifications
-            if r.expiration_date and r.expiration_date > today
+            1 for r in certifications if r.expiration_date and r.expiration_date > today
         )
 
         expiring_soon = sum(
             1
             for r in certifications
-            if r.expiration_date
-            and today < r.expiration_date <= ninety_days
+            if r.expiration_date and today < r.expiration_date <= ninety_days
         )
 
         expired = sum(
@@ -190,7 +189,9 @@ class TrainingService:
             tier_exempt = False
             tier_exempt_types: list = []
             try:
-                from app.models.user import User as _User, Organization as _Org
+                from app.models.user import Organization as _Org
+                from app.models.user import User as _User
+
                 user_result = await self.db.execute(
                     select(_User).where(_User.id == str(user_id))
                 )
@@ -203,12 +204,18 @@ class TrainingService:
                     if _org:
                         _tier_cfg = (_org.settings or {}).get("membership_tiers", {})
                         _tiers = _tier_cfg.get("tiers", [])
-                        _member_tier_id = getattr(_member, "membership_type", None) or "active"
-                        _tier_def = next((t for t in _tiers if t.get("id") == _member_tier_id), None)
+                        _member_tier_id = (
+                            getattr(_member, "membership_type", None) or "active"
+                        )
+                        _tier_def = next(
+                            (t for t in _tiers if t.get("id") == _member_tier_id), None
+                        )
                         if _tier_def:
                             _benefits = _tier_def.get("benefits", {})
                             tier_exempt = _benefits.get("training_exempt", False)
-                            tier_exempt_types = _benefits.get("training_exempt_types", [])
+                            tier_exempt_types = _benefits.get(
+                                "training_exempt_types", []
+                            )
             except Exception:
                 pass  # Fail open — don't block training checks if tier lookup fails
 
@@ -222,7 +229,9 @@ class TrainingService:
 
             # Pre-fetch waivers once for all requirement checks
             user_waivers = await fetch_user_waivers(
-                self.db, str(organization_id), str(user_id),
+                self.db,
+                str(organization_id),
+                str(user_id),
             )
 
             for req in requirements:
@@ -231,7 +240,11 @@ class TrainingService:
                     requirements_met.append(req.id)
                     continue
                 if tier_exempt_types and getattr(req, "training_type", None):
-                    req_type = req.training_type.value if hasattr(req.training_type, "value") else str(req.training_type)
+                    req_type = (
+                        req.training_type.value
+                        if hasattr(req.training_type, "value")
+                        else str(req.training_type)
+                    )
                     if req_type in tier_exempt_types:
                         requirements_met.append(req.id)
                         continue
@@ -263,16 +276,25 @@ class TrainingService:
         standard frequency-based windows (annual, quarterly, monthly, etc.).
         """
         # Rolling period takes precedence over frequency-based window
-        due_date_type = getattr(requirement, 'due_date_type', None)
+        due_date_type = getattr(requirement, "due_date_type", None)
         if due_date_type:
-            due_date_type = due_date_type.value if hasattr(due_date_type, 'value') else str(due_date_type)
-        rolling_months = getattr(requirement, 'rolling_period_months', None)
+            due_date_type = (
+                due_date_type.value
+                if hasattr(due_date_type, "value")
+                else str(due_date_type)
+            )
+        rolling_months = getattr(requirement, "rolling_period_months", None)
 
-        if due_date_type == 'rolling' and rolling_months:
+        if due_date_type == "rolling" and rolling_months:
             from dateutil.relativedelta import relativedelta
+
             return today - relativedelta(months=rolling_months), today
 
-        freq = requirement.frequency.value if hasattr(requirement.frequency, 'value') else str(requirement.frequency)
+        freq = (
+            requirement.frequency.value
+            if hasattr(requirement.frequency, "value")
+            else str(requirement.frequency)
+        )
         current_year = today.year
 
         if freq == RequirementFrequency.ONE_TIME.value:
@@ -300,7 +322,10 @@ class TrainingService:
 
     @staticmethod
     def evaluate_requirement_detail(
-        req, member_records, today: date, waivers=None,
+        req,
+        member_records,
+        today: date,
+        waivers=None,
     ) -> Dict:
         """Evaluate a member's progress on a single requirement (in-memory).
 
@@ -313,8 +338,16 @@ class TrainingService:
         """
         from app.models.training import RequirementType
 
-        req_type = req.requirement_type.value if hasattr(req.requirement_type, 'value') else str(req.requirement_type)
-        freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
+        req_type = (
+            req.requirement_type.value
+            if hasattr(req.requirement_type, "value")
+            else str(req.requirement_type)
+        )
+        freq = (
+            req.frequency.value
+            if hasattr(req.frequency, "value")
+            else str(req.frequency)
+        )
         start_date, end_date = TrainingService._get_date_window(req, today)
         _waivers = waivers or []
 
@@ -322,7 +355,8 @@ class TrainingService:
         completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
         if start_date and end_date:
             windowed = [
-                r for r in completed
+                r
+                for r in completed
                 if r.completion_date and start_date <= r.completion_date <= end_date
             ]
         else:
@@ -340,10 +374,16 @@ class TrainingService:
         if req_type == RequirementType.HOURS.value:
             type_matched = windowed
             if req.training_type:
-                type_matched = [r for r in windowed if r.training_type == req.training_type]
+                type_matched = [
+                    r for r in windowed if r.training_type == req.training_type
+                ]
             if req.required_courses:
                 req_courses = set(req.required_courses)
-                type_matched = [r for r in type_matched if r.course_id and str(r.course_id) in req_courses]
+                type_matched = [
+                    r
+                    for r in type_matched
+                    if r.course_id and str(r.course_id) in req_courses
+                ]
 
             completed_value = sum(r.hours_completed or 0 for r in type_matched)
             base_required = req.required_hours or 0
@@ -351,7 +391,11 @@ class TrainingService:
 
             if base_required > 0 and start_date and end_date and _waivers:
                 adjusted_required, waived_months, active_months = adjust_required(
-                    base_required, start_date, end_date, _waivers, str(req.id),
+                    base_required,
+                    start_date,
+                    end_date,
+                    _waivers,
+                    str(req.id),
                     period_months=get_rolling_period_months(req),
                 )
 
@@ -359,7 +403,9 @@ class TrainingService:
             if freq == RequirementFrequency.BIANNUAL.value:
                 with_exp = [r for r in completed if r.expiration_date]
                 if req.training_type:
-                    with_exp = [r for r in with_exp if r.training_type == req.training_type]
+                    with_exp = [
+                        r for r in with_exp if r.training_type == req.training_type
+                    ]
                 if with_exp:
                     newest = max(with_exp, key=lambda r: r.expiration_date)
                     if newest.expiration_date < today:
@@ -381,12 +427,20 @@ class TrainingService:
         # ---- CERTIFICATION ----
         elif req_type == RequirementType.CERTIFICATION.value:
             matching = [
-                r for r in completed
+                r
+                for r in completed
                 if (
                     (req.training_type and r.training_type == req.training_type)
-                    or (r.course_name and req.name and req.name.lower() in r.course_name.lower())
-                    or (r.certification_number and getattr(req, 'registry_code', None)
-                        and req.registry_code.lower() in r.certification_number.lower())
+                    or (
+                        r.course_name
+                        and req.name
+                        and req.name.lower() in r.course_name.lower()
+                    )
+                    or (
+                        r.certification_number
+                        and getattr(req, "registry_code", None)
+                        and req.registry_code.lower() in r.certification_number.lower()
+                    )
                 )
             ]
             base_required = 1
@@ -408,14 +462,20 @@ class TrainingService:
         elif req_type == RequirementType.SHIFTS.value:
             type_matched = windowed
             if req.training_type:
-                type_matched = [r for r in windowed if r.training_type == req.training_type]
+                type_matched = [
+                    r for r in windowed if r.training_type == req.training_type
+                ]
             completed_value = float(len(type_matched))
             base_required = float(req.required_shifts or 0)
             adjusted_required = base_required
 
             if base_required > 0 and start_date and end_date and _waivers:
                 adjusted_required, waived_months, active_months = adjust_required(
-                    base_required, start_date, end_date, _waivers, str(req.id),
+                    base_required,
+                    start_date,
+                    end_date,
+                    _waivers,
+                    str(req.id),
                     period_months=get_rolling_period_months(req),
                 )
 
@@ -423,14 +483,20 @@ class TrainingService:
         elif req_type == RequirementType.CALLS.value:
             type_matched = windowed
             if req.training_type:
-                type_matched = [r for r in windowed if r.training_type == req.training_type]
+                type_matched = [
+                    r for r in windowed if r.training_type == req.training_type
+                ]
             completed_value = float(len(type_matched))
             base_required = float(req.required_calls or 0)
             adjusted_required = base_required
 
             if base_required > 0 and start_date and end_date and _waivers:
                 adjusted_required, waived_months, active_months = adjust_required(
-                    base_required, start_date, end_date, _waivers, str(req.id),
+                    base_required,
+                    start_date,
+                    end_date,
+                    _waivers,
+                    str(req.id),
                     period_months=get_rolling_period_months(req),
                 )
 
@@ -441,7 +507,8 @@ class TrainingService:
                 matching = [r for r in windowed if r.training_type == req.training_type]
             if not matching and req.name:
                 matching = [
-                    r for r in windowed
+                    r
+                    for r in windowed
                     if r.course_name and req.name.lower() in r.course_name.lower()
                 ]
             base_required = 1
@@ -467,7 +534,9 @@ class TrainingService:
         is_met = pct >= 100 and not cert_expired
 
         # Effective due date
-        effective_due_date = req.due_date if req.due_date else (end_date if end_date else None)
+        effective_due_date = (
+            req.due_date if req.due_date else (end_date if end_date else None)
+        )
         if freq == RequirementFrequency.BIANNUAL.value:
             with_exp = [r for r in completed if r.expiration_date]
             if req.training_type:
@@ -478,7 +547,9 @@ class TrainingService:
             elif not effective_due_date:
                 effective_due_date = today
 
-        days_until_due = (effective_due_date - today).days if effective_due_date else None
+        days_until_due = (
+            (effective_due_date - today).days if effective_due_date else None
+        )
 
         return {
             "id": str(req.id),
@@ -486,7 +557,11 @@ class TrainingService:
             "description": req.description,
             "requirement_type": req_type,
             "frequency": freq,
-            "training_type": req.training_type.value if req.training_type and hasattr(req.training_type, 'value') else (str(req.training_type) if req.training_type else None),
+            "training_type": (
+                req.training_type.value
+                if req.training_type and hasattr(req.training_type, "value")
+                else (str(req.training_type) if req.training_type else None)
+            ),
             "required_hours": adjusted_required,
             "original_required_hours": base_required,
             "completed_hours": completed_value,
@@ -501,7 +576,10 @@ class TrainingService:
         }
 
     async def check_requirement_progress(
-        self, user_id: UUID, requirement_id: UUID, organization_id: UUID,
+        self,
+        user_id: UUID,
+        requirement_id: UUID,
+        organization_id: UUID,
         waivers: Optional[List[WaiverPeriod]] = None,
     ) -> RequirementProgress:
         """
@@ -529,13 +607,23 @@ class TrainingService:
 
         today = date.today()
         start_date, end_date = self._get_date_window(requirement, today)
-        req_type = requirement.requirement_type.value if hasattr(requirement.requirement_type, 'value') else str(requirement.requirement_type)
-        freq = requirement.frequency.value if hasattr(requirement.frequency, 'value') else str(requirement.frequency)
+        req_type = (
+            requirement.requirement_type.value
+            if hasattr(requirement.requirement_type, "value")
+            else str(requirement.requirement_type)
+        )
+        freq = (
+            requirement.frequency.value
+            if hasattr(requirement.frequency, "value")
+            else str(requirement.frequency)
+        )
 
         # Fetch waivers if not pre-loaded
         if waivers is None:
             waivers = await fetch_user_waivers(
-                self.db, str(organization_id), str(user_id),
+                self.db,
+                str(organization_id),
+                str(user_id),
             )
 
         # Base query for completed records in the evaluation window
@@ -571,9 +659,13 @@ class TrainingService:
                     TrainingRecord.completion_date <= end_date,
                 )
             if requirement.training_type:
-                hours_q = hours_q.where(TrainingRecord.training_type == requirement.training_type)
+                hours_q = hours_q.where(
+                    TrainingRecord.training_type == requirement.training_type
+                )
             if requirement.required_courses:
-                hours_q = hours_q.where(TrainingRecord.course_id.in_(requirement.required_courses))
+                hours_q = hours_q.where(
+                    TrainingRecord.course_id.in_(requirement.required_courses)
+                )
 
             result = await self.db.execute(hours_q)
             completed_value = float(result.scalar() or 0)
@@ -582,7 +674,11 @@ class TrainingService:
             # Adjust for waivers
             if required_value > 0 and start_date and end_date and waivers:
                 required_value, _, _ = adjust_required(
-                    required_value, start_date, end_date, waivers, str(requirement.id),
+                    required_value,
+                    start_date,
+                    end_date,
+                    waivers,
+                    str(requirement.id),
                     period_months=get_rolling_period_months(requirement),
                 )
 
@@ -600,7 +696,9 @@ class TrainingService:
                     .limit(1)
                 )
                 if requirement.training_type:
-                    cert_q = cert_q.where(TrainingRecord.training_type == requirement.training_type)
+                    cert_q = cert_q.where(
+                        TrainingRecord.training_type == requirement.training_type
+                    )
                 cert_result = await self.db.execute(cert_q)
                 latest_exp = cert_result.scalar_one_or_none()
                 if latest_exp and latest_exp < today:
@@ -618,7 +716,9 @@ class TrainingService:
                         due_date=requirement.due_date,
                     )
 
-            is_complete = completed_value >= required_value if required_value > 0 else True
+            is_complete = (
+                completed_value >= required_value if required_value > 0 else True
+            )
 
         # ---- COURSES requirements ----
         elif req_type == RequirementType.COURSES.value:
@@ -645,25 +745,34 @@ class TrainingService:
 
         # ---- CERTIFICATION requirements ----
         elif req_type == RequirementType.CERTIFICATION.value:
-            cert_q = (
-                select(TrainingRecord)
-                .where(
-                    TrainingRecord.user_id == str(user_id),
-                    TrainingRecord.organization_id == str(organization_id),
-                    TrainingRecord.status == TrainingStatus.COMPLETED,
-                )
+            cert_q = select(TrainingRecord).where(
+                TrainingRecord.user_id == str(user_id),
+                TrainingRecord.organization_id == str(organization_id),
+                TrainingRecord.status == TrainingStatus.COMPLETED,
             )
             cert_result = await self.db.execute(cert_q)
             all_completed = cert_result.scalars().all()
 
             # Match by training_type, name substring, or registry_code
             matching = [
-                r for r in all_completed
+                r
+                for r in all_completed
                 if (
-                    (requirement.training_type and r.training_type == requirement.training_type)
-                    or (r.course_name and requirement.name and requirement.name.lower() in r.course_name.lower())
-                    or (r.certification_number and requirement.registry_code
-                        and requirement.registry_code.lower() in r.certification_number.lower())
+                    (
+                        requirement.training_type
+                        and r.training_type == requirement.training_type
+                    )
+                    or (
+                        r.course_name
+                        and requirement.name
+                        and requirement.name.lower() in r.course_name.lower()
+                    )
+                    or (
+                        r.certification_number
+                        and requirement.registry_code
+                        and requirement.registry_code.lower()
+                        in r.certification_number.lower()
+                    )
                 )
             ]
 
@@ -689,7 +798,9 @@ class TrainingService:
             records = records_result.scalars().all()
             type_matched = records
             if requirement.training_type:
-                type_matched = [r for r in records if r.training_type == requirement.training_type]
+                type_matched = [
+                    r for r in records if r.training_type == requirement.training_type
+                ]
 
             completed_value = float(len(type_matched))
             required_value = float(requirement.required_shifts or 0)
@@ -697,11 +808,17 @@ class TrainingService:
             # Adjust for waivers
             if required_value > 0 and start_date and end_date and waivers:
                 required_value, _, _ = adjust_required(
-                    required_value, start_date, end_date, waivers, str(requirement.id),
+                    required_value,
+                    start_date,
+                    end_date,
+                    waivers,
+                    str(requirement.id),
                     period_months=get_rolling_period_months(requirement),
                 )
 
-            is_complete = completed_value >= required_value if required_value > 0 else True
+            is_complete = (
+                completed_value >= required_value if required_value > 0 else True
+            )
 
         # ---- CALLS requirements ----
         elif req_type == RequirementType.CALLS.value:
@@ -709,7 +826,9 @@ class TrainingService:
             records = records_result.scalars().all()
             type_matched = records
             if requirement.training_type:
-                type_matched = [r for r in records if r.training_type == requirement.training_type]
+                type_matched = [
+                    r for r in records if r.training_type == requirement.training_type
+                ]
 
             completed_value = float(len(type_matched))
             required_value = float(requirement.required_calls or 0)
@@ -717,11 +836,17 @@ class TrainingService:
             # Adjust for waivers
             if required_value > 0 and start_date and end_date and waivers:
                 required_value, _, _ = adjust_required(
-                    required_value, start_date, end_date, waivers, str(requirement.id),
+                    required_value,
+                    start_date,
+                    end_date,
+                    waivers,
+                    str(requirement.id),
                     period_months=get_rolling_period_months(requirement),
                 )
 
-            is_complete = completed_value >= required_value if required_value > 0 else True
+            is_complete = (
+                completed_value >= required_value if required_value > 0 else True
+            )
 
         # ---- Fallback (skills_evaluation, checklist, etc.) ----
         else:
@@ -729,11 +854,15 @@ class TrainingService:
             records = records_result.scalars().all()
             matching = []
             if requirement.training_type:
-                matching = [r for r in records if r.training_type == requirement.training_type]
+                matching = [
+                    r for r in records if r.training_type == requirement.training_type
+                ]
             if not matching and requirement.name:
                 matching = [
-                    r for r in records
-                    if r.course_name and requirement.name.lower() in r.course_name.lower()
+                    r
+                    for r in records
+                    if r.course_name
+                    and requirement.name.lower() in r.course_name.lower()
                 ]
 
             if matching:
@@ -751,7 +880,9 @@ class TrainingService:
                 completed_value = 0
                 required_value = 1
 
-        percentage = (completed_value / required_value * 100) if required_value > 0 else 100
+        percentage = (
+            (completed_value / required_value * 100) if required_value > 0 else 100
+        )
         percentage = min(percentage, 100.0)
 
         return RequirementProgress(
@@ -770,7 +901,7 @@ class TrainingService:
         """
         Get progress for all requirements applicable to a user
         """
-        current_year = year or datetime.now(timezone.utc).year
+        year or datetime.now(timezone.utc).year
 
         # Get user's roles
         user_result = await self.db.execute(
@@ -814,7 +945,9 @@ class TrainingService:
 
         # Pre-fetch waivers once for all requirement checks
         user_waivers = await fetch_user_waivers(
-            self.db, str(organization_id), str(user_id),
+            self.db,
+            str(organization_id),
+            str(user_id),
         )
 
         # Get progress for each requirement

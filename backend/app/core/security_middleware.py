@@ -5,23 +5,23 @@ Implements rate limiting, CSRF protection, security headers,
 input sanitization, and other security features.
 """
 
-from fastapi import Request, HTTPException, status
+import html
+import re
+import secrets
+import time
+from collections import defaultdict
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from fastapi import HTTPException, Request, status
 from fastapi.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
-from typing import Callable, Dict, List, Optional, Any
-import time
-import hashlib
-import secrets
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-import re
-import html
-
 
 # ============================================
 # Rate Limiting
 # ============================================
+
 
 class RateLimiter:
     """
@@ -29,6 +29,7 @@ class RateLimiter:
 
     In production, use Redis for distributed rate limiting
     """
+
     def __init__(self):
         self.requests: Dict[str, List[float]] = defaultdict(list)
         self.lockouts: Dict[str, float] = {}
@@ -38,7 +39,7 @@ class RateLimiter:
         key: str,
         max_requests: int = 5,
         window_seconds: int = 60,
-        lockout_seconds: int = 1800  # 30 minutes
+        lockout_seconds: int = 1800,  # 30 minutes
     ) -> tuple[bool, Optional[str]]:
         """
         Check if a request should be rate limited
@@ -66,7 +67,8 @@ class RateLimiter:
 
         # Clean old requests outside window
         self.requests[key] = [
-            req_time for req_time in self.requests[key]
+            req_time
+            for req_time in self.requests[key]
             if current_time - req_time < window_seconds
         ]
 
@@ -74,7 +76,10 @@ class RateLimiter:
         if len(self.requests[key]) >= max_requests:
             # Too many requests - apply lockout
             self.lockouts[key] = current_time + lockout_seconds
-            return True, f"Too many requests. Account locked for {lockout_seconds // 60} minutes"
+            return (
+                True,
+                f"Too many requests. Account locked for {lockout_seconds // 60} minutes",
+            )
 
         # Record this request
         if key not in self.requests:
@@ -91,6 +96,7 @@ rate_limiter = RateLimiter()
 # ============================================
 # CSRF Protection
 # ============================================
+
 
 class CSRFProtection:
     """
@@ -124,6 +130,7 @@ class CSRFProtection:
 # Input Sanitization
 # ============================================
 
+
 class InputSanitizer:
     """
     Sanitize and validate user inputs
@@ -148,7 +155,7 @@ class InputSanitizer:
         value = html.escape(value)
 
         # Remove null bytes
-        value = value.replace('\x00', '')
+        value = value.replace("\x00", "")
 
         # Strip leading/trailing whitespace
         value = value.strip()
@@ -170,11 +177,14 @@ class InputSanitizer:
         email = email.lower().strip()
 
         # Basic email validation
-        if not re.match(r'^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$', email):
+        if not re.match(
+            r"^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+            email,
+        ):
             raise ValueError("Invalid email format")
 
         # Check for injection attempts
-        if '\n' in email or '\r' in email or '%0a' in email or '%0d' in email:
+        if "\n" in email or "\r" in email or "%0a" in email or "%0d" in email:
             raise ValueError("Invalid email format")
 
         if len(email) > 254:
@@ -195,8 +205,10 @@ class InputSanitizer:
 
         username = username.strip()
 
-        if not re.match(r'^[a-zA-Z0-9_-]{3,32}$', username):
-            raise ValueError("Username must be 3-32 characters (letters, numbers, underscore, hyphen only)")
+        if not re.match(r"^[a-zA-Z0-9_-]{3,32}$", username):
+            raise ValueError(
+                "Username must be 3-32 characters (letters, numbers, underscore, hyphen only)"
+            )
 
         return username
 
@@ -209,10 +221,10 @@ class InputSanitizer:
             raise ValueError("Phone must be a string")
 
         # Remove all non-digit characters except +
-        phone = re.sub(r'[^\d+]', '', phone)
+        phone = re.sub(r"[^\d+]", "", phone)
 
         # Basic validation
-        if not re.match(r'^\+?[\d]{7,15}$', phone):
+        if not re.match(r"^\+?[\d]{7,15}$", phone):
             raise ValueError("Invalid phone number format")
 
         return phone
@@ -235,14 +247,14 @@ class InputSanitizer:
         url = url.strip()
 
         # Check protocol
-        if not url.startswith('https://'):
-            if allow_http and url.startswith('http://'):
+        if not url.startswith("https://"):
+            if allow_http and url.startswith("http://"):
                 pass  # Allow HTTP in development
             else:
                 raise ValueError("URL must use HTTPS")
 
         # Basic URL validation
-        if not re.match(r'^https?://[a-zA-Z0-9.-]+(?:\.[a-zA-Z]{2,})?(?:/.*)?$', url):
+        if not re.match(r"^https?://[a-zA-Z0-9.-]+(?:\.[a-zA-Z]{2,})?(?:/.*)?$", url):
             raise ValueError("Invalid URL format")
 
         return url
@@ -252,26 +264,29 @@ class InputSanitizer:
 # Security Headers Middleware
 # ============================================
 
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Add security headers to all responses
     """
 
     async def dispatch(
-        self,
-        request: Request,
-        call_next: RequestResponseEndpoint
+        self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         response = await call_next(request)
 
         # Prevent caching of API responses containing sensitive data
         if request.url.path.startswith("/api/"):
-            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate"
+            response.headers["Cache-Control"] = (
+                "no-store, no-cache, must-revalidate, proxy-revalidate"
+            )
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
 
         # Strict Transport Security (HSTS)
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
 
         # Prevent MIME type sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -286,7 +301,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
         # Permissions Policy
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=()"
+        )
 
         # Content Security Policy
         # NOTE: style-src 'unsafe-inline' is required because the frontend
@@ -313,10 +330,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # Rate Limiting Dependency
 # ============================================
 
+
 async def check_rate_limit(
-    request: Request,
-    max_requests: int = 5,
-    window_seconds: int = 60
+    request: Request, max_requests: int = 5, window_seconds: int = 60
 ) -> None:
     """
     Dependency to check rate limits
@@ -329,21 +345,20 @@ async def check_rate_limit(
 
     # Check rate limit
     is_limited, reason = rate_limiter.is_rate_limited(
-        key=client_ip,
-        max_requests=max_requests,
-        window_seconds=window_seconds
+        key=client_ip, max_requests=max_requests, window_seconds=window_seconds
     )
 
     if is_limited:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=reason or "Too many requests"
+            detail=reason or "Too many requests",
         )
 
 
 # ============================================
 # CSRF Protection Dependency
 # ============================================
+
 
 async def verify_csrf_token(request: Request) -> None:
     """
@@ -374,16 +389,18 @@ async def verify_csrf_token(request: Request) -> None:
         # The login response should set the csrf_token cookie.
         return
 
-    if not request_token or not CSRFProtection.validate_token(request_token, cookie_token):
+    if not request_token or not CSRFProtection.validate_token(
+        request_token, cookie_token
+    ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid CSRF token"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token"
         )
 
 
 # ============================================
 # Audit Logging
 # ============================================
+
 
 class SecurityAuditLogger:
     """
@@ -397,7 +414,7 @@ class SecurityAuditLogger:
         ip_address: str,
         user_agent: Optional[str],
         details: dict,
-        severity: str = "INFO"
+        severity: str = "INFO",
     ) -> None:
         """
         Log security event to audit log
@@ -413,18 +430,16 @@ class SecurityAuditLogger:
             "ip_address": ip_address,
             "user_agent": user_agent,
             "details": details,
-            "severity": severity
+            "severity": severity,
         }
 
         from loguru import logger
+
         logger.warning(f"[SECURITY AUDIT] {log_entry}")
 
     @staticmethod
     async def log_failed_login(
-        username: str,
-        ip_address: str,
-        user_agent: Optional[str],
-        reason: str
+        username: str, ip_address: str, user_agent: Optional[str], reason: str
     ) -> None:
         """Log failed login attempt"""
         await SecurityAuditLogger.log_event(
@@ -433,15 +448,12 @@ class SecurityAuditLogger:
             ip_address=ip_address,
             user_agent=user_agent,
             details={"username": username, "reason": reason},
-            severity="WARNING"
+            severity="WARNING",
         )
 
     @staticmethod
     async def log_successful_login(
-        user_id: str,
-        username: str,
-        ip_address: str,
-        user_agent: Optional[str]
+        user_id: str, username: str, ip_address: str, user_agent: Optional[str]
     ) -> None:
         """Log successful login"""
         await SecurityAuditLogger.log_event(
@@ -450,14 +462,12 @@ class SecurityAuditLogger:
             ip_address=ip_address,
             user_agent=user_agent,
             details={"username": username},
-            severity="INFO"
+            severity="INFO",
         )
 
     @staticmethod
     async def log_password_change(
-        user_id: str,
-        ip_address: str,
-        user_agent: Optional[str]
+        user_id: str, ip_address: str, user_agent: Optional[str]
     ) -> None:
         """Log password change"""
         await SecurityAuditLogger.log_event(
@@ -466,7 +476,7 @@ class SecurityAuditLogger:
             ip_address=ip_address,
             user_agent=user_agent,
             details={},
-            severity="INFO"
+            severity="INFO",
         )
 
     @staticmethod
@@ -474,7 +484,7 @@ class SecurityAuditLogger:
         user_id: Optional[str],
         ip_address: str,
         user_agent: Optional[str],
-        description: str
+        description: str,
     ) -> None:
         """Log suspicious activity"""
         await SecurityAuditLogger.log_event(
@@ -483,13 +493,14 @@ class SecurityAuditLogger:
             ip_address=ip_address,
             user_agent=user_agent,
             details={"description": description},
-            severity="CRITICAL"
+            severity="CRITICAL",
         )
 
 
 # ============================================
 # Helper Functions
 # ============================================
+
 
 def get_client_ip(request: Request) -> str:
     """Get client IP address from request.
@@ -520,6 +531,7 @@ def get_user_agent(request: Request) -> Optional[str]:
 # IP/Country Blocking Middleware
 # ============================================
 
+
 class IPBlockingMiddleware(BaseHTTPMiddleware):
     """
     Middleware for IP-based and country-based access control.
@@ -548,9 +560,7 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         self.log_blocked_attempts = log_blocked_attempts
 
     async def dispatch(
-        self,
-        request: Request,
-        call_next: RequestResponseEndpoint
+        self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Process request and check IP/country restrictions."""
 
@@ -586,12 +596,13 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
 
                 # Return 403 Forbidden
                 from fastapi.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=status.HTTP_403_FORBIDDEN,
                     content={
                         "detail": "Access denied from your location",
                         "error_code": "GEO_BLOCKED",
-                    }
+                    },
                 )
 
             # Add geo info to request state for downstream use
@@ -626,21 +637,20 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
             return set()
 
     async def _log_blocked_attempt(
-        self,
-        request: Request,
-        client_ip: str,
-        reason: str
+        self, request: Request, client_ip: str, reason: str
     ) -> None:
         """Log blocked access attempt to database."""
         try:
+            pass
+
             from app.core.geoip import get_geoip_service
-            import json
 
             geoip = get_geoip_service()
             geo_info = geoip.lookup_ip(client_ip) if geoip else {}
 
             # Log using loguru (immediate)
             from loguru import logger
+
             logger.warning(
                 f"BLOCKED ACCESS: IP={client_ip}, "
                 f"Country={geo_info.get('country_code', 'unknown')}, "
@@ -650,8 +660,8 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
 
             # Log to database asynchronously for audit trail
             try:
-                from app.core.database import async_session_factory
                 from app.core.audit import log_audit_event
+                from app.core.database import async_session_factory
 
                 async with async_session_factory() as db:
                     await log_audit_event(
@@ -675,12 +685,14 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
 
         except Exception as e:
             from loguru import logger
+
             logger.error(f"Failed to log blocked attempt: {e}")
 
 
 # ============================================
 # IP Logging Middleware
 # ============================================
+
 
 class IPLoggingMiddleware(BaseHTTPMiddleware):
     """
@@ -690,12 +702,11 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(
-        self,
-        request: Request,
-        call_next: RequestResponseEndpoint
+        self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Log request IP and geo information."""
         from loguru import logger
+
         from app.core.geoip import get_geoip_service
 
         client_ip = get_client_ip(request)
@@ -723,7 +734,10 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Add request ID header
-        request_id = request.headers.get("X-Request-ID", str(hash(f"{client_ip}{datetime.now(timezone.utc).timestamp()}")))
+        request_id = request.headers.get(
+            "X-Request-ID",
+            str(hash(f"{client_ip}{datetime.now(timezone.utc).timestamp()}")),
+        )
         response.headers["X-Request-ID"] = request_id
 
         return response
@@ -732,6 +746,7 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
 # ============================================
 # Security Monitoring Integration Middleware
 # ============================================
+
 
 class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
     """
@@ -762,9 +777,7 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
     }
 
     async def dispatch(
-        self,
-        request: Request,
-        call_next: RequestResponseEndpoint
+        self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Process request through security monitoring."""
         from loguru import logger
@@ -800,12 +813,15 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
                 body = await request.body()
                 if body:
                     try:
-                        request_data["body"] = body.decode("utf-8")[:10000]  # Limit size
+                        request_data["body"] = body.decode("utf-8")[
+                            :10000
+                        ]  # Limit size
                     except UnicodeDecodeError:
                         pass  # Binary data, skip
 
                 # Re-wrap body for handler
                 from starlette.requests import Request as StarletteRequest
+
                 request = StarletteRequest(
                     scope=request.scope,
                     receive=lambda: {"type": "http.request", "body": body},
@@ -817,8 +833,8 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
         if user_id and session_id and client_ip:
             try:
                 # Import here to avoid circular imports
-                from app.services.security_monitoring import security_monitor
                 from app.core.database import async_session_factory
+                from app.services.security_monitoring import security_monitor
 
                 async with async_session_factory() as db:
                     alert = await security_monitor.detect_session_hijack(
@@ -844,8 +860,8 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
                 if content_length:
                     data_size = int(content_length)
 
-                    from app.services.security_monitoring import security_monitor
                     from app.core.database import async_session_factory
+                    from app.services.security_monitoring import security_monitor
 
                     async with async_session_factory() as db:
                         await security_monitor.detect_data_exfiltration(
@@ -865,6 +881,7 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
 # Periodic Security Check Task
 # ============================================
 
+
 async def run_periodic_security_checks() -> Dict[str, Any]:
     """
     Run periodic security checks.
@@ -875,9 +892,10 @@ async def run_periodic_security_checks() -> Dict[str, Any]:
         Dictionary with check results
     """
     from loguru import logger
-    from app.services.security_monitoring import security_monitor
+
+    from app.core.audit import audit_logger, verify_audit_log_integrity
     from app.core.database import async_session_factory
-    from app.core.audit import verify_audit_log_integrity, audit_logger
+    from app.services.security_monitoring import security_monitor
 
     results = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -928,7 +946,9 @@ async def run_periodic_security_checks() -> Dict[str, Any]:
                 except Exception as e:
                     logger.warning(f"Could not create checkpoint: {e}")
 
-            results["overall_status"] = "healthy" if integrity["verified"] else "critical"
+            results["overall_status"] = (
+                "healthy" if integrity["verified"] else "critical"
+            )
 
     except Exception as e:
         logger.error(f"Periodic security check failed: {e}")

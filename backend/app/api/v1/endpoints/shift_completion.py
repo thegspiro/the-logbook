@@ -5,22 +5,23 @@ Allows shift officers to submit reports on trainee shift experiences.
 Auto-updates pipeline requirement progress for shift/call/hour requirements.
 """
 
+from datetime import date
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
-from datetime import date
 
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.api.dependencies import get_current_user, require_permission
 from app.models.user import User
-from app.services.shift_completion_service import ShiftCompletionService
 from app.schemas.shift_completion import (
+    ReportReview,
     ShiftCompletionReportCreate,
     ShiftCompletionReportResponse,
     TraineeAcknowledgment,
-    ReportReview,
 )
+from app.services.shift_completion_service import ShiftCompletionService
 from app.services.training_module_config_service import TrainingModuleConfigService
 
 router = APIRouter()
@@ -41,7 +42,7 @@ async def create_shift_report(
     # Check if review is required for this organization
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
-    review_status = 'pending_review' if config.report_review_required else 'approved'
+    review_status = "pending_review" if config.report_review_required else "approved"
 
     service = ShiftCompletionService(db)
     try:
@@ -77,20 +78,20 @@ async def get_my_shift_reports(
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
     if config.report_review_required:
-        reports = [r for r in reports if r.review_status == 'approved']
+        reports = [r for r in reports if r.review_status == "approved"]
 
     # Strip sensitive fields based on visibility config
     visibility = config.to_visibility_dict()
     for report in reports:
-        if not visibility.get('show_performance_rating', True):
+        if not visibility.get("show_performance_rating", True):
             report.performance_rating = None
-        if not visibility.get('show_officer_narrative', False):
+        if not visibility.get("show_officer_narrative", False):
             report.officer_narrative = None
-        if not visibility.get('show_areas_of_strength', True):
+        if not visibility.get("show_areas_of_strength", True):
             report.areas_of_strength = None
-        if not visibility.get('show_areas_for_improvement', True):
+        if not visibility.get("show_areas_for_improvement", True):
             report.areas_for_improvement = None
-        if not visibility.get('show_skills_observed', True):
+        if not visibility.get("show_skills_observed", True):
             report.skills_observed = None
         # Never expose reviewer notes to trainees
         report.reviewer_notes = None
@@ -235,7 +236,9 @@ async def acknowledge_report(
         trainee_comments=ack.trainee_comments,
     )
     if not report:
-        raise HTTPException(status_code=404, detail="Report not found or not your report")
+        raise HTTPException(
+            status_code=404, detail="Report not found or not your report"
+        )
     return report
 
 

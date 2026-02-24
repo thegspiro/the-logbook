@@ -11,14 +11,16 @@ Zero-Trust Security:
 """
 
 import ipaddress
-from typing import Optional, Dict, Any, Set
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, Optional, Set
+
 from loguru import logger
 
 try:
     import geoip2.database
     import geoip2.errors
+
     GEOIP_AVAILABLE = True
 except ImportError:
     GEOIP_AVAILABLE = False

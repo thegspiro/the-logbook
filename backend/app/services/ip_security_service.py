@@ -10,24 +10,23 @@ Zero-Trust Model:
 - All actions are logged for audit
 """
 
-from typing import Optional, List, Set, Dict, Any
-from datetime import datetime, timedelta, timezone
-from sqlalchemy import select, update, func, and_, or_
-from sqlalchemy.ext.asyncio import AsyncSession
-from loguru import logger
 import json
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Set
 
+from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.geoip import get_geoip_service
 from app.models.ip_security import (
-    IPException,
-    IPExceptionType,
-    IPExceptionApprovalStatus,
     BlockedAccessAttempt,
     CountryBlockRule,
+    IPException,
+    IPExceptionApprovalStatus,
     IPExceptionAuditLog,
+    IPExceptionType,
 )
-from app.core.geoip import get_geoip_service
-from app.core.config import settings
-
 
 # Maximum allowed exception duration (in days)
 MAX_EXCEPTION_DURATION_DAYS = 90
@@ -84,20 +83,28 @@ class IPSecurityService:
         if requested_duration_days <= 0:
             raise ValueError("Duration must be at least 1 day")
         if requested_duration_days > MAX_EXCEPTION_DURATION_DAYS:
-            raise ValueError(f"Duration cannot exceed {MAX_EXCEPTION_DURATION_DAYS} days")
+            raise ValueError(
+                f"Duration cannot exceed {MAX_EXCEPTION_DURATION_DAYS} days"
+            )
 
         # Check for existing active/pending exception for same IP and user
         existing = await db.execute(
             select(IPException)
             .where(IPException.user_id == str(user_id))
             .where(IPException.ip_address == ip_address)
-            .where(IPException.approval_status.in_([
-                IPExceptionApprovalStatus.PENDING,
-                IPExceptionApprovalStatus.APPROVED
-            ]))
+            .where(
+                IPException.approval_status.in_(
+                    [
+                        IPExceptionApprovalStatus.PENDING,
+                        IPExceptionApprovalStatus.APPROVED,
+                    ]
+                )
+            )
         )
         if existing.scalar_one_or_none():
-            raise ValueError("An active or pending exception already exists for this IP")
+            raise ValueError(
+                "An active or pending exception already exists for this IP"
+            )
 
         # Look up country info
         geoip = get_geoip_service()
@@ -109,7 +116,9 @@ class IPSecurityService:
             country_name = geo_info.get("country_name")
 
         # Calculate tentative valid_until (will be confirmed on approval)
-        tentative_valid_until = datetime.now(timezone.utc) + timedelta(days=requested_duration_days)
+        tentative_valid_until = datetime.now(timezone.utc) + timedelta(
+            days=requested_duration_days
+        )
 
         # Create the exception request
         exception = IPException(
@@ -144,7 +153,7 @@ class IPSecurityService:
                 "requested_duration_days": requested_duration_days,
                 "use_case": use_case,
                 "country_code": country_code,
-            }
+            },
         )
 
         logger.info(
@@ -193,7 +202,9 @@ class IPSecurityService:
             raise ValueError("Exception not found")
 
         if exception.approval_status != IPExceptionApprovalStatus.PENDING:
-            raise ValueError(f"Exception is not pending (status: {exception.approval_status})")
+            raise ValueError(
+                f"Exception is not pending (status: {exception.approval_status})"
+            )
 
         # Determine approved duration
         duration = approved_duration_days or exception.requested_duration_days
@@ -228,7 +239,7 @@ class IPSecurityService:
                 "valid_from": now.isoformat(),
                 "valid_until": valid_until.isoformat(),
                 "approval_notes": approval_notes,
-            }
+            },
         )
 
         logger.info(
@@ -278,7 +289,9 @@ class IPSecurityService:
             raise ValueError("Exception not found")
 
         if exception.approval_status != IPExceptionApprovalStatus.PENDING:
-            raise ValueError(f"Exception is not pending (status: {exception.approval_status})")
+            raise ValueError(
+                f"Exception is not pending (status: {exception.approval_status})"
+            )
 
         # Update exception
         exception.approval_status = IPExceptionApprovalStatus.REJECTED
@@ -298,7 +311,7 @@ class IPSecurityService:
             ip_address=admin_ip,
             details={
                 "rejection_reason": rejection_reason,
-            }
+            },
         )
 
         logger.info(
@@ -347,7 +360,9 @@ class IPSecurityService:
             raise ValueError("Exception not found")
 
         if exception.approval_status != IPExceptionApprovalStatus.APPROVED:
-            raise ValueError(f"Can only revoke approved exceptions (status: {exception.approval_status})")
+            raise ValueError(
+                f"Can only revoke approved exceptions (status: {exception.approval_status})"
+            )
 
         # Update exception
         exception.approval_status = IPExceptionApprovalStatus.REVOKED
@@ -368,7 +383,7 @@ class IPSecurityService:
             details={
                 "revoke_reason": revoke_reason,
                 "days_remaining": exception.days_remaining(),
-            }
+            },
         )
 
         logger.info(
@@ -424,10 +439,12 @@ class IPSecurityService:
 
         if not include_expired:
             query = query.where(
-                IPException.approval_status.in_([
-                    IPExceptionApprovalStatus.PENDING,
-                    IPExceptionApprovalStatus.APPROVED,
-                ])
+                IPException.approval_status.in_(
+                    [
+                        IPExceptionApprovalStatus.PENDING,
+                        IPExceptionApprovalStatus.APPROVED,
+                    ]
+                )
             )
 
         query = query.order_by(IPException.created_at.desc()).limit(limit)
@@ -524,7 +541,7 @@ class IPSecurityService:
                 exception_id=exception.id,
                 action="expired",
                 performed_by="system",
-                details={"valid_until": exception.valid_until.isoformat()}
+                details={"valid_until": exception.valid_until.isoformat()},
             )
 
         await db.commit()

@@ -5,29 +5,29 @@ Business logic for custom forms including form definitions,
 fields, submissions, public forms, integrations, and reporting.
 """
 
-from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
+import html as html_lib
+import re
+from datetime import date, datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.security_middleware import InputSanitizer
 from app.models.forms import (
+    FieldType,
     Form,
+    FormCategory,
     FormField,
-    FormSubmission,
     FormIntegration,
     FormStatus,
-    FormCategory,
-    FieldType,
+    FormSubmission,
     IntegrationTarget,
     IntegrationType,
 )
-from app.models.user import Organization, User, UserStatus
-from app.core.security_middleware import InputSanitizer
-
-import re
-import html as html_lib
+from app.models.user import User, UserStatus
 
 
 class FormsService:
@@ -72,13 +72,17 @@ class FormsService:
             str_value = str(value)
 
             # Remove null bytes
-            str_value = str_value.replace('\x00', '')
+            str_value = str_value.replace("\x00", "")
 
             # HTML-escape to prevent stored XSS
             str_value = html_lib.escape(str_value)
 
             # Enforce length limits by field type
-            field_type = field.field_type if isinstance(field.field_type, str) else field.field_type.value
+            field_type = (
+                field.field_type
+                if isinstance(field.field_type, str)
+                else field.field_type.value
+            )
             if field_type == FieldType.TEXTAREA.value:
                 max_len = field.max_length or FormsService.MAX_TEXTAREA_LENGTH
             elif field_type == FieldType.EMAIL.value:
@@ -87,25 +91,35 @@ class FormsService:
                 max_len = field.max_length or FormsService.MAX_TEXT_LENGTH
 
             if len(str_value) > max_len:
-                return {}, f"Value for '{field.label}' exceeds maximum length of {max_len} characters"
+                return (
+                    {},
+                    f"Value for '{field.label}' exceeds maximum length of {max_len} characters",
+                )
 
             # Enforce min_length if set
-            if field.min_length and field.required and len(str_value.strip()) < field.min_length:
-                return {}, f"Value for '{field.label}' must be at least {field.min_length} characters"
+            if (
+                field.min_length
+                and field.required
+                and len(str_value.strip()) < field.min_length
+            ):
+                return (
+                    {},
+                    f"Value for '{field.label}' must be at least {field.min_length} characters",
+                )
 
             # Type-specific validation
             if field_type == FieldType.EMAIL.value and str_value.strip():
-                email_pattern = r'^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$'
+                email_pattern = r"^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$"
                 raw_value = html_lib.unescape(str_value)
                 if not re.match(email_pattern, raw_value):
                     return {}, f"Invalid email format for '{field.label}'"
                 # Check for header injection
-                if '\n' in raw_value or '\r' in raw_value:
+                if "\n" in raw_value or "\r" in raw_value:
                     return {}, f"Invalid email format for '{field.label}'"
 
             if field_type == FieldType.PHONE.value and str_value.strip():
                 raw_value = html_lib.unescape(str_value)
-                digits_only = re.sub(r'[^\d+\-() ]', '', raw_value)
+                digits_only = re.sub(r"[^\d+\-() ]", "", raw_value)
                 if digits_only != raw_value:
                     return {}, f"Invalid phone number for '{field.label}'"
 
@@ -113,16 +127,28 @@ class FormsService:
                 try:
                     num_val = float(html_lib.unescape(str_value))
                     if field.min_value is not None and num_val < field.min_value:
-                        return {}, f"Value for '{field.label}' must be at least {field.min_value}"
+                        return (
+                            {},
+                            f"Value for '{field.label}' must be at least {field.min_value}",
+                        )
                     if field.max_value is not None and num_val > field.max_value:
-                        return {}, f"Value for '{field.label}' must be at most {field.max_value}"
+                        return (
+                            {},
+                            f"Value for '{field.label}' must be at most {field.max_value}",
+                        )
                 except ValueError:
                     return {}, f"Invalid number for '{field.label}'"
 
-            if field_type in (FieldType.SELECT.value, FieldType.RADIO.value) and str_value.strip():
+            if (
+                field_type in (FieldType.SELECT.value, FieldType.RADIO.value)
+                and str_value.strip()
+            ):
                 # Validate against allowed options
                 if field.options:
-                    allowed = {opt.value if hasattr(opt, 'value') else opt.get('value', '') for opt in field.options}
+                    allowed = {
+                        opt.value if hasattr(opt, "value") else opt.get("value", "")
+                        for opt in field.options
+                    }
                     raw_value = html_lib.unescape(str_value)
                     if raw_value not in allowed:
                         return {}, f"Invalid option for '{field.label}'"
@@ -130,9 +156,12 @@ class FormsService:
             if field_type == FieldType.CHECKBOX.value and str_value.strip():
                 # Validate each comma-separated value against allowed options
                 if field.options:
-                    allowed = {opt.value if hasattr(opt, 'value') else opt.get('value', '') for opt in field.options}
+                    allowed = {
+                        opt.value if hasattr(opt, "value") else opt.get("value", "")
+                        for opt in field.options
+                    }
                     raw_value = html_lib.unescape(str_value)
-                    for part in raw_value.split(','):
+                    for part in raw_value.split(","):
                         if part and part not in allowed:
                             return {}, f"Invalid option for '{field.label}'"
 
@@ -141,7 +170,10 @@ class FormsService:
                 try:
                     raw_value = html_lib.unescape(str_value)
                     if not re.match(field.validation_pattern, raw_value):
-                        return {}, f"Value for '{field.label}' does not match the required format"
+                        return (
+                            {},
+                            f"Value for '{field.label}' does not match the required format",
+                        )
                 except re.error:
                     pass  # Skip invalid regex patterns
 
@@ -167,10 +199,10 @@ class FormsService:
             raw_email = email.strip()[:254]
             # Basic format check
             if raw_email:
-                email_pattern = r'^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$'
+                email_pattern = r"^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$"
                 if not re.match(email_pattern, raw_email):
                     return None, None, "Invalid submitter email format"
-                if '\n' in raw_email or '\r' in raw_email:
+                if "\n" in raw_email or "\r" in raw_email:
                     return None, None, "Invalid submitter email format"
                 clean_email = html_lib.escape(raw_email.lower())
 
@@ -188,9 +220,7 @@ class FormsService:
             fields_data = form_data.pop("fields", None) or []
 
             form = Form(
-                organization_id=organization_id,
-                created_by=created_by,
-                **form_data
+                organization_id=organization_id, created_by=created_by, **form_data
             )
             self.db.add(form)
             await self.db.flush()  # Get form.id before adding fields
@@ -243,7 +273,9 @@ class FormsService:
             query = query.where(Form.is_template == is_template)
 
         if search:
-            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
@@ -299,7 +331,10 @@ class FormsService:
             # Handle status changes
             if "status" in update_data:
                 new_status = update_data["status"]
-                if new_status == FormStatus.PUBLISHED.value and form.status != FormStatus.PUBLISHED:
+                if (
+                    new_status == FormStatus.PUBLISHED.value
+                    and form.status != FormStatus.PUBLISHED
+                ):
                     update_data["published_at"] = datetime.now(timezone.utc)
 
             for key, value in update_data.items():
@@ -368,7 +403,11 @@ class FormsService:
             return None, str(e)
 
     async def update_field(
-        self, field_id: UUID, form_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self,
+        field_id: UUID,
+        form_id: UUID,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
     ) -> Tuple[Optional[FormField], Optional[str]]:
         """Update a form field"""
         try:
@@ -469,7 +508,9 @@ class FormsService:
                     return None, f"Required field '{field.label}' is missing"
 
             # Sanitize and validate all submitted values
-            sanitized_data, sanitize_error = self._sanitize_submission_data(data, form.fields)
+            sanitized_data, sanitize_error = self._sanitize_submission_data(
+                data, form.fields
+            )
             if sanitize_error:
                 return None, sanitize_error
 
@@ -520,7 +561,9 @@ class FormsService:
                     return None, f"Required field '{field.label}' is missing"
 
             # Sanitize and validate all submitted values
-            sanitized_data, sanitize_error = self._sanitize_submission_data(data, form.fields)
+            sanitized_data, sanitize_error = self._sanitize_submission_data(
+                data, form.fields
+            )
             if sanitize_error:
                 return None, sanitize_error
 
@@ -574,7 +617,9 @@ class FormsService:
         total = total_result.scalar()
 
         # Paginated results
-        query = query.order_by(FormSubmission.submitted_at.desc()).offset(skip).limit(limit)
+        query = (
+            query.order_by(FormSubmission.submitted_at.desc()).offset(skip).limit(limit)
+        )
         result = await self.db.execute(query)
         submissions = result.scalars().all()
 
@@ -723,7 +768,9 @@ class FormsService:
                         submission, integration
                     )
                     results["membership_interest"] = result
-                elif integration.integration_type == IntegrationType.EQUIPMENT_ASSIGNMENT:
+                elif (
+                    integration.integration_type == IntegrationType.EQUIPMENT_ASSIGNMENT
+                ):
                     result = await self._process_equipment_assignment(
                         submission, integration
                     )
@@ -752,8 +799,9 @@ class FormsService:
         Maps form fields to prospect fields and auto-creates a
         ProspectiveMember record in the org's default pipeline.
         """
-        from app.services.membership_pipeline_service import MembershipPipelineService
         from loguru import logger
+
+        from app.services.membership_pipeline_service import MembershipPipelineService
 
         mappings = integration.field_mappings or {}
         mapped_data = {}
@@ -764,7 +812,11 @@ class FormsService:
 
         # Auto-create a prospect if we have at least first_name, last_name, email
         prospect_id = None
-        if mapped_data.get("first_name") and mapped_data.get("last_name") and mapped_data.get("email"):
+        if (
+            mapped_data.get("first_name")
+            and mapped_data.get("last_name")
+            and mapped_data.get("email")
+        ):
             try:
                 pipeline_service = MembershipPipelineService(self.db)
                 prospect_data = {
@@ -801,9 +853,11 @@ class FormsService:
             "success": True,
             "mapped_data": mapped_data,
             "prospect_id": prospect_id,
-            "message": "Prospect auto-created from membership interest form"
-            if prospect_id
-            else "Membership interest recorded (prospect creation skipped — missing required fields)",
+            "message": (
+                "Prospect auto-created from membership interest form"
+                if prospect_id
+                else "Membership interest recorded (prospect creation skipped — missing required fields)"
+            ),
         }
 
     async def _process_equipment_assignment(
@@ -887,8 +941,8 @@ class FormsService:
         # If the submitter is an authenticated member, create an RSVP
         if submission.submitted_by:
             try:
-                from app.models.event import EventRSVP, RSVPStatus
                 from app.core.utils import generate_uuid
+                from app.models.event import EventRSVP, RSVPStatus
 
                 rsvp = EventRSVP(
                     id=generate_uuid(),
@@ -935,7 +989,9 @@ class FormsService:
                     User.last_name.ilike(search_term),
                     User.email.ilike(search_term),
                     User.membership_number.ilike(search_term),
-                    func.concat(User.first_name, " ", User.last_name).ilike(search_term),
+                    func.concat(User.first_name, " ", User.last_name).ilike(
+                        search_term
+                    ),
                 )
             )
             .order_by(User.last_name, User.first_name)
@@ -1001,8 +1057,9 @@ class FormsService:
 
         # Total submissions
         total_subs_result = await self.db.execute(
-            select(func.count(FormSubmission.id))
-            .where(FormSubmission.organization_id == org_id_str)
+            select(func.count(FormSubmission.id)).where(
+                FormSubmission.organization_id == org_id_str
+            )
         )
         total_submissions = total_subs_result.scalar()
 
@@ -1011,7 +1068,10 @@ class FormsService:
         month_subs_result = await self.db.execute(
             select(func.count(FormSubmission.id))
             .where(FormSubmission.organization_id == org_id_str)
-            .where(FormSubmission.submitted_at >= datetime.combine(first_of_month, datetime.min.time()))
+            .where(
+                FormSubmission.submitted_at
+                >= datetime.combine(first_of_month, datetime.min.time())
+            )
         )
         submissions_this_month = month_subs_result.scalar()
 

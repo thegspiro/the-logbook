@@ -6,13 +6,15 @@ the minutes publishing flow. For the main documents endpoint,
 see schemas/documents.py.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FolderCreate(BaseModel):
     """Schema for creating a document folder"""
+
     name: str = Field(..., min_length=1, max_length=200)
     slug: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
@@ -24,6 +26,7 @@ class FolderCreate(BaseModel):
 
 class FolderUpdate(BaseModel):
     """Schema for updating a folder"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     sort_order: Optional[int] = Field(None, ge=0)
@@ -33,6 +36,7 @@ class FolderUpdate(BaseModel):
 
 class FolderResponse(BaseModel):
     """Folder response schema"""
+
     id: str
     organization_id: str
     name: str
@@ -52,6 +56,7 @@ class FolderResponse(BaseModel):
 
 class DocumentCreate(BaseModel):
     """Schema for creating a document via the document service"""
+
     folder_id: str
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
@@ -65,6 +70,7 @@ class DocumentCreate(BaseModel):
 
 class DocumentUpdate(BaseModel):
     """Schema for updating a document"""
+
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     folder_id: Optional[str] = None
@@ -73,6 +79,7 @@ class DocumentUpdate(BaseModel):
 
 class DocumentResponse(BaseModel):
     """Document response schema for the minutes publishing flow"""
+
     id: str
     organization_id: str
     folder_id: Optional[str] = None
@@ -96,6 +103,7 @@ class DocumentResponse(BaseModel):
 
 class DocumentListItem(BaseModel):
     """Compact document listing"""
+
     id: str
     folder_id: Optional[str] = None
     title: str

@@ -6,29 +6,29 @@ pipeline configuration, prospect tracking, step progression, and
 transfer to full membership.
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, update, delete
-from sqlalchemy.orm import selectinload
-from uuid import UUID, uuid4
 import secrets
 import string
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
+from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.membership_pipeline import (
     MembershipPipeline,
     MembershipPipelineStep,
-    ProspectiveMember,
-    ProspectStepProgress,
+    PipelineStepType,
     ProspectActivityLog,
     ProspectDocument,
     ProspectElectionPackage,
+    ProspectiveMember,
     ProspectStatus,
+    ProspectStepProgress,
     StepProgressStatus,
-    PipelineStepType,
 )
-from app.models.user import User, UserStatus, Organization, generate_uuid
+from app.models.user import Organization, User, UserStatus, generate_uuid
 
 
 class MembershipPipelineService:
@@ -52,14 +52,18 @@ class MembershipPipelineService:
                 selectinload(MembershipPipeline.steps),
                 selectinload(MembershipPipeline.prospects),
             )
-            .order_by(MembershipPipeline.is_default.desc(), MembershipPipeline.created_at)
+            .order_by(
+                MembershipPipeline.is_default.desc(), MembershipPipeline.created_at
+            )
         )
         if not include_templates:
             query = query.where(MembershipPipeline.is_template == False)  # noqa: E712
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_pipeline(self, pipeline_id: str, organization_id: str) -> Optional[MembershipPipeline]:
+    async def get_pipeline(
+        self, pipeline_id: str, organization_id: str
+    ) -> Optional[MembershipPipeline]:
         """Get a single pipeline by ID"""
         query = (
             select(MembershipPipeline)
@@ -130,10 +134,17 @@ class MembershipPipelineService:
         return await self.get_pipeline(pipeline.id, organization_id)
 
     # Fields that may never be set via the generic update dict
-    _PIPELINE_PROTECTED_FIELDS = frozenset({
-        "id", "organization_id", "created_by", "created_at", "updated_at",
-        "steps", "prospects",
-    })
+    _PIPELINE_PROTECTED_FIELDS = frozenset(
+        {
+            "id",
+            "organization_id",
+            "created_by",
+            "created_at",
+            "updated_at",
+            "steps",
+            "prospects",
+        }
+    )
 
     async def update_pipeline(
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
@@ -166,7 +177,11 @@ class MembershipPipelineService:
         return True
 
     async def duplicate_pipeline(
-        self, pipeline_id: str, organization_id: str, new_name: str, created_by: Optional[str] = None
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        new_name: str,
+        created_by: Optional[str] = None,
     ) -> Optional[MembershipPipeline]:
         """Duplicate a pipeline (useful for creating from templates)"""
         source = await self.get_pipeline(pipeline_id, organization_id)
@@ -177,8 +192,16 @@ class MembershipPipelineService:
             {
                 "name": step.name,
                 "description": step.description,
-                "step_type": step.step_type.value if isinstance(step.step_type, PipelineStepType) else step.step_type,
-                "action_type": step.action_type.value if step.action_type and hasattr(step.action_type, 'value') else step.action_type,
+                "step_type": (
+                    step.step_type.value
+                    if isinstance(step.step_type, PipelineStepType)
+                    else step.step_type
+                ),
+                "action_type": (
+                    step.action_type.value
+                    if step.action_type and hasattr(step.action_type, "value")
+                    else step.action_type
+                ),
                 "is_first_step": step.is_first_step,
                 "is_final_step": step.is_final_step,
                 "sort_order": step.sort_order,
@@ -253,10 +276,16 @@ class MembershipPipelineService:
         await self.db.refresh(step)
         return step
 
-    _STEP_PROTECTED_FIELDS = frozenset({
-        "id", "pipeline_id", "created_at", "updated_at",
-        "pipeline", "progress_records",
-    })
+    _STEP_PROTECTED_FIELDS = frozenset(
+        {
+            "id",
+            "pipeline_id",
+            "created_at",
+            "updated_at",
+            "pipeline",
+            "progress_records",
+        }
+    )
 
     async def update_step(
         self, step_id: str, pipeline_id: str, organization_id: str, data: Dict[str, Any]
@@ -280,7 +309,9 @@ class MembershipPipelineService:
         await self.db.refresh(step)
         return step
 
-    async def delete_step(self, step_id: str, pipeline_id: str, organization_id: str) -> bool:
+    async def delete_step(
+        self, step_id: str, pipeline_id: str, organization_id: str
+    ) -> bool:
         """Remove a step from a pipeline"""
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
@@ -338,7 +369,9 @@ class MembershipPipelineService:
         if status:
             query = query.where(ProspectiveMember.status == status)
         if search:
-            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             search_term = f"%{safe_search}%"
             query = query.where(
                 ProspectiveMember.first_name.ilike(search_term)
@@ -352,13 +385,19 @@ class MembershipPipelineService:
         total = total_result.scalar() or 0
 
         # Data query
-        query = query.order_by(ProspectiveMember.created_at.desc()).limit(limit).offset(offset)
+        query = (
+            query.order_by(ProspectiveMember.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(query)
         prospects = list(result.scalars().all())
 
         return prospects, total
 
-    async def get_prospect(self, prospect_id: str, organization_id: str) -> Optional[ProspectiveMember]:
+    async def get_prospect(
+        self, prospect_id: str, organization_id: str
+    ) -> Optional[ProspectiveMember]:
         """Get a single prospect with full details"""
         query = (
             select(ProspectiveMember)
@@ -370,8 +409,12 @@ class MembershipPipelineService:
             )
             .options(
                 selectinload(ProspectiveMember.current_step),
-                selectinload(ProspectiveMember.pipeline).selectinload(MembershipPipeline.steps),
-                selectinload(ProspectiveMember.step_progress).selectinload(ProspectStepProgress.step),
+                selectinload(ProspectiveMember.pipeline).selectinload(
+                    MembershipPipeline.steps
+                ),
+                selectinload(ProspectiveMember.step_progress).selectinload(
+                    ProspectStepProgress.step
+                ),
             )
         )
         result = await self.db.execute(query)
@@ -408,9 +451,7 @@ class MembershipPipelineService:
 
         conditions.append(or_(*match_conditions))
 
-        result = await self.db.execute(
-            select(User).where(*conditions)
-        )
+        result = await self.db.execute(select(User).where(*conditions))
         matches = result.scalars().all()
 
         return [
@@ -418,10 +459,14 @@ class MembershipPipelineService:
                 "user_id": str(m.id),
                 "name": m.full_name,
                 "email": m.email,
-                "status": m.status.value if hasattr(m.status, 'value') else str(m.status),
+                "status": (
+                    m.status.value if hasattr(m.status, "value") else str(m.status)
+                ),
                 "membership_number": m.membership_number,
                 "archived_at": m.archived_at.isoformat() if m.archived_at else None,
-                "match_type": "email" if m.email and m.email.lower() == email.lower() else "name",
+                "match_type": (
+                    "email" if m.email and m.email.lower() == email.lower() else "name"
+                ),
             }
             for m in matches
         ]
@@ -476,13 +521,21 @@ class MembershipPipelineService:
 
         # Initialize step progress records for all steps in the pipeline
         if pipeline_id:
-            await self._initialize_step_progress(prospect.id, pipeline_id, first_step_id)
+            await self._initialize_step_progress(
+                prospect.id, pipeline_id, first_step_id
+            )
 
         # Log the creation
         await self._log_activity(
             prospect_id=prospect.id,
             action="prospect_created",
-            details={"source": "manual" if not data.get("form_submission_id") else "form_submission"},
+            details={
+                "source": (
+                    "manual"
+                    if not data.get("form_submission_id")
+                    else "form_submission"
+                )
+            },
             performed_by=created_by,
         )
 
@@ -490,16 +543,34 @@ class MembershipPipelineService:
         return await self.get_prospect(prospect.id, organization_id)
 
     # Fields that may never be set via the generic update dict
-    _PROSPECT_PROTECTED_FIELDS = frozenset({
-        "id", "organization_id", "pipeline_id", "current_step_id",
-        "transferred_user_id", "transferred_at", "form_submission_id",
-        "created_at", "updated_at", "step_progress", "activity_log",
-        "pipeline", "current_step", "referrer", "transferred_user",
-        "documents", "election_packages",
-    })
+    _PROSPECT_PROTECTED_FIELDS = frozenset(
+        {
+            "id",
+            "organization_id",
+            "pipeline_id",
+            "current_step_id",
+            "transferred_user_id",
+            "transferred_at",
+            "form_submission_id",
+            "created_at",
+            "updated_at",
+            "step_progress",
+            "activity_log",
+            "pipeline",
+            "current_step",
+            "referrer",
+            "transferred_user",
+            "documents",
+            "election_packages",
+        }
+    )
 
     async def update_prospect(
-        self, prospect_id: str, organization_id: str, data: Dict[str, Any], updated_by: Optional[str] = None
+        self,
+        prospect_id: str,
+        organization_id: str,
+        data: Dict[str, Any],
+        updated_by: Optional[str] = None,
     ) -> Optional[ProspectiveMember]:
         """Update a prospect's information"""
         prospect = await self.get_prospect(prospect_id, organization_id)
@@ -580,7 +651,9 @@ class MembershipPipelineService:
         )
 
         # Check if the completed step is the final step and auto-transfer is on
-        step = next((s for s in prospect.pipeline.steps if str(s.id) == str(step_id)), None)
+        step = next(
+            (s for s in prospect.pipeline.steps if str(s.id) == str(step_id)), None
+        )
         if step and step.is_final_step and prospect.pipeline.auto_transfer_on_approval:
             await self._do_transfer(prospect, completed_by)
         else:
@@ -604,7 +677,11 @@ class MembershipPipelineService:
 
         sorted_steps = sorted(prospect.pipeline.steps, key=lambda s: s.sort_order)
         current_idx = next(
-            (i for i, s in enumerate(sorted_steps) if str(s.id) == str(prospect.current_step_id)),
+            (
+                i
+                for i, s in enumerate(sorted_steps)
+                if str(s.id) == str(prospect.current_step_id)
+            ),
             -1,
         )
 
@@ -622,31 +699,43 @@ class MembershipPipelineService:
         if next_progress:
             next_progress.status = StepProgressStatus.IN_PROGRESS
         else:
-            self.db.add(ProspectStepProgress(
-                id=generate_uuid(),
-                prospect_id=prospect_id,
-                step_id=next_step.id,
-                status=StepProgressStatus.IN_PROGRESS,
-            ))
+            self.db.add(
+                ProspectStepProgress(
+                    id=generate_uuid(),
+                    prospect_id=prospect_id,
+                    step_id=next_step.id,
+                    status=StepProgressStatus.IN_PROGRESS,
+                )
+            )
 
         await self._log_activity(
             prospect_id=prospect_id,
             action="prospect_advanced",
-            details={"to_step_id": str(next_step.id), "to_step_name": next_step.name, "notes": notes},
+            details={
+                "to_step_id": str(next_step.id),
+                "to_step_name": next_step.name,
+                "notes": notes,
+            },
             performed_by=advanced_by,
         )
 
         await self.db.commit()
         return await self.get_prospect(prospect_id, organization_id)
 
-    async def _advance_current_step(self, prospect: ProspectiveMember, completed_step_id: str):
+    async def _advance_current_step(
+        self, prospect: ProspectiveMember, completed_step_id: str
+    ):
         """After completing a step, move current_step_id to the next step"""
         if not prospect.pipeline:
             return
 
         sorted_steps = sorted(prospect.pipeline.steps, key=lambda s: s.sort_order)
         current_idx = next(
-            (i for i, s in enumerate(sorted_steps) if str(s.id) == str(completed_step_id)),
+            (
+                i
+                for i, s in enumerate(sorted_steps)
+                if str(s.id) == str(completed_step_id)
+            ),
             -1,
         )
 
@@ -656,7 +745,11 @@ class MembershipPipelineService:
 
             # Mark next step as in_progress
             next_progress = next(
-                (p for p in prospect.step_progress if str(p.step_id) == str(next_step.id)),
+                (
+                    p
+                    for p in prospect.step_progress
+                    if str(p.step_id) == str(next_step.id)
+                ),
                 None,
             )
             if next_progress:
@@ -688,10 +781,19 @@ class MembershipPipelineService:
             return None
 
         if prospect.status == ProspectStatus.TRANSFERRED:
-            return {"success": False, "message": "Prospect has already been transferred"}
+            return {
+                "success": False,
+                "message": "Prospect has already been transferred",
+            }
 
         return await self._do_transfer(
-            prospect, transferred_by, username, membership_id, rank, station, role_ids,
+            prospect,
+            transferred_by,
+            username,
+            membership_id,
+            rank,
+            station,
+            role_ids,
             send_welcome_email=send_welcome_email,
             middle_name=middle_name,
             hire_date=hire_date,
@@ -759,8 +861,11 @@ class MembershipPipelineService:
         # Auto-assign membership ID if not manually provided
         if not membership_id:
             from app.services.organization_service import OrganizationService
+
             org_service = OrganizationService(self.db)
-            membership_id = await org_service.generate_next_membership_id(prospect.organization_id)
+            membership_id = await org_service.generate_next_membership_id(
+                prospect.organization_id
+            )
 
         # Generate a temporary password so the new member can log in.
         # The password is hashed before storage; the plaintext is only
@@ -805,6 +910,7 @@ class MembershipPipelineService:
         # Assign initial roles/positions if provided
         if role_ids:
             from app.models.user import Role
+
             role_result = await self.db.execute(
                 select(Role)
                 .where(Role.id.in_([str(rid) for rid in role_ids]))
@@ -816,6 +922,7 @@ class MembershipPipelineService:
 
         # Auto-assign membership number if enabled for this organization
         from app.services.organization_service import OrganizationService
+
         org_service = OrganizationService(self.db)
         membership_number = await org_service.assign_next_membership_number(
             organization_id=prospect.organization_id,
@@ -847,7 +954,9 @@ class MembershipPipelineService:
             enrolled_by=transferred_by,
         )
 
-        result_msg = f"Prospect {prospect.full_name} transferred to membership as {username}"
+        result_msg = (
+            f"Prospect {prospect.full_name} transferred to membership as {username}"
+        )
         if enrollment_result:
             result_msg += f". Auto-enrolled in training program: {enrollment_result['program_name']}"
 
@@ -886,7 +995,11 @@ class MembershipPipelineService:
         program with "probationary" in the name.
         """
         try:
-            from app.models.training import TrainingProgram, ProgramEnrollment, EnrollmentStatus
+            from app.models.training import (
+                EnrollmentStatus,
+                ProgramEnrollment,
+                TrainingProgram,
+            )
             from app.models.user import Organization
 
             # Check org settings for auto-enroll program
@@ -911,11 +1024,13 @@ class MembershipPipelineService:
             else:
                 # Look for a program with "probationary" in the name
                 program_result = await self.db.execute(
-                    select(TrainingProgram).where(
+                    select(TrainingProgram)
+                    .where(
                         TrainingProgram.organization_id == organization_id,
                         TrainingProgram.name.ilike("%probationary%"),
                         TrainingProgram.active == True,  # noqa: E712
-                    ).limit(1)
+                    )
+                    .limit(1)
                 )
                 program = program_result.scalar_one_or_none()
 
@@ -967,8 +1082,8 @@ class MembershipPipelineService:
     ) -> bool:
         """Send welcome email with temporary credentials to a newly transferred member."""
         try:
-            from app.services.email_service import EmailService
             from app.core.config import settings
+            from app.services.email_service import EmailService
 
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == organization_id)
@@ -1004,7 +1119,7 @@ class MembershipPipelineService:
         """Generate a username from first and last name"""
         base = f"{first_name[0]}{last_name}".lower().replace(" ", "")
         # Add random suffix to avoid collisions
-        suffix = ''.join(secrets.choice(string.digits) for _ in range(3))
+        suffix = "".join(secrets.choice(string.digits) for _ in range(3))
         return f"{base}{suffix}"
 
     # =========================================================================
@@ -1038,21 +1153,28 @@ class MembershipPipelineService:
         # Group prospects by current step
         columns = []
         for step in sorted(pipeline.steps, key=lambda s: s.sort_order):
-            step_prospects = [p for p in prospects if str(p.current_step_id) == str(step.id)]
-            columns.append({
-                "step": step,
-                "prospects": step_prospects,
-                "count": len(step_prospects),
-            })
+            step_prospects = [
+                p for p in prospects if str(p.current_step_id) == str(step.id)
+            ]
+            columns.append(
+                {
+                    "step": step,
+                    "prospects": step_prospects,
+                    "count": len(step_prospects),
+                }
+            )
 
         # Add column for prospects with no current step
         unassigned = [p for p in prospects if not p.current_step_id]
         if unassigned:
-            columns.insert(0, {
-                "step": None,
-                "prospects": unassigned,
-                "count": len(unassigned),
-            })
+            columns.insert(
+                0,
+                {
+                    "step": None,
+                    "prospects": unassigned,
+                    "count": len(unassigned),
+                },
+            )
 
         return {
             "pipeline": pipeline,
@@ -1104,32 +1226,92 @@ class MembershipPipelineService:
     # Template Seeding
     # =========================================================================
 
-    async def seed_default_templates(self, organization_id: str, created_by: Optional[str] = None):
+    async def seed_default_templates(
+        self, organization_id: str, created_by: Optional[str] = None
+    ):
         """Create default pipeline templates for an organization"""
         templates = [
             {
                 "name": "Standard Membership Pipeline",
                 "description": "A standard pipeline for processing new membership applications with bookended steps.",
                 "steps": [
-                    {"name": "Interest Form Received", "step_type": "checkbox", "is_first_step": True, "required": True},
-                    {"name": "Send Welcome Email", "step_type": "action", "action_type": "send_email", "required": True},
-                    {"name": "Interest Meeting Attended", "step_type": "checkbox", "required": True},
-                    {"name": "Application Sent", "step_type": "action", "action_type": "send_email", "required": True},
-                    {"name": "Application Received", "step_type": "checkbox", "required": True},
-                    {"name": "Background Check", "step_type": "checkbox", "required": True},
-                    {"name": "Interview Completed", "step_type": "note", "required": True},
-                    {"name": "Membership Vote", "step_type": "checkbox", "required": True},
-                    {"name": "Approved / Elected", "step_type": "checkbox", "is_final_step": True, "required": True},
+                    {
+                        "name": "Interest Form Received",
+                        "step_type": "checkbox",
+                        "is_first_step": True,
+                        "required": True,
+                    },
+                    {
+                        "name": "Send Welcome Email",
+                        "step_type": "action",
+                        "action_type": "send_email",
+                        "required": True,
+                    },
+                    {
+                        "name": "Interest Meeting Attended",
+                        "step_type": "checkbox",
+                        "required": True,
+                    },
+                    {
+                        "name": "Application Sent",
+                        "step_type": "action",
+                        "action_type": "send_email",
+                        "required": True,
+                    },
+                    {
+                        "name": "Application Received",
+                        "step_type": "checkbox",
+                        "required": True,
+                    },
+                    {
+                        "name": "Background Check",
+                        "step_type": "checkbox",
+                        "required": True,
+                    },
+                    {
+                        "name": "Interview Completed",
+                        "step_type": "note",
+                        "required": True,
+                    },
+                    {
+                        "name": "Membership Vote",
+                        "step_type": "checkbox",
+                        "required": True,
+                    },
+                    {
+                        "name": "Approved / Elected",
+                        "step_type": "checkbox",
+                        "is_final_step": True,
+                        "required": True,
+                    },
                 ],
             },
             {
                 "name": "Expedited Membership Pipeline",
                 "description": "A shorter pipeline for lateral transfers or expedited membership approvals.",
                 "steps": [
-                    {"name": "Application Received", "step_type": "checkbox", "is_first_step": True, "required": True},
-                    {"name": "Credentials Verified", "step_type": "checkbox", "required": True},
-                    {"name": "Interview Completed", "step_type": "note", "required": True},
-                    {"name": "Approved / Elected", "step_type": "checkbox", "is_final_step": True, "required": True},
+                    {
+                        "name": "Application Received",
+                        "step_type": "checkbox",
+                        "is_first_step": True,
+                        "required": True,
+                    },
+                    {
+                        "name": "Credentials Verified",
+                        "step_type": "checkbox",
+                        "required": True,
+                    },
+                    {
+                        "name": "Interview Completed",
+                        "step_type": "note",
+                        "required": True,
+                    },
+                    {
+                        "name": "Approved / Elected",
+                        "step_type": "checkbox",
+                        "is_final_step": True,
+                        "required": True,
+                    },
                 ],
             },
         ]
@@ -1148,7 +1330,9 @@ class MembershipPipelineService:
     # Helpers
     # =========================================================================
 
-    async def _get_default_pipeline(self, organization_id: str) -> Optional[MembershipPipeline]:
+    async def _get_default_pipeline(
+        self, organization_id: str
+    ) -> Optional[MembershipPipeline]:
         """Get the default pipeline for an organization"""
         query = (
             select(MembershipPipeline)
@@ -1188,7 +1372,11 @@ class MembershipPipelineService:
         steps = result.scalars().all()
 
         for step in steps:
-            status = StepProgressStatus.IN_PROGRESS if str(step.id) == str(first_step_id) else StepProgressStatus.PENDING
+            status = (
+                StepProgressStatus.IN_PROGRESS
+                if str(step.id) == str(first_step_id)
+                else StepProgressStatus.PENDING
+            )
             progress = ProspectStepProgress(
                 id=generate_uuid(),
                 prospect_id=prospect_id,
@@ -1201,7 +1389,9 @@ class MembershipPipelineService:
     # Pipeline Statistics
     # =========================================================================
 
-    async def get_pipeline_stats(self, pipeline_id: str, organization_id: str) -> Optional[Dict[str, Any]]:
+    async def get_pipeline_stats(
+        self, pipeline_id: str, organization_id: str
+    ) -> Optional[Dict[str, Any]]:
         """Get statistics for a pipeline"""
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
@@ -1210,13 +1400,10 @@ class MembershipPipelineService:
         # Count prospects by status
         status_counts = {}
         for status_val in ProspectStatus:
-            count_query = (
-                select(func.count(ProspectiveMember.id))
-                .where(
-                    and_(
-                        ProspectiveMember.pipeline_id == pipeline_id,
-                        ProspectiveMember.status == status_val,
-                    )
+            count_query = select(func.count(ProspectiveMember.id)).where(
+                and_(
+                    ProspectiveMember.pipeline_id == pipeline_id,
+                    ProspectiveMember.status == status_val,
                 )
             )
             result = await self.db.execute(count_query)
@@ -1227,42 +1414,38 @@ class MembershipPipelineService:
         # Count prospects by current step
         by_step = []
         for step in sorted(pipeline.steps, key=lambda s: s.sort_order):
-            step_count_query = (
-                select(func.count(ProspectiveMember.id))
-                .where(
-                    and_(
-                        ProspectiveMember.pipeline_id == pipeline_id,
-                        ProspectiveMember.current_step_id == step.id,
-                        ProspectiveMember.status == ProspectStatus.ACTIVE,
-                    )
+            step_count_query = select(func.count(ProspectiveMember.id)).where(
+                and_(
+                    ProspectiveMember.pipeline_id == pipeline_id,
+                    ProspectiveMember.current_step_id == step.id,
+                    ProspectiveMember.status == ProspectStatus.ACTIVE,
                 )
             )
             result = await self.db.execute(step_count_query)
-            by_step.append({
-                "stage_id": step.id,
-                "stage_name": step.name,
-                "count": result.scalar() or 0,
-            })
+            by_step.append(
+                {
+                    "stage_id": step.id,
+                    "stage_name": step.name,
+                    "count": result.scalar() or 0,
+                }
+            )
 
         # Calculate avg days to transfer
         avg_days = None
         transferred_count = status_counts.get("transferred", 0)
         if transferred_count > 0:
-            avg_query = (
-                select(
-                    func.avg(
-                        func.datediff(
-                            ProspectiveMember.transferred_at,
-                            ProspectiveMember.created_at,
-                        )
+            avg_query = select(
+                func.avg(
+                    func.datediff(
+                        ProspectiveMember.transferred_at,
+                        ProspectiveMember.created_at,
                     )
                 )
-                .where(
-                    and_(
-                        ProspectiveMember.pipeline_id == pipeline_id,
-                        ProspectiveMember.status == ProspectStatus.TRANSFERRED,
-                        ProspectiveMember.transferred_at.isnot(None),
-                    )
+            ).where(
+                and_(
+                    ProspectiveMember.pipeline_id == pipeline_id,
+                    ProspectiveMember.status == ProspectStatus.TRANSFERRED,
+                    ProspectiveMember.transferred_at.isnot(None),
                 )
             )
             result = await self.db.execute(avg_query)
@@ -1404,13 +1587,10 @@ class MembershipPipelineService:
         if not prospect:
             return False
 
-        query = (
-            select(ProspectDocument)
-            .where(
-                and_(
-                    ProspectDocument.id == document_id,
-                    ProspectDocument.prospect_id == prospect_id,
-                )
+        query = select(ProspectDocument).where(
+            and_(
+                ProspectDocument.id == document_id,
+                ProspectDocument.prospect_id == prospect_id,
             )
         )
         result = await self.db.execute(query)
@@ -1474,7 +1654,9 @@ class MembershipPipelineService:
             "email": prospect.email,
             "phone": prospect.phone,
             "mobile": prospect.mobile,
-            "date_of_birth": str(prospect.date_of_birth) if prospect.date_of_birth else None,
+            "date_of_birth": (
+                str(prospect.date_of_birth) if prospect.date_of_birth else None
+            ),
             "address_street": prospect.address_street,
             "address_city": prospect.address_city,
             "address_state": prospect.address_state,
@@ -1507,10 +1689,19 @@ class MembershipPipelineService:
         await self.db.commit()
         return pkg
 
-    _ELECTION_PKG_PROTECTED_FIELDS = frozenset({
-        "id", "prospect_id", "pipeline_id", "election_id",
-        "created_at", "updated_at", "prospect", "pipeline", "step",
-    })
+    _ELECTION_PKG_PROTECTED_FIELDS = frozenset(
+        {
+            "id",
+            "prospect_id",
+            "pipeline_id",
+            "election_id",
+            "created_at",
+            "updated_at",
+            "prospect",
+            "pipeline",
+            "step",
+        }
+    )
 
     async def update_election_package(
         self,
@@ -1550,7 +1741,10 @@ class MembershipPipelineService:
         """List election packages, optionally filtered by pipeline and status"""
         query = (
             select(ProspectElectionPackage)
-            .join(ProspectiveMember, ProspectElectionPackage.prospect_id == ProspectiveMember.id)
+            .join(
+                ProspectiveMember,
+                ProspectElectionPackage.prospect_id == ProspectiveMember.id,
+            )
             .where(ProspectiveMember.organization_id == organization_id)
         )
         if pipeline_id:
@@ -1577,8 +1771,12 @@ class MembershipPipelineService:
             .where(ProspectiveMember.status_token == token)
             .options(
                 selectinload(ProspectiveMember.current_step),
-                selectinload(ProspectiveMember.pipeline).selectinload(MembershipPipeline.steps),
-                selectinload(ProspectiveMember.step_progress).selectinload(ProspectStepProgress.step),
+                selectinload(ProspectiveMember.pipeline).selectinload(
+                    MembershipPipeline.steps
+                ),
+                selectinload(ProspectiveMember.step_progress).selectinload(
+                    ProspectStepProgress.step
+                ),
             )
         )
         result = await self.db.execute(query)
@@ -1603,11 +1801,19 @@ class MembershipPipelineService:
             for sp in sorted(prospect.step_progress, key=lambda p: p.created_at):
                 if str(sp.step_id) not in public_step_ids:
                     continue
-                completed_stages.append({
-                    "stage_name": sp.step.name if sp.step else "Unknown",
-                    "status": sp.status.value if hasattr(sp.status, "value") else sp.status,
-                    "completed_at": sp.completed_at.isoformat() if sp.completed_at else None,
-                })
+                completed_stages.append(
+                    {
+                        "stage_name": sp.step.name if sp.step else "Unknown",
+                        "status": (
+                            sp.status.value
+                            if hasattr(sp.status, "value")
+                            else sp.status
+                        ),
+                        "completed_at": (
+                            sp.completed_at.isoformat() if sp.completed_at else None
+                        ),
+                    }
+                )
 
         total_public_stages = len(public_step_ids)
 
@@ -1619,12 +1825,18 @@ class MembershipPipelineService:
         return {
             "first_name": prospect.first_name,
             "last_name": prospect.last_name,
-            "status": prospect.status.value if hasattr(prospect.status, "value") else prospect.status,
+            "status": (
+                prospect.status.value
+                if hasattr(prospect.status, "value")
+                else prospect.status
+            ),
             "current_stage_name": current_stage_name,
             "pipeline_name": prospect.pipeline.name if prospect.pipeline else None,
             "total_stages": total_public_stages,
             "stage_timeline": completed_stages,
-            "applied_at": prospect.created_at.isoformat() if prospect.created_at else None,
+            "applied_at": (
+                prospect.created_at.isoformat() if prospect.created_at else None
+            ),
         }
 
     # =========================================================================
@@ -1636,7 +1848,6 @@ class MembershipPipelineService:
         Find all active prospects that have exceeded their pipeline or step
         inactivity thresholds. Returns a list of prospects with their alert level.
         """
-        from datetime import timedelta
 
         # Get all active prospects for this org
         query = (
@@ -1682,7 +1893,9 @@ class MembershipPipelineService:
             days_inactive = (now - (prospect.updated_at or prospect.created_at)).days
             warning_pct = 80  # default warning at 80%
             if prospect.pipeline and prospect.pipeline.inactivity_config:
-                warning_pct = prospect.pipeline.inactivity_config.get("warning_threshold_percent", 80)
+                warning_pct = prospect.pipeline.inactivity_config.get(
+                    "warning_threshold_percent", 80
+                )
 
             warning_threshold = int(timeout_days * warning_pct / 100)
 
@@ -1693,16 +1906,22 @@ class MembershipPipelineService:
             else:
                 continue  # Not yet at warning level
 
-            warnings.append({
-                "prospect_id": str(prospect.id),
-                "prospect_name": prospect.full_name,
-                "prospect_email": prospect.email,
-                "current_stage": prospect.current_step.name if prospect.current_step else None,
-                "pipeline_name": prospect.pipeline.name if prospect.pipeline else None,
-                "days_inactive": days_inactive,
-                "timeout_days": timeout_days,
-                "alert_level": alert_level,
-            })
+            warnings.append(
+                {
+                    "prospect_id": str(prospect.id),
+                    "prospect_name": prospect.full_name,
+                    "prospect_email": prospect.email,
+                    "current_stage": (
+                        prospect.current_step.name if prospect.current_step else None
+                    ),
+                    "pipeline_name": (
+                        prospect.pipeline.name if prospect.pipeline else None
+                    ),
+                    "days_inactive": days_inactive,
+                    "timeout_days": timeout_days,
+                    "alert_level": alert_level,
+                }
+            )
 
         return warnings
 
@@ -1765,9 +1984,11 @@ class MembershipPipelineService:
                 )
                 existing_warning = recent_warning.scalars().first()
                 # Only warn once per 7-day period
-                if not existing_warning or (
-                    datetime.now(timezone.utc) - existing_warning.created_at
-                ).days >= 7:
+                if (
+                    not existing_warning
+                    or (datetime.now(timezone.utc) - existing_warning.created_at).days
+                    >= 7
+                ):
                     await self._log_activity(
                         prospect_id=prospect_id,
                         action="inactivity_warning_sent",

@@ -6,26 +6,25 @@ Endpoints for organization settings management.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
-from app.core.database import get_db
+from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
+from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.user import Role, User
 from app.schemas.organization import (
+    ContactInfoSettings,
+    EnabledModulesResponse,
+    MembershipIdSettings,
+    ModuleSettingsUpdate,
     OrganizationSettingsResponse,
     OrganizationSettingsUpdate,
-    ContactInfoSettings,
-    MembershipIdSettings,
-    EnabledModulesResponse,
-    ModuleSettingsUpdate,
-    SetupChecklistResponse,
     SetupChecklistItem,
+    SetupChecklistResponse,
 )
 from app.services.organization_service import OrganizationService
-from app.api.dependencies import get_current_user, require_permission
-from app.models.user import User, Role
-
 
 router = APIRouter()
 
@@ -55,7 +54,13 @@ async def get_organization_settings(
 async def update_organization_settings(
     settings_update: OrganizationSettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage", "settings.manage_contact_visibility", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission(
+            "settings.manage",
+            "settings.manage_contact_visibility",
+            "organization.update_settings",
+        )
+    ),
 ):
     """
     Update organization settings
@@ -81,8 +86,7 @@ async def update_organization_settings(
     # Update settings
     try:
         updated_settings = await org_service.update_organization_settings(
-            current_user.organization_id,
-            settings_dict
+            current_user.organization_id, settings_dict
         )
 
         await log_audit_event(
@@ -101,8 +105,7 @@ async def update_organization_settings(
         return updated_settings.model_dump()
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
         )
 
 
@@ -110,7 +113,13 @@ async def update_organization_settings(
 async def update_contact_info_settings(
     contact_settings: ContactInfoSettings,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage", "settings.manage_contact_visibility", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission(
+            "settings.manage",
+            "settings.manage_contact_visibility",
+            "organization.update_settings",
+        )
+    ),
 ):
     """
     Update contact information visibility settings
@@ -133,7 +142,9 @@ async def update_contact_info_settings(
     }
 
     try:
-        await org_service.update_organization_settings(current_user.organization_id, settings_dict)
+        await org_service.update_organization_settings(
+            current_user.organization_id, settings_dict
+        )
 
         await log_audit_event(
             db=db,
@@ -151,8 +162,7 @@ async def update_contact_info_settings(
         return contact_settings
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
         )
 
 
@@ -160,7 +170,9 @@ async def update_contact_info_settings(
 async def update_membership_id_settings(
     membership_id_settings: MembershipIdSettings,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.edit", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission("settings.edit", "organization.update_settings")
+    ),
 ):
     """
     Update membership ID number settings
@@ -181,7 +193,9 @@ async def update_membership_id_settings(
     }
 
     try:
-        await org_service.update_organization_settings(current_user.organization_id, settings_dict)
+        await org_service.update_organization_settings(
+            current_user.organization_id, settings_dict
+        )
 
         await log_audit_event(
             db=db,
@@ -199,8 +213,7 @@ async def update_membership_id_settings(
         return membership_id_settings
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
         )
 
 
@@ -225,7 +238,9 @@ async def get_enabled_modules(
 async def update_module_settings(
     module_update: ModuleSettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
 ):
     """
     Update module settings for the current organization
@@ -254,8 +269,7 @@ async def update_module_settings(
 
     try:
         result = await org_service.update_module_settings(
-            current_user.organization_id,
-            module_updates
+            current_user.organization_id, module_updates
         )
 
         await log_audit_event(
@@ -274,8 +288,7 @@ async def update_module_settings(
         return result
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
         )
 
 
@@ -293,8 +306,6 @@ async def get_membership_id_settings(
     return await org_service.get_membership_id_settings(current_user.organization_id)
 
 
-
-
 @router.get("/settings/membership-id/preview")
 async def preview_next_membership_id(
     db: AsyncSession = Depends(get_db),
@@ -306,7 +317,9 @@ async def preview_next_membership_id(
     **Authentication required**
     """
     org_service = OrganizationService(db)
-    org_settings = await org_service.get_organization_settings(current_user.organization_id)
+    org_settings = await org_service.get_organization_settings(
+        current_user.organization_id
+    )
     membership_id_settings = org_settings.membership_id
 
     if not membership_id_settings.enabled:
@@ -331,61 +344,89 @@ async def get_setup_checklist(
 
     **Authentication required**
     """
-    from app.models.user import Organization
-    from app.models.training import (
-        BasicApparatus, Shift, ShiftTemplate,
-        TrainingCourse,
-    )
-    from app.models.location import Location
     from app.models.forms import Form
+    from app.models.location import Location
     from app.models.membership_pipeline import MembershipPipeline
+    from app.models.training import BasicApparatus, ShiftTemplate, TrainingCourse
 
     org_id = str(current_user.organization_id)
 
     # Run all counts in parallel-ish (sequential awaits, but fast DB queries)
-    member_count = (await db.execute(
-        select(func.count()).select_from(User).where(User.organization_id == org_id)
-    )).scalar() or 0
+    member_count = (
+        await db.execute(
+            select(func.count()).select_from(User).where(User.organization_id == org_id)
+        )
+    ).scalar() or 0
 
-    role_count = (await db.execute(
-        select(func.count()).select_from(Role).where(Role.organization_id == org_id)
-    )).scalar() or 0
+    role_count = (
+        await db.execute(
+            select(func.count()).select_from(Role).where(Role.organization_id == org_id)
+        )
+    ).scalar() or 0
 
-    apparatus_count = (await db.execute(
-        select(func.count()).select_from(BasicApparatus)
-        .where(BasicApparatus.organization_id == org_id, BasicApparatus.is_active == True)  # noqa: E712
-    )).scalar() or 0
+    apparatus_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(BasicApparatus)
+            .where(
+                BasicApparatus.organization_id == org_id,
+                BasicApparatus.is_active == True,
+            )  # noqa: E712
+        )
+    ).scalar() or 0
 
-    location_count = (await db.execute(
-        select(func.count()).select_from(Location)
-        .where(Location.organization_id == org_id, Location.is_active == True)  # noqa: E712
-    )).scalar() or 0
+    location_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(Location)
+            .where(
+                Location.organization_id == org_id, Location.is_active == True
+            )  # noqa: E712
+        )
+    ).scalar() or 0
 
-    shift_template_count = (await db.execute(
-        select(func.count()).select_from(ShiftTemplate)
-        .where(ShiftTemplate.organization_id == org_id, ShiftTemplate.is_active == True)  # noqa: E712
-    )).scalar() or 0
+    shift_template_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(ShiftTemplate)
+            .where(
+                ShiftTemplate.organization_id == org_id, ShiftTemplate.is_active == True
+            )  # noqa: E712
+        )
+    ).scalar() or 0
 
-    course_count = (await db.execute(
-        select(func.count()).select_from(TrainingCourse)
-        .where(TrainingCourse.organization_id == org_id)
-    )).scalar() or 0
+    course_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(TrainingCourse)
+            .where(TrainingCourse.organization_id == org_id)
+        )
+    ).scalar() or 0
 
     form_count = 0
     try:
-        form_count = (await db.execute(
-            select(func.count()).select_from(Form)
-            .where(Form.organization_id == org_id)
-        )).scalar() or 0
+        form_count = (
+            await db.execute(
+                select(func.count())
+                .select_from(Form)
+                .where(Form.organization_id == org_id)
+            )
+        ).scalar() or 0
     except Exception as e:
         logger.warning(f"Failed to query form count for setup checklist: {e}")
 
     pipeline_count = 0
     try:
-        pipeline_count = (await db.execute(
-            select(func.count()).select_from(MembershipPipeline)
-            .where(MembershipPipeline.organization_id == org_id, MembershipPipeline.is_active == True)  # noqa: E712
-        )).scalar() or 0
+        pipeline_count = (
+            await db.execute(
+                select(func.count())
+                .select_from(MembershipPipeline)
+                .where(
+                    MembershipPipeline.organization_id == org_id,
+                    MembershipPipeline.is_active == True,
+                )  # noqa: E712
+            )
+        ).scalar() or 0
     except Exception as e:
         logger.warning(f"Failed to query pipeline count for setup checklist: {e}")
 
@@ -421,7 +462,11 @@ async def get_setup_checklist(
             key="apparatus",
             title="Set Up Apparatus & Vehicles",
             description="Define your apparatus with unit numbers, types, and crew positions for shift staffing.",
-            path="/apparatus-basic" if "apparatus" not in enabled_modules else "/apparatus",
+            path=(
+                "/apparatus-basic"
+                if "apparatus" not in enabled_modules
+                else "/apparatus"
+            ),
             category="essential",
             is_complete=apparatus_count > 0,
             count=apparatus_count,
@@ -451,76 +496,88 @@ async def get_setup_checklist(
 
     # Module-specific items (only shown if module is enabled)
     if "scheduling" in enabled_modules:
-        items.append(SetupChecklistItem(
-            key="scheduling",
-            title="Create Shift Templates",
-            description="Define reusable shift templates (Day Shift, Night Shift, etc.) for faster schedule building.",
-            path="/scheduling",
-            category="scheduling",
-            is_complete=shift_template_count > 0,
-            count=shift_template_count,
-            required=False,
-        ))
+        items.append(
+            SetupChecklistItem(
+                key="scheduling",
+                title="Create Shift Templates",
+                description="Define reusable shift templates (Day Shift, Night Shift, etc.) for faster schedule building.",
+                path="/scheduling",
+                category="scheduling",
+                is_complete=shift_template_count > 0,
+                count=shift_template_count,
+                required=False,
+            )
+        )
 
     if "training" in enabled_modules:
-        items.append(SetupChecklistItem(
-            key="training",
-            title="Set Up Training Courses & Requirements",
-            description="Create training courses, set certification requirements, and define expiration periods.",
-            path="/training/admin",
-            category="training",
-            is_complete=course_count > 0,
-            count=course_count,
-            required=False,
-        ))
+        items.append(
+            SetupChecklistItem(
+                key="training",
+                title="Set Up Training Courses & Requirements",
+                description="Create training courses, set certification requirements, and define expiration periods.",
+                path="/training/admin",
+                category="training",
+                is_complete=course_count > 0,
+                count=course_count,
+                required=False,
+            )
+        )
 
     if "forms" in enabled_modules:
-        items.append(SetupChecklistItem(
-            key="forms",
-            title="Create Custom Forms",
-            description="Build forms for shift checkouts, equipment inspections, surveys, and other data collection.",
-            path="/forms",
-            category="forms",
-            is_complete=form_count > 0,
-            count=form_count,
-            required=False,
-        ))
+        items.append(
+            SetupChecklistItem(
+                key="forms",
+                title="Create Custom Forms",
+                description="Build forms for shift checkouts, equipment inspections, surveys, and other data collection.",
+                path="/forms",
+                category="forms",
+                is_complete=form_count > 0,
+                count=form_count,
+                required=False,
+            )
+        )
 
     if "notifications" in enabled_modules:
-        items.append(SetupChecklistItem(
-            key="email",
-            title="Configure Email Notifications",
-            description="Set up SMTP/email service so the system can send notifications, reminders, and alerts.",
-            path="/settings",
-            category="notifications",
-            is_complete=email_configured,
-            count=1 if email_configured else 0,
-            required=False,
-        ))
+        items.append(
+            SetupChecklistItem(
+                key="email",
+                title="Configure Email Notifications",
+                description="Set up SMTP/email service so the system can send notifications, reminders, and alerts.",
+                path="/settings",
+                category="notifications",
+                is_complete=email_configured,
+                count=1 if email_configured else 0,
+                required=False,
+            )
+        )
 
     if "prospective_members" in enabled_modules or True:
-        items.append(SetupChecklistItem(
-            key="pipeline",
-            title="Configure Prospective Members Pipeline",
-            description="Define the stages applicants go through from initial interest to full membership.",
-            path="/prospective-members/settings",
-            category="prospective_members",
-            is_complete=pipeline_count > 0,
-            count=pipeline_count,
-            required=False,
-        ))
+        items.append(
+            SetupChecklistItem(
+                key="pipeline",
+                title="Configure Prospective Members Pipeline",
+                description="Define the stages applicants go through from initial interest to full membership.",
+                path="/prospective-members/settings",
+                category="prospective_members",
+                is_complete=pipeline_count > 0,
+                count=pipeline_count,
+                required=False,
+            )
+        )
 
     if "integrations" in enabled_modules:
-        items.append(SetupChecklistItem(
-            key="integrations",
-            title="Set Up Integrations",
-            description="Connect external services like Google Calendar, Slack, or other tools your department uses.",
-            path="/integrations",
-            category="integrations",
-            is_complete=False,
-            count=0,
-            required=False,
-        ))
+        items.append(
+            SetupChecklistItem(
+                key="integrations",
+                title="Set Up Integrations",
+                description="Connect external services like Google Calendar, Slack, or other tools your department uses.",
+                path="/integrations",
+                category="integrations",
+                is_complete=False,
+                count=0,
+                required=False,
+            )
+        )
 
     completed_count = sum(1 for item in items if item.is_complete)
 
@@ -613,8 +670,8 @@ async def update_organization_profile(
     Update organization profile details.
     Requires settings.manage permission.
     """
+
     from app.models.user import Organization
-    from sqlalchemy.orm.attributes import flag_modified
 
     result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
@@ -624,7 +681,15 @@ async def update_organization_profile(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Allowed top-level scalar fields
-    allowed_fields = {"name", "timezone", "phone", "email", "website", "county", "founded_year"}
+    allowed_fields = {
+        "name",
+        "timezone",
+        "phone",
+        "email",
+        "website",
+        "county",
+        "founded_year",
+    }
     for field in allowed_fields:
         if field in updates:
             setattr(org, field, updates[field])

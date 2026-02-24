@@ -6,36 +6,47 @@ When a member is dropped (voluntarily or involuntarily), a property-return
 report is automatically generated, saved to documents, and optionally emailed.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 from uuid import UUID
 
-from datetime import datetime, timezone
-from app.core.database import get_db
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.api.dependencies import require_permission
 from app.core.audit import log_audit_event
-from app.core.utils import safe_error_detail
-from app.api.dependencies import get_current_user, require_permission
-from app.models.user import User, UserStatus, Organization
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
+from app.core.database import get_db
+from app.core.utils import safe_error_detail
+from app.models.user import Organization, User, UserStatus
 
 router = APIRouter()
 
 
 class MemberStatusChangeRequest(BaseModel):
     """Request body for changing a member's status."""
-    new_status: str = Field(..., description="New status value (e.g. 'dropped_voluntary')")
+
+    new_status: str = Field(
+        ..., description="New status value (e.g. 'dropped_voluntary')"
+    )
     reason: Optional[str] = Field(None, description="Reason for the status change")
-    send_property_return_email: bool = Field(True, description="Email the property return report to the member")
-    return_deadline_days: int = Field(14, ge=1, le=90, description="Days to return property (1-90)")
-    custom_instructions: Optional[str] = Field(None, description="Extra paragraph added to the letter")
+    send_property_return_email: bool = Field(
+        True, description="Email the property return report to the member"
+    )
+    return_deadline_days: int = Field(
+        14, ge=1, le=90, description="Days to return property (1-90)"
+    )
+    custom_instructions: Optional[str] = Field(
+        None, description="Extra paragraph added to the letter"
+    )
 
 
 class MemberStatusChangeResponse(BaseModel):
     """Response after a status change."""
+
     user_id: str
     previous_status: str
     new_status: str
@@ -89,7 +100,9 @@ async def change_member_status(
             detail="Member not found",
         )
 
-    previous_status = member.status.value if hasattr(member.status, 'value') else str(member.status)
+    previous_status = (
+        member.status.value if hasattr(member.status, "value") else str(member.status)
+    )
 
     # Prevent no-op
     if member.status == new_status:
@@ -163,7 +176,10 @@ async def change_member_status(
 
         # Auto-create departure clearance so items can be tracked and resolved
         try:
-            from app.services.departure_clearance_service import DepartureClearanceService
+            from app.services.departure_clearance_service import (
+                DepartureClearanceService,
+            )
+
             clearance_svc = DepartureClearanceService(db)
             _clearance, _cl_err = await clearance_svc.initiate_clearance(
                 user_id=str(user_id),
@@ -175,15 +191,19 @@ async def change_member_status(
             )
             if _cl_err:
                 from loguru import logger as _lg
+
                 _lg.warning(f"Could not auto-create departure clearance: {_cl_err}")
         except Exception as _e:
             from loguru import logger as _lg
+
             _lg.error(f"Failed to auto-create departure clearance: {_e}")
 
         # Email the report to the member (with configurable CC and personal email)
         if request.send_property_return_email and member.email:
             org_result = await db.execute(
-                select(Organization).where(Organization.id == current_user.organization_id)
+                select(Organization).where(
+                    Organization.id == current_user.organization_id
+                )
             )
             organization = org_result.scalar_one_or_none()
 
@@ -198,28 +218,35 @@ async def change_member_status(
             cc_emails = list(cc_static_emails)  # start with static list
             if cc_role_names:
                 cc_users_result = await db.execute(
-                    select(User).where(
+                    select(User)
+                    .where(
                         User.organization_id == current_user.organization_id,
                         User.status == UserStatus.ACTIVE,
                         User.deleted_at.is_(None),
-                    ).options(selectinload(User.roles))
+                    )
+                    .options(selectinload(User.roles))
                 )
                 cc_users = cc_users_result.scalars().all()
                 for u in cc_users:
                     role_slugs = [r.slug for r in (u.roles or [])]
                     if any(r in role_slugs for r in cc_role_names):
-                        if u.email and u.email not in cc_emails and u.id != str(user_id):
+                        if (
+                            u.email
+                            and u.email not in cc_emails
+                            and u.id != str(user_id)
+                        ):
                             cc_emails.append(u.email)
 
             # Build recipient list — primary email + optionally personal email
             to_emails = [member.email]
-            if include_personal and getattr(member, 'personal_email', None):
+            if include_personal and getattr(member, "personal_email", None):
                 if member.personal_email not in to_emails:
                     to_emails.append(member.personal_email)
 
             async def _send_report():
                 try:
                     from app.services.email_service import EmailService
+
                     email_svc = EmailService(organization)
                     org_name = organization.name if organization else "Department"
                     subject = f"Notice of Department Property Return — {org_name}"
@@ -250,7 +277,10 @@ async def change_member_status(
                     )
                 except Exception as e:
                     from loguru import logger
-                    logger.error(f"Failed to send property return email to {member.email}: {e}")
+
+                    logger.error(
+                        f"Failed to send property return email to {member.email}: {e}"
+                    )
 
             background_tasks.add_task(_send_report)
             response.email_sent = True
@@ -281,7 +311,9 @@ async def get_property_return_preview(
     )
     member = result.scalar_one_or_none()
     if not member:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
 
     prs = PropertyReturnService(db)
     report_data, html_content = await prs.generate_report(
@@ -321,7 +353,9 @@ async def process_property_return_reminders(
 
     Requires `members.manage` permission.
     """
-    from app.services.property_return_reminder_service import PropertyReturnReminderService
+    from app.services.property_return_reminder_service import (
+        PropertyReturnReminderService,
+    )
 
     service = PropertyReturnReminderService(db)
     result = await service.process_reminders(
@@ -344,7 +378,9 @@ async def get_overdue_property_returns(
 
     Requires `members.manage` permission.
     """
-    from app.services.property_return_reminder_service import PropertyReturnReminderService
+    from app.services.property_return_reminder_service import (
+        PropertyReturnReminderService,
+    )
 
     service = PropertyReturnReminderService(db)
     overdue_list = await service.get_overdue_returns(
@@ -362,11 +398,13 @@ async def get_overdue_property_returns(
 
 class ArchiveMemberRequest(BaseModel):
     """Request body for manually archiving a dropped member."""
+
     reason: Optional[str] = Field(None, description="Reason for archiving")
 
 
 class ReactivateMemberRequest(BaseModel):
     """Request body for reactivating an archived member."""
+
     reason: Optional[str] = Field(None, description="Reason for reactivation")
 
 
@@ -405,7 +443,10 @@ async def archive_member(
             detail="Member not found",
         )
 
-    if member.status not in (UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY):
+    if member.status not in (
+        UserStatus.DROPPED_VOLUNTARY,
+        UserStatus.DROPPED_INVOLUNTARY,
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Only dropped members can be archived. Current status: {member.status.value}",
@@ -529,7 +570,13 @@ async def get_archived_members(
 
 class MembershipTypeChangeRequest(BaseModel):
     """Request body for changing a member's membership tier."""
-    membership_type: str = Field(..., min_length=1, max_length=50, description="New tier ID (e.g. 'senior', 'life')")
+
+    membership_type: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="New tier ID (e.g. 'senior', 'life')",
+    )
     reason: Optional[str] = Field(None, description="Reason for the tier change")
 
 
@@ -557,7 +604,9 @@ async def change_membership_type(
     )
     member = result.scalar_one_or_none()
     if not member:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
 
     # Validate the tier exists in org settings
     org_result = await db.execute(
@@ -696,10 +745,14 @@ async def update_membership_tier_config(
 
     for tier in tiers:
         if not tier.get("id") or not tier.get("name"):
-            raise HTTPException(status_code=400, detail="Each tier must have 'id' and 'name'")
+            raise HTTPException(
+                status_code=400, detail="Each tier must have 'id' and 'name'"
+            )
         benefits = tier.get("benefits", {})
         if not isinstance(benefits, dict):
-            raise HTTPException(status_code=400, detail=f"Tier '{tier['id']}' benefits must be a dict")
+            raise HTTPException(
+                status_code=400, detail=f"Tier '{tier['id']}' benefits must be a dict"
+            )
         # Validate attendance percentage range
         min_pct = benefits.get("voting_min_attendance_pct", 0.0)
         if not (0 <= min_pct <= 100):

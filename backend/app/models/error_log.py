@@ -4,23 +4,16 @@ Error Log Database Models
 SQLAlchemy models for persistent error tracking.
 """
 
-from sqlalchemy import (
-    Column,
-    String,
-    DateTime,
-    Text,
-    JSON,
-    Index,
-)
+from sqlalchemy import JSON, Column, DateTime, Index, String, Text
 from sqlalchemy.sql import func
 
-from app.core.utils import generate_uuid
-
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class ErrorLog(Base):
     """Stores application error logs for monitoring"""
+
     __tablename__ = "error_logs"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)

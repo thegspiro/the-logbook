@@ -7,12 +7,13 @@ Quorum rules are set at the organization level and can be overridden per meeting
 
 from typing import Dict, Optional, Tuple
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+
 from loguru import logger
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.minute import MeetingMinutes
-from app.models.user import User, UserStatus, Organization
+from app.models.user import Organization, User, UserStatus
 
 
 class QuorumService:
@@ -92,7 +93,9 @@ class QuorumService:
         else:  # percentage
             total_active = await self.get_active_member_count(organization_id)
             required = max(1, int((q_threshold / 100.0) * total_active + 0.5))
-            description = f"{q_threshold}% of {total_active} active members = {required} required"
+            description = (
+                f"{q_threshold}% of {total_active} active members = {required} required"
+            )
 
         quorum_met = present_count >= required
 

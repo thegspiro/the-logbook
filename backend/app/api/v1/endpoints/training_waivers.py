@@ -12,23 +12,25 @@ PATCH  /training/waivers/{id}     - Update a waiver (training officers)
 DELETE /training/waivers/{id}     - Deactivate a waiver (training officers)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Optional, List
-from datetime import datetime, date, timezone
-from pydantic import BaseModel, Field
+from datetime import date, datetime, timezone
+from typing import List, Optional
 
-from app.core.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.dependencies import get_current_user, require_permission
-from app.models.user import User
-from app.models.training import TrainingWaiver, TrainingWaiverType
+from app.core.database import get_db
 from app.core.utils import generate_uuid
+from app.models.training import TrainingWaiver, TrainingWaiverType
+from app.models.user import User
 
 router = APIRouter()
 
 
 # ==================== Schemas ====================
+
 
 class TrainingWaiverCreate(BaseModel):
     user_id: str
@@ -68,7 +70,10 @@ class TrainingWaiverResponse(BaseModel):
 
 # ==================== Endpoints ====================
 
-@router.post("", response_model=TrainingWaiverResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "", response_model=TrainingWaiverResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_training_waiver(
     data: TrainingWaiverCreate,
     db: AsyncSession = Depends(get_db),
@@ -156,8 +161,7 @@ async def update_training_waiver(
 ):
     """Update a training waiver."""
     result = await db.execute(
-        select(TrainingWaiver)
-        .where(
+        select(TrainingWaiver).where(
             TrainingWaiver.id == waiver_id,
             TrainingWaiver.organization_id == str(current_user.organization_id),
         )
@@ -191,8 +195,7 @@ async def delete_training_waiver(
 ):
     """Deactivate a training waiver (soft delete)."""
     result = await db.execute(
-        select(TrainingWaiver)
-        .where(
+        select(TrainingWaiver).where(
             TrainingWaiver.id == waiver_id,
             TrainingWaiver.organization_id == str(current_user.organization_id),
         )
@@ -211,7 +214,11 @@ def _to_response(waiver: TrainingWaiver) -> TrainingWaiverResponse:
         id=str(waiver.id),
         organization_id=str(waiver.organization_id),
         user_id=str(waiver.user_id),
-        waiver_type=waiver.waiver_type.value if hasattr(waiver.waiver_type, 'value') else str(waiver.waiver_type),
+        waiver_type=(
+            waiver.waiver_type.value
+            if hasattr(waiver.waiver_type, "value")
+            else str(waiver.waiver_type)
+        ),
         reason=waiver.reason,
         start_date=waiver.start_date,
         end_date=waiver.end_date,

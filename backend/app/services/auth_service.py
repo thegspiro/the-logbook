@@ -4,31 +4,36 @@ Authentication Service
 Business logic for authentication operations.
 """
 
-from typing import Optional, Tuple
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-from datetime import datetime, timedelta, timezone
-from uuid import UUID, uuid4
-import secrets
 import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Tuple
+from uuid import UUID, uuid4
 
-from app.models.user import User, Session as UserSession, PasswordHistory, Organization, UserStatus
+from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.config import settings
 from app.core.security import (
-    verify_password,
-    hash_password,
     create_access_token,
     create_refresh_token,
     decode_token,
+    hash_password,
     validate_password_strength,
+    verify_password,
 )
-from app.core.config import settings
-from loguru import logger
+from app.models.user import Organization, PasswordHistory
+from app.models.user import Session as UserSession
+from app.models.user import User, UserStatus
 
 RESET_TOKEN_EXPIRY_MINUTES = 30
 
 
-async def _check_password_history(db: AsyncSession, user_id: str, new_password: str) -> bool:
+async def _check_password_history(
+    db: AsyncSession, user_id: str, new_password: str
+) -> bool:
     """
     Check if the new password was used in the last N passwords.
 
@@ -71,9 +76,7 @@ class AuthService:
         self.db = db
 
     async def authenticate_user(
-        self,
-        username: str,
-        password: str
+        self, username: str, password: str
     ) -> Tuple[Optional[User], Optional[str]]:
         """
         Authenticate a user by username and password
@@ -92,9 +95,7 @@ class AuthService:
 
         query = (
             select(User)
-            .where(
-                (User.username == username) | (User.email == username)
-            )
+            .where((User.username == username) | (User.email == username))
             .where(User.deleted_at.is_(None))
             .options(selectinload(User.roles))
         )
@@ -113,11 +114,21 @@ class AuthService:
             return None, "Incorrect username or password"
 
         # Check if account is locked
-        locked_until = user.locked_until.replace(tzinfo=timezone.utc) if user.locked_until and user.locked_until.tzinfo is None else user.locked_until
+        locked_until = (
+            user.locked_until.replace(tzinfo=timezone.utc)
+            if user.locked_until and user.locked_until.tzinfo is None
+            else user.locked_until
+        )
         if locked_until and locked_until > datetime.now(timezone.utc):
-            remaining = int((locked_until - datetime.now(timezone.utc)).total_seconds() / 60) + 1
+            remaining = (
+                int((locked_until - datetime.now(timezone.utc)).total_seconds() / 60)
+                + 1
+            )
             logger.warning(f"Authentication failed: account locked - {username}")
-            return None, f"Account is temporarily locked. Try again in {remaining} minutes."
+            return (
+                None,
+                f"Account is temporarily locked. Try again in {remaining} minutes.",
+            )
 
         # Verify password
         password_valid, rehashed = verify_password(password, user.password_hash)
@@ -138,9 +149,15 @@ class AuthService:
 
             remaining_attempts = 5 - user.failed_login_attempts
             if remaining_attempts <= 0:
-                return None, "Account is temporarily locked due to too many failed attempts. Try again in 30 minutes."
+                return (
+                    None,
+                    "Account is temporarily locked due to too many failed attempts. Try again in 30 minutes.",
+                )
             elif remaining_attempts <= 2:
-                return None, f"Incorrect username or password. {remaining_attempts} attempt{'s' if remaining_attempts > 1 else ''} remaining before account is locked."
+                return (
+                    None,
+                    f"Incorrect username or password. {remaining_attempts} attempt{'s' if remaining_attempts > 1 else ''} remaining before account is locked.",
+                )
             else:
                 return None, "Incorrect username or password"
 
@@ -170,7 +187,7 @@ class AuthService:
         self,
         user: User,
         ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        user_agent: Optional[str] = None,
     ) -> Tuple[str, str]:
         """
         Create access and refresh tokens for a user
@@ -202,9 +219,8 @@ class AuthService:
             refresh_token=refresh_token,
             ip_address=ip_address,
             user_agent=user_agent,
-            expires_at=datetime.now(timezone.utc) + timedelta(
-                minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-            ),
+            expires_at=datetime.now(timezone.utc)
+            + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         )
 
         self.db.add(session)
@@ -326,7 +342,7 @@ class AuthService:
         first_name: str,
         last_name: str,
         organization_id: UUID,
-        membership_number: Optional[str] = None
+        membership_number: Optional[str] = None,
     ) -> Tuple[Optional[User], Optional[str]]:
         """
         Register a new user
@@ -359,7 +375,7 @@ class AuthService:
             select(User).where(
                 User.username == username,
                 User.organization_id == organization_id,
-                User.deleted_at.is_(None)
+                User.deleted_at.is_(None),
             )
         )
         if result.scalar_one_or_none():
@@ -369,7 +385,7 @@ class AuthService:
             select(User).where(
                 User.email == email,
                 User.organization_id == organization_id,
-                User.deleted_at.is_(None)
+                User.deleted_at.is_(None),
             )
         )
         if result.scalar_one_or_none():
@@ -426,10 +442,7 @@ class AuthService:
             return False
 
     async def change_password(
-        self,
-        user: User,
-        current_password: str,
-        new_password: str
+        self, user: User, current_password: str, new_password: str
     ) -> Tuple[bool, Optional[str]]:
         """
         Change user password
@@ -448,9 +461,16 @@ class AuthService:
             Tuple of (success, error_message)
         """
         # Verify current password
-        current_valid, _ = verify_password(current_password, user.password_hash) if user.password_hash else (False, None)
+        current_valid, _ = (
+            verify_password(current_password, user.password_hash)
+            if user.password_hash
+            else (False, None)
+        )
         if not current_valid:
-            return False, "Current password is incorrect. Please verify your existing password and try again."
+            return (
+                False,
+                "Current password is incorrect. Please verify your existing password and try again.",
+            )
 
         # Enforce minimum password age (prevent rapid cycling through history)
         # Skip this check when user is forced to change password (e.g., first login
@@ -497,7 +517,9 @@ class AuthService:
 
         await self.db.commit()
 
-        logger.info(f"Password changed for user: {user.username}, revoked {revoked} sessions")
+        logger.info(
+            f"Password changed for user: {user.username}, revoked {revoked} sessions"
+        )
 
         return True, None
 
@@ -545,7 +567,11 @@ class AuthService:
                 logger.debug("Token rejected: session user_id mismatch")
                 return None
 
-            session_expires = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at and session.expires_at.tzinfo is None else session.expires_at
+            session_expires = (
+                session.expires_at.replace(tzinfo=timezone.utc)
+                if session.expires_at and session.expires_at.tzinfo is None
+                else session.expires_at
+            )
             if session_expires and session_expires < datetime.now(timezone.utc):
                 logger.debug("Token rejected: session expired")
                 return None
@@ -584,8 +610,7 @@ class AuthService:
             (None, None) otherwise.
         """
         result = await self.db.execute(
-            select(User)
-            .where(
+            select(User).where(
                 User.email == email,
                 User.organization_id == organization_id,
                 User.deleted_at.is_(None),
@@ -602,7 +627,12 @@ class AuthService:
             return None, None
 
         # Cooldown: reject if an active (non-expired) token already exists
-        reset_expires = user.password_reset_expires_at.replace(tzinfo=timezone.utc) if user.password_reset_expires_at and user.password_reset_expires_at.tzinfo is None else user.password_reset_expires_at
+        reset_expires = (
+            user.password_reset_expires_at.replace(tzinfo=timezone.utc)
+            if user.password_reset_expires_at
+            and user.password_reset_expires_at.tzinfo is None
+            else user.password_reset_expires_at
+        )
         if (
             user.password_reset_token
             and reset_expires
@@ -624,9 +654,7 @@ class AuthService:
         )
 
         await self.db.flush()
-        logger.info(
-            f"Password reset token created (ip={ip_address})"
-        )
+        logger.info(f"Password reset token created (ip={ip_address})")
 
         return user, raw_token
 
@@ -643,8 +671,7 @@ class AuthService:
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
         result = await self.db.execute(
-            select(User)
-            .where(
+            select(User).where(
                 User.password_reset_token == token_hash,
                 User.deleted_at.is_(None),
             )
@@ -657,10 +684,7 @@ class AuthService:
         reset_exp = user.password_reset_expires_at
         if reset_exp and reset_exp.tzinfo is None:
             reset_exp = reset_exp.replace(tzinfo=timezone.utc)
-        if (
-            not reset_exp
-            or reset_exp < datetime.now(timezone.utc)
-        ):
+        if not reset_exp or reset_exp < datetime.now(timezone.utc):
             return False, None
 
         return True, user.email
@@ -679,8 +703,7 @@ class AuthService:
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
         result = await self.db.execute(
-            select(User)
-            .where(
+            select(User).where(
                 User.password_reset_token == token_hash,
                 User.deleted_at.is_(None),
             )
@@ -688,20 +711,23 @@ class AuthService:
         user = result.scalar_one_or_none()
 
         if not user:
-            return False, "This password reset link is invalid or has already been used. Please request a new reset link from the login page."
+            return (
+                False,
+                "This password reset link is invalid or has already been used. Please request a new reset link from the login page.",
+            )
 
         reset_exp = user.password_reset_expires_at
         if reset_exp and reset_exp.tzinfo is None:
             reset_exp = reset_exp.replace(tzinfo=timezone.utc)
-        if (
-            not reset_exp
-            or reset_exp < datetime.now(timezone.utc)
-        ):
+        if not reset_exp or reset_exp < datetime.now(timezone.utc):
             # Clear expired token
             user.password_reset_token = None
             user.password_reset_expires_at = None
             await self.db.flush()
-            return False, "This password reset link has expired. Reset links are valid for 30 minutes. Please request a new one from the login page."
+            return (
+                False,
+                "This password reset link has expired. Reset links are valid for 30 minutes. Please request a new one from the login page.",
+            )
 
         # Validate new password strength
         is_valid, error_msg = validate_password_strength(new_password)

@@ -4,25 +4,26 @@ Location API Endpoints
 Endpoints for location management including CRUD operations and event queries.
 """
 
+from datetime import timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-from datetime import datetime, timedelta
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
+from app.schemas.event import QRCheckInData
 from app.schemas.location import (
     LocationCreate,
-    LocationUpdate,
-    LocationResponse,
-    LocationListItem,
     LocationDisplayInfo,
+    LocationListItem,
+    LocationResponse,
+    LocationUpdate,
 )
-from app.schemas.event import QRCheckInData
 from app.services.location_service import LocationService
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -30,6 +31,7 @@ router = APIRouter()
 # ============================================
 # Location Endpoints
 # ============================================
+
 
 @router.get("", response_model=List[LocationListItem])
 async def list_locations(
@@ -80,7 +82,9 @@ async def list_locations(
 async def create_location(
     location_data: LocationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("locations.create", "locations.manage")),
+    current_user: User = Depends(
+        require_permission("locations.create", "locations.manage")
+    ),
 ):
     """
     Create a new location
@@ -97,7 +101,9 @@ async def create_location(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return LocationResponse(
         id=UUID(location.id),
@@ -142,8 +148,7 @@ async def get_location(
 
     if not location:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Location not found"
         )
 
     return LocationResponse(
@@ -175,7 +180,9 @@ async def update_location(
     location_id: UUID,
     location_data: LocationUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("locations.edit", "locations.manage")),
+    current_user: User = Depends(
+        require_permission("locations.edit", "locations.manage")
+    ),
 ):
     """
     Update a location
@@ -192,12 +199,13 @@ async def update_location(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not location:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Location not found"
         )
 
     return LocationResponse(
@@ -228,7 +236,9 @@ async def update_location(
 async def delete_location(
     location_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("locations.delete", "locations.manage")),
+    current_user: User = Depends(
+        require_permission("locations.delete", "locations.manage")
+    ),
 ):
     """
     Delete a location
@@ -247,18 +257,20 @@ async def delete_location(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Location not found"
         )
 
 
 # ============================================
 # Location Display Endpoints (for QR code displays)
 # ============================================
+
 
 @router.get("/{location_id}/display", response_model=LocationDisplayInfo)
 async def get_location_display_info(
@@ -284,8 +296,7 @@ async def get_location_display_info(
 
     if not location:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Location not found"
         )
 
     # Get events currently in check-in window
@@ -309,7 +320,9 @@ async def get_location_display_info(
                 event_description=event.description,
                 start_datetime=event.start_datetime.isoformat(),
                 end_datetime=event.end_datetime.isoformat(),
-                actual_end_time=event.actual_end_time.isoformat() if event.actual_end_time else None,
+                actual_end_time=(
+                    event.actual_end_time.isoformat() if event.actual_end_time else None
+                ),
                 check_in_start=check_in_start.isoformat(),
                 check_in_end=check_in_end.isoformat(),
                 is_valid=True,  # Already filtered by check-in window

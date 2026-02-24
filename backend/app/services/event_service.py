@@ -5,30 +5,37 @@ Business logic for event management.
 """
 
 import calendar
-from typing import List, Optional, Tuple, Dict, Any
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
-from datetime import datetime, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
+
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.orm import selectinload
 
-from app.models.event import Event, EventRSVP, EventTemplate, EventType, RSVPStatus, CheckInWindowType, RecurrencePattern
-from app.models.user import User, Organization
-from app.models.location import Location
-from app.models.training import TrainingSession, TrainingRecord, TrainingStatus
+from app.models.event import (
+    CheckInWindowType,
+    Event,
+    EventRSVP,
+    EventTemplate,
+    EventType,
+    RecurrencePattern,
+    RSVPStatus,
+)
+from app.models.notification import NotificationChannel
+from app.models.training import TrainingRecord, TrainingSession, TrainingStatus
+from app.models.user import Organization, User
 from app.schemas.event import (
     EventCreate,
+    EventStats,
     EventUpdate,
     RSVPCreate,
-    EventStats,
-    EventResponse,
-    RSVPResponse,
     RSVPOverride,
 )
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
-from app.models.notification import NotificationChannel, NotificationCategory
 
 
 class EventService:
@@ -74,9 +81,7 @@ class EventService:
 
         # Create event
         event = Event(
-            organization_id=organization_id,
-            created_by=created_by,
-            **event_dict
+            organization_id=organization_id, created_by=created_by, **event_dict
         )
 
         self.db.add(event)
@@ -172,7 +177,10 @@ class EventService:
         return list(result.scalars().all())
 
     async def update_event(
-        self, event_id: UUID, organization_id: UUID, event_data: EventUpdate,
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        event_data: EventUpdate,
         updated_by: Optional[UUID] = None,
     ) -> Optional[Event]:
         """Update an event"""
@@ -232,7 +240,10 @@ class EventService:
         return event
 
     async def cancel_event(
-        self, event_id: UUID, organization_id: UUID, reason: str,
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        reason: str,
         send_notifications: bool = False,
     ) -> Optional[Event]:
         """Cancel an event and optionally notify RSVPs"""
@@ -272,7 +283,7 @@ class EventService:
                             "channel": NotificationChannel.IN_APP,
                             "recipient_id": str(rsvp.user_id),
                             "subject": f"Event Cancelled: {event.title}",
-                            "message": f"The event \"{event.title}\" has been cancelled. Reason: {reason}",
+                            "message": f'The event "{event.title}" has been cancelled. Reason: {reason}',
                         },
                     )
 
@@ -344,9 +355,7 @@ class EventService:
 
         return new_event
 
-    async def delete_event(
-        self, event_id: UUID, organization_id: UUID
-    ) -> bool:
+    async def delete_event(self, event_id: UUID, organization_id: UUID) -> bool:
         """Delete an event"""
         result = await self.db.execute(
             select(Event)
@@ -366,7 +375,11 @@ class EventService:
     # RSVP Methods
 
     async def create_or_update_rsvp(
-        self, event_id: UUID, user_id: UUID, rsvp_data: RSVPCreate, organization_id: UUID
+        self,
+        event_id: UUID,
+        user_id: UUID,
+        rsvp_data: RSVPCreate,
+        organization_id: UUID,
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """Create or update an RSVP"""
         # Verify event exists and belongs to organization
@@ -396,7 +409,10 @@ class EventService:
         # Validate RSVP status against allowed statuses
         allowed_statuses = event.allowed_rsvp_statuses or ["going", "not_going"]
         if rsvp_data.status not in allowed_statuses:
-            return None, f"RSVP status '{rsvp_data.status}' is not allowed for this event. Allowed statuses: {', '.join(allowed_statuses)}"
+            return (
+                None,
+                f"RSVP status '{rsvp_data.status}' is not allowed for this event. Allowed statuses: {', '.join(allowed_statuses)}",
+            )
 
         # Check if RSVP already exists
         existing_result = await self.db.execute(
@@ -418,7 +434,7 @@ class EventService:
                 organization_id=organization_id,
                 event_id=event_id,
                 user_id=user_id,
-                **rsvp_data.model_dump()
+                **rsvp_data.model_dump(),
             )
             self.db.add(rsvp)
 
@@ -444,9 +460,7 @@ class EventService:
 
         return rsvp, None
 
-    async def get_rsvp(
-        self, event_id: UUID, user_id: UUID
-    ) -> Optional[EventRSVP]:
+    async def get_rsvp(self, event_id: UUID, user_id: UUID) -> Optional[EventRSVP]:
         """Get a user's RSVP for an event"""
         result = await self.db.execute(
             select(EventRSVP)
@@ -475,7 +489,11 @@ class EventService:
         if not event:
             return []
 
-        query = select(EventRSVP).where(EventRSVP.event_id == str(event_id)).options(selectinload(EventRSVP.user))
+        query = (
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event_id))
+            .options(selectinload(EventRSVP.user))
+        )
 
         if status_filter:
             query = query.where(EventRSVP.status == status_filter)
@@ -612,8 +630,12 @@ class EventService:
         override_fields = override_data.model_dump(exclude_unset=True)
 
         # Validate override times if both provided
-        check_in = override_fields.get("override_check_in_at", rsvp.override_check_in_at)
-        check_out = override_fields.get("override_check_out_at", rsvp.override_check_out_at)
+        check_in = override_fields.get(
+            "override_check_in_at", rsvp.override_check_in_at
+        )
+        check_out = override_fields.get(
+            "override_check_out_at", rsvp.override_check_out_at
+        )
         if check_in and check_out and check_out <= check_in:
             return None, "Override check-out time must be after check-in time"
 
@@ -627,9 +649,14 @@ class EventService:
                 rsvp.checked_in_at = override_fields["override_check_in_at"]
 
         # Auto-calculate duration if both override times are set and no explicit duration override
-        if (rsvp.override_check_in_at and rsvp.override_check_out_at
-                and "override_duration_minutes" not in override_fields):
-            duration = (rsvp.override_check_out_at - rsvp.override_check_in_at).total_seconds() / 60
+        if (
+            rsvp.override_check_in_at
+            and rsvp.override_check_out_at
+            and "override_duration_minutes" not in override_fields
+        ):
+            duration = (
+                rsvp.override_check_out_at - rsvp.override_check_in_at
+            ).total_seconds() / 60
             rsvp.override_duration_minutes = int(duration)
 
         rsvp.overridden_by = manager_id
@@ -775,7 +802,9 @@ class EventService:
                 EventRSVP.status,
                 func.count(EventRSVP.id),
                 func.sum(EventRSVP.guest_count),
-                func.sum(case((EventRSVP.checked_in == True, 1), else_=0))  # noqa: E712
+                func.sum(
+                    case((EventRSVP.checked_in == True, 1), else_=0)
+                ),  # noqa: E712
             )
             .where(EventRSVP.event_id == str(event_id))
             .group_by(EventRSVP.status)
@@ -890,12 +919,18 @@ class EventService:
         # Database datetimes may be naive (stored as UTC without tzinfo), so
         # attach UTC tzinfo to avoid "can't compare offset-naive and
         # offset-aware datetimes" errors.
-        start_dt = event.start_datetime.replace(tzinfo=dt_timezone.utc) if event.start_datetime.tzinfo is None else event.start_datetime
+        start_dt = (
+            event.start_datetime.replace(tzinfo=dt_timezone.utc)
+            if event.start_datetime.tzinfo is None
+            else event.start_datetime
+        )
         check_in_start = start_dt - timedelta(hours=1)
 
         # Use actual_end_time if set (early end), otherwise use scheduled end_datetime
         end_dt = event.actual_end_time if event.actual_end_time else event.end_datetime
-        check_in_end = end_dt.replace(tzinfo=dt_timezone.utc) if end_dt.tzinfo is None else end_dt
+        check_in_end = (
+            end_dt.replace(tzinfo=dt_timezone.utc) if end_dt.tzinfo is None else end_dt
+        )
 
         is_valid = check_in_start <= now <= check_in_end
 
@@ -910,7 +945,11 @@ class EventService:
             "event_description": event.description,
             "start_datetime": event.start_datetime.isoformat() + "Z",
             "end_datetime": event.end_datetime.isoformat() + "Z",
-            "actual_end_time": (event.actual_end_time.isoformat() + "Z") if event.actual_end_time else None,
+            "actual_end_time": (
+                (event.actual_end_time.isoformat() + "Z")
+                if event.actual_end_time
+                else None
+            ),
             "check_in_start": check_in_start.isoformat() + "Z",
             "check_in_end": check_in_end.isoformat() + "Z",
             "is_valid": is_valid,
@@ -920,7 +959,9 @@ class EventService:
             "require_checkout": event.require_checkout or False,
         }, None
 
-    def _validate_check_in_window(self, event: Event, now: datetime, tz_name: Optional[str] = None) -> Tuple[bool, Optional[str]]:
+    def _validate_check_in_window(
+        self, event: Event, now: datetime, tz_name: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
         """
         Validate if check-in is allowed based on event's check-in window settings
 
@@ -934,32 +975,61 @@ class EventService:
 
         if check_in_window_type == CheckInWindowType.FLEXIBLE:
             # Allow check-in within configurable window before event starts, until event ends
-            minutes_before = event.check_in_minutes_before if event.check_in_minutes_before is not None else 30
-            check_in_start = _ensure_utc(event.start_datetime) - timedelta(minutes=minutes_before)
-            check_in_end = _ensure_utc(event.actual_end_time if event.actual_end_time else event.end_datetime)
+            minutes_before = (
+                event.check_in_minutes_before
+                if event.check_in_minutes_before is not None
+                else 30
+            )
+            check_in_start = _ensure_utc(event.start_datetime) - timedelta(
+                minutes=minutes_before
+            )
+            check_in_end = _ensure_utc(
+                event.actual_end_time if event.actual_end_time else event.end_datetime
+            )
 
         elif check_in_window_type == CheckInWindowType.STRICT:
             # Only between actual start and end times
-            check_in_start = _ensure_utc(event.actual_start_time if event.actual_start_time else event.start_datetime)
-            check_in_end = _ensure_utc(event.actual_end_time if event.actual_end_time else event.end_datetime)
+            check_in_start = _ensure_utc(
+                event.actual_start_time
+                if event.actual_start_time
+                else event.start_datetime
+            )
+            check_in_end = _ensure_utc(
+                event.actual_end_time if event.actual_end_time else event.end_datetime
+            )
 
         else:  # WINDOW type
             # Configurable window before/after start
-            minutes_before = event.check_in_minutes_before if event.check_in_minutes_before is not None else 15
-            minutes_after = event.check_in_minutes_after if event.check_in_minutes_after is not None else 15
-            check_in_start = _ensure_utc(event.start_datetime) - timedelta(minutes=minutes_before)
-            check_in_end = _ensure_utc(event.end_datetime) + timedelta(minutes=minutes_after)
+            minutes_before = (
+                event.check_in_minutes_before
+                if event.check_in_minutes_before is not None
+                else 15
+            )
+            minutes_after = (
+                event.check_in_minutes_after
+                if event.check_in_minutes_after is not None
+                else 15
+            )
+            check_in_start = _ensure_utc(event.start_datetime) - timedelta(
+                minutes=minutes_before
+            )
+            check_in_end = _ensure_utc(event.end_datetime) + timedelta(
+                minutes=minutes_after
+            )
 
         if now < check_in_start:
             # Always convert UTC to local time for user-facing messages
             utc_start = check_in_start.replace(tzinfo=dt_timezone.utc)
             if tz_name:
                 local_start = utc_start.astimezone(ZoneInfo(tz_name))
-                tz_label = local_start.strftime('%Z')
+                tz_label = local_start.strftime("%Z")
             else:
                 local_start = utc_start
                 tz_label = "UTC"
-            return False, f"Check-in is not available yet. Opens at {local_start.strftime('%I:%M %p')} {tz_label}."
+            return (
+                False,
+                f"Check-in is not available yet. Opens at {local_start.strftime('%I:%M %p')} {tz_label}.",
+            )
 
         if now > check_in_end:
             return False, "Check-in is no longer available. The event has ended."
@@ -967,7 +1037,11 @@ class EventService:
         return True, None
 
     async def self_check_in(
-        self, event_id: UUID, user_id: UUID, organization_id: UUID, is_checkout: bool = False
+        self,
+        event_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        is_checkout: bool = False,
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """
         Allow a user to check themselves in or out via QR code
@@ -1091,8 +1165,7 @@ class EventService:
 
         # Check if this event has a training session
         session_result = await self.db.execute(
-            select(TrainingSession)
-            .where(TrainingSession.event_id == event.id)
+            select(TrainingSession).where(TrainingSession.event_id == event.id)
         )
         training_session = session_result.scalar_one_or_none()
 
@@ -1130,7 +1203,11 @@ class EventService:
             instructor=training_session.instructor,
             location=event.location,
             certification_number=None,  # Will be generated upon completion if applicable
-            issuing_agency=training_session.issuing_agency if training_session.issues_certification else None,
+            issuing_agency=(
+                training_session.issuing_agency
+                if training_session.issues_certification
+                else None
+            ),
             created_by=user_id,
         )
 
@@ -1147,9 +1224,7 @@ class EventService:
             Tuple of (stats_dict, error_message)
         """
         # Get event
-        result = await self.db.execute(
-            select(Event).where(Event.id == str(event_id))
-        )
+        result = await self.db.execute(select(Event).where(Event.id == str(event_id)))
         event = result.scalar_one_or_none()
 
         if not event:
@@ -1160,10 +1235,16 @@ class EventService:
 
         # Calculate check-in window — ensure datetimes are timezone-aware
         now = datetime.now(dt_timezone.utc)
-        start_dt = event.start_datetime.replace(tzinfo=dt_timezone.utc) if event.start_datetime.tzinfo is None else event.start_datetime
+        start_dt = (
+            event.start_datetime.replace(tzinfo=dt_timezone.utc)
+            if event.start_datetime.tzinfo is None
+            else event.start_datetime
+        )
         check_in_start = start_dt - timedelta(hours=1)
         end_dt = event.actual_end_time if event.actual_end_time else event.end_datetime
-        check_in_end = end_dt.replace(tzinfo=dt_timezone.utc) if end_dt.tzinfo is None else end_dt
+        check_in_end = (
+            end_dt.replace(tzinfo=dt_timezone.utc) if end_dt.tzinfo is None else end_dt
+        )
         is_check_in_active = check_in_start <= now <= check_in_end
 
         # Get all RSVPs with user details
@@ -1187,20 +1268,26 @@ class EventService:
         total_rsvps = len(rsvps_with_users)
         checked_in_rsvps = [r for r, u in rsvps_with_users if r.checked_in]
         total_checked_in = len(checked_in_rsvps)
-        check_in_rate = (total_checked_in / total_eligible_members * 100) if total_eligible_members > 0 else 0
+        check_in_rate = (
+            (total_checked_in / total_eligible_members * 100)
+            if total_eligible_members > 0
+            else 0
+        )
 
         # Get recent check-ins (last 10)
         recent_check_ins = []
         for rsvp, user in rsvps_with_users:
             if rsvp.checked_in and rsvp.checked_in_at:
-                recent_check_ins.append({
-                    "user_id": str(user.id),
-                    "user_name": f"{user.first_name} {user.last_name}",
-                    "user_email": user.email,
-                    "checked_in_at": rsvp.checked_in_at,
-                    "rsvp_status": rsvp.status.value,
-                    "guest_count": rsvp.guest_count or 0,
-                })
+                recent_check_ins.append(
+                    {
+                        "user_id": str(user.id),
+                        "user_name": f"{user.first_name} {user.last_name}",
+                        "user_email": user.email,
+                        "checked_in_at": rsvp.checked_in_at,
+                        "rsvp_status": rsvp.status.value,
+                        "guest_count": rsvp.guest_count or 0,
+                    }
+                )
                 if len(recent_check_ins) >= 10:
                     break
 
@@ -1211,7 +1298,9 @@ class EventService:
             check_in_times = []
             for rsvp in checked_in_rsvps:
                 if rsvp.checked_in_at:
-                    time_diff = (event.start_datetime - rsvp.checked_in_at).total_seconds() / 60
+                    time_diff = (
+                        event.start_datetime - rsvp.checked_in_at
+                    ).total_seconds() / 60
                     check_in_times.append(time_diff)
                     if not last_check_in_at or rsvp.checked_in_at > last_check_in_at:
                         last_check_in_at = rsvp.checked_in_at
@@ -1233,7 +1322,9 @@ class EventService:
             "total_checked_in": total_checked_in,
             "check_in_rate": round(check_in_rate, 2),
             "recent_check_ins": recent_check_ins,
-            "avg_check_in_time_minutes": round(avg_check_in_time, 2) if avg_check_in_time else None,
+            "avg_check_in_time_minutes": (
+                round(avg_check_in_time, 2) if avg_check_in_time else None
+            ),
             "last_check_in_at": last_check_in_at,
         }
 
@@ -1265,9 +1356,8 @@ class EventService:
         limit: int = 100,
     ) -> List[EventTemplate]:
         """List all event templates for an organization"""
-        query = (
-            select(EventTemplate)
-            .where(EventTemplate.organization_id == str(organization_id))
+        query = select(EventTemplate).where(
+            EventTemplate.organization_id == str(organization_id)
         )
         if not include_inactive:
             query = query.where(EventTemplate.is_active == True)  # noqa: E712
@@ -1287,7 +1377,10 @@ class EventService:
         return result.scalar_one_or_none()
 
     async def update_template(
-        self, template_id: UUID, organization_id: UUID, update_data: Dict[str, Any],
+        self,
+        template_id: UUID,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
         updated_by: Optional[UUID] = None,
     ) -> Optional[EventTemplate]:
         """Update an event template"""
@@ -1305,9 +1398,7 @@ class EventService:
         await self.db.refresh(template)
         return template
 
-    async def delete_template(
-        self, template_id: UUID, organization_id: UUID
-    ) -> bool:
+    async def delete_template(self, template_id: UUID, organization_id: UUID) -> bool:
         """Soft-delete a template by deactivating it"""
         template = await self.get_template(template_id, organization_id)
         if not template:
@@ -1360,7 +1451,9 @@ class EventService:
                 except ValueError:
                     # Handle months with fewer days (e.g., Jan 31 -> Feb 28)
                     last_day = calendar.monthrange(year, month)[1]
-                    current = current.replace(year=year, month=month, day=min(current.day, last_day))
+                    current = current.replace(
+                        year=year, month=month, day=min(current.day, last_day)
+                    )
             elif pattern == RecurrencePattern.CUSTOM.value and custom_days:
                 # Find next matching weekday
                 found = False
@@ -1417,7 +1510,11 @@ class EventService:
             recurrence_custom_days=recurrence_custom_days,
             start_datetime=occurrences[0][0],
             end_datetime=occurrences[0][1],
-            **{k: v for k, v in event_data.items() if k not in ("start_datetime", "end_datetime")},
+            **{
+                k: v
+                for k, v in event_data.items()
+                if k not in ("start_datetime", "end_datetime")
+            },
         )
         self.db.add(parent_event)
         await self.db.flush()  # Get the parent ID
@@ -1434,7 +1531,11 @@ class EventService:
                 recurrence_pattern=RecurrencePattern(recurrence_pattern),
                 start_datetime=start,
                 end_datetime=end,
-                **{k: v for k, v in event_data.items() if k not in ("start_datetime", "end_datetime")},
+                **{
+                    k: v
+                    for k, v in event_data.items()
+                    if k not in ("start_datetime", "end_datetime")
+                },
             )
             self.db.add(child_event)
             created_events.append(child_event)

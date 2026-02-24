@@ -4,18 +4,20 @@ Meeting Minutes Pydantic Schemas
 Request and response schemas for meeting minutes endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
-from datetime import datetime, date, time
+from datetime import date, datetime, time
+from typing import List, Optional
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============================================
 # Meeting Attendee Schemas
 # ============================================
 
+
 class MeetingAttendeeCreate(BaseModel):
     """Schema for adding a meeting attendee"""
+
     user_id: UUID
     present: bool = True
     excused: bool = False
@@ -23,6 +25,7 @@ class MeetingAttendeeCreate(BaseModel):
 
 class MeetingAttendeeResponse(BaseModel):
     """Schema for meeting attendee response"""
+
     id: UUID
     meeting_id: UUID
     user_id: UUID
@@ -38,8 +41,10 @@ class MeetingAttendeeResponse(BaseModel):
 # Meeting Action Item Schemas
 # ============================================
 
+
 class ActionItemCreate(BaseModel):
     """Schema for creating an action item"""
+
     description: str = Field(..., min_length=1)
     assigned_to: Optional[UUID] = None
     due_date: Optional[date] = None
@@ -48,6 +53,7 @@ class ActionItemCreate(BaseModel):
 
 class ActionItemUpdate(BaseModel):
     """Schema for updating an action item"""
+
     description: Optional[str] = Field(None, min_length=1)
     assigned_to: Optional[UUID] = None
     due_date: Optional[date] = None
@@ -58,6 +64,7 @@ class ActionItemUpdate(BaseModel):
 
 class ActionItemResponse(BaseModel):
     """Schema for action item response"""
+
     id: UUID
     meeting_id: UUID
     organization_id: UUID
@@ -79,8 +86,10 @@ class ActionItemResponse(BaseModel):
 # Meeting Schemas
 # ============================================
 
+
 class MeetingCreate(BaseModel):
     """Schema for creating a meeting"""
+
     title: str = Field(..., min_length=1, max_length=255)
     meeting_type: str = "business"
     meeting_date: date
@@ -97,6 +106,7 @@ class MeetingCreate(BaseModel):
 
 class MeetingUpdate(BaseModel):
     """Schema for updating a meeting"""
+
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     meeting_type: Optional[str] = None
     meeting_date: Optional[date] = None
@@ -112,6 +122,7 @@ class MeetingUpdate(BaseModel):
 
 class MeetingResponse(BaseModel):
     """Schema for meeting response"""
+
     id: UUID
     organization_id: UUID
     title: str
@@ -139,6 +150,7 @@ class MeetingResponse(BaseModel):
 
 class MeetingDetailResponse(MeetingResponse):
     """Extended meeting response with attendees and action items"""
+
     attendees: List[MeetingAttendeeResponse] = []
     action_items: List[ActionItemResponse] = []
 
@@ -147,6 +159,7 @@ class MeetingDetailResponse(MeetingResponse):
 
 class MeetingsListResponse(BaseModel):
     """Schema for paginated meetings list"""
+
     meetings: List[MeetingResponse]
     total: int
     skip: int
@@ -157,8 +170,10 @@ class MeetingsListResponse(BaseModel):
 # Summary Schemas
 # ============================================
 
+
 class MeetingsSummary(BaseModel):
     """Schema for meetings module summary"""
+
     total_meetings: int
     meetings_this_month: int
     open_action_items: int

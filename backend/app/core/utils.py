@@ -6,9 +6,9 @@ Shared helper functions used across the application.
 
 import logging
 import re
-import uuid
 import secrets
 import string
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -76,5 +76,7 @@ def generate_display_code(length: int = 8) -> str:
     """
     alphabet = string.ascii_lowercase + string.digits
     # Remove ambiguous characters
-    alphabet = alphabet.replace('0', '').replace('o', '').replace('l', '').replace('1', '')
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
+    alphabet = (
+        alphabet.replace("0", "").replace("o", "").replace("l", "").replace("1", "")
+    )
+    return "".join(secrets.choice(alphabet) for _ in range(length))

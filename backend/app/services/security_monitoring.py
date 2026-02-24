@@ -10,28 +10,26 @@ Comprehensive security monitoring with:
 - Brute force detection
 """
 
-import hashlib
 import json
 import secrets
-import time
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, Optional, List, Tuple
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from ipaddress import ip_address, ip_network
+from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from loguru import logger
 
-from app.models.audit import AuditLog
 from app.core.audit import log_audit_event, verify_audit_log_integrity
 from app.core.constants import AUDIT_EVENT_LOGIN_FAILED
+from app.models.audit import AuditLog
 
 
 class ThreatLevel(str, Enum):
     """Security threat severity levels"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -40,6 +38,7 @@ class ThreatLevel(str, Enum):
 
 class AlertType(str, Enum):
     """Types of security alerts"""
+
     BRUTE_FORCE = "brute_force"
     SESSION_HIJACK = "session_hijack"
     DATA_EXFILTRATION = "data_exfiltration"
@@ -55,6 +54,7 @@ class AlertType(str, Enum):
 @dataclass
 class SecurityAlert:
     """Security alert data structure"""
+
     id: str
     alert_type: AlertType
     threat_level: ThreatLevel
@@ -70,6 +70,7 @@ class SecurityAlert:
 @dataclass
 class AnomalyThresholds:
     """Configurable thresholds for anomaly detection"""
+
     # Login anomalies
     failed_logins_per_hour: int = 10
     failed_logins_per_user: int = 5
@@ -114,18 +115,35 @@ class SecurityMonitoringService:
         # Suspicious patterns to detect
         self._suspicious_patterns = {
             "sql_injection": [
-                "' OR '1'='1", "'; DROP TABLE", "UNION SELECT",
-                "1=1", "/**/", "@@version", "SLEEP(",
+                "' OR '1'='1",
+                "'; DROP TABLE",
+                "UNION SELECT",
+                "1=1",
+                "/**/",
+                "@@version",
+                "SLEEP(",
             ],
             "xss": [
-                "<script", "javascript:", "onerror=", "onload=",
-                "eval(", "document.cookie",
+                "<script",
+                "javascript:",
+                "onerror=",
+                "onload=",
+                "eval(",
+                "document.cookie",
             ],
             "path_traversal": [
-                "../", "..\\", "%2e%2e", "%252e%252e",
+                "../",
+                "..\\",
+                "%2e%2e",
+                "%252e%252e",
             ],
             "command_injection": [
-                "; ls", "| cat", "$(", "`", "&&", "||",
+                "; ls",
+                "| cat",
+                "$(",
+                "`",
+                "&&",
+                "||",
             ],
         }
 
@@ -183,7 +201,7 @@ class SecurityMonitoringService:
                             "pattern_type": pattern_type,
                             "matched_pattern": pattern,
                             "request_path": request_data.get("path", "unknown"),
-                        }
+                        },
                     )
 
                     # Log the alert
@@ -215,9 +233,7 @@ class SecurityMonitoringService:
         minute_ago = now - timedelta(minutes=1)
 
         # Clean old entries
-        self._api_calls[ip] = [
-            ts for ts in self._api_calls[ip] if ts > minute_ago
-        ]
+        self._api_calls[ip] = [ts for ts in self._api_calls[ip] if ts > minute_ago]
 
         # Add current call
         self._api_calls[ip].append(now)
@@ -235,7 +251,7 @@ class SecurityMonitoringService:
                 details={
                     "calls_per_minute": len(self._api_calls[ip]),
                     "threshold": self.thresholds.api_calls_per_minute,
-                }
+                },
             )
             self.alerts.append(alert)
             return alert
@@ -290,7 +306,7 @@ class SecurityMonitoringService:
                     "failed_attempts": len(self._login_attempts[ip]),
                     "time_window": "1 hour",
                     "threshold": self.thresholds.failed_logins_per_hour,
-                }
+                },
             )
 
             await log_audit_event(
@@ -322,7 +338,7 @@ class SecurityMonitoringService:
                         "failed_attempts": len(self._login_attempts[key]),
                         "time_window": "1 hour",
                         "threshold": self.thresholds.failed_logins_per_user,
-                    }
+                    },
                 )
 
                 await log_audit_event(
@@ -379,7 +395,7 @@ class SecurityMonitoringService:
                             "previous_ip": last_ip,
                             "current_ip": current_ip,
                             "time_since_last_request": time_diff,
-                        }
+                        },
                     )
 
                     await log_audit_event(
@@ -453,7 +469,7 @@ class SecurityMonitoringService:
                     "endpoint": endpoint,
                     "threshold_mb": self.thresholds.large_data_export_mb,
                     "total_24h_mb": total_mb,
-                }
+                },
             )
             alerts.append(alert)
 
@@ -471,7 +487,7 @@ class SecurityMonitoringService:
                     "destination": destination,
                     "data_size_bytes": data_size_bytes,
                     "endpoint": endpoint,
-                }
+                },
             )
             alerts.append(alert)
 
@@ -491,7 +507,7 @@ class SecurityMonitoringService:
                 details={
                     "total_24h_mb": total_mb,
                     "transfer_count": len(self._data_transfers[user_id]),
-                }
+                },
             )
             alerts.append(alert)
 
@@ -559,7 +575,7 @@ class SecurityMonitoringService:
                 details={
                     "errors": result["errors"],
                     "total_checked": result["total_checked"],
-                }
+                },
             )
 
             await log_audit_event(
@@ -610,7 +626,7 @@ class SecurityMonitoringService:
                 details={
                     "action": action,
                     "target_resource": target_resource,
-                }
+                },
             )
 
             await log_audit_event(
@@ -637,7 +653,6 @@ class SecurityMonitoringService:
         """
         now = datetime.now(timezone.utc)
         hour_ago = now - timedelta(hours=1)
-        day_ago = now - timedelta(days=1)
 
         # Count recent alerts by severity
         recent_alerts = [a for a in self.alerts if a.timestamp > hour_ago]
@@ -663,7 +678,11 @@ class SecurityMonitoringService:
         external_endpoints = list(self._external_endpoints)[:10]
 
         return {
-            "status": "healthy" if integrity_result["verified"] and not recent_alerts else "alert",
+            "status": (
+                "healthy"
+                if integrity_result["verified"] and not recent_alerts
+                else "alert"
+            ),
             "timestamp": now.isoformat(),
             "log_integrity": {
                 "verified": integrity_result["verified"],
@@ -679,7 +698,8 @@ class SecurityMonitoringService:
             "metrics": {
                 "failed_logins_last_hour": failed_logins_hour,
                 "active_rate_limit_violations": sum(
-                    1 for calls in self._api_calls.values()
+                    1
+                    for calls in self._api_calls.values()
                     if len(calls) > self.thresholds.api_calls_per_minute
                 ),
                 "tracked_sessions": len(self._session_ips),
@@ -689,7 +709,7 @@ class SecurityMonitoringService:
                 "failed_logins_per_hour": self.thresholds.failed_logins_per_hour,
                 "api_calls_per_minute": self.thresholds.api_calls_per_minute,
                 "large_data_export_mb": self.thresholds.large_data_export_mb,
-            }
+            },
         }
 
     async def get_recent_alerts(

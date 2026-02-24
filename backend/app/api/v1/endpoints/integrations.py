@@ -4,15 +4,14 @@ Integrations API Endpoints
 Endpoints for managing external integration configurations.
 """
 
-from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.models.integration import Integration
 from app.models.user import User
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -72,12 +71,14 @@ async def ensure_catalog(db: AsyncSession, organization_id: str) -> None:
 
     for item in INTEGRATION_CATALOG:
         if item["integration_type"] not in existing:
-            db.add(Integration(
-                organization_id=organization_id,
-                **item,
-                config={},
-                enabled=False,
-            ))
+            db.add(
+                Integration(
+                    organization_id=organization_id,
+                    **item,
+                    config={},
+                    enabled=False,
+                )
+            )
     await db.commit()
 
 
@@ -128,7 +129,9 @@ async def get_integration(
     )
     integration = result.scalar_one_or_none()
     if not integration:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
+        )
     return {
         "id": integration.id,
         "organization_id": integration.organization_id,
@@ -139,9 +142,15 @@ async def get_integration(
         "status": integration.status,
         "config": integration.config or {},
         "enabled": integration.enabled,
-        "last_sync_at": integration.last_sync_at.isoformat() if integration.last_sync_at else None,
-        "created_at": integration.created_at.isoformat() if integration.created_at else None,
-        "updated_at": integration.updated_at.isoformat() if integration.updated_at else None,
+        "last_sync_at": (
+            integration.last_sync_at.isoformat() if integration.last_sync_at else None
+        ),
+        "created_at": (
+            integration.created_at.isoformat() if integration.created_at else None
+        ),
+        "updated_at": (
+            integration.updated_at.isoformat() if integration.updated_at else None
+        ),
     }
 
 
@@ -161,9 +170,14 @@ async def connect_integration(
     )
     integration = result.scalar_one_or_none()
     if not integration:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
+        )
     if integration.status == "coming_soon":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This integration is not yet available")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This integration is not yet available",
+        )
 
     integration.status = "connected"
     integration.enabled = True
@@ -180,9 +194,15 @@ async def connect_integration(
         "status": integration.status,
         "config": integration.config or {},
         "enabled": integration.enabled,
-        "last_sync_at": integration.last_sync_at.isoformat() if integration.last_sync_at else None,
-        "created_at": integration.created_at.isoformat() if integration.created_at else None,
-        "updated_at": integration.updated_at.isoformat() if integration.updated_at else None,
+        "last_sync_at": (
+            integration.last_sync_at.isoformat() if integration.last_sync_at else None
+        ),
+        "created_at": (
+            integration.created_at.isoformat() if integration.created_at else None
+        ),
+        "updated_at": (
+            integration.updated_at.isoformat() if integration.updated_at else None
+        ),
     }
 
 
@@ -201,7 +221,9 @@ async def disconnect_integration(
     )
     integration = result.scalar_one_or_none()
     if not integration:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
+        )
 
     integration.status = "available"
     integration.enabled = False
@@ -225,7 +247,9 @@ async def update_integration(
     )
     integration = result.scalar_one_or_none()
     if not integration:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
+        )
 
     integration.config = {**(integration.config or {}), **config}
     await db.commit()
@@ -240,7 +264,13 @@ async def update_integration(
         "status": integration.status,
         "config": integration.config or {},
         "enabled": integration.enabled,
-        "last_sync_at": integration.last_sync_at.isoformat() if integration.last_sync_at else None,
-        "created_at": integration.created_at.isoformat() if integration.created_at else None,
-        "updated_at": integration.updated_at.isoformat() if integration.updated_at else None,
+        "last_sync_at": (
+            integration.last_sync_at.isoformat() if integration.last_sync_at else None
+        ),
+        "created_at": (
+            integration.created_at.isoformat() if integration.created_at else None
+        ),
+        "updated_at": (
+            integration.updated_at.isoformat() if integration.updated_at else None
+        ),
     }

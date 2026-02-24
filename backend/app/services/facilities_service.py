@@ -4,75 +4,76 @@ Facilities Service
 Business logic for facility/building management.
 """
 
+from datetime import date, datetime, timezone
 from typing import List, Optional, Tuple
-from datetime import date, datetime, timedelta, timezone
+
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func, desc
 from sqlalchemy.orm import selectinload
 
 from app.models.facilities import (
     Facility,
-    FacilityType,
-    FacilityStatus,
-    FacilityPhoto,
-    FacilityDocument,
-    FacilityMaintenanceType,
-    FacilityMaintenance,
-    FacilitySystem,
-    FacilityInspection,
-    FacilityUtilityAccount,
-    FacilityUtilityReading,
     FacilityAccessKey,
-    FacilityRoom,
-    FacilityEmergencyContact,
-    FacilityShutoffLocation,
     FacilityCapitalProject,
-    FacilityInsurancePolicy,
-    FacilityOccupant,
     FacilityComplianceChecklist,
     FacilityComplianceItem,
+    FacilityDocument,
+    FacilityEmergencyContact,
+    FacilityInspection,
+    FacilityInsurancePolicy,
+    FacilityMaintenance,
+    FacilityMaintenanceType,
+    FacilityOccupant,
+    FacilityPhoto,
+    FacilityRoom,
+    FacilityShutoffLocation,
+    FacilityStatus,
+    FacilitySystem,
+    FacilityType,
+    FacilityUtilityAccount,
+    FacilityUtilityReading,
 )
 from app.schemas.facilities import (
-    FacilityCreate,
-    FacilityUpdate,
-    FacilityTypeCreate,
-    FacilityTypeUpdate,
-    FacilityStatusCreate,
-    FacilityStatusUpdate,
-    FacilityPhotoCreate,
-    FacilityPhotoUpdate,
-    FacilityDocumentCreate,
-    FacilityDocumentUpdate,
-    FacilityMaintenanceTypeCreate,
-    FacilityMaintenanceTypeUpdate,
-    FacilityMaintenanceCreate,
-    FacilityMaintenanceUpdate,
-    FacilitySystemCreate,
-    FacilitySystemUpdate,
-    FacilityInspectionCreate,
-    FacilityInspectionUpdate,
-    FacilityUtilityAccountCreate,
-    FacilityUtilityAccountUpdate,
-    FacilityUtilityReadingCreate,
-    FacilityUtilityReadingUpdate,
     FacilityAccessKeyCreate,
     FacilityAccessKeyUpdate,
-    FacilityRoomCreate,
-    FacilityRoomUpdate,
-    FacilityEmergencyContactCreate,
-    FacilityEmergencyContactUpdate,
-    FacilityShutoffLocationCreate,
-    FacilityShutoffLocationUpdate,
     FacilityCapitalProjectCreate,
     FacilityCapitalProjectUpdate,
-    FacilityInsurancePolicyCreate,
-    FacilityInsurancePolicyUpdate,
-    FacilityOccupantCreate,
-    FacilityOccupantUpdate,
     FacilityComplianceChecklistCreate,
     FacilityComplianceChecklistUpdate,
     FacilityComplianceItemCreate,
     FacilityComplianceItemUpdate,
+    FacilityCreate,
+    FacilityDocumentCreate,
+    FacilityDocumentUpdate,
+    FacilityEmergencyContactCreate,
+    FacilityEmergencyContactUpdate,
+    FacilityInspectionCreate,
+    FacilityInspectionUpdate,
+    FacilityInsurancePolicyCreate,
+    FacilityInsurancePolicyUpdate,
+    FacilityMaintenanceCreate,
+    FacilityMaintenanceTypeCreate,
+    FacilityMaintenanceTypeUpdate,
+    FacilityMaintenanceUpdate,
+    FacilityOccupantCreate,
+    FacilityOccupantUpdate,
+    FacilityPhotoCreate,
+    FacilityPhotoUpdate,
+    FacilityRoomCreate,
+    FacilityRoomUpdate,
+    FacilityShutoffLocationCreate,
+    FacilityShutoffLocationUpdate,
+    FacilityStatusCreate,
+    FacilityStatusUpdate,
+    FacilitySystemCreate,
+    FacilitySystemUpdate,
+    FacilityTypeCreate,
+    FacilityTypeUpdate,
+    FacilityUpdate,
+    FacilityUtilityAccountCreate,
+    FacilityUtilityAccountUpdate,
+    FacilityUtilityReadingCreate,
+    FacilityUtilityReadingUpdate,
 )
 
 
@@ -109,9 +110,7 @@ class FacilitiesService:
             conditions.append(FacilityType.is_active == is_active)
 
         query = (
-            select(FacilityType)
-            .where(and_(*conditions))
-            .order_by(FacilityType.name)
+            select(FacilityType).where(and_(*conditions)).order_by(FacilityType.name)
         )
 
         result = await self.db.execute(query)
@@ -152,7 +151,9 @@ class FacilitiesService:
         )
         existing = result.scalar_one_or_none()
         if existing:
-            raise ValueError(f"Facility type with name '{type_data.name}' already exists")
+            raise ValueError(
+                f"Facility type with name '{type_data.name}' already exists"
+            )
 
         facility_type = FacilityType(
             organization_id=organization_id,
@@ -195,7 +196,9 @@ class FacilitiesService:
                 .where(FacilityType.id != type_id)
             )
             if result.scalar_one_or_none():
-                raise ValueError(f"Facility type with name '{type_data.name}' already exists")
+                raise ValueError(
+                    f"Facility type with name '{type_data.name}' already exists"
+                )
 
         update_data = type_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -206,9 +209,7 @@ class FacilitiesService:
 
         return facility_type
 
-    async def delete_facility_type(
-        self, type_id: str, organization_id: str
-    ) -> bool:
+    async def delete_facility_type(self, type_id: str, organization_id: str) -> bool:
         """Delete facility type"""
         facility_type = await self.get_facility_type(type_id, organization_id)
         if not facility_type:
@@ -301,7 +302,9 @@ class FacilitiesService:
         )
         existing = result.scalar_one_or_none()
         if existing:
-            raise ValueError(f"Facility status with name '{status_data.name}' already exists")
+            raise ValueError(
+                f"Facility status with name '{status_data.name}' already exists"
+            )
 
         facility_status = FacilityStatus(
             organization_id=organization_id,
@@ -342,7 +345,9 @@ class FacilitiesService:
                 .where(FacilityStatus.id != status_id)
             )
             if result.scalar_one_or_none():
-                raise ValueError(f"Facility status with name '{status_data.name}' already exists")
+                raise ValueError(
+                    f"Facility status with name '{status_data.name}' already exists"
+                )
 
         update_data = status_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -372,7 +377,9 @@ class FacilitiesService:
         )
         count = result.scalar()
         if count > 0:
-            raise ValueError(f"Cannot delete status. {count} facilities use this status.")
+            raise ValueError(
+                f"Cannot delete status. {count} facilities use this status."
+            )
 
         await self.db.delete(facility_status)
         await self.db.commit()
@@ -404,7 +411,9 @@ class FacilitiesService:
         if is_archived is not None:
             conditions.append(Facility.is_archived == is_archived)
         if search:
-            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             search_term = f"%{safe_search}%"
             conditions.append(
                 or_(
@@ -697,9 +706,7 @@ class FacilitiesService:
 
         return photo
 
-    async def delete_photo(
-        self, photo_id: str, organization_id: str
-    ) -> bool:
+    async def delete_photo(self, photo_id: str, organization_id: str) -> bool:
         """Delete a facility photo"""
         result = await self.db.execute(
             select(FacilityPhoto)
@@ -735,7 +742,9 @@ class FacilitiesService:
         query = (
             select(FacilityDocument)
             .where(and_(*conditions))
-            .order_by(FacilityDocument.document_type, desc(FacilityDocument.uploaded_at))
+            .order_by(
+                FacilityDocument.document_type, desc(FacilityDocument.uploaded_at)
+            )
             .offset(skip)
             .limit(limit)
         )
@@ -787,9 +796,7 @@ class FacilitiesService:
 
         return document
 
-    async def delete_document(
-        self, document_id: str, organization_id: str
-    ) -> bool:
+    async def delete_document(self, document_id: str, organization_id: str) -> bool:
         """Delete a facility document"""
         result = await self.db.execute(
             select(FacilityDocument)
@@ -931,9 +938,7 @@ class FacilitiesService:
 
         return maintenance_type
 
-    async def delete_maintenance_type(
-        self, type_id: str, organization_id: str
-    ) -> bool:
+    async def delete_maintenance_type(self, type_id: str, organization_id: str) -> bool:
         """Delete maintenance type"""
         maintenance_type = await self.get_maintenance_type(type_id, organization_id)
         if not maintenance_type:
@@ -1362,9 +1367,7 @@ class FacilitiesService:
 
         return inspection
 
-    async def delete_inspection(
-        self, inspection_id: str, organization_id: str
-    ) -> bool:
+    async def delete_inspection(self, inspection_id: str, organization_id: str) -> bool:
         """Delete facility inspection"""
         inspection = await self.get_inspection(inspection_id, organization_id)
         if not inspection:
@@ -1681,9 +1684,7 @@ class FacilitiesService:
 
         return key
 
-    async def delete_access_key(
-        self, key_id: str, organization_id: str
-    ) -> bool:
+    async def delete_access_key(self, key_id: str, organization_id: str) -> bool:
         """Delete access key"""
         key = await self.get_access_key(key_id, organization_id)
         if not key:
@@ -1792,9 +1793,7 @@ class FacilitiesService:
 
         return room
 
-    async def delete_room(
-        self, room_id: str, organization_id: str
-    ) -> bool:
+    async def delete_room(self, room_id: str, organization_id: str) -> bool:
         """Delete room"""
         room = await self.get_room(room_id, organization_id)
         if not room:
@@ -1824,9 +1823,7 @@ class FacilitiesService:
         if facility_id:
             conditions.append(FacilityEmergencyContact.facility_id == facility_id)
         if contact_type:
-            conditions.append(
-                FacilityEmergencyContact.contact_type == contact_type
-            )
+            conditions.append(FacilityEmergencyContact.contact_type == contact_type)
         if is_active is not None:
             conditions.append(FacilityEmergencyContact.is_active == is_active)
 
@@ -1929,9 +1926,7 @@ class FacilitiesService:
         if facility_id:
             conditions.append(FacilityShutoffLocation.facility_id == facility_id)
         if shutoff_type:
-            conditions.append(
-                FacilityShutoffLocation.shutoff_type == shutoff_type
-            )
+            conditions.append(FacilityShutoffLocation.shutoff_type == shutoff_type)
 
         query = (
             select(FacilityShutoffLocation)
@@ -2033,13 +2028,9 @@ class FacilitiesService:
         if facility_id:
             conditions.append(FacilityCapitalProject.facility_id == facility_id)
         if project_type:
-            conditions.append(
-                FacilityCapitalProject.project_type == project_type
-            )
+            conditions.append(FacilityCapitalProject.project_type == project_type)
         if project_status:
-            conditions.append(
-                FacilityCapitalProject.project_status == project_status
-            )
+            conditions.append(FacilityCapitalProject.project_status == project_status)
 
         query = (
             select(FacilityCapitalProject)
@@ -2155,9 +2146,7 @@ class FacilitiesService:
         if facility_id:
             conditions.append(FacilityInsurancePolicy.facility_id == facility_id)
         if policy_type:
-            conditions.append(
-                FacilityInsurancePolicy.policy_type == policy_type
-            )
+            conditions.append(FacilityInsurancePolicy.policy_type == policy_type)
         if is_active is not None:
             conditions.append(FacilityInsurancePolicy.is_active == is_active)
 
@@ -2344,9 +2333,7 @@ class FacilitiesService:
 
         return occupant
 
-    async def delete_occupant(
-        self, occupant_id: str, organization_id: str
-    ) -> bool:
+    async def delete_occupant(self, occupant_id: str, organization_id: str) -> bool:
         """Delete occupant"""
         occupant = await self.get_occupant(occupant_id, organization_id)
         if not occupant:
@@ -2371,22 +2358,16 @@ class FacilitiesService:
         limit: int = 100,
     ) -> List[FacilityComplianceChecklist]:
         """List compliance checklists"""
-        conditions = [
-            FacilityComplianceChecklist.organization_id == organization_id
-        ]
+        conditions = [FacilityComplianceChecklist.organization_id == organization_id]
 
         if facility_id:
-            conditions.append(
-                FacilityComplianceChecklist.facility_id == facility_id
-            )
+            conditions.append(FacilityComplianceChecklist.facility_id == facility_id)
         if compliance_type:
             conditions.append(
                 FacilityComplianceChecklist.compliance_type == compliance_type
             )
         if is_completed is not None:
-            conditions.append(
-                FacilityComplianceChecklist.is_completed == is_completed
-            )
+            conditions.append(FacilityComplianceChecklist.is_completed == is_completed)
 
         query = (
             select(FacilityComplianceChecklist)
@@ -2406,9 +2387,7 @@ class FacilitiesService:
         result = await self.db.execute(
             select(FacilityComplianceChecklist)
             .where(FacilityComplianceChecklist.id == checklist_id)
-            .where(
-                FacilityComplianceChecklist.organization_id == organization_id
-            )
+            .where(FacilityComplianceChecklist.organization_id == organization_id)
             .options(selectinload(FacilityComplianceChecklist.items))
         )
         return result.scalar_one_or_none()
@@ -2446,9 +2425,7 @@ class FacilitiesService:
         organization_id: str,
     ) -> Optional[FacilityComplianceChecklist]:
         """Update compliance checklist"""
-        checklist = await self.get_compliance_checklist(
-            checklist_id, organization_id
-        )
+        checklist = await self.get_compliance_checklist(checklist_id, organization_id)
         if not checklist:
             return None
 
@@ -2465,9 +2442,7 @@ class FacilitiesService:
         self, checklist_id: str, organization_id: str
     ) -> bool:
         """Delete compliance checklist"""
-        checklist = await self.get_compliance_checklist(
-            checklist_id, organization_id
-        )
+        checklist = await self.get_compliance_checklist(checklist_id, organization_id)
         if not checklist:
             return False
 
@@ -2491,9 +2466,7 @@ class FacilitiesService:
         conditions = [FacilityComplianceItem.organization_id == organization_id]
 
         if checklist_id:
-            conditions.append(
-                FacilityComplianceItem.checklist_id == checklist_id
-            )
+            conditions.append(FacilityComplianceItem.checklist_id == checklist_id)
 
         query = (
             select(FacilityComplianceItem)
@@ -2563,9 +2536,7 @@ class FacilitiesService:
 
         return item
 
-    async def delete_compliance_item(
-        self, item_id: str, organization_id: str
-    ) -> bool:
+    async def delete_compliance_item(self, item_id: str, organization_id: str) -> bool:
         """Delete compliance item"""
         item = await self.get_compliance_item(item_id, organization_id)
         if not item:

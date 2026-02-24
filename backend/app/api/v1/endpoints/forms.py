@@ -6,40 +6,35 @@ submissions, integrations, member lookup, and reporting.
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
-from app.core.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
+from app.core.database import get_db
+from app.models.forms import FormCategory, FormStatus
 from app.models.user import User
-from app.models.forms import FormStatus, FormCategory
-from app.schemas.forms import (
-    # Form schemas
+from app.schemas.forms import (  # Form schemas; Field schemas; Submission schemas; Integration schemas; Member lookup; Summary
     FormCreate,
-    FormUpdate,
-    FormResponse,
     FormDetailResponse,
-    FormsListResponse,
-    # Field schemas
     FormFieldCreate,
-    FormFieldUpdate,
     FormFieldResponse,
-    # Submission schemas
+    FormFieldUpdate,
+    FormIntegrationCreate,
+    FormIntegrationResponse,
+    FormIntegrationUpdate,
+    FormResponse,
+    FormsListResponse,
+    FormsSummary,
     FormSubmissionCreate,
     FormSubmissionResponse,
-    SubmissionsListResponse,
-    # Integration schemas
-    FormIntegrationCreate,
-    FormIntegrationUpdate,
-    FormIntegrationResponse,
-    # Member lookup
+    FormUpdate,
     MemberLookupResponse,
-    # Summary
-    FormsSummary,
+    SubmissionsListResponse,
 )
 from app.services.forms_service import FormsService
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -47,6 +42,7 @@ router = APIRouter()
 # ============================================
 # Form Endpoints
 # ============================================
+
 
 @router.get("", response_model=FormsListResponse)
 async def list_forms(
@@ -354,7 +350,12 @@ async def archive_form(
 # Field Endpoints
 # ============================================
 
-@router.post("/{form_id}/fields", response_model=FormFieldResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/{form_id}/fields",
+    response_model=FormFieldResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_field(
     form_id: UUID,
     field_data: FormFieldCreate,
@@ -474,7 +475,12 @@ async def reorder_fields(
 # Integration Endpoints
 # ============================================
 
-@router.post("/{form_id}/integrations", response_model=FormIntegrationResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/{form_id}/integrations",
+    response_model=FormIntegrationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_integration(
     form_id: UUID,
     integration_data: FormIntegrationCreate,
@@ -503,7 +509,9 @@ async def add_integration(
     return integration
 
 
-@router.patch("/{form_id}/integrations/{integration_id}", response_model=FormIntegrationResponse)
+@router.patch(
+    "/{form_id}/integrations/{integration_id}", response_model=FormIntegrationResponse
+)
 async def update_integration(
     form_id: UUID,
     integration_id: UUID,
@@ -534,7 +542,9 @@ async def update_integration(
     return integration
 
 
-@router.delete("/{form_id}/integrations/{integration_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{form_id}/integrations/{integration_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_integration(
     form_id: UUID,
     integration_id: UUID,
@@ -565,7 +575,12 @@ async def delete_integration(
 # Submission Endpoints
 # ============================================
 
-@router.post("/{form_id}/submit", response_model=FormSubmissionResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/{form_id}/submit",
+    response_model=FormSubmissionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def submit_form(
     form_id: UUID,
     submission: FormSubmissionCreate,
@@ -638,7 +653,9 @@ async def list_submissions(
     )
 
 
-@router.get("/{form_id}/submissions/{submission_id}", response_model=FormSubmissionResponse)
+@router.get(
+    "/{form_id}/submissions/{submission_id}", response_model=FormSubmissionResponse
+)
 async def get_submission(
     form_id: UUID,
     submission_id: UUID,
@@ -666,7 +683,9 @@ async def get_submission(
     return submission
 
 
-@router.delete("/{form_id}/submissions/{submission_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{form_id}/submissions/{submission_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_submission(
     form_id: UUID,
     submission_id: UUID,

@@ -5,16 +5,17 @@ Endpoints for logging and retrieving application errors.
 """
 
 import json
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
 
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.models.error_log import ErrorLog
 from app.models.user import User
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ MAX_CONTEXT_SIZE = 4096
 
 class ErrorLogCreate(BaseModel):
     """Validated schema for error log creation."""
+
     error_type: str = Field(default="UNKNOWN_ERROR", max_length=100)
     error_message: str = Field(default="", max_length=2000)
     user_message: Optional[str] = Field(default=None, max_length=500)
@@ -83,9 +85,11 @@ async def get_errors(
     total = count_result.scalar() or 0
 
     result = await db.execute(
-        select(ErrorLog).where(*filters)
+        select(ErrorLog)
+        .where(*filters)
         .order_by(ErrorLog.created_at.desc())
-        .offset(skip).limit(limit)
+        .offset(skip)
+        .limit(limit)
     )
     errors = result.scalars().all()
 
@@ -122,15 +126,14 @@ async def get_error_stats(
     total = total_result.scalar() or 0
 
     type_result = await db.execute(
-        select(ErrorLog.error_type, func.count()).where(*filters)
+        select(ErrorLog.error_type, func.count())
+        .where(*filters)
         .group_by(ErrorLog.error_type)
     )
     by_type = {error_type: count for error_type, count in type_result.all()}
 
     recent_result = await db.execute(
-        select(ErrorLog).where(*filters)
-        .order_by(ErrorLog.created_at.desc())
-        .limit(5)
+        select(ErrorLog).where(*filters).order_by(ErrorLog.created_at.desc()).limit(5)
     )
     recent = recent_result.scalars().all()
 
@@ -161,7 +164,9 @@ async def clear_errors(
 ):
     """Clear all error logs for the organization"""
     await db.execute(
-        delete(ErrorLog).where(ErrorLog.organization_id == str(current_user.organization_id))
+        delete(ErrorLog).where(
+            ErrorLog.organization_id == str(current_user.organization_id)
+        )
     )
     await db.commit()
     return {"status": "cleared"}
@@ -179,7 +184,10 @@ async def export_errors(
         filters.append(ErrorLog.event_id == event_id)
 
     result = await db.execute(
-        select(ErrorLog).where(*filters).order_by(ErrorLog.created_at.desc()).limit(1000)
+        select(ErrorLog)
+        .where(*filters)
+        .order_by(ErrorLog.created_at.desc())
+        .limit(1000)
     )
     errors = result.scalars().all()
     return [

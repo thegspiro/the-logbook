@@ -5,29 +5,21 @@ Database models for configurable email templates.
 Templates are managed by admins and used by the email service.
 """
 
-from sqlalchemy import (
-    Column,
-    String,
-    Boolean,
-    DateTime,
-    Text,
-    ForeignKey,
-    Index,
-    JSON,
-    Enum as SQLEnum,
-)
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from datetime import datetime
 import enum
 
-from app.core.utils import generate_uuid
+from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Index, String, Text
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class EmailTemplateType(str, enum.Enum):
     """Types of email templates"""
+
     WELCOME = "welcome"
     PASSWORD_RESET = "password_reset"
     EVENT_CANCELLATION = "event_cancellation"
@@ -80,8 +72,15 @@ class EmailTemplate(Base):
     available_variables = Column(JSON, default=list)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
     created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
     updated_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
 
@@ -119,7 +118,9 @@ class EmailAttachment(Base):
     storage_path = Column(String(500), nullable=False)  # Path in MinIO/S3
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
 
     # Relationships

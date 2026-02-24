@@ -12,16 +12,17 @@ Security measures:
 """
 
 import re
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security_middleware import rate_limiter, get_client_ip
+from app.core.security_middleware import get_client_ip, rate_limiter
 from app.models.user import Organization
 from app.schemas.forms import (
-    PublicFormResponse,
     PublicFormFieldResponse,
+    PublicFormResponse,
     PublicFormSubmissionCreate,
     PublicFormSubmissionResponse,
 )
@@ -30,7 +31,7 @@ from app.services.forms_service import FormsService
 router = APIRouter(prefix="/public/v1/forms", tags=["public-forms"])
 
 # Slug format: exactly 12 hex characters
-SLUG_PATTERN = re.compile(r'^[a-f0-9]{12}$')
+SLUG_PATTERN = re.compile(r"^[a-f0-9]{12}$")
 
 
 def _validate_slug(slug: str) -> str:
@@ -75,7 +76,11 @@ async def _rate_limit_submit(request: Request) -> None:
         )
 
 
-@router.get("/{slug}", response_model=PublicFormResponse, dependencies=[Depends(_rate_limit_view)])
+@router.get(
+    "/{slug}",
+    response_model=PublicFormResponse,
+    dependencies=[Depends(_rate_limit_view)],
+)
 async def get_public_form(
     slug: str,
     db: AsyncSession = Depends(get_db),
@@ -115,14 +120,21 @@ async def get_public_form(
         id=form.id,
         name=form.name,
         description=form.description,
-        category=form.category.value if hasattr(form.category, 'value') else form.category,
+        category=(
+            form.category.value if hasattr(form.category, "value") else form.category
+        ),
         allow_multiple_submissions=form.allow_multiple_submissions,
         fields=fields,
         organization_name=org_name,
     )
 
 
-@router.post("/{slug}/submit", response_model=PublicFormSubmissionResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(_rate_limit_submit)])
+@router.post(
+    "/{slug}/submit",
+    response_model=PublicFormSubmissionResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(_rate_limit_submit)],
+)
 async def submit_public_form(
     slug: str,
     submission: PublicFormSubmissionCreate,
@@ -158,6 +170,7 @@ async def submit_public_form(
     if result is None and error is None:
         import uuid
         from datetime import datetime, timezone
+
         return PublicFormSubmissionResponse(
             id=uuid.uuid4(),
             form_name="Form",

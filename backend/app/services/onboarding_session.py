@@ -9,13 +9,15 @@ browser sessionStorage where they can be accessed by XSS attacks or
 browser extensions.
 """
 
-from typing import Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
 import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
+
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+
+from app.core.security import decrypt_data, encrypt_data
 from app.models.onboarding import OnboardingSessionModel
-from app.core.security import encrypt_data, decrypt_data
 
 
 class OnboardingSessionManager:
@@ -34,10 +36,7 @@ class OnboardingSessionManager:
         return secrets.token_urlsafe(32)
 
     async def create_session(
-        self,
-        db: AsyncSession,
-        ip_address: str,
-        user_agent: Optional[str] = None
+        self, db: AsyncSession, ip_address: str, user_agent: Optional[str] = None
     ) -> str:
         """
         Create a new onboarding session
@@ -55,7 +54,7 @@ class OnboardingSessionManager:
             user_agent=user_agent,
             expires_at=expires_at,
             created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc)
+            updated_at=datetime.now(timezone.utc),
         )
 
         db.add(session)
@@ -64,9 +63,7 @@ class OnboardingSessionManager:
         return session_id
 
     async def get_session(
-        self,
-        db: AsyncSession,
-        session_id: str
+        self, db: AsyncSession, session_id: str
     ) -> Optional[Dict[str, Any]]:
         """
         Get onboarding session data
@@ -85,7 +82,11 @@ class OnboardingSessionManager:
             return None
 
         # Check if expired
-        sess_exp = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at.tzinfo is None else session.expires_at
+        sess_exp = (
+            session.expires_at.replace(tzinfo=timezone.utc)
+            if session.expires_at.tzinfo is None
+            else session.expires_at
+        )
         if sess_exp < datetime.now(timezone.utc):
             # Delete expired session
             await db.delete(session)
@@ -99,7 +100,7 @@ class OnboardingSessionManager:
         db: AsyncSession,
         session_id: str,
         data: Dict[str, Any],
-        merge: bool = True
+        merge: bool = True,
     ) -> bool:
         """
         Update onboarding session data
@@ -123,7 +124,11 @@ class OnboardingSessionManager:
             return False
 
         # Check if expired
-        sess_exp = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at.tzinfo is None else session.expires_at
+        sess_exp = (
+            session.expires_at.replace(tzinfo=timezone.utc)
+            if session.expires_at.tzinfo is None
+            else session.expires_at
+        )
         if sess_exp < datetime.now(timezone.utc):
             await db.delete(session)
             await db.commit()
@@ -140,11 +145,7 @@ class OnboardingSessionManager:
         await db.commit()
         return True
 
-    async def delete_session(
-        self,
-        db: AsyncSession,
-        session_id: str
-    ) -> bool:
+    async def delete_session(self, db: AsyncSession, session_id: str) -> bool:
         """
         Delete onboarding session
 
@@ -165,10 +166,7 @@ class OnboardingSessionManager:
         await db.commit()
         return True
 
-    async def cleanup_expired_sessions(
-        self,
-        db: AsyncSession
-    ) -> int:
+    async def cleanup_expired_sessions(self, db: AsyncSession) -> int:
         """
         Clean up expired sessions
 
@@ -184,11 +182,7 @@ class OnboardingSessionManager:
         return result.rowcount
 
     async def store_sensitive_data(
-        self,
-        db: AsyncSession,
-        session_id: str,
-        key: str,
-        value: str
+        self, db: AsyncSession, session_id: str, key: str, value: str
     ) -> bool:
         """
         Store sensitive data (password, API key, etc.) encrypted
@@ -208,16 +202,11 @@ class OnboardingSessionManager:
 
         # Store in session with _encrypted suffix
         return await self.update_session(
-            db,
-            session_id,
-            {f"{key}_encrypted": encrypted_value}
+            db, session_id, {f"{key}_encrypted": encrypted_value}
         )
 
     async def get_sensitive_data(
-        self,
-        db: AsyncSession,
-        session_id: str,
-        key: str
+        self, db: AsyncSession, session_id: str, key: str
     ) -> Optional[str]:
         """
         Retrieve and decrypt sensitive data
@@ -243,10 +232,7 @@ class OnboardingSessionManager:
         return decrypt_data(encrypted_value)
 
     async def clear_sensitive_data(
-        self,
-        db: AsyncSession,
-        session_id: str,
-        key: str
+        self, db: AsyncSession, session_id: str, key: str
     ) -> bool:
         """
         Remove sensitive data from session
@@ -271,12 +257,7 @@ class OnboardingSessionManager:
             del session_data[f"{key}_encrypted"]
 
             # Update session without the sensitive data
-            return await self.update_session(
-                db,
-                session_id,
-                session_data,
-                merge=False
-            )
+            return await self.update_session(db, session_id, session_data, merge=False)
 
         return True
 

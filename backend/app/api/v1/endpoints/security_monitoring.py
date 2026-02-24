@@ -10,25 +10,21 @@ Provides endpoints for:
 """
 
 from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.core.utils import safe_error_detail
-from app.api.dependencies import get_current_user, require_permission
-from app.models.user import User
-from app.services.security_monitoring import (
-    security_monitor,
-    ThreatLevel,
-    AlertType,
-)
+from app.api.dependencies import require_permission
 from app.core.audit import (
+    audit_logger,
+    get_audit_log_status,
     log_audit_event,
     verify_audit_log_integrity,
-    get_audit_log_status,
-    audit_logger,
 )
-
+from app.core.database import get_db
+from app.core.utils import safe_error_detail
+from app.models.user import User
+from app.services.security_monitoring import AlertType, ThreatLevel, security_monitor
 
 router = APIRouter()
 
@@ -88,7 +84,7 @@ async def get_security_alerts(
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid threat_level. Must be one of: {[t.value for t in ThreatLevel]}"
+                detail=f"Invalid threat_level. Must be one of: {[t.value for t in ThreatLevel]}",
             )
 
     # Parse alert type if provided
@@ -99,7 +95,7 @@ async def get_security_alerts(
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid alert_type. Must be one of: {[t.value for t in AlertType]}"
+                detail=f"Invalid alert_type. Must be one of: {[t.value for t in AlertType]}",
             )
 
     alerts = await security_monitor.get_recent_alerts(
@@ -124,7 +120,10 @@ async def acknowledge_alert(
     success = security_monitor.acknowledge_alert(alert_id)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Security alert not found. It may have already been resolved or removed.")
+        raise HTTPException(
+            status_code=404,
+            detail="Security alert not found. It may have already been resolved or removed.",
+        )
 
     await log_audit_event(
         db=db,
@@ -155,7 +154,10 @@ async def resolve_alert(
     success = security_monitor.resolve_alert(alert_id)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Security alert not found. It may have already been resolved or removed.")
+        raise HTTPException(
+            status_code=404,
+            detail="Security alert not found. It may have already been resolved or removed.",
+        )
 
     await log_audit_event(
         db=db,
@@ -201,7 +203,11 @@ async def verify_audit_integrity(
         "first_id": result.get("first_id"),
         "last_id": result.get("last_id"),
         "errors": result.get("errors", []),
-        "message": "Audit log integrity verified" if result["verified"] else "INTEGRITY FAILURE DETECTED",
+        "message": (
+            "Audit log integrity verified"
+            if result["verified"]
+            else "INTEGRITY FAILURE DETECTED"
+        ),
     }
 
 
@@ -259,7 +265,9 @@ async def create_audit_checkpoint(
             "total_entries": checkpoint.total_entries,
             "merkle_root": checkpoint.merkle_root,
             "checkpoint_hash": checkpoint.checkpoint_hash,
-            "created_at": checkpoint.created_at.isoformat() if checkpoint.created_at else None,
+            "created_at": (
+                checkpoint.created_at.isoformat() if checkpoint.created_at else None
+            ),
         }
 
     except ValueError as e:
@@ -375,5 +383,9 @@ async def trigger_manual_security_check(
         },
         "alerts": status["alerts"],
         "metrics": status["metrics"],
-        "overall_status": "secure" if integrity_result["verified"] and status["alerts"]["total_last_hour"] == 0 else "requires_attention",
+        "overall_status": (
+            "secure"
+            if integrity_result["verified"] and status["alerts"]["total_last_hour"] == 0
+            else "requires_attention"
+        ),
     }

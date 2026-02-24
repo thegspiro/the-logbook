@@ -4,21 +4,24 @@ Facilities Pydantic Schemas
 Request and response schemas for facility-related endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from pydantic.alias_generators import to_camel
-from typing import Optional, List
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
+from typing import List, Optional
 
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 # Shared config for response schemas
-_response_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
+_response_config = ConfigDict(
+    from_attributes=True, alias_generator=to_camel, populate_by_name=True
+)
 
 
 # =============================================================================
 # Schema Enums (mirror model enums for API layer)
 # =============================================================================
+
 
 class FacilityCategoryEnum(str, Enum):
     STATION = "station"
@@ -206,8 +209,10 @@ class ComplianceTypeEnum(str, Enum):
 # Shared Attachment Schema
 # =============================================================================
 
+
 class FileAttachment(BaseModel):
     """Attachment reference for files"""
+
     file_path: str
     file_name: str
     mime_type: Optional[str] = None
@@ -216,6 +221,7 @@ class FileAttachment(BaseModel):
 # =============================================================================
 # Facility Type Schemas
 # =============================================================================
+
 
 class FacilityTypeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -256,6 +262,7 @@ class FacilityTypeListItem(BaseModel):
 # =============================================================================
 # Facility Status Schemas
 # =============================================================================
+
 
 class FacilityStatusBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -299,6 +306,7 @@ class FacilityStatusListItem(BaseModel):
 # =============================================================================
 # Facility Schemas
 # =============================================================================
+
 
 class FacilityBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
@@ -415,6 +423,7 @@ class FacilityListItem(BaseModel):
 # Facility Photo Schemas
 # =============================================================================
 
+
 class FacilityPhotoCreate(BaseModel):
     facility_id: str
     file_path: str
@@ -440,6 +449,7 @@ class FacilityPhotoResponse(FacilityPhotoCreate):
 # =============================================================================
 # Facility Document Schemas
 # =============================================================================
+
 
 class FacilityDocumentCreate(BaseModel):
     facility_id: str
@@ -470,6 +480,7 @@ class FacilityDocumentResponse(FacilityDocumentCreate):
 # =============================================================================
 # Facility Maintenance Type Schemas
 # =============================================================================
+
 
 class FacilityMaintenanceTypeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
@@ -506,10 +517,13 @@ class FacilityMaintenanceTypeResponse(FacilityMaintenanceTypeBase):
 # Facility Maintenance Record Schemas
 # =============================================================================
 
+
 class FacilityMaintenanceBase(BaseModel):
     facility_id: str = Field(..., description="Facility ID")
     maintenance_type_id: str = Field(..., description="Maintenance type ID")
-    system_id: Optional[str] = Field(None, description="Building system this maintenance targets")
+    system_id: Optional[str] = Field(
+        None, description="Building system this maintenance targets"
+    )
 
     scheduled_date: Optional[date] = None
     due_date: Optional[date] = None
@@ -536,7 +550,10 @@ class FacilityMaintenanceCreate(FacilityMaintenanceBase):
 
     # Historic entry support
     is_historic: bool = Field(default=False)
-    occurred_date: Optional[date] = Field(None, description="Actual date the work was performed (required when is_historic=True)")
+    occurred_date: Optional[date] = Field(
+        None,
+        description="Actual date the work was performed (required when is_historic=True)",
+    )
     historic_source: Optional[str] = Field(None, max_length=200)
 
 
@@ -591,6 +608,7 @@ class FacilityMaintenanceResponse(FacilityMaintenanceBase):
 # =============================================================================
 # Facility System Schemas
 # =============================================================================
+
 
 class FacilitySystemBase(BaseModel):
     facility_id: str = Field(..., description="Facility ID")
@@ -656,6 +674,7 @@ class FacilitySystemResponse(FacilitySystemBase):
 # Facility Inspection Schemas
 # =============================================================================
 
+
 class FacilityInspectionBase(BaseModel):
     facility_id: str = Field(..., description="Facility ID")
     inspection_type: InspectionTypeEnum = InspectionTypeEnum.ROUTINE
@@ -718,6 +737,7 @@ class FacilityInspectionResponse(FacilityInspectionBase):
 # Facility Utility Account Schemas
 # =============================================================================
 
+
 class FacilityUtilityAccountBase(BaseModel):
     facility_id: str
     utility_type: UtilityTypeEnum
@@ -763,6 +783,7 @@ class FacilityUtilityAccountResponse(FacilityUtilityAccountBase):
 # Facility Utility Reading Schemas
 # =============================================================================
 
+
 class FacilityUtilityReadingCreate(BaseModel):
     utility_account_id: str
     reading_date: date
@@ -803,6 +824,7 @@ class FacilityUtilityReadingResponse(BaseModel):
 # =============================================================================
 # Facility Access Key Schemas
 # =============================================================================
+
 
 class FacilityAccessKeyBase(BaseModel):
     facility_id: str
@@ -846,6 +868,7 @@ class FacilityAccessKeyResponse(FacilityAccessKeyBase):
 # =============================================================================
 # Facility Room Schemas
 # =============================================================================
+
 
 class FacilityRoomBase(BaseModel):
     facility_id: str
@@ -893,6 +916,7 @@ class FacilityRoomResponse(FacilityRoomBase):
 # Facility Emergency Contact Schemas
 # =============================================================================
 
+
 class FacilityEmergencyContactBase(BaseModel):
     facility_id: str
     contact_type: EmergencyContactTypeEnum
@@ -937,6 +961,7 @@ class FacilityEmergencyContactResponse(FacilityEmergencyContactBase):
 # Facility Shutoff Location Schemas
 # =============================================================================
 
+
 class FacilityShutoffLocationCreate(BaseModel):
     facility_id: str
     shutoff_type: ShutoffTypeEnum
@@ -973,6 +998,7 @@ class FacilityShutoffLocationResponse(BaseModel):
 # =============================================================================
 # Facility Capital Project Schemas
 # =============================================================================
+
 
 class FacilityCapitalProjectBase(BaseModel):
     facility_id: str
@@ -1033,6 +1059,7 @@ class FacilityCapitalProjectResponse(FacilityCapitalProjectBase):
 # Facility Insurance Policy Schemas
 # =============================================================================
 
+
 class FacilityInsurancePolicyBase(BaseModel):
     facility_id: str
     policy_type: InsurancePolicyTypeEnum
@@ -1086,6 +1113,7 @@ class FacilityInsurancePolicyResponse(FacilityInsurancePolicyBase):
 # Facility Occupant Schemas
 # =============================================================================
 
+
 class FacilityOccupantBase(BaseModel):
     facility_id: str
     unit_name: str = Field(..., max_length=200)
@@ -1127,6 +1155,7 @@ class FacilityOccupantResponse(FacilityOccupantBase):
 # Facility Compliance Checklist Schemas
 # =============================================================================
 
+
 class FacilityComplianceChecklistBase(BaseModel):
     facility_id: str
     checklist_name: str = Field(..., max_length=300)
@@ -1164,6 +1193,7 @@ class FacilityComplianceChecklistResponse(FacilityComplianceChecklistBase):
 # =============================================================================
 # Facility Compliance Item Schemas
 # =============================================================================
+
 
 class FacilityComplianceItemCreate(BaseModel):
     checklist_id: str

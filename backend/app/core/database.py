@@ -6,18 +6,14 @@ Includes retry logic and connection timeouts for robust startup.
 """
 
 import asyncio
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    create_async_engine,
-    async_sessionmaker,
-)
-from sqlalchemy.orm import declarative_base
-from sqlalchemy import MetaData
 from typing import AsyncGenerator
+
 from loguru import logger
+from sqlalchemy import MetaData
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
 from app.core.config import settings
-
 
 # Naming convention for constraints - ensures consistent names for Alembic migrations
 # This is critical for MySQL which requires explicit constraint names for ALTER operations
@@ -38,7 +34,7 @@ class DatabaseManager:
     """
     Database connection manager with async support
     """
-    
+
     def __init__(self):
         self.engine = None
         self.session_factory = None
@@ -59,7 +55,9 @@ class DatabaseManager:
 
         for attempt in range(1, settings.DB_CONNECT_RETRIES + 1):
             try:
-                logger.info(f"Database connection attempt {attempt}/{settings.DB_CONNECT_RETRIES}...")
+                logger.info(
+                    f"Database connection attempt {attempt}/{settings.DB_CONNECT_RETRIES}..."
+                )
 
                 # Create async engine with connection timeout
                 self.engine = create_async_engine(
@@ -85,13 +83,16 @@ class DatabaseManager:
                 async with asyncio.timeout(settings.DB_CONNECT_TIMEOUT):
                     async with self.engine.begin() as conn:
                         from sqlalchemy import text
+
                         await conn.execute(text("SELECT 1"))
 
                 logger.info("Database connection established")
                 return  # Success - exit the retry loop
 
             except asyncio.TimeoutError:
-                last_exception = TimeoutError(f"Database connection timed out after {settings.DB_CONNECT_TIMEOUT}s")
+                last_exception = TimeoutError(
+                    f"Database connection timed out after {settings.DB_CONNECT_TIMEOUT}s"
+                )
                 logger.warning(f"Database connection attempt {attempt} timed out")
             except Exception as e:
                 last_exception = e
@@ -110,22 +111,26 @@ class DatabaseManager:
             if attempt < settings.DB_CONNECT_RETRIES:
                 logger.info(f"Retrying in {retry_delay}s...")
                 await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, settings.DB_CONNECT_RETRY_MAX_DELAY)  # Exponential backoff with cap
+                retry_delay = min(
+                    retry_delay * 2, settings.DB_CONNECT_RETRY_MAX_DELAY
+                )  # Exponential backoff with cap
 
         # All retries exhausted
-        logger.error(f"Database connection failed after {settings.DB_CONNECT_RETRIES} attempts")
+        logger.error(
+            f"Database connection failed after {settings.DB_CONNECT_RETRIES} attempts"
+        )
         raise last_exception or ConnectionError("Failed to connect to database")
-    
+
     async def disconnect(self):
         """Close database connection"""
         if self.engine:
             await self.engine.dispose()
             logger.info("Database connection closed")
-    
+
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """
         Get database session (dependency injection)
-        
+
         Usage:
             @app.get("/users")
             async def get_users(db: AsyncSession = Depends(get_db)):
@@ -133,7 +138,7 @@ class DatabaseManager:
         """
         if not self.session_factory:
             raise RuntimeError("Database not initialized. Call connect() first.")
-        
+
         async with self.session_factory() as session:
             try:
                 yield session
@@ -168,7 +173,9 @@ def async_session_factory() -> AsyncSession:
         RuntimeError: If database is not initialized
     """
     if not database_manager.session_factory:
-        raise RuntimeError("Database not initialized. Call database_manager.connect() first.")
+        raise RuntimeError(
+            "Database not initialized. Call database_manager.connect() first."
+        )
     return database_manager.session_factory()
 
 

@@ -4,30 +4,35 @@ Documents Pydantic Schemas
 Request and response schemas for document management endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============================================
 # Document Folder Schemas
 # ============================================
 
+
 class DocumentFolderCreate(BaseModel):
     """Schema for creating a document folder"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     color: str = Field(default="#3B82F6", max_length=20)
     icon: str = Field(default="folder", max_length=50)
     parent_id: Optional[UUID] = None
-    visibility: str = Field(default="organization", pattern="^(organization|leadership|owner)$")
+    visibility: str = Field(
+        default="organization", pattern="^(organization|leadership|owner)$"
+    )
     owner_user_id: Optional[UUID] = None
     allowed_roles: Optional[List[str]] = None
 
 
 class DocumentFolderUpdate(BaseModel):
     """Schema for updating a document folder"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     color: Optional[str] = Field(None, max_length=20)
@@ -40,6 +45,7 @@ class DocumentFolderUpdate(BaseModel):
 
 class DocumentFolderResponse(BaseModel):
     """Schema for folder response"""
+
     id: UUID
     organization_id: UUID
     name: str
@@ -65,8 +71,10 @@ class DocumentFolderResponse(BaseModel):
 # Document Schemas
 # ============================================
 
+
 class DocumentCreate(BaseModel):
     """Schema for creating a document (metadata only, file uploaded separately)"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     folder_id: Optional[UUID] = None
@@ -75,6 +83,7 @@ class DocumentCreate(BaseModel):
 
 class DocumentUpdate(BaseModel):
     """Schema for updating a document"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     folder_id: Optional[UUID] = None
@@ -84,6 +93,7 @@ class DocumentUpdate(BaseModel):
 
 class DocumentResponse(BaseModel):
     """Schema for document response"""
+
     id: UUID
     organization_id: UUID
     folder_id: Optional[UUID] = None
@@ -106,6 +116,7 @@ class DocumentResponse(BaseModel):
 
 class DocumentsListResponse(BaseModel):
     """Schema for paginated documents list"""
+
     documents: List[DocumentResponse]
     total: int
     skip: int
@@ -114,6 +125,7 @@ class DocumentsListResponse(BaseModel):
 
 class FoldersListResponse(BaseModel):
     """Schema for folders list"""
+
     folders: List[DocumentFolderResponse]
     total: int
 
@@ -122,8 +134,10 @@ class FoldersListResponse(BaseModel):
 # Summary Schemas
 # ============================================
 
+
 class DocumentsSummary(BaseModel):
     """Schema for documents module summary"""
+
     total_documents: int
     total_folders: int
     total_size_bytes: int

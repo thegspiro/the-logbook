@@ -14,20 +14,20 @@ Workflow:
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User, UserStatus, Organization
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.models.inventory import (
-    ItemAssignment,
     CheckOutRecord,
-    ItemIssuance,
-    DepartureClearance,
     ClearanceStatus,
+    DepartureClearance,
+    ItemAssignment,
+    ItemIssuance,
 )
+from app.models.user import Organization, User, UserStatus
 
 logger = logging.getLogger(__name__)
 
@@ -59,52 +59,65 @@ async def check_and_auto_archive(
         return None
 
     # Only auto-archive dropped members
-    if member.status not in (UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY):
+    if member.status not in (
+        UserStatus.DROPPED_VOLUNTARY,
+        UserStatus.DROPPED_INVOLUNTARY,
+    ):
         return None
 
     # Check for any remaining active assignments
     assign_result = await db.execute(
-        select(ItemAssignment.id).where(
+        select(ItemAssignment.id)
+        .where(
             ItemAssignment.organization_id == organization_id,
             ItemAssignment.user_id == user_id,
             ItemAssignment.is_active == True,  # noqa: E712
-        ).limit(1)
+        )
+        .limit(1)
     )
     if assign_result.scalar_one_or_none() is not None:
         return None  # Still has active assignments
 
     # Check for any remaining unreturned checkouts
     checkout_result = await db.execute(
-        select(CheckOutRecord.id).where(
+        select(CheckOutRecord.id)
+        .where(
             CheckOutRecord.organization_id == organization_id,
             CheckOutRecord.user_id == user_id,
             CheckOutRecord.is_returned == False,  # noqa: E712
-        ).limit(1)
+        )
+        .limit(1)
     )
     if checkout_result.scalar_one_or_none() is not None:
         return None  # Still has unreturned checkouts
 
     # Check for any remaining unreturned pool issuances
     issuance_result = await db.execute(
-        select(ItemIssuance.id).where(
+        select(ItemIssuance.id)
+        .where(
             ItemIssuance.organization_id == organization_id,
             ItemIssuance.user_id == user_id,
             ItemIssuance.is_returned == False,  # noqa: E712
-        ).limit(1)
+        )
+        .limit(1)
     )
     if issuance_result.scalar_one_or_none() is not None:
         return None  # Still has unreturned issuances
 
     # Check for any open departure clearances
     clearance_result = await db.execute(
-        select(DepartureClearance.id).where(
+        select(DepartureClearance.id)
+        .where(
             DepartureClearance.organization_id == organization_id,
             DepartureClearance.user_id == user_id,
-            DepartureClearance.status.in_([
-                ClearanceStatus.INITIATED,
-                ClearanceStatus.IN_PROGRESS,
-            ]),
-        ).limit(1)
+            DepartureClearance.status.in_(
+                [
+                    ClearanceStatus.INITIATED,
+                    ClearanceStatus.IN_PROGRESS,
+                ]
+            ),
+        )
+        .limit(1)
     )
     if clearance_result.scalar_one_or_none() is not None:
         return None  # Still has an open departure clearance
@@ -121,6 +134,7 @@ async def check_and_auto_archive(
     # Audit log
     try:
         from app.core.audit import log_audit_event
+
         await log_audit_event(
             db=db,
             event_type="member_auto_archived",
@@ -148,16 +162,20 @@ async def check_and_auto_archive(
         org_name = org.name if org else "Department"
 
         from app.services.email_service import EmailService
+
         email_svc = EmailService(org)
 
         # Find admin/quartermaster/chief users to notify
         from sqlalchemy.orm import selectinload
+
         admin_result = await db.execute(
-            select(User).where(
+            select(User)
+            .where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
                 User.deleted_at.is_(None),
-            ).options(selectinload(User.roles))
+            )
+            .options(selectinload(User.roles))
         )
         admins = admin_result.scalars().all()
         admin_emails = []
@@ -248,6 +266,7 @@ async def reactivate_member(
         performer = performer_result.scalar_one_or_none()
 
         from app.core.audit import log_audit_event
+
         await log_audit_event(
             db=db,
             event_type="member_reactivated",

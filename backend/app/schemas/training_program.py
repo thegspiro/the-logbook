@@ -4,14 +4,16 @@ Training Program Pydantic Schemas
 Request and response schemas for training program management endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # Enum-like string literals for validation
-RequirementTypeStr = str  # hours, courses, certification, shifts, calls, skills_evaluation, checklist
+RequirementTypeStr = (
+    str  # hours, courses, certification, shifts, calls, skills_evaluation, checklist
+)
 RequirementSourceStr = str  # department, state, national
 ProgramStructureTypeStr = str  # sequential, phases, flexible
 EnrollmentStatusStr = str  # active, completed, on_hold, withdrawn, failed
@@ -20,8 +22,10 @@ RequirementProgressStatusStr = str  # not_started, in_progress, completed, waive
 
 # Training Requirement Schemas (Enhanced)
 
+
 class TrainingRequirementEnhancedBase(BaseModel):
     """Enhanced training requirement schema with all requirement types"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     requirement_type: RequirementTypeStr
@@ -51,11 +55,11 @@ class TrainingRequirementEnhancedBase(BaseModel):
 
 class TrainingRequirementEnhancedCreate(TrainingRequirementEnhancedBase):
     """Schema for creating an enhanced training requirement"""
-    pass
 
 
 class TrainingRequirementEnhancedUpdate(BaseModel):
     """Schema for updating an enhanced training requirement"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     requirement_type: Optional[RequirementTypeStr] = None
@@ -80,6 +84,7 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
 
 class TrainingRequirementEnhancedResponse(TrainingRequirementEnhancedBase):
     """Schema for enhanced training requirement response"""
+
     id: UUID
     organization_id: UUID
     active: bool
@@ -92,8 +97,10 @@ class TrainingRequirementEnhancedResponse(TrainingRequirementEnhancedBase):
 
 # Training Program Schemas
 
+
 class TrainingProgramBase(BaseModel):
     """Base training program schema"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     target_position: Optional[str] = Field(None, max_length=100)
@@ -106,11 +113,11 @@ class TrainingProgramBase(BaseModel):
 
 class TrainingProgramCreate(TrainingProgramBase):
     """Schema for creating a training program"""
-    pass
 
 
 class TrainingProgramUpdate(BaseModel):
     """Schema for updating a training program"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     target_position: Optional[str] = Field(None, max_length=100)
@@ -124,6 +131,7 @@ class TrainingProgramUpdate(BaseModel):
 
 class TrainingProgramResponse(TrainingProgramBase):
     """Schema for training program response"""
+
     id: UUID
     organization_id: UUID
     active: bool
@@ -136,8 +144,10 @@ class TrainingProgramResponse(TrainingProgramBase):
 
 # Program Phase Schemas
 
+
 class ProgramPhaseBase(BaseModel):
     """Base program phase schema"""
+
     phase_number: int = Field(..., ge=1)
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -147,11 +157,13 @@ class ProgramPhaseBase(BaseModel):
 
 class ProgramPhaseCreate(ProgramPhaseBase):
     """Schema for creating a program phase"""
+
     program_id: UUID
 
 
 class ProgramPhaseUpdate(BaseModel):
     """Schema for updating a program phase"""
+
     phase_number: Optional[int] = Field(None, ge=1)
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
@@ -161,6 +173,7 @@ class ProgramPhaseUpdate(BaseModel):
 
 class ProgramPhaseResponse(ProgramPhaseBase):
     """Schema for program phase response"""
+
     id: UUID
     program_id: UUID
     created_at: datetime
@@ -171,8 +184,10 @@ class ProgramPhaseResponse(ProgramPhaseBase):
 
 # Program Requirement Schemas
 
+
 class ProgramRequirementBase(BaseModel):
     """Base program requirement schema"""
+
     is_required: bool = True
     is_prerequisite: bool = False
     sort_order: int = Field(default=0, ge=0)
@@ -180,6 +195,7 @@ class ProgramRequirementBase(BaseModel):
 
 class ProgramRequirementCreate(ProgramRequirementBase):
     """Schema for creating a program requirement"""
+
     program_id: UUID
     phase_id: Optional[UUID] = None
     requirement_id: UUID
@@ -187,6 +203,7 @@ class ProgramRequirementCreate(ProgramRequirementBase):
 
 class ProgramRequirementUpdate(BaseModel):
     """Schema for updating a program requirement"""
+
     is_required: Optional[bool] = None
     is_prerequisite: Optional[bool] = None
     sort_order: Optional[int] = Field(None, ge=0)
@@ -194,6 +211,7 @@ class ProgramRequirementUpdate(BaseModel):
 
 class ProgramRequirementResponse(ProgramRequirementBase):
     """Schema for program requirement response"""
+
     id: UUID
     program_id: UUID
     phase_id: Optional[UUID] = None
@@ -205,8 +223,10 @@ class ProgramRequirementResponse(ProgramRequirementBase):
 
 # Program Milestone Schemas
 
+
 class ProgramMilestoneBase(BaseModel):
     """Base program milestone schema"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     completion_percentage_threshold: float = Field(..., ge=0, le=100)
@@ -215,12 +235,14 @@ class ProgramMilestoneBase(BaseModel):
 
 class ProgramMilestoneCreate(ProgramMilestoneBase):
     """Schema for creating a program milestone"""
+
     program_id: UUID
     phase_id: Optional[UUID] = None
 
 
 class ProgramMilestoneUpdate(BaseModel):
     """Schema for updating a program milestone"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     completion_percentage_threshold: Optional[float] = Field(None, ge=0, le=100)
@@ -229,6 +251,7 @@ class ProgramMilestoneUpdate(BaseModel):
 
 class ProgramMilestoneResponse(ProgramMilestoneBase):
     """Schema for program milestone response"""
+
     id: UUID
     program_id: UUID
     phase_id: Optional[UUID] = None
@@ -239,20 +262,24 @@ class ProgramMilestoneResponse(ProgramMilestoneBase):
 
 # Program Enrollment Schemas
 
+
 class ProgramEnrollmentBase(BaseModel):
     """Base program enrollment schema"""
+
     target_completion_date: Optional[date] = None
     notes: Optional[str] = None
 
 
 class ProgramEnrollmentCreate(ProgramEnrollmentBase):
     """Schema for enrolling a member in a program"""
+
     user_id: UUID
     program_id: UUID
 
 
 class ProgramEnrollmentUpdate(BaseModel):
     """Schema for updating a program enrollment"""
+
     target_completion_date: Optional[date] = None
     current_phase_id: Optional[UUID] = None
     status: Optional[EnrollmentStatusStr] = None
@@ -261,6 +288,7 @@ class ProgramEnrollmentUpdate(BaseModel):
 
 class ProgramEnrollmentResponse(ProgramEnrollmentBase):
     """Schema for program enrollment response"""
+
     id: UUID
     user_id: UUID
     program_id: UUID
@@ -278,19 +306,23 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase):
 
 # Requirement Progress Schemas
 
+
 class RequirementProgressBase(BaseModel):
     """Base requirement progress schema"""
+
     progress_notes: Optional[Dict[str, Any]] = None
 
 
 class RequirementProgressCreate(RequirementProgressBase):
     """Schema for creating requirement progress tracking"""
+
     enrollment_id: UUID
     requirement_id: UUID
 
 
 class RequirementProgressUpdate(BaseModel):
     """Schema for updating requirement progress"""
+
     status: Optional[RequirementProgressStatusStr] = None
     progress_value: Optional[float] = Field(None, ge=0)
     progress_notes: Optional[Dict[str, Any]] = None
@@ -299,6 +331,7 @@ class RequirementProgressUpdate(BaseModel):
 
 class RequirementProgressResponse(RequirementProgressBase):
     """Schema for requirement progress response"""
+
     id: UUID
     enrollment_id: UUID
     requirement_id: UUID
@@ -317,8 +350,10 @@ class RequirementProgressResponse(RequirementProgressBase):
 
 # Skill Evaluation Schemas
 
+
 class SkillEvaluationBase(BaseModel):
     """Base skill evaluation schema"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     category: Optional[str] = Field(None, max_length=100)
@@ -329,11 +364,11 @@ class SkillEvaluationBase(BaseModel):
 
 class SkillEvaluationCreate(SkillEvaluationBase):
     """Schema for creating a skill evaluation"""
-    pass
 
 
 class SkillEvaluationUpdate(BaseModel):
     """Schema for updating a skill evaluation"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     category: Optional[str] = Field(None, max_length=100)
@@ -344,6 +379,7 @@ class SkillEvaluationUpdate(BaseModel):
 
 class SkillEvaluationResponse(SkillEvaluationBase):
     """Schema for skill evaluation response"""
+
     id: UUID
     organization_id: UUID
     created_at: datetime
@@ -355,14 +391,17 @@ class SkillEvaluationResponse(SkillEvaluationBase):
 
 # Skill Checkoff Schemas
 
+
 class SkillCheckoffBase(BaseModel):
     """Base skill checkoff schema"""
+
     evaluation_results: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
 
 
 class SkillCheckoffCreate(SkillCheckoffBase):
     """Schema for creating a skill checkoff"""
+
     user_id: UUID
     skill_evaluation_id: UUID
     evaluator_id: UUID
@@ -370,6 +409,7 @@ class SkillCheckoffCreate(SkillCheckoffBase):
 
 class SkillCheckoffUpdate(BaseModel):
     """Schema for updating a skill checkoff"""
+
     status: Optional[str] = None  # pending, passed, failed, needs_retest
     evaluation_results: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
@@ -377,6 +417,7 @@ class SkillCheckoffUpdate(BaseModel):
 
 class SkillCheckoffResponse(SkillCheckoffBase):
     """Schema for skill checkoff response"""
+
     id: UUID
     user_id: UUID
     skill_evaluation_id: UUID
@@ -391,8 +432,10 @@ class SkillCheckoffResponse(SkillCheckoffBase):
 
 # Comprehensive Program Details
 
+
 class ProgramWithPhasesAndRequirements(TrainingProgramResponse):
     """Comprehensive program details with phases and requirements"""
+
     phases: List[ProgramPhaseResponse] = []
     requirements: List[TrainingRequirementEnhancedResponse] = []
     milestones: List[ProgramMilestoneResponse] = []
@@ -402,6 +445,7 @@ class ProgramWithPhasesAndRequirements(TrainingProgramResponse):
 
 class MemberProgramProgress(BaseModel):
     """Comprehensive member progress in a program"""
+
     enrollment: ProgramEnrollmentResponse
     program: TrainingProgramResponse
     current_phase: Optional[ProgramPhaseResponse] = None
@@ -415,8 +459,10 @@ class MemberProgramProgress(BaseModel):
 
 # Registry Import Schemas
 
+
 class RegistryRequirementImport(BaseModel):
     """Schema for importing registry requirements"""
+
     registry_name: str
     registry_description: str
     requirements: List[TrainingRequirementEnhancedCreate]
@@ -424,6 +470,7 @@ class RegistryRequirementImport(BaseModel):
 
 class RegistryImportResult(BaseModel):
     """Result of registry import operation"""
+
     registry_name: str
     imported_count: int
     skipped_count: int

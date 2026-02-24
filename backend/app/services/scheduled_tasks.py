@@ -37,13 +37,13 @@ Recommended crontab (add to host or container cron):
 """
 
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
+
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Organization
-
 
 # Schedule definitions (for documentation and frontend display)
 SCHEDULE = {
@@ -125,8 +125,14 @@ async def run_cert_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
             logger.error(f"Cert alert failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
 
-    logger.info(f"Cert expiration alerts complete: {total_sent} alerts sent across {len(organizations)} orgs")
-    return {"task": "cert_expiration_alerts", "total_alerts_sent": total_sent, "organizations": results}
+    logger.info(
+        f"Cert expiration alerts complete: {total_sent} alerts sent across {len(organizations)} orgs"
+    )
+    return {
+        "task": "cert_expiration_alerts",
+        "total_alerts_sent": total_sent,
+        "organizations": results,
+    }
 
 
 async def run_struggling_member_check(db: AsyncSession) -> Dict[str, Any]:
@@ -151,7 +157,11 @@ async def run_struggling_member_check(db: AsyncSession) -> Dict[str, Any]:
             results.append({"org_id": str(org.id), "error": str(e)})
 
     logger.info(f"Struggling member check complete: {total_flagged} members flagged")
-    return {"task": "struggling_member_check", "total_flagged": total_flagged, "organizations": results}
+    return {
+        "task": "struggling_member_check",
+        "total_flagged": total_flagged,
+        "organizations": results,
+    }
 
 
 async def run_enrollment_deadline_warnings(db: AsyncSession) -> Dict[str, Any]:
@@ -175,7 +185,11 @@ async def run_enrollment_deadline_warnings(db: AsyncSession) -> Dict[str, Any]:
             logger.error(f"Enrollment deadline warnings failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
 
-    return {"task": "enrollment_deadline_warnings", "total_warned": total_warned, "organizations": results}
+    return {
+        "task": "enrollment_deadline_warnings",
+        "total_warned": total_warned,
+        "organizations": results,
+    }
 
 
 async def run_membership_tier_advance(db: AsyncSession) -> Dict[str, Any]:
@@ -203,7 +217,11 @@ async def run_membership_tier_advance(db: AsyncSession) -> Dict[str, Any]:
             results.append({"org_id": str(org.id), "error": str(e)})
 
     logger.info(f"Membership tier advance complete: {total_advanced} members advanced")
-    return {"task": "membership_tier_advance", "total_advanced": total_advanced, "organizations": results}
+    return {
+        "task": "membership_tier_advance",
+        "total_advanced": total_advanced,
+        "organizations": results,
+    }
 
 
 async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
@@ -212,21 +230,22 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     Checks both meeting_action_items and minutes_action_items tables.
     Sends notifications at 3 days before, 1 day before, and on overdue.
     """
-    from app.models.meeting import MeetingActionItem, ActionItemStatus
-    from app.models.minute import ActionItem as MinutesActionItem, MinutesActionItemStatus
-    from app.models.user import User
     from datetime import date, timedelta
+
+    from app.models.meeting import ActionItemStatus, MeetingActionItem
+    from app.models.minute import ActionItem as MinutesActionItem
+    from app.models.minute import MinutesActionItemStatus
 
     today = date.today()
     three_days = today + timedelta(days=3)
-    one_day = today + timedelta(days=1)
-
     total_reminders = 0
 
     # ── Meeting action items ──
     meeting_items = await db.execute(
         select(MeetingActionItem).where(
-            MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
+            MeetingActionItem.status.in_(
+                [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
+            ),
             MeetingActionItem.due_date.isnot(None),
             MeetingActionItem.due_date <= three_days,
         )
@@ -237,9 +256,12 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
             if days_until is not None and days_until in (3, 1, 0, -1):
                 # Log notification for the assignee
                 try:
-                    from app.models.notification import NotificationLog
                     from app.core.utils import generate_uuid
-                    urgency = "overdue" if days_until < 0 else f"due in {days_until} day(s)"
+                    from app.models.notification import NotificationLog
+
+                    urgency = (
+                        "overdue" if days_until < 0 else f"due in {days_until} day(s)"
+                    )
                     log = NotificationLog(
                         id=generate_uuid(),
                         organization_id=item.organization_id,
@@ -257,26 +279,38 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     # ── Minutes action items ──
     minutes_items = await db.execute(
         select(MinutesActionItem).where(
-            MinutesActionItem.status.in_([
-                MinutesActionItemStatus.PENDING.value,
-                MinutesActionItemStatus.IN_PROGRESS.value,
-            ]),
+            MinutesActionItem.status.in_(
+                [
+                    MinutesActionItemStatus.PENDING.value,
+                    MinutesActionItemStatus.IN_PROGRESS.value,
+                ]
+            ),
             MinutesActionItem.due_date.isnot(None),
-            MinutesActionItem.due_date <= datetime.combine(three_days, datetime.min.time()),
+            MinutesActionItem.due_date
+            <= datetime.combine(three_days, datetime.min.time()),
         )
     )
     for item in minutes_items.scalars().all():
         if item.assignee_id:
-            due_d = item.due_date.date() if hasattr(item.due_date, 'date') else item.due_date
+            due_d = (
+                item.due_date.date()
+                if hasattr(item.due_date, "date")
+                else item.due_date
+            )
             days_until = (due_d - today).days if due_d else None
             if days_until is not None and days_until in (3, 1, 0, -1):
                 try:
-                    from app.models.notification import NotificationLog
                     from app.core.utils import generate_uuid
-                    urgency = "overdue" if days_until < 0 else f"due in {days_until} day(s)"
+                    from app.models.notification import NotificationLog
+
+                    urgency = (
+                        "overdue" if days_until < 0 else f"due in {days_until} day(s)"
+                    )
                     log = NotificationLog(
                         id=generate_uuid(),
-                        organization_id=item.minutes.organization_id if item.minutes else None,
+                        organization_id=(
+                            item.minutes.organization_id if item.minutes else None
+                        ),
                         user_id=item.assignee_id,
                         channel="in_app",
                         category="action_items",
@@ -286,7 +320,9 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     db.add(log)
                     total_reminders += 1
                 except Exception as e:
-                    logger.error(f"Failed to create minutes action item notification: {e}")
+                    logger.error(
+                        f"Failed to create minutes action item notification: {e}"
+                    )
 
     await db.commit()
     logger.info(f"Action item reminders complete: {total_reminders} notifications sent")
@@ -332,15 +368,19 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     Tracks which intervals have been sent in custom_fields.reminders_sent.
     """
-    from datetime import timedelta, timezone as dt_timezone, time as dt_time
+    from datetime import time as dt_time
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
     from zoneinfo import ZoneInfo
+
     from sqlalchemy.orm import selectinload
-    from app.models.event import Event, EventRSVP, RSVPStatus
-    from app.models.user import User
-    from app.models.notification import NotificationLog, NotificationChannel
-    from app.services.email_service import EmailService
-    from app.core.utils import generate_uuid
+
     from app.core.config import settings
+    from app.core.utils import generate_uuid
+    from app.models.event import Event, RSVPStatus
+    from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.user import User
+    from app.services.email_service import EmailService
 
     now = datetime.now(dt_timezone.utc)
     orgs = await db.execute(select(Organization))
@@ -357,7 +397,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         try:
             # Load org event settings to get default_reminder_time
             org_settings = (org.settings or {}).get("events", {}).get("defaults", {})
-            default_reminder_time_str = org_settings.get("default_reminder_time", "12:00")
+            default_reminder_time_str = org_settings.get(
+                "default_reminder_time", "12:00"
+            )
             try:
                 parts = default_reminder_time_str.split(":")
                 default_reminder_time = dt_time(int(parts[0]), int(parts[1]))
@@ -404,7 +446,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                         # appropriate day in the org's timezone.
                         days_before = hours // 24
                         event_local = event.start_datetime.astimezone(org_tz)
-                        reminder_date = (event_local - timedelta(days=days_before)).date()
+                        reminder_date = (
+                            event_local - timedelta(days=days_before)
+                        ).date()
                         reminder_local = datetime.combine(
                             reminder_date, default_reminder_time, tzinfo=org_tz
                         )
@@ -460,7 +504,8 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 event_type_label = (
                     event.event_type.value.replace("_", " ").title()
-                    if event.event_type else "Event"
+                    if event.event_type
+                    else "Event"
                 )
                 event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
                 email_service = EmailService(organization=org)
@@ -486,7 +531,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                                 category="event_reminder",
                                 subject=f"Reminder: {event.title}",
                                 message=(
-                                    f"Your event \"{event.title}\" starts "
+                                    f'Your event "{event.title}" starts '
                                     f"{_format_relative_time(event.start_datetime, now)}."
                                 ),
                                 expires_at=expires_at,
@@ -494,7 +539,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                             db.add(in_app_log)
                             org_reminders += 1
                         except Exception as e:
-                            logger.error(f"Failed to create in-app reminder for user {user.id}: {e}")
+                            logger.error(
+                                f"Failed to create in-app reminder for user {user.id}: {e}"
+                            )
 
                         # Email notification — only if user hasn't opted out
                         wants_email = prefs.get("email_notifications", True)
@@ -515,7 +562,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                                 if sent:
                                     org_emails += 1
                             except Exception as e:
-                                logger.error(f"Failed to send reminder email to {user.email}: {e}")
+                                logger.error(
+                                    f"Failed to send reminder email to {user.email}: {e}"
+                                )
 
                 # Mark all due intervals as sent
                 event.custom_fields = {
@@ -533,11 +582,13 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         total_reminders += org_reminders
         total_emails += org_emails
         if org_reminders > 0 or org_emails > 0:
-            results.append({
-                "org_id": str(org.id),
-                "in_app_reminders": org_reminders,
-                "emails_sent": org_emails,
-            })
+            results.append(
+                {
+                    "org_id": str(org.id),
+                    "in_app_reminders": org_reminders,
+                    "emails_sent": org_emails,
+                }
+            )
 
     logger.info(
         f"Event reminders complete: {total_reminders} in-app, "
@@ -563,14 +614,17 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
     Tracks sent status in custom_fields.validation_notification_sent.
     """
-    from datetime import timedelta, timezone as dt_timezone
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+
     from sqlalchemy.orm import selectinload
-    from app.models.event import Event
-    from app.models.user import User
-    from app.models.notification import NotificationLog, NotificationChannel
-    from app.services.email_service import EmailService
-    from app.core.utils import generate_uuid
+
     from app.core.config import settings
+    from app.core.utils import generate_uuid
+    from app.models.event import Event
+    from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.user import User
+    from app.services.email_service import EmailService
 
     now = datetime.now(dt_timezone.utc)
     # Look back 2 hours for recently ended events
@@ -614,14 +668,15 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                 creator = creator_result.scalar_one_or_none()
                 if not creator:
                     # Mark as sent to avoid retrying for deleted/inactive users
-                    event.custom_fields = {**custom, "validation_notification_sent": True}
+                    event.custom_fields = {
+                        **custom,
+                        "validation_notification_sent": True,
+                    }
                     continue
 
                 event_url = f"/events/{event.id}"
                 rsvp_count = len(event.rsvps) if event.rsvps else 0
-                checked_in_count = sum(
-                    1 for r in (event.rsvps or []) if r.checked_in
-                )
+                checked_in_count = sum(1 for r in (event.rsvps or []) if r.checked_in)
 
                 subject = f"Action Required: Validate attendance for {event.title}"
                 message = (
@@ -699,11 +754,13 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
         total_notifications += org_notifications
         total_emails += org_emails
         if org_notifications > 0 or org_emails > 0:
-            results.append({
-                "org_id": str(org.id),
-                "notifications": org_notifications,
-                "emails_sent": org_emails,
-            })
+            results.append(
+                {
+                    "org_id": str(org.id),
+                    "notifications": org_notifications,
+                    "emails_sent": org_emails,
+                }
+            )
 
     logger.info(
         f"Post-event validation complete: {total_notifications} in-app, "
@@ -729,13 +786,15 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
     Tracks sent status via a custom JSON field on the Shift model (activities).
     """
-    from datetime import timedelta, timezone as dt_timezone
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+
+    from app.core.config import settings
+    from app.core.utils import generate_uuid
+    from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import Shift, ShiftAttendance
     from app.models.user import User
-    from app.models.notification import NotificationLog, NotificationChannel
     from app.services.email_service import EmailService
-    from app.core.utils import generate_uuid
-    from app.core.config import settings
 
     now = datetime.now(dt_timezone.utc)
     lookback = now - timedelta(hours=2)
@@ -776,7 +835,10 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 )
                 officer = officer_result.scalar_one_or_none()
                 if not officer:
-                    shift.activities = {**activities, "validation_notification_sent": True}
+                    shift.activities = {
+                        **activities,
+                        "validation_notification_sent": True,
+                    }
                     continue
 
                 # Count attendance
@@ -788,7 +850,11 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 attendance_records = list(att_result.scalars().all())
                 att_count = len(attendance_records)
 
-                shift_date_str = shift.shift_date.strftime("%b %d, %Y") if shift.shift_date else "Unknown"
+                shift_date_str = (
+                    shift.shift_date.strftime("%b %d, %Y")
+                    if shift.shift_date
+                    else "Unknown"
+                )
                 subject = f"Action Required: Validate attendance for shift on {shift_date_str}"
                 message = (
                     f"Your shift on {shift_date_str} has ended. "
@@ -865,11 +931,13 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
         total_notifications += org_notifications
         total_emails += org_emails
         if org_notifications > 0 or org_emails > 0:
-            results.append({
-                "org_id": str(org.id),
-                "notifications": org_notifications,
-                "emails_sent": org_emails,
-            })
+            results.append(
+                {
+                    "org_id": str(org.id),
+                    "notifications": org_notifications,
+                    "emails_sent": org_emails,
+                }
+            )
 
     logger.info(
         f"Post-shift validation complete: {total_notifications} in-app, "

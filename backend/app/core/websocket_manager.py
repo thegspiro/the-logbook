@@ -7,7 +7,8 @@ for broadcasting inventory change events to connected clients.
 
 import asyncio
 import json
-from typing import Dict, Set, Optional
+from typing import Dict, Optional, Set
+
 from fastapi import WebSocket
 from loguru import logger
 
@@ -32,7 +33,9 @@ class ConnectionManager:
         if organization_id not in self._connections:
             self._connections[organization_id] = set()
         self._connections[organization_id].add(websocket)
-        logger.debug(f"WS connected: org={organization_id}, total={len(self._connections[organization_id])}")
+        logger.debug(
+            f"WS connected: org={organization_id}, total={len(self._connections[organization_id])}"
+        )
 
     def disconnect(self, websocket: WebSocket, organization_id: str):
         if organization_id in self._connections:
@@ -72,7 +75,9 @@ class ConnectionManager:
                 await cache_manager.redis_client.publish(channel, json.dumps(message))
                 return
             except Exception as e:
-                logger.warning(f"Redis publish failed, falling back to local broadcast: {e}")
+                logger.warning(
+                    f"Redis publish failed, falling back to local broadcast: {e}"
+                )
 
         # Fallback: broadcast locally
         await self.broadcast_to_org(organization_id, event)

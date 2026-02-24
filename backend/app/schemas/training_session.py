@@ -4,10 +4,11 @@ Training Session Pydantic Schemas
 Request and response schemas for training session endpoints.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 
 class TrainingSessionCreate(BaseModel):
@@ -16,7 +17,9 @@ class TrainingSessionCreate(BaseModel):
     # Event details
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    location_id: Optional[UUID] = Field(None, description="Location ID for double-booking prevention")
+    location_id: Optional[UUID] = Field(
+        None, description="Location ID for double-booking prevention"
+    )
     location: Optional[str] = Field(None, max_length=300)
     location_details: Optional[str] = None
     start_datetime: datetime
@@ -29,25 +32,43 @@ class TrainingSessionCreate(BaseModel):
     is_mandatory: bool = Field(default=False)
 
     # Check-in settings
-    check_in_window_type: str = Field(default="flexible", description="flexible, strict, or window")
+    check_in_window_type: str = Field(
+        default="flexible", description="flexible, strict, or window"
+    )
     check_in_minutes_before: int = Field(default=15)
     check_in_minutes_after: int = Field(default=15)
-    require_checkout: bool = Field(default=True, description="Require manual check-out for accurate duration tracking")
+    require_checkout: bool = Field(
+        default=True,
+        description="Require manual check-out for accurate duration tracking",
+    )
 
     # Training course details
     use_existing_course: bool = Field(default=False)
     course_id: Optional[UUID] = None  # If using existing course
 
     # Category and program linkage
-    category_id: Optional[UUID] = Field(None, description="Training category this session falls under (Fire, EMS, Hazmat, etc.)")
-    program_id: Optional[UUID] = Field(None, description="Training program this session is part of (e.g., Recruit School, Driver Training)")
-    phase_id: Optional[UUID] = Field(None, description="Specific program phase (e.g., Phase 2 of Recruit School)")
-    requirement_id: Optional[UUID] = Field(None, description="Specific requirement this session satisfies")
+    category_id: Optional[UUID] = Field(
+        None,
+        description="Training category this session falls under (Fire, EMS, Hazmat, etc.)",
+    )
+    program_id: Optional[UUID] = Field(
+        None,
+        description="Training program this session is part of (e.g., Recruit School, Driver Training)",
+    )
+    phase_id: Optional[UUID] = Field(
+        None, description="Specific program phase (e.g., Phase 2 of Recruit School)"
+    )
+    requirement_id: Optional[UUID] = Field(
+        None, description="Specific requirement this session satisfies"
+    )
 
     # New course details (if not using existing)
     course_name: Optional[str] = Field(None, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
-    training_type: str = Field(..., description="certification, continuing_education, skills_practice, orientation, refresher, specialty")
+    training_type: str = Field(
+        ...,
+        description="certification, continuing_education, skills_practice, orientation, refresher, specialty",
+    )
     credit_hours: float = Field(..., ge=0)
     instructor: Optional[str] = Field(None, max_length=255)
 
@@ -58,8 +79,12 @@ class TrainingSessionCreate(BaseModel):
     expiration_months: Optional[int] = Field(None, ge=1)
 
     # Auto-completion settings
-    auto_create_records: bool = Field(default=True, description="Auto-create training records on check-in")
-    require_completion_confirmation: bool = Field(default=False, description="Require instructor confirmation")
+    auto_create_records: bool = Field(
+        default=True, description="Auto-create training records on check-in"
+    )
+    require_completion_confirmation: bool = Field(
+        default=False, description="Require instructor confirmation"
+    )
 
     # Approval settings
     approval_required: bool = Field(default=True)
@@ -68,6 +93,7 @@ class TrainingSessionCreate(BaseModel):
 
 class TrainingSessionResponse(BaseModel):
     """Schema for training session response"""
+
     id: UUID
     organization_id: UUID
     event_id: UUID
@@ -109,6 +135,7 @@ class TrainingSessionResponse(BaseModel):
 
 class AttendeeApprovalData(BaseModel):
     """Schema for individual attendee approval data"""
+
     user_id: UUID
     user_name: str
     user_email: str
@@ -130,12 +157,14 @@ class AttendeeApprovalData(BaseModel):
 
 class TrainingApprovalRequest(BaseModel):
     """Schema for submitting training approval"""
+
     attendees: list[AttendeeApprovalData]
     approval_notes: Optional[str] = None
 
 
 class TrainingApprovalResponse(BaseModel):
     """Schema for training approval response"""
+
     id: UUID
     training_session_id: UUID
     event_id: UUID

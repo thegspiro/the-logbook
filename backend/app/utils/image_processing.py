@@ -1,8 +1,9 @@
 """Image optimization utilities for uploaded images (#21)."""
-from io import BytesIO
-from PIL import Image
-from loguru import logger
 
+from io import BytesIO
+
+from loguru import logger
+from PIL import Image
 
 # Maximum dimensions for different image types
 IMAGE_SIZE_LIMITS = {
@@ -43,7 +44,9 @@ def optimize_image(
         optimized = output.getvalue()
 
         saved_pct = (1 - len(optimized) / len(file_bytes)) * 100 if file_bytes else 0
-        logger.debug(f"Image optimized: {len(file_bytes)} -> {len(optimized)} bytes ({saved_pct:.0f}% reduction)")
+        logger.debug(
+            f"Image optimized: {len(file_bytes)} -> {len(optimized)} bytes ({saved_pct:.0f}% reduction)"
+        )
 
         return optimized
     except Exception as e:

@@ -5,35 +5,34 @@ Business logic for inventory management including items, categories,
 assignments, checkouts, maintenance, and reporting.
 """
 
-from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date, timedelta, timezone
-from io import BytesIO
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, update, delete
-from sqlalchemy.orm import selectinload, joinedload
-from uuid import UUID
+import logging
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from io import BytesIO
+from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
+
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.inventory import (
+    AssignmentType,
+    CheckOutRecord,
+    InventoryActionType,
     InventoryCategory,
     InventoryItem,
     ItemAssignment,
+    ItemCondition,
     ItemIssuance,
-    CheckOutRecord,
+    ItemStatus,
+    ItemType,
     MaintenanceRecord,
+    TrackingType,
     WriteOffRequest,
     WriteOffStatus,
-    ItemType,
-    ItemCondition,
-    ItemStatus,
-    MaintenanceType,
-    AssignmentType,
-    TrackingType,
-    InventoryActionType,
 )
 from app.models.user import User
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +72,10 @@ class InventoryService:
     ) -> None:
         """Queue a delayed notification for an inventory change."""
         try:
-            from app.services.inventory_notification_service import InventoryNotificationService
-            from app.models.inventory import InventoryActionType
+            from app.services.inventory_notification_service import (
+                InventoryNotificationService,
+            )
+
             svc = InventoryNotificationService(self.db)
             await svc.queue_notification(
                 organization_id=str(organization_id),
@@ -87,6 +88,7 @@ class InventoryService:
         except Exception as e:
             # Notification queue failure must not break the primary operation
             from loguru import logger
+
             logger.warning(f"Failed to queue inventory notification: {e}")
 
     # ------------------------------------------------------------------
@@ -120,7 +122,9 @@ class InventoryService:
             return None
         if category.requires_serial_number and not item_data.get("serial_number"):
             return f"Category '{category.name}' requires a serial number"
-        if category.requires_maintenance and not item_data.get("inspection_interval_days"):
+        if category.requires_maintenance and not item_data.get(
+            "inspection_interval_days"
+        ):
             return f"Category '{category.name}' requires an inspection interval"
         return None
 
@@ -137,9 +141,7 @@ class InventoryService:
             if "metadata" in category_data:
                 category_data["extra_data"] = category_data.pop("metadata")
             category = InventoryCategory(
-                organization_id=organization_id,
-                created_by=created_by,
-                **category_data
+                organization_id=organization_id, created_by=created_by, **category_data
             )
             self.db.add(category)
             await self.db.commit()
@@ -216,18 +218,18 @@ class InventoryService:
     # ============================================
 
     async def _check_serial_number_unique(
-        self, serial_number: str, organization_id: UUID, exclude_item_id: Optional[UUID] = None
+        self,
+        serial_number: str,
+        organization_id: UUID,
+        exclude_item_id: Optional[UUID] = None,
     ) -> Optional[str]:
         """Check that serial_number is unique within the organization."""
         if not serial_number:
             return None
-        query = (
-            select(func.count(InventoryItem.id))
-            .where(
-                InventoryItem.organization_id == str(organization_id),
-                InventoryItem.serial_number == serial_number,
-                InventoryItem.active == True,  # noqa: E712
-            )
+        query = select(func.count(InventoryItem.id)).where(
+            InventoryItem.organization_id == str(organization_id),
+            InventoryItem.serial_number == serial_number,
+            InventoryItem.active == True,  # noqa: E712
         )
         if exclude_item_id:
             query = query.where(InventoryItem.id != str(exclude_item_id))
@@ -242,7 +244,9 @@ class InventoryService:
         """Create a new inventory item"""
         try:
             # Validate category requirements
-            cat_err = await self._validate_category_requirements(item_data, organization_id)
+            cat_err = await self._validate_category_requirements(
+                item_data, organization_id
+            )
             if cat_err:
                 return None, cat_err
 
@@ -270,9 +274,7 @@ class InventoryService:
                 item_data["current_value"] = item_data["purchase_price"]
 
             item = InventoryItem(
-                organization_id=organization_id,
-                created_by=created_by,
-                **item_data
+                organization_id=organization_id, created_by=created_by, **item_data
             )
             self.db.add(item)
             await self.db.commit()
@@ -313,7 +315,9 @@ class InventoryService:
             query = query.where(InventoryItem.assigned_to_user_id == assigned_to)
 
         if search:
-            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
@@ -387,7 +391,13 @@ class InventoryService:
             # Lock the row when status, condition, or assignment changes to
             # prevent concurrent mutations from creating inconsistent state.
             needs_lock = bool(
-                {"status", "condition", "assigned_to_user_id", "quantity", "quantity_issued"}
+                {
+                    "status",
+                    "condition",
+                    "assigned_to_user_id",
+                    "quantity",
+                    "quantity_issued",
+                }
                 & update_data.keys()
             )
             if needs_lock:
@@ -399,15 +409,28 @@ class InventoryService:
 
             # Validate category requirements if category is changing
             if "category_id" in update_data:
-                merged = {**{"serial_number": item.serial_number, "inspection_interval_days": item.inspection_interval_days}, **update_data}
-                cat_err = await self._validate_category_requirements(merged, organization_id)
+                merged = {
+                    **{
+                        "serial_number": item.serial_number,
+                        "inspection_interval_days": item.inspection_interval_days,
+                    },
+                    **update_data,
+                }
+                cat_err = await self._validate_category_requirements(
+                    merged, organization_id
+                )
                 if cat_err:
                     return None, cat_err
 
             # Validate serial number uniqueness if changing
-            if "serial_number" in update_data and update_data["serial_number"] != item.serial_number:
+            if (
+                "serial_number" in update_data
+                and update_data["serial_number"] != item.serial_number
+            ):
                 sn_err = await self._check_serial_number_unique(
-                    update_data["serial_number"], organization_id, exclude_item_id=item_id
+                    update_data["serial_number"],
+                    organization_id,
+                    exclude_item_id=item_id,
                 )
                 if sn_err:
                     return None, sn_err
@@ -419,10 +442,22 @@ class InventoryService:
                     return None, "Pool item quantity cannot be negative"
 
             # Validate resulting state
-            new_status = ItemStatus(update_data["status"]) if "status" in update_data else item.status
-            new_condition = ItemCondition(update_data["condition"]) if "condition" in update_data else item.condition
-            assigned_user = update_data.get("assigned_to_user_id", item.assigned_to_user_id)
-            state_err = self._validate_item_state(new_status, new_condition, assigned_user)
+            new_status = (
+                ItemStatus(update_data["status"])
+                if "status" in update_data
+                else item.status
+            )
+            new_condition = (
+                ItemCondition(update_data["condition"])
+                if "condition" in update_data
+                else item.condition
+            )
+            assigned_user = update_data.get(
+                "assigned_to_user_id", item.assigned_to_user_id
+            )
+            state_err = self._validate_item_state(
+                new_status, new_condition, assigned_user
+            )
             if state_err:
                 return None, state_err
 
@@ -451,7 +486,10 @@ class InventoryService:
 
             # Block retirement if item has active assignments
             if item.assigned_to_user_id:
-                return False, "Cannot retire: item is currently assigned. Unassign it first."
+                return (
+                    False,
+                    "Cannot retire: item is currently assigned. Unassign it first.",
+                )
 
             # Block if item has active (unreturned) checkouts
             active_co = await self.db.execute(
@@ -460,7 +498,10 @@ class InventoryService:
                 .where(CheckOutRecord.is_returned == False)  # noqa: E712
             )
             if active_co.scalar():
-                return False, "Cannot retire: item has active checkouts. Check it in first."
+                return (
+                    False,
+                    "Cannot retire: item has active checkouts. Check it in first.",
+                )
 
             # Block if pool item has unreturned issuances
             if item.tracking_type == TrackingType.POOL:
@@ -480,6 +521,7 @@ class InventoryService:
 
             # Log audit event for retirement within the service transaction
             from app.core.audit import log_audit_event
+
             await log_audit_event(
                 db=self.db,
                 event_type="inventory_item_retired",
@@ -553,8 +595,11 @@ class InventoryService:
 
             # Queue notification
             await self._queue_inventory_notification(
-                organization_id, user_id, InventoryActionType.ASSIGNED,
-                item, performed_by=assigned_by,
+                organization_id,
+                user_id,
+                InventoryActionType.ASSIGNED,
+                item,
+                performed_by=assigned_by,
             )
 
             await self.db.commit()
@@ -588,7 +633,9 @@ class InventoryService:
             if not item.assigned_to_user_id:
                 return False, "Item is not currently assigned"
 
-            if expected_user_id and str(item.assigned_to_user_id) != str(expected_user_id):
+            if expected_user_id and str(item.assigned_to_user_id) != str(
+                expected_user_id
+            ):
                 return False, "Item is not assigned to the expected user"
 
             # Capture user_id before clearing assignment (needed for auto-archive check)
@@ -620,8 +667,11 @@ class InventoryService:
 
             # Queue notification
             await self._queue_inventory_notification(
-                organization_id, previous_user_id, InventoryActionType.UNASSIGNED,
-                item, performed_by=returned_by,
+                organization_id,
+                previous_user_id,
+                InventoryActionType.UNASSIGNED,
+                item,
+                performed_by=returned_by,
             )
 
             await self.db.commit()
@@ -631,7 +681,10 @@ class InventoryService:
             # the already-committed unassign operation.
             try:
                 from app.services.member_archive_service import check_and_auto_archive
-                await check_and_auto_archive(self.db, previous_user_id, str(organization_id))
+
+                await check_and_auto_archive(
+                    self.db, previous_user_id, str(organization_id)
+                )
             except Exception as e:
                 logger.warning(f"Auto-archive check failed after unassign: {e}")
 
@@ -661,7 +714,11 @@ class InventoryService:
         if active_only:
             query = query.where(ItemAssignment.is_active == True)  # noqa: E712
 
-        query = query.order_by(ItemAssignment.assigned_date.desc()).offset(skip).limit(limit)
+        query = (
+            query.order_by(ItemAssignment.assigned_date.desc())
+            .offset(skip)
+            .limit(limit)
+        )
 
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -693,13 +750,19 @@ class InventoryService:
                 return None, "Item not found"
 
             if item.tracking_type != TrackingType.POOL:
-                return None, "Item is not a pool-tracked item. Use assign for individual items."
+                return (
+                    None,
+                    "Item is not a pool-tracked item. Use assign for individual items.",
+                )
 
             if not item.active:
                 return None, "Item is retired or inactive"
 
             if item.quantity < quantity:
-                return None, f"Insufficient stock: {item.quantity} available, {quantity} requested"
+                return (
+                    None,
+                    f"Insufficient stock: {item.quantity} available, {quantity} requested",
+                )
 
             # Decrement pool quantity, increment issued count
             item.quantity -= quantity
@@ -719,8 +782,12 @@ class InventoryService:
 
             # Queue notification
             await self._queue_inventory_notification(
-                organization_id, user_id, InventoryActionType.ISSUED,
-                item, quantity=quantity, performed_by=issued_by,
+                organization_id,
+                user_id,
+                InventoryActionType.ISSUED,
+                item,
+                quantity=quantity,
+                performed_by=issued_by,
             )
 
             await self.db.commit()
@@ -756,7 +823,10 @@ class InventoryService:
 
             qty = quantity_returned or issuance.quantity_issued
             if qty > issuance.quantity_issued:
-                return False, f"Cannot return {qty} units; only {issuance.quantity_issued} were issued"
+                return (
+                    False,
+                    f"Cannot return {qty} units; only {issuance.quantity_issued} were issued",
+                )
 
             # Capture user_id for auto-archive check
             issuance_user_id = str(issuance.user_id)
@@ -794,8 +864,12 @@ class InventoryService:
 
             # Queue notification
             await self._queue_inventory_notification(
-                organization_id, issuance_user_id, InventoryActionType.RETURNED,
-                item, quantity=qty, performed_by=returned_by,
+                organization_id,
+                issuance_user_id,
+                InventoryActionType.RETURNED,
+                item,
+                quantity=qty,
+                performed_by=returned_by,
             )
 
             await self.db.commit()
@@ -805,7 +879,10 @@ class InventoryService:
             # the already-committed pool return operation.
             try:
                 from app.services.member_archive_service import check_and_auto_archive
-                await check_and_auto_archive(self.db, issuance_user_id, str(organization_id))
+
+                await check_and_auto_archive(
+                    self.db, issuance_user_id, str(organization_id)
+                )
             except Exception as e:
                 logger.warning(f"Auto-archive check failed after pool return: {e}")
 
@@ -885,7 +962,10 @@ class InventoryService:
                 return None, "Item not found"
 
             if item.status != ItemStatus.AVAILABLE:
-                return None, f"Item is not available for checkout (status: {item.status})"
+                return (
+                    None,
+                    f"Item is not available for checkout (status: {item.status})",
+                )
 
             # Create checkout record
             checkout = CheckOutRecord(
@@ -905,8 +985,11 @@ class InventoryService:
 
             # Queue notification
             await self._queue_inventory_notification(
-                organization_id, user_id, InventoryActionType.CHECKED_OUT,
-                item, performed_by=checked_out_by,
+                organization_id,
+                user_id,
+                InventoryActionType.CHECKED_OUT,
+                item,
+                performed_by=checked_out_by,
             )
 
             await self.db.commit()
@@ -962,8 +1045,11 @@ class InventoryService:
 
             # Queue notification
             await self._queue_inventory_notification(
-                organization_id, checkout_user_id, InventoryActionType.CHECKED_IN,
-                item, performed_by=checked_in_by,
+                organization_id,
+                checkout_user_id,
+                InventoryActionType.CHECKED_IN,
+                item,
+                performed_by=checked_in_by,
             )
 
             await self.db.commit()
@@ -973,7 +1059,10 @@ class InventoryService:
             # the already-committed checkin operation.
             try:
                 from app.services.member_archive_service import check_and_auto_archive
-                await check_and_auto_archive(self.db, checkout_user_id, str(organization_id))
+
+                await check_and_auto_archive(
+                    self.db, checkout_user_id, str(organization_id)
+                )
             except Exception as e:
                 logger.warning(f"Auto-archive check failed after checkin: {e}")
 
@@ -1003,7 +1092,11 @@ class InventoryService:
         if user_id:
             query = query.where(CheckOutRecord.user_id == str(user_id))
 
-        query = query.order_by(CheckOutRecord.checked_out_at.desc()).offset(skip).limit(limit)
+        query = (
+            query.order_by(CheckOutRecord.checked_out_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
 
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -1063,10 +1156,24 @@ class InventoryService:
     # Fields allowed via kwargs when creating a maintenance record.
     # Prevents callers from overwriting id, organization_id, etc.
     _MAINTENANCE_ALLOWED_FIELDS = {
-        "maintenance_type", "scheduled_date", "completed_date", "next_due_date",
-        "performed_by", "vendor_name", "cost", "condition_before", "condition_after",
-        "description", "parts_replaced", "parts_cost", "labor_hours",
-        "passed", "notes", "issues_found", "attachments", "is_completed",
+        "maintenance_type",
+        "scheduled_date",
+        "completed_date",
+        "next_due_date",
+        "performed_by",
+        "vendor_name",
+        "cost",
+        "condition_before",
+        "condition_after",
+        "description",
+        "parts_replaced",
+        "parts_cost",
+        "labor_hours",
+        "passed",
+        "notes",
+        "issues_found",
+        "attachments",
+        "is_completed",
     }
 
     async def create_maintenance_record(
@@ -1079,14 +1186,15 @@ class InventoryService:
         """Create a maintenance record"""
         try:
             safe_data = {
-                k: v for k, v in maintenance_data.items()
+                k: v
+                for k, v in maintenance_data.items()
                 if k in self._MAINTENANCE_ALLOWED_FIELDS
             }
             maintenance = MaintenanceRecord(
                 organization_id=organization_id,
                 item_id=item_id,
                 created_by=created_by,
-                **safe_data
+                **safe_data,
             )
             self.db.add(maintenance)
 
@@ -1105,7 +1213,9 @@ class InventoryService:
                         if item.inspection_interval_days:
                             if isinstance(completed, str):
                                 completed = date.fromisoformat(completed)
-                            item.next_inspection_due = completed + timedelta(days=item.inspection_interval_days)
+                            item.next_inspection_due = completed + timedelta(
+                                days=item.inspection_interval_days
+                            )
                         elif maintenance_data.get("next_due_date"):
                             item.next_inspection_due = maintenance_data["next_due_date"]
 
@@ -1138,7 +1248,8 @@ class InventoryService:
 
             # Only allow updating known safe fields
             safe_data = {
-                k: v for k, v in update_data.items()
+                k: v
+                for k, v in update_data.items()
                 if k in self._MAINTENANCE_ALLOWED_FIELDS
             }
 
@@ -1160,9 +1271,13 @@ class InventoryService:
                         if item.inspection_interval_days:
                             if isinstance(completed, str):
                                 completed = date.fromisoformat(completed)
-                            item.next_inspection_due = completed + timedelta(days=item.inspection_interval_days)
+                            item.next_inspection_due = completed + timedelta(
+                                days=item.inspection_interval_days
+                            )
                         elif safe_data.get("next_due_date") or record.next_due_date:
-                            item.next_inspection_due = safe_data.get("next_due_date") or record.next_due_date
+                            item.next_inspection_due = (
+                                safe_data.get("next_due_date") or record.next_due_date
+                            )
 
             await self.db.commit()
             await self.db.refresh(record)
@@ -1210,9 +1325,7 @@ class InventoryService:
     # Reporting & Analytics
     # ============================================
 
-    async def get_low_stock_items(
-        self, organization_id: UUID
-    ) -> List[Dict[str, Any]]:
+    async def get_low_stock_items(self, organization_id: UUID) -> List[Dict[str, Any]]:
         """Get categories with low stock, using the sum of item quantities
         rather than a simple row count, and include the names of low-stock items."""
         org_id = str(organization_id)
@@ -1221,7 +1334,9 @@ class InventoryService:
         result = await self.db.execute(
             select(
                 InventoryCategory,
-                func.coalesce(func.sum(InventoryItem.quantity), 0).label("current_stock"),
+                func.coalesce(func.sum(InventoryItem.quantity), 0).label(
+                    "current_stock"
+                ),
             )
             .join(InventoryItem, InventoryCategory.id == InventoryItem.category_id)
             .where(InventoryCategory.organization_id == org_id)
@@ -1229,7 +1344,10 @@ class InventoryService:
             .where(InventoryItem.active == True)  # noqa: E712
             .where(InventoryCategory.low_stock_threshold.isnot(None))
             .group_by(InventoryCategory.id)
-            .having(func.coalesce(func.sum(InventoryItem.quantity), 0) <= InventoryCategory.low_stock_threshold)
+            .having(
+                func.coalesce(func.sum(InventoryItem.quantity), 0)
+                <= InventoryCategory.low_stock_threshold
+            )
         )
 
         low_stock_items = []
@@ -1246,20 +1364,20 @@ class InventoryService:
                 {"name": row.name, "quantity": row.quantity}
                 for row in items_result.all()
             ]
-            low_stock_items.append({
-                "category_id": category.id,
-                "category_name": category.name,
-                "item_type": category.item_type,
-                "current_stock": int(current_stock),
-                "threshold": category.low_stock_threshold,
-                "items": item_details,
-            })
+            low_stock_items.append(
+                {
+                    "category_id": category.id,
+                    "category_name": category.name,
+                    "item_type": category.item_type,
+                    "current_stock": int(current_stock),
+                    "threshold": category.low_stock_threshold,
+                    "items": item_details,
+                }
+            )
 
         return low_stock_items
 
-    async def get_inventory_summary(
-        self, organization_id: UUID
-    ) -> Dict[str, Any]:
+    async def get_inventory_summary(self, organization_id: UUID) -> Dict[str, Any]:
         """Get overall inventory summary statistics"""
         # Total items
         total_result = await self.db.execute(
@@ -1291,7 +1409,9 @@ class InventoryService:
             .where(InventoryItem.active == True)  # noqa: E712
             .group_by(InventoryItem.condition)
         )
-        items_by_condition = {row.condition.value: row.count for row in condition_result.all()}
+        items_by_condition = {
+            row.condition.value: row.count for row in condition_result.all()
+        }
 
         # Total value
         value_result = await self.db.execute(
@@ -1343,13 +1463,17 @@ class InventoryService:
     ) -> Dict[str, Any]:
         """Get all inventory items for a specific user (for dashboard)"""
         # Permanent assignments
-        assignments = await self.get_user_assignments(user_id, organization_id, active_only=True)
+        assignments = await self.get_user_assignments(
+            user_id, organization_id, active_only=True
+        )
 
         # Active checkouts
         checkouts = await self.get_active_checkouts(organization_id, user_id=user_id)
 
         # Active pool issuances
-        issuances = await self.get_user_issuances(user_id, organization_id, active_only=True)
+        issuances = await self.get_user_issuances(
+            user_id, organization_id, active_only=True
+        )
 
         return {
             "permanent_assignments": [
@@ -1486,19 +1610,21 @@ class InventoryService:
             co = row.checkout_count
             iss = row.issued_count
             full_name = " ".join(filter(None, [row.first_name, row.last_name])) or None
-            result.append({
-                "user_id": row.id,
-                "username": row.username,
-                "first_name": row.first_name,
-                "last_name": row.last_name,
-                "full_name": full_name,
-                "membership_number": row.membership_number,
-                "permanent_count": perm,
-                "checkout_count": co,
-                "issued_count": iss,
-                "overdue_count": row.overdue_count,
-                "total_items": perm + co + iss,
-            })
+            result.append(
+                {
+                    "user_id": row.id,
+                    "username": row.username,
+                    "first_name": row.first_name,
+                    "last_name": row.last_name,
+                    "full_name": full_name,
+                    "membership_number": row.membership_number,
+                    "permanent_count": perm,
+                    "checkout_count": co,
+                    "issued_count": iss,
+                    "overdue_count": row.overdue_count,
+                    "total_items": perm + co + iss,
+                }
+            )
         return result
 
     # ============================================
@@ -1668,14 +1794,16 @@ class InventoryService:
             if not lookup:
                 lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
-                results.append({
-                    "code": code,
-                    "item_name": "Unknown",
-                    "item_id": "",
-                    "action": "none",
-                    "success": False,
-                    "error": f"No item found for code '{code}'",
-                })
+                results.append(
+                    {
+                        "code": code,
+                        "item_name": "Unknown",
+                        "item_id": "",
+                        "action": "none",
+                        "success": False,
+                        "error": f"No item found for code '{code}'",
+                    }
+                )
                 failed += 1
                 continue
 
@@ -1693,18 +1821,28 @@ class InventoryService:
                         reason=reason,
                     )
                     if err:
-                        results.append({
-                            "code": code, "item_name": item.name,
-                            "item_id": item.id, "action": "issued",
-                            "success": False, "error": err,
-                        })
+                        results.append(
+                            {
+                                "code": code,
+                                "item_name": item.name,
+                                "item_id": item.id,
+                                "action": "issued",
+                                "success": False,
+                                "error": err,
+                            }
+                        )
                         failed += 1
                     else:
-                        results.append({
-                            "code": code, "item_name": item.name,
-                            "item_id": item.id, "action": "issued",
-                            "success": True, "error": None,
-                        })
+                        results.append(
+                            {
+                                "code": code,
+                                "item_name": item.name,
+                                "item_id": item.id,
+                                "action": "issued",
+                                "success": True,
+                                "error": None,
+                            }
+                        )
                         successful += 1
 
                 elif item.status in (ItemStatus.AVAILABLE, ItemStatus.ASSIGNED):
@@ -1718,35 +1856,54 @@ class InventoryService:
                         reason=reason,
                     )
                     if err:
-                        results.append({
-                            "code": code, "item_name": item.name,
-                            "item_id": item.id, "action": "assigned",
-                            "success": False, "error": err,
-                        })
+                        results.append(
+                            {
+                                "code": code,
+                                "item_name": item.name,
+                                "item_id": item.id,
+                                "action": "assigned",
+                                "success": False,
+                                "error": err,
+                            }
+                        )
                         failed += 1
                     else:
-                        results.append({
-                            "code": code, "item_name": item.name,
-                            "item_id": item.id, "action": "assigned",
-                            "success": True, "error": None,
-                        })
+                        results.append(
+                            {
+                                "code": code,
+                                "item_name": item.name,
+                                "item_id": item.id,
+                                "action": "assigned",
+                                "success": True,
+                                "error": None,
+                            }
+                        )
                         successful += 1
 
                 else:
-                    results.append({
-                        "code": code, "item_name": item.name,
-                        "item_id": item.id, "action": "none",
-                        "success": False,
-                        "error": f"Item is not available (status: {item.status.value})",
-                    })
+                    results.append(
+                        {
+                            "code": code,
+                            "item_name": item.name,
+                            "item_id": item.id,
+                            "action": "none",
+                            "success": False,
+                            "error": f"Item is not available (status: {item.status.value})",
+                        }
+                    )
                     failed += 1
 
             except Exception as e:
-                results.append({
-                    "code": code, "item_name": item.name if item else "Unknown",
-                    "item_id": item.id if item else "",
-                    "action": "none", "success": False, "error": str(e),
-                })
+                results.append(
+                    {
+                        "code": code,
+                        "item_name": item.name if item else "Unknown",
+                        "item_id": item.id if item else "",
+                        "action": "none",
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
                 failed += 1
 
         return {
@@ -1795,11 +1952,16 @@ class InventoryService:
             if not lookup:
                 lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
-                results.append({
-                    "code": code, "item_name": "Unknown", "item_id": "",
-                    "action": "none", "success": False,
-                    "error": f"No item found for code '{code}'",
-                })
+                results.append(
+                    {
+                        "code": code,
+                        "item_name": "Unknown",
+                        "item_id": "",
+                        "action": "none",
+                        "success": False,
+                        "error": f"No item found for code '{code}'",
+                    }
+                )
                 failed += 1
                 continue
 
@@ -1808,12 +1970,16 @@ class InventoryService:
             try:
                 condition = IC(condition_str)
             except ValueError:
-                results.append({
-                    "code": code, "item_name": item.name if item else "Unknown",
-                    "item_id": item.id if item else "",
-                    "action": "none", "success": False,
-                    "error": f"Invalid return condition: '{condition_str}'",
-                })
+                results.append(
+                    {
+                        "code": code,
+                        "item_name": item.name if item else "Unknown",
+                        "item_id": item.id if item else "",
+                        "action": "none",
+                        "success": False,
+                        "error": f"Invalid return condition: '{condition_str}'",
+                    }
+                )
                 failed += 1
                 continue
 
@@ -1832,18 +1998,28 @@ class InventoryService:
                         expected_user_id=user_id,
                     )
                     if err:
-                        results.append({
-                            "code": code, "item_name": item.name,
-                            "item_id": item.id, "action": "unassigned",
-                            "success": False, "error": err,
-                        })
+                        results.append(
+                            {
+                                "code": code,
+                                "item_name": item.name,
+                                "item_id": item.id,
+                                "action": "unassigned",
+                                "success": False,
+                                "error": err,
+                            }
+                        )
                         failed += 1
                     else:
-                        results.append({
-                            "code": code, "item_name": item.name,
-                            "item_id": item.id, "action": "unassigned",
-                            "success": True, "error": None,
-                        })
+                        results.append(
+                            {
+                                "code": code,
+                                "item_name": item.name,
+                                "item_id": item.id,
+                                "action": "unassigned",
+                                "success": True,
+                                "error": None,
+                            }
+                        )
                         successful += 1
                     continue
 
@@ -1870,18 +2046,28 @@ class InventoryService:
                         damage_notes=damage_notes,
                     )
                     if err:
-                        results.append({
-                            "code": code, "item_name": item.name,
-                            "item_id": item.id, "action": "checked_in",
-                            "success": False, "error": err,
-                        })
+                        results.append(
+                            {
+                                "code": code,
+                                "item_name": item.name,
+                                "item_id": item.id,
+                                "action": "checked_in",
+                                "success": False,
+                                "error": err,
+                            }
+                        )
                         failed += 1
                     else:
-                        results.append({
-                            "code": code, "item_name": item.name,
-                            "item_id": item.id, "action": "checked_in",
-                            "success": True, "error": None,
-                        })
+                        results.append(
+                            {
+                                "code": code,
+                                "item_name": item.name,
+                                "item_id": item.id,
+                                "action": "checked_in",
+                                "success": True,
+                                "error": None,
+                            }
+                        )
                         successful += 1
                     continue
 
@@ -1910,36 +2096,55 @@ class InventoryService:
                             quantity_returned=quantity,
                         )
                         if err:
-                            results.append({
-                                "code": code, "item_name": item.name,
-                                "item_id": item.id, "action": "returned_to_pool",
-                                "success": False, "error": err,
-                            })
+                            results.append(
+                                {
+                                    "code": code,
+                                    "item_name": item.name,
+                                    "item_id": item.id,
+                                    "action": "returned_to_pool",
+                                    "success": False,
+                                    "error": err,
+                                }
+                            )
                             failed += 1
                         else:
-                            results.append({
-                                "code": code, "item_name": item.name,
-                                "item_id": item.id, "action": "returned_to_pool",
-                                "success": True, "error": None,
-                            })
+                            results.append(
+                                {
+                                    "code": code,
+                                    "item_name": item.name,
+                                    "item_id": item.id,
+                                    "action": "returned_to_pool",
+                                    "success": True,
+                                    "error": None,
+                                }
+                            )
                             successful += 1
                         continue
 
                 # Item not held by this user
-                results.append({
-                    "code": code, "item_name": item.name,
-                    "item_id": item.id, "action": "none",
-                    "success": False,
-                    "error": "Item is not assigned to, checked out by, or issued to this member",
-                })
+                results.append(
+                    {
+                        "code": code,
+                        "item_name": item.name,
+                        "item_id": item.id,
+                        "action": "none",
+                        "success": False,
+                        "error": "Item is not assigned to, checked out by, or issued to this member",
+                    }
+                )
                 failed += 1
 
             except Exception as e:
-                results.append({
-                    "code": code, "item_name": item.name if item else "Unknown",
-                    "item_id": item.id if item else "",
-                    "action": "none", "success": False, "error": str(e),
-                })
+                results.append(
+                    {
+                        "code": code,
+                        "item_name": item.name if item else "Unknown",
+                        "item_id": item.id if item else "",
+                        "action": "none",
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
                 failed += 1
 
         return {
@@ -2007,9 +2212,6 @@ class InventoryService:
 
         Thermal formats produce one label per page, sized exactly to the label.
         """
-        from reportlab.lib.units import inch
-        from reportlab.graphics.barcode import code128
-        from reportlab.pdfgen import canvas
 
         items = []
         for item_id in item_ids:
@@ -2035,12 +2237,16 @@ class InventoryService:
 
         if label_format == "custom":
             if not custom_width or not custom_height:
-                raise ValueError("custom_width and custom_height are required for custom label format")
+                raise ValueError(
+                    "custom_width and custom_height are required for custom label format"
+                )
             return self._generate_thermal_labels(items, custom_width, custom_height)
 
         fmt = self.LABEL_FORMATS.get(label_format)
         if not fmt:
-            raise ValueError(f"Unknown label format: {label_format}. Available: {', '.join(self.LABEL_FORMATS.keys())}, custom")
+            raise ValueError(
+                f"Unknown label format: {label_format}. Available: {', '.join(self.LABEL_FORMATS.keys())}, custom"
+            )
 
         if fmt["type"] == "sheet":
             return self._generate_sheet_labels(items)
@@ -2050,9 +2256,9 @@ class InventoryService:
     @staticmethod
     def _generate_sheet_labels(items: list) -> BytesIO:
         """Generate labels on standard letter-size sheets in a 2x5 grid."""
+        from reportlab.graphics.barcode import code128
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.units import inch
-        from reportlab.graphics.barcode import code128
         from reportlab.pdfgen import canvas
 
         buf = BytesIO()
@@ -2083,7 +2289,9 @@ class InventoryService:
             c.setLineWidth(0.5)
             c.rect(x + 4, y + 4, label_w - 8, label_h - 8)
 
-            barcode_value = item.barcode or item.asset_tag or item.serial_number or item.id[:12]
+            barcode_value = (
+                item.barcode or item.asset_tag or item.serial_number or item.id[:12]
+            )
 
             # Item name (truncated)
             c.setFont("Helvetica-Bold", 9)
@@ -2117,13 +2325,15 @@ class InventoryService:
         return buf
 
     @staticmethod
-    def _generate_thermal_labels(items: list, width_in: float, height_in: float) -> BytesIO:
+    def _generate_thermal_labels(
+        items: list, width_in: float, height_in: float
+    ) -> BytesIO:
         """
         Generate labels sized for thermal printers (Dymo, Rollo, etc).
         Each item gets its own page at the exact label dimensions.
         """
-        from reportlab.lib.units import inch
         from reportlab.graphics.barcode import code128
+        from reportlab.lib.units import inch
         from reportlab.pdfgen import canvas
 
         label_w = width_in * inch
@@ -2141,7 +2351,9 @@ class InventoryService:
             if idx > 0:
                 c.showPage()
 
-            barcode_value = item.barcode or item.asset_tag or item.serial_number or item.id[:12]
+            barcode_value = (
+                item.barcode or item.asset_tag or item.serial_number or item.id[:12]
+            )
 
             if is_landscape:
                 # Landscape: text on left, barcode on right or text top barcode bottom
@@ -2162,7 +2374,10 @@ class InventoryService:
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
                 # Scale down barWidth if barcode doesn't fit
-                while barcode_obj.width > max_barcode_width and bar_width_unit > 0.005 * inch:
+                while (
+                    barcode_obj.width > max_barcode_width
+                    and bar_width_unit > 0.005 * inch
+                ):
                     bar_width_unit -= 0.001 * inch
                     barcode_obj = code128.Code128(
                         barcode_value, barWidth=bar_width_unit, barHeight=bar_height
@@ -2174,7 +2389,9 @@ class InventoryService:
                 # Item name
                 c.setFont("Helvetica-Bold", name_font_size)
                 name_max_chars = int(self_w / (name_font_size * 0.5))
-                name = item.name[:name_max_chars] + ("..." if len(item.name) > name_max_chars else "")
+                name = item.name[:name_max_chars] + (
+                    "..." if len(item.name) > name_max_chars else ""
+                )
                 y_cursor -= name_font_size
                 c.drawString(padding, y_cursor, name)
 
@@ -2185,7 +2402,7 @@ class InventoryService:
                 if item.serial_number:
                     info_parts.append(f"S/N: {item.serial_number}")
                 if info_parts:
-                    y_cursor -= (info_font_size + 2)
+                    y_cursor -= info_font_size + 2
                     c.setFont("Helvetica", info_font_size)
                     c.drawString(padding, y_cursor, " | ".join(info_parts))
 
@@ -2215,7 +2432,10 @@ class InventoryService:
                 barcode_obj = code128.Code128(
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
-                while barcode_obj.width > max_barcode_width and bar_width_unit > 0.005 * inch:
+                while (
+                    barcode_obj.width > max_barcode_width
+                    and bar_width_unit > 0.005 * inch
+                ):
                     bar_width_unit -= 0.001 * inch
                     barcode_obj = code128.Code128(
                         barcode_value, barWidth=bar_width_unit, barHeight=bar_height
@@ -2224,7 +2444,9 @@ class InventoryService:
                 # Item name at top
                 c.setFont("Helvetica-Bold", name_font_size)
                 name_max_chars = int(self_w / (name_font_size * 0.52))
-                name = item.name[:name_max_chars] + ("..." if len(item.name) > name_max_chars else "")
+                name = item.name[:name_max_chars] + (
+                    "..." if len(item.name) > name_max_chars else ""
+                )
                 y_cursor = label_h - padding - name_font_size
                 c.drawCentredString(label_w / 2, y_cursor, name)
 
@@ -2235,7 +2457,7 @@ class InventoryService:
                 if item.serial_number:
                     info_parts.append(f"S/N: {item.serial_number}")
                 if info_parts:
-                    y_cursor -= (info_font_size + 4)
+                    y_cursor -= info_font_size + 4
                     c.setFont("Helvetica", info_font_size)
                     c.drawCentredString(label_w / 2, y_cursor, " | ".join(info_parts))
 
@@ -2281,9 +2503,18 @@ class InventoryService:
             if item.status == ItemStatus.RETIRED:
                 return None, "Item is already retired"
 
-            valid_reasons = {"lost", "damaged_beyond_repair", "obsolete", "stolen", "other"}
+            valid_reasons = {
+                "lost",
+                "damaged_beyond_repair",
+                "obsolete",
+                "stolen",
+                "other",
+            }
             if reason not in valid_reasons:
-                return None, f"Invalid reason. Must be one of: {', '.join(sorted(valid_reasons))}"
+                return (
+                    None,
+                    f"Invalid reason. Must be one of: {', '.join(sorted(valid_reasons))}",
+                )
 
             write_off = WriteOffRequest(
                 organization_id=organization_id,
@@ -2307,11 +2538,15 @@ class InventoryService:
                 "id": write_off.id,
                 "item_id": write_off.item_id,
                 "item_name": write_off.item_name,
-                "item_value": float(write_off.item_value) if write_off.item_value else None,
+                "item_value": (
+                    float(write_off.item_value) if write_off.item_value else None
+                ),
                 "reason": write_off.reason,
                 "description": write_off.description,
                 "status": write_off.status.value,
-                "created_at": write_off.created_at.isoformat() if write_off.created_at else None,
+                "created_at": (
+                    write_off.created_at.isoformat() if write_off.created_at else None
+                ),
             }, None
 
         except Exception as e:
@@ -2341,37 +2576,49 @@ class InventoryService:
             # Load requester name
             requester_name = None
             if wo.requested_by:
-                u = await self.db.execute(select(User).where(User.id == wo.requested_by))
+                u = await self.db.execute(
+                    select(User).where(User.id == wo.requested_by)
+                )
                 user = u.scalar_one_or_none()
                 if user:
-                    requester_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+                    requester_name = (
+                        f"{user.first_name or ''} {user.last_name or ''}".strip()
+                        or user.username
+                    )
 
             reviewer_name = None
             if wo.reviewed_by:
                 u = await self.db.execute(select(User).where(User.id == wo.reviewed_by))
                 user = u.scalar_one_or_none()
                 if user:
-                    reviewer_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+                    reviewer_name = (
+                        f"{user.first_name or ''} {user.last_name or ''}".strip()
+                        or user.username
+                    )
 
-            requests.append({
-                "id": wo.id,
-                "item_id": wo.item_id,
-                "item_name": wo.item_name,
-                "item_serial_number": wo.item_serial_number,
-                "item_asset_tag": wo.item_asset_tag,
-                "item_value": float(wo.item_value) if wo.item_value else None,
-                "reason": wo.reason,
-                "description": wo.description,
-                "status": wo.status.value,
-                "requested_by": wo.requested_by,
-                "requester_name": requester_name,
-                "reviewed_by": wo.reviewed_by,
-                "reviewer_name": reviewer_name,
-                "reviewed_at": wo.reviewed_at.isoformat() if wo.reviewed_at else None,
-                "review_notes": wo.review_notes,
-                "clearance_id": wo.clearance_id,
-                "created_at": wo.created_at.isoformat() if wo.created_at else None,
-            })
+            requests.append(
+                {
+                    "id": wo.id,
+                    "item_id": wo.item_id,
+                    "item_name": wo.item_name,
+                    "item_serial_number": wo.item_serial_number,
+                    "item_asset_tag": wo.item_asset_tag,
+                    "item_value": float(wo.item_value) if wo.item_value else None,
+                    "reason": wo.reason,
+                    "description": wo.description,
+                    "status": wo.status.value,
+                    "requested_by": wo.requested_by,
+                    "requester_name": requester_name,
+                    "reviewed_by": wo.reviewed_by,
+                    "reviewer_name": reviewer_name,
+                    "reviewed_at": (
+                        wo.reviewed_at.isoformat() if wo.reviewed_at else None
+                    ),
+                    "review_notes": wo.review_notes,
+                    "clearance_id": wo.clearance_id,
+                    "created_at": wo.created_at.isoformat() if wo.created_at else None,
+                }
+            )
         return requests
 
     async def review_write_off(
@@ -2417,11 +2664,17 @@ class InventoryService:
                 item = item_result.scalar_one_or_none()
                 if item and item.status != ItemStatus.RETIRED:
                     if wo.reason in ("lost", "stolen"):
-                        item.status = ItemStatus.LOST if wo.reason == "lost" else ItemStatus.STOLEN
+                        item.status = (
+                            ItemStatus.LOST
+                            if wo.reason == "lost"
+                            else ItemStatus.STOLEN
+                        )
                     else:
                         item.status = ItemStatus.RETIRED
                         item.condition = ItemCondition.RETIRED
-                    item.notes = (item.notes or "") + f"\n[Write-off approved: {wo.reason}] {wo.description}"
+                    item.notes = (
+                        item.notes or ""
+                    ) + f"\n[Write-off approved: {wo.reason}] {wo.description}"
 
             await self.db.commit()
             await self.db.refresh(wo)

@@ -6,7 +6,7 @@ including an admin-level summary for Chiefs and department leaders.
 """
 
 import logging
-from datetime import datetime, date, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
@@ -16,14 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_active_user, require_permission
 from app.core.database import get_db
-from app.models.event import Event, EventRSVP, EventExternalAttendee, EventType
+from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
+from app.models.meeting import ActionItemStatus, MeetingActionItem
+from app.models.minute import ActionItem, MeetingMinutes, MinutesActionItemStatus
+from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import User, UserStatus
-from app.models.meeting import MeetingActionItem, ActionItemStatus
-from app.models.minute import ActionItem, MinutesActionItemStatus, MeetingMinutes
-from app.models.training import (
-    TrainingRecord,
-    TrainingStatus,
-)
 from app.services.training_compliance import compute_org_compliance_pct
 
 logger = logging.getLogger(__name__)
@@ -42,6 +39,7 @@ class DashboardStats(BaseModel):
 
 class AdminSummary(BaseModel):
     """Department-wide summary for Chiefs and admins."""
+
     active_members: int
     inactive_members: int
     total_members: int
@@ -54,6 +52,7 @@ class AdminSummary(BaseModel):
 
 class ActionItemSummary(BaseModel):
     """Unified action item from either meetings or minutes."""
+
     id: str
     source: str  # "meeting" or "minutes"
     source_id: str
@@ -68,6 +67,7 @@ class ActionItemSummary(BaseModel):
 
 class CommunityEngagement(BaseModel):
     """Community engagement metrics for Public Outreach."""
+
     total_public_events: int
     total_member_attendees: int
     total_external_attendees: int
@@ -189,7 +189,9 @@ async def get_admin_summary(
         result = await db.execute(
             select(func.count(MeetingActionItem.id)).where(
                 MeetingActionItem.organization_id == org_id,
-                MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
+                MeetingActionItem.status.in_(
+                    [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
+                ),
                 MeetingActionItem.due_date < date.today(),
             )
         )
@@ -198,7 +200,9 @@ async def get_admin_summary(
         result = await db.execute(
             select(func.count(MeetingActionItem.id)).where(
                 MeetingActionItem.organization_id == org_id,
-                MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
+                MeetingActionItem.status.in_(
+                    [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
+                ),
             )
         )
         open_meeting = result.scalar() or 0
@@ -214,10 +218,12 @@ async def get_admin_summary(
             .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
             .where(
                 MeetingMinutes.organization_id == org_id,
-                ActionItem.status.in_([
-                    MinutesActionItemStatus.PENDING.value,
-                    MinutesActionItemStatus.IN_PROGRESS.value,
-                ]),
+                ActionItem.status.in_(
+                    [
+                        MinutesActionItemStatus.PENDING.value,
+                        MinutesActionItemStatus.IN_PROGRESS.value,
+                    ]
+                ),
                 ActionItem.due_date < datetime.now(timezone.utc),
             )
         )
@@ -228,10 +234,12 @@ async def get_admin_summary(
             .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
             .where(
                 MeetingMinutes.organization_id == org_id,
-                ActionItem.status.in_([
-                    MinutesActionItemStatus.PENDING.value,
-                    MinutesActionItemStatus.IN_PROGRESS.value,
-                ]),
+                ActionItem.status.in_(
+                    [
+                        MinutesActionItemStatus.PENDING.value,
+                        MinutesActionItemStatus.IN_PROGRESS.value,
+                    ]
+                ),
             )
         )
         open_minutes = result.scalar() or 0
@@ -290,17 +298,23 @@ async def get_unified_action_items(
 
     result = await db.execute(query.order_by(MeetingActionItem.due_date.asc()))
     for item in result.scalars().all():
-        items.append(ActionItemSummary(
-            id=item.id,
-            source="meeting",
-            source_id=item.meeting_id,
-            description=item.description,
-            assignee_id=item.assigned_to,
-            due_date=item.due_date.isoformat() if item.due_date else None,
-            status=item.status.value if hasattr(item.status, 'value') else str(item.status),
-            priority=str(item.priority) if item.priority else None,
-            created_at=item.created_at.isoformat() if item.created_at else "",
-        ))
+        items.append(
+            ActionItemSummary(
+                id=item.id,
+                source="meeting",
+                source_id=item.meeting_id,
+                description=item.description,
+                assignee_id=item.assigned_to,
+                due_date=item.due_date.isoformat() if item.due_date else None,
+                status=(
+                    item.status.value
+                    if hasattr(item.status, "value")
+                    else str(item.status)
+                ),
+                priority=str(item.priority) if item.priority else None,
+                created_at=item.created_at.isoformat() if item.created_at else "",
+            )
+        )
 
     # ── Minutes action items (scoped to organization via MeetingMinutes) ──
     query2 = (
@@ -315,18 +329,28 @@ async def get_unified_action_items(
 
     result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
     for item in result2.scalars().all():
-        items.append(ActionItemSummary(
-            id=item.id,
-            source="minutes",
-            source_id=item.minutes_id,
-            description=item.description,
-            assignee_id=item.assignee_id,
-            assignee_name=item.assignee_name,
-            due_date=item.due_date.isoformat() if item.due_date else None,
-            status=item.status.value if hasattr(item.status, 'value') else str(item.status),
-            priority=item.priority.value if hasattr(item.priority, 'value') else str(item.priority) if item.priority else None,
-            created_at=item.created_at.isoformat() if item.created_at else "",
-        ))
+        items.append(
+            ActionItemSummary(
+                id=item.id,
+                source="minutes",
+                source_id=item.minutes_id,
+                description=item.description,
+                assignee_id=item.assignee_id,
+                assignee_name=item.assignee_name,
+                due_date=item.due_date.isoformat() if item.due_date else None,
+                status=(
+                    item.status.value
+                    if hasattr(item.status, "value")
+                    else str(item.status)
+                ),
+                priority=(
+                    item.priority.value
+                    if hasattr(item.priority, "value")
+                    else str(item.priority) if item.priority else None
+                ),
+                created_at=item.created_at.isoformat() if item.created_at else "",
+            )
+        )
 
     # Sort by due date (nulls last)
     items.sort(key=lambda x: x.due_date or "9999-12-31")

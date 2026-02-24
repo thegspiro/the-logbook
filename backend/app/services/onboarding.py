@@ -5,23 +5,23 @@ Handles first-time system setup and configuration.
 This module guides users through initial setup and can be disabled once complete.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import ProgrammingError, OperationalError
-from sqlalchemy import select, func, or_
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, UTC
 import secrets
-import os
+from datetime import UTC, datetime
+from typing import Any, Dict, List, Optional
 
-from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem
-from app.models.user import Organization, User, Role, UserStatus, OrganizationType, IdentifierType
-from app.models.facilities import Facility, FacilityType, FacilityStatus
-from app.services.auth_service import AuthService
-from app.core.config import settings
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.audit import log_audit_event
-from app.core.permissions import DEFAULT_ROLES
+from app.core.config import settings
 from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
+from app.core.permissions import DEFAULT_ROLES
 from app.core.utils import generate_uuid
+from app.models.facilities import Facility, FacilityStatus, FacilityType
+from app.models.onboarding import OnboardingChecklistItem, OnboardingStatus
+from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
+from app.services.auth_service import AuthService
 
 
 class OnboardingService:
@@ -36,71 +36,71 @@ class OnboardingService:
             "name": "organization",
             "title": "Organization Setup",
             "description": "Set up your fire department or emergency services organization",
-            "required": True
+            "required": True,
         },
         {
             "id": 2,
             "name": "navigation",
             "title": "Navigation Layout",
             "description": "Choose your preferred navigation layout",
-            "required": False
+            "required": False,
         },
         {
             "id": 3,
             "name": "email_platform",
             "title": "Email Platform",
             "description": "Select your email service provider",
-            "required": False
+            "required": False,
         },
         {
             "id": 4,
             "name": "email_config",
             "title": "Email Configuration",
             "description": "Configure email settings",
-            "required": False
+            "required": False,
         },
         {
             "id": 5,
             "name": "file_storage",
             "title": "File Storage",
             "description": "Choose your file storage solution",
-            "required": False
+            "required": False,
         },
         {
             "id": 6,
             "name": "authentication",
             "title": "Authentication",
             "description": "Select authentication method",
-            "required": False
+            "required": False,
         },
         {
             "id": 7,
             "name": "admin_user",
             "title": "Create System Owner",
             "description": "Create the first admin user with secure credentials",
-            "required": True
+            "required": True,
         },
         {
             "id": 8,
             "name": "it_team",
             "title": "IT Team & Backup Access",
             "description": "Configure IT team and backup access",
-            "required": False
+            "required": False,
         },
         {
             "id": 9,
             "name": "roles",
             "title": "Role Setup",
             "description": "Configure roles and permissions",
-            "required": False
+            "required": False,
         },
         {
             "id": 10,
             "name": "modules",
             "title": "Select Modules",
             "description": "Choose which modules to enable for your organization",
-            "required": False
-        }
+            "required": False,
+        },
     ]
 
     def __init__(self, db: AsyncSession):
@@ -116,7 +116,9 @@ class OnboardingService:
         try:
             # First, check if onboarding is explicitly marked as completed
             result = await self.db.execute(
-                select(OnboardingStatus).where(OnboardingStatus.is_completed == True)  # noqa: E712
+                select(OnboardingStatus).where(
+                    OnboardingStatus.is_completed == True
+                )  # noqa: E712
             )
             completed = result.scalar_one_or_none()
 
@@ -125,7 +127,9 @@ class OnboardingService:
 
             # Check if there's an onboarding in progress (not completed)
             result = await self.db.execute(
-                select(OnboardingStatus).where(OnboardingStatus.is_completed == False)  # noqa: E712
+                select(OnboardingStatus).where(
+                    OnboardingStatus.is_completed == False
+                )  # noqa: E712
             )
             in_progress = result.scalar_one_or_none()
 
@@ -162,7 +166,9 @@ class OnboardingService:
         """
         try:
             result = await self.db.execute(
-                select(OnboardingStatus).order_by(OnboardingStatus.created_at.desc()).limit(1)
+                select(OnboardingStatus)
+                .order_by(OnboardingStatus.created_at.desc())
+                .limit(1)
             )
             return result.scalar_one_or_none()
         except (ProgrammingError, OperationalError):
@@ -170,9 +176,7 @@ class OnboardingService:
             return None
 
     async def start_onboarding(
-        self,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        self, ip_address: Optional[str] = None, user_agent: Optional[str] = None
     ) -> OnboardingStatus:
         """
         Start the onboarding process
@@ -215,78 +219,94 @@ class OnboardingService:
 
         # Check SECRET_KEY
         if "INSECURE_DEFAULT" in settings.SECRET_KEY:
-            issues.append({
-                "field": "SECRET_KEY",
-                "severity": "critical",
-                "message": "SECRET_KEY is using the insecure default value. Generate a secure key in your .env file.",
-                "fix": "Run: python -c \"import secrets; print(secrets.token_urlsafe(64))\" and set SECRET_KEY in .env"
-            })
+            issues.append(
+                {
+                    "field": "SECRET_KEY",
+                    "severity": "critical",
+                    "message": "SECRET_KEY is using the insecure default value. Generate a secure key in your .env file.",
+                    "fix": 'Run: python -c "import secrets; print(secrets.token_urlsafe(64))" and set SECRET_KEY in .env',
+                }
+            )
             passed = False
         elif len(settings.SECRET_KEY) < 32:
-            issues.append({
-                "field": "SECRET_KEY",
-                "severity": "critical",
-                "message": "SECRET_KEY is too short. Must be at least 32 characters.",
-                "fix": "Generate a longer key with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
-            })
+            issues.append(
+                {
+                    "field": "SECRET_KEY",
+                    "severity": "critical",
+                    "message": "SECRET_KEY is too short. Must be at least 32 characters.",
+                    "fix": 'Generate a longer key with: python -c "import secrets; print(secrets.token_urlsafe(64))"',
+                }
+            )
             passed = False
 
         # Check ENCRYPTION_KEY
         if "INSECURE_DEFAULT" in settings.ENCRYPTION_KEY:
-            issues.append({
-                "field": "ENCRYPTION_KEY",
-                "severity": "critical",
-                "message": "ENCRYPTION_KEY is using the insecure default value. Generate a secure key in your .env file.",
-                "fix": "Run: python -c \"import secrets; print(secrets.token_hex(32))\" and set ENCRYPTION_KEY in .env"
-            })
+            issues.append(
+                {
+                    "field": "ENCRYPTION_KEY",
+                    "severity": "critical",
+                    "message": "ENCRYPTION_KEY is using the insecure default value. Generate a secure key in your .env file.",
+                    "fix": 'Run: python -c "import secrets; print(secrets.token_hex(32))" and set ENCRYPTION_KEY in .env',
+                }
+            )
             passed = False
 
         # Check database password
         if settings.DB_PASSWORD == "change_me_in_production":
-            issues.append({
-                "field": "DB_PASSWORD",
-                "severity": "critical",
-                "message": "Database password is using default value",
-                "fix": "Set a strong database password in .env file"
-            })
+            issues.append(
+                {
+                    "field": "DB_PASSWORD",
+                    "severity": "critical",
+                    "message": "Database password is using default value",
+                    "fix": "Set a strong database password in .env file",
+                }
+            )
             passed = False
 
         # Check if in production with DEBUG=True
         if settings.ENVIRONMENT == "production" and settings.DEBUG:
-            warnings.append({
-                "field": "DEBUG",
-                "severity": "high",
-                "message": "DEBUG mode is enabled in production environment",
-                "fix": "Set DEBUG=false in .env file"
-            })
+            warnings.append(
+                {
+                    "field": "DEBUG",
+                    "severity": "high",
+                    "message": "DEBUG mode is enabled in production environment",
+                    "fix": "Set DEBUG=false in .env file",
+                }
+            )
 
         # Check password policy
         if settings.PASSWORD_MIN_LENGTH < 12:
-            warnings.append({
-                "field": "PASSWORD_MIN_LENGTH",
-                "severity": "medium",
-                "message": "Password minimum length is below recommended 12 characters",
-                "fix": "Set PASSWORD_MIN_LENGTH=12 or higher"
-            })
+            warnings.append(
+                {
+                    "field": "PASSWORD_MIN_LENGTH",
+                    "severity": "medium",
+                    "message": "Password minimum length is below recommended 12 characters",
+                    "fix": "Set PASSWORD_MIN_LENGTH=12 or higher",
+                }
+            )
 
         # Check CORS origins
         if "*" in str(settings.ALLOWED_ORIGINS):
-            warnings.append({
-                "field": "ALLOWED_ORIGINS",
-                "severity": "high",
-                "message": "CORS is allowing all origins (*)",
-                "fix": "Restrict ALLOWED_ORIGINS to specific domains"
-            })
+            warnings.append(
+                {
+                    "field": "ALLOWED_ORIGINS",
+                    "severity": "high",
+                    "message": "CORS is allowing all origins (*)",
+                    "fix": "Restrict ALLOWED_ORIGINS to specific domains",
+                }
+            )
 
         # Safety check: if passed=False but no issues, add a generic issue
         # This prevents the UI from showing "Please fix the following errors" with empty bullets
         if not passed and len(issues) == 0:
-            issues.append({
-                "field": "CONFIGURATION",
-                "severity": "critical",
-                "message": "Security configuration check failed but no specific issues were identified. Please review logs for details.",
-                "fix": "Check application logs for more information about the security validation failure."
-            })
+            issues.append(
+                {
+                    "field": "CONFIGURATION",
+                    "severity": "critical",
+                    "message": "Security configuration check failed but no specific issues were identified. Please review logs for details.",
+                    "fix": "Check application logs for more information about the security validation failure.",
+                }
+            )
 
         return {
             "passed": passed,
@@ -367,7 +387,9 @@ class OnboardingService:
         """
         # Validate slug is URL-safe
         if not slug.replace("-", "").replace("_", "").isalnum():
-            raise ValueError("Slug must contain only letters, numbers, hyphens, and underscores")
+            raise ValueError(
+                "Slug must contain only letters, numbers, hyphens, and underscores"
+            )
 
         # Check if organization already exists
         result = await self.db.execute(
@@ -489,13 +511,15 @@ class OnboardingService:
         # Fallback to any active station-category type
         if not facility_type:
             type_result = await self.db.execute(
-                select(FacilityType).where(
+                select(FacilityType)
+                .where(
                     or_(
                         FacilityType.organization_id == org.id,
                         FacilityType.organization_id.is_(None),
                     ),
                     FacilityType.is_active.is_(True),
-                ).limit(1)
+                )
+                .limit(1)
             )
             facility_type = type_result.scalar_one_or_none()
 
@@ -591,8 +615,7 @@ class OnboardingService:
         # Look up the member role once
         member_role_result = await self.db.execute(
             select(Role).where(
-                Role.organization_id == organization_id,
-                Role.slug == ROLE_MEMBER
+                Role.organization_id == organization_id, Role.slug == ROLE_MEMBER
             )
         )
         member_role = member_role_result.scalar_one_or_none()
@@ -683,7 +706,7 @@ class OnboardingService:
         password: str,
         first_name: str,
         last_name: str,
-        membership_number: Optional[str] = None
+        membership_number: Optional[str] = None,
     ) -> User:
         """
         Create the System Owner (IT Manager) user
@@ -713,7 +736,7 @@ class OnboardingService:
             password=password,
             first_name=first_name,
             last_name=last_name,
-            membership_number=membership_number
+            membership_number=membership_number,
         )
 
         if error or not user:
@@ -724,23 +747,21 @@ class OnboardingService:
         # "*" permissions granting full access.
         result = await self.db.execute(
             select(Role).where(
-                Role.organization_id == organization_id,
-                Role.slug == ROLE_IT_MANAGER
+                Role.organization_id == organization_id, Role.slug == ROLE_IT_MANAGER
             )
         )
         it_manager_position = result.scalar_one_or_none()
 
         if it_manager_position:
             # Refresh user with positions relationship loaded to avoid MissingGreenlet error
-            await self.db.refresh(user, ['positions'])
+            await self.db.refresh(user, ["positions"])
             user.positions.append(it_manager_position)
             await self.db.flush()
 
         # Also assign the default "member" position
         member_result = await self.db.execute(
             select(Role).where(
-                Role.organization_id == organization_id,
-                Role.slug == ROLE_MEMBER
+                Role.organization_id == organization_id, Role.slug == ROLE_MEMBER
             )
         )
         member_position = member_result.scalar_one_or_none()
@@ -753,7 +774,9 @@ class OnboardingService:
         if status:
             status.admin_email = email
             status.admin_username = username
-            await self._mark_step_completed(status, 7, "admin_user")  # Step 7: System Owner creation
+            await self._mark_step_completed(
+                status, 7, "admin_user"
+            )  # Step 7: System Owner creation
 
         # Log event
         await log_audit_event(
@@ -763,18 +786,12 @@ class OnboardingService:
             severity="INFO",
             user_id=str(user.id),
             username=username,
-            event_data={
-                "organization_id": organization_id,
-                "email": email
-            }
+            event_data={"organization_id": organization_id, "email": email},
         )
 
         return user
 
-    async def configure_modules(
-        self,
-        enabled_modules: List[str]
-    ) -> Dict[str, bool]:
+    async def configure_modules(self, enabled_modules: List[str]) -> Dict[str, bool]:
         """
         Configure which modules are enabled.
 
@@ -796,18 +813,30 @@ class OnboardingService:
             # Core modules (always enabled)
             *core_modules,
             # Operations modules
-            "training", "inventory", "scheduling", "apparatus", "facilities",
+            "training",
+            "inventory",
+            "scheduling",
+            "apparatus",
+            "facilities",
             # Governance modules
-            "elections", "minutes", "reports",
+            "elections",
+            "minutes",
+            "reports",
             # Communication modules
-            "notifications", "mobile",
+            "notifications",
+            "mobile",
             # Advanced modules
             "integrations",
             # Membership
             "prospective_members",
             # Legacy/additional modules (for backwards compatibility)
-            "compliance", "meetings", "fundraising", "incidents",
-            "equipment", "vehicles", "budget"
+            "compliance",
+            "meetings",
+            "fundraising",
+            "incidents",
+            "equipment",
+            "vehicles",
+            "budget",
         ]
 
         # Validate modules
@@ -822,13 +851,23 @@ class OnboardingService:
         status = await self.get_onboarding_status()
         if status:
             status.enabled_modules = final_modules
-            await self._mark_step_completed(status, 10, "modules")  # Step 10: final step
+            await self._mark_step_completed(
+                status, 10, "modules"
+            )  # Step 10: final step
 
         # ── Also persist to Organization.settings.modules (canonical store) ──
         # Configurable module keys that the Settings page manages
         configurable_keys = [
-            "training", "inventory", "scheduling", "elections", "minutes",
-            "reports", "notifications", "mobile", "forms", "integrations",
+            "training",
+            "inventory",
+            "scheduling",
+            "elections",
+            "minutes",
+            "reports",
+            "notifications",
+            "mobile",
+            "forms",
+            "integrations",
             "facilities",
         ]
         modules_dict = {k: k in final_modules for k in configurable_keys}
@@ -840,6 +879,7 @@ class OnboardingService:
             settings_dict["modules"] = modules_dict
             org.settings = settings_dict
             from sqlalchemy.orm.attributes import flag_modified
+
             flag_modified(org, "settings")
             await self.db.flush()
 
@@ -870,7 +910,7 @@ class OnboardingService:
                 "port": settings.DB_PORT,
                 "server_time": str(db_time),
                 "organizations_count": org_count,
-                "charset": settings.DB_CHARSET
+                "charset": settings.DB_CHARSET,
             }
         except Exception as e:
             return {
@@ -878,12 +918,11 @@ class OnboardingService:
                 "error": str(e),
                 "database": settings.DB_NAME,
                 "host": settings.DB_HOST,
-                "port": settings.DB_PORT
+                "port": settings.DB_PORT,
             }
 
     async def complete_onboarding(
-        self,
-        notes: Optional[str] = None
+        self, notes: Optional[str] = None
     ) -> OnboardingStatus:
         """
         Mark onboarding as completed
@@ -928,17 +967,14 @@ class OnboardingService:
             event_data={
                 "organization": status.organization_name,
                 "admin_user": status.admin_username,
-                "enabled_modules": status.enabled_modules
-            }
+                "enabled_modules": status.enabled_modules,
+            },
         )
 
         return status
 
     async def _mark_step_completed(
-        self,
-        status: OnboardingStatus,
-        step_number: int,
-        step_name: str
+        self, status: OnboardingStatus, step_number: int, step_name: str
     ):
         """Mark a step as completed in onboarding status"""
         # Copy the dict so SQLAlchemy detects the JSON column mutation.
@@ -947,7 +983,7 @@ class OnboardingService:
         steps[step_name] = {
             "completed": True,
             "completed_at": datetime.now(UTC).isoformat(),
-            "step_number": step_number
+            "step_number": step_number,
         }
         status.steps_completed = steps
         status.current_step = step_number + 1
@@ -960,7 +996,7 @@ class OnboardingService:
             completed_at=datetime.now(UTC),
             current_step=len(self.STEPS),
             steps_completed={"legacy": True},
-            setup_notes="Auto-completed for existing installation"
+            setup_notes="Auto-completed for existing installation",
         )
         self.db.add(status)
         await self.db.flush()
@@ -975,7 +1011,7 @@ class OnboardingService:
                 "priority": "critical",
                 "documentation_link": "https://docs.the-logbook.org/security/tls",
                 "estimated_time_minutes": 60,
-                "sort_order": 1
+                "sort_order": 1,
             },
             {
                 "title": "Configure email notifications",
@@ -984,7 +1020,7 @@ class OnboardingService:
                 "priority": "high",
                 "documentation_link": "https://docs.the-logbook.org/configuration/email",
                 "estimated_time_minutes": 30,
-                "sort_order": 2
+                "sort_order": 2,
             },
             {
                 "title": "Set up automated backups",
@@ -993,7 +1029,7 @@ class OnboardingService:
                 "priority": "critical",
                 "documentation_link": "https://docs.the-logbook.org/deployment/backups",
                 "estimated_time_minutes": 45,
-                "sort_order": 3
+                "sort_order": 3,
             },
             {
                 "title": "Review HIPAA compliance checklist",
@@ -1002,7 +1038,7 @@ class OnboardingService:
                 "priority": "critical",
                 "documentation_link": "SECURITY.md#hipaa-compliance-checklist",
                 "estimated_time_minutes": 120,
-                "sort_order": 4
+                "sort_order": 4,
             },
             {
                 "title": "Enable multi-factor authentication",
@@ -1011,7 +1047,7 @@ class OnboardingService:
                 "priority": "high",
                 "documentation_link": "SECURITY.md#authentication--authorization",
                 "estimated_time_minutes": 15,
-                "sort_order": 5
+                "sort_order": 5,
             },
             {
                 "title": "Configure firewall rules",
@@ -1020,7 +1056,7 @@ class OnboardingService:
                 "priority": "critical",
                 "documentation_link": "https://docs.the-logbook.org/security/firewall",
                 "estimated_time_minutes": 90,
-                "sort_order": 6
+                "sort_order": 6,
             },
             {
                 "title": "Set up monitoring and alerting",
@@ -1029,7 +1065,7 @@ class OnboardingService:
                 "priority": "high",
                 "documentation_link": "https://docs.the-logbook.org/deployment/monitoring",
                 "estimated_time_minutes": 60,
-                "sort_order": 7
+                "sort_order": 7,
             },
             {
                 "title": "Train staff on security policies",
@@ -1038,7 +1074,7 @@ class OnboardingService:
                 "priority": "high",
                 "documentation_link": "SECURITY.md",
                 "estimated_time_minutes": 180,
-                "sort_order": 8
+                "sort_order": 8,
             },
             {
                 "title": "Test disaster recovery plan",
@@ -1047,7 +1083,7 @@ class OnboardingService:
                 "priority": "high",
                 "documentation_link": "https://docs.the-logbook.org/deployment/disaster-recovery",
                 "estimated_time_minutes": 120,
-                "sort_order": 9
+                "sort_order": 9,
             },
             {
                 "title": "Review and customize user roles",
@@ -1056,8 +1092,8 @@ class OnboardingService:
                 "priority": "medium",
                 "documentation_link": "https://docs.the-logbook.org/configuration/roles",
                 "estimated_time_minutes": 45,
-                "sort_order": 10
-            }
+                "sort_order": 10,
+            },
         ]
 
         for item_data in checklist_items:
@@ -1074,9 +1110,7 @@ class OnboardingService:
             List of checklist items sorted by priority and order
         """
         result = await self.db.execute(
-            select(OnboardingChecklistItem).order_by(
-                OnboardingChecklistItem.sort_order
-            )
+            select(OnboardingChecklistItem).order_by(OnboardingChecklistItem.sort_order)
         )
         return result.scalars().all()
 
@@ -1095,20 +1129,20 @@ class OnboardingService:
                 "type": "MySQL",
                 "host": settings.DB_HOST,
                 "port": settings.DB_PORT,
-                "name": settings.DB_NAME
+                "name": settings.DB_NAME,
             },
             "security": {
                 "password_min_length": settings.PASSWORD_MIN_LENGTH,
                 "mfa_available": True,
                 "session_timeout_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
                 "encryption": "AES-256",
-                "password_hashing": "Argon2id"
+                "password_hashing": "Argon2id",
             },
             "features": {
                 "hipaa_compliant": True,
                 "section_508_accessible": True,
                 "tamper_proof_logging": True,
                 "multi_factor_auth": True,
-                "role_based_access": True
-            }
+                "role_based_access": True,
+            },
         }

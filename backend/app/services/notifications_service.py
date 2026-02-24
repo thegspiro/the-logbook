@@ -5,20 +5,19 @@ Business logic for notification management including rules,
 sending, logging, and preferences.
 """
 
-from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from datetime import date, datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.notification import (
-    NotificationRule,
-    NotificationLog,
-    NotificationTrigger,
     NotificationCategory,
     NotificationChannel,
+    NotificationLog,
+    NotificationRule,
 )
-from app.models.user import User
 
 
 class NotificationsService:
@@ -37,9 +36,7 @@ class NotificationsService:
         """Create a new notification rule"""
         try:
             rule = NotificationRule(
-                organization_id=organization_id,
-                created_by=created_by,
-                **rule_data
+                organization_id=organization_id, created_by=created_by, **rule_data
             )
             self.db.add(rule)
             await self.db.commit()
@@ -57,9 +54,8 @@ class NotificationsService:
         search: Optional[str] = None,
     ) -> List[NotificationRule]:
         """Get notification rules with optional filtering"""
-        query = (
-            select(NotificationRule)
-            .where(NotificationRule.organization_id == str(organization_id))
+        query = select(NotificationRule).where(
+            NotificationRule.organization_id == str(organization_id)
         )
 
         if category:
@@ -73,7 +69,9 @@ class NotificationsService:
             query = query.where(NotificationRule.enabled == enabled)
 
         if search:
-            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
@@ -147,10 +145,7 @@ class NotificationsService:
     ) -> Tuple[Optional[NotificationLog], Optional[str]]:
         """Log a sent notification"""
         try:
-            log = NotificationLog(
-                organization_id=organization_id,
-                **log_data
-            )
+            log = NotificationLog(organization_id=organization_id, **log_data)
             self.db.add(log)
             await self.db.commit()
             await self.db.refresh(log)
@@ -167,9 +162,8 @@ class NotificationsService:
         limit: int = 100,
     ) -> Tuple[List[NotificationLog], int]:
         """Get notification logs with pagination"""
-        query = (
-            select(NotificationLog)
-            .where(NotificationLog.organization_id == str(organization_id))
+        query = select(NotificationLog).where(
+            NotificationLog.organization_id == str(organization_id)
         )
 
         if channel:
@@ -288,8 +282,9 @@ class NotificationsService:
         """Get notifications summary statistics"""
         # Total rules
         total_result = await self.db.execute(
-            select(func.count(NotificationRule.id))
-            .where(NotificationRule.organization_id == str(organization_id))
+            select(func.count(NotificationRule.id)).where(
+                NotificationRule.organization_id == str(organization_id)
+            )
         )
         total_rules = total_result.scalar() or 0
 
@@ -307,7 +302,10 @@ class NotificationsService:
             select(func.count(NotificationLog.id))
             .where(NotificationLog.organization_id == str(organization_id))
             .where(NotificationLog.channel == NotificationChannel.EMAIL)
-            .where(NotificationLog.sent_at >= datetime.combine(first_of_month, datetime.min.time()))
+            .where(
+                NotificationLog.sent_at
+                >= datetime.combine(first_of_month, datetime.min.time())
+            )
         )
         emails_this_month = email_result.scalar() or 0
 
@@ -315,7 +313,10 @@ class NotificationsService:
         total_notif_result = await self.db.execute(
             select(func.count(NotificationLog.id))
             .where(NotificationLog.organization_id == str(organization_id))
-            .where(NotificationLog.sent_at >= datetime.combine(first_of_month, datetime.min.time()))
+            .where(
+                NotificationLog.sent_at
+                >= datetime.combine(first_of_month, datetime.min.time())
+            )
         )
         notifications_this_month = total_notif_result.scalar() or 0
 

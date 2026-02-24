@@ -7,20 +7,20 @@ deactivate ranks through the admin settings UI.
 """
 
 from sqlalchemy import (
-    Column,
-    String,
-    Text,
-    Integer,
     Boolean,
+    Column,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
+    String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.sql import func
 
-from app.core.utils import generate_uuid
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class OperationalRank(Base):
@@ -47,8 +47,15 @@ class OperationalRank(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
     __table_args__ = (
         UniqueConstraint("organization_id", "rank_code", name="uq_ranks_org_code"),

@@ -4,42 +4,37 @@ Election Service
 Business logic for election management including elections, candidates, voting, and results.
 """
 
-from typing import List, Optional, Dict, Tuple
-from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError
-from uuid import UUID, uuid4
 import hashlib
 import hmac
 import os
 import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Tuple
+from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
-from app.models.election import (
-    Election,
-    Candidate,
-    Vote,
-    VotingToken,
-    ElectionStatus,
-)
-from app.models.user import User, Organization
+from loguru import logger
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.audit import log_audit_event
 from app.core.constants import (
+    ADMINISTRATIVE_ROLE_SLUGS,
     LEADERSHIP_ROLE_SLUGS,
     OPERATIONAL_ROLE_SLUGS,
-    ADMINISTRATIVE_ROLE_SLUGS,
 )
+from app.models.election import Candidate, Election, ElectionStatus, Vote, VotingToken
+from app.models.user import Organization, User
 from app.schemas.election import (
-    ElectionResults,
     CandidateResult,
-    PositionResults,
+    ElectionResults,
     ElectionStats,
+    PositionResults,
     VoterEligibility,
 )
 from app.services.email_service import EmailService
-from app.core.audit import log_audit_event
-from loguru import logger
 
 
 class ElectionService:
@@ -160,7 +155,9 @@ class ElectionService:
 
         # Get the user being checked in
         user_result = await self.db.execute(
-            select(User).where(User.id == str(user_id)).where(User.organization_id == str(organization_id))
+            select(User)
+            .where(User.id == str(user_id))
+            .where(User.organization_id == str(organization_id))
         )
         user = user_result.scalar_one_or_none()
         if not user:
@@ -186,12 +183,18 @@ class ElectionService:
         await self.db.commit()
         await self.db.refresh(election)
 
-        logger.info(f"Attendee checked in | election={election_id} user={user_id} by={checked_in_by}")
-        await self._audit("meeting_attendee_checked_in", {
-            "election_id": str(election_id),
-            "user_id": str(user_id),
-            "name": user.full_name,
-        }, user_id=str(checked_in_by))
+        logger.info(
+            f"Attendee checked in | election={election_id} user={user_id} by={checked_in_by}"
+        )
+        await self._audit(
+            "meeting_attendee_checked_in",
+            {
+                "election_id": str(election_id),
+                "user_id": str(user_id),
+                "name": user.full_name,
+            },
+            user_id=str(checked_in_by),
+        )
 
         return attendee_record, None
 
@@ -226,11 +229,17 @@ class ElectionService:
         election.attendees = attendees
         await self.db.commit()
 
-        logger.info(f"Attendee removed | election={election_id} user={user_id} by={removed_by}")
-        await self._audit("meeting_attendee_removed", {
-            "election_id": str(election_id),
-            "user_id": str(user_id),
-        }, user_id=str(removed_by))
+        logger.info(
+            f"Attendee removed | election={election_id} user={user_id} by={removed_by}"
+        )
+        await self._audit(
+            "meeting_attendee_removed",
+            {
+                "election_id": str(election_id),
+                "user_id": str(user_id),
+            },
+            user_id=str(removed_by),
+        )
 
         return True, None
 
@@ -341,7 +350,11 @@ class ElectionService:
         ]
 
     async def check_voter_eligibility(
-        self, user_id: UUID, election_id: UUID, organization_id: UUID, position: Optional[str] = None
+        self,
+        user_id: UUID,
+        election_id: UUID,
+        organization_id: UUID,
+        position: Optional[str] = None,
     ) -> VoterEligibility:
         """
         Check if a user is eligible to vote in an election and if they've already voted
@@ -365,8 +378,16 @@ class ElectionService:
 
         # Check if election is open
         now = datetime.now(timezone.utc)
-        start = election.start_date.replace(tzinfo=timezone.utc) if election.start_date and election.start_date.tzinfo is None else election.start_date
-        end = election.end_date.replace(tzinfo=timezone.utc) if election.end_date and election.end_date.tzinfo is None else election.end_date
+        start = (
+            election.start_date.replace(tzinfo=timezone.utc)
+            if election.start_date and election.start_date.tzinfo is None
+            else election.start_date
+        )
+        end = (
+            election.end_date.replace(tzinfo=timezone.utc)
+            if election.end_date and election.end_date.tzinfo is None
+            else election.end_date
+        )
         if election.status != ElectionStatus.OPEN:
             return VoterEligibility(
                 is_eligible=False,
@@ -428,8 +449,7 @@ class ElectionService:
         _has_override = False
         if election.voter_overrides:
             _has_override = any(
-                o.get("user_id") == str(user_id)
-                for o in election.voter_overrides
+                o.get("user_id") == str(user_id) for o in election.voter_overrides
             )
 
         # ---- Membership tier voting rules ----
@@ -461,7 +481,10 @@ class ElectionService:
                     min_pct = benefits.get("voting_min_attendance_pct", 0.0)
                     period = benefits.get("voting_attendance_period_months", 12)
                     if min_pct > 0:
-                        from app.services.membership_tier_service import MembershipTierService
+                        from app.services.membership_tier_service import (
+                            MembershipTierService,
+                        )
+
                         tier_svc = MembershipTierService(self.db)
                         actual_pct = await tier_svc.get_meeting_attendance_pct(
                             user_id=str(user_id),
@@ -497,7 +520,8 @@ class ElectionService:
         # Check ballot item eligibility (member class + attendance)
         if position and election.ballot_items:
             matching_items = [
-                item for item in election.ballot_items
+                item
+                for item in election.ballot_items
                 if item.get("position") == position or item.get("title") == position
             ]
             for item in matching_items:
@@ -543,11 +567,15 @@ class ElectionService:
             )
         existing_votes = vote_result.scalars().all()
 
-        positions_voted = list(set(vote.position for vote in existing_votes if vote.position))
+        positions_voted = list(
+            set(vote.position for vote in existing_votes if vote.position)
+        )
 
         # Determine remaining positions
         all_positions = election.positions or []
-        positions_remaining = [pos for pos in all_positions if pos not in positions_voted]
+        positions_remaining = [
+            pos for pos in all_positions if pos not in positions_voted
+        ]
 
         # If all positions are voted or no positions defined, check if they've voted at all
         has_voted = len(existing_votes) > 0
@@ -587,7 +615,9 @@ class ElectionService:
         Returns: (Vote object, error message)
         """
         # Check eligibility
-        eligibility = await self.check_voter_eligibility(user_id, election_id, organization_id)
+        eligibility = await self.check_voter_eligibility(
+            user_id, election_id, organization_id
+        )
 
         # Get election for further checks
         result = await self.db.execute(
@@ -629,7 +659,11 @@ class ElectionService:
 
         # Check max votes per position
         if position:
-            position_votes = [v for v in await self._get_user_votes(user_id, election_id, election) if v.position == position]
+            position_votes = [
+                v
+                for v in await self._get_user_votes(user_id, election_id, election)
+                if v.position == position
+            ]
             if len(position_votes) >= election.max_votes_per_position:
                 return None, f"Maximum votes for {position} reached"
 
@@ -638,7 +672,13 @@ class ElectionService:
             election_id=election_id,
             candidate_id=candidate_id,
             voter_id=user_id if not election.anonymous_voting else None,
-            voter_hash=self._generate_voter_hash(user_id, election_id, election.voter_anonymity_salt or "") if election.anonymous_voting else None,
+            voter_hash=(
+                self._generate_voter_hash(
+                    user_id, election_id, election.voter_anonymity_salt or ""
+                )
+                if election.anonymous_voting
+                else None
+            ),
             position=position,
             vote_rank=vote_rank,
             ip_address=ip_address,
@@ -663,26 +703,43 @@ class ElectionService:
                 "Double-vote attempt blocked by DB constraint | "
                 f"election={election_id} position={position} anonymous={election.anonymous_voting}"
             )
-            await self._audit("vote_double_attempt", {
-                "election_id": str(election_id),
-                "position": position,
-                "anonymous": election.anonymous_voting,
-            }, severity="warning", user_id=str(user_id), ip_address=ip_address)
+            await self._audit(
+                "vote_double_attempt",
+                {
+                    "election_id": str(election_id),
+                    "position": position,
+                    "anonymous": election.anonymous_voting,
+                },
+                severity="warning",
+                user_id=str(user_id),
+                ip_address=ip_address,
+            )
             if position:
-                return None, f"Database integrity check: You have already voted for {position}"
-            return None, "Database integrity check: You have already voted in this election"
+                return (
+                    None,
+                    f"Database integrity check: You have already voted for {position}",
+                )
+            return (
+                None,
+                "Database integrity check: You have already voted in this election",
+            )
 
         # Audit & log the successful vote
         logger.info(
             f"Vote cast | election={election_id} position={position} "
             f"anonymous={election.anonymous_voting} vote_id={vote.id}"
         )
-        await self._audit("vote_cast", {
-            "election_id": str(election_id),
-            "vote_id": str(vote.id),
-            "position": position,
-            "anonymous": election.anonymous_voting,
-        }, user_id=str(user_id), ip_address=ip_address)
+        await self._audit(
+            "vote_cast",
+            {
+                "election_id": str(election_id),
+                "vote_id": str(vote.id),
+                "position": position,
+                "anonymous": election.anonymous_voting,
+            },
+            user_id=str(user_id),
+            ip_address=ip_address,
+        )
 
         return vote, None
 
@@ -789,15 +846,21 @@ class ElectionService:
                 f"tampered={len(tampered)} ids={tampered}"
             )
         else:
-            logger.info(f"Vote integrity check PASS | election={election_id} total={total}")
+            logger.info(
+                f"Vote integrity check PASS | election={election_id} total={total}"
+            )
 
-        await self._audit("vote_integrity_check", {
-            "election_id": str(election_id),
-            "total_votes": total,
-            "valid_signatures": valid,
-            "tampered_votes": len(tampered),
-            "integrity_status": integrity_status,
-        }, severity="critical" if tampered else "info")
+        await self._audit(
+            "vote_integrity_check",
+            {
+                "election_id": str(election_id),
+                "total_votes": total,
+                "valid_signatures": valid,
+                "tampered_votes": len(tampered),
+                "integrity_status": integrity_status,
+            },
+            severity="critical" if tampered else "info",
+        )
 
         return {
             "election_id": str(election_id),
@@ -830,11 +893,16 @@ class ElectionService:
             f"Vote soft-deleted | vote={vote_id} election={vote.election_id} "
             f"by={deleted_by} reason={reason!r}"
         )
-        await self._audit("vote_soft_deleted", {
-            "vote_id": str(vote_id),
-            "election_id": str(vote.election_id),
-            "reason": reason,
-        }, severity="warning", user_id=str(deleted_by))
+        await self._audit(
+            "vote_soft_deleted",
+            {
+                "vote_id": str(vote_id),
+                "election_id": str(vote.election_id),
+                "reason": reason,
+            },
+            severity="warning",
+            user_id=str(deleted_by),
+        )
 
         return vote
 
@@ -889,8 +957,7 @@ class ElectionService:
 
         # 3. Voting token access logs
         token_result = await self.db.execute(
-            select(VotingToken)
-            .where(VotingToken.election_id == str(election_id))
+            select(VotingToken).where(VotingToken.election_id == str(election_id))
         )
         tokens = token_result.scalars().all()
 
@@ -899,7 +966,9 @@ class ElectionService:
                 "token_id": str(t.id),
                 "used": t.used,
                 "used_at": t.used_at.isoformat() if t.used_at else None,
-                "first_accessed_at": t.first_accessed_at.isoformat() if t.first_accessed_at else None,
+                "first_accessed_at": (
+                    t.first_accessed_at.isoformat() if t.first_accessed_at else None
+                ),
                 "access_count": t.access_count,
                 "positions_voted": t.positions_voted,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
@@ -945,19 +1014,28 @@ class ElectionService:
             ip_vote_counts[ip] = ip_vote_counts.get(ip, 0) + 1
 
         # Flag IPs with suspiciously high vote counts (> 5 from same IP)
-        suspicious_ips = {ip: count for ip, count in ip_vote_counts.items() if count > 5 and ip != "unknown"}
+        suspicious_ips = {
+            ip: count
+            for ip, count in ip_vote_counts.items()
+            if count > 5 and ip != "unknown"
+        }
 
         # 6. Voting timeline (votes per hour)
         voting_timeline: Dict[str, int] = {}
         for v in active_votes:
-            hour_key = v.voted_at.strftime("%Y-%m-%d %H:00") if v.voted_at else "unknown"
+            hour_key = (
+                v.voted_at.strftime("%Y-%m-%d %H:00") if v.voted_at else "unknown"
+            )
             voting_timeline[hour_key] = voting_timeline.get(hour_key, 0) + 1
 
         logger.info(f"Forensics report generated | election={election_id}")
-        await self._audit("forensics_report_generated", {
-            "election_id": str(election_id),
-            "title": election.title,
-        })
+        await self._audit(
+            "forensics_report_generated",
+            {
+                "election_id": str(election_id),
+                "title": election.title,
+            },
+        )
 
         # 7. Proxy voting summary
         proxy_votes = [v for v in active_votes if v.is_proxy_vote]
@@ -979,39 +1057,33 @@ class ElectionService:
             "election_status": election.status.value,
             "anonymous_voting": election.anonymous_voting,
             "voting_method": election.voting_method,
-            "created_at": election.created_at.isoformat() if election.created_at else None,
-
+            "created_at": (
+                election.created_at.isoformat() if election.created_at else None
+            ),
             "vote_integrity": integrity,
-
             "deleted_votes": {
                 "count": len(deleted_records),
                 "records": deleted_records,
             },
-
             "rollback_history": election.rollback_history or [],
-
             "voting_tokens": {
                 "total_issued": len(token_records),
                 "total_used": sum(1 for t in token_records if t["used"]),
                 "records": token_records,
             },
-
             "audit_log": {
                 "total_entries": len(audit_records),
                 "entries": audit_records,
             },
-
             "anomaly_detection": {
                 "suspicious_ips": suspicious_ips,
                 "ip_vote_distribution": ip_vote_counts,
             },
-
             "proxy_voting": {
                 "authorizations": election.proxy_authorizations or [],
                 "total_proxy_votes": len(proxy_vote_records),
                 "proxy_votes": proxy_vote_records,
             },
-
             "voting_timeline": voting_timeline,
         }
 
@@ -1049,13 +1121,16 @@ class ElectionService:
         # SECURITY: Check if results can be viewed
         # Results are ONLY visible after the election closing time has passed
         current_time = datetime.now(timezone.utc)
-        end_date = election.end_date.replace(tzinfo=timezone.utc) if election.end_date and election.end_date.tzinfo is None else election.end_date
+        end_date = (
+            election.end_date.replace(tzinfo=timezone.utc)
+            if election.end_date and election.end_date.tzinfo is None
+            else election.end_date
+        )
         election_has_closed = end_date is not None and current_time > end_date
 
         can_view = (
-            (election.status == ElectionStatus.CLOSED and election_has_closed)
-            or election.results_visible_immediately
-        )
+            election.status == ElectionStatus.CLOSED and election_has_closed
+        ) or election.results_visible_immediately
 
         if not can_view:
             # Before closing: use get_election_stats() for ballot counts only
@@ -1071,8 +1146,7 @@ class ElectionService:
 
         # Get all candidates
         candidates_result = await self.db.execute(
-            select(Candidate)
-            .where(Candidate.election_id == str(election_id))
+            select(Candidate).where(Candidate.election_id == str(election_id))
         )
         candidates = candidates_result.scalars().all()
 
@@ -1095,7 +1169,9 @@ class ElectionService:
             unique_voters = len(set(v.voter_id for v in all_votes if v.voter_id))
 
         # Calculate turnout
-        voter_turnout = (unique_voters / total_eligible * 100) if total_eligible > 0 else 0
+        voter_turnout = (
+            (unique_voters / total_eligible * 100) if total_eligible > 0 else 0
+        )
 
         # Calculate results by position
         results_by_position = []
@@ -1117,7 +1193,9 @@ class ElectionService:
                 )
 
         # Overall results (all candidates regardless of position)
-        overall_results = await self._calculate_candidate_results(candidates, all_votes, election, total_eligible)
+        overall_results = await self._calculate_candidate_results(
+            candidates, all_votes, election, total_eligible
+        )
 
         return ElectionResults(
             election_id=election.id,
@@ -1131,7 +1209,11 @@ class ElectionService:
         )
 
     async def _calculate_candidate_results(
-        self, candidates: List[Candidate], votes: List[Vote], election: Election, total_eligible: int
+        self,
+        candidates: List[Candidate],
+        votes: List[Vote],
+        election: Election,
+        total_eligible: int,
     ) -> List[CandidateResult]:
         """
         Calculate results for a list of candidates based on configured voting method
@@ -1147,7 +1229,9 @@ class ElectionService:
             List of CandidateResult objects with winner flags set
         """
         if election.voting_method == "ranked_choice":
-            return self._calculate_ranked_choice_results(candidates, votes, election, total_eligible)
+            return self._calculate_ranked_choice_results(
+                candidates, votes, election, total_eligible
+            )
 
         # Standard counting for simple_majority, approval, and supermajority
         # For approval voting, every vote counts equally (no ranking)
@@ -1219,7 +1303,11 @@ class ElectionService:
         return results
 
     def _calculate_ranked_choice_results(
-        self, candidates: List[Candidate], votes: List[Vote], election: Election, total_eligible: int
+        self,
+        candidates: List[Candidate],
+        votes: List[Vote],
+        election: Election,
+        total_eligible: int,
     ) -> List[CandidateResult]:
         """
         Instant-runoff voting (ranked-choice) calculation.
@@ -1283,7 +1371,9 @@ class ElectionService:
             # Eliminate candidate with fewest votes
             min_count = min(round_counts.values())
             # Get all candidates tied at the bottom
-            bottom_candidates = [cid for cid, count in round_counts.items() if count == min_count]
+            bottom_candidates = [
+                cid for cid, count in round_counts.items() if count == min_count
+            ]
             # Eliminate the first one (stable tie-breaking by ID)
             eliminated = sorted(bottom_candidates)[0]
             active_candidates.discard(eliminated)
@@ -1351,8 +1441,7 @@ class ElectionService:
 
         # Get all candidates
         candidates_result = await self.db.execute(
-            select(Candidate)
-            .where(Candidate.election_id == str(election_id))
+            select(Candidate).where(Candidate.election_id == str(election_id))
         )
         total_candidates = len(candidates_result.scalars().all())
 
@@ -1374,13 +1463,17 @@ class ElectionService:
             unique_voters = len(set(v.voter_id for v in all_votes if v.voter_id))
 
         # Calculate turnout
-        voter_turnout = (unique_voters / total_eligible * 100) if total_eligible > 0 else 0
+        voter_turnout = (
+            (unique_voters / total_eligible * 100) if total_eligible > 0 else 0
+        )
 
         # Votes by position
         votes_by_position = {}
         for vote in all_votes:
             if vote.position:
-                votes_by_position[vote.position] = votes_by_position.get(vote.position, 0) + 1
+                votes_by_position[vote.position] = (
+                    votes_by_position.get(vote.position, 0) + 1
+                )
 
         return ElectionStats(
             election_id=election.id,
@@ -1398,9 +1491,7 @@ class ElectionService:
     ) -> Optional[Election]:
         """Check if a runoff is needed and create it if so"""
         # Get results to check if there's a winner
-        results = await self.get_election_results(
-            election.id, organization_id
-        )
+        results = await self.get_election_results(election.id, organization_id)
 
         if not results:
             return None
@@ -1442,13 +1533,15 @@ class ElectionService:
 
         candidate_vote_counts = {}
         for vote in all_votes:
-            candidate_vote_counts[vote.candidate_id] = candidate_vote_counts.get(vote.candidate_id, 0) + 1
+            candidate_vote_counts[vote.candidate_id] = (
+                candidate_vote_counts.get(vote.candidate_id, 0) + 1
+            )
 
         # Sort candidates by vote count
         sorted_candidates = sorted(
             all_candidates,
             key=lambda c: candidate_vote_counts.get(c.id, 0),
-            reverse=True
+            reverse=True,
         )
 
         # Determine which candidates advance to runoff based on runoff_type
@@ -1463,7 +1556,9 @@ class ElectionService:
             advancing_candidates = sorted_candidates[:2]
 
         # Create runoff election
-        runoff_start = datetime.now(timezone.utc) + timedelta(hours=1)  # Start 1 hour from now
+        runoff_start = datetime.now(timezone.utc) + timedelta(
+            hours=1
+        )  # Start 1 hour from now
         runoff_end = runoff_start + timedelta(days=1)  # 1 day duration by default
 
         runoff_election = Election(
@@ -1545,24 +1640,35 @@ class ElectionService:
         await self.db.commit()
         await self.db.refresh(election)
 
-        logger.info(f"Election closed | election={election_id} title={election.title!r}")
-        await self._audit("election_closed", {
-            "election_id": str(election_id),
-            "title": election.title,
-        })
+        logger.info(
+            f"Election closed | election={election_id} title={election.title!r}"
+        )
+        await self._audit(
+            "election_closed",
+            {
+                "election_id": str(election_id),
+                "title": election.title,
+            },
+        )
 
         # Check if runoffs are enabled and if we should create one
-        if election.enable_runoffs and election.runoff_round < election.max_runoff_rounds:
+        if (
+            election.enable_runoffs
+            and election.runoff_round < election.max_runoff_rounds
+        ):
             runoff = await self._check_and_create_runoff(election, organization_id)
             if runoff:
                 logger.info(
                     f"Runoff created | parent={election_id} runoff={runoff.id} round={runoff.runoff_round}"
                 )
-                await self._audit("runoff_election_created", {
-                    "parent_election_id": str(election_id),
-                    "runoff_election_id": str(runoff.id),
-                    "runoff_round": runoff.runoff_round,
-                })
+                await self._audit(
+                    "runoff_election_created",
+                    {
+                        "parent_election_id": str(election_id),
+                        "runoff_election_id": str(runoff.id),
+                        "runoff_round": runoff.runoff_round,
+                    },
+                )
 
         return election
 
@@ -1598,12 +1704,17 @@ class ElectionService:
         await self.db.commit()
         await self.db.refresh(election)
 
-        logger.info(f"Election opened | election={election_id} title={election.title!r}")
-        await self._audit("election_opened", {
-            "election_id": str(election_id),
-            "title": election.title,
-            "candidate_count": candidate_count,
-        })
+        logger.info(
+            f"Election opened | election={election_id} title={election.title!r}"
+        )
+        await self._audit(
+            "election_opened",
+            {
+                "election_id": str(election_id),
+                "title": election.title,
+                "candidate_count": candidate_count,
+            },
+        )
 
         return election, None
 
@@ -1672,13 +1783,18 @@ class ElectionService:
             f"Election rolled back | election={election_id} "
             f"{from_status} -> {to_status} by={performed_by} reason={reason!r}"
         )
-        await self._audit("election_rollback", {
-            "election_id": str(election_id),
-            "title": election.title,
-            "from_status": from_status,
-            "to_status": to_status,
-            "reason": reason,
-        }, severity="warning", user_id=str(performed_by))
+        await self._audit(
+            "election_rollback",
+            {
+                "election_id": str(election_id),
+                "title": election.title,
+                "from_status": from_status,
+                "to_status": to_status,
+                "reason": reason,
+            },
+            severity="warning",
+            user_id=str(performed_by),
+        )
 
         # Send email notifications to leadership
         notifications_sent = await self._notify_leadership_of_rollback(
@@ -1722,7 +1838,8 @@ class ElectionService:
 
         # Filter to leadership users
         leadership_users = [
-            user for user in all_users
+            user
+            for user in all_users
             if any(role.slug in leadership_roles for role in user.roles)
         ]
 
@@ -1731,16 +1848,14 @@ class ElectionService:
 
         # Get the user who performed the rollback
         performer_result = await self.db.execute(
-            select(User)
-            .where(User.id == str(performed_by))
+            select(User).where(User.id == str(performed_by))
         )
         performer = performer_result.scalar_one_or_none()
         performer_name = performer.full_name if performer else "Unknown"
 
         # Get organization for email service
         org_result = await self.db.execute(
-            select(Organization)
-            .where(Organization.id == str(organization_id))
+            select(Organization).where(Organization.id == str(organization_id))
         )
         organization = org_result.scalar_one_or_none()
 
@@ -1752,6 +1867,7 @@ class ElectionService:
 
         # HTML-escape user-supplied data to prevent injection in emails
         import html
+
         safe_title = html.escape(election.title)
         safe_performer = html.escape(performer_name)
         safe_reason = html.escape(reason)
@@ -1857,7 +1973,9 @@ Best regards,
                 if success_count_user > 0:
                     sent_count += 1
             except Exception as e:
-                logger.error(f"Failed to send rollback notification to {user.email}: {e}")
+                logger.error(
+                    f"Failed to send rollback notification to {user.email}: {e}"
+                )
                 continue
 
         return sent_count
@@ -1892,7 +2010,8 @@ Best regards,
         all_users = users_result.scalars().all()
 
         leadership_users = [
-            user for user in all_users
+            user
+            for user in all_users
             if any(role.slug in leadership_roles for role in user.roles)
         ]
 
@@ -1916,6 +2035,7 @@ Best regards,
         email_service = EmailService(organization)
 
         import html
+
         safe_title = html.escape(election.title)
         safe_performer = html.escape(performer_name)
         safe_reason = html.escape(reason)
@@ -2019,14 +2139,20 @@ Best regards,
                 if success_count_user > 0:
                     sent_count += 1
             except Exception as e:
-                logger.error(f"Failed to send deletion notification to {user.email}: {e}")
+                logger.error(
+                    f"Failed to send deletion notification to {user.email}: {e}"
+                )
                 continue
 
         return sent_count
 
     async def _generate_voting_token(
-        self, user_id: UUID, election_id: UUID, organization_id: UUID,
-        election_end_date: datetime, anonymity_salt: str = "",
+        self,
+        user_id: UUID,
+        election_id: UUID,
+        organization_id: UUID,
+        election_end_date: datetime,
+        anonymity_salt: str = "",
     ) -> VotingToken:
         """
         Generate a secure voting token for a user-election pair
@@ -2049,7 +2175,11 @@ Best regards,
 
         # Token expires when election ends (or 30 days if election is longer)
         max_expiry = datetime.now(timezone.utc) + timedelta(days=30)
-        end_for_expiry = election_end_date.replace(tzinfo=timezone.utc) if election_end_date and election_end_date.tzinfo is None else election_end_date
+        end_for_expiry = (
+            election_end_date.replace(tzinfo=timezone.utc)
+            if election_end_date and election_end_date.tzinfo is None
+            else election_end_date
+        )
         expires_at = min(end_for_expiry, max_expiry) if end_for_expiry else max_expiry
 
         voting_token = VotingToken(
@@ -2072,7 +2202,9 @@ Best regards,
 
     def _is_proxy_voting_enabled(self, organization: "Organization") -> bool:
         """Check if the organization has opted in to proxy voting."""
-        return (organization.settings or {}).get("proxy_voting", {}).get("enabled", False)
+        return (
+            (organization.settings or {}).get("proxy_voting", {}).get("enabled", False)
+        )
 
     async def add_proxy_authorization(
         self,
@@ -2112,18 +2244,29 @@ Best regards,
             return None, "A member cannot be their own proxy"
 
         # Verify both users exist in the same org
-        for uid, label in [(delegating_user_id, "Delegating member"), (proxy_user_id, "Proxy member")]:
+        for uid, label in [
+            (delegating_user_id, "Delegating member"),
+            (proxy_user_id, "Proxy member"),
+        ]:
             u_result = await self.db.execute(
-                select(User).where(User.id == str(uid)).where(User.organization_id == str(organization_id))
+                select(User)
+                .where(User.id == str(uid))
+                .where(User.organization_id == str(organization_id))
             )
             if not u_result.scalar_one_or_none():
                 return None, f"{label} not found"
 
-        delegating_result = await self.db.execute(select(User).where(User.id == str(delegating_user_id)))
+        delegating_result = await self.db.execute(
+            select(User).where(User.id == str(delegating_user_id))
+        )
         delegating_user = delegating_result.scalar_one()
-        proxy_result = await self.db.execute(select(User).where(User.id == str(proxy_user_id)))
+        proxy_result = await self.db.execute(
+            select(User).where(User.id == str(proxy_user_id))
+        )
         proxy_user = proxy_result.scalar_one()
-        auth_result = await self.db.execute(select(User).where(User.id == str(authorized_by)))
+        auth_result = await self.db.execute(
+            select(User).where(User.id == str(authorized_by))
+        )
         authorizer = auth_result.scalar_one_or_none()
         if not authorizer:
             return None, "Authorizing user not found"
@@ -2132,8 +2275,13 @@ Best regards,
 
         # Prevent duplicate active authorization for the same delegating member
         for auth in authorizations:
-            if auth.get("delegating_user_id") == str(delegating_user_id) and not auth.get("revoked_at"):
-                return None, f"{delegating_user.full_name} already has an active proxy authorization for this election"
+            if auth.get("delegating_user_id") == str(
+                delegating_user_id
+            ) and not auth.get("revoked_at"):
+                return (
+                    None,
+                    f"{delegating_user.full_name} already has an active proxy authorization for this election",
+                )
 
         auth_record = {
             "id": str(uuid4()),
@@ -2153,16 +2301,21 @@ Best regards,
 
         await self.db.commit()
 
-        await self._audit("proxy_authorization_granted", {
-            "election_id": str(election_id),
-            "election_title": election.title,
-            "delegating_user_id": str(delegating_user_id),
-            "delegating_user_name": delegating_user.full_name,
-            "proxy_user_id": str(proxy_user_id),
-            "proxy_user_name": proxy_user.full_name,
-            "proxy_type": proxy_type,
-            "reason": reason,
-        }, severity="warning", user_id=str(authorized_by))
+        await self._audit(
+            "proxy_authorization_granted",
+            {
+                "election_id": str(election_id),
+                "election_title": election.title,
+                "delegating_user_id": str(delegating_user_id),
+                "delegating_user_name": delegating_user.full_name,
+                "proxy_user_id": str(proxy_user_id),
+                "proxy_user_name": proxy_user.full_name,
+                "proxy_type": proxy_type,
+                "reason": reason,
+            },
+            severity="warning",
+            user_id=str(authorized_by),
+        )
 
         logger.info(
             f"Proxy authorization granted | election={election_id} "
@@ -2204,7 +2357,10 @@ Best regards,
                     .where(Vote.deleted_at.is_(None))
                 )
                 if vote_result.scalar_one_or_none():
-                    return False, "Cannot revoke — the proxy has already cast a vote using this authorization"
+                    return (
+                        False,
+                        "Cannot revoke — the proxy has already cast a vote using this authorization",
+                    )
 
                 auth["revoked_at"] = datetime.now(timezone.utc).isoformat()
                 found = True
@@ -2216,10 +2372,15 @@ Best regards,
         election.proxy_authorizations = authorizations
         await self.db.commit()
 
-        await self._audit("proxy_authorization_revoked", {
-            "election_id": str(election_id),
-            "authorization_id": authorization_id,
-        }, severity="info", user_id=str(revoked_by))
+        await self._audit(
+            "proxy_authorization_revoked",
+            {
+                "election_id": str(election_id),
+                "authorization_id": authorization_id,
+            },
+            severity="info",
+            user_id=str(revoked_by),
+        )
 
         return True, None
 
@@ -2255,7 +2416,8 @@ Best regards,
         """Return all active (non-revoked) proxy authorizations where this user is the proxy."""
         auths = election.proxy_authorizations or []
         return [
-            a for a in auths
+            a
+            for a in auths
             if a.get("proxy_user_id") == proxy_user_id and not a.get("revoked_at")
         ]
 
@@ -2344,9 +2506,13 @@ Best regards,
             election_id=election_id,
             candidate_id=candidate_id,
             voter_id=delegating_user_id if not election.anonymous_voting else None,
-            voter_hash=self._generate_voter_hash(
-                delegating_user_id, election_id, election.voter_anonymity_salt or ""
-            ) if election.anonymous_voting else None,
+            voter_hash=(
+                self._generate_voter_hash(
+                    delegating_user_id, election_id, election.voter_anonymity_salt or ""
+                )
+                if election.anonymous_voting
+                else None
+            ),
             position=position,
             vote_rank=vote_rank,
             ip_address=ip_address,
@@ -2369,28 +2535,43 @@ Best regards,
                 f"Proxy double-vote attempt blocked | election={election_id} "
                 f"delegating={delegating_user_id} proxy={proxy_user_id}"
             )
-            await self._audit("proxy_vote_double_attempt", {
-                "election_id": str(election_id),
-                "delegating_user_id": str(delegating_user_id),
-                "proxy_user_id": str(proxy_user_id),
-                "authorization_id": proxy_authorization_id,
-            }, severity="warning", user_id=str(proxy_user_id), ip_address=ip_address)
-            return None, "Database integrity check: the delegating member has already voted"
+            await self._audit(
+                "proxy_vote_double_attempt",
+                {
+                    "election_id": str(election_id),
+                    "delegating_user_id": str(delegating_user_id),
+                    "proxy_user_id": str(proxy_user_id),
+                    "authorization_id": proxy_authorization_id,
+                },
+                severity="warning",
+                user_id=str(proxy_user_id),
+                ip_address=ip_address,
+            )
+            return (
+                None,
+                "Database integrity check: the delegating member has already voted",
+            )
 
         logger.info(
             f"Proxy vote cast | election={election_id} position={position} "
             f"delegating={delegating_user_id} proxy={proxy_user_id} "
             f"auth={proxy_authorization_id} vote_id={vote.id}"
         )
-        await self._audit("proxy_vote_cast", {
-            "election_id": str(election_id),
-            "vote_id": str(vote.id),
-            "position": position,
-            "delegating_user_id": str(delegating_user_id),
-            "proxy_user_id": str(proxy_user_id),
-            "authorization_id": proxy_authorization_id,
-            "anonymous": election.anonymous_voting,
-        }, severity="info", user_id=str(proxy_user_id), ip_address=ip_address)
+        await self._audit(
+            "proxy_vote_cast",
+            {
+                "election_id": str(election_id),
+                "vote_id": str(vote.id),
+                "position": position,
+                "delegating_user_id": str(delegating_user_id),
+                "proxy_user_id": str(proxy_user_id),
+                "authorization_id": proxy_authorization_id,
+                "anonymous": election.anonymous_voting,
+            },
+            severity="info",
+            user_id=str(proxy_user_id),
+            ip_address=ip_address,
+        )
 
         return vote, None
 
@@ -2457,7 +2638,7 @@ Best regards,
         # Build a lookup of delegating_user_id -> proxy user email
         # so we can CC the proxy holder on ballot notifications
         proxy_cc_map: Dict[str, str] = {}
-        for auth in (election.proxy_authorizations or []):
+        for auth in election.proxy_authorizations or []:
             if not auth.get("revoked_at"):
                 proxy_uid = auth.get("proxy_user_id")
                 delegating_uid = auth.get("delegating_user_id")
@@ -2484,7 +2665,11 @@ Best regards,
             )
 
             # Build unique ballot URL with token
-            ballot_url = f"{base_ballot_url}?token={voting_token.token}" if base_ballot_url else None
+            ballot_url = (
+                f"{base_ballot_url}?token={voting_token.token}"
+                if base_ballot_url
+                else None
+            )
 
             # If this voter has a proxy, CC the proxy holder
             cc_email = proxy_cc_map.get(str(recipient.id))
@@ -2517,12 +2702,15 @@ Best regards,
             f"Ballot emails sent | election={election_id} "
             f"success={success_count} failed={failed_count}"
         )
-        await self._audit("ballot_emails_sent", {
-            "election_id": str(election_id),
-            "title": election.title,
-            "recipients": success_count,
-            "failed": failed_count,
-        })
+        await self._audit(
+            "ballot_emails_sent",
+            {
+                "election_id": str(election_id),
+                "title": election.title,
+                "recipients": success_count,
+                "failed": failed_count,
+            },
+        )
 
         return success_count, failed_count
 
@@ -2560,8 +2748,7 @@ Best regards,
         """
         # Find the voting token
         result = await self.db.execute(
-            select(VotingToken)
-            .where(VotingToken.token == token)
+            select(VotingToken).where(VotingToken.token == token)
         )
         voting_token = result.scalar_one_or_none()
 
@@ -2569,7 +2756,11 @@ Best regards,
             return None, None, "Invalid voting token"
 
         # Check if token has expired
-        token_exp = voting_token.expires_at.replace(tzinfo=timezone.utc) if voting_token.expires_at.tzinfo is None else voting_token.expires_at
+        token_exp = (
+            voting_token.expires_at.replace(tzinfo=timezone.utc)
+            if voting_token.expires_at.tzinfo is None
+            else voting_token.expires_at
+        )
         if datetime.now(timezone.utc) > token_exp:
             return None, None, "Voting token has expired"
 
@@ -2585,8 +2776,7 @@ Best regards,
 
         # Get the election
         election_result = await self.db.execute(
-            select(Election)
-            .where(Election.id == voting_token.election_id)
+            select(Election).where(Election.id == voting_token.election_id)
         )
         election = election_result.scalar_one_or_none()
 
@@ -2595,8 +2785,16 @@ Best regards,
 
         # Check if election is still open
         now = datetime.now(timezone.utc)
-        start = election.start_date.replace(tzinfo=timezone.utc) if election.start_date and election.start_date.tzinfo is None else election.start_date
-        end = election.end_date.replace(tzinfo=timezone.utc) if election.end_date and election.end_date.tzinfo is None else election.end_date
+        start = (
+            election.start_date.replace(tzinfo=timezone.utc)
+            if election.start_date and election.start_date.tzinfo is None
+            else election.start_date
+        )
+        end = (
+            election.end_date.replace(tzinfo=timezone.utc)
+            if election.end_date and election.end_date.tzinfo is None
+            else election.end_date
+        )
         if election.status != ElectionStatus.OPEN:
             return None, None, f"Election is {election.status.value}"
 
@@ -2657,7 +2855,11 @@ Best regards,
         existing_votes = existing_votes_result.scalars().all()
 
         if existing_votes:
-            return None, f"You have already voted for {position}" if position else "You have already voted"
+            return None, (
+                f"You have already voted for {position}"
+                if position
+                else "You have already voted"
+            )
 
         # Check max votes per position
         if position:
@@ -2712,22 +2914,37 @@ Best regards,
             logger.warning(
                 f"Token double-vote attempt blocked | election={election.id} position={position}"
             )
-            await self._audit("vote_double_attempt_token", {
-                "election_id": str(election.id),
-                "position": position,
-            }, severity="warning", ip_address=ip_address)
+            await self._audit(
+                "vote_double_attempt_token",
+                {
+                    "election_id": str(election.id),
+                    "position": position,
+                },
+                severity="warning",
+                ip_address=ip_address,
+            )
             if position:
-                return None, f"Database integrity check: You have already voted for {position}"
-            return None, "Database integrity check: You have already voted in this election"
+                return (
+                    None,
+                    f"Database integrity check: You have already voted for {position}",
+                )
+            return (
+                None,
+                "Database integrity check: You have already voted in this election",
+            )
 
         logger.info(
             f"Token vote cast | election={election.id} position={position} vote_id={vote.id}"
         )
-        await self._audit("vote_cast_token", {
-            "election_id": str(election.id),
-            "vote_id": str(vote.id),
-            "position": position,
-        }, ip_address=ip_address)
+        await self._audit(
+            "vote_cast_token",
+            {
+                "election_id": str(election.id),
+                "vote_id": str(vote.id),
+                "position": position,
+            },
+            ip_address=ip_address,
+        )
 
         return vote, None
 
@@ -2804,14 +3021,20 @@ Best regards,
                 .where(Vote.deleted_at.is_(None))
             )
             if existing_check.scalar_one_or_none():
-                return None, f"You have already voted on: {ballot_item.get('title', ballot_item_id)}"
+                return (
+                    None,
+                    f"You have already voted on: {ballot_item.get('title', ballot_item_id)}",
+                )
 
             # Determine candidate_id based on choice
             candidate_id = None
 
             if choice == "write_in":
                 if not write_in_name or not write_in_name.strip():
-                    return None, f"Write-in name is required for: {ballot_item.get('title', ballot_item_id)}"
+                    return (
+                        None,
+                        f"Write-in name is required for: {ballot_item.get('title', ballot_item_id)}",
+                    )
 
                 # Create a write-in candidate
                 write_in_candidate = Candidate(
@@ -2879,7 +3102,10 @@ Best regards,
             else:
                 # Choice is a candidate UUID
                 if choice not in candidate_map:
-                    return None, f"Invalid candidate selection for: {ballot_item.get('title', ballot_item_id)}"
+                    return (
+                        None,
+                        f"Invalid candidate selection for: {ballot_item.get('title', ballot_item_id)}",
+                    )
                 candidate_id = UUID(choice)
 
             # Create the vote
@@ -2900,31 +3126,40 @@ Best regards,
         # Mark token as fully used
         voting_token.used = True
         voting_token.used_at = datetime.now(timezone.utc)
-        voting_token.positions_voted = [v.get("ballot_item_id") for v in votes if v.get("choice") != "abstain"]
+        voting_token.positions_voted = [
+            v.get("ballot_item_id") for v in votes if v.get("choice") != "abstain"
+        ]
 
         # Commit all votes atomically
         try:
             await self.db.commit()
         except IntegrityError:
             await self.db.rollback()
-            logger.warning(
-                f"Ballot double-submission blocked | election={election.id}"
+            logger.warning(f"Ballot double-submission blocked | election={election.id}")
+            await self._audit(
+                "vote_double_attempt_token",
+                {
+                    "election_id": str(election.id),
+                    "type": "bulk_ballot_submission",
+                },
+                severity="warning",
+                ip_address=ip_address,
             )
-            await self._audit("vote_double_attempt_token", {
-                "election_id": str(election.id),
-                "type": "bulk_ballot_submission",
-            }, severity="warning", ip_address=ip_address)
             return None, "This ballot has already been submitted"
 
         logger.info(
             f"Ballot submitted | election={election.id} "
             f"votes={len(created_votes)} abstentions={abstentions}"
         )
-        await self._audit("ballot_submitted_token", {
-            "election_id": str(election.id),
-            "votes_cast": len(created_votes),
-            "abstentions": abstentions,
-        }, ip_address=ip_address)
+        await self._audit(
+            "ballot_submitted_token",
+            {
+                "election_id": str(election.id),
+                "votes_cast": len(created_votes),
+                "abstentions": abstentions,
+            },
+            ip_address=ip_address,
+        )
 
         return {
             "success": True,

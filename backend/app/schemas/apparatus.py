@@ -4,22 +4,24 @@ Apparatus Pydantic Schemas
 Request and response schemas for apparatus-related endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
-from pydantic.alias_generators import to_camel
-from typing import Optional, List, Any, Dict
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
-from uuid import UUID
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 # Shared config for response schemas that need camelCase serialization
-_response_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
+_response_config = ConfigDict(
+    from_attributes=True, alias_generator=to_camel, populate_by_name=True
+)
 
 
 # =============================================================================
 # Enumerations (matching model enums)
 # =============================================================================
+
 
 class ApparatusCategoryEnum(str, Enum):
     FIRE = "fire"
@@ -109,8 +111,10 @@ class MaintenanceIntervalUnitEnum(str, Enum):
 # Apparatus Type Schemas
 # =============================================================================
 
+
 class ApparatusTypeBase(BaseModel):
     """Base apparatus type schema"""
+
     name: str = Field(..., min_length=1, max_length=100, description="Display name")
     code: str = Field(..., min_length=1, max_length=50, description="Short code")
     description: Optional[str] = Field(None, description="Type description")
@@ -123,11 +127,11 @@ class ApparatusTypeBase(BaseModel):
 
 class ApparatusTypeCreate(ApparatusTypeBase):
     """Schema for creating apparatus type"""
-    pass
 
 
 class ApparatusTypeUpdate(BaseModel):
     """Schema for updating apparatus type"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     code: Optional[str] = Field(None, min_length=1, max_length=50)
     description: Optional[str] = None
@@ -140,6 +144,7 @@ class ApparatusTypeUpdate(BaseModel):
 
 class ApparatusTypeResponse(ApparatusTypeBase):
     """Schema for apparatus type response"""
+
     id: str
     organization_id: Optional[str] = None
     is_system: bool
@@ -152,6 +157,7 @@ class ApparatusTypeResponse(ApparatusTypeBase):
 
 class ApparatusTypeListItem(BaseModel):
     """Schema for apparatus type list items"""
+
     id: str
     name: str
     code: str
@@ -168,15 +174,21 @@ class ApparatusTypeListItem(BaseModel):
 # Apparatus Status Schemas
 # =============================================================================
 
+
 class ApparatusStatusBase(BaseModel):
     """Base apparatus status schema"""
+
     name: str = Field(..., min_length=1, max_length=100, description="Display name")
     code: str = Field(..., min_length=1, max_length=50, description="Short code")
     description: Optional[str] = Field(None, description="Status description")
     is_available: bool = Field(default=True, description="Can respond to calls")
     is_operational: bool = Field(default=True, description="Is functioning")
-    requires_reason: bool = Field(default=False, description="Needs explanation when set")
-    is_archived_status: bool = Field(default=False, description="Marks apparatus as archived")
+    requires_reason: bool = Field(
+        default=False, description="Needs explanation when set"
+    )
+    is_archived_status: bool = Field(
+        default=False, description="Marks apparatus as archived"
+    )
     color: Optional[str] = Field(None, max_length=20, description="Color code")
     icon: Optional[str] = Field(None, max_length=50)
     sort_order: int = Field(default=0, ge=0)
@@ -185,11 +197,11 @@ class ApparatusStatusBase(BaseModel):
 
 class ApparatusStatusCreate(ApparatusStatusBase):
     """Schema for creating apparatus status"""
-    pass
 
 
 class ApparatusStatusUpdate(BaseModel):
     """Schema for updating apparatus status"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     code: Optional[str] = Field(None, min_length=1, max_length=50)
     description: Optional[str] = None
@@ -205,6 +217,7 @@ class ApparatusStatusUpdate(BaseModel):
 
 class ApparatusStatusResponse(ApparatusStatusBase):
     """Schema for apparatus status response"""
+
     id: str
     organization_id: Optional[str] = None
     is_system: bool
@@ -217,6 +230,7 @@ class ApparatusStatusResponse(ApparatusStatusBase):
 
 class ApparatusStatusListItem(BaseModel):
     """Schema for apparatus status list items"""
+
     id: str
     name: str
     code: str
@@ -235,18 +249,28 @@ class ApparatusStatusListItem(BaseModel):
 # Main Apparatus Schemas
 # =============================================================================
 
+
 class ApparatusBase(BaseModel):
     """Base apparatus schema"""
+
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     # Identification
-    unit_number: str = Field(..., min_length=1, max_length=50, description="Department unit number")
-    name: Optional[str] = Field(None, max_length=200, description="Optional friendly name")
-    vin: Optional[str] = Field(None, max_length=17, description="Vehicle Identification Number")
+    unit_number: str = Field(
+        ..., min_length=1, max_length=50, description="Department unit number"
+    )
+    name: Optional[str] = Field(
+        None, max_length=200, description="Optional friendly name"
+    )
+    vin: Optional[str] = Field(
+        None, max_length=17, description="Vehicle Identification Number"
+    )
     license_plate: Optional[str] = Field(None, max_length=20)
     license_state: Optional[str] = Field(None, max_length=50)
     radio_id: Optional[str] = Field(None, max_length=50, description="Radio call sign")
-    asset_tag: Optional[str] = Field(None, max_length=50, description="Internal asset tracking number")
+    asset_tag: Optional[str] = Field(
+        None, max_length=50, description="Internal asset tracking number"
+    )
 
     # Type and Status
     apparatus_type_id: str = Field(..., description="Apparatus type ID")
@@ -266,16 +290,28 @@ class ApparatusBase(BaseModel):
 
     # Capacity
     seating_capacity: Optional[int] = Field(None, ge=1)
-    gvwr: Optional[int] = Field(None, ge=0, description="Gross Vehicle Weight Rating (lbs)")
+    gvwr: Optional[int] = Field(
+        None, ge=0, description="Gross Vehicle Weight Rating (lbs)"
+    )
 
     # Fire/EMS Specifications
-    pump_capacity_gpm: Optional[int] = Field(None, ge=0, description="Pump capacity in GPM")
-    tank_capacity_gallons: Optional[int] = Field(None, ge=0, description="Water tank capacity")
-    foam_capacity_gallons: Optional[int] = Field(None, ge=0, description="Foam tank capacity")
-    ladder_length_feet: Optional[int] = Field(None, ge=0, description="Aerial ladder length")
+    pump_capacity_gpm: Optional[int] = Field(
+        None, ge=0, description="Pump capacity in GPM"
+    )
+    tank_capacity_gallons: Optional[int] = Field(
+        None, ge=0, description="Water tank capacity"
+    )
+    foam_capacity_gallons: Optional[int] = Field(
+        None, ge=0, description="Foam tank capacity"
+    )
+    ladder_length_feet: Optional[int] = Field(
+        None, ge=0, description="Aerial ladder length"
+    )
 
     # Location
-    primary_station_id: Optional[str] = Field(None, description="Primary station location ID")
+    primary_station_id: Optional[str] = Field(
+        None, description="Primary station location ID"
+    )
     current_location_id: Optional[str] = Field(None, description="Current location ID")
 
     # Usage Tracking
@@ -330,11 +366,11 @@ class ApparatusBase(BaseModel):
 
 class ApparatusCreate(ApparatusBase):
     """Schema for creating apparatus"""
-    pass
 
 
 class ApparatusUpdate(BaseModel):
     """Schema for updating apparatus"""
+
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     # Identification
@@ -428,6 +464,7 @@ class ApparatusUpdate(BaseModel):
 
 class ApparatusResponse(ApparatusBase):
     """Schema for apparatus response"""
+
     id: str
     organization_id: str
 
@@ -469,6 +506,7 @@ class ApparatusResponse(ApparatusBase):
 
 class ApparatusListItem(BaseModel):
     """Schema for apparatus list items"""
+
     id: str
     unit_number: str
     name: Optional[str] = None
@@ -491,15 +529,23 @@ class ApparatusListItem(BaseModel):
 
 class ApparatusStatusChange(BaseModel):
     """Schema for changing apparatus status"""
+
     status_id: str = Field(..., description="New status ID")
     reason: Optional[str] = Field(None, description="Reason for status change")
-    current_mileage: Optional[int] = Field(None, ge=0, description="Current mileage at time of change")
-    current_hours: Optional[Decimal] = Field(None, ge=0, description="Current hours at time of change")
+    current_mileage: Optional[int] = Field(
+        None, ge=0, description="Current mileage at time of change"
+    )
+    current_hours: Optional[Decimal] = Field(
+        None, ge=0, description="Current hours at time of change"
+    )
 
 
 class ApparatusArchive(BaseModel):
     """Schema for archiving apparatus"""
-    disposal_method: str = Field(..., description="Method of disposal (sold, traded, donated, scrapped)")
+
+    disposal_method: str = Field(
+        ..., description="Method of disposal (sold, traded, donated, scrapped)"
+    )
     disposal_reason: Optional[str] = Field(None, description="Reason for disposal")
     disposal_date: Optional[date] = Field(None, description="Date of disposal")
     disposal_notes: Optional[str] = Field(None, description="Additional notes")
@@ -508,21 +554,26 @@ class ApparatusArchive(BaseModel):
     sold_date: Optional[date] = None
     sold_price: Optional[Decimal] = Field(None, ge=0)
     sold_to: Optional[str] = Field(None, max_length=200, description="Buyer name")
-    sold_to_contact: Optional[str] = Field(None, max_length=200, description="Buyer contact info")
+    sold_to_contact: Optional[str] = Field(
+        None, max_length=200, description="Buyer contact info"
+    )
 
 
 # =============================================================================
 # Apparatus Custom Field Schemas
 # =============================================================================
 
+
 class CustomFieldOption(BaseModel):
     """Option for SELECT and MULTI_SELECT fields"""
+
     value: str
     label: str
 
 
 class ApparatusCustomFieldBase(BaseModel):
     """Base custom field schema"""
+
     name: str = Field(..., min_length=1, max_length=100, description="Display name")
     field_key: str = Field(..., min_length=1, max_length=100, description="Unique key")
     description: Optional[str] = None
@@ -550,11 +601,11 @@ class ApparatusCustomFieldBase(BaseModel):
 
 class ApparatusCustomFieldCreate(ApparatusCustomFieldBase):
     """Schema for creating custom field"""
-    pass
 
 
 class ApparatusCustomFieldUpdate(BaseModel):
     """Schema for updating custom field"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     field_key: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
@@ -582,6 +633,7 @@ class ApparatusCustomFieldUpdate(BaseModel):
 
 class ApparatusCustomFieldResponse(ApparatusCustomFieldBase):
     """Schema for custom field response"""
+
     id: str
     organization_id: str
     created_by: Optional[str] = None
@@ -595,12 +647,16 @@ class ApparatusCustomFieldResponse(ApparatusCustomFieldBase):
 # Apparatus Maintenance Type Schemas
 # =============================================================================
 
+
 class ApparatusMaintenanceTypeBase(BaseModel):
     """Base maintenance type schema"""
+
     name: str = Field(..., min_length=1, max_length=100)
     code: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = None
-    category: MaintenanceCategoryEnum = Field(default=MaintenanceCategoryEnum.PREVENTIVE)
+    category: MaintenanceCategoryEnum = Field(
+        default=MaintenanceCategoryEnum.PREVENTIVE
+    )
 
     default_interval_value: Optional[int] = Field(None, ge=1)
     default_interval_unit: Optional[MaintenanceIntervalUnitEnum] = None
@@ -617,11 +673,11 @@ class ApparatusMaintenanceTypeBase(BaseModel):
 
 class ApparatusMaintenanceTypeCreate(ApparatusMaintenanceTypeBase):
     """Schema for creating maintenance type"""
-    pass
 
 
 class ApparatusMaintenanceTypeUpdate(BaseModel):
     """Schema for updating maintenance type"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     code: Optional[str] = Field(None, min_length=1, max_length=50)
     description: Optional[str] = None
@@ -642,6 +698,7 @@ class ApparatusMaintenanceTypeUpdate(BaseModel):
 
 class ApparatusMaintenanceTypeResponse(ApparatusMaintenanceTypeBase):
     """Schema for maintenance type response"""
+
     id: str
     organization_id: Optional[str] = None
     is_system: bool
@@ -655,8 +712,10 @@ class ApparatusMaintenanceTypeResponse(ApparatusMaintenanceTypeBase):
 # Shared Attachment Schema
 # =============================================================================
 
+
 class FileAttachment(BaseModel):
     """Attachment reference for files (photos, PDFs, email exports, etc.)"""
+
     file_path: str
     file_name: str
     mime_type: Optional[str] = None
@@ -666,17 +725,25 @@ class FileAttachment(BaseModel):
 # Apparatus Maintenance Record Schemas
 # =============================================================================
 
+
 class ApparatusMaintenanceBase(BaseModel):
     """Base maintenance record schema"""
+
     apparatus_id: str = Field(..., description="Apparatus ID")
     maintenance_type_id: str = Field(..., description="Maintenance type ID")
-    component_id: Optional[str] = Field(None, description="Component this maintenance targets")
-    service_provider_id: Optional[str] = Field(None, description="Service provider who performed the work")
+    component_id: Optional[str] = Field(
+        None, description="Component this maintenance targets"
+    )
+    service_provider_id: Optional[str] = Field(
+        None, description="Service provider who performed the work"
+    )
 
     scheduled_date: Optional[date] = None
     due_date: Optional[date] = None
     completed_date: Optional[date] = None
-    performed_by: Optional[str] = Field(None, max_length=200, description="External vendor/person")
+    performed_by: Optional[str] = Field(
+        None, max_length=200, description="External vendor/person"
+    )
 
     description: Optional[str] = None
     work_performed: Optional[str] = None
@@ -701,6 +768,7 @@ class ApparatusMaintenanceBase(BaseModel):
 
 class ApparatusMaintenanceCreate(ApparatusMaintenanceBase):
     """Schema for creating maintenance record"""
+
     is_completed: bool = Field(default=False)
 
     # Historic entry support — for back-dating records entered during onboarding
@@ -713,13 +781,15 @@ class ApparatusMaintenanceCreate(ApparatusMaintenanceBase):
         description="Actual date the work was performed (required when is_historic=True)",
     )
     historic_source: Optional[str] = Field(
-        None, max_length=200,
+        None,
+        max_length=200,
         description='Where the data came from, e.g. "Paper logbook", "Vendor invoice"',
     )
 
 
 class ApparatusMaintenanceUpdate(BaseModel):
     """Schema for updating maintenance record"""
+
     maintenance_type_id: Optional[str] = None
     component_id: Optional[str] = None
     service_provider_id: Optional[str] = None
@@ -758,6 +828,7 @@ class ApparatusMaintenanceUpdate(BaseModel):
 
 class ApparatusMaintenanceResponse(ApparatusMaintenanceBase):
     """Schema for maintenance record response"""
+
     id: str
     organization_id: str
     is_completed: bool
@@ -782,8 +853,10 @@ class ApparatusMaintenanceResponse(ApparatusMaintenanceBase):
 # Apparatus Fuel Log Schemas
 # =============================================================================
 
+
 class ApparatusFuelLogBase(BaseModel):
     """Base fuel log schema"""
+
     apparatus_id: str = Field(..., description="Apparatus ID")
     fuel_date: datetime
     fuel_type: FuelTypeEnum
@@ -803,11 +876,11 @@ class ApparatusFuelLogBase(BaseModel):
 
 class ApparatusFuelLogCreate(ApparatusFuelLogBase):
     """Schema for creating fuel log"""
-    pass
 
 
 class ApparatusFuelLogUpdate(BaseModel):
     """Schema for updating fuel log"""
+
     fuel_date: Optional[datetime] = None
     fuel_type: Optional[FuelTypeEnum] = None
     gallons: Optional[Decimal] = Field(None, gt=0)
@@ -826,6 +899,7 @@ class ApparatusFuelLogUpdate(BaseModel):
 
 class ApparatusFuelLogResponse(ApparatusFuelLogBase):
     """Schema for fuel log response"""
+
     id: str
     organization_id: str
     recorded_by: Optional[str] = None
@@ -838,15 +912,20 @@ class ApparatusFuelLogResponse(ApparatusFuelLogBase):
 # Apparatus Operator Schemas
 # =============================================================================
 
+
 class OperatorRestriction(BaseModel):
     """Restriction detail for operators"""
-    type: str = Field(..., description="Restriction type (e.g., 'weather', 'event', 'time')")
+
+    type: str = Field(
+        ..., description="Restriction type (e.g., 'weather', 'event', 'time')"
+    )
     description: str = Field(..., description="Restriction description")
     is_active: bool = Field(default=True)
 
 
 class ApparatusOperatorBase(BaseModel):
     """Base operator schema"""
+
     apparatus_id: str = Field(..., description="Apparatus ID")
     user_id: str = Field(..., description="User ID")
 
@@ -868,11 +947,11 @@ class ApparatusOperatorBase(BaseModel):
 
 class ApparatusOperatorCreate(ApparatusOperatorBase):
     """Schema for creating operator"""
-    pass
 
 
 class ApparatusOperatorUpdate(BaseModel):
     """Schema for updating operator"""
+
     is_certified: Optional[bool] = None
     certification_date: Optional[date] = None
     certification_expiration: Optional[date] = None
@@ -891,6 +970,7 @@ class ApparatusOperatorUpdate(BaseModel):
 
 class ApparatusOperatorResponse(ApparatusOperatorBase):
     """Schema for operator response"""
+
     id: str
     organization_id: str
     certified_by: Optional[str] = None
@@ -905,8 +985,10 @@ class ApparatusOperatorResponse(ApparatusOperatorBase):
 # Apparatus Equipment Schemas
 # =============================================================================
 
+
 class ApparatusEquipmentBase(BaseModel):
     """Base equipment schema"""
+
     apparatus_id: str = Field(..., description="Apparatus ID")
     inventory_item_id: Optional[str] = Field(None, description="Link to inventory item")
 
@@ -928,11 +1010,11 @@ class ApparatusEquipmentBase(BaseModel):
 
 class ApparatusEquipmentCreate(ApparatusEquipmentBase):
     """Schema for creating equipment"""
-    pass
 
 
 class ApparatusEquipmentUpdate(BaseModel):
     """Schema for updating equipment"""
+
     inventory_item_id: Optional[str] = None
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -953,6 +1035,7 @@ class ApparatusEquipmentUpdate(BaseModel):
 
 class ApparatusEquipmentResponse(ApparatusEquipmentBase):
     """Schema for equipment response"""
+
     id: str
     organization_id: str
     assigned_by: Optional[str] = None
@@ -966,17 +1049,22 @@ class ApparatusEquipmentResponse(ApparatusEquipmentBase):
 # Apparatus Photo Schemas
 # =============================================================================
 
+
 class ApparatusPhotoBase(BaseModel):
     """Base photo schema"""
+
     title: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     taken_at: Optional[datetime] = None
-    photo_type: Optional[str] = Field(None, max_length=50, description="exterior, interior, damage, detail")
+    photo_type: Optional[str] = Field(
+        None, max_length=50, description="exterior, interior, damage, detail"
+    )
     is_primary: bool = Field(default=False)
 
 
 class ApparatusPhotoCreate(ApparatusPhotoBase):
     """Schema for creating photo"""
+
     apparatus_id: str = Field(..., description="Apparatus ID")
     file_path: str = Field(..., description="Path in storage system")
     file_name: str = Field(..., max_length=255)
@@ -986,6 +1074,7 @@ class ApparatusPhotoCreate(ApparatusPhotoBase):
 
 class ApparatusPhotoUpdate(BaseModel):
     """Schema for updating photo"""
+
     title: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     taken_at: Optional[datetime] = None
@@ -995,6 +1084,7 @@ class ApparatusPhotoUpdate(BaseModel):
 
 class ApparatusPhotoResponse(ApparatusPhotoBase):
     """Schema for photo response"""
+
     id: str
     organization_id: str
     apparatus_id: str
@@ -1012,17 +1102,24 @@ class ApparatusPhotoResponse(ApparatusPhotoBase):
 # Apparatus Document Schemas
 # =============================================================================
 
+
 class ApparatusDocumentBase(BaseModel):
     """Base document schema"""
+
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    document_type: str = Field(..., max_length=50, description="title, registration, insurance, manual, inspection")
+    document_type: str = Field(
+        ...,
+        max_length=50,
+        description="title, registration, insurance, manual, inspection",
+    )
     expiration_date: Optional[date] = None
     document_date: Optional[date] = None
 
 
 class ApparatusDocumentCreate(ApparatusDocumentBase):
     """Schema for creating document"""
+
     apparatus_id: str = Field(..., description="Apparatus ID")
     file_path: str = Field(..., description="Path in storage system")
     file_name: str = Field(..., max_length=255)
@@ -1032,6 +1129,7 @@ class ApparatusDocumentCreate(ApparatusDocumentBase):
 
 class ApparatusDocumentUpdate(BaseModel):
     """Schema for updating document"""
+
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     document_type: Optional[str] = Field(None, max_length=50)
@@ -1041,6 +1139,7 @@ class ApparatusDocumentUpdate(BaseModel):
 
 class ApparatusDocumentResponse(ApparatusDocumentBase):
     """Schema for document response"""
+
     id: str
     organization_id: str
     apparatus_id: str
@@ -1058,8 +1157,10 @@ class ApparatusDocumentResponse(ApparatusDocumentBase):
 # List/Filter Schemas
 # =============================================================================
 
+
 class ApparatusListFilters(BaseModel):
     """Filters for apparatus list"""
+
     apparatus_type_id: Optional[str] = None
     status_id: Optional[str] = None
     primary_station_id: Optional[str] = None
@@ -1072,6 +1173,7 @@ class ApparatusListFilters(BaseModel):
 
 class PaginatedApparatusList(BaseModel):
     """Paginated apparatus list response"""
+
     items: List[ApparatusListItem]
     total: int
     page: int
@@ -1085,8 +1187,10 @@ class PaginatedApparatusList(BaseModel):
 # Summary/Dashboard Schemas
 # =============================================================================
 
+
 class ApparatusFleetSummary(BaseModel):
     """Fleet summary for dashboard"""
+
     total_apparatus: int
     in_service_count: int
     out_of_service_count: int
@@ -1111,6 +1215,7 @@ class ApparatusFleetSummary(BaseModel):
 
 class ApparatusMaintenanceDue(BaseModel):
     """Maintenance due item"""
+
     id: str
     apparatus_id: str
     apparatus_unit_number: str
@@ -1127,6 +1232,7 @@ class ApparatusMaintenanceDue(BaseModel):
 # NFPA Compliance Schemas
 # =============================================================================
 
+
 class ComplianceStatusEnum(str, Enum):
     COMPLIANT = "compliant"
     NON_COMPLIANT = "non_compliant"
@@ -1136,12 +1242,27 @@ class ComplianceStatusEnum(str, Enum):
 
 class ApparatusNFPAComplianceBase(BaseModel):
     """Base NFPA compliance schema"""
+
     apparatus_id: str = Field(..., description="Apparatus ID")
-    standard_code: str = Field(..., min_length=1, max_length=50, description="NFPA standard code (e.g., 'NFPA 1911')")
-    section_reference: str = Field(..., min_length=1, max_length=100, description="Section reference (e.g., 'Section 5.2.1')")
-    requirement_description: str = Field(..., min_length=1, description="Description of the requirement")
+    standard_code: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="NFPA standard code (e.g., 'NFPA 1911')",
+    )
+    section_reference: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Section reference (e.g., 'Section 5.2.1')",
+    )
+    requirement_description: str = Field(
+        ..., min_length=1, description="Description of the requirement"
+    )
     is_compliant: bool = Field(default=False)
-    compliance_status: ComplianceStatusEnum = Field(default=ComplianceStatusEnum.PENDING)
+    compliance_status: ComplianceStatusEnum = Field(
+        default=ComplianceStatusEnum.PENDING
+    )
     last_checked_date: Optional[date] = None
     next_due_date: Optional[date] = None
     notes: Optional[str] = None
@@ -1150,11 +1271,11 @@ class ApparatusNFPAComplianceBase(BaseModel):
 
 class ApparatusNFPAComplianceCreate(ApparatusNFPAComplianceBase):
     """Schema for creating NFPA compliance record"""
-    pass
 
 
 class ApparatusNFPAComplianceUpdate(BaseModel):
     """Schema for updating NFPA compliance record"""
+
     standard_code: Optional[str] = Field(None, min_length=1, max_length=50)
     section_reference: Optional[str] = Field(None, min_length=1, max_length=100)
     requirement_description: Optional[str] = None
@@ -1168,6 +1289,7 @@ class ApparatusNFPAComplianceUpdate(BaseModel):
 
 class ApparatusNFPAComplianceResponse(ApparatusNFPAComplianceBase):
     """Schema for NFPA compliance response"""
+
     id: str
     organization_id: str
     last_checked_by: Optional[str] = None
@@ -1180,6 +1302,7 @@ class ApparatusNFPAComplianceResponse(ApparatusNFPAComplianceBase):
 # =============================================================================
 # Report Config Schemas
 # =============================================================================
+
 
 class ScheduleFrequencyEnum(str, Enum):
     DAILY = "daily"
@@ -1204,6 +1327,7 @@ class OutputFormatEnum(str, Enum):
 
 class ApparatusReportConfigBase(BaseModel):
     """Base report config schema"""
+
     name: str = Field(..., min_length=1, max_length=200, description="Report name")
     description: Optional[str] = None
     report_type: ReportTypeEnum = Field(..., description="Report type")
@@ -1211,7 +1335,12 @@ class ApparatusReportConfigBase(BaseModel):
     # Schedule
     is_scheduled: bool = Field(default=False)
     schedule_frequency: Optional[ScheduleFrequencyEnum] = None
-    schedule_day: Optional[int] = Field(None, ge=1, le=31, description="For weekly: day of week (1=Mon..7=Sun); for monthly: day of month (1-31)")
+    schedule_day: Optional[int] = Field(
+        None,
+        ge=1,
+        le=31,
+        description="For weekly: day of week (1=Mon..7=Sun); for monthly: day of month (1-31)",
+    )
 
     # Data Range
     data_range_type: Optional[str] = Field(None, max_length=50)
@@ -1240,18 +1369,23 @@ class ApparatusReportConfigBase(BaseModel):
 
 class ApparatusReportConfigCreate(ApparatusReportConfigBase):
     """Schema for creating report config"""
-    pass
 
 
 class ApparatusReportConfigUpdate(BaseModel):
     """Schema for updating report config"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     report_type: Optional[ReportTypeEnum] = None
 
     is_scheduled: Optional[bool] = None
     schedule_frequency: Optional[ScheduleFrequencyEnum] = None
-    schedule_day: Optional[int] = Field(None, ge=1, le=31, description="For weekly: day of week (1=Mon..7=Sun); for monthly: day of month (1-31)")
+    schedule_day: Optional[int] = Field(
+        None,
+        ge=1,
+        le=31,
+        description="For weekly: day of week (1=Mon..7=Sun); for monthly: day of month (1-31)",
+    )
 
     data_range_type: Optional[str] = Field(None, max_length=50)
     data_range_days: Optional[int] = Field(None, ge=1)
@@ -1275,6 +1409,7 @@ class ApparatusReportConfigUpdate(BaseModel):
 
 class ApparatusReportConfigResponse(ApparatusReportConfigBase):
     """Schema for report config response"""
+
     id: str
     organization_id: str
     next_run_date: Optional[datetime] = None
@@ -1289,6 +1424,7 @@ class ApparatusReportConfigResponse(ApparatusReportConfigBase):
 # =============================================================================
 # Service Provider Schemas
 # =============================================================================
+
 
 class ComponentTypeEnum(str, Enum):
     ENGINE = "engine"
@@ -1346,12 +1482,15 @@ class NoteStatusEnum(str, Enum):
 
 class ApparatusServiceProviderBase(BaseModel):
     """Base service provider schema"""
+
     name: str = Field(..., min_length=1, max_length=200)
     company_name: Optional[str] = Field(None, max_length=200)
     contact_name: Optional[str] = Field(None, max_length=200)
 
     phone: Optional[str] = Field(None, max_length=50)
-    email: Optional[str] = Field(None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    email: Optional[str] = Field(
+        None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    )
     address: Optional[str] = None
     city: Optional[str] = Field(None, max_length=100)
     state: Optional[str] = Field(None, max_length=50)
@@ -1376,11 +1515,11 @@ class ApparatusServiceProviderBase(BaseModel):
 
 class ApparatusServiceProviderCreate(ApparatusServiceProviderBase):
     """Schema for creating service provider"""
-    pass
 
 
 class ApparatusServiceProviderUpdate(BaseModel):
     """Schema for updating service provider"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     company_name: Optional[str] = Field(None, max_length=200)
     contact_name: Optional[str] = Field(None, max_length=200)
@@ -1411,6 +1550,7 @@ class ApparatusServiceProviderUpdate(BaseModel):
 
 class ApparatusServiceProviderResponse(ApparatusServiceProviderBase):
     """Schema for service provider response"""
+
     id: str
     organization_id: str
     archived_at: Optional[datetime] = None
@@ -1426,8 +1566,10 @@ class ApparatusServiceProviderResponse(ApparatusServiceProviderBase):
 # Component Schemas
 # =============================================================================
 
+
 class ApparatusComponentBase(BaseModel):
     """Base component schema"""
+
     apparatus_id: str = Field(..., description="Apparatus ID")
     name: str = Field(..., min_length=1, max_length=200, description="Component name")
     component_type: ComponentTypeEnum = Field(default=ComponentTypeEnum.OTHER)
@@ -1452,11 +1594,11 @@ class ApparatusComponentBase(BaseModel):
 
 class ApparatusComponentCreate(ApparatusComponentBase):
     """Schema for creating component"""
-    pass
 
 
 class ApparatusComponentUpdate(BaseModel):
     """Schema for updating component"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     component_type: Optional[ComponentTypeEnum] = None
     description: Optional[str] = None
@@ -1480,6 +1622,7 @@ class ApparatusComponentUpdate(BaseModel):
 
 class ApparatusComponentResponse(ApparatusComponentBase):
     """Schema for component response"""
+
     id: str
     organization_id: str
     apparatus_id: str
@@ -1502,6 +1645,7 @@ NoteAttachment = FileAttachment
 
 class ApparatusComponentNoteBase(BaseModel):
     """Base component note schema"""
+
     component_id: str = Field(..., description="Component ID")
     apparatus_id: str = Field(..., description="Apparatus ID")
 
@@ -1523,11 +1667,11 @@ class ApparatusComponentNoteBase(BaseModel):
 
 class ApparatusComponentNoteCreate(ApparatusComponentNoteBase):
     """Schema for creating component note"""
-    pass
 
 
 class ApparatusComponentNoteUpdate(BaseModel):
     """Schema for updating component note"""
+
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     note_type: Optional[NoteTypeEnum] = None
@@ -1546,6 +1690,7 @@ class ApparatusComponentNoteUpdate(BaseModel):
 
 class ApparatusComponentNoteResponse(ApparatusComponentNoteBase):
     """Schema for component note response"""
+
     id: str
     organization_id: str
     created_by: Optional[str] = None
@@ -1562,8 +1707,10 @@ class ApparatusComponentNoteResponse(ApparatusComponentNoteBase):
 # Service Report Schema (compiled report for service techs)
 # =============================================================================
 
+
 class ApparatusServiceReport(BaseModel):
     """Compiled service report for a vehicle or specific component area"""
+
     apparatus: ApparatusResponse
     components: List[ApparatusComponentResponse]
     open_issues: List[ApparatusComponentNoteResponse]

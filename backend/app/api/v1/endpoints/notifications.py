@@ -6,23 +6,24 @@ logs, and preferences.
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.notifications import (
-    NotificationRuleCreate,
-    NotificationRuleUpdate,
-    NotificationRuleResponse,
-    NotificationRulesListResponse,
     NotificationLogResponse,
     NotificationLogsListResponse,
+    NotificationRuleCreate,
+    NotificationRuleResponse,
+    NotificationRulesListResponse,
+    NotificationRuleUpdate,
     NotificationsSummary,
 )
 from app.services.notifications_service import NotificationsService
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -30,6 +31,7 @@ router = APIRouter()
 # ============================================
 # Rule Endpoints
 # ============================================
+
 
 @router.get("/rules", response_model=NotificationRulesListResponse)
 async def list_rules(
@@ -53,7 +55,11 @@ async def list_rules(
     }
 
 
-@router.post("/rules", response_model=NotificationRuleResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/rules",
+    response_model=NotificationRuleResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_rule(
     rule: NotificationRuleCreate,
     db: AsyncSession = Depends(get_db),
@@ -66,7 +72,9 @@ async def create_rule(
         current_user.organization_id, rule_data, current_user.id
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to create notification rule. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to create notification rule. {error}"
+        )
     return result
 
 
@@ -98,7 +106,9 @@ async def update_rule(
         rule_id, current_user.organization_id, update_data
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to update notification rule. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to update notification rule. {error}"
+        )
     return result
 
 
@@ -112,7 +122,9 @@ async def delete_rule(
     service = NotificationsService(db)
     success, error = await service.delete_rule(rule_id, current_user.organization_id)
     if not success:
-        raise HTTPException(status_code=400, detail=f"Unable to delete notification rule. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to delete notification rule. {error}"
+        )
 
 
 @router.post("/rules/{rule_id}/toggle", response_model=NotificationRuleResponse)
@@ -124,15 +136,20 @@ async def toggle_rule(
 ):
     """Toggle a notification rule on/off"""
     service = NotificationsService(db)
-    result, error = await service.toggle_rule(rule_id, current_user.organization_id, enabled)
+    result, error = await service.toggle_rule(
+        rule_id, current_user.organization_id, enabled
+    )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to toggle notification rule. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to toggle notification rule. {error}"
+        )
     return result
 
 
 # ============================================
 # Notification Log Endpoints
 # ============================================
+
 
 @router.get("/logs", response_model=NotificationLogsListResponse)
 async def list_logs(
@@ -168,7 +185,9 @@ async def mark_notification_read(
     service = NotificationsService(db)
     result, error = await service.mark_as_read(log_id, current_user.organization_id)
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to mark notification as read. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to mark notification as read. {error}"
+        )
     return result
 
 
@@ -176,9 +195,12 @@ async def mark_notification_read(
 # User-Facing Notification Inbox
 # ============================================
 
+
 @router.get("/my", response_model=NotificationLogsListResponse)
 async def get_my_notifications(
-    include_expired: bool = Query(False, description="Include expired notifications (for history view)"),
+    include_expired: bool = Query(
+        False, description="Include expired notifications (for history view)"
+    ),
     include_read: bool = Query(True, description="Include read notifications"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -226,13 +248,16 @@ async def mark_my_notification_read(
     service = NotificationsService(db)
     result, error = await service.mark_as_read(log_id, current_user.organization_id)
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to mark notification as read. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to mark notification as read. {error}"
+        )
     return result
 
 
 # ============================================
 # Summary Endpoint
 # ============================================
+
 
 @router.get("/summary", response_model=NotificationsSummary)
 async def get_notifications_summary(

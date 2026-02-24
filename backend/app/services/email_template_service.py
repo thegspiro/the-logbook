@@ -6,18 +6,14 @@ Manages CRUD operations for email templates and renders them with context variab
 
 import re
 import uuid
-from typing import Dict, List, Optional, Any, Tuple
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
-from sqlalchemy.orm import selectinload
+from typing import Any, Dict, List, Optional, Tuple
+
 from loguru import logger
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.models.email_template import (
-    EmailTemplate,
-    EmailAttachment,
-    EmailTemplateType,
-)
-
+from app.models.email_template import EmailTemplate, EmailTemplateType
 
 # Default CSS styles shared across all email templates
 DEFAULT_CSS = """
@@ -53,21 +49,39 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "first_name", "description": "Member's first name"},
         {"name": "organization_name", "description": "Organization/department name"},
         {"name": "change_date", "description": "Date the changes occurred"},
-        {"name": "items_issued_html", "description": "HTML list of items issued/assigned"},
+        {
+            "name": "items_issued_html",
+            "description": "HTML list of items issued/assigned",
+        },
         {"name": "items_returned_html", "description": "HTML list of items returned"},
-        {"name": "items_issued_text", "description": "Plain-text list of items issued/assigned"},
-        {"name": "items_returned_text", "description": "Plain-text list of items returned"},
+        {
+            "name": "items_issued_text",
+            "description": "Plain-text list of items issued/assigned",
+        },
+        {
+            "name": "items_returned_text",
+            "description": "Plain-text list of items returned",
+        },
     ],
     "member_dropped": [
         {"name": "member_name", "description": "Full name of the dropped member"},
         {"name": "organization_name", "description": "Organization/department name"},
-        {"name": "drop_type_display", "description": "Type of separation (Voluntary/Involuntary)"},
+        {
+            "name": "drop_type_display",
+            "description": "Type of separation (Voluntary/Involuntary)",
+        },
         {"name": "reason", "description": "Reason for the status change"},
         {"name": "effective_date", "description": "Date the drop takes effect"},
         {"name": "return_deadline", "description": "Deadline to return all property"},
         {"name": "item_count", "description": "Number of outstanding items"},
-        {"name": "total_value", "description": "Total dollar value of outstanding items"},
-        {"name": "performed_by_name", "description": "Name of the officer who performed the drop"},
+        {
+            "name": "total_value",
+            "description": "Total dollar value of outstanding items",
+        },
+        {
+            "name": "performed_by_name",
+            "description": "Name of the officer who performed the drop",
+        },
         {"name": "performed_by_title", "description": "Title/rank of the officer"},
     ],
 }
@@ -317,9 +331,7 @@ class EmailTemplateService:
         )
         return result.scalar_one_or_none()
 
-    async def list_templates(
-        self, organization_id: str
-    ) -> List[EmailTemplate]:
+    async def list_templates(self, organization_id: str) -> List[EmailTemplate]:
         """List all templates for an organization"""
         result = await self.db.execute(
             select(EmailTemplate)
@@ -383,8 +395,14 @@ class EmailTemplateService:
             return None
 
         allowed_fields = {
-            "name", "subject", "html_body", "text_body",
-            "css_styles", "description", "is_active", "allow_attachments",
+            "name",
+            "subject",
+            "html_body",
+            "text_body",
+            "css_styles",
+            "description",
+            "is_active",
+            "allow_attachments",
         }
         for key, value in fields.items():
             if key in allowed_fields and value is not None:
@@ -394,9 +412,7 @@ class EmailTemplateService:
         await self.db.flush()
         return template
 
-    async def delete_template(
-        self, template_id: str, organization_id: str
-    ) -> bool:
+    async def delete_template(self, template_id: str, organization_id: str) -> bool:
         """Delete an email template"""
         result = await self.db.execute(
             select(EmailTemplate).where(
@@ -460,7 +476,7 @@ class EmailTemplateService:
             value = str(context.get(var_name, match.group(0)))
             return _html.escape(value)
 
-        return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
+        return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
 
     async def ensure_default_templates(
         self,
@@ -490,7 +506,9 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(f"Created default welcome email template for org {organization_id}")
+            logger.info(
+                f"Created default welcome email template for org {organization_id}"
+            )
 
         # Check for password reset template
         existing = await self.get_template(
@@ -509,7 +527,9 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(f"Created default password reset email template for org {organization_id}")
+            logger.info(
+                f"Created default password reset email template for org {organization_id}"
+            )
 
         # Check for member dropped template
         existing = await self.get_template(
@@ -532,7 +552,9 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(f"Created default member dropped email template for org {organization_id}")
+            logger.info(
+                f"Created default member dropped email template for org {organization_id}"
+            )
 
         # Check for inventory change template
         existing = await self.get_template(
@@ -556,6 +578,8 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(f"Created default inventory change email template for org {organization_id}")
+            logger.info(
+                f"Created default inventory change email template for org {organization_id}"
+            )
 
         return created

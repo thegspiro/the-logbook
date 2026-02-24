@@ -5,29 +5,28 @@ Business logic for syncing training records from external providers
 like Vector Solutions, Target Solutions, Lexipol, etc.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, date, timedelta, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
-import httpx
 import logging
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
+import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.security import decrypt_data
 from app.models.training import (
-    ExternalTrainingProvider,
     ExternalCategoryMapping,
-    ExternalUserMapping,
-    ExternalTrainingSyncLog,
-    ExternalTrainingImport,
     ExternalProviderType,
+    ExternalTrainingImport,
+    ExternalTrainingProvider,
+    ExternalTrainingSyncLog,
+    ExternalUserMapping,
     SyncStatus,
+    TrainingCategory,
     TrainingRecord,
     TrainingStatus,
-    TrainingCategory,
 )
 from app.models.user import User
-from app.core.security import decrypt_data
-
 
 logger = logging.getLogger(__name__)
 
@@ -102,23 +101,40 @@ class ExternalTrainingSyncService:
 
         if response.status_code == 200:
             data = response.json()
-            sites = data if isinstance(data, list) else data.get("sites", data.get("data", []))
+            sites = (
+                data
+                if isinstance(data, list)
+                else data.get("sites", data.get("data", []))
+            )
             site_id = config.get("site_id")
 
             if site_id:
                 # Verify the configured site_id is accessible
-                site_ids = [str(s.get("id", s.get("siteId", ""))) for s in sites] if isinstance(sites, list) else []
+                site_ids = (
+                    [str(s.get("id", s.get("siteId", ""))) for s in sites]
+                    if isinstance(sites, list)
+                    else []
+                )
                 if site_ids and site_id not in site_ids:
-                    return False, f"Connection successful but site_id '{site_id}' not found in accessible sites: {', '.join(site_ids)}"
+                    return (
+                        False,
+                        f"Connection successful but site_id '{site_id}' not found in accessible sites: {', '.join(site_ids)}",
+                    )
                 return True, f"Connection successful - site '{site_id}' verified"
             else:
                 # No site_id configured yet - report available sites
                 site_count = len(sites) if isinstance(sites, list) else 0
-                return True, f"Connection successful - {site_count} site(s) accessible. Configure site_id in provider settings to enable sync."
+                return (
+                    True,
+                    f"Connection successful - {site_count} site(s) accessible. Configure site_id in provider settings to enable sync.",
+                )
         elif response.status_code == 401:
             return False, "Authentication failed - check your AccessToken"
         elif response.status_code == 403:
-            return False, "Access denied - your token may not have sufficient permissions"
+            return (
+                False,
+                "Access denied - your token may not have sufficient permissions",
+            )
         else:
             return False, f"Unexpected response: {response.status_code}"
 
@@ -232,6 +248,7 @@ class ExternalTrainingSyncService:
                 headers["Authorization"] = f"Bearer {api_key}"
         elif provider.auth_type == "basic":
             import base64
+
             if api_key and api_secret:
                 credentials = base64.b64encode(
                     f"{api_key}:{api_secret}".encode()
@@ -291,7 +308,10 @@ class ExternalTrainingSyncService:
             # Determine date range
             if sync_type == "incremental" and not from_date:
                 # Use last sync date or default to 30 days ago
-                from_date = (provider.last_sync_at or datetime.now(timezone.utc) - timedelta(days=30)).date()
+                from_date = (
+                    provider.last_sync_at
+                    or datetime.now(timezone.utc) - timedelta(days=30)
+                ).date()
             elif sync_type == "full" and not from_date:
                 # Full sync: get all records from a year ago
                 from_date = (datetime.now(timezone.utc) - timedelta(days=365)).date()
@@ -332,13 +352,17 @@ class ExternalTrainingSyncService:
             sync_log.records_updated = updated
             sync_log.records_skipped = skipped
             sync_log.records_failed = failed
-            sync_log.status = SyncStatus.COMPLETED if failed == 0 else SyncStatus.PARTIAL
+            sync_log.status = (
+                SyncStatus.COMPLETED if failed == 0 else SyncStatus.PARTIAL
+            )
             sync_log.completed_at = datetime.now(timezone.utc)
 
             # Update provider sync timestamps
             provider.last_sync_at = datetime.now(timezone.utc)
             if provider.auto_sync_enabled:
-                provider.next_sync_at = datetime.now(timezone.utc) + timedelta(hours=provider.sync_interval_hours)
+                provider.next_sync_at = datetime.now(timezone.utc) + timedelta(
+                    hours=provider.sync_interval_hours
+                )
 
             await self.db.commit()
 
@@ -359,9 +383,13 @@ class ExternalTrainingSyncService:
     ) -> List[Dict[str, Any]]:
         """Fetch training records from external provider"""
         if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
-            return await self._fetch_vector_solutions_records(provider, from_date, to_date)
+            return await self._fetch_vector_solutions_records(
+                provider, from_date, to_date
+            )
         elif provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
-            return await self._fetch_target_solutions_records(provider, from_date, to_date)
+            return await self._fetch_target_solutions_records(
+                provider, from_date, to_date
+            )
         elif provider.provider_type == ExternalProviderType.LEXIPOL:
             return await self._fetch_lexipol_records(provider, from_date, to_date)
         elif provider.provider_type == ExternalProviderType.I_AM_RESPONDING:
@@ -405,8 +433,7 @@ class ExternalTrainingSyncService:
 
         # Use configured endpoint or default to credentials (training completions)
         records_endpoint = config.get(
-            "records_endpoint",
-            f"/sites/{site_id}/credentials"
+            "records_endpoint", f"/sites/{site_id}/credentials"
         )
         # If the endpoint doesn't already include the site_id, prepend it
         if "{siteId}" in records_endpoint:
@@ -429,7 +456,9 @@ class ExternalTrainingSyncService:
             params[date_filter] = from_date.isoformat()
         else:
             # Use search query for date filtering
-            params["q"] = f'{{"completionDate":"{from_date.isoformat()}..{to_date.isoformat()}"}}'
+            params["q"] = (
+                f'{{"completionDate":"{from_date.isoformat()}..{to_date.isoformat()}"}}'
+            )
 
         all_records = []
         startrow = 0
@@ -440,7 +469,11 @@ class ExternalTrainingSyncService:
             response.raise_for_status()
 
             data = response.json()
-            records = data if isinstance(data, list) else data.get("data", data.get("credentials", data.get("records", [])))
+            records = (
+                data
+                if isinstance(data, list)
+                else data.get("data", data.get("credentials", data.get("records", [])))
+            )
 
             if not records:
                 break
@@ -455,7 +488,9 @@ class ExternalTrainingSyncService:
 
         return all_records
 
-    def _normalize_vector_solutions_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_vector_solutions_record(
+        self, record: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Normalize a Vector Solutions / TargetSolutions record to our standard format.
 
@@ -470,18 +505,51 @@ class ExternalTrainingSyncService:
             full_name = f"{first} {last}".strip()
 
         return {
-            "external_record_id": str(record.get("id", record.get("credentialId", record.get("completionId", "")))),
-            "external_user_id": str(record.get("userId", record.get("employeeId", record.get("user_id", "")))),
-            "external_course_id": str(record.get("courseId", record.get("course_id", ""))),
-            "external_category_id": str(record.get("categoryId", record.get("category_id", ""))),
-            "course_title": record.get("courseName", record.get("courseTitle", record.get("name", ""))),
+            "external_record_id": str(
+                record.get(
+                    "id", record.get("credentialId", record.get("completionId", ""))
+                )
+            ),
+            "external_user_id": str(
+                record.get(
+                    "userId", record.get("employeeId", record.get("user_id", ""))
+                )
+            ),
+            "external_course_id": str(
+                record.get("courseId", record.get("course_id", ""))
+            ),
+            "external_category_id": str(
+                record.get("categoryId", record.get("category_id", ""))
+            ),
+            "course_title": record.get(
+                "courseName", record.get("courseTitle", record.get("name", ""))
+            ),
             "course_code": record.get("courseCode", record.get("code", "")),
-            "description": record.get("description", record.get("courseDescription", "")),
-            "duration_minutes": record.get("durationMinutes", record.get("duration", record.get("creditMinutes", 0))),
-            "completion_date": record.get("completionDate", record.get("completedDate", record.get("dateCompleted"))),
-            "score": record.get("score", record.get("percentScore", record.get("finalScore"))),
-            "passed": record.get("passed", record.get("isPassed", record.get("status", "").lower() in ("passed", "completed", "complete"))),
-            "external_category_name": record.get("categoryName", record.get("category", "")),
+            "description": record.get(
+                "description", record.get("courseDescription", "")
+            ),
+            "duration_minutes": record.get(
+                "durationMinutes",
+                record.get("duration", record.get("creditMinutes", 0)),
+            ),
+            "completion_date": record.get(
+                "completionDate",
+                record.get("completedDate", record.get("dateCompleted")),
+            ),
+            "score": record.get(
+                "score", record.get("percentScore", record.get("finalScore"))
+            ),
+            "passed": record.get(
+                "passed",
+                record.get(
+                    "isPassed",
+                    record.get("status", "").lower()
+                    in ("passed", "completed", "complete"),
+                ),
+            ),
+            "external_category_name": record.get(
+                "categoryName", record.get("category", "")
+            ),
             "external_username": record.get("username", record.get("loginName", "")),
             "external_email": record.get("email", record.get("userEmail", "")),
             "external_name": full_name,
@@ -498,7 +566,9 @@ class ExternalTrainingSyncService:
         headers = self._get_auth_headers(provider)
         config = provider.config or {}
 
-        records_endpoint = config.get("records_endpoint", "/api/v2/training/completions")
+        records_endpoint = config.get(
+            "records_endpoint", "/api/v2/training/completions"
+        )
         url = f"{provider.api_base_url.rstrip('/')}{records_endpoint}"
 
         params = {
@@ -529,7 +599,9 @@ class ExternalTrainingSyncService:
 
         return all_records
 
-    def _normalize_target_solutions_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_target_solutions_record(
+        self, record: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Normalize Target Solutions record to standard format"""
         return {
             "external_record_id": str(record.get("id", "")),
@@ -590,7 +662,9 @@ class ExternalTrainingSyncService:
             "completion_date": record.get("completedDate", record.get("dateCompleted")),
             "score": record.get("score", None),
             "passed": record.get("passed", True),
-            "external_category_name": record.get("topicName", record.get("category", "")),
+            "external_category_name": record.get(
+                "topicName", record.get("category", "")
+            ),
             "external_username": record.get("memberEmail", ""),
             "external_email": record.get("memberEmail", ""),
             "external_name": record.get("memberName", ""),
@@ -637,7 +711,9 @@ class ExternalTrainingSyncService:
             "completion_date": record.get("date", record.get("training_date")),
             "score": None,
             "passed": True,
-            "external_category_name": record.get("type", record.get("training_type", "")),
+            "external_category_name": record.get(
+                "type", record.get("training_type", "")
+            ),
             "external_username": record.get("member_email", ""),
             "external_email": record.get("member_email", ""),
             "external_name": record.get("member_name", ""),
@@ -691,12 +767,15 @@ class ExternalTrainingSyncService:
         self, record: Dict[str, Any], field_mapping: Dict[str, str]
     ) -> Dict[str, Any]:
         """Normalize custom API record using field mapping"""
+
         def get_field(name: str, default: Any = "") -> Any:
             field_name = field_mapping.get(name, name)
             return record.get(field_name, default)
 
         return {
-            "external_record_id": str(get_field("external_record_id", record.get("id", ""))),
+            "external_record_id": str(
+                get_field("external_record_id", record.get("id", ""))
+            ),
             "external_user_id": str(get_field("external_user_id", "")),
             "external_course_id": str(get_field("external_course_id", "")),
             "external_category_id": str(get_field("external_category_id", "")),
@@ -729,7 +808,10 @@ class ExternalTrainingSyncService:
         existing = await self.db.execute(
             select(ExternalTrainingImport)
             .where(ExternalTrainingImport.provider_id == provider.id)
-            .where(ExternalTrainingImport.external_record_id == record_data["external_record_id"])
+            .where(
+                ExternalTrainingImport.external_record_id
+                == record_data["external_record_id"]
+            )
         )
         existing_import = existing.scalar_one_or_none()
 
@@ -934,7 +1016,10 @@ class ExternalTrainingSyncService:
             result = await self.db.execute(
                 select(ExternalCategoryMapping)
                 .where(ExternalCategoryMapping.provider_id == import_record.provider_id)
-                .where(ExternalCategoryMapping.external_category_id == import_record.external_category_id)
+                .where(
+                    ExternalCategoryMapping.external_category_id
+                    == import_record.external_category_id
+                )
             )
             mapping = result.scalar_one_or_none()
             if mapping and mapping.internal_category_id:
@@ -943,8 +1028,9 @@ class ExternalTrainingSyncService:
         # If still no category, use provider default
         if not target_category_id:
             provider_result = await self.db.execute(
-                select(ExternalTrainingProvider)
-                .where(ExternalTrainingProvider.id == import_record.provider_id)
+                select(ExternalTrainingProvider).where(
+                    ExternalTrainingProvider.id == import_record.provider_id
+                )
             )
             provider = provider_result.scalar_one_or_none()
             if provider:
@@ -957,12 +1043,20 @@ class ExternalTrainingSyncService:
             title=import_record.course_title,
             description=import_record.description,
             hours_completed=round((import_record.duration_minutes or 0) / 60.0, 2),
-            completion_date=import_record.completion_date.date() if import_record.completion_date else None,
+            completion_date=(
+                import_record.completion_date.date()
+                if import_record.completion_date
+                else None
+            ),
             status=TrainingStatus.COMPLETED,
             category_id=target_category_id,
             external_provider_id=import_record.provider_id,
             external_record_id=import_record.external_record_id,
-            notes=f"Imported from external training provider. Score: {import_record.score}" if import_record.score else "Imported from external training provider",
+            notes=(
+                f"Imported from external training provider. Score: {import_record.score}"
+                if import_record.score
+                else "Imported from external training provider"
+            ),
         )
 
         self.db.add(training_record)
@@ -992,9 +1086,8 @@ class ExternalTrainingSyncService:
         Returns:
             Dict with counts: imported, failed, skipped
         """
-        query = (
-            select(ExternalTrainingImport)
-            .where(ExternalTrainingImport.provider_id == str(provider_id))
+        query = select(ExternalTrainingImport).where(
+            ExternalTrainingImport.provider_id == str(provider_id)
         )
 
         if import_ids:
@@ -1042,9 +1135,7 @@ class ExternalTrainingSyncService:
     # Mapping Management
     # ==========================================
 
-    async def get_unmapped_users(
-        self, provider_id: str
-    ) -> List[ExternalUserMapping]:
+    async def get_unmapped_users(self, provider_id: str) -> List[ExternalUserMapping]:
         """Get all unmapped users for a provider"""
         result = await self.db.execute(
             select(ExternalUserMapping)
@@ -1072,8 +1163,7 @@ class ExternalTrainingSyncService:
     ) -> ExternalUserMapping:
         """Map an external user to an internal user"""
         result = await self.db.execute(
-            select(ExternalUserMapping)
-            .where(ExternalUserMapping.id == str(mapping_id))
+            select(ExternalUserMapping).where(ExternalUserMapping.id == str(mapping_id))
         )
         mapping = result.scalar_one_or_none()
 
@@ -1105,8 +1195,9 @@ class ExternalTrainingSyncService:
     ) -> ExternalCategoryMapping:
         """Map an external category to an internal category"""
         result = await self.db.execute(
-            select(ExternalCategoryMapping)
-            .where(ExternalCategoryMapping.id == str(mapping_id))
+            select(ExternalCategoryMapping).where(
+                ExternalCategoryMapping.id == str(mapping_id)
+            )
         )
         mapping = result.scalar_one_or_none()
 

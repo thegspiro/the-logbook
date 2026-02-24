@@ -6,44 +6,42 @@ step progression, and transfer to full membership.
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.membership_pipeline import (
-    PipelineCreate,
-    PipelineUpdate,
-    PipelineResponse,
-    PipelineListResponse,
-    PipelineStepCreate,
-    PipelineStepUpdate,
-    PipelineStepResponse,
-    StepReorderRequest,
-    ProspectCreate,
-    ProspectUpdate,
-    ProspectResponse,
-    ProspectListResponse,
-    PaginatedProspectListResponse,
-    CompleteStepRequest,
-    AdvanceProspectRequest,
-    TransferProspectRequest,
-    TransferProspectResponse,
     ActivityLogResponse,
-    PipelineKanbanResponse,
-    PipelineKanbanColumn,
+    AdvanceProspectRequest,
+    CompleteStepRequest,
+    ElectionPackageCreate,
+    ElectionPackageResponse,
+    ElectionPackageUpdate,
+    PaginatedProspectListResponse,
+    PipelineCreate,
+    PipelineListResponse,
+    PipelineResponse,
     PipelineStatsResponse,
-    PipelineStageStats,
+    PipelineStepCreate,
+    PipelineStepResponse,
+    PipelineStepUpdate,
+    PipelineUpdate,
+    ProspectCreate,
+    ProspectDocumentResponse,
+    ProspectListResponse,
+    ProspectResponse,
+    ProspectUpdate,
     PurgeInactiveRequest,
     PurgeInactiveResponse,
-    ProspectDocumentResponse,
-    ElectionPackageCreate,
-    ElectionPackageUpdate,
-    ElectionPackageResponse,
+    StepReorderRequest,
+    TransferProspectRequest,
+    TransferProspectResponse,
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -52,11 +50,16 @@ router = APIRouter()
 # Pipeline Endpoints
 # ============================================
 
+
 @router.get("/pipelines", response_model=List[PipelineListResponse])
 async def list_pipelines(
     include_templates: bool = Query(True, description="Include template pipelines"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     List all membership pipelines for the organization.
@@ -70,26 +73,34 @@ async def list_pipelines(
 
     result = []
     for p in pipelines:
-        result.append(PipelineListResponse(
-            id=p.id,
-            name=p.name,
-            description=p.description,
-            is_template=p.is_template,
-            is_default=p.is_default,
-            is_active=p.is_active if hasattr(p, 'is_active') else True,
-            auto_transfer_on_approval=p.auto_transfer_on_approval,
-            step_count=len(p.steps) if p.steps else 0,
-            prospect_count=len(p.prospects) if hasattr(p, 'prospects') and p.prospects else 0,
-            created_at=p.created_at,
-        ))
+        result.append(
+            PipelineListResponse(
+                id=p.id,
+                name=p.name,
+                description=p.description,
+                is_template=p.is_template,
+                is_default=p.is_default,
+                is_active=p.is_active if hasattr(p, "is_active") else True,
+                auto_transfer_on_approval=p.auto_transfer_on_approval,
+                step_count=len(p.steps) if p.steps else 0,
+                prospect_count=(
+                    len(p.prospects) if hasattr(p, "prospects") and p.prospects else 0
+                ),
+                created_at=p.created_at,
+            )
+        )
     return result
 
 
-@router.post("/pipelines", response_model=PipelineResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/pipelines", response_model=PipelineResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_pipeline(
     data: PipelineCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Create a new membership pipeline.
@@ -120,7 +131,11 @@ async def create_pipeline(
 async def get_pipeline(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     Get a single pipeline with its steps.
@@ -128,9 +143,13 @@ async def get_pipeline(
     **Requires permission: members.view**
     """
     service = MembershipPipelineService(db)
-    pipeline = await service.get_pipeline(str(pipeline_id), current_user.organization_id)
+    pipeline = await service.get_pipeline(
+        str(pipeline_id), current_user.organization_id
+    )
     if not pipeline:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
     return pipeline
 
 
@@ -139,7 +158,9 @@ async def update_pipeline(
     pipeline_id: UUID,
     data: PipelineUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Update a pipeline's properties.
@@ -153,7 +174,9 @@ async def update_pipeline(
         data.model_dump(exclude_unset=True),
     )
     if not pipeline:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
     return pipeline
 
 
@@ -161,7 +184,9 @@ async def update_pipeline(
 async def delete_pipeline(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Delete a pipeline.
@@ -169,17 +194,27 @@ async def delete_pipeline(
     **Requires permission: members.manage**
     """
     service = MembershipPipelineService(db)
-    deleted = await service.delete_pipeline(str(pipeline_id), current_user.organization_id)
+    deleted = await service.delete_pipeline(
+        str(pipeline_id), current_user.organization_id
+    )
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
 
 
-@router.post("/pipelines/{pipeline_id}/duplicate", response_model=PipelineResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/pipelines/{pipeline_id}/duplicate",
+    response_model=PipelineResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def duplicate_pipeline(
     pipeline_id: UUID,
     name: str = Query(..., description="Name for the duplicated pipeline"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Duplicate a pipeline (useful for creating from templates).
@@ -194,15 +229,21 @@ async def duplicate_pipeline(
         created_by=current_user.id,
     )
     if not pipeline:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source pipeline not found"
+        )
     return pipeline
 
 
-@router.post("/pipelines/{pipeline_id}/seed-templates", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/pipelines/{pipeline_id}/seed-templates", status_code=status.HTTP_201_CREATED
+)
 async def seed_templates(
     pipeline_id: str = "default",
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Seed default pipeline templates for the organization.
@@ -218,11 +259,16 @@ async def seed_templates(
 # Pipeline Step Endpoints
 # ============================================
 
+
 @router.get("/pipelines/{pipeline_id}/steps", response_model=List[PipelineStepResponse])
 async def list_steps(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     List all steps for a pipeline.
@@ -230,18 +276,28 @@ async def list_steps(
     **Requires permission: members.view**
     """
     service = MembershipPipelineService(db)
-    pipeline = await service.get_pipeline(str(pipeline_id), current_user.organization_id)
+    pipeline = await service.get_pipeline(
+        str(pipeline_id), current_user.organization_id
+    )
     if not pipeline:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
     return sorted(pipeline.steps, key=lambda s: s.sort_order)
 
 
-@router.post("/pipelines/{pipeline_id}/steps", response_model=PipelineStepResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/pipelines/{pipeline_id}/steps",
+    response_model=PipelineStepResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_step(
     pipeline_id: UUID,
     data: PipelineStepCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Add a step to a pipeline.
@@ -255,17 +311,23 @@ async def add_step(
         data.model_dump(),
     )
     if not step:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
     return step
 
 
-@router.put("/pipelines/{pipeline_id}/steps/{step_id}", response_model=PipelineStepResponse)
+@router.put(
+    "/pipelines/{pipeline_id}/steps/{step_id}", response_model=PipelineStepResponse
+)
 async def update_step(
     pipeline_id: UUID,
     step_id: UUID,
     data: PipelineStepUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Update a pipeline step.
@@ -280,16 +342,22 @@ async def update_step(
         data.model_dump(exclude_unset=True),
     )
     if not step:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Step or pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Step or pipeline not found"
+        )
     return step
 
 
-@router.delete("/pipelines/{pipeline_id}/steps/{step_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/pipelines/{pipeline_id}/steps/{step_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_step(
     pipeline_id: UUID,
     step_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Remove a step from a pipeline.
@@ -301,15 +369,21 @@ async def delete_step(
         str(step_id), str(pipeline_id), current_user.organization_id
     )
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Step or pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Step or pipeline not found"
+        )
 
 
-@router.put("/pipelines/{pipeline_id}/steps/reorder", response_model=List[PipelineStepResponse])
+@router.put(
+    "/pipelines/{pipeline_id}/steps/reorder", response_model=List[PipelineStepResponse]
+)
 async def reorder_steps(
     pipeline_id: UUID,
     data: StepReorderRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Reorder steps in a pipeline by providing an ordered list of step IDs.
@@ -323,7 +397,9 @@ async def reorder_steps(
         [str(sid) for sid in data.step_ids],
     )
     if steps is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
     return steps
 
 
@@ -331,11 +407,16 @@ async def reorder_steps(
 # Kanban Board Endpoint
 # ============================================
 
+
 @router.get("/pipelines/{pipeline_id}/kanban")
 async def get_kanban_board(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     Get the kanban board view for a pipeline.
@@ -345,9 +426,13 @@ async def get_kanban_board(
     **Requires permission: members.view**
     """
     service = MembershipPipelineService(db)
-    board = await service.get_kanban_board(str(pipeline_id), current_user.organization_id)
+    board = await service.get_kanban_board(
+        str(pipeline_id), current_user.organization_id
+    )
     if not board:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
     return board
 
 
@@ -355,11 +440,16 @@ async def get_kanban_board(
 # Pipeline Statistics
 # ============================================
 
+
 @router.get("/pipelines/{pipeline_id}/stats", response_model=PipelineStatsResponse)
 async def get_pipeline_stats(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     Get statistics for a pipeline (counts by status, by step, conversion rate).
@@ -367,9 +457,13 @@ async def get_pipeline_stats(
     **Requires permission: members.view**
     """
     service = MembershipPipelineService(db)
-    stats = await service.get_pipeline_stats(str(pipeline_id), current_user.organization_id)
+    stats = await service.get_pipeline_stats(
+        str(pipeline_id), current_user.organization_id
+    )
     if not stats:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
     return stats
 
 
@@ -377,12 +471,17 @@ async def get_pipeline_stats(
 # Purge Inactive Prospects
 # ============================================
 
-@router.post("/pipelines/{pipeline_id}/purge-inactive", response_model=PurgeInactiveResponse)
+
+@router.post(
+    "/pipelines/{pipeline_id}/purge-inactive", response_model=PurgeInactiveResponse
+)
 async def purge_inactive_prospects(
     pipeline_id: UUID,
     data: PurgeInactiveRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Purge withdrawn/inactive prospects from a pipeline.
@@ -398,7 +497,9 @@ async def purge_inactive_prospects(
         )
 
     service = MembershipPipelineService(db)
-    prospect_ids = [str(pid) for pid in data.prospect_ids] if data.prospect_ids else None
+    prospect_ids = (
+        [str(pid) for pid in data.prospect_ids] if data.prospect_ids else None
+    )
     count = await service.purge_inactive_prospects(
         pipeline_id=str(pipeline_id),
         organization_id=current_user.organization_id,
@@ -415,15 +516,22 @@ async def purge_inactive_prospects(
 # Prospect Endpoints
 # ============================================
 
+
 @router.get("/prospects", response_model=PaginatedProspectListResponse)
 async def list_prospects(
     pipeline_id: Optional[UUID] = Query(None, description="Filter by pipeline"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by status"
+    ),
     search: Optional[str] = Query(None, description="Search by name or email"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     List prospective members with optional filters.
@@ -445,20 +553,24 @@ async def list_prospects(
 
     items = []
     for p in prospects:
-        items.append(ProspectListResponse(
-            id=p.id,
-            first_name=p.first_name,
-            last_name=p.last_name,
-            email=p.email,
-            phone=p.phone,
-            status=p.status.value if hasattr(p.status, 'value') else p.status,
-            pipeline_id=p.pipeline_id,
-            pipeline_name=p.pipeline.name if p.pipeline else None,
-            current_step_id=p.current_step_id,
-            current_step_name=p.current_step.name if p.current_step else None,
-            created_at=p.created_at,
-        ))
-    return PaginatedProspectListResponse(items=items, total=total, limit=limit, offset=offset)
+        items.append(
+            ProspectListResponse(
+                id=p.id,
+                first_name=p.first_name,
+                last_name=p.last_name,
+                email=p.email,
+                phone=p.phone,
+                status=p.status.value if hasattr(p.status, "value") else p.status,
+                pipeline_id=p.pipeline_id,
+                pipeline_name=p.pipeline.name if p.pipeline else None,
+                current_step_id=p.current_step_id,
+                current_step_name=p.current_step.name if p.current_step else None,
+                created_at=p.created_at,
+            )
+        )
+    return PaginatedProspectListResponse(
+        items=items, total=total, limit=limit, offset=offset
+    )
 
 
 @router.post("/prospects/check-existing")
@@ -467,7 +579,9 @@ async def check_existing_members_for_prospect(
     first_name: Optional[str] = Query(None, description="First name for name matching"),
     last_name: Optional[str] = Query(None, description="Last name for name matching"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.create", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.create", "prospective_members.manage")
+    ),
 ):
     """
     Check if a prospective member matches any existing users in the organization.
@@ -503,11 +617,15 @@ async def check_existing_members_for_prospect(
     }
 
 
-@router.post("/prospects", response_model=ProspectResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/prospects", response_model=ProspectResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_prospect(
     data: ProspectCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.create", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.create", "prospective_members.manage")
+    ),
 ):
     """
     Add a new prospective member manually.
@@ -564,7 +682,11 @@ async def create_prospect(
 async def get_prospect(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     Get a prospective member's full details including step progress.
@@ -572,9 +694,13 @@ async def get_prospect(
     **Requires permission: members.view**
     """
     service = MembershipPipelineService(db)
-    prospect = await service.get_prospect(str(prospect_id), current_user.organization_id)
+    prospect = await service.get_prospect(
+        str(prospect_id), current_user.organization_id
+    )
     if not prospect:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
     return prospect
 
 
@@ -583,7 +709,9 @@ async def update_prospect(
     prospect_id: UUID,
     data: ProspectUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Update a prospective member's information.
@@ -598,7 +726,9 @@ async def update_prospect(
         updated_by=current_user.id,
     )
     if not prospect:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
     return prospect
 
 
@@ -607,7 +737,9 @@ async def complete_step(
     prospect_id: UUID,
     data: CompleteStepRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Mark a pipeline step as completed for a prospect.
@@ -627,7 +759,9 @@ async def complete_step(
         action_result=data.action_result,
     )
     if not prospect:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
     return prospect
 
 
@@ -636,7 +770,9 @@ async def advance_prospect(
     prospect_id: UUID,
     data: AdvanceProspectRequest = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Advance a prospect to the next step in the pipeline.
@@ -651,16 +787,22 @@ async def advance_prospect(
         notes=data.notes if data else None,
     )
     if not prospect:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
     return prospect
 
 
-@router.post("/prospects/{prospect_id}/transfer", response_model=TransferProspectResponse)
+@router.post(
+    "/prospects/{prospect_id}/transfer", response_model=TransferProspectResponse
+)
 async def transfer_prospect(
     prospect_id: UUID,
     data: TransferProspectRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Transfer a prospect to full membership (creates a User record).
@@ -680,22 +822,34 @@ async def transfer_prospect(
         send_welcome_email=data.send_welcome_email,
         middle_name=data.middle_name,
         hire_date=data.hire_date,
-        emergency_contacts=[ec for ec in data.emergency_contacts] if data.emergency_contacts else None,
+        emergency_contacts=(
+            [ec for ec in data.emergency_contacts] if data.emergency_contacts else None
+        ),
         membership_type=data.membership_type,
     )
     if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
     if not result.get("success"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("message"))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("message")
+        )
     return result
 
 
-@router.get("/prospects/{prospect_id}/activity", response_model=List[ActivityLogResponse])
+@router.get(
+    "/prospects/{prospect_id}/activity", response_model=List[ActivityLogResponse]
+)
 async def get_prospect_activity(
     prospect_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     Get the activity log for a prospect.
@@ -709,15 +863,17 @@ async def get_prospect_activity(
 
     result = []
     for log in logs:
-        result.append(ActivityLogResponse(
-            id=log.id,
-            prospect_id=log.prospect_id,
-            action=log.action,
-            details=log.details,
-            performed_by=log.performed_by,
-            performer_name=log.performer.full_name if log.performer else None,
-            created_at=log.created_at,
-        ))
+        result.append(
+            ActivityLogResponse(
+                id=log.id,
+                prospect_id=log.prospect_id,
+                action=log.action,
+                details=log.details,
+                performed_by=log.performed_by,
+                performer_name=log.performer.full_name if log.performer else None,
+                created_at=log.created_at,
+            )
+        )
     return result
 
 
@@ -725,11 +881,18 @@ async def get_prospect_activity(
 # Prospect Document Endpoints
 # ============================================
 
-@router.get("/prospects/{prospect_id}/documents", response_model=List[ProspectDocumentResponse])
+
+@router.get(
+    "/prospects/{prospect_id}/documents", response_model=List[ProspectDocumentResponse]
+)
 async def list_prospect_documents(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     List all documents for a prospect.
@@ -737,7 +900,9 @@ async def list_prospect_documents(
     **Requires permission: members.view**
     """
     service = MembershipPipelineService(db)
-    docs = await service.get_prospect_documents(str(prospect_id), current_user.organization_id)
+    docs = await service.get_prospect_documents(
+        str(prospect_id), current_user.organization_id
+    )
     return docs
 
 
@@ -748,14 +913,18 @@ async def list_prospect_documents(
 )
 async def add_prospect_document(
     prospect_id: UUID,
-    document_type: str = Query(..., description="Type of document (e.g. application, id, background_check)"),
+    document_type: str = Query(
+        ..., description="Type of document (e.g. application, id, background_check)"
+    ),
     file_name: str = Query(..., description="Original file name"),
     file_path: str = Query(..., description="Storage path for the file"),
     file_size: int = Query(0, ge=0, description="File size in bytes"),
     mime_type: Optional[str] = Query(None, description="MIME type of the file"),
     step_id: Optional[UUID] = Query(None, description="Associated pipeline step"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Add a document record for a prospect.
@@ -781,7 +950,9 @@ async def add_prospect_document(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
     return doc
 
 
@@ -793,7 +964,9 @@ async def delete_prospect_document(
     prospect_id: UUID,
     document_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Delete a prospect document.
@@ -808,18 +981,27 @@ async def delete_prospect_document(
         deleted_by=current_user.id,
     )
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
 
 
 # ============================================
 # Election Package Endpoints
 # ============================================
 
-@router.get("/prospects/{prospect_id}/election-package", response_model=ElectionPackageResponse)
+
+@router.get(
+    "/prospects/{prospect_id}/election-package", response_model=ElectionPackageResponse
+)
 async def get_election_package(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     Get the election package for a prospect.
@@ -827,9 +1009,13 @@ async def get_election_package(
     **Requires permission: members.view**
     """
     service = MembershipPipelineService(db)
-    pkg = await service.get_election_package(str(prospect_id), current_user.organization_id)
+    pkg = await service.get_election_package(
+        str(prospect_id), current_user.organization_id
+    )
     if not pkg:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election package not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election package not found"
+        )
     return pkg
 
 
@@ -842,7 +1028,9 @@ async def create_election_package(
     prospect_id: UUID,
     data: ElectionPackageCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Create an election package for a prospect.
@@ -863,16 +1051,22 @@ async def create_election_package(
         created_by=current_user.id,
     )
     if not pkg:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
     return pkg
 
 
-@router.put("/prospects/{prospect_id}/election-package", response_model=ElectionPackageResponse)
+@router.put(
+    "/prospects/{prospect_id}/election-package", response_model=ElectionPackageResponse
+)
 async def update_election_package(
     prospect_id: UUID,
     data: ElectionPackageUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Update an election package for a prospect.
@@ -887,16 +1081,24 @@ async def update_election_package(
         updated_by=current_user.id,
     )
     if not pkg:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election package not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election package not found"
+        )
     return pkg
 
 
 @router.get("/election-packages", response_model=List[ElectionPackageResponse])
 async def list_election_packages(
     pipeline_id: Optional[UUID] = Query(None, description="Filter by pipeline"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by status"
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.view", "prospective_members.view", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
 ):
     """
     List election packages across all prospects, optionally filtered.
@@ -916,10 +1118,13 @@ async def list_election_packages(
 # Inactivity Check Endpoint
 # ============================================
 
+
 @router.post("/prospects/process-inactivity")
 async def process_inactivity(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage", "prospective_members.manage")),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
 ):
     """
     Process inactivity warnings for all prospects in the organization.

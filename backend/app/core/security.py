@@ -5,24 +5,23 @@ Comprehensive security functions for password hashing, encryption,
 and other security-critical operations. HIPAA compliant.
 """
 
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHash
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
-import jwt
-from jwt.exceptions import InvalidTokenError as JWTError
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
-import secrets
-import string
 import base64
 import hashlib
 import re
+import secrets
+import string
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
+
+import jwt
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
+from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from app.core.config import settings
-
 
 # ============================================
 # Password Hashing (Argon2)
@@ -30,11 +29,11 @@ from app.core.config import settings
 
 # Argon2 is recommended by OWASP and is resistant to GPU attacks
 password_hasher = PasswordHasher(
-    time_cost=3,        # Number of iterations
+    time_cost=3,  # Number of iterations
     memory_cost=65536,  # Memory usage in KB (64 MB)
-    parallelism=4,      # Number of parallel threads
-    hash_len=32,        # Length of the hash in bytes
-    salt_len=16         # Length of the salt in bytes
+    parallelism=4,  # Number of parallel threads
+    hash_len=32,  # Length of the hash in bytes
+    salt_len=16,  # Length of the salt in bytes
 )
 
 
@@ -117,60 +116,149 @@ def validate_password_strength(password: str) -> tuple[bool, str | None]:
 
     # Check length
     if len(password) < settings.PASSWORD_MIN_LENGTH:
-        errors.append(f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters long")
+        errors.append(
+            f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters long"
+        )
 
     # Check uppercase
-    if settings.PASSWORD_REQUIRE_UPPERCASE and not re.search(r'[A-Z]', password):
+    if settings.PASSWORD_REQUIRE_UPPERCASE and not re.search(r"[A-Z]", password):
         errors.append("Password must contain at least one uppercase letter")
 
     # Check lowercase
-    if settings.PASSWORD_REQUIRE_LOWERCASE and not re.search(r'[a-z]', password):
+    if settings.PASSWORD_REQUIRE_LOWERCASE and not re.search(r"[a-z]", password):
         errors.append("Password must contain at least one lowercase letter")
 
     # Check numbers
-    if settings.PASSWORD_REQUIRE_NUMBERS and not re.search(r'\d', password):
+    if settings.PASSWORD_REQUIRE_NUMBERS and not re.search(r"\d", password):
         errors.append("Password must contain at least one number")
 
     # Check special characters
-    if settings.PASSWORD_REQUIRE_SPECIAL and not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?~`]', password):
+    if settings.PASSWORD_REQUIRE_SPECIAL and not re.search(
+        r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?~`]', password
+    ):
         errors.append("Password must contain at least one special character")
 
     # Check for sequential characters (3+ in a row)
     sequential_patterns = [
-        '012', '123', '234', '345', '456', '567', '678', '789',
-        'abc', 'bcd', 'cde', 'def', 'efg', 'fgh', 'ghi', 'hij',
-        'ijk', 'jkl', 'klm', 'lmn', 'mno', 'nop', 'opq', 'pqr',
-        'qrs', 'rst', 'stu', 'tuv', 'uvw', 'vwx', 'wxy', 'xyz'
+        "012",
+        "123",
+        "234",
+        "345",
+        "456",
+        "567",
+        "678",
+        "789",
+        "abc",
+        "bcd",
+        "cde",
+        "def",
+        "efg",
+        "fgh",
+        "ghi",
+        "hij",
+        "ijk",
+        "jkl",
+        "klm",
+        "lmn",
+        "mno",
+        "nop",
+        "opq",
+        "pqr",
+        "qrs",
+        "rst",
+        "stu",
+        "tuv",
+        "uvw",
+        "vwx",
+        "wxy",
+        "xyz",
     ]
     password_lower = password.lower()
     for pattern in sequential_patterns:
         if pattern in password_lower:
-            errors.append("Password cannot contain sequential characters (e.g., '123', 'abc')")
+            errors.append(
+                "Password cannot contain sequential characters (e.g., '123', 'abc')"
+            )
             break
 
     # Check for repeated characters (3+ in a row)
-    if re.search(r'(.)\1{2,}', password):
+    if re.search(r"(.)\1{2,}", password):
         errors.append("Password cannot contain 3 or more repeated characters")
 
     # Check for common passwords (expanded list for security)
     common_passwords = [
-        'password', '12345678', '123456789', '1234567890', 'qwerty', 'admin',
-        'letmein', 'welcome', 'monkey', 'dragon', 'master', 'password123',
-        'password1', 'password!', 'iloveyou', 'sunshine', 'princess', 'admin123',
-        'qwerty123', 'login', 'passw0rd', 'baseball', 'football', 'shadow',
-        'michael', 'batman', 'trustno1', 'whatever', 'freedom', 'mustang',
-        'jennifer', 'jordan', 'harley', 'ranger', 'thomas', 'robert', 'soccer',
-        'hockey', 'killer', 'george', 'charlie', 'andrew', 'daniel', 'joshua',
-        'matthew', 'firedepart', 'firehouse', 'firefighter', 'rescue', 'engine',
-        'ladder', 'station', 'department', 'emergency', 'medic', 'ems', 'ambulance'
+        "password",
+        "12345678",
+        "123456789",
+        "1234567890",
+        "qwerty",
+        "admin",
+        "letmein",
+        "welcome",
+        "monkey",
+        "dragon",
+        "master",
+        "password123",
+        "password1",
+        "password!",
+        "iloveyou",
+        "sunshine",
+        "princess",
+        "admin123",
+        "qwerty123",
+        "login",
+        "passw0rd",
+        "baseball",
+        "football",
+        "shadow",
+        "michael",
+        "batman",
+        "trustno1",
+        "whatever",
+        "freedom",
+        "mustang",
+        "jennifer",
+        "jordan",
+        "harley",
+        "ranger",
+        "thomas",
+        "robert",
+        "soccer",
+        "hockey",
+        "killer",
+        "george",
+        "charlie",
+        "andrew",
+        "daniel",
+        "joshua",
+        "matthew",
+        "firedepart",
+        "firehouse",
+        "firefighter",
+        "rescue",
+        "engine",
+        "ladder",
+        "station",
+        "department",
+        "emergency",
+        "medic",
+        "ems",
+        "ambulance",
     ]
     if password_lower in common_passwords:
         errors.append("Password is too common. Please choose a stronger password")
 
     # Check for keyboard patterns
     keyboard_patterns = [
-        'qwerty', 'asdfgh', 'zxcvbn', 'qazwsx', 'qweasd', '!@#$%^',
-        '1qaz2wsx', '1234qwer', 'asdf1234'
+        "qwerty",
+        "asdfgh",
+        "zxcvbn",
+        "qazwsx",
+        "qweasd",
+        "!@#$%^",
+        "1qaz2wsx",
+        "1234qwer",
+        "asdf1234",
     ]
     for pattern in keyboard_patterns:
         if pattern in password_lower:
@@ -182,7 +270,10 @@ def validate_password_strength(password: str) -> tuple[bool, str | None]:
         if len(errors) == 1:
             error_message = errors[0]
         else:
-            error_message = f"Password requirements not met ({len(errors)} issues): " + "; ".join(errors)
+            error_message = (
+                f"Password requirements not met ({len(errors)} issues): "
+                + "; ".join(errors)
+            )
 
         return False, error_message
 
@@ -243,6 +334,7 @@ def generate_temporary_password(length: int = 16) -> str:
 # Data Encryption (AES-256)
 # ============================================
 
+
 def get_encryption_salt() -> bytes:
     """
     Get installation-specific salt for key derivation.
@@ -259,10 +351,11 @@ def get_encryption_salt() -> bytes:
         if settings.ENVIRONMENT == "production":
             raise RuntimeError(
                 "ENCRYPTION_SALT must be set in production. "
-                "Generate one with: python -c \"import secrets; print(secrets.token_hex(16))\""
+                'Generate one with: python -c "import secrets; print(secrets.token_hex(16))"'
             )
         # Fallback for development only - log warning
         import logging
+
         logging.warning(
             "SECURITY WARNING: ENCRYPTION_SALT not set. "
             "Using fallback salt. This is insecure for production!"
@@ -292,7 +385,7 @@ def get_encryption_key() -> bytes:
         length=32,
         salt=get_encryption_salt(),
         iterations=100000,
-        backend=default_backend()
+        backend=default_backend(),
     )
     derived_key = kdf.derive(key)
 
@@ -347,7 +440,10 @@ def decrypt_data(encrypted_data: str) -> str:
 # JWT Token Management
 # ============================================
 
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+
+def create_access_token(
+    data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+) -> str:
     """
     Create a JWT access token
 
@@ -363,15 +459,17 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
 
-    to_encode.update({
-        "exp": expire,
-        "iat": datetime.now(timezone.utc),
-        "type": "access"
-    })
+    to_encode.update(
+        {"exp": expire, "iat": datetime.now(timezone.utc), "type": "access"}
+    )
 
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
     return encoded_jwt
 
 
@@ -386,15 +484,17 @@ def create_refresh_token(data: Dict[str, Any]) -> str:
         Encoded JWT refresh token string
     """
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
 
-    to_encode.update({
-        "exp": expire,
-        "iat": datetime.now(timezone.utc),
-        "type": "refresh"
-    })
+    to_encode.update(
+        {"exp": expire, "iat": datetime.now(timezone.utc), "type": "refresh"}
+    )
 
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
     return encoded_jwt
 
 
@@ -419,6 +519,7 @@ def decode_token(token: str) -> Dict[str, Any]:
 # Security Utilities
 # ============================================
 
+
 def generate_secure_token(length: int = 32) -> str:
     """
     Generate a cryptographically secure random token
@@ -442,7 +543,7 @@ def generate_verification_code(length: int = 6) -> str:
     Returns:
         Numeric string of specified length
     """
-    return ''.join([str(secrets.randbelow(10)) for _ in range(length)])
+    return "".join([str(secrets.randbelow(10)) for _ in range(length)])
 
 
 def hash_data_sha256(data: str) -> str:
@@ -495,11 +596,13 @@ def sanitize_input(text: str, max_length: int = 1000) -> str:
     text = text[:max_length]
 
     # Remove null bytes
-    text = text.replace('\x00', '')
+    text = text.replace("\x00", "")
 
     # Remove control characters except common whitespace
-    allowed_control = {'\n', '\r', '\t'}
-    text = ''.join(char for char in text if char in allowed_control or char.isprintable())
+    allowed_control = {"\n", "\r", "\t"}
+    text = "".join(
+        char for char in text if char in allowed_control or char.isprintable()
+    )
 
     return text.strip()
 
@@ -527,6 +630,7 @@ def mask_sensitive_data(data: str, visible_chars: int = 4) -> str:
 # Rate Limiting Helpers
 # ============================================
 
+
 async def is_rate_limited(
     key: str,
     limit: int,
@@ -549,13 +653,17 @@ async def is_rate_limited(
     Returns:
         True if rate limit exceeded, False otherwise
     """
-    from app.core.cache import cache_manager
-    from loguru import logger
     import time
+
+    from loguru import logger
+
+    from app.core.cache import cache_manager
 
     if not cache_manager.is_connected or not cache_manager.redis_client:
         if fail_closed:
-            logger.warning("Rate limiting fail-closed: Redis not connected, denying request")
+            logger.warning(
+                "Rate limiting fail-closed: Redis not connected, denying request"
+            )
             return True
         logger.debug("Rate limiting disabled - Redis not connected")
         return False
@@ -588,7 +696,9 @@ async def is_rate_limited(
         request_count = results[1]
 
         if request_count >= limit:
-            logger.warning(f"Rate limit exceeded for key: {key} ({request_count}/{limit} requests)")
+            logger.warning(
+                f"Rate limit exceeded for key: {key} ({request_count}/{limit} requests)"
+            )
             return True
 
         return False

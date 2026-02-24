@@ -5,15 +5,16 @@ Handles sending emails using SMTP or organization-specific email service configu
 """
 
 import html as _html
-import smtplib
 import os
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
-from typing import List, Optional, Dict, Any
+import smtplib
 from datetime import datetime, timezone
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
+
 from loguru import logger
 
 from app.core.config import settings
@@ -38,9 +39,11 @@ class EmailService:
         """HTML-escape a string for safe insertion into email HTML bodies."""
         return _html.escape(str(value)) if value else ""
 
-    def _format_local_dt(self, dt: datetime, fmt: str = '%B %d, %Y at %I:%M %p') -> str:
+    def _format_local_dt(self, dt: datetime, fmt: str = "%B %d, %Y at %I:%M %p") -> str:
         """Format a datetime in the organization's local timezone."""
-        tz_name = getattr(self.organization, 'timezone', None) if self.organization else None
+        tz_name = (
+            getattr(self.organization, "timezone", None) if self.organization else None
+        )
         if tz_name:
             local_dt = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
         else:
@@ -57,27 +60,29 @@ class EmailService:
         """
         # Check if organization has custom email settings
         if self.organization and self.organization.settings:
-            org_email_config = self.organization.settings.get('email_service', {})
-            if org_email_config.get('enabled'):
+            org_email_config = self.organization.settings.get("email_service", {})
+            if org_email_config.get("enabled"):
                 return {
-                    'host': org_email_config.get('smtp_host'),
-                    'port': org_email_config.get('smtp_port', 587),
-                    'user': org_email_config.get('smtp_user'),
-                    'password': org_email_config.get('smtp_password'),
-                    'from_email': org_email_config.get('from_email'),
-                    'from_name': org_email_config.get('from_name', self.organization.name),
-                    'use_tls': org_email_config.get('use_tls', True),
+                    "host": org_email_config.get("smtp_host"),
+                    "port": org_email_config.get("smtp_port", 587),
+                    "user": org_email_config.get("smtp_user"),
+                    "password": org_email_config.get("smtp_password"),
+                    "from_email": org_email_config.get("from_email"),
+                    "from_name": org_email_config.get(
+                        "from_name", self.organization.name
+                    ),
+                    "use_tls": org_email_config.get("use_tls", True),
                 }
 
         # Fall back to global settings
         return {
-            'host': settings.SMTP_HOST,
-            'port': settings.SMTP_PORT,
-            'user': settings.SMTP_USER,
-            'password': settings.SMTP_PASSWORD,
-            'from_email': settings.SMTP_FROM_EMAIL,
-            'from_name': settings.SMTP_FROM_NAME,
-            'use_tls': True,
+            "host": settings.SMTP_HOST,
+            "port": settings.SMTP_PORT,
+            "user": settings.SMTP_USER,
+            "password": settings.SMTP_PASSWORD,
+            "from_email": settings.SMTP_FROM_EMAIL,
+            "from_name": settings.SMTP_FROM_NAME,
+            "use_tls": True,
         }
 
     async def send_email(
@@ -105,9 +110,13 @@ class EmailService:
         Returns:
             Tuple of (success_count, failure_count)
         """
-        if not settings.EMAIL_ENABLED and not (self.organization and
-                                                self.organization.settings.get('email_service', {}).get('enabled')):
-            logger.info(f"Email disabled. Would send to {len(to_emails)} recipients: {subject}")
+        if not settings.EMAIL_ENABLED and not (
+            self.organization
+            and self.organization.settings.get("email_service", {}).get("enabled")
+        ):
+            logger.info(
+                f"Email disabled. Would send to {len(to_emails)} recipients: {subject}"
+            )
             return 0, len(to_emails)
 
         success_count = 0
@@ -117,56 +126,68 @@ class EmailService:
             try:
                 # Use mixed type when we have attachments, alternative otherwise
                 if attachment_paths:
-                    msg = MIMEMultipart('mixed')
+                    msg = MIMEMultipart("mixed")
                     # Create alternative sub-part for text/html
-                    alt_part = MIMEMultipart('alternative')
+                    alt_part = MIMEMultipart("alternative")
                     if text_body:
-                        alt_part.attach(MIMEText(text_body, 'plain'))
-                    alt_part.attach(MIMEText(html_body, 'html'))
+                        alt_part.attach(MIMEText(text_body, "plain"))
+                    alt_part.attach(MIMEText(html_body, "html"))
                     msg.attach(alt_part)
 
                     # Attach files
                     for filepath in attachment_paths:
                         if not os.path.isfile(filepath):
-                            logger.warning(f"Attachment not found, skipping: {filepath}")
+                            logger.warning(
+                                f"Attachment not found, skipping: {filepath}"
+                            )
                             continue
-                        with open(filepath, 'rb') as f:
-                            part = MIMEBase('application', 'octet-stream')
+                        with open(filepath, "rb") as f:
+                            part = MIMEBase("application", "octet-stream")
                             part.set_payload(f.read())
                         encoders.encode_base64(part)
                         filename = os.path.basename(filepath)
-                        part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                        part.add_header(
+                            "Content-Disposition", f'attachment; filename="{filename}"'
+                        )
                         msg.attach(part)
                 else:
-                    msg = MIMEMultipart('alternative')
+                    msg = MIMEMultipart("alternative")
                     if text_body:
-                        msg.attach(MIMEText(text_body, 'plain'))
-                    msg.attach(MIMEText(html_body, 'html'))
+                        msg.attach(MIMEText(text_body, "plain"))
+                    msg.attach(MIMEText(html_body, "html"))
 
-                msg['From'] = f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
-                msg['To'] = to_email
-                msg['Subject'] = subject
-                msg['Date'] = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S +0000')
+                msg["From"] = (
+                    f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
+                )
+                msg["To"] = to_email
+                msg["Subject"] = subject
+                msg["Date"] = datetime.now(timezone.utc).strftime(
+                    "%a, %d %b %Y %H:%M:%S +0000"
+                )
 
                 # Add CC and BCC recipients
                 all_recipients = [to_email]
                 if cc_emails:
-                    msg['Cc'] = ', '.join(cc_emails)
+                    msg["Cc"] = ", ".join(cc_emails)
                     all_recipients.extend(cc_emails)
                 if bcc_emails:
                     # BCC recipients are NOT added to headers (invisible to other recipients)
                     all_recipients.extend(bcc_emails)
 
                 # Send email
-                with smtplib.SMTP(self._smtp_config['host'], self._smtp_config['port']) as server:
-                    if self._smtp_config['use_tls']:
+                with smtplib.SMTP(
+                    self._smtp_config["host"], self._smtp_config["port"]
+                ) as server:
+                    if self._smtp_config["use_tls"]:
                         server.starttls()
 
-                    if self._smtp_config['user'] and self._smtp_config['password']:
-                        server.login(self._smtp_config['user'], self._smtp_config['password'])
+                    if self._smtp_config["user"] and self._smtp_config["password"]:
+                        server.login(
+                            self._smtp_config["user"], self._smtp_config["password"]
+                        )
 
                     server.sendmail(
-                        self._smtp_config['from_email'],
+                        self._smtp_config["from_email"],
                         all_recipients,
                         msg.as_string(),
                     )
@@ -209,8 +230,8 @@ class EmailService:
         esc = self._esc
         e_election_title = esc(election_title)
         e_recipient_name = esc(recipient_name)
-        e_custom_message = esc(custom_message) if custom_message else ''
-        e_ballot_url = esc(ballot_url) if ballot_url else ''
+        e_custom_message = esc(custom_message) if custom_message else ""
+        e_ballot_url = esc(ballot_url) if ballot_url else ""
 
         # Build email body
         html_body = f"""
@@ -324,7 +345,7 @@ Please do not reply to this email.
         esc = self._esc
         e_course_name = esc(course_name)
         e_event_title = esc(event_title)
-        e_submitter_name = esc(submitter_name) if submitter_name else ''
+        e_submitter_name = esc(submitter_name) if submitter_name else ""
         e_approval_url = esc(approval_url)
 
         html_body = f"""
@@ -473,10 +494,8 @@ Please do not reply to this email.
         # Try loading the admin-configured template from the database
         if db and organization_id:
             try:
-                from app.services.email_template_service import (
-                    EmailTemplateService,
-                )
                 from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
 
                 template_service = EmailTemplateService(db)
                 template = await template_service.get_template(
@@ -494,24 +513,28 @@ Please do not reply to this email.
                         else:
                             attachment_paths = stored_paths
             except Exception as e:
-                logger.warning(f"Failed to load welcome email template, using default: {e}")
+                logger.warning(
+                    f"Failed to load welcome email template, using default: {e}"
+                )
 
         # Fall back to inline default if no template loaded
         if not subject:
-            from app.services.email_template_service import (
-                DEFAULT_WELCOME_SUBJECT,
-                DEFAULT_WELCOME_HTML,
-                DEFAULT_WELCOME_TEXT,
-                DEFAULT_CSS,
-            )
             import re
+
+            from app.services.email_template_service import (
+                DEFAULT_CSS,
+                DEFAULT_WELCOME_HTML,
+                DEFAULT_WELCOME_SUBJECT,
+                DEFAULT_WELCOME_TEXT,
+            )
 
             def _replace(text: str) -> str:
                 def replacer(match):
                     var = match.group(1).strip()
                     value = str(context.get(var, match.group(0)))
                     return _html.escape(value)
-                return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
+
+                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
 
             subject = _replace(DEFAULT_WELCOME_SUBJECT)
             html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_WELCOME_HTML)}</body></html>"
@@ -568,8 +591,8 @@ Please do not reply to this email.
         # Try loading the admin-configured template from the database
         if db and organization_id:
             try:
-                from app.services.email_template_service import EmailTemplateService
                 from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
 
                 template_service = EmailTemplateService(db)
                 template = await template_service.get_template(
@@ -580,24 +603,28 @@ Please do not reply to this email.
                         template, context
                     )
             except Exception as e:
-                logger.warning(f"Failed to load password reset template, using default: {e}")
+                logger.warning(
+                    f"Failed to load password reset template, using default: {e}"
+                )
 
         # Fall back to inline default
         if not subject:
-            from app.services.email_template_service import (
-                DEFAULT_PASSWORD_RESET_SUBJECT,
-                DEFAULT_PASSWORD_RESET_HTML,
-                DEFAULT_PASSWORD_RESET_TEXT,
-                DEFAULT_CSS,
-            )
             import re
+
+            from app.services.email_template_service import (
+                DEFAULT_CSS,
+                DEFAULT_PASSWORD_RESET_HTML,
+                DEFAULT_PASSWORD_RESET_SUBJECT,
+                DEFAULT_PASSWORD_RESET_TEXT,
+            )
 
             def _replace(text: str) -> str:
                 def replacer(match):
                     var = match.group(1).strip()
                     value = str(context.get(var, match.group(0)))
                     return _html.escape(value)
-                return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
+
+                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
 
             subject = _replace(DEFAULT_PASSWORD_RESET_SUBJECT)
             html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_PASSWORD_RESET_HTML)}</body></html>"
@@ -735,7 +762,7 @@ Automated IT notification from {organization_name}."""
             True if sent successfully
         """
         start_str = self._format_local_dt(event_start)
-        end_str = self._format_local_dt(event_end, '%I:%M %p')
+        end_str = self._format_local_dt(event_end, "%I:%M %p")
         subject = f"Reminder: {event_title}"
 
         # HTML-escape user-controlled values

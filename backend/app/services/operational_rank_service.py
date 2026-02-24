@@ -7,7 +7,7 @@ Business logic for per-organization operational rank management.
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.operational_rank import OperationalRank
@@ -78,9 +78,8 @@ class OperationalRankService:
         organization_id: str,
         is_active: Optional[bool] = None,
     ) -> List[OperationalRank]:
-        query = (
-            select(OperationalRank)
-            .where(OperationalRank.organization_id == organization_id)
+        query = select(OperationalRank).where(
+            OperationalRank.organization_id == organization_id
         )
         if is_active is not None:
             query = query.where(OperationalRank.is_active == is_active)
@@ -89,7 +88,9 @@ class OperationalRankService:
         return list(result.scalars().all())
 
     async def get_rank(
-        self, rank_id: UUID, organization_id: str,
+        self,
+        rank_id: UUID,
+        organization_id: str,
     ) -> Optional[OperationalRank]:
         result = await self.db.execute(
             select(OperationalRank).where(
@@ -209,23 +210,22 @@ class OperationalRankService:
         valid_codes = {row[0] for row in result.all()}
 
         # Find active-status members whose rank is set but unrecognised.
-        members_q = (
-            select(User.id, User.first_name, User.last_name, User.rank)
-            .where(
-                User.organization_id == organization_id,
-                User.rank.isnot(None),
-                User.rank != "",
-                User.status.notin_([s.value for s in _INACTIVE_STATUSES]),
-                User.deleted_at.is_(None),
-            )
+        members_q = select(User.id, User.first_name, User.last_name, User.rank).where(
+            User.organization_id == organization_id,
+            User.rank.isnot(None),
+            User.rank != "",
+            User.status.notin_([s.value for s in _INACTIVE_STATUSES]),
+            User.deleted_at.is_(None),
         )
         members_result = await self.db.execute(members_q)
         issues: List[Dict] = []
         for row in members_result.all():
             if row.rank not in valid_codes:
-                issues.append({
-                    "member_id": row.id,
-                    "member_name": f"{row.first_name or ''} {row.last_name or ''}".strip(),
-                    "rank_code": row.rank,
-                })
+                issues.append(
+                    {
+                        "member_id": row.id,
+                        "member_name": f"{row.first_name or ''} {row.last_name or ''}".strip(),
+                        "rank_code": row.rank,
+                    }
+                )
         return issues

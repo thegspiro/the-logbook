@@ -5,28 +5,28 @@ Seeds the database with default training categories, courses, and requirements.
 Follows the same async SQLAlchemy session pattern as seed.py.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.utils import generate_uuid
 from app.models.training import (
-    TrainingCategory,
-    TrainingCourse,
-    TrainingRequirement,
-    TrainingProgram,
+    DueDateType,
+    ProgramMilestone,
     ProgramPhase,
     ProgramRequirement,
-    ProgramMilestone,
-    TrainingType,
-    RequirementType,
+    ProgramStructureType,
     RequirementFrequency,
     RequirementSource,
-    DueDateType,
-    ProgramStructureType,
+    RequirementType,
+    TrainingCategory,
+    TrainingCourse,
+    TrainingProgram,
+    TrainingRequirement,
+    TrainingType,
 )
-from app.core.utils import generate_uuid
-from loguru import logger
-
 
 # ============================================
 # Default Training Categories
@@ -41,10 +41,30 @@ DEFAULT_CATEGORIES = [
         "icon": "flame",
         "sort_order": 1,
         "subcategories": [
-            {"name": "Suppression", "code": "FIRE-SUP", "description": "Fire suppression techniques and tactics", "sort_order": 1},
-            {"name": "Ventilation", "code": "FIRE-VENT", "description": "Ventilation operations and techniques", "sort_order": 2},
-            {"name": "Search & Rescue", "code": "FIRE-SAR", "description": "Primary and secondary search operations", "sort_order": 3},
-            {"name": "Ladder Operations", "code": "FIRE-LAD", "description": "Ground and aerial ladder operations", "sort_order": 4},
+            {
+                "name": "Suppression",
+                "code": "FIRE-SUP",
+                "description": "Fire suppression techniques and tactics",
+                "sort_order": 1,
+            },
+            {
+                "name": "Ventilation",
+                "code": "FIRE-VENT",
+                "description": "Ventilation operations and techniques",
+                "sort_order": 2,
+            },
+            {
+                "name": "Search & Rescue",
+                "code": "FIRE-SAR",
+                "description": "Primary and secondary search operations",
+                "sort_order": 3,
+            },
+            {
+                "name": "Ladder Operations",
+                "code": "FIRE-LAD",
+                "description": "Ground and aerial ladder operations",
+                "sort_order": 4,
+            },
         ],
     },
     {
@@ -55,10 +75,30 @@ DEFAULT_CATEGORIES = [
         "icon": "heart-pulse",
         "sort_order": 2,
         "subcategories": [
-            {"name": "BLS", "code": "EMS-BLS", "description": "Basic Life Support training", "sort_order": 1},
-            {"name": "ALS", "code": "EMS-ALS", "description": "Advanced Life Support training", "sort_order": 2},
-            {"name": "Trauma", "code": "EMS-TRAUMA", "description": "Trauma assessment and treatment", "sort_order": 3},
-            {"name": "Pediatric", "code": "EMS-PEDI", "description": "Pediatric emergency care", "sort_order": 4},
+            {
+                "name": "BLS",
+                "code": "EMS-BLS",
+                "description": "Basic Life Support training",
+                "sort_order": 1,
+            },
+            {
+                "name": "ALS",
+                "code": "EMS-ALS",
+                "description": "Advanced Life Support training",
+                "sort_order": 2,
+            },
+            {
+                "name": "Trauma",
+                "code": "EMS-TRAUMA",
+                "description": "Trauma assessment and treatment",
+                "sort_order": 3,
+            },
+            {
+                "name": "Pediatric",
+                "code": "EMS-PEDI",
+                "description": "Pediatric emergency care",
+                "sort_order": 4,
+            },
         ],
     },
     {
@@ -78,10 +118,30 @@ DEFAULT_CATEGORIES = [
         "icon": "shield",
         "sort_order": 4,
         "subcategories": [
-            {"name": "Water Rescue", "code": "RESCUE-WATER", "description": "Water and swift water rescue operations", "sort_order": 1},
-            {"name": "Rope Rescue", "code": "RESCUE-ROPE", "description": "High and low angle rope rescue", "sort_order": 2},
-            {"name": "Confined Space", "code": "RESCUE-CS", "description": "Confined space rescue operations", "sort_order": 3},
-            {"name": "Vehicle Extrication", "code": "RESCUE-VEX", "description": "Vehicle extrication techniques", "sort_order": 4},
+            {
+                "name": "Water Rescue",
+                "code": "RESCUE-WATER",
+                "description": "Water and swift water rescue operations",
+                "sort_order": 1,
+            },
+            {
+                "name": "Rope Rescue",
+                "code": "RESCUE-ROPE",
+                "description": "High and low angle rope rescue",
+                "sort_order": 2,
+            },
+            {
+                "name": "Confined Space",
+                "code": "RESCUE-CS",
+                "description": "Confined space rescue operations",
+                "sort_order": 3,
+            },
+            {
+                "name": "Vehicle Extrication",
+                "code": "RESCUE-VEX",
+                "description": "Vehicle extrication techniques",
+                "sort_order": 4,
+            },
         ],
     },
     {
@@ -569,9 +629,7 @@ async def seed_training_courses(
             continue
 
         resolved_prereqs = [
-            course_code_map[code]
-            for code in prereq_codes
-            if code in course_code_map
+            course_code_map[code] for code in prereq_codes if code in course_code_map
         ]
 
         if resolved_prereqs:
@@ -583,7 +641,9 @@ async def seed_training_courses(
             course = result.scalar_one_or_none()
             if course and not course.prerequisites:
                 course.prerequisites = resolved_prereqs
-                logger.info(f"Set prerequisites for {course_data['name']}: {prereq_codes}")
+                logger.info(
+                    f"Set prerequisites for {course_data['name']}: {prereq_codes}"
+                )
 
     await db.commit()
     logger.info(f"Training courses seeded successfully ({len(course_ids)} total)")
@@ -660,7 +720,9 @@ async def seed_training_requirements(
         logger.info(f"Created training requirement: {req_data['name']}")
 
     await db.commit()
-    logger.info(f"Training requirements seeded successfully ({len(requirement_ids)} total)")
+    logger.info(
+        f"Training requirements seeded successfully ({len(requirement_ids)} total)"
+    )
     return requirement_ids
 
 
@@ -745,8 +807,8 @@ PIPELINE_TEMPLATES = [
                         "required_skills": [
                             "Forward lay",
                             "Reverse lay",
-                            "Attack line advance (1-3/4\")",
-                            "Attack line advance (2-1/2\")",
+                            'Attack line advance (1-3/4")',
+                            'Attack line advance (2-1/2")',
                             "Supply line operations",
                             "Nozzle patterns and techniques",
                         ],
@@ -1388,7 +1450,9 @@ async def seed_pipeline_templates(
                 name=phase_data["name"],
                 description=phase_data["description"],
                 time_limit_days=phase_data.get("time_limit_days"),
-                requires_manual_advancement=phase_data.get("requires_manual_advancement", False),
+                requires_manual_advancement=phase_data.get(
+                    "requires_manual_advancement", False
+                ),
             )
             db.add(phase)
             logger.info(f"  Created phase: {phase_data['name']}")
@@ -1439,7 +1503,9 @@ async def seed_pipeline_templates(
                     phase_id=phase_id,
                     name=ms_data["name"],
                     description=ms_data["description"],
-                    completion_percentage_threshold=ms_data["completion_percentage_threshold"],
+                    completion_percentage_threshold=ms_data[
+                        "completion_percentage_threshold"
+                    ],
                     notification_message=ms_data.get("notification_message"),
                 )
                 db.add(milestone)
@@ -1477,10 +1543,14 @@ async def seed_training_data(
     category_map = await seed_training_categories(db, organization_id, created_by)
 
     # 2. Seed courses (references categories)
-    course_ids = await seed_training_courses(db, organization_id, created_by, category_map)
+    course_ids = await seed_training_courses(
+        db, organization_id, created_by, category_map
+    )
 
     # 3. Seed requirements (references categories)
-    requirement_ids = await seed_training_requirements(db, organization_id, created_by, category_map)
+    requirement_ids = await seed_training_requirements(
+        db, organization_id, created_by, category_map
+    )
 
     # 4. Seed pipeline templates (programs with phases, requirements, milestones)
     pipeline_ids = await seed_pipeline_templates(db, organization_id, created_by)

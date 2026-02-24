@@ -36,14 +36,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.training import TrainingWaiver
 from app.models.user import MemberLeaveOfAbsence
 
-
 # ---------------------------------------------------------------------------
 # Lightweight wrapper so calculation helpers work uniformly with both models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class WaiverPeriod:
     """Uniform representation of a waiver / leave period."""
+
     start_date: date
     end_date: date
     requirement_ids: Optional[List[str]] = None  # None → applies to all
@@ -70,6 +71,7 @@ def _to_waiver_period(obj) -> WaiverPeriod:
 # ---------------------------------------------------------------------------
 # Fetch helpers
 # ---------------------------------------------------------------------------
+
 
 async def fetch_user_waivers(
     db: AsyncSession,
@@ -98,8 +100,8 @@ async def fetch_user_waivers(
     periods: List[WaiverPeriod] = []
     for w in tw_result.scalars().all():
         periods.append(_to_waiver_period(w))
-    for l in ml_result.scalars().all():
-        periods.append(_to_waiver_period(l))
+    for leave in ml_result.scalars().all():
+        periods.append(_to_waiver_period(leave))
     return periods
 
 
@@ -129,9 +131,9 @@ async def fetch_org_waivers(
     for w in tw_result.scalars().all():
         uid = str(w.user_id)
         by_user.setdefault(uid, []).append(_to_waiver_period(w))
-    for l in ml_result.scalars().all():
-        uid = str(l.user_id)
-        by_user.setdefault(uid, []).append(_to_waiver_period(l))
+    for leave in ml_result.scalars().all():
+        uid = str(leave.user_id)
+        by_user.setdefault(uid, []).append(_to_waiver_period(leave))
     return by_user
 
 
@@ -139,17 +141,22 @@ async def fetch_org_waivers(
 # Pure calculation helpers (no I/O)
 # ---------------------------------------------------------------------------
 
+
 def get_rolling_period_months(req) -> Optional[int]:
     """Return ``rolling_period_months`` when a requirement uses rolling due dates.
 
     Returns ``None`` for non-rolling requirements so ``adjust_required``
     falls back to the calendar-month count.
     """
-    due_date_type = getattr(req, 'due_date_type', None)
+    due_date_type = getattr(req, "due_date_type", None)
     if due_date_type:
-        dt = due_date_type.value if hasattr(due_date_type, 'value') else str(due_date_type)
-        if dt == 'rolling':
-            return getattr(req, 'rolling_period_months', None)
+        dt = (
+            due_date_type.value
+            if hasattr(due_date_type, "value")
+            else str(due_date_type)
+        )
+        if dt == "rolling":
+            return getattr(req, "rolling_period_months", None)
     return None
 
 
@@ -218,7 +225,11 @@ def total_months_in_period(period_start: date, period_end: date) -> int:
     """Count total calendar months spanned by ``[period_start, period_end]``."""
     if not period_start or not period_end:
         return 0
-    months = (period_end.year - period_start.year) * 12 + (period_end.month - period_start.month) + 1
+    months = (
+        (period_end.year - period_start.year) * 12
+        + (period_end.month - period_start.month)
+        + 1
+    )
     return max(months, 1)
 
 
@@ -260,7 +271,11 @@ def adjust_required(
     if not period_start or not period_end or base_required <= 0:
         return base_required, 0, 0
 
-    total = period_months if period_months else total_months_in_period(period_start, period_end)
+    total = (
+        period_months
+        if period_months
+        else total_months_in_period(period_start, period_end)
+    )
     waived = count_waived_months(waivers, period_start, period_end, req_id)
     active_months = max(total - waived, 1)
 

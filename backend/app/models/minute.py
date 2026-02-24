@@ -4,29 +4,21 @@ Meeting Minutes Models
 Database models for meeting minutes, motions, action items, and templates.
 """
 
-from sqlalchemy import (
-    Column,
-    String,
-    Text,
-    Boolean,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    Enum as SQLEnum,
-    Index,
-    JSON,
-)
+from enum import Enum
+
+from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from enum import Enum
-from app.core.utils import generate_uuid
 
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class MinutesMeetingType(str, Enum):
     """Meeting type enumeration"""
+
     BUSINESS = "business"
     SPECIAL = "special"
     COMMITTEE = "committee"
@@ -39,6 +31,7 @@ class MinutesMeetingType(str, Enum):
 
 class MinutesStatus(str, Enum):
     """Minutes approval workflow status"""
+
     DRAFT = "draft"
     SUBMITTED = "submitted"
     APPROVED = "approved"
@@ -47,6 +40,7 @@ class MinutesStatus(str, Enum):
 
 class MotionStatus(str, Enum):
     """Motion vote result"""
+
     PASSED = "passed"
     FAILED = "failed"
     TABLED = "tabled"
@@ -55,6 +49,7 @@ class MotionStatus(str, Enum):
 
 class MinutesActionItemStatus(str, Enum):
     """Action item progress status"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -64,6 +59,7 @@ class MinutesActionItemStatus(str, Enum):
 
 class ActionItemPriority(str, Enum):
     """Action item priority level"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -73,77 +69,413 @@ class ActionItemPriority(str, Enum):
 # ── Default template sections for a standard business meeting ──
 
 DEFAULT_BUSINESS_SECTIONS = [
-    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
-    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
-    {"order": 2, "key": "approval_of_previous", "title": "Approval of Previous Minutes", "default_content": "", "required": False},
-    {"order": 3, "key": "treasurer_report", "title": "Treasurer's Report", "default_content": "", "required": False},
-    {"order": 4, "key": "chief_report", "title": "Chief's Report", "default_content": "", "required": False},
-    {"order": 5, "key": "committee_reports", "title": "Committee Reports", "default_content": "", "required": False},
-    {"order": 6, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
-    {"order": 7, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
-    {"order": 8, "key": "announcements", "title": "Announcements", "default_content": "", "required": False},
-    {"order": 9, "key": "public_comment", "title": "Public Comment", "default_content": "", "required": False},
-    {"order": 10, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+    {
+        "order": 0,
+        "key": "call_to_order",
+        "title": "Call to Order",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 1,
+        "key": "roll_call",
+        "title": "Roll Call / Attendance",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 2,
+        "key": "approval_of_previous",
+        "title": "Approval of Previous Minutes",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 3,
+        "key": "treasurer_report",
+        "title": "Treasurer's Report",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 4,
+        "key": "chief_report",
+        "title": "Chief's Report",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 5,
+        "key": "committee_reports",
+        "title": "Committee Reports",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 6,
+        "key": "old_business",
+        "title": "Old Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 7,
+        "key": "new_business",
+        "title": "New Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 8,
+        "key": "announcements",
+        "title": "Announcements",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 9,
+        "key": "public_comment",
+        "title": "Public Comment",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 10,
+        "key": "adjournment",
+        "title": "Adjournment",
+        "default_content": "",
+        "required": True,
+    },
 ]
 
 DEFAULT_SPECIAL_SECTIONS = [
-    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
-    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
-    {"order": 2, "key": "purpose", "title": "Purpose of Special Meeting", "default_content": "", "required": True},
-    {"order": 3, "key": "discussion", "title": "Discussion", "default_content": "", "required": False},
-    {"order": 4, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+    {
+        "order": 0,
+        "key": "call_to_order",
+        "title": "Call to Order",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 1,
+        "key": "roll_call",
+        "title": "Roll Call / Attendance",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 2,
+        "key": "purpose",
+        "title": "Purpose of Special Meeting",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 3,
+        "key": "discussion",
+        "title": "Discussion",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 4,
+        "key": "adjournment",
+        "title": "Adjournment",
+        "default_content": "",
+        "required": True,
+    },
 ]
 
 DEFAULT_COMMITTEE_SECTIONS = [
-    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
-    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
-    {"order": 2, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
-    {"order": 3, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
-    {"order": 4, "key": "recommendations", "title": "Recommendations to Full Body", "default_content": "", "required": False},
-    {"order": 5, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+    {
+        "order": 0,
+        "key": "call_to_order",
+        "title": "Call to Order",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 1,
+        "key": "roll_call",
+        "title": "Roll Call / Attendance",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 2,
+        "key": "old_business",
+        "title": "Old Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 3,
+        "key": "new_business",
+        "title": "New Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 4,
+        "key": "recommendations",
+        "title": "Recommendations to Full Body",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 5,
+        "key": "adjournment",
+        "title": "Adjournment",
+        "default_content": "",
+        "required": True,
+    },
 ]
 
 DEFAULT_TRUSTEE_SECTIONS = [
-    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
-    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
-    {"order": 2, "key": "approval_of_previous", "title": "Approval of Previous Minutes", "default_content": "", "required": False},
-    {"order": 3, "key": "treasurer_report", "title": "Treasurer's Report", "default_content": "", "required": True},
-    {"order": 4, "key": "financial_review", "title": "Financial Review & Budget", "default_content": "", "required": False},
-    {"order": 5, "key": "trust_fund_report", "title": "Trust Fund Report", "default_content": "", "required": False},
-    {"order": 6, "key": "audit_report", "title": "Audit Report", "default_content": "", "required": False},
-    {"order": 7, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
-    {"order": 8, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
-    {"order": 9, "key": "legal_matters", "title": "Legal Matters", "default_content": "", "required": False},
-    {"order": 10, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+    {
+        "order": 0,
+        "key": "call_to_order",
+        "title": "Call to Order",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 1,
+        "key": "roll_call",
+        "title": "Roll Call / Attendance",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 2,
+        "key": "approval_of_previous",
+        "title": "Approval of Previous Minutes",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 3,
+        "key": "treasurer_report",
+        "title": "Treasurer's Report",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 4,
+        "key": "financial_review",
+        "title": "Financial Review & Budget",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 5,
+        "key": "trust_fund_report",
+        "title": "Trust Fund Report",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 6,
+        "key": "audit_report",
+        "title": "Audit Report",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 7,
+        "key": "old_business",
+        "title": "Old Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 8,
+        "key": "new_business",
+        "title": "New Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 9,
+        "key": "legal_matters",
+        "title": "Legal Matters",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 10,
+        "key": "adjournment",
+        "title": "Adjournment",
+        "default_content": "",
+        "required": True,
+    },
 ]
 
 DEFAULT_EXECUTIVE_SECTIONS = [
-    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
-    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
-    {"order": 2, "key": "approval_of_previous", "title": "Approval of Previous Minutes", "default_content": "", "required": False},
-    {"order": 3, "key": "officers_reports", "title": "Officers' Reports", "default_content": "", "required": False},
-    {"order": 4, "key": "chief_report", "title": "Chief's Report", "default_content": "", "required": False},
-    {"order": 5, "key": "strategic_planning", "title": "Strategic Planning & Goals", "default_content": "", "required": False},
-    {"order": 6, "key": "personnel_matters", "title": "Personnel Matters", "default_content": "", "required": False},
-    {"order": 7, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
-    {"order": 8, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
-    {"order": 9, "key": "executive_session", "title": "Executive Session", "default_content": "", "required": False},
-    {"order": 10, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+    {
+        "order": 0,
+        "key": "call_to_order",
+        "title": "Call to Order",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 1,
+        "key": "roll_call",
+        "title": "Roll Call / Attendance",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 2,
+        "key": "approval_of_previous",
+        "title": "Approval of Previous Minutes",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 3,
+        "key": "officers_reports",
+        "title": "Officers' Reports",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 4,
+        "key": "chief_report",
+        "title": "Chief's Report",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 5,
+        "key": "strategic_planning",
+        "title": "Strategic Planning & Goals",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 6,
+        "key": "personnel_matters",
+        "title": "Personnel Matters",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 7,
+        "key": "old_business",
+        "title": "Old Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 8,
+        "key": "new_business",
+        "title": "New Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 9,
+        "key": "executive_session",
+        "title": "Executive Session",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 10,
+        "key": "adjournment",
+        "title": "Adjournment",
+        "default_content": "",
+        "required": True,
+    },
 ]
 
 DEFAULT_ANNUAL_SECTIONS = [
-    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
-    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
-    {"order": 2, "key": "approval_of_previous", "title": "Approval of Previous Annual Minutes", "default_content": "", "required": False},
-    {"order": 3, "key": "annual_report", "title": "Annual Report", "default_content": "", "required": True},
-    {"order": 4, "key": "treasurer_report", "title": "Treasurer's Annual Report", "default_content": "", "required": True},
-    {"order": 5, "key": "chief_report", "title": "Chief's Annual Report", "default_content": "", "required": False},
-    {"order": 6, "key": "committee_reports", "title": "Committee Reports", "default_content": "", "required": False},
-    {"order": 7, "key": "election_results", "title": "Election Results", "default_content": "", "required": False},
-    {"order": 8, "key": "awards_recognition", "title": "Awards & Recognition", "default_content": "", "required": False},
-    {"order": 9, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
-    {"order": 10, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
-    {"order": 11, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+    {
+        "order": 0,
+        "key": "call_to_order",
+        "title": "Call to Order",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 1,
+        "key": "roll_call",
+        "title": "Roll Call / Attendance",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 2,
+        "key": "approval_of_previous",
+        "title": "Approval of Previous Annual Minutes",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 3,
+        "key": "annual_report",
+        "title": "Annual Report",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 4,
+        "key": "treasurer_report",
+        "title": "Treasurer's Annual Report",
+        "default_content": "",
+        "required": True,
+    },
+    {
+        "order": 5,
+        "key": "chief_report",
+        "title": "Chief's Annual Report",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 6,
+        "key": "committee_reports",
+        "title": "Committee Reports",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 7,
+        "key": "election_results",
+        "title": "Election Results",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 8,
+        "key": "awards_recognition",
+        "title": "Awards & Recognition",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 9,
+        "key": "old_business",
+        "title": "Old Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 10,
+        "key": "new_business",
+        "title": "New Business",
+        "default_content": "",
+        "required": False,
+    },
+    {
+        "order": 11,
+        "key": "adjournment",
+        "title": "Adjournment",
+        "default_content": "",
+        "required": True,
+    },
 ]
 
 
@@ -154,14 +486,21 @@ class MinutesTemplate(Base):
     Defines a reusable template with predefined sections, ordering,
     and document header/footer configuration for uniform output.
     """
+
     __tablename__ = "minutes_templates"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
 
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
-    meeting_type = Column(SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesMeetingType.BUSINESS)
+    meeting_type = Column(
+        SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=MinutesMeetingType.BUSINESS,
+    )
     is_default = Column(Boolean, nullable=False, default=False)
 
     # Sections definition: JSON array of {order, key, title, default_content, required}
@@ -174,8 +513,15 @@ class MinutesTemplate(Base):
     footer_config = Column(JSON, nullable=True)
 
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     __table_args__ = (
         Index("ix_minutes_templates_organization_id", "organization_id"),
@@ -190,14 +536,21 @@ class MeetingMinutes(Base):
     Records the official minutes of a meeting, including attendees,
     agenda items, motions, and action items.
     """
+
     __tablename__ = "meeting_minutes"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Meeting details
     title = Column(String(300), nullable=False)
-    meeting_type = Column(SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesMeetingType.BUSINESS)
+    meeting_type = Column(
+        SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=MinutesMeetingType.BUSINESS,
+    )
     meeting_date = Column(DateTime(timezone=True), nullable=False)
     location = Column(String(300), nullable=True)
     called_by = Column(String(200), nullable=True)
@@ -222,7 +575,11 @@ class MeetingMinutes(Base):
     sections = Column(JSON, nullable=True)
 
     # Template used to create these minutes
-    template_id = Column(String(36), ForeignKey("minutes_templates.id", ondelete="SET NULL"), nullable=True)
+    template_id = Column(
+        String(36),
+        ForeignKey("minutes_templates.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Document header/footer overrides (inherits from template if null)
     header_config = Column(JSON, nullable=True)
@@ -242,7 +599,11 @@ class MeetingMinutes(Base):
     notes = Column(Text, nullable=True)
 
     # Approval workflow
-    status = Column(SQLEnum(MinutesStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesStatus.DRAFT)
+    status = Column(
+        SQLEnum(MinutesStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=MinutesStatus.DRAFT,
+    )
     submitted_at = Column(DateTime(timezone=True), nullable=True)
     submitted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
@@ -255,19 +616,38 @@ class MeetingMinutes(Base):
     event_id = Column(String(36), ForeignKey("events.id"), nullable=True)
 
     # Link to meeting record (optional — pre-fills date, attendees, agenda from Meeting)
-    meeting_id = Column(String(36), ForeignKey("meetings.id", ondelete="SET NULL"), nullable=True)
+    meeting_id = Column(
+        String(36), ForeignKey("meetings.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     # Relationships
     template = relationship("MinutesTemplate", foreign_keys=[template_id])
     event = relationship("Event", foreign_keys=[event_id])
     meeting = relationship("Meeting", foreign_keys=[meeting_id])
-    motions = relationship("Motion", back_populates="minutes", cascade="all, delete-orphan", order_by="Motion.order")
-    action_items = relationship("ActionItem", back_populates="minutes", cascade="all, delete-orphan", order_by="ActionItem.created_at")
+    motions = relationship(
+        "Motion",
+        back_populates="minutes",
+        cascade="all, delete-orphan",
+        order_by="Motion.order",
+    )
+    action_items = relationship(
+        "ActionItem",
+        back_populates="minutes",
+        cascade="all, delete-orphan",
+        order_by="ActionItem.created_at",
+    )
 
     def get_sections(self):
         """Return sections from the dynamic field, or build from legacy fields."""
@@ -289,7 +669,9 @@ class MeetingMinutes(Base):
         for i, (key, title) in enumerate(legacy_map):
             value = getattr(self, key, None)
             if value:
-                result.append({"order": i, "key": key, "title": title, "content": value})
+                result.append(
+                    {"order": i, "key": key, "title": title, "content": value}
+                )
         return result
 
     def get_effective_header(self):
@@ -323,10 +705,13 @@ class Motion(Base):
     Records a formal motion made during a meeting, including
     who moved/seconded, the vote tally, and the result.
     """
+
     __tablename__ = "meeting_motions"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    minutes_id = Column(String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False)
+    minutes_id = Column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Motion details
     order = Column(Integer, nullable=False, default=0)
@@ -336,21 +721,30 @@ class Motion(Base):
     discussion_notes = Column(Text, nullable=True)
 
     # Vote result
-    status = Column(SQLEnum(MotionStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MotionStatus.PASSED)
+    status = Column(
+        SQLEnum(MotionStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=MotionStatus.PASSED,
+    )
     votes_for = Column(Integer, nullable=True)
     votes_against = Column(Integer, nullable=True)
     votes_abstain = Column(Integer, nullable=True)
 
     # Metadata
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     # Relationships
     minutes = relationship("MeetingMinutes", back_populates="motions")
 
-    __table_args__ = (
-        Index("ix_meeting_motions_minutes_id", "minutes_id"),
-    )
+    __table_args__ = (Index("ix_meeting_motions_minutes_id", "minutes_id"),)
 
 
 class ActionItem(Base):
@@ -360,26 +754,46 @@ class ActionItem(Base):
     Tracks tasks assigned during a meeting with assignee, due date,
     and completion tracking.
     """
+
     __tablename__ = "minutes_action_items"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    minutes_id = Column(String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False)
+    minutes_id = Column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Item details
     description = Column(Text, nullable=False)
     assignee_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     assignee_name = Column(String(200), nullable=True)
     due_date = Column(DateTime(timezone=True), nullable=True)
-    priority = Column(SQLEnum(ActionItemPriority, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ActionItemPriority.MEDIUM)
+    priority = Column(
+        SQLEnum(ActionItemPriority, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ActionItemPriority.MEDIUM,
+    )
 
     # Status tracking
-    status = Column(SQLEnum(MinutesActionItemStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesActionItemStatus.PENDING)
+    status = Column(
+        SQLEnum(
+            MinutesActionItemStatus, values_callable=lambda x: [e.value for e in x]
+        ),
+        nullable=False,
+        default=MinutesActionItemStatus.PENDING,
+    )
     completed_at = Column(DateTime(timezone=True), nullable=True)
     completion_notes = Column(Text, nullable=True)
 
     # Metadata
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     # Relationships
     minutes = relationship("MeetingMinutes", back_populates="action_items")

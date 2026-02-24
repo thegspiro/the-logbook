@@ -16,32 +16,32 @@ Designed to be triggered by a daily cron job / scheduled task.
 Can also be triggered manually by training officers.
 """
 
-from datetime import datetime, timedelta, date, timezone
-from typing import List, Dict, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Dict, List, Optional
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-from loguru import logger
 
-from app.models.training import TrainingRecord, TrainingStatus
-from app.models.user import User, UserStatus, Organization
-from app.models.notification import NotificationChannel, NotificationCategory
+from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.core.constants import (
-    DEFAULT_TRAINING_OFFICER_ROLES,
     DEFAULT_COMPLIANCE_OFFICER_ROLES,
+    DEFAULT_TRAINING_OFFICER_ROLES,
     ROLE_CHIEF,
 )
+from app.models.notification import NotificationCategory, NotificationChannel
+from app.models.training import TrainingRecord, TrainingStatus
+from app.models.user import Organization, User, UserStatus
 from app.services.email_service import EmailService
 from app.services.notifications_service import NotificationsService
-
 
 # Alert tiers: (days_before, field_name, cc_officers)
 ALERT_TIERS = [
     (90, "alert_90_sent_at", False),
     (60, "alert_60_sent_at", False),
-    (30, "alert_30_sent_at", True),    # CC training officer
-    (7,  "alert_7_sent_at",  True),    # CC training + compliance
+    (30, "alert_30_sent_at", True),  # CC training officer
+    (7, "alert_7_sent_at", True),  # CC training + compliance
 ]
 
 
@@ -117,10 +117,7 @@ class CertAlertService:
             .options(selectinload(User.roles))
         )
         users = result.scalars().all()
-        return [
-            u for u in users
-            if any(r.slug in role_slugs for r in u.roles)
-        ]
+        return [u for u in users if any(r.slug in role_slugs for r in u.roles)]
 
     async def _get_officer_emails(
         self, organization_id: UUID, role_slugs: List[str]
@@ -131,9 +128,9 @@ class CertAlertService:
 
     def _member_has_email_enabled(self, member: User) -> bool:
         """Check if a member has email notifications enabled."""
-        prefs = getattr(member, 'notification_preferences', None)
+        prefs = getattr(member, "notification_preferences", None)
         if prefs and isinstance(prefs, dict):
-            return prefs.get('email_notifications', True) and prefs.get('email', True)
+            return prefs.get("email_notifications", True) and prefs.get("email", True)
         return True  # Default to enabled
 
     async def _log_in_app_notification(
@@ -160,9 +157,7 @@ class CertAlertService:
             },
         )
 
-    async def process_alerts(
-        self, organization_id: UUID
-    ) -> Dict[str, int]:
+    async def process_alerts(self, organization_id: UUID) -> Dict[str, int]:
         """
         Process all certification expiration alerts for an organization.
 
@@ -176,18 +171,32 @@ class CertAlertService:
         """
         config = await self.get_alert_config(organization_id)
         if not config.get("enabled"):
-            return {"alerts_sent": 0, "escalations_sent": 0, "in_app_sent": 0, "errors": 0}
+            return {
+                "alerts_sent": 0,
+                "escalations_sent": 0,
+                "in_app_sent": 0,
+                "errors": 0,
+            }
 
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
         if not org:
-            return {"alerts_sent": 0, "escalations_sent": 0, "in_app_sent": 0, "errors": 0}
+            return {
+                "alerts_sent": 0,
+                "escalations_sent": 0,
+                "in_app_sent": 0,
+                "errors": 0,
+            }
 
         email_service = EmailService(org)
-        training_roles = config.get("training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES)
-        compliance_roles = config.get("compliance_officer_roles", DEFAULT_COMPLIANCE_OFFICER_ROLES)
+        training_roles = config.get(
+            "training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES
+        )
+        compliance_roles = config.get(
+            "compliance_officer_roles", DEFAULT_COMPLIANCE_OFFICER_ROLES
+        )
         escalation_roles = config.get("escalation_roles", training_roles + [ROLE_CHIEF])
 
         alerts_sent = 0
@@ -218,7 +227,9 @@ class CertAlertService:
                 if not member:
                     continue
 
-                subject = f"Certification Expiring in {days_until} Days: {record.course_name}"
+                subject = (
+                    f"Certification Expiring in {days_until} Days: {record.course_name}"
+                )
                 message = (
                     f"Your {record.course_name} certification expires on "
                     f"{record.expiration_date.strftime('%B %d, %Y')} ({days_until} days). "
@@ -238,9 +249,15 @@ class CertAlertService:
 
                     # Also notify officers in-app for escalation tiers
                     if cc_officers:
-                        officers = await self._get_officers_with_roles(organization_id, training_roles)
+                        officers = await self._get_officers_with_roles(
+                            organization_id, training_roles
+                        )
                         if tier_days <= 7:
-                            officers.extend(await self._get_officers_with_roles(organization_id, compliance_roles))
+                            officers.extend(
+                                await self._get_officers_with_roles(
+                                    organization_id, compliance_roles
+                                )
+                            )
                         for officer in officers:
                             await self._log_in_app_notification(
                                 organization_id=organization_id,
@@ -254,9 +271,17 @@ class CertAlertService:
                     if self._member_has_email_enabled(member) and member.email:
                         cc_emails = []
                         if cc_officers:
-                            cc_emails.extend(await self._get_officer_emails(organization_id, training_roles))
+                            cc_emails.extend(
+                                await self._get_officer_emails(
+                                    organization_id, training_roles
+                                )
+                            )
                             if tier_days <= 7:
-                                cc_emails.extend(await self._get_officer_emails(organization_id, compliance_roles))
+                                cc_emails.extend(
+                                    await self._get_officer_emails(
+                                        organization_id, compliance_roles
+                                    )
+                                )
 
                         html_body = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -316,7 +341,9 @@ class CertAlertService:
                 continue
 
             days_expired = (today - record.expiration_date).days
-            subject = f"EXPIRED Certification: {record.course_name} - {member.full_name}"
+            subject = (
+                f"EXPIRED Certification: {record.course_name} - {member.full_name}"
+            )
             message = (
                 f"{member.full_name}'s {record.course_name} certification "
                 f"expired on {record.expiration_date.strftime('%B %d, %Y')} "
@@ -335,7 +362,9 @@ class CertAlertService:
                 in_app_sent += 1
 
                 # In-app notification to escalation officers
-                escalation_officers = await self._get_officers_with_roles(organization_id, escalation_roles)
+                escalation_officers = await self._get_officers_with_roles(
+                    organization_id, escalation_roles
+                )
                 for officer in escalation_officers:
                     await self._log_in_app_notification(
                         organization_id=organization_id,
@@ -346,16 +375,22 @@ class CertAlertService:
                     )
 
                 # Email escalation
-                cc_emails = await self._get_officer_emails(organization_id, training_roles)
-                cc_emails.extend(await self._get_officer_emails(organization_id, compliance_roles))
+                cc_emails = await self._get_officer_emails(
+                    organization_id, training_roles
+                )
+                cc_emails.extend(
+                    await self._get_officer_emails(organization_id, compliance_roles)
+                )
                 if config.get("cc_chief_on_escalation"):
-                    cc_emails.extend(await self._get_officer_emails(organization_id, [ROLE_CHIEF]))
+                    cc_emails.extend(
+                        await self._get_officer_emails(organization_id, [ROLE_CHIEF])
+                    )
 
                 to_emails = []
                 if self._member_has_email_enabled(member) and member.email:
                     to_emails.append(member.email)
                 # Include personal email on final escalation if configured
-                if include_personal_email and getattr(member, 'personal_email', None):
+                if include_personal_email and getattr(member, "personal_email", None):
                     to_emails.append(member.personal_email)
 
                 if to_emails or cc_emails:
@@ -430,7 +465,13 @@ async def run_daily_cert_alerts(db: AsyncSession) -> Dict[str, int]:
     result = await db.execute(select(Organization))
     organizations = result.scalars().all()
 
-    total_results = {"alerts_sent": 0, "escalations_sent": 0, "in_app_sent": 0, "errors": 0, "orgs_processed": 0}
+    total_results = {
+        "alerts_sent": 0,
+        "escalations_sent": 0,
+        "in_app_sent": 0,
+        "errors": 0,
+        "orgs_processed": 0,
+    }
 
     for org in organizations:
         config = (org.settings or {}).get("cert_alert_config", {})

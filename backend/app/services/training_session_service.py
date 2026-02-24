@@ -4,25 +4,33 @@ Training Session Service
 Business logic for training session management, approval workflows, and notifications.
 """
 
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 from uuid import UUID
-from datetime import datetime, timedelta, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
-from sqlalchemy.orm import selectinload
-import secrets
 
-from app.models.event import Event, EventRSVP, EventType, CheckInWindowType
-from app.core.constants import ROLE_TRAINING_OFFICER
-from app.models.training import (
-    TrainingSession, TrainingCourse, TrainingApproval, ApprovalStatus,
-    TrainingType, TrainingRecord, ProgramEnrollment, RequirementProgress,
-    EnrollmentStatus, RequirementProgressStatus,
-)
-from app.models.user import User, Role
-from app.schemas.training_session import TrainingSessionCreate, AttendeeApprovalData
-from app.services.location_service import LocationService
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.core.config import settings
+from app.core.constants import ROLE_TRAINING_OFFICER
+from app.models.event import CheckInWindowType, Event, EventRSVP, EventType
+from app.models.training import (
+    ApprovalStatus,
+    EnrollmentStatus,
+    ProgramEnrollment,
+    RequirementProgress,
+    RequirementProgressStatus,
+    TrainingApproval,
+    TrainingCourse,
+    TrainingRecord,
+    TrainingSession,
+    TrainingType,
+)
+from app.models.user import Role, User
+from app.schemas.training_session import AttendeeApprovalData, TrainingSessionCreate
+from app.services.location_service import LocationService
 
 
 class TrainingSessionService:
@@ -137,10 +145,18 @@ class TrainingSessionService:
             organization_id=organization_id,
             event_id=event.id,
             course_id=course_id,
-            category_id=str(session_data.category_id) if session_data.category_id else None,
-            program_id=str(session_data.program_id) if session_data.program_id else None,
+            category_id=(
+                str(session_data.category_id) if session_data.category_id else None
+            ),
+            program_id=(
+                str(session_data.program_id) if session_data.program_id else None
+            ),
             phase_id=str(session_data.phase_id) if session_data.phase_id else None,
-            requirement_id=str(session_data.requirement_id) if session_data.requirement_id else None,
+            requirement_id=(
+                str(session_data.requirement_id)
+                if session_data.requirement_id
+                else None
+            ),
             course_name=course_name,
             course_code=course_code,
             training_type=TrainingType(session_data.training_type),
@@ -232,26 +248,42 @@ class TrainingSessionService:
             # Calculate duration
             check_in = rsvp.override_check_in_at or rsvp.checked_in_at
             check_out = rsvp.override_check_out_at or rsvp.checked_out_at or event_end
-            duration_minutes = int((check_out - check_in).total_seconds() / 60) if check_in and check_out else None
+            duration_minutes = (
+                int((check_out - check_in).total_seconds() / 60)
+                if check_in and check_out
+                else None
+            )
 
-            attendee_data.append({
-                "user_id": str(rsvp.user_id),
-                "user_name": f"{user.first_name} {user.last_name}",
-                "user_email": user.email,
-                "checked_in_at": check_in.isoformat() if check_in else None,
-                "checked_out_at": check_out.isoformat() if check_out else None,
-                "calculated_duration_minutes": duration_minutes,
-                "override_check_in_at": rsvp.override_check_in_at.isoformat() if rsvp.override_check_in_at else None,
-                "override_check_out_at": rsvp.override_check_out_at.isoformat() if rsvp.override_check_out_at else None,
-                "override_duration_minutes": rsvp.override_duration_minutes,
-                "approved": False,
-                "notes": None,
-            })
+            attendee_data.append(
+                {
+                    "user_id": str(rsvp.user_id),
+                    "user_name": f"{user.first_name} {user.last_name}",
+                    "user_email": user.email,
+                    "checked_in_at": check_in.isoformat() if check_in else None,
+                    "checked_out_at": check_out.isoformat() if check_out else None,
+                    "calculated_duration_minutes": duration_minutes,
+                    "override_check_in_at": (
+                        rsvp.override_check_in_at.isoformat()
+                        if rsvp.override_check_in_at
+                        else None
+                    ),
+                    "override_check_out_at": (
+                        rsvp.override_check_out_at.isoformat()
+                        if rsvp.override_check_out_at
+                        else None
+                    ),
+                    "override_duration_minutes": rsvp.override_duration_minutes,
+                    "approved": False,
+                    "notes": None,
+                }
+            )
 
         # Generate secure token for approval link
         approval_token = secrets.token_urlsafe(48)
         token_expires_at = now + timedelta(days=30)  # Token valid for 30 days
-        approval_deadline = event_end + timedelta(days=training_session.approval_deadline_days)
+        approval_deadline = event_end + timedelta(
+            days=training_session.approval_deadline_days
+        )
 
         # Create TrainingApproval record
         training_approval = TrainingApproval(
@@ -308,8 +340,8 @@ class TrainingSessionService:
         """
         Send email notifications to training officers about pending approval.
         """
-        from app.services.email_service import EmailService
         from app.models.user import user_roles
+        from app.services.email_service import EmailService
 
         try:
             # Get training officer role
@@ -338,8 +370,7 @@ class TrainingSessionService:
 
             # Get officer emails
             to_emails = [
-                officer.email for officer in training_officers
-                if officer.email
+                officer.email for officer in training_officers if officer.email
             ]
 
             if not to_emails:
@@ -350,7 +381,9 @@ class TrainingSessionService:
                 select(User).where(User.id == str(finalized_by))
             )
             submitter = submitter_result.scalar_one_or_none()
-            submitter_name = f"{submitter.first_name} {submitter.last_name}" if submitter else None
+            submitter_name = (
+                f"{submitter.first_name} {submitter.last_name}" if submitter else None
+            )
 
             # Build approval URL
             approval_url = f"{settings.FRONTEND_URL}/training/approve/{approval_token}"
@@ -371,6 +404,7 @@ class TrainingSessionService:
         except Exception as e:
             # Log error but don't fail the finalization
             import logging
+
             logging.error(f"Failed to send training officer notification: {e}")
 
     async def get_training_approval_by_token(
@@ -383,8 +417,7 @@ class TrainingSessionService:
         Returns: (approval_data, error_message)
         """
         approval_result = await self.db.execute(
-            select(TrainingApproval)
-            .where(TrainingApproval.approval_token == token)
+            select(TrainingApproval).where(TrainingApproval.approval_token == token)
         )
         approval = approval_result.scalar_one_or_none()
 
@@ -392,7 +425,11 @@ class TrainingSessionService:
             return None, "Invalid approval link"
 
         # Check if token is expired
-        token_exp = approval.token_expires_at.replace(tzinfo=timezone.utc) if approval.token_expires_at.tzinfo is None else approval.token_expires_at
+        token_exp = (
+            approval.token_expires_at.replace(tzinfo=timezone.utc)
+            if approval.token_expires_at.tzinfo is None
+            else approval.token_expires_at
+        )
         if datetime.now(timezone.utc) > token_exp:
             return None, "This approval link has expired"
 
@@ -403,7 +440,9 @@ class TrainingSessionService:
         event = event_result.scalar_one_or_none()
 
         session_result = await self.db.execute(
-            select(TrainingSession).where(TrainingSession.id == approval.training_session_id)
+            select(TrainingSession).where(
+                TrainingSession.id == approval.training_session_id
+            )
         )
         training_session = session_result.scalar_one_or_none()
 
@@ -444,8 +483,7 @@ class TrainingSessionService:
         """
         # Get approval
         approval_result = await self.db.execute(
-            select(TrainingApproval)
-            .where(TrainingApproval.approval_token == token)
+            select(TrainingApproval).where(TrainingApproval.approval_token == token)
         )
         approval = approval_result.scalar_one_or_none()
 
@@ -456,7 +494,11 @@ class TrainingSessionService:
             return False, "This training session has already been processed"
 
         # Check if token is expired
-        token_exp = approval.token_expires_at.replace(tzinfo=timezone.utc) if approval.token_expires_at.tzinfo is None else approval.token_expires_at
+        token_exp = (
+            approval.token_expires_at.replace(tzinfo=timezone.utc)
+            if approval.token_expires_at.tzinfo is None
+            else approval.token_expires_at
+        )
         if datetime.now(timezone.utc) > token_exp:
             return False, "This approval link has expired"
 
@@ -465,7 +507,7 @@ class TrainingSessionService:
         approval.approved_by = approved_by
         approval.approved_at = datetime.now(timezone.utc)
         approval.approval_notes = approval_notes
-        approval.attendee_data = [a.model_dump(mode='python') for a in attendees]
+        approval.attendee_data = [a.model_dump(mode="python") for a in attendees]
 
         # Update RSVP records with overrides
         for attendee in attendees:
@@ -544,7 +586,9 @@ class TrainingSessionService:
                 hours_completed = attendee.override_duration_minutes / 60.0
             elif attendee.override_check_in_at and attendee.override_check_out_at:
                 # Calculate from override times
-                duration = attendee.override_check_out_at - attendee.override_check_in_at
+                duration = (
+                    attendee.override_check_out_at - attendee.override_check_in_at
+                )
                 hours_completed = duration.total_seconds() / 3600.0
             else:
                 # Get actual RSVP check-in/out times
@@ -569,7 +613,10 @@ class TrainingSessionService:
             existing_record_result = await self.db.execute(
                 select(TrainingRecord)
                 .where(TrainingRecord.user_id == str(attendee.user_id))
-                .where(TrainingRecord.organization_id == str(training_session.organization_id))
+                .where(
+                    TrainingRecord.organization_id
+                    == str(training_session.organization_id)
+                )
                 .where(TrainingRecord.course_name == training_session.course_name)
                 .where(TrainingRecord.completion_date == event.start_datetime.date())
             )
@@ -585,10 +632,19 @@ class TrainingSessionService:
                 training_record = TrainingRecord(
                     organization_id=str(training_session.organization_id),
                     user_id=str(attendee.user_id),
-                    course_id=str(training_session.course_id) if training_session.course_id else None,
+                    course_id=(
+                        str(training_session.course_id)
+                        if training_session.course_id
+                        else None
+                    ),
                     course_name=training_session.course_name,
-                    course_code=training_session.course.code if training_session.course else None,
-                    training_type=training_session.training_type or TrainingType.CONTINUING_EDUCATION,
+                    course_code=(
+                        training_session.course.code
+                        if training_session.course
+                        else None
+                    ),
+                    training_type=training_session.training_type
+                    or TrainingType.CONTINUING_EDUCATION,
                     scheduled_date=event.start_datetime.date(),
                     completion_date=event.start_datetime.date(),
                     hours_completed=hours_completed,
