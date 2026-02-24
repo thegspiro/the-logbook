@@ -32,14 +32,10 @@ services:
       - mysql_data:/var/lib/mysql
       - ./database/schemas:/docker-entrypoint-initdb.d
     healthcheck:
-      test:
-        - "CMD-SHELL"
-        - |
-          mysqladmin ping -h 127.0.0.1 --port=3306 -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_in_production} &&
-          mysql -h 127.0.0.1 --port=3306 -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_in_production} -e 'SELECT 1' $${MYSQL_DATABASE:-intranet_db}
-      interval: 5s
-      timeout: 3s
-      retries: 60
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} && mysql -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} -e 'SELECT 1' $${MYSQL_DATABASE:-intranet_db}"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
       start_period: 300s
     deploy:
       resources:
