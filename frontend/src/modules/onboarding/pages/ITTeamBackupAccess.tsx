@@ -48,10 +48,10 @@ const ITTeamBackupAccess: React.FC = () => {
     }
 
     // Auto-populate primary IT contact from System Owner if the fields are empty
-    if (systemOwnerFirstName && itTeam.length > 0) {
-      const primary = itTeam[0];
+    const primary = itTeam[0];
+    if (systemOwnerFirstName && primary) {
       if (!primary.name && !primary.email) {
-        const updatedPrimary = {
+        const updatedPrimary: ITTeamMember = {
           ...primary,
           name: `${systemOwnerFirstName} ${systemOwnerLastName}`.trim(),
           email: systemOwnerEmail,
