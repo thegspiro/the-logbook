@@ -28,4 +28,43 @@ echo "✅ ESLint check passed"
 
 cd ..
 
-echo "✅ All pre-commit checks passed!"
+# Python linting for backend
+PYTHON_FILES=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+if [ -n "$PYTHON_FILES" ]; then
+  echo "Running Python lint checks..."
+
+  # Run black (format check)
+  echo "Checking Python formatting with black..."
+  cd backend
+  python -m black --check $PYTHON_FILES 2>/dev/null
+  if [ $? -ne 0 ]; then
+    echo "Python formatting check failed!"
+    echo "Run 'cd backend && black app/' to auto-format, then re-stage."
+    exit 1
+  fi
+  echo "black check passed"
+
+  # Run flake8 (linting)
+  echo "Running flake8..."
+  python -m flake8 $PYTHON_FILES 2>/dev/null
+  if [ $? -ne 0 ]; then
+    echo "flake8 found issues!"
+    echo "Fix the errors above before committing."
+    exit 1
+  fi
+  echo "flake8 check passed"
+
+  # Run isort (import ordering check)
+  echo "Checking import ordering with isort..."
+  python -m isort --check-only $PYTHON_FILES 2>/dev/null
+  if [ $? -ne 0 ]; then
+    echo "Import ordering check failed!"
+    echo "Run 'cd backend && isort app/' to auto-fix imports, then re-stage."
+    exit 1
+  fi
+  echo "isort check passed"
+
+  cd ..
+fi
+
+echo "All pre-commit checks passed!"

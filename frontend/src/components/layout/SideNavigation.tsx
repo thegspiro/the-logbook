@@ -34,7 +34,7 @@ import {
   Rocket,
   ShieldCheck,
 } from 'lucide-react';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor, Contrast } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
@@ -103,14 +103,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   }, [location.pathname]);
 
   const cycleTheme = () => {
-    const order = ['light', 'dark', 'system'] as const;
+    const order = ['light', 'dark', 'system', 'high-contrast'] as const;
     const currentIndex = order.indexOf(theme as typeof order[number]);
     const nextIndex = (currentIndex + 1) % order.length;
     setTheme(order[nextIndex] ?? 'system');
   };
 
-  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
-  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
+  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
+  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   // Determine if user has any admin permission (to show/hide Administration section)
   const hasAnyAdminPermission =

@@ -79,6 +79,11 @@
     ],
     "*.{json,md}": [
       "prettier --write"
+    ],
+    "backend/**/*.py": [
+      "bash -c 'cd backend && python -m black --check \"$@\"' --",
+      "bash -c 'cd backend && python -m flake8 \"$@\"' --",
+      "bash -c 'cd backend && python -m isort --check-only \"$@\"' --"
     ]
   },
   "overrides": {

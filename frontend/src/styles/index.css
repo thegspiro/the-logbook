@@ -195,6 +195,107 @@
   --alert-danger-text: #fecaca;            /* red-200 */
 }
 
+/* High-contrast theme (#84) */
+.high-contrast {
+  --bg-gradient-from: #000000;
+  --bg-gradient-via: #000000;
+  --bg-gradient-to: #000000;
+
+  /* Surfaces */
+  --surface-bg: #000000;
+  --surface-secondary: #111111;
+  --surface-hover: #222222;
+  --surface-border: #ffffff;
+  --surface-modal: #000000;
+
+  /* Text */
+  --text-primary: #ffffff;
+  --text-secondary: #f0f0f0;
+  --text-muted: #cccccc;
+
+  /* Navigation */
+  --nav-bg: #000000;
+  --nav-border: #ffffff;
+
+  /* Inputs */
+  --input-bg: #111111;
+  --input-border: #ffffff;
+
+  /* Scrollbar */
+  --scrollbar-track: #111111;
+
+  /* Focus ring offset */
+  --ring-offset-bg: #000000;
+
+  /* Accent colors – high-contrast on pure black */
+  --accent-red: #ff6b6b;
+  --accent-green: #69ff69;
+  --accent-blue: #6bb5ff;
+  --accent-orange: #ffb347;
+  --accent-yellow: #ffff00;
+  --accent-cyan: #00ffff;
+  --accent-purple: #d98fff;
+
+  /* Muted accent backgrounds */
+  --accent-green-muted: rgba(105, 255, 105, 0.15);
+  --accent-orange-muted: rgba(255, 179, 71, 0.15);
+
+  /* Focus ring */
+  --focus-ring: #ffff00;
+
+  /* Toast icon colors */
+  --toast-success: #69ff69;
+  --toast-error: #ff6b6b;
+  --toast-icon-secondary: #ffffff;
+  --toast-warning-bg: #ffff00;
+  --toast-warning-text: #000000;
+
+  /* Status indicator colors */
+  --status-passed: #69ff69;
+  --status-failed: #ff6b6b;
+  --status-pending: #ffff00;
+
+  /* Alert: Info (blue) */
+  --alert-info-bg: rgba(107, 181, 255, 0.15);
+  --alert-info-border: #6bb5ff;
+  --alert-info-icon: #6bb5ff;
+  --alert-info-title: #ffffff;
+  --alert-info-text: #f0f0f0;
+
+  /* Alert: Success (green) */
+  --alert-success-bg: rgba(105, 255, 105, 0.15);
+  --alert-success-border: #69ff69;
+  --alert-success-icon: #69ff69;
+  --alert-success-title: #ffffff;
+  --alert-success-text: #f0f0f0;
+
+  /* Alert: Warning (amber) */
+  --alert-warning-bg: rgba(255, 255, 0, 0.15);
+  --alert-warning-border: #ffff00;
+  --alert-warning-icon: #ffff00;
+  --alert-warning-title: #ffffff;
+  --alert-warning-text: #f0f0f0;
+
+  /* Alert: Purple */
+  --alert-purple-bg: rgba(217, 143, 255, 0.15);
+  --alert-purple-border: #d98fff;
+  --alert-purple-icon: #d98fff;
+  --alert-purple-title: #ffffff;
+  --alert-purple-text: #f0f0f0;
+
+  /* Alert: Danger (red) */
+  --alert-danger-bg: rgba(255, 107, 107, 0.15);
+  --alert-danger-border: #ff6b6b;
+  --alert-danger-icon: #ff6b6b;
+  --alert-danger-title: #ffffff;
+  --alert-danger-text: #f0f0f0;
+}
+
+.high-contrast *:focus-visible {
+  outline: 3px solid #ffff00 !important;
+  outline-offset: 2px;
+}
+
 /* Custom scrollbar */
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
@@ -468,4 +569,55 @@ option {
 /* Skip to main content link for accessibility */
 .skip-to-main {
   @apply absolute -top-96 left-0 z-50 bg-theme-surface text-theme-text-primary px-4 py-2 rounded-br-lg focus:top-0;
+}
+
+/* Print styles (#94) */
+@media print {
+  /* Hide non-content elements */
+  nav, aside, .skip-to-main,
+  [role="navigation"], [role="banner"],
+  button:not([data-print]),
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset backgrounds for ink savings */
+  body, main, .dark {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Remove decorative styles */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Ensure content fits page */
+  body {
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+
+  /* Show link URLs */
+  a[href]:after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #666;
+  }
+
+  a[href^="#"]:after,
+  a[href^="javascript"]:after {
+    content: "";
+  }
+
+  /* Prevent page breaks inside cards/tables */
+  tr, .card, article {
+    page-break-inside: avoid;
+  }
+
+  /* Ensure images fit */
+  img {
+    max-width: 100% !important;
+  }
 }

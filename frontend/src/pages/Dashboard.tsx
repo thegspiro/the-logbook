@@ -21,6 +21,7 @@ import {
   Eye,
   Rocket,
   Package,
+  Smartphone,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -37,6 +38,7 @@ import { getProgressBarColor } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
 import type { NotificationLogRecord, ShiftRecord } from '../services/api';
 import { dashboardService } from '../services/api';
@@ -63,6 +65,8 @@ const Dashboard: React.FC = () => {
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
   const [departmentName, setDepartmentName] = useState('Fire Department');
+  const { canInstall, install } = usePWAInstall();
+  const [dismissedInstall, setDismissedInstall] = useState(false);
 
   // Admin summary (only loaded for users with settings.manage)
   const isAdmin = checkPermission('settings.manage');
@@ -163,7 +167,7 @@ const Dashboard: React.FC = () => {
 
   const loadNotifications = async () => {
     try {
-      const data = await notificationsService.getLogs({ limit: 5 });
+      const data = await notificationsService.getLogs({ limit: 10 });
       setNotifications(data.logs || []);
       setUnreadCount((data.logs || []).filter((n: NotificationLogRecord) => !n.read).length);
     } catch {
@@ -296,6 +300,27 @@ const Dashboard: React.FC = () => {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz })}
           </p>
         </div>
+
+        {/* PWA Install Banner */}
+        {canInstall && !dismissedInstall && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 flex items-center justify-between mb-6 sm:mb-8">
+            <div className="flex items-center gap-3">
+              <Smartphone className="w-5 h-5 text-blue-500" />
+              <div>
+                <p className="text-sm font-medium text-theme-text-primary">Install The Logbook</p>
+                <p className="text-xs text-theme-text-muted">Add to your home screen for quick access</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setDismissedInstall(true)} className="text-xs text-theme-text-muted hover:text-theme-text-primary px-2 py-1">
+                Dismiss
+              </button>
+              <button onClick={install} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium">
+                Install
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Setup Prompt (shown to admins when setup is incomplete) */}
         {isAdmin && setupProgress && setupProgress.completed < setupProgress.total && (
@@ -681,6 +706,45 @@ const Dashboard: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Activity Feed */}
+        <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4 sm:p-6 mb-6 sm:mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
+              <Activity className="w-5 h-5" />
+              Recent Activity
+            </h3>
+            <button
+              onClick={() => navigate('/notifications')}
+              className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
+            >
+              View All <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          {loadingNotifications ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-8 bg-slate-700/30 animate-pulse rounded"></div>
+              ))}
+            </div>
+          ) : notifications.length === 0 ? (
+            <p className="text-sm text-theme-text-muted text-center py-4">No recent activity</p>
+          ) : (
+            <div className="space-y-3">
+              {notifications.slice(0, 8).map((notif, idx) => (
+                <div key={notif.id ?? idx} className="flex items-start gap-3">
+                  <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${notif.read ? 'bg-theme-text-muted' : 'bg-blue-500'}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-theme-text-primary truncate">{notif.subject || notif.message || 'Notification'}</p>
+                    <p className="text-xs text-theme-text-muted">
+                      {formatRelativeTime(notif.sent_at || notif.created_at)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Quick Access: Meeting Minutes */}
