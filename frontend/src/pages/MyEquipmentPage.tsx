@@ -106,8 +106,8 @@ const MyEquipmentPage: React.FC = () => {
   };
 
   const pendingRequestCount = myRequests.filter(r => r.status === 'pending').length;
-  const overdueCount = data?.active_checkouts.filter(c => c.is_overdue).length ?? 0;
-  const totalItems = (data?.permanent_assignments.length ?? 0) + (data?.active_checkouts.length ?? 0) + (data?.issued_items.length ?? 0);
+  const overdueCount = data?.active_checkouts?.filter(c => c.is_overdue)?.length ?? 0;
+  const totalItems = (data?.permanent_assignments?.length ?? 0) + (data?.active_checkouts?.length ?? 0) + (data?.issued_items?.length ?? 0);
 
   if (loading) {
     return (
