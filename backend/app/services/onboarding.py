@@ -75,31 +75,31 @@ class OnboardingService:
         },
         {
             "id": 7,
+            "name": "admin_user",
+            "title": "Create System Owner",
+            "description": "Create the first admin user with secure credentials",
+            "required": True
+        },
+        {
+            "id": 8,
             "name": "it_team",
             "title": "IT Team & Backup Access",
             "description": "Configure IT team and backup access",
             "required": False
         },
         {
-            "id": 8,
+            "id": 9,
             "name": "roles",
             "title": "Role Setup",
             "description": "Configure roles and permissions",
             "required": False
         },
         {
-            "id": 9,
+            "id": 10,
             "name": "modules",
             "title": "Select Modules",
             "description": "Choose which modules to enable for your organization",
             "required": False
-        },
-        {
-            "id": 10,
-            "name": "admin_user",
-            "title": "Create Administrator",
-            "description": "Create the first admin user with secure credentials",
-            "required": True
         }
     ]
 
@@ -648,7 +648,7 @@ class OnboardingService:
         if status:
             status.admin_email = email
             status.admin_username = username
-            await self._mark_step_completed(status, 10, "admin_user")  # Step 10 in new flow
+            await self._mark_step_completed(status, 7, "admin_user")  # Step 7: System Owner creation
 
         # Log event
         await log_audit_event(
@@ -717,7 +717,7 @@ class OnboardingService:
         status = await self.get_onboarding_status()
         if status:
             status.enabled_modules = final_modules
-            await self._mark_step_completed(status, 9, "modules")  # Step 9 in new flow
+            await self._mark_step_completed(status, 10, "modules")  # Step 10: final step
 
         # ── Also persist to Organization.settings.modules (canonical store) ──
         # Configurable module keys that the Settings page manages

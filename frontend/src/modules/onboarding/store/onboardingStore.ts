@@ -38,6 +38,11 @@ export interface OnboardingState {
   // Authentication
   authPlatform: string | null;
 
+  // System Owner (populated after admin account creation, used to auto-fill IT Team)
+  systemOwnerFirstName: string;
+  systemOwnerLastName: string;
+  systemOwnerEmail: string;
+
   // IT Team
   itTeamConfigured: boolean;
   itTeamMembers: Array<{
@@ -102,6 +107,9 @@ export interface OnboardingActions {
   // Authentication Actions
   setAuthPlatform: (platform: string) => void;
 
+  // System Owner Actions
+  setSystemOwnerInfo: (info: { firstName: string; lastName: string; email: string }) => void;
+
   // IT Team Actions
   setITTeamConfigured: (configured: boolean) => void;
   setITTeamMembers: (members: Array<{ id: string; name: string; email: string; phone: string; role: string }>) => void;
@@ -147,6 +155,9 @@ const initialState: OnboardingState = {
   emailConfigured: false,
   fileStoragePlatform: null,
   authPlatform: null,
+  systemOwnerFirstName: '',
+  systemOwnerLastName: '',
+  systemOwnerEmail: '',
   itTeamConfigured: false,
   itTeamMembers: [{ id: '1', name: '', email: '', phone: '', role: 'Primary IT Contact' }],
   backupEmail: '',
@@ -232,6 +243,16 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
       // Authentication Actions
       setAuthPlatform: (platform) => {
         set({ authPlatform: platform });
+        get().triggerAutoSave();
+      },
+
+      // System Owner Actions
+      setSystemOwnerInfo: (info) => {
+        set({
+          systemOwnerFirstName: info.firstName,
+          systemOwnerLastName: info.lastName,
+          systemOwnerEmail: info.email,
+        });
         get().triggerAutoSave();
       },
 
@@ -409,6 +430,9 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         emailConfigured: state.emailConfigured,
         fileStoragePlatform: state.fileStoragePlatform,
         authPlatform: state.authPlatform,
+        systemOwnerFirstName: state.systemOwnerFirstName,
+        systemOwnerLastName: state.systemOwnerLastName,
+        systemOwnerEmail: state.systemOwnerEmail,
         itTeamConfigured: state.itTeamConfigured,
         positionsConfig: state.positionsConfig,
         selectedModules: state.selectedModules,

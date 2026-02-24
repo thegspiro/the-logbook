@@ -187,6 +187,17 @@ const SystemOwnerCreation: React.FC = () => {
           throw new Error(errorMessage);
         }
 
+        toast.success('System Owner account created!');
+
+        // Save system owner info to the onboarding store so the
+        // IT Team step can auto-populate the primary contact.
+        // Must happen before clearing form data.
+        useOnboardingStore.getState().setSystemOwnerInfo({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+        });
+
         // SECURITY: Clear password from memory immediately (apiClient already does this)
         setFormData({
           username: '',
@@ -198,31 +209,19 @@ const SystemOwnerCreation: React.FC = () => {
           confirmPassword: '',
         });
 
-        toast.success('System Owner account created! Setting up your dashboard...');
-
-        // Complete onboarding and finalize setup
-        const completeResponse = await apiClient.completeOnboarding();
-
-        if (completeResponse.error) {
-          throw new Error('Account created but setup incomplete. Please contact support.');
-        }
-
-        toast.success('Welcome to your department dashboard!');
-
-        // Load user into auth store before navigating — ProtectedRoute
-        // checks useAuthStore for authentication, so the store must
-        // be populated before the dashboard renders.
+        // Load user into auth store so the session persists through
+        // the remaining onboarding steps.
         const { useAuthStore } = await import('../../../stores/authStore');
         await useAuthStore.getState().loadUser();
 
-        // Navigate to main dashboard (user is now authenticated)
-        navigate('/dashboard');
+        // Continue to IT Team & Backup Access step
+        navigate('/onboarding/it-team');
 
         return response;
       },
       {
         step: 'System Owner Creation',
-        action: 'Create system owner and complete onboarding',
+        action: 'Create system owner account',
         userContext: `Username: ${formData.username}, Email: ${formData.email}`,
       }
     );
@@ -253,7 +252,7 @@ const SystemOwnerCreation: React.FC = () => {
         <div className="max-w-2xl w-full">
           {/* Navigation Buttons */}
           <div className="flex justify-between items-center mb-6">
-            <BackButton to="/onboarding/modules" />
+            <BackButton to="/onboarding/authentication" />
             <ResetProgressButton />
           </div>
 
@@ -678,31 +677,31 @@ const SystemOwnerCreation: React.FC = () => {
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
-                aria-label="Create System Owner account and access dashboard"
+                aria-label="Create System Owner account and continue setup"
               >
-                {isSaving ? 'Creating System Owner Account & Finalizing Setup...' : 'Create System Owner Account & Access Dashboard'}
+                {isSaving ? 'Creating System Owner Account...' : 'Create Account & Continue'}
               </button>
 
               {/* Help Text */}
               <p className="text-center text-theme-text-muted text-sm mt-4">
-                You'll be logged in automatically and redirected to your dashboard
+                You'll be logged in automatically and continue with IT team setup
               </p>
 
               {/* Progress Indicator */}
               <div className="mt-6 pt-6 border-t border-theme-nav-border">
                 <div className="flex items-center justify-between text-sm text-theme-text-muted mb-2">
                   <span>Setup Progress</span>
-                  <span>Step 10 of 10</span>
+                  <span>Step 7 of 10</span>
                 </div>
                 <div className="w-full bg-theme-surface rounded-full h-2">
                   <div
                     className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: '100%' }}
+                    style={{ width: '70%' }}
                     role="progressbar"
-                    aria-valuenow={100}
+                    aria-valuenow={70}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    aria-label="Setup progress: 100 percent complete"
+                    aria-label="Setup progress: 70 percent complete"
                   />
                 </div>
                 <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />

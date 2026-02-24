@@ -69,13 +69,28 @@ const ModuleOverview: React.FC = () => {
           throw new Error(response.error);
         }
 
-        toast.success('Module configuration saved!');
-        navigate('/onboarding/system-owner');
+        toast.success('Module configuration saved! Finalizing setup...');
+
+        // Complete onboarding
+        const completeResponse = await apiClient.completeOnboarding();
+
+        if (completeResponse.error) {
+          throw new Error('Modules saved but setup could not be finalized. Please contact support.');
+        }
+
+        toast.success('Welcome to your department dashboard!');
+
+        // Ensure auth store is loaded before navigating to the
+        // protected dashboard route.
+        const { useAuthStore } = await import('../../../stores/authStore');
+        await useAuthStore.getState().loadUser();
+
+        navigate('/dashboard');
         return response;
       },
       {
         step: 'Module Selection',
-        action: 'Save module configuration',
+        action: 'Save modules and complete onboarding',
       }
     );
 
@@ -157,7 +172,7 @@ const ModuleOverview: React.FC = () => {
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
             >
-              {isSaving ? 'Saving...' : 'Continue to Admin Setup'}
+              {isSaving ? 'Finalizing Setup...' : 'Complete Setup & Go to Dashboard'}
             </button>
           </div>
 
@@ -338,7 +353,7 @@ const ModuleOverview: React.FC = () => {
 
           {/* Progress Indicator */}
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
-            <ProgressIndicator currentStep={9} totalSteps={10} />
+            <ProgressIndicator currentStep={10} totalSteps={10} />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
         </div>

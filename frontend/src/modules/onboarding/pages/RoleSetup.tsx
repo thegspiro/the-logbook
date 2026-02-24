@@ -981,7 +981,7 @@ const PositionSetup: React.FC = () => {
 
           {/* Progress */}
           <div className="mt-8 bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
-            <ProgressIndicator currentStep={8} totalSteps={10} />
+            <ProgressIndicator currentStep={9} totalSteps={10} />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
         </div>
