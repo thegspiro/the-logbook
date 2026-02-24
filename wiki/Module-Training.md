@@ -14,7 +14,7 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Competency Matrix** — Department readiness heat-map
 - **Expiring Certifications** — Tiered alerts at 90/60/30/7 days with escalation for expired certs
 - **Compliance Summary** — Per-member green/yellow/red compliance card on profiles
-- **Training Waivers** — Leave of Absence auto-linking, waiver management, proportional requirement adjustment
+- **Training Waivers** — Leave of Absence auto-linking, waiver management, proportional requirement adjustment. Supports permanent waivers (no end date), New Member waiver type, and multi-select "Applies To" (Training + Meetings + Shifts can be combined)
 - **Bulk Record Creation** — Up to 500 records per request with duplicate detection
 - **Rank & Station Snapshots** — `rank_at_completion` and `station_at_completion` captured on every record
 - **External Integrations** — Connect external training providers with category and user mapping

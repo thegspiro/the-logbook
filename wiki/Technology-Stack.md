@@ -22,20 +22,25 @@ Complete technology reference for The Logbook.
 | Technology | Version | Purpose |
 |-----------|---------|---------|
 | **React** | 18.3 | UI framework |
-| **TypeScript** | 5.7 | Type-safe JavaScript |
-| **Vite** | 6.0 | Build tool and dev server |
+| **TypeScript** | 5.9 | Type-safe JavaScript |
+| **Vite** | 7.3 | Build tool and dev server |
 | **Tailwind CSS** | 3.x | Utility-first CSS framework |
 | **React Router** | 6.x | Client-side routing |
+| **Vitest** | 3.2 | Unit/integration testing |
 | **React Hot Toast** | — | Toast notifications |
-| **Lucide React** | 0.468+ | Icon library |
+| **Lucide React** | 0.575+ | Icon library |
 | **DOMPurify** | — | XSS sanitization |
+| **React Hook Form** | 7.71 | Form management |
 
 ### Frontend Capabilities
-- Progressive Web App (PWA) with offline support
+- Progressive Web App (PWA) with offline support and install prompt
 - Responsive design (mobile-first)
 - WCAG 2.1 Level AA accessibility
-- Dark mode support
+- Dark mode and high-contrast theme support
 - Camera-based QR/barcode scanning
+- Command Palette (Ctrl+K) for quick navigation
+- Keyboard shortcuts for common actions
+- Print-optimized CSS
 
 ---
 
@@ -48,19 +53,24 @@ Complete technology reference for The Logbook.
 | **SQLAlchemy** | 2.x | Async ORM |
 | **Alembic** | Latest | Database migrations |
 | **Pydantic** | 2.x | Data validation and serialization |
-| **Argon2-cffi** | — | Password hashing |
+| **Argon2-cffi** | 25.1 | Password hashing |
 | **PyJWT** | — | JWT token management |
-| **ReportLab** | — | PDF and label generation |
-| **Pillow** | 11.1 | Image processing |
+| **ReportLab** | 4.3 | PDF and label generation |
+| **Pillow** | 11.3 | Image processing and optimization |
 | **python-magic** | 0.4.27 | File type detection |
+| **cryptography** | 44.0 | Cryptographic operations |
+| **slowapi** | — | Application-level rate limiting |
 
 ### Backend Capabilities
 - Fully async (asyncio + SQLAlchemy async)
 - Auto-generated OpenAPI documentation
 - Tamper-proof audit logging (SHA-256 hash chain)
 - AES-256 data encryption at rest
-- Rate limiting and brute-force protection
-- Multi-tenant data isolation
+- Application-level rate limiting (slowapi + Redis)
+- CSRF protection (global middleware)
+- httpOnly cookie-based authentication
+- Multi-tenant data isolation with org-scoped queries
+- Structured JSON logging option (LOG_FORMAT=json)
 
 ---
 

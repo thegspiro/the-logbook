@@ -41,18 +41,27 @@ calculations, and what members see on their end.
    | Field           | Description |
    |-----------------|-------------|
    | **Member**      | Select the member from the dropdown (sorted by last name). |
-   | **Applies To**  | Choose scope: *All (LOA + Training Waiver)*, *Training Only*, or *Meetings & Shifts Only*. |
-   | **Leave Type**  | Choose one: *Leave of Absence*, *Medical*, *Military*, *Personal*, *Administrative*, or *Other*. |
+   | **Applies To**  | Multi-select checkboxes: *Training*, *Meetings*, *Shifts*. Pick any combination. |
+   | **Leave Type**  | Choose one: *Leave of Absence*, *Medical*, *Military*, *Personal*, *Administrative*, *New Member*, or *Other*. |
    | **Start Date**  | First day the member is on leave. |
-   | **End Date**    | Last day the member is on leave (must be on or after start date). |
+   | **End Date**    | Last day the member is on leave (must be on or after start date). Leave blank and check **Permanent** for waivers with no end date. |
    | **Reason**      | Optional free-text explanation. |
 
 4. Click **Create Waiver**.
 
-**Applies To options:**
-- **All**: Creates a Leave of Absence and automatically creates a linked training waiver with matching dates. This is the most common choice.
-- **Training Only**: Creates a standalone training waiver without a Leave of Absence. The member's meeting attendance and shift scheduling are not affected.
-- **Meetings & Shifts Only**: Creates a Leave of Absence with `exempt_from_training_waiver = true`. Training requirements are not adjusted.
+**Applies To options (multi-select):**
+- **Training + Meetings + Shifts** (all selected): Creates a Leave of Absence and automatically creates a linked training waiver with matching dates. This is the most common choice.
+- **Training only**: Creates a standalone training waiver without a Leave of Absence. The member's meeting attendance and shift scheduling are not affected.
+- **Meetings and/or Shifts only** (Training unchecked): Creates a Leave of Absence with `exempt_from_training_waiver = true`. Training requirements are not adjusted.
+- Any combination of the three is valid.
+
+**Permanent waivers:**
+- Leave the **End Date** blank and check **Permanent (no end date)** to create a waiver that never expires.
+- Permanent waivers display a purple "Permanent" badge in all status columns.
+- Internally, the calculation layer maps a null end date to a far-future sentinel (9999-12-31) for period calculations.
+
+**New Member leave type:**
+- The **New Member** leave type is designed for long-service members who are exempt from certain training requirements. It functions identically to other leave types for calculation purposes.
 
 ### From the Member Lifecycle page (alternative)
 

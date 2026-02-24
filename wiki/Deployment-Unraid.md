@@ -1,10 +1,39 @@
 # Unraid Instance Update Guide
 
-**Last Updated:** January 24, 2026
+**Last Updated:** February 24, 2026
 
 This guide will help you update your Unraid instance of The Logbook with the latest fixes and security updates.
 
 ## What's Been Fixed
+
+### ✅ Recent Fixes (2026-02-24)
+
+**Dependency & Build Fixes:**
+- Updated backend dependencies for Python 3.13 compatibility (cryptography 44.0, Pillow 11.3, argon2-cffi 25.1, psutil 7.0, and 8 more)
+- Fixed frontend peer dependency conflicts (@typescript-eslint for TS 5.9, vitest ecosystem alignment, esbuild/postcss for Vite 7.3.1)
+- Fixed Docker Compose startup error: MinIO env vars no longer block startup for non-S3 users
+
+**Security Hardening (19 findings from insider threat analysis):**
+- Authentication now uses httpOnly cookies (removed localStorage token storage)
+- WebSocket validates user is active, not just JWT signature
+- Added permission checks to previously open endpoints
+- CSRF protection wired as global middleware
+- File extension derived from MIME type, not user filename
+- Field allowlists on all setattr update loops (mass assignment prevention)
+
+**Migration Reliability (Unraid-specific):**
+- Auto-cleanup of stale `__pycache__` before Alembic loads
+- Retry with backoff for migration graph loading
+- SQL-based stamp fallback when Alembic graph resolution fails
+- Resolved migration revision ID collisions
+
+**Bug Fixes:**
+- Dashboard vs Training Admin compliance calculation mismatch
+- Stale asset 404s after deployment (nginx no-cache headers)
+- Circular chunk dependency causing React.memo runtime crash
+- TypeScript strict null check errors across 56 files
+- Public portal timestamp overflow
+- Login page dark mode (white text on white background)
 
 ### ✅ Onboarding Module Improvements
 - Fixed inconsistent button text in Module Overview page

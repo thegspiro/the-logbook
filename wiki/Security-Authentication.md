@@ -13,8 +13,11 @@ Username and password authentication with Argon2id password hashing.
 1. User submits username and password
 2. Backend verifies password against Argon2id hash
 3. On success, issues JWT access token (8-hour lifetime) and refresh token (7-day lifetime)
-4. Access token included in `Authorization: Bearer <token>` header for all API requests
+4. Tokens are set as **httpOnly cookies** (not stored in localStorage) for all API requests
 5. Refresh token used to obtain new access tokens without re-authentication
+6. CSRF protection is enforced globally via middleware on all state-changing requests
+
+> **Security Note (2026-02-24):** JWT tokens were previously stored in `localStorage` and sent via `Authorization: Bearer` headers. This has been changed to httpOnly cookies to prevent XSS-based token theft. If you have custom integrations using Bearer tokens, update them to use cookie-based authentication.
 
 ### Password Requirements
 

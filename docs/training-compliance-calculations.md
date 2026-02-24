@@ -498,6 +498,10 @@ active_months = MAX(total_months - waived_months, 1)
 adjusted_required = base_required × (active_months / total_months)
 ```
 
+> **Bug Fix (2026-02-24):** A rolling period of N months can span N+1 calendar months (e.g., Feb 15 – Feb 14 next year = 12 rolling months spanning 13 calendar months). Previously, `total_months` was set from the rolling period config (12) while the calendar month walk counted 13 months, causing `waived_months > total_months` and negative `active_months`. The fix ensures `total_months` is computed from the actual evaluation period dates rather than the rolling period config value.
+
+> **Permanent waivers (2026-02-24):** Waivers with no end date (permanent) use a far-future sentinel (9999-12-31) internally. The overlap calculation naturally caps at `period_end`, so only months within the evaluation period are counted as waived.
+
 ### Example: Danielle's Maternity Leave vs. Maria (No Leave)
 
 Danielle Brooks was on maternity leave from **March 10 to July 25, 2025**.
