@@ -27,7 +27,7 @@ from app.schemas.training_program import (
     RequirementProgressUpdate, SkillEvaluationCreate, SkillCheckoffCreate
 )
 from app.models.notification import NotificationChannel, NotificationCategory
-from app.services.training_waiver_service import fetch_user_waivers, adjust_required
+from app.services.training_waiver_service import fetch_user_waivers, adjust_required, get_rolling_period_months
 from app.services.notifications_service import NotificationsService
 from loguru import logger
 
@@ -780,16 +780,19 @@ class TrainingProgramService:
             if requirement.requirement_type == RequirementType.HOURS and requirement.required_hours:
                 adj_required, _, _ = adjust_required(
                     requirement.required_hours, enroll_start, enroll_end, user_waivers, str(requirement.id),
+                    period_months=get_rolling_period_months(requirement),
                 ) if user_waivers else (requirement.required_hours, 0, 0)
                 progress.progress_percentage = min(100.0, (updates.progress_value / adj_required) * 100)
             elif requirement.requirement_type == RequirementType.SHIFTS and requirement.required_shifts:
                 adj_required, _, _ = adjust_required(
                     requirement.required_shifts, enroll_start, enroll_end, user_waivers, str(requirement.id),
+                    period_months=get_rolling_period_months(requirement),
                 ) if user_waivers else (requirement.required_shifts, 0, 0)
                 progress.progress_percentage = min(100.0, (updates.progress_value / adj_required) * 100)
             elif requirement.requirement_type == RequirementType.CALLS and requirement.required_calls:
                 adj_required, _, _ = adjust_required(
                     requirement.required_calls, enroll_start, enroll_end, user_waivers, str(requirement.id),
+                    period_months=get_rolling_period_months(requirement),
                 ) if user_waivers else (requirement.required_calls, 0, 0)
                 progress.progress_percentage = min(100.0, (updates.progress_value / adj_required) * 100)
 

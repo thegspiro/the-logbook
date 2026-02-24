@@ -297,6 +297,29 @@ class TestEvaluateRequirementDetailHours:
         assert result["is_met"] is True
         assert result["waived_months"] == 3
 
+    def test_rolling_hours_with_waiver_uses_rolling_months(self):
+        """Rolling period waiver uses rolling_period_months as total, not calendar months."""
+        req = _make_requirement(
+            required_hours=12.0,
+            due_date_type=SimpleNamespace(value="rolling"),
+            rolling_period_months=12,
+        )
+        records = [
+            _make_record(hours_completed=11.0, completion_date=date(2026, 1, 15)),
+        ]
+        waivers = [
+            WaiverPeriod(start_date=date(2026, 1, 1), end_date=date(2026, 1, 31)),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 2, 24), waivers=waivers
+        )
+        # 12-month rolling, 1 waived → 11 active → 12 * (11/12) = 11.0
+        assert result["original_required_hours"] == 12.0
+        assert result["required_hours"] == 11.0
+        assert result["active_months"] == 11
+        assert result["waived_months"] == 1
+        assert result["is_met"] is True
+
 
 class TestEvaluateRequirementDetailCourses:
     """Test course completion requirement evaluation."""
@@ -699,6 +722,36 @@ class TestWaiverCalculations:
             0, date(2026, 1, 1), date(2026, 12, 31), waivers
         )
         assert adjusted == 0
+
+    def test_adjust_required_rolling_period_months_override(self):
+        """Rolling periods should use period_months instead of calendar-month count.
+
+        A 12-month rolling window from mid-Feb to mid-Feb spans 13 calendar
+        months but the intention is 12.  Passing period_months=12 corrects
+        the total so that 1 waived month → 11 active months.
+        """
+        waivers = [
+            WaiverPeriod(start_date=date(2026, 1, 1), end_date=date(2026, 1, 31)),
+        ]
+        # Mid-month rolling window: Feb 24 2025 → Feb 24 2026 (13 calendar months)
+        adjusted, waived, active = adjust_required(
+            12.0, date(2025, 2, 24), date(2026, 2, 24), waivers,
+            period_months=12,
+        )
+        assert waived == 1
+        assert active == 11
+        assert adjusted == 11.0  # 12 * (11/12) = 11.0
+
+    def test_adjust_required_rolling_without_override_has_off_by_one(self):
+        """Without period_months, mid-month rolling window counts 13 months."""
+        waivers = [
+            WaiverPeriod(start_date=date(2026, 1, 1), end_date=date(2026, 1, 31)),
+        ]
+        # Same window without override → total_months_in_period returns 13
+        adjusted, waived, active = adjust_required(
+            12.0, date(2025, 2, 24), date(2026, 2, 24), waivers,
+        )
+        assert active == 12  # 13 - 1 = 12 (incorrect for a "12-month" period)
 
 
 # =====================================================

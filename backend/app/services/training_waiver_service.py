@@ -131,6 +131,20 @@ async def fetch_org_waivers(
 # Pure calculation helpers (no I/O)
 # ---------------------------------------------------------------------------
 
+def get_rolling_period_months(req) -> Optional[int]:
+    """Return ``rolling_period_months`` when a requirement uses rolling due dates.
+
+    Returns ``None`` for non-rolling requirements so ``adjust_required``
+    falls back to the calendar-month count.
+    """
+    due_date_type = getattr(req, 'due_date_type', None)
+    if due_date_type:
+        dt = due_date_type.value if hasattr(due_date_type, 'value') else str(due_date_type)
+        if dt == 'rolling':
+            return getattr(req, 'rolling_period_months', None)
+    return None
+
+
 def count_waived_months(
     waivers: List[WaiverPeriod],
     period_start: date,
@@ -206,6 +220,7 @@ def adjust_required(
     period_end: date,
     waivers: List[WaiverPeriod],
     req_id: Optional[str] = None,
+    period_months: Optional[int] = None,
 ) -> Tuple[float, int, int]:
     """
     Adjust a requirement's target value for waived months.
@@ -224,6 +239,11 @@ def adjust_required(
         Active waiver / leave periods for the user.
     req_id : str | None
         Requirement ID for requirement-specific filtering.
+    period_months : int | None
+        Explicit total months for the period.  When provided (e.g. from
+        ``rolling_period_months``), this overrides the calendar-month
+        count from ``total_months_in_period`` which can be off-by-one
+        for mid-month rolling windows.
 
     Returns
     -------
@@ -232,7 +252,7 @@ def adjust_required(
     if not period_start or not period_end or base_required <= 0:
         return base_required, 0, 0
 
-    total = total_months_in_period(period_start, period_end)
+    total = period_months if period_months else total_months_in_period(period_start, period_end)
     waived = count_waived_months(waivers, period_start, period_end, req_id)
     active_months = max(total - waived, 1)
 

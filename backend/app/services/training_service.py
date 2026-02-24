@@ -28,7 +28,7 @@ from app.schemas.training import (
     RequirementProgress,
 )
 from app.services.training_waiver_service import (
-    WaiverPeriod, fetch_user_waivers, adjust_required,
+    WaiverPeriod, fetch_user_waivers, adjust_required, get_rolling_period_months,
 )
 
 
@@ -352,6 +352,7 @@ class TrainingService:
             if base_required > 0 and start_date and end_date and _waivers:
                 adjusted_required, waived_months, active_months = adjust_required(
                     base_required, start_date, end_date, _waivers, str(req.id),
+                    period_months=get_rolling_period_months(req),
                 )
 
             # Biannual: expired cert overrides hours
@@ -415,6 +416,7 @@ class TrainingService:
             if base_required > 0 and start_date and end_date and _waivers:
                 adjusted_required, waived_months, active_months = adjust_required(
                     base_required, start_date, end_date, _waivers, str(req.id),
+                    period_months=get_rolling_period_months(req),
                 )
 
         # ---- CALLS ----
@@ -429,6 +431,7 @@ class TrainingService:
             if base_required > 0 and start_date and end_date and _waivers:
                 adjusted_required, waived_months, active_months = adjust_required(
                     base_required, start_date, end_date, _waivers, str(req.id),
+                    period_months=get_rolling_period_months(req),
                 )
 
         # ---- Fallback ----
@@ -580,6 +583,7 @@ class TrainingService:
             if required_value > 0 and start_date and end_date and waivers:
                 required_value, _, _ = adjust_required(
                     required_value, start_date, end_date, waivers, str(requirement.id),
+                    period_months=get_rolling_period_months(requirement),
                 )
 
             # Biannual: expired cert overrides hours
@@ -694,6 +698,7 @@ class TrainingService:
             if required_value > 0 and start_date and end_date and waivers:
                 required_value, _, _ = adjust_required(
                     required_value, start_date, end_date, waivers, str(requirement.id),
+                    period_months=get_rolling_period_months(requirement),
                 )
 
             is_complete = completed_value >= required_value if required_value > 0 else True
@@ -713,6 +718,7 @@ class TrainingService:
             if required_value > 0 and start_date and end_date and waivers:
                 required_value, _, _ = adjust_required(
                     required_value, start_date, end_date, waivers, str(requirement.id),
+                    period_months=get_rolling_period_months(requirement),
                 )
 
             is_complete = completed_value >= required_value if required_value > 0 else True
