@@ -7,8 +7,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  ArrowLeftRight, CalendarOff, Check, X, Clock,
-  Loader2, AlertCircle, Filter,
+  ArrowLeftRight, CalendarOff, Check, X,
+  Loader2, Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';

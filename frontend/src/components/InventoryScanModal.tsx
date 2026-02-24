@@ -323,7 +323,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     e.preventDefault();
     // If dropdown is showing and an item is highlighted, add it
     if (showDropdown && activeDropdownIndex >= 0 && searchResults[activeDropdownIndex]) {
-      addItemFromResult(searchResults[activeDropdownIndex]!);
+      addItemFromResult(searchResults[activeDropdownIndex]);
       return;
     }
     // If dropdown is showing with results, add the first one

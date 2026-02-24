@@ -22,7 +22,7 @@ import { schedulingService, userService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDate, formatTime } from '../../utils/dateFormatting';
+import { formatTime } from '../../utils/dateFormatting';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
 
 interface ShiftDetailPanelProps {
@@ -738,7 +738,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <div key={i} className="p-3 bg-theme-surface-hover/30 rounded-lg border border-theme-surface-border">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium text-theme-text-primary capitalize">
-                          {String(call.incident_type || 'Unknown')}
+                          {String((call.incident_type ?? 'Unknown') as string)}
                         </p>
                         {Boolean(call.incident_number) && (
                           <span className="text-xs text-theme-text-muted">#{String(call.incident_number)}</span>

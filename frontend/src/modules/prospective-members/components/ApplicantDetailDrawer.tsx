@@ -46,7 +46,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
-import { ApplicantStatus, StageType as StageTypeEnum, ElectionStatus } from '../../../constants/enums';
+import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
 
 interface ApplicantDetailDrawerProps {
   applicant: Applicant | null;

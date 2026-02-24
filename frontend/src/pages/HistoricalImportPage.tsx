@@ -24,7 +24,6 @@ import {
   ArrowLeft,
   Download,
   Users,
-  BookOpen,
   Search,
   ChevronDown,
   ChevronUp,
@@ -33,7 +32,6 @@ import {
 import { trainingService } from '../services/api';
 import type {
   HistoricalImportParseResponse,
-  HistoricalImportParsedRow,
   UnmatchedCourse,
   CourseMappingEntry,
   HistoricalImportConfirmRequest,

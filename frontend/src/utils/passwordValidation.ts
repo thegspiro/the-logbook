@@ -93,8 +93,10 @@ export function validatePassword(
   }
 
   // Check special characters
+  // eslint-disable-next-line no-useless-escape
   if (requirements.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
     errors.push('Password must contain at least one special character');
+    // eslint-disable-next-line no-useless-escape
   } else if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
     strengthScore += 1;
   }
@@ -222,6 +224,7 @@ export function validatePasswordStrength(password: string) {
     uppercase: /[A-Z]/.test(password),
     lowercase: /[a-z]/.test(password),
     number: /\d/.test(password),
+    // eslint-disable-next-line no-useless-escape
     special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password),
   };
 

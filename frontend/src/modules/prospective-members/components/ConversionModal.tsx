@@ -19,7 +19,6 @@ import {
   ArrowRight,
   ArrowLeft,
   MapPin,
-  FileText,
   Briefcase,
   Users,
 } from 'lucide-react';

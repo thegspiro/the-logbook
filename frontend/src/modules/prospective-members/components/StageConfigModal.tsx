@@ -15,7 +15,6 @@ import {
   Trash2,
   Clock,
   Bell,
-  Eye,
 } from 'lucide-react';
 import type {
   PipelineStage,

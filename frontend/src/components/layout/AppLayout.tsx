@@ -20,7 +20,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const _user = useAuthStore((s) => s.user);
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>(
+  const [navigationLayout, _setNavigationLayout] = useState<'top' | 'left'>(
     () => (localStorage.getItem('navigationLayout') as 'top' | 'left') || 'left'
   );
   const [showLogoutModal, setShowLogoutModal] = useState(false);

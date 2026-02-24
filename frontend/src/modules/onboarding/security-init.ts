@@ -84,7 +84,7 @@ export const performSecurityChecks = (): SecurityCheckResult => {
 
     try {
       observer.observe({ entryTypes: ['resource'] });
-    } catch (e) {
+    } catch (_e) {
       // Performance Observer not supported
     }
   }

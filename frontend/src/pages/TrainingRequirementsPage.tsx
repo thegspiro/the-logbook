@@ -566,7 +566,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
   const [formData, setFormData] = useState({
     name: requirement?.name || '',
     description: requirement?.description || '',
-    requirement_type: (requirement?.requirement_type || 'hours') as RequirementType,
+    requirement_type: (requirement?.requirement_type || 'hours'),
     training_type: requirement?.training_type || '',
     required_hours: requirement?.required_hours || undefined,
     frequency: requirement?.frequency || 'annual' as RequirementFrequency,
@@ -595,7 +595,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
       const data = {
         name: formData.name,
         description: formData.description || undefined,
-        requirement_type: formData.requirement_type as RequirementType,
+        requirement_type: formData.requirement_type,
         training_type: formData.training_type as TrainingType || undefined,
         required_hours: formData.required_hours || undefined,
         frequency: formData.frequency,

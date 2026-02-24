@@ -414,7 +414,7 @@ const MinutesPage: React.FC = () => {
                           <div key={wIdx} className="bg-theme-surface rounded-lg p-3 border border-theme-surface-border text-sm">
                             <div className="flex items-center justify-between">
                               <span className="text-theme-text-primary font-medium">
-                                {String(waiver.user_name || waiver.user_id || 'Unknown')}
+                                {String((waiver.user_name ?? waiver.user_id ?? 'Unknown') as string)}
                               </span>
                               <span className="px-2 py-0.5 text-xs rounded-full bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
                                 Waived
@@ -422,12 +422,12 @@ const MinutesPage: React.FC = () => {
                             </div>
                             {waiver.reason ? (
                               <p className="text-xs text-theme-text-muted mt-1">
-                                Reason: {String(waiver.reason)}
+                                Reason: {String(waiver.reason as string)}
                               </p>
                             ) : null}
                             {waiver.granted_by_name ? (
                               <p className="text-xs text-theme-text-muted mt-0.5">
-                                Granted by: {String(waiver.granted_by_name)}
+                                Granted by: {String(waiver.granted_by_name as string)}
                               </p>
                             ) : null}
                           </div>

@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Clock, Check, XCircle, ArrowLeftRight, CalendarOff,
-  Loader2, ChevronDown, Users,
+  Loader2, ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
@@ -34,7 +34,7 @@ interface MyShiftsTabProps {
 export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const tz = useTimezone();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [upcomingShifts, setUpcomingShifts] = useState<ShiftRecord[]>([]);
+  const [_upcomingShifts, setUpcomingShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'upcoming' | 'past'>('upcoming');
 

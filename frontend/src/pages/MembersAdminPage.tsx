@@ -128,7 +128,7 @@ export const MembersAdminPage: React.FC = () => {
     setEditingMembers(true);
   };
 
-  const handleEditProfile = async (user: UserWithRoles) => {
+  const _handleEditProfile = async (user: UserWithRoles) => {
     // Fetch full profile for the user to get all fields
     try {
       const fullProfile = await userService.getUserWithRoles(user.id);

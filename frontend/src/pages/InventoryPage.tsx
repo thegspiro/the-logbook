@@ -13,7 +13,6 @@ import {
   Printer,
   Pencil,
   Archive,
-  ArrowLeft,
   ChevronDown,
   Download,
   Send,
@@ -22,7 +21,6 @@ import {
   XCircle,
   Loader2,
   Wrench,
-  Calendar,
   CheckCircle2,
   Clock,
   FileX,
@@ -178,7 +176,7 @@ const InventoryPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Confirmation dialog for batch submit in scan modal
-  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
+  const [_showBatchConfirm, _setShowBatchConfirm] = useState(false);
 
   // Bulk operations
   const [showBulkMenu, setShowBulkMenu] = useState(false);

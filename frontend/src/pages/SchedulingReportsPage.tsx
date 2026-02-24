@@ -18,7 +18,6 @@ import {
   Users,
   RefreshCw,
   Search,
-  Download,
   AlertCircle,
   CheckCircle2,
   XCircle,
@@ -26,7 +25,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
-import type { RequirementComplianceSummary, MemberComplianceRecord } from '../services/api';
+import type { RequirementComplianceSummary } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 
@@ -240,7 +239,7 @@ export const SchedulingReportsPage: React.FC = () => {
     try {
       const data = await schedulingService.getCoverageReport({ start_date: startDate, end_date: endDate });
       // Data might be an array or an object with records
-      const records = Array.isArray(data) ? data : (data as Record<string, unknown>).records || [];
+      const records = Array.isArray(data) ? data : (data).records || [];
       setCoverageData(records as unknown as CoverageRecord[]);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load coverage report'));
@@ -255,7 +254,7 @@ export const SchedulingReportsPage: React.FC = () => {
     setHasSearched(true);
     try {
       const data = await schedulingService.getCallVolumeReport({ start_date: startDate, end_date: endDate, group_by: groupBy });
-      const records = Array.isArray(data) ? data : (data as Record<string, unknown>).records || [];
+      const records = Array.isArray(data) ? data : (data).records || [];
       setCallVolumeData(records as unknown as CallVolumeRecord[]);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load call volume report'));

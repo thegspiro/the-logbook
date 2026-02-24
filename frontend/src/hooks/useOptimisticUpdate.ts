@@ -40,8 +40,10 @@ export function useOptimisticUpdate<T>({
         return result;
       } catch {
         toast.error(errorMessage);
-        // Caller should use the rollback value
-        throw rollbackRef.current;
+        // Attach rollback value so callers can revert
+        const err = new Error(errorMessage);
+        (err as Error & { rollbackValue: T | null }).rollbackValue = rollbackRef.current;
+        throw err;
       } finally {
         setLoading(false);
       }

@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Plus, Search, Filter, Wrench, ClipboardCheck,
-  Archive, RotateCcw, MapPin, CheckCircle2, Clock, Loader2, X,
+  MapPin, CheckCircle2, Clock, Loader2, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../services/api';

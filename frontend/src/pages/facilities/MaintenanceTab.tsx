@@ -13,7 +13,7 @@ import type { MaintenanceRecord, MaintenanceType, Facility, MAINTENANCE_CATEGORI
 import { useTimezone } from '../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
 
-const CATEGORY_OPTIONS: Array<typeof MAINTENANCE_CATEGORIES[number]> = [
+const _CATEGORY_OPTIONS: Array<typeof MAINTENANCE_CATEGORIES[number]> = [
   'PREVENTIVE', 'REPAIR', 'INSPECTION', 'RENOVATION', 'CLEANING', 'SAFETY', 'OTHER',
 ];
 

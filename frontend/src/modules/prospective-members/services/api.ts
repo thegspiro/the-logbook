@@ -64,7 +64,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) return Promise.reject(error);
+      if (!refreshToken) return Promise.reject(error instanceof Error ? error : new Error(String(error)));
 
       try {
         if (!refreshPromise) {
@@ -89,7 +89,7 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
-    return Promise.reject(error);
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
 );
 

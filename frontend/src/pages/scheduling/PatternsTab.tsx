@@ -8,8 +8,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Plus, RefreshCw, Loader2, Calendar, Clock, Trash2,
-  Play, ChevronDown, ChevronUp, Users, Pencil,
+  Plus, RefreshCw, Loader2, Trash2,
+  Play, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
@@ -150,7 +150,7 @@ export const PatternsTab: React.FC = () => {
         start_date: generateForm.start_date,
         end_date: generateForm.end_date,
       });
-      const count = (result as Record<string, unknown>).shifts_created ?? 0;
+      const count = Number(result.shifts_created ?? 0);
       toast.success(`Generated ${count} shifts`);
       setGeneratingFor(null);
       setGenerateForm({ start_date: '', end_date: '' });

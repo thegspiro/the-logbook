@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Clock, Users, UserPlus, Truck, Search, Loader2,
+  Clock, Users, UserPlus, Truck, Loader2,
   CalendarDays, Filter, Check, MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';

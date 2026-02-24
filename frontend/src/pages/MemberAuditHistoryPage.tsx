@@ -149,7 +149,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
     if (value === null || value === undefined) return 'N/A';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (typeof value === 'object') return JSON.stringify(value);
-    return String(value);
+    return String(value as string | number);
   };
 
   const formatEventDataKey = (key: string): string => {
@@ -273,7 +273,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
         ) : (
           <div className="space-y-0">
             {entries.map((entry, index) => {
-              const severityStyle = getSeverityStyle(entry.severity)!;
+              const severityStyle = getSeverityStyle(entry.severity);
               const isExpanded = expandedEntryIds.has(entry.id);
               const hasEventData =
                 entry.event_data && Object.keys(entry.event_data).length > 0;

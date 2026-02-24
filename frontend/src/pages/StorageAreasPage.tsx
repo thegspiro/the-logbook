@@ -237,7 +237,7 @@ export const StorageAreasPage: React.FC = () => {
     setFormError(null);
     try {
       if (editingArea) {
-        await inventoryService.updateStorageArea(editingArea.id, form as Partial<StorageAreaCreate>);
+        await inventoryService.updateStorageArea(editingArea.id, form);
         toast.success('Storage area updated');
       } else {
         await inventoryService.createStorageArea(form as StorageAreaCreate);

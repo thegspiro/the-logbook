@@ -20,7 +20,6 @@ import { useAuthStore } from '../../stores/authStore';
 import type {
   ShiftCompletionReport,
   ShiftCompletionReportCreate,
-  SkillObservation,
   TaskPerformed,
   TrainingModuleConfig,
 } from '../../types/training';
@@ -220,9 +219,9 @@ export const ShiftReportsTab: React.FC = () => {
     setSubmitting(true);
     try {
       const payload: ShiftCompletionReportCreate = {
-        trainee_id: form.trainee_id!,
-        shift_date: form.shift_date!,
-        hours_on_shift: form.hours_on_shift!,
+        trainee_id: form.trainee_id,
+        shift_date: form.shift_date,
+        hours_on_shift: form.hours_on_shift,
         calls_responded: form.calls_responded || 0,
         call_types: form.call_types?.length ? form.call_types : undefined,
         performance_rating: form.performance_rating || undefined,
