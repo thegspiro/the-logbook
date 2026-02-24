@@ -38,6 +38,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { HelpLink } from '../components/HelpLink';
 import { organizationService, ranksService } from '../services/api';
 import type { ModuleSettingsData, OperationalRankResponse, OrganizationProfile, RankValidationIssue } from '../services/api';
 import type { ContactInfoSettings, MembershipIdSettings } from '../types/user';
@@ -396,7 +397,7 @@ export const SettingsPage: React.FC = () => {
             <div className="flex items-start gap-4">
               <div className="w-20 h-20 rounded-xl border-2 border-dashed border-theme-surface-border flex items-center justify-center overflow-hidden bg-theme-surface-secondary flex-shrink-0">
                 {profile?.logo ? (
-                  <img src={profile.logo} alt="" className="max-w-full max-h-full object-contain" />
+                  <img src={profile.logo} alt={`${profile.name || 'Department'} logo`} className="max-w-full max-h-full object-contain" />
                 ) : (
                   <Building2 className="w-8 h-8 text-theme-text-muted" />
                 )}
@@ -914,11 +915,17 @@ export const SettingsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-theme-text-primary">Organization Settings</h2>
-          <p className="mt-1 text-sm text-theme-text-muted">
-            Manage your department profile, modules, and configuration.
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-theme-text-primary">Organization Settings</h2>
+            <p className="mt-1 text-sm text-theme-text-muted">
+              Manage your department profile, modules, and configuration.
+            </p>
+          </div>
+          <HelpLink
+            topic="settings"
+            tooltip="Configure your department's name, logo, timezone, modules, member settings, and rank structure from this page."
+          />
         </div>
 
         <div className="flex flex-col md:flex-row gap-6">

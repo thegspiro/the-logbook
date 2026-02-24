@@ -5,9 +5,9 @@
  * Enhanced with skeleton loading, empty states, breadcrumbs, and relative time.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Plus } from 'lucide-react';
+import { Calendar, Plus, Download } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventListItem, EventType } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
@@ -19,7 +19,6 @@ import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime
 
 export const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<EventListItem[]>([]);
-  const [filteredEvents, setFilteredEvents] = useState<EventListItem[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,13 +31,32 @@ export const EventsPage: React.FC = () => {
     fetchEvents();
   }, []);
 
-  useEffect(() => {
-    if (typeFilter === 'all') {
-      setFilteredEvents(events);
-    } else {
-      setFilteredEvents(events.filter(e => e.event_type === typeFilter));
-    }
+  // #77: Memoize filtered events instead of storing in separate state
+  const filteredEvents = useMemo(() => {
+    if (typeFilter === 'all') return events;
+    return events.filter(e => e.event_type === typeFilter);
   }, [events, typeFilter]);
+
+  // #48: CSV export for events
+  const handleExportCSV = useCallback(() => {
+    const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
+    const rows = filteredEvents.map(e => [
+      e.title,
+      getEventTypeLabel(e.event_type),
+      formatShortDateTime(e.start_datetime, tz),
+      e.location || '',
+      e.is_mandatory ? 'Yes' : 'No',
+      e.is_cancelled ? 'Yes' : 'No',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `events-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filteredEvents, tz]);
 
   const fetchEvents = async () => {
     try {
@@ -97,8 +115,19 @@ export const EventsPage: React.FC = () => {
             Department events, meetings, training sessions, and more
           </p>
         </div>
-        {canManage && (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
+          {filteredEvents.length > 0 && (
+            <button
+              onClick={handleExportCSV}
+              className="btn-secondary inline-flex items-center gap-2"
+              title="Export to CSV"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          )}
+          {canManage && (
+            <>
             <Link
               to="/events/admin"
               className="btn-secondary btn-icon"
@@ -116,8 +145,9 @@ export const EventsPage: React.FC = () => {
               <Plus className="h-5 w-5" aria-hidden="true" />
               Create Event
             </Link>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Filter Tabs */}

@@ -341,6 +341,8 @@ class Settings(BaseSettings):
     # ============================================
     ENABLE_DOCS: bool = True  # OpenAPI/Swagger docs
     LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "text"  # "text" for human-readable, "json" for structured JSON logging
+    RATE_LIMIT_DEFAULT: str = "100/minute"
 
 
 @lru_cache()

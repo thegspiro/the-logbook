@@ -17,6 +17,10 @@ from loguru import logger
 import sys
 import signal
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from app.core.config import settings
 from app.core.database import database_manager
 from app.core.cache import cache_manager
@@ -25,14 +29,47 @@ from app.api.public.portal import router as public_portal_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.display import router as public_display_router
 
-
-# Configure logging
-logger.remove()
-logger.add(
-    sys.stdout,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    level="INFO" if settings.ENVIRONMENT == "production" else "DEBUG",
+# Create rate limiter instance (uses Redis if available, falls back to in-memory)
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[settings.RATE_LIMIT_DEFAULT],
+    storage_uri=f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/1"
+    if settings.REDIS_HOST
+    else "memory://",
 )
+
+
+# Configure logging (#19: structured JSON logging option)
+logger.remove()
+
+if settings.LOG_FORMAT == "json":
+    # Structured JSON logging for production monitoring (ELK, Datadog, CloudWatch)
+    import json as _json
+
+    def _json_sink(message):
+        record = message.record
+        log_entry = {
+            "timestamp": record["time"].isoformat(),
+            "level": record["level"].name,
+            "message": record["message"],
+            "module": record["name"],
+            "function": record["function"],
+            "line": record["line"],
+        }
+        if record["exception"]:
+            log_entry["exception"] = str(record["exception"])
+        print(_json.dumps(log_entry), flush=True)
+
+    logger.add(
+        _json_sink,
+        level=settings.LOG_LEVEL if settings.ENVIRONMENT == "production" else "DEBUG",
+    )
+else:
+    logger.add(
+        sys.stdout,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level=settings.LOG_LEVEL if settings.ENVIRONMENT == "production" else "DEBUG",
+    )
 
 # Add file logging with directory creation
 import os
@@ -1249,6 +1286,10 @@ app = FastAPI(
     lifespan=lifespan,
     redirect_slashes=False,
 )
+
+# Attach rate limiter to application
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ============================================
 # Middleware
