@@ -66,11 +66,16 @@ const MyEquipmentPage: React.FC = () => {
       // Resolve the member's rank code to a sort_order via the ranks list
       const memberRank = ranks.find(r => r.rank_code === user?.rank);
       const memberSortOrder = memberRank?.sort_order;
-      // Filter out items the member's rank doesn't qualify for
+      const memberPositions = user?.positions ?? [];
+      // Filter out items the member doesn't qualify for.
+      // If both rank AND position restrictions exist, either one qualifying grants access (OR).
       const filtered = res.items.filter(item => {
-        if (item.min_rank_order == null) return true;
-        if (memberSortOrder == null) return true; // no rank info → show all
-        return memberSortOrder <= item.min_rank_order;
+        const hasRankRestriction = item.min_rank_order != null;
+        const hasPositionRestriction = item.restricted_to_positions != null && item.restricted_to_positions.length > 0;
+        if (!hasRankRestriction && !hasPositionRestriction) return true;
+        const passesRank = !hasRankRestriction || (memberSortOrder != null && memberSortOrder <= (item.min_rank_order ?? 0));
+        const passesPosition = !hasPositionRestriction || memberPositions.some(p => item.restricted_to_positions?.includes(p));
+        return passesRank || passesPosition;
       });
       setItemResults(filtered);
     } catch {
@@ -78,7 +83,7 @@ const MyEquipmentPage: React.FC = () => {
     } finally {
       setSearchingItems(false);
     }
-  }, [ranks, user?.rank]);
+  }, [ranks, user?.rank, user?.positions]);
 
   const handleItemSearchChange = (value: string) => {
     setItemSearch(value);
