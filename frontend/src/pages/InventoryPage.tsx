@@ -546,6 +546,8 @@ const InventoryPage: React.FC = () => {
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       const fmt = labelFormats.find(f => f.id === labelFormat);
       toast.success(`Generated ${fmt?.description || labelFormat} labels for ${selectedItemIds.size} item(s)`);
+      // Refresh items so auto-populated barcode values are visible in edit form
+      loadData();
     } catch {
       toast.error('Failed to generate barcode labels');
     } finally {
@@ -1177,7 +1179,7 @@ const InventoryPage: React.FC = () => {
                   <input
                     id="inventory-search"
                     type="text"
-                    placeholder="Search by name, serial number, asset tag..."
+                    placeholder="Search by name, size, color, serial #, barcode..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -1319,7 +1321,26 @@ const InventoryPage: React.FC = () => {
                             <div>
                               <div className="text-theme-text-primary font-medium text-sm">{item.name}</div>
                               {item.manufacturer && (
-                                <div className="text-theme-text-muted text-xs sm:text-sm">{item.manufacturer} {item.model_number || ''}</div>
+                                <div className="text-theme-text-muted text-xs">{item.manufacturer}{item.model_number ? ` ${item.model_number}` : ''}</div>
+                              )}
+                              {(item.size || item.color || item.asset_tag) && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {item.size && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                                      {item.size}
+                                    </span>
+                                  )}
+                                  {item.color && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
+                                      {item.color}
+                                    </span>
+                                  )}
+                                  {item.asset_tag && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                                      {item.asset_tag}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </td>

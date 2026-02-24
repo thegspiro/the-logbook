@@ -648,9 +648,12 @@ async def update_organization_profile(
     # Also update localStorage branding for the caller
     await log_audit_event(
         db=db,
+        event_type="organization.profile_updated",
+        event_category="administration",
+        severity="info",
+        event_data={"fields_changed": list(updates.keys())},
         user_id=str(current_user.id),
-        action="organization.profile_updated",
-        details={"fields_changed": list(updates.keys())},
+        username=current_user.username,
     )
 
     return {
