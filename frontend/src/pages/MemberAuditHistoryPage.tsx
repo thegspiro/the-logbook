@@ -141,8 +141,8 @@ export const MemberAuditHistoryPage: React.FC = () => {
     });
   };
 
-  const getSeverityStyle = (severity: string) => {
-    return SEVERITY_STYLES[severity] || SEVERITY_STYLES.info;
+  const getSeverityStyle = (severity: string): { dot: string; label: string } => {
+    return (SEVERITY_STYLES[severity] || SEVERITY_STYLES.info)!;
   };
 
   const formatEventDataValue = (value: unknown): string => {
@@ -273,7 +273,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
         ) : (
           <div className="space-y-0">
             {entries.map((entry, index) => {
-              const severityStyle = getSeverityStyle(entry.severity);
+              const severityStyle = getSeverityStyle(entry.severity)!;
               const isExpanded = expandedEntryIds.has(entry.id);
               const hasEventData =
                 entry.event_data && Object.keys(entry.event_data).length > 0;

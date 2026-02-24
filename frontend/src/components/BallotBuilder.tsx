@@ -144,7 +144,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
     if (newIndex < 0 || newIndex >= ballotItems.length) return;
 
     const updated = [...ballotItems];
-    [updated[index], updated[newIndex]] = [updated[newIndex], updated[index]];
+    [updated[index], updated[newIndex]] = [updated[newIndex] as BallotItem, updated[index] as BallotItem];
     await saveItems(updated);
   };
 

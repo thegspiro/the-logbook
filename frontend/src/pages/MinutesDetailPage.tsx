@@ -163,7 +163,7 @@ export const MinutesDetailPage: React.FC = () => {
     if (targetIndex < 0 || targetIndex >= sections.length) return;
 
     // Swap
-    [sections[index], sections[targetIndex]] = [sections[targetIndex], sections[index]];
+    [sections[index], sections[targetIndex]] = [sections[targetIndex] as SectionEntry, sections[index] as SectionEntry];
     // Renumber
     const renumbered = sections.map((s, i) => ({ ...s, order: i }));
 

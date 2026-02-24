@@ -159,7 +159,7 @@ const MinutesPage: React.FC = () => {
   };
 
   const getMeetingTypeInfo = (type: string) => {
-    return MEETING_TYPES.find(t => t.value === type) || MEETING_TYPES[MEETING_TYPES.length - 1];
+    return MEETING_TYPES.find(t => t.value === type) || MEETING_TYPES[MEETING_TYPES.length - 1]!;
   };
 
   const handleToggleWaivers = async (meetingId: string) => {
@@ -299,8 +299,8 @@ const MinutesPage: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-theme-text-primary font-semibold text-lg truncate">{meeting.title}</h3>
-                      <span className={`px-2 py-0.5 text-xs rounded border ${typeInfo.color}`}>
-                        {typeInfo.label}
+                      <span className={`px-2 py-0.5 text-xs rounded border ${typeInfo?.color}`}>
+                        {typeInfo?.label}
                       </span>
                       {meeting.status && (
                         <span className={`px-2 py-0.5 text-xs rounded ${

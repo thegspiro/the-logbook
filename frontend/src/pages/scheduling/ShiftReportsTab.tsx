@@ -191,7 +191,7 @@ export const ShiftReportsTab: React.FC = () => {
   const handleUpdateTask = (index: number, field: keyof TaskPerformed, value: string) => {
     setForm(prev => {
       const tasks = [...(prev.tasks_performed || [])];
-      tasks[index] = { ...tasks[index], [field]: value };
+      tasks[index] = { ...tasks[index], [field]: value } as TaskPerformed;
       return { ...prev, tasks_performed: tasks };
     });
   };
@@ -394,7 +394,7 @@ export const ShiftReportsTab: React.FC = () => {
       weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
     });
 
-    const statusStyle = REVIEW_STATUS_STYLES[report.review_status] || REVIEW_STATUS_STYLES.approved;
+    const statusStyle = (REVIEW_STATUS_STYLES[report.review_status] || REVIEW_STATUS_STYLES.approved)!;
 
     return (
       <div key={report.id} className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-hidden">

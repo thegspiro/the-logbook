@@ -72,8 +72,8 @@ const formatDateISO = (date: Date): string => {
 /** Compute the end date for a shift given its start date and template times. */
 const computeEndDate = (startDate: string, template: BackendTemplate | undefined): string => {
   if (!startDate || !template) return '';
-  const [startHour] = template.start_time_of_day.split(':').map(Number);
-  const [endHour] = template.end_time_of_day.split(':').map(Number);
+  const [startHour = 0] = template.start_time_of_day.split(':').map(Number);
+  const [endHour = 0] = template.end_time_of_day.split(':').map(Number);
   // Same-day shift: end time is after start time and not a 24-hour shift
   if (endHour > startHour && template.duration_hours < 24) {
     return startDate;
@@ -236,8 +236,8 @@ const SchedulingPage: React.FC = () => {
     if (viewMode === 'month') {
       return currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: tz });
     }
-    const start = weekDates[0];
-    const end = weekDates[6];
+    const start = weekDates[0]!;
+    const end = weekDates[6]!;
     const startMonth = start.toLocaleString('en-US', { month: 'short', timeZone: tz });
     const endMonth = end.toLocaleString('en-US', { month: 'short', timeZone: tz });
     if (startMonth === endMonth) {
@@ -264,7 +264,7 @@ const SchedulingPage: React.FC = () => {
           currentDate.getMonth() + 1
         );
       } else {
-        const weekStartStr = formatDateISO(weekDates[0]);
+        const weekStartStr = formatDateISO(weekDates[0]!);
         fetchedShifts = await schedulingService.getWeekCalendar(weekStartStr);
       }
       setShifts(fetchedShifts);
@@ -1636,7 +1636,7 @@ const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                               ...prev.resourceTypeDefaults,
                               [type]: { ...prev.resourceTypeDefaults[type], positions: editPositions },
                             },
-                          }));
+                          } as ShiftSettings));
                           setEditingApparatusType(null);
                         }} className="text-xs text-violet-600 dark:text-violet-400 font-medium hover:underline">Save</button>
                       </div>

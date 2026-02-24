@@ -825,12 +825,12 @@ const CreatePipelinePage: React.FC = () => {
 
   const goNext = () => {
     const idx = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
-    if (idx < WIZARD_STEPS.length - 1) setCurrentStep(WIZARD_STEPS[idx + 1].key);
+    if (idx < WIZARD_STEPS.length - 1) setCurrentStep(WIZARD_STEPS[idx + 1]!.key);
   };
 
   const goBack = () => {
     const idx = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
-    if (idx > 0) setCurrentStep(WIZARD_STEPS[idx - 1].key);
+    if (idx > 0) setCurrentStep(WIZARD_STEPS[idx - 1]!.key);
   };
 
   // ---- Info handlers ----
@@ -939,7 +939,7 @@ const CreatePipelinePage: React.FC = () => {
         const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
         if (swapIdx < 0 || swapIdx >= p.milestones.length) return p;
         const updated = [...p.milestones];
-        [updated[idx], updated[swapIdx]] = [updated[swapIdx], updated[idx]];
+        [updated[idx], updated[swapIdx]] = [updated[swapIdx]!, updated[idx]!];
         return { ...p, milestones: updated };
       })
     );

@@ -67,7 +67,7 @@ export const WhatsNew: React.FC = () => {
 
   const handleOpen = () => {
     setIsOpen(true);
-    localStorage.setItem(STORAGE_KEY, currentVersion);
+    localStorage.setItem(STORAGE_KEY, currentVersion!);
     setHasNew(false);
   };
 

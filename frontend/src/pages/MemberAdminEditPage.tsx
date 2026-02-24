@@ -147,7 +147,7 @@ export const MemberAdminEditPage: React.FC = () => {
     setForm((prev) => {
       if (!prev) return prev;
       const updatedContacts = [...prev.emergency_contacts];
-      updatedContacts[index] = { ...updatedContacts[index], [field]: value };
+      updatedContacts[index] = { ...updatedContacts[index], [field]: value } as EmergencyContact;
       return { ...prev, emergency_contacts: updatedContacts };
     });
   };

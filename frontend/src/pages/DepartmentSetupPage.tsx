@@ -200,8 +200,8 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate }) => {
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
             </div>
           ) : (
-            <div className={`w-10 h-10 rounded-full ${styles.bgClass} flex items-center justify-center`}>
-              <span className={styles.textClass}>{icon}</span>
+            <div className={`w-10 h-10 rounded-full ${styles?.bgClass} flex items-center justify-center`}>
+              <span className={styles?.textClass}>{icon}</span>
             </div>
           )}
         </div>

@@ -188,8 +188,8 @@ function LocationSetupWizard({
     try {
       const newStations = [...stations];
       for (let i = 0; i < newStations.length; i++) {
-        if (!newStations[i].saved) {
-          const s = newStations[i];
+        const s = newStations[i]!;
+        if (!s.saved) {
           const created = await locationsService.createLocation({
             name: s.name.trim(),
             address: s.address.trim() || undefined,
@@ -197,7 +197,7 @@ function LocationSetupWizard({
             state: s.state.trim() || undefined,
             zip: s.zip.trim() || undefined,
           });
-          newStations[i] = { ...s, saved: true, savedId: created.id };
+          newStations[i] = { ...s, saved: true, savedId: created.id } as WizardStation;
         }
       }
       setStations(newStations);

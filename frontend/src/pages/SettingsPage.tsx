@@ -353,7 +353,7 @@ export const SettingsPage: React.FC = () => {
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     if (swapIndex < 0 || swapIndex >= ranks.length) return;
     const newRanks = [...ranks];
-    [newRanks[index], newRanks[swapIndex]] = [newRanks[swapIndex], newRanks[index]];
+    [newRanks[index], newRanks[swapIndex]] = [newRanks[swapIndex]!, newRanks[index]!];
     const reorderPayload = newRanks.map((r, i) => ({ id: r.id, sort_order: i }));
     setRanks(newRanks);
     try {

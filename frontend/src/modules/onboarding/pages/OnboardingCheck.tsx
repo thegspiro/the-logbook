@@ -680,13 +680,13 @@ const OnboardingCheck: React.FC = () => {
             <div className="mt-4 pt-4 border-t border-theme-nav-border">
               <div className="bg-theme-alert-info-bg rounded-lg p-4 border border-theme-alert-info-border">
                 <div className="flex items-start gap-3">
-                  <div className="text-3xl flex-shrink-0">{educationalTips[currentTipIndex].icon}</div>
+                  <div className="text-3xl flex-shrink-0">{educationalTips[currentTipIndex]?.icon}</div>
                   <div className="flex-1">
                     <h4 className="text-theme-alert-info-title font-semibold text-sm mb-1">
-                      {educationalTips[currentTipIndex].title}
+                      {educationalTips[currentTipIndex]?.title}
                     </h4>
                     <p className="text-theme-text-secondary text-xs">
-                      {educationalTips[currentTipIndex].content}
+                      {educationalTips[currentTipIndex]?.content}
                     </p>
                   </div>
                 </div>

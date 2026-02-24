@@ -139,7 +139,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
         for (let i = 0; i < ranked.length; i++) {
           const voteData: VoteCreate = {
             election_id: electionId,
-            candidate_id: ranked[i],
+            candidate_id: ranked[i] as string,
             position: actualPosition,
             vote_rank: i + 1,
           };

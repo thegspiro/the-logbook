@@ -57,7 +57,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     const order = ['light', 'dark', 'system'] as const;
     const currentIndex = order.indexOf(theme as typeof order[number]);
     const nextIndex = (currentIndex + 1) % order.length;
-    setTheme(order[nextIndex]);
+    setTheme(order[nextIndex] ?? 'system');
   };
 
   const themeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;

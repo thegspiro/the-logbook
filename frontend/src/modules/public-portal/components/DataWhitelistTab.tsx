@@ -160,12 +160,12 @@ export const DataWhitelistTab: React.FC = () => {
       if (!grouped[field.category]) {
         grouped[field.category] = [];
       }
-      grouped[field.category].push(field);
+      grouped[field.category]!.push(field);
     });
 
     // Sort fields within each category by field name
     Object.keys(grouped).forEach(category => {
-      grouped[category].sort((a, b) => a.field_name.localeCompare(b.field_name));
+      grouped[category]!.sort((a, b) => a.field_name.localeCompare(b.field_name));
     });
 
     return grouped;
@@ -325,7 +325,7 @@ export const DataWhitelistTab: React.FC = () => {
             <CategorySection
               key={category}
               category={category}
-              fields={fieldsByCategory[category]}
+              fields={fieldsByCategory[category] ?? []}
               onToggle={handleToggle}
             />
           ))}

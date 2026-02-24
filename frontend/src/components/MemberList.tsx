@@ -95,7 +95,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                       ) : (
                         <div className="flex-shrink-0 h-10 w-10 rounded-full bg-theme-surface-secondary flex items-center justify-center">
                           <span className="text-theme-text-muted font-medium">
-                            {(member.first_name?.[0] || member.username[0]).toUpperCase()}
+                            {(member.first_name?.[0] ?? member.username?.[0] ?? '').toUpperCase()}
                           </span>
                         </div>
                       )}

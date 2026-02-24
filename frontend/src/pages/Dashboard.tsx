@@ -249,7 +249,7 @@ const Dashboard: React.FC = () => {
       const details = new Map<string, MemberProgramProgress>();
       results.forEach((result, i) => {
         if (result.status === 'fulfilled') {
-          details.set(top3[i].id, result.value);
+          details.set(top3[i]!.id, result.value);
         }
       });
       setProgressDetails(details);
