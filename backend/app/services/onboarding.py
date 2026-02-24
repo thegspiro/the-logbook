@@ -566,6 +566,111 @@ class OnboardingService:
 
         await self.db.flush()
 
+    async def create_it_team_users(
+        self,
+        organization_id: str,
+        it_team_members: List[Dict[str, Any]],
+    ) -> List[User]:
+        """
+        Create user accounts for IT team members collected during onboarding.
+
+        Each member gets an ACTIVE account with ``must_change_password`` set
+        so they are forced to choose their own password on first login.
+        They are assigned the default ``member`` role.
+
+        Args:
+            organization_id: Organization UUID
+            it_team_members: List of dicts with keys: name, email, phone, role
+
+        Returns:
+            List of created User objects
+        """
+        auth_service = AuthService(self.db)
+        created_users: List[User] = []
+
+        # Look up the member role once
+        member_role_result = await self.db.execute(
+            select(Role).where(
+                Role.organization_id == organization_id,
+                Role.slug == ROLE_MEMBER
+            )
+        )
+        member_role = member_role_result.scalar_one_or_none()
+
+        for member in it_team_members:
+            email = member.get("email", "").strip()
+            name = member.get("name", "").strip()
+            phone = member.get("phone", "").strip()
+
+            if not email or not name:
+                continue
+
+            # Split name into first/last
+            name_parts = name.split(None, 1)
+            first_name = name_parts[0]
+            last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+            # Generate username from email local part
+            username = email.split("@")[0].lower()
+            username = "".join(c for c in username if c.isalnum() or c in "-_")
+            if not username:
+                username = first_name.lower()
+
+            # Check if a user with this email already exists (e.g. the System Owner)
+            existing = await self.db.execute(
+                select(User).where(
+                    User.email == email,
+                    User.organization_id == organization_id,
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
+
+            # Check for username conflict and append a suffix if needed
+            base_username = username
+            suffix = 1
+            while True:
+                dup = await self.db.execute(
+                    select(User).where(
+                        User.username == username,
+                        User.organization_id == organization_id,
+                    )
+                )
+                if dup.scalar_one_or_none() is None:
+                    break
+                username = f"{base_username}{suffix}"
+                suffix += 1
+
+            # Generate a secure temporary password
+            temp_password = secrets.token_urlsafe(16)
+
+            user, error = await auth_service.register_user(
+                organization_id=organization_id,
+                username=username,
+                email=email,
+                password=temp_password,
+                first_name=first_name,
+                last_name=last_name,
+            )
+
+            if error or not user:
+                continue
+
+            # Force password change on first login
+            user.must_change_password = True
+            user.phone = phone
+
+            # Assign member role
+            if member_role:
+                await self.db.refresh(user, ["positions"])
+                if member_role not in user.positions:
+                    user.positions.append(member_role)
+
+            await self.db.flush()
+            created_users.append(user)
+
+        return created_users
+
     # Backward-compatible alias
     async def create_admin_user(self, **kwargs) -> "User":
         return await self.create_system_owner(**kwargs)

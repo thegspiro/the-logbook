@@ -512,13 +512,30 @@ async def _persist_session_data_to_org(
 
     org_settings = dict(organization.settings or {})
 
-    # Persist IT team data
+    # Persist IT team data and create user accounts for IT team members
     it_team_data = session_data.get("it_team")
     if it_team_data:
         org_settings["it_team"] = {
             "members": it_team_data.get("members", []),
             "backup_access": it_team_data.get("backup_access", {}),
         }
+
+        # Create user accounts for IT team members so they can log in
+        members = it_team_data.get("members", [])
+        if members:
+            service = OnboardingService(db)
+            try:
+                created_users = await service.create_it_team_users(
+                    organization_id=str(organization.id),
+                    it_team_members=members,
+                )
+                if created_users:
+                    logger.info(
+                        f"Created {len(created_users)} IT team user account(s) "
+                        f"(must_change_password=True)"
+                    )
+            except Exception as e:
+                logger.warning(f"Could not create IT team user accounts: {e}")
 
     # Persist auth provider choice
     auth_data = session_data.get("auth")
