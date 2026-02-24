@@ -76,9 +76,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('react-dom') || id.includes('/react/')) {
-              return 'vendor-react';
-            }
+            // Check specific sub-framework chunks first (before the
+            // broad 'react' match below catches them)
             if (id.includes('react-router') || id.includes('@remix-run')) {
               return 'vendor-router';
             }
@@ -93,6 +92,12 @@ export default defineConfig({
             }
             if (id.includes('zustand')) {
               return 'vendor-state';
+            }
+            // React core + scheduler + all React-dependent libs in one
+            // chunk. This prevents circular inter-chunk dependencies
+            // (e.g. react-dom→scheduler in vendor, vendor→react).
+            if (id.includes('react') || id.includes('scheduler') || id.includes('@hookform')) {
+              return 'vendor-react';
             }
             return 'vendor';
           }

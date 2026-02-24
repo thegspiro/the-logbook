@@ -1173,7 +1173,7 @@ export const MemberProfilePage: React.FC = () => {
                   <div key={leave.id} className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium text-yellow-700 dark:text-yellow-400 capitalize">
-                        {leave.leave_type.replace(/_/g, ' ')}
+                        {(leave.leave_type ?? '').replace(/_/g, ' ')}
                       </span>
                       <span className="text-xs text-theme-text-muted">Active</span>
                     </div>

@@ -97,7 +97,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
       const items: HeldItem[] = [];
 
       // Permanent assignments
-      data.permanent_assignments.forEach((a: UserInventoryItem) => {
+      (data.permanent_assignments ?? []).forEach((a: UserInventoryItem) => {
         const details: string[] = [];
         if (a.serial_number) details.push(`SN: ${a.serial_number}`);
         if (a.asset_tag) details.push(`AT: ${a.asset_tag}`);
@@ -112,7 +112,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
       });
 
       // Active checkouts
-      data.active_checkouts.forEach((c: UserCheckoutItem) => {
+      (data.active_checkouts ?? []).forEach((c: UserCheckoutItem) => {
         const details: string[] = [];
         details.push(`Checked out: ${new Date(c.checked_out_at).toLocaleDateString()}`);
         if (c.is_overdue) details.push('OVERDUE');
@@ -126,7 +126,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
       });
 
       // Pool issuances
-      data.issued_items.forEach((i: UserIssuedItem) => {
+      (data.issued_items ?? []).forEach((i: UserIssuedItem) => {
         const details: string[] = [];
         details.push(`Qty: ${i.quantity_issued}`);
         if (i.size) details.push(`Size: ${i.size}`);
@@ -177,14 +177,14 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
   const updateCondition = (recordId: string, condition: string) => {
     setSelections((prev) => ({
       ...prev,
-      [recordId]: { ...prev[recordId]!, returnCondition: condition },
+      [recordId]: { ...(prev[recordId] ?? { returnCondition: '', quantityReturning: 0 }), returnCondition: condition },
     } as Record<string, ReturnSelection>));
   };
 
   const updateQuantity = (recordId: string, qty: number) => {
     setSelections((prev) => ({
       ...prev,
-      [recordId]: { ...prev[recordId]!, quantityReturning: qty },
+      [recordId]: { ...(prev[recordId] ?? { returnCondition: '', quantityReturning: 0 }), quantityReturning: qty },
     } as Record<string, ReturnSelection>));
   };
 

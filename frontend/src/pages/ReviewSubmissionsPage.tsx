@@ -560,7 +560,7 @@ const ConfigEditor: React.FC<{
   const updateField = (fieldName: string, prop: keyof FieldConfig, value: boolean | string) => {
     setFieldConfig((prev) => ({
       ...prev,
-      [fieldName]: { ...prev[fieldName], [prop]: value },
+      [fieldName]: { ...(prev[fieldName] ?? { visible: true, required: false, label: '' }), [prop]: value },
     } as Record<string, FieldConfig>));
   };
 

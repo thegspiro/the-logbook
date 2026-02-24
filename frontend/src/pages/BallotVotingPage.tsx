@@ -101,7 +101,7 @@ export const BallotVotingPage: React.FC = () => {
     setChoices((prev) => ({
       ...prev,
       [itemId]: {
-        ...prev[itemId],
+        ...(prev[itemId] ?? { choice: '', write_in_name: '' }),
         write_in_name: name,
       },
     } as Record<string, ItemChoice>));

@@ -100,7 +100,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       const query = searchQuery.toLowerCase();
       result = result.filter(
         (t) =>
-          t.course_name.toLowerCase().includes(query) ||
+          t.course_name?.toLowerCase().includes(query) ||
           t.course_code?.toLowerCase().includes(query) ||
           t.instructor?.toLowerCase().includes(query)
       );
@@ -121,13 +121,13 @@ export const MemberTrainingHistoryPage: React.FC = () => {
 
       switch (sortField) {
         case 'date': {
-          const dateA = new Date(a.completion_date || a.scheduled_date || '');
-          const dateB = new Date(b.completion_date || b.scheduled_date || '');
+          const dateA = new Date(a.completion_date || a.scheduled_date || 0);
+          const dateB = new Date(b.completion_date || b.scheduled_date || 0);
           compareValue = dateB.getTime() - dateA.getTime();
           break;
         }
         case 'course':
-          compareValue = a.course_name.localeCompare(b.course_name);
+          compareValue = (a.course_name ?? '').localeCompare(b.course_name ?? '');
           break;
         case 'hours':
           compareValue = (b.hours_completed || 0) - (a.hours_completed || 0);
@@ -251,7 +251,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             <select
               value={`${sortField}-${sortOrder}`}
               onChange={(e) => {
-                const [field, order] = e.target.value.split('-');
+                const [field, order = 'asc'] = e.target.value.split('-');
                 setSortField(field as SortField);
                 setSortOrder(order as SortOrder);
               }}
