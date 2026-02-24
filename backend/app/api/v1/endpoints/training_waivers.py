@@ -35,7 +35,7 @@ class TrainingWaiverCreate(BaseModel):
     waiver_type: str = "leave_of_absence"
     reason: Optional[str] = None
     start_date: date
-    end_date: date
+    end_date: Optional[date] = None  # None = permanent waiver
     requirement_ids: Optional[List[str]] = None
 
 
@@ -55,7 +55,7 @@ class TrainingWaiverResponse(BaseModel):
     waiver_type: str
     reason: Optional[str] = None
     start_date: date
-    end_date: date
+    end_date: Optional[date] = None
     requirement_ids: Optional[List[str]] = None
     granted_by: Optional[str] = None
     granted_at: Optional[datetime] = None
@@ -75,7 +75,7 @@ async def create_training_waiver(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """Create a training waiver / leave of absence for a member."""
-    if data.end_date < data.start_date:
+    if data.end_date and data.end_date < data.start_date:
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
     # Validate waiver type

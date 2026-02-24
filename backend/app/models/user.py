@@ -481,6 +481,7 @@ class LeaveType(str, enum.Enum):
     MILITARY = "military"
     PERSONAL = "personal"
     ADMINISTRATIVE = "administrative"
+    NEW_MEMBER = "new_member"
     OTHER = "other"
 
 
@@ -522,7 +523,7 @@ class MemberLeaveOfAbsence(Base):
 
     # The period the member is on leave (inclusive, month-level granularity)
     start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)  # None = permanent leave
 
     # Approval
     granted_by = Column(String(36), ForeignKey("users.id"), nullable=True)

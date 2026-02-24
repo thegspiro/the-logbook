@@ -49,12 +49,20 @@ class WaiverPeriod:
     requirement_ids: Optional[List[str]] = None  # None → applies to all
 
 
+_PERMANENT_END = date(9999, 12, 31)
+
+
 def _to_waiver_period(obj) -> WaiverPeriod:
-    """Convert a TrainingWaiver or MemberLeaveOfAbsence to a WaiverPeriod."""
+    """Convert a TrainingWaiver or MemberLeaveOfAbsence to a WaiverPeriod.
+
+    Permanent waivers (``end_date is None``) are mapped to a far-future
+    sentinel so the calendar-month overlap math in ``count_waived_months``
+    works without special-casing ``None``.
+    """
     req_ids = getattr(obj, "requirement_ids", None)
     return WaiverPeriod(
         start_date=obj.start_date,
-        end_date=obj.end_date,
+        end_date=obj.end_date or _PERMANENT_END,
         requirement_ids=req_ids,
     )
 

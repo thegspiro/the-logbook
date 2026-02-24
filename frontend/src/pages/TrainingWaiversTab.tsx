@@ -20,13 +20,16 @@ import { useTimezone } from '../hooks/useTimezone';
 
 type StatusFilter = 'all' | 'active' | 'future' | 'expired' | 'inactive';
 
-function getStatusBadge(waiver: { start_date: string; end_date: string; active: boolean }) {
+function getStatusBadge(waiver: { start_date: string; end_date: string | null; active: boolean }) {
   if (!waiver.active) {
     return { label: 'Deactivated', color: 'bg-gray-500/20 text-gray-400' };
   }
   const today = new Date().toISOString().split('T')[0];
   if (waiver.start_date > today) {
     return { label: 'Future', color: 'bg-blue-500/20 text-blue-400' };
+  }
+  if (!waiver.end_date) {
+    return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-400' };
   }
   if (waiver.end_date < today) {
     return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-400' };
@@ -40,6 +43,7 @@ const WAIVER_TYPE_LABELS: Record<string, string> = {
   military: 'Military',
   personal: 'Personal',
   administrative: 'Administrative',
+  new_member: 'New Member',
   other: 'Other',
 };
 
@@ -51,7 +55,7 @@ interface UnifiedTrainingWaiver {
   waiver_type: string;
   reason: string | null;
   start_date: string;
-  end_date: string;
+  end_date: string | null;
   requirement_ids: string[] | null;
   granted_by_name: string;
   active: boolean;
@@ -137,11 +141,11 @@ const TrainingWaiversTab: React.FC = () => {
     let result = waiverList;
 
     if (statusFilter === 'active') {
-      result = result.filter((w) => w.active && w.start_date <= today && w.end_date >= today);
+      result = result.filter((w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today));
     } else if (statusFilter === 'future') {
       result = result.filter((w) => w.active && w.start_date > today);
     } else if (statusFilter === 'expired') {
-      result = result.filter((w) => w.active && w.end_date < today);
+      result = result.filter((w) => w.active && w.end_date && w.end_date < today);
     } else if (statusFilter === 'inactive') {
       result = result.filter((w) => !w.active);
     }
@@ -161,9 +165,9 @@ const TrainingWaiversTab: React.FC = () => {
   // Summary stats
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    const active = waiverList.filter((w) => w.active && w.start_date <= today && w.end_date >= today);
+    const active = waiverList.filter((w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today));
     const future = waiverList.filter((w) => w.active && w.start_date > today);
-    const expired = waiverList.filter((w) => w.active && w.end_date < today);
+    const expired = waiverList.filter((w) => w.active && w.end_date && w.end_date < today);
     return { active: active.length, future: future.length, expired: expired.length, total: waiverList.length };
   }, [waiverList]);
 
@@ -277,7 +281,7 @@ const TrainingWaiversTab: React.FC = () => {
                     <td className="px-4 py-3 text-sm text-theme-text-secondary">
                       <span>{formatDate(waiver.start_date, tz)}</span>
                       <span className="text-theme-text-muted mx-1">to</span>
-                      <span>{formatDate(waiver.end_date, tz)}</span>
+                      <span>{waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}</span>
                     </td>
                     <td className="px-4 py-3 text-sm text-theme-text-muted">
                       {waiver.requirement_ids

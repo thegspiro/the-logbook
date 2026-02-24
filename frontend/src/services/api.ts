@@ -4811,7 +4811,7 @@ export interface LeaveOfAbsenceResponse {
   leave_type: string;
   reason: string | null;
   start_date: string;
-  end_date: string;
+  end_date: string | null;
   granted_by: string | null;
   granted_at: string | null;
   active: boolean;
@@ -4828,7 +4828,7 @@ export interface TrainingWaiverResponse {
   waiver_type: string;
   reason: string | null;
   start_date: string;
-  end_date: string;
+  end_date: string | null;
   requirement_ids: string[] | null;
   granted_by: string | null;
   granted_at: string | null;
@@ -4899,7 +4899,7 @@ export const memberStatusService = {
     leave_type: string;
     reason?: string;
     start_date: string;
-    end_date: string;
+    end_date?: string;
     exempt_from_training_waiver?: boolean;
   }): Promise<LeaveOfAbsenceResponse> {
     const response = await api.post('/users/leaves-of-absence', data);
@@ -4933,7 +4933,7 @@ export const memberStatusService = {
     waiver_type: string;
     reason?: string;
     start_date: string;
-    end_date: string;
+    end_date?: string;
     requirement_ids?: string[];
   }): Promise<TrainingWaiverResponse> {
     const response = await api.post('/training/waivers', data);
