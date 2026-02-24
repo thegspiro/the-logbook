@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor, Contrast } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 interface ThemeToggleProps {
@@ -10,14 +10,14 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
   const { theme, setTheme } = useTheme();
 
   const cycleTheme = () => {
-    const order = ['light', 'dark', 'system'] as const;
+    const order = ['light', 'dark', 'system', 'high-contrast'] as const;
     const currentIndex = order.indexOf(theme as typeof order[number]);
     const nextIndex = (currentIndex + 1) % order.length;
     setTheme(order[nextIndex] ?? 'system');
   };
 
-  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
-  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
+  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
+  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   return (
     <button
