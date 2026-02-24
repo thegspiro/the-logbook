@@ -5,12 +5,11 @@ Database models for the public portal module that enables secure,
 read-only API access to selected organization data for public websites.
 """
 
-from sqlalchemy import Column, String, Boolean, Integer, Text, ForeignKey, Index, JSON
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.dialects.mysql import CHAR
-from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import JSON, Boolean, Column, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
@@ -22,7 +21,7 @@ def UUID():
 
 def _utc_iso() -> str:
     """UTC timestamp as a 26-char naive ISO string (fits String(26) columns)."""
-    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")
 
 
 class PublicPortalConfig(Base):
@@ -32,6 +31,7 @@ class PublicPortalConfig(Base):
     Controls whether the public portal is enabled and sets default
     security parameters for API access.
     """
+
     __tablename__ = "public_portal_config"
 
     id = Column(String(36), primary_key=True, default=UUID)
@@ -40,7 +40,7 @@ class PublicPortalConfig(Base):
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
-        index=True
+        index=True,
     )
 
     # Enable/disable entire public portal
@@ -60,29 +60,20 @@ class PublicPortalConfig(Base):
 
     # Timestamps
     created_at = Column(String(26), nullable=False, default=_utc_iso)
-    updated_at = Column(
-        String(26),
-        nullable=False,
-        default=_utc_iso,
-        onupdate=_utc_iso
-    )
+    updated_at = Column(String(26), nullable=False, default=_utc_iso, onupdate=_utc_iso)
 
     # Relationships
     organization = relationship("Organization", back_populates="public_portal_config")
     api_keys = relationship(
-        "PublicPortalAPIKey",
-        back_populates="config",
-        cascade="all, delete-orphan"
+        "PublicPortalAPIKey", back_populates="config", cascade="all, delete-orphan"
     )
     access_logs = relationship(
-        "PublicPortalAccessLog",
-        back_populates="config",
-        cascade="all, delete-orphan"
+        "PublicPortalAccessLog", back_populates="config", cascade="all, delete-orphan"
     )
     data_whitelist = relationship(
         "PublicPortalDataWhitelist",
         back_populates="config",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self):
@@ -96,6 +87,7 @@ class PublicPortalAPIKey(Base):
     Keys are hashed before storage. Only the prefix (first 8 chars)
     is stored in plaintext for identification purposes.
     """
+
     __tablename__ = "public_portal_api_keys"
 
     id = Column(String(36), primary_key=True, default=UUID)
@@ -103,12 +95,12 @@ class PublicPortalAPIKey(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
     config_id = Column(
         String(36),
         ForeignKey("public_portal_config.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
     )
 
     # API key (hashed with bcrypt)
@@ -134,9 +126,7 @@ class PublicPortalAPIKey(Base):
 
     # Who created this key
     created_by = Column(
-        String(36),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Timestamps
@@ -147,15 +137,13 @@ class PublicPortalAPIKey(Base):
     config = relationship("PublicPortalConfig", back_populates="api_keys")
     creator = relationship("User")
     access_logs = relationship(
-        "PublicPortalAccessLog",
-        back_populates="api_key",
-        cascade="all, delete-orphan"
+        "PublicPortalAccessLog", back_populates="api_key", cascade="all, delete-orphan"
     )
 
     # Indexes
     __table_args__ = (
-        Index('idx_api_key_prefix', 'key_prefix'),
-        Index('idx_api_key_active', 'is_active'),
+        Index("idx_api_key_prefix", "key_prefix"),
+        Index("idx_api_key_active", "is_active"),
     )
 
     def __repr__(self):
@@ -190,6 +178,7 @@ class PublicPortalAccessLog(Base):
     Records every request to the public API for security monitoring,
     anomaly detection, and compliance.
     """
+
     __tablename__ = "public_portal_access_log"
 
     id = Column(String(36), primary_key=True, default=UUID)
@@ -197,12 +186,12 @@ class PublicPortalAccessLog(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
     config_id = Column(
         String(36),
         ForeignKey("public_portal_config.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
     )
 
     # API key used (NULL if invalid/missing key)
@@ -210,7 +199,7 @@ class PublicPortalAccessLog(Base):
         String(36),
         ForeignKey("public_portal_api_keys.id", ondelete="SET NULL"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     # Request details
@@ -238,10 +227,10 @@ class PublicPortalAccessLog(Base):
 
     # Indexes for common queries
     __table_args__ = (
-        Index('idx_access_log_timestamp', 'timestamp'),
-        Index('idx_access_log_ip', 'ip_address'),
-        Index('idx_access_log_suspicious', 'flagged_suspicious'),
-        Index('idx_access_log_org_timestamp', 'organization_id', 'timestamp'),
+        Index("idx_access_log_timestamp", "timestamp"),
+        Index("idx_access_log_ip", "ip_address"),
+        Index("idx_access_log_suspicious", "flagged_suspicious"),
+        Index("idx_access_log_org_timestamp", "organization_id", "timestamp"),
     )
 
     def __repr__(self):
@@ -255,6 +244,7 @@ class PublicPortalDataWhitelist(Base):
     Uses a whitelist approach - only explicitly enabled fields are
     returned through the public API.
     """
+
     __tablename__ = "public_portal_data_whitelist"
 
     id = Column(String(36), primary_key=True, default=UUID)
@@ -262,12 +252,12 @@ class PublicPortalDataWhitelist(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
     config_id = Column(
         String(36),
         ForeignKey("public_portal_config.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
     )
 
     # Data category (e.g., 'organization', 'events', 'personnel')
@@ -281,12 +271,7 @@ class PublicPortalDataWhitelist(Base):
 
     # Timestamps
     created_at = Column(String(26), nullable=False, default=_utc_iso)
-    updated_at = Column(
-        String(26),
-        nullable=False,
-        default=_utc_iso,
-        onupdate=_utc_iso
-    )
+    updated_at = Column(String(26), nullable=False, default=_utc_iso, onupdate=_utc_iso)
 
     # Relationships
     organization = relationship("Organization")
@@ -294,9 +279,15 @@ class PublicPortalDataWhitelist(Base):
 
     # Unique constraint: one entry per org+category+field combination
     __table_args__ = (
-        Index('idx_whitelist_category', 'data_category'),
-        Index('idx_whitelist_enabled', 'is_enabled'),
-        Index('idx_whitelist_unique', 'organization_id', 'data_category', 'field_name', unique=True),
+        Index("idx_whitelist_category", "data_category"),
+        Index("idx_whitelist_enabled", "is_enabled"),
+        Index(
+            "idx_whitelist_unique",
+            "organization_id",
+            "data_category",
+            "field_name",
+            unique=True,
+        ),
     )
 
     def __repr__(self):

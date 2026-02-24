@@ -7,22 +7,21 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 
 import calendar
 from datetime import date
-from typing import List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
+    RequirementFrequency,
+    RequirementType,
     TrainingRecord,
     TrainingRequirement,
     TrainingStatus,
-    RequirementType,
-    RequirementFrequency,
 )
 from app.models.user import User, UserStatus
 from app.services.training_waiver_service import (
-    fetch_org_waivers,
     adjust_required,
+    fetch_org_waivers,
     get_rolling_period_months,
 )
 
@@ -35,16 +34,23 @@ def get_requirement_date_window(req, today: date):
     ``today - rolling_period_months`` to ``today``.
     """
     # Check for rolling period first (overrides frequency-based window)
-    due_date_type = getattr(req, 'due_date_type', None)
+    due_date_type = getattr(req, "due_date_type", None)
     if due_date_type:
-        due_date_type = due_date_type.value if hasattr(due_date_type, 'value') else str(due_date_type)
-    rolling_months = getattr(req, 'rolling_period_months', None)
+        due_date_type = (
+            due_date_type.value
+            if hasattr(due_date_type, "value")
+            else str(due_date_type)
+        )
+    rolling_months = getattr(req, "rolling_period_months", None)
 
-    if due_date_type == 'rolling' and rolling_months:
+    if due_date_type == "rolling" and rolling_months:
         from dateutil.relativedelta import relativedelta
+
         return today - relativedelta(months=rolling_months), today
 
-    freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
+    freq = (
+        req.frequency.value if hasattr(req.frequency, "value") else str(req.frequency)
+    )
     current_year = today.year
 
     if freq == RequirementFrequency.ONE_TIME.value:
@@ -87,8 +93,14 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
     - SHIFTS/CALLS:   Count matching records within date window
     - Others:         Match by training_type or name
     """
-    req_type = req.requirement_type.value if hasattr(req.requirement_type, 'value') else str(req.requirement_type)
-    freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
+    req_type = (
+        req.requirement_type.value
+        if hasattr(req.requirement_type, "value")
+        else str(req.requirement_type)
+    )
+    freq = (
+        req.frequency.value if hasattr(req.frequency, "value") else str(req.frequency)
+    )
     start_date, end_date = get_requirement_date_window(req, today)
     _waivers = waivers or []
 
@@ -96,7 +108,8 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
     completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
     if start_date and end_date:
         windowed = [
-            r for r in completed
+            r
+            for r in completed
             if r.completion_date and start_date <= r.completion_date <= end_date
         ]
     else:
@@ -115,20 +128,40 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
 
         if required > 0 and start_date and end_date and _waivers:
             required, _, _ = adjust_required(
-                required, start_date, end_date, _waivers, str(req.id),
+                required,
+                start_date,
+                end_date,
+                _waivers,
+                str(req.id),
                 period_months=get_rolling_period_months(req),
             )
 
-        latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
-        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
-        latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
+        latest = (
+            max(type_matched, key=lambda r: r.completion_date or date.min)
+            if type_matched
+            else None
+        )
+        latest_comp = (
+            latest.completion_date.isoformat()
+            if latest and latest.completion_date
+            else None
+        )
+        latest_exp = (
+            latest.expiration_date.isoformat()
+            if latest and latest.expiration_date
+            else None
+        )
 
         if freq == RequirementFrequency.BIANNUAL.value and type_matched:
             with_exp = [r for r in type_matched if r.expiration_date]
             if with_exp:
                 newest_cert = max(with_exp, key=lambda r: r.expiration_date)
                 if newest_cert.expiration_date < today:
-                    exp_comp = newest_cert.completion_date.isoformat() if newest_cert.completion_date else latest_comp
+                    exp_comp = (
+                        newest_cert.completion_date.isoformat()
+                        if newest_cert.completion_date
+                        else latest_comp
+                    )
                     exp_exp = newest_cert.expiration_date.isoformat()
                     return "expired", exp_comp, exp_exp
 
@@ -148,16 +181,32 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
         completed_course_ids = {str(r.course_id) for r in windowed if r.course_id}
         matched_count = sum(1 for cid in course_ids if cid in completed_course_ids)
 
-        latest = max(windowed, key=lambda r: r.completion_date or date.min) if windowed else None
-        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
-        latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
+        latest = (
+            max(windowed, key=lambda r: r.completion_date or date.min)
+            if windowed
+            else None
+        )
+        latest_comp = (
+            latest.completion_date.isoformat()
+            if latest and latest.completion_date
+            else None
+        )
+        latest_exp = (
+            latest.expiration_date.isoformat()
+            if latest and latest.expiration_date
+            else None
+        )
 
         if freq == RequirementFrequency.BIANNUAL.value and windowed:
             with_exp = [r for r in windowed if r.expiration_date]
             if with_exp:
                 newest_cert = max(with_exp, key=lambda r: r.expiration_date)
                 if newest_cert.expiration_date < today:
-                    exp_comp = newest_cert.completion_date.isoformat() if newest_cert.completion_date else latest_comp
+                    exp_comp = (
+                        newest_cert.completion_date.isoformat()
+                        if newest_cert.completion_date
+                        else latest_comp
+                    )
                     exp_exp = newest_cert.expiration_date.isoformat()
                     return "expired", exp_comp, exp_exp
 
@@ -171,18 +220,30 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
     # ---- CERTIFICATION requirements: match by name, training_type, or cert number ----
     if req_type == RequirementType.CERTIFICATION.value:
         matching = [
-            r for r in completed
+            r
+            for r in completed
             if (
                 (req.training_type and r.training_type == req.training_type)
-                or (r.course_name and req.name and req.name.lower() in r.course_name.lower())
-                or (r.certification_number and req.registry_code
-                    and req.registry_code.lower() in r.certification_number.lower())
+                or (
+                    r.course_name
+                    and req.name
+                    and req.name.lower() in r.course_name.lower()
+                )
+                or (
+                    r.certification_number
+                    and req.registry_code
+                    and req.registry_code.lower() in r.certification_number.lower()
+                )
             )
         ]
         if matching:
             latest = max(matching, key=lambda r: r.completion_date or date.min)
-            latest_comp = latest.completion_date.isoformat() if latest.completion_date else None
-            latest_exp = latest.expiration_date.isoformat() if latest.expiration_date else None
+            latest_comp = (
+                latest.completion_date.isoformat() if latest.completion_date else None
+            )
+            latest_exp = (
+                latest.expiration_date.isoformat() if latest.expiration_date else None
+            )
             if latest.expiration_date and latest.expiration_date < today:
                 return "expired", latest_comp, latest_exp
             return "completed", latest_comp, latest_exp
@@ -198,12 +259,24 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
 
         if required > 0 and start_date and end_date and _waivers:
             required, _, _ = adjust_required(
-                required, start_date, end_date, _waivers, str(req.id),
+                required,
+                start_date,
+                end_date,
+                _waivers,
+                str(req.id),
                 period_months=get_rolling_period_months(req),
             )
 
-        latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
-        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
+        latest = (
+            max(type_matched, key=lambda r: r.completion_date or date.min)
+            if type_matched
+            else None
+        )
+        latest_comp = (
+            latest.completion_date.isoformat()
+            if latest and latest.completion_date
+            else None
+        )
         latest_exp = None
 
         if required > 0 and count >= required:
@@ -222,12 +295,24 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
 
         if required > 0 and start_date and end_date and _waivers:
             required, _, _ = adjust_required(
-                required, start_date, end_date, _waivers, str(req.id),
+                required,
+                start_date,
+                end_date,
+                _waivers,
+                str(req.id),
                 period_months=get_rolling_period_months(req),
             )
 
-        latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
-        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
+        latest = (
+            max(type_matched, key=lambda r: r.completion_date or date.min)
+            if type_matched
+            else None
+        )
+        latest_comp = (
+            latest.completion_date.isoformat()
+            if latest and latest.completion_date
+            else None
+        )
         latest_exp = None
 
         if required > 0 and count >= required:
@@ -242,24 +327,37 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
         matching = [r for r in windowed if r.training_type == req.training_type]
     if not matching and req.name:
         matching = [
-            r for r in windowed
+            r
+            for r in windowed
             if r.course_name and req.name.lower() in r.course_name.lower()
         ]
 
     if matching:
         latest = max(matching, key=lambda r: r.completion_date or date.min)
-        latest_comp = latest.completion_date.isoformat() if latest.completion_date else None
-        latest_exp = latest.expiration_date.isoformat() if latest.expiration_date else None
+        latest_comp = (
+            latest.completion_date.isoformat() if latest.completion_date else None
+        )
+        latest_exp = (
+            latest.expiration_date.isoformat() if latest.expiration_date else None
+        )
         if latest.expiration_date and latest.expiration_date < today:
             return "expired", latest_comp, latest_exp
         return "completed", latest_comp, latest_exp
     else:
-        in_progress = [r for r in member_records if r.status == TrainingStatus.IN_PROGRESS]
+        in_progress = [
+            r for r in member_records if r.status == TrainingStatus.IN_PROGRESS
+        ]
         ip_matching = []
         if req.training_type:
-            ip_matching = [r for r in in_progress if r.training_type == req.training_type]
+            ip_matching = [
+                r for r in in_progress if r.training_type == req.training_type
+            ]
         if not ip_matching and req.name:
-            ip_matching = [r for r in in_progress if r.course_name and req.name.lower() in r.course_name.lower()]
+            ip_matching = [
+                r
+                for r in in_progress
+                if r.course_name and req.name.lower() in r.course_name.lower()
+            ]
         if ip_matching:
             return "in_progress", None, None
     return "not_started", None, None

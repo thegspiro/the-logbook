@@ -4,43 +4,41 @@ Public Portal Pydantic Schemas
 Request and response schemas for public portal API endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ==============================================================================
 # Configuration Schemas
 # ==============================================================================
 
+
 class PublicPortalConfigCreate(BaseModel):
     """Schema for creating public portal configuration"""
+
     enabled: bool = Field(default=False, description="Enable/disable public portal")
     allowed_origins: List[str] = Field(
-        default_factory=list,
-        description="List of allowed CORS origins"
+        default_factory=list, description="List of allowed CORS origins"
     )
     default_rate_limit: int = Field(
         default=1000,
         ge=1,
         le=100000,
-        description="Default rate limit (requests per hour)"
+        description="Default rate limit (requests per hour)",
     )
     cache_ttl_seconds: int = Field(
-        default=300,
-        ge=0,
-        le=3600,
-        description="Cache TTL in seconds"
+        default=300, ge=0, le=3600, description="Cache TTL in seconds"
     )
     settings: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional settings"
+        default_factory=dict, description="Additional settings"
     )
 
 
 class PublicPortalConfigUpdate(BaseModel):
     """Schema for updating public portal configuration"""
+
     enabled: Optional[bool] = None
     allowed_origins: Optional[List[str]] = None
     default_rate_limit: Optional[int] = Field(None, ge=1, le=100000)
@@ -50,6 +48,7 @@ class PublicPortalConfigUpdate(BaseModel):
 
 class PublicPortalConfigResponse(BaseModel):
     """Schema for public portal configuration response"""
+
     id: UUID
     organization_id: UUID
     enabled: bool
@@ -67,23 +66,25 @@ class PublicPortalConfigResponse(BaseModel):
 # API Key Schemas
 # ==============================================================================
 
+
 class PublicPortalAPIKeyCreate(BaseModel):
     """Schema for creating a new API key"""
-    name: str = Field(..., min_length=1, max_length=100, description="Friendly name for the API key")
+
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="Friendly name for the API key"
+    )
     rate_limit_override: Optional[int] = Field(
         None,
         ge=1,
         le=100000,
-        description="Override default rate limit (NULL = use default)"
+        description="Override default rate limit (NULL = use default)",
     )
-    expires_at: Optional[datetime] = Field(
-        None,
-        description="Optional expiration date"
-    )
+    expires_at: Optional[datetime] = Field(None, description="Optional expiration date")
 
 
 class PublicPortalAPIKeyResponse(BaseModel):
     """Schema for API key response (without the actual key)"""
+
     id: UUID
     organization_id: UUID
     key_prefix: str
@@ -101,8 +102,11 @@ class PublicPortalAPIKeyResponse(BaseModel):
 
 class PublicPortalAPIKeyCreatedResponse(BaseModel):
     """Schema for newly created API key (includes the actual key once)"""
+
     id: UUID
-    api_key: str = Field(..., description="The actual API key - SAVE THIS! It won't be shown again.")
+    api_key: str = Field(
+        ..., description="The actual API key - SAVE THIS! It won't be shown again."
+    )
     key_prefix: str
     name: str
     rate_limit_override: Optional[int]
@@ -113,6 +117,7 @@ class PublicPortalAPIKeyCreatedResponse(BaseModel):
 
 class PublicPortalAPIKeyUpdate(BaseModel):
     """Schema for updating an API key"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     rate_limit_override: Optional[int] = Field(None, ge=1, le=100000)
     expires_at: Optional[datetime] = None
@@ -123,8 +128,10 @@ class PublicPortalAPIKeyUpdate(BaseModel):
 # Access Log Schemas
 # ==============================================================================
 
+
 class PublicPortalAccessLogResponse(BaseModel):
     """Schema for access log entry response"""
+
     id: UUID
     organization_id: UUID
     api_key_id: Optional[UUID]
@@ -144,6 +151,7 @@ class PublicPortalAccessLogResponse(BaseModel):
 
 class PublicPortalAccessLogFilter(BaseModel):
     """Schema for filtering access logs"""
+
     api_key_id: Optional[UUID] = None
     ip_address: Optional[str] = None
     endpoint: Optional[str] = None
@@ -159,8 +167,10 @@ class PublicPortalAccessLogFilter(BaseModel):
 # Data Whitelist Schemas
 # ==============================================================================
 
+
 class PublicPortalDataWhitelistCreate(BaseModel):
     """Schema for creating data whitelist entry"""
+
     data_category: str = Field(..., min_length=1, max_length=50)
     field_name: str = Field(..., min_length=1, max_length=100)
     is_enabled: bool = Field(default=False)
@@ -168,11 +178,13 @@ class PublicPortalDataWhitelistCreate(BaseModel):
 
 class PublicPortalDataWhitelistUpdate(BaseModel):
     """Schema for updating data whitelist entry"""
+
     is_enabled: bool
 
 
 class PublicPortalDataWhitelistResponse(BaseModel):
     """Schema for data whitelist entry response"""
+
     id: UUID
     organization_id: UUID
     data_category: str
@@ -186,9 +198,9 @@ class PublicPortalDataWhitelistResponse(BaseModel):
 
 class PublicPortalDataWhitelistBulkUpdate(BaseModel):
     """Schema for bulk updating whitelist entries"""
+
     updates: List[Dict[str, Any]] = Field(
-        ...,
-        description="List of {category, field, enabled} objects"
+        ..., description="List of {category, field, enabled} objects"
     )
 
 
@@ -196,8 +208,10 @@ class PublicPortalDataWhitelistBulkUpdate(BaseModel):
 # Usage Statistics Schemas
 # ==============================================================================
 
+
 class PublicPortalUsageStats(BaseModel):
     """Schema for usage statistics"""
+
     total_requests: int
     requests_today: int
     requests_this_week: int
@@ -213,8 +227,10 @@ class PublicPortalUsageStats(BaseModel):
 # Public API Response Schemas
 # ==============================================================================
 
+
 class PublicOrganizationInfo(BaseModel):
     """Public organization information (sanitized)"""
+
     name: str
     organization_type: str
     logo: Optional[str]
@@ -228,6 +244,7 @@ class PublicOrganizationInfo(BaseModel):
 
 class PublicOrganizationStats(BaseModel):
     """Public organization statistics"""
+
     total_volunteer_hours: Optional[int]
     total_calls_ytd: Optional[int]
     total_members: Optional[int]
@@ -238,6 +255,7 @@ class PublicOrganizationStats(BaseModel):
 
 class PublicEvent(BaseModel):
     """Public event information"""
+
     id: UUID
     title: str
     description: Optional[str]
@@ -250,6 +268,7 @@ class PublicEvent(BaseModel):
 
 class PublicPersonnelRoster(BaseModel):
     """Public personnel roster (minimal PII)"""
+
     name: str
     rank: Optional[str]
     years_of_service: Optional[int]
@@ -260,8 +279,12 @@ class PublicPersonnelRoster(BaseModel):
 # Error Response Schema
 # ==============================================================================
 
+
 class PublicPortalErrorResponse(BaseModel):
     """Standard error response for public API"""
+
     error: str = Field(..., description="Error code")
     message: str = Field(..., description="Human-readable error message")
-    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
+    details: Optional[Dict[str, Any]] = Field(
+        None, description="Additional error details"
+    )

@@ -5,33 +5,42 @@ Endpoints for document management including folders,
 document CRUD, and file uploads.
 """
 
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from uuid import UUID
+import logging
 import os
 import uuid as uuid_lib
-import logging
-import magic
+from typing import Optional
+from uuid import UUID
 
+import magic
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.models.user import User
 from app.models.document import Document, DocumentStatus
+from app.models.user import User
 from app.schemas.documents import (
     DocumentFolderCreate,
-    DocumentFolderUpdate,
     DocumentFolderResponse,
-    DocumentCreate,
-    DocumentUpdate,
+    DocumentFolderUpdate,
     DocumentResponse,
     DocumentsListResponse,
-    FoldersListResponse,
     DocumentsSummary,
+    DocumentUpdate,
+    FoldersListResponse,
 )
 from app.services.documents_service import DocumentsService
-from app.api.dependencies import get_current_user, require_permission
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +75,7 @@ ALLOWED_DOCUMENT_MIME_TYPES = {
 # Folder Endpoints
 # ============================================
 
+
 @router.get("/folders", response_model=FoldersListResponse)
 async def list_folders(
     parent_id: Optional[str] = None,
@@ -83,7 +93,7 @@ async def list_folders(
         "folders": [
             {
                 **{c.key: getattr(f, c.key) for c in f.__table__.columns},
-                "document_count": getattr(f, 'document_count', 0),
+                "document_count": getattr(f, "document_count", 0),
             }
             for f in folders
         ],
@@ -91,7 +101,11 @@ async def list_folders(
     }
 
 
-@router.post("/folders", response_model=DocumentFolderResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/folders",
+    response_model=DocumentFolderResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_folder(
     folder: DocumentFolderCreate,
     db: AsyncSession = Depends(get_db),
@@ -106,7 +120,9 @@ async def create_folder(
         )
     except Exception as e:
         logger.error(f"Failed to create folder: {e}")
-        raise HTTPException(status_code=400, detail=safe_error_detail(e, "Unable to create folder"))
+        raise HTTPException(
+            status_code=400, detail=safe_error_detail(e, "Unable to create folder")
+        )
     return result
 
 
@@ -145,6 +161,7 @@ async def delete_folder(
 # Document Endpoints
 # ============================================
 
+
 @router.get("", response_model=DocumentsListResponse)
 async def list_documents(
     folder_id: Optional[str] = None,
@@ -160,11 +177,16 @@ async def list_documents(
 
     # Enforce folder-level access when listing by folder
     if folder_uuid:
-        folder = await service.get_folder_by_id(folder_uuid, current_user.organization_id)
+        folder = await service.get_folder_by_id(
+            folder_uuid, current_user.organization_id
+        )
         if not folder:
             raise HTTPException(status_code=404, detail="Folder not found")
         if not service.can_access_folder(folder, current_user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this folder")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view this folder",
+            )
 
     documents, total = await service.get_documents(
         current_user.organization_id,
@@ -182,7 +204,9 @@ async def list_documents(
     }
 
 
-@router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED
+)
 async def upload_document(
     file: UploadFile = File(...),
     name: str = Form(...),
@@ -197,7 +221,9 @@ async def upload_document(
 
     # Enforce folder access if uploading into a specific folder
     if folder_id:
-        folder = await service.get_folder_by_id(UUID(folder_id), current_user.organization_id)
+        folder = await service.get_folder_by_id(
+            UUID(folder_id), current_user.organization_id
+        )
         if folder and not service.can_access_folder(folder, current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -209,8 +235,7 @@ async def upload_document(
     content = await file.read()
     if len(content) > max_size:
         raise HTTPException(
-            status_code=400,
-            detail="File too large. Maximum size is 50MB."
+            status_code=400, detail="File too large. Maximum size is 50MB."
         )
 
     # Validate MIME type using magic bytes (not the HTTP Content-Type header)
@@ -223,7 +248,7 @@ async def upload_document(
         raise HTTPException(
             status_code=400,
             detail=f"File type not allowed. Detected type: {detected_mime}. "
-                   "Allowed types: PDF, Word, Excel, PowerPoint, text, CSV, images, ZIP."
+            "Allowed types: PDF, Word, Excel, PowerPoint, text, CSV, images, ZIP.",
         )
 
     # Create upload directory
@@ -277,9 +302,13 @@ async def upload_document(
         try:
             os.remove(file_path)
         except OSError:
-            logger.warning(f"Failed to clean up file after document creation error: {file_path}")
+            logger.warning(
+                f"Failed to clean up file after document creation error: {file_path}"
+            )
         logger.error(f"Failed to create document record: {e}")
-        raise HTTPException(status_code=400, detail=safe_error_detail(e, "Unable to save document"))
+        raise HTTPException(
+            status_code=400, detail=safe_error_detail(e, "Unable to save document")
+        )
 
     return document
 
@@ -292,7 +321,9 @@ async def get_document(
 ):
     """Get a document by ID"""
     service = DocumentsService(db)
-    document = await service.get_document_by_id(document_id, current_user.organization_id)
+    document = await service.get_document_by_id(
+        document_id, current_user.organization_id
+    )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     return document
@@ -333,6 +364,7 @@ async def delete_document(
 # Member Folder Endpoints
 # ============================================
 
+
 @router.get("/my-folder", response_model=DocumentFolderResponse)
 async def get_my_member_folder(
     db: AsyncSession = Depends(get_db),
@@ -343,7 +375,9 @@ async def get_my_member_folder(
     under the 'Member Files' hierarchy.
     """
     service = DocumentsService(db)
-    folder = await service.ensure_member_folder(current_user.organization_id, current_user)
+    folder = await service.ensure_member_folder(
+        current_user.organization_id, current_user
+    )
     await db.commit()
 
     count_result = await db.execute(
@@ -362,6 +396,7 @@ async def get_my_member_folder(
 # ============================================
 # Summary Endpoint
 # ============================================
+
 
 @router.get("/stats/summary", response_model=DocumentsSummary)
 async def get_documents_summary(

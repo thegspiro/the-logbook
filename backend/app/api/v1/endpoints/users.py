@@ -6,33 +6,49 @@ Endpoints for user management and listing.
 
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
-from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func, or_
-from sqlalchemy.orm import selectinload
 from uuid import UUID
 
-from app.core.database import get_db
-from app.core.audit import log_audit_event
-from app.schemas.user import (
-    UserListResponse,
-    UserWithRolesResponse,
-    ContactInfoUpdate,
-    UserProfileResponse,
-    AdminUserCreate,
-    AdminPasswordReset,
-    UserUpdate,
-    MemberAuditLogEntry,
-    DeletionImpactResponse,
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
 )
-from app.schemas.role import UserRoleAssignment, UserRoleResponse
-from app.services.user_service import UserService
-from app.services.organization_service import OrganizationService
-from app.models.user import User, Role, UserStatus, user_roles
-from app.models.audit import AuditLog
-from app.api.dependencies import get_current_user, require_permission, _collect_user_permissions, _has_permission
+from loguru import logger
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
+from app.core.audit import log_audit_event
 from app.core.config import settings
+from app.core.database import get_db
+from app.models.audit import AuditLog
+from app.models.user import Role, User, UserStatus, user_roles
+from app.schemas.role import UserRoleAssignment, UserRoleResponse
+from app.schemas.user import (
+    AdminPasswordReset,
+    AdminUserCreate,
+    ContactInfoUpdate,
+    DeletionImpactResponse,
+    MemberAuditLogEntry,
+    UserListResponse,
+    UserProfileResponse,
+    UserUpdate,
+    UserWithRolesResponse,
+)
+from app.services.organization_service import OrganizationService
+from app.services.user_service import UserService
+
 # NOTE: Authentication is now implemented
 # from app.api.dependencies import get_current_active_user, get_user_organization
 # from app.models.user import Organization
@@ -67,7 +83,9 @@ async def list_users(
     include_contact_info = False
     contact_settings = None
     try:
-        org_settings = await org_service.get_organization_settings(current_user.organization_id)
+        org_settings = await org_service.get_organization_settings(
+            current_user.organization_id
+        )
         include_contact_info = org_settings.contact_info_visibility.enabled
         contact_settings = {
             "contact_info_visibility": {
@@ -77,7 +95,9 @@ async def list_users(
             }
         }
     except Exception as e:
-        logger.warning(f"Failed to load organization settings, returning users without contact info: {e}")
+        logger.warning(
+            f"Failed to load organization settings, returning users without contact info: {e}"
+        )
 
     # Get users with conditional contact info
     users = await user_service.get_users_for_organization(
@@ -89,7 +109,9 @@ async def list_users(
     return users
 
 
-@router.post("", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_member(
     user_data: AdminUserCreate,
     background_tasks: BackgroundTasks,
@@ -107,7 +129,8 @@ async def create_member(
     **Authentication required**
     """
     from uuid import uuid4
-    from app.core.security import hash_password, generate_temporary_password
+
+    from app.core.security import generate_temporary_password, hash_password
 
     # Check if username already exists
     result = await db.execute(
@@ -118,8 +141,7 @@ async def create_member(
     )
     if result.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already exists"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists"
         )
 
     # Check if membership number already exists in the organization
@@ -133,7 +155,7 @@ async def create_member(
         if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A member with this membership number already exists"
+                detail="A member with this membership number already exists",
             )
 
     # Check if email already exists (including archived members)
@@ -161,14 +183,13 @@ async def create_member(
                 },
             )
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already exists"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists"
         )
 
     # Use admin-provided password or generate a temporary one
-    password_was_generated = False
     if user_data.password:
         from app.core.security import validate_password_strength
+
         is_valid, error_msg = validate_password_strength(user_data.password)
         if not is_valid:
             raise HTTPException(
@@ -180,7 +201,6 @@ async def create_member(
     else:
         initial_password = generate_temporary_password()
         password_hash = hash_password(initial_password)
-        password_was_generated = True
 
     # Create new user
     new_user = User(
@@ -229,7 +249,7 @@ async def create_member(
         if len(roles) != len(user_data.role_ids):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="One or more role IDs are invalid"
+                detail="One or more role IDs are invalid",
             )
 
         for role in roles:
@@ -248,13 +268,14 @@ async def create_member(
 
     # Re-query with eager loading so Pydantic can serialize roles without lazy loading
     result = await db.execute(
-        select(User)
-        .where(User.id == new_user.id)
-        .options(selectinload(User.positions))
+        select(User).where(User.id == new_user.id).options(selectinload(User.positions))
     )
     new_user = result.scalar_one_or_none()
     if not new_user:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="User disappeared after creation")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User disappeared after creation",
+        )
 
     await log_audit_event(
         db=db,
@@ -274,8 +295,9 @@ async def create_member(
     # Send welcome email with temporary password via background task
     if user_data.send_welcome_email:
         from loguru import logger
-        from app.services.email_service import EmailService
+
         from app.models.user import Organization as OrgModel
+        from app.services.email_service import EmailService
 
         logger.info(f"Welcome email requested for new user: {user_data.username}")
 
@@ -286,7 +308,11 @@ async def create_member(
         organization = org_result.scalar_one_or_none()
 
         org_name = organization.name if organization else "The Logbook"
-        login_url = f"{settings.FRONTEND_URL}/login" if hasattr(settings, 'FRONTEND_URL') and settings.FRONTEND_URL else "/login"
+        login_url = (
+            f"{settings.FRONTEND_URL}/login"
+            if hasattr(settings, "FRONTEND_URL") and settings.FRONTEND_URL
+            else "/login"
+        )
 
         # Capture scalar values before they expire after the response returns
         welcome_email = new_user.email
@@ -390,15 +416,14 @@ async def get_user_roles(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     return {
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
-        "roles": user.roles
+        "roles": user.roles,
     }
 
 
@@ -407,7 +432,14 @@ async def assign_user_roles(
     user_id: UUID,
     role_assignment: UserRoleAssignment,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.update_positions", "members.assign_positions", "users.update_roles", "members.assign_roles")),
+    current_user: User = Depends(
+        require_permission(
+            "users.update_positions",
+            "members.assign_positions",
+            "users.update_roles",
+            "members.assign_roles",
+        )
+    ),
 ):
     """
     Assign roles to a user (replaces all existing roles)
@@ -428,8 +460,7 @@ async def assign_user_roles(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     # Verify all role IDs exist and belong to the same organization
@@ -444,15 +475,13 @@ async def assign_user_roles(
         if len(roles) != len(role_assignment.role_ids):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="One or more role IDs are invalid"
+                detail="One or more role IDs are invalid",
             )
     else:
         roles = []
 
     # Remove all existing role assignments
-    await db.execute(
-        delete(user_roles).where(user_roles.c.user_id == str(user_id))
-    )
+    await db.execute(delete(user_roles).where(user_roles.c.user_id == str(user_id)))
 
     # Assign new roles
     user.roles = roles
@@ -466,7 +495,10 @@ async def assign_user_roles(
     )
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after role assignment")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found after role assignment",
+        )
 
     await log_audit_event(
         db=db,
@@ -486,7 +518,7 @@ async def assign_user_roles(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
-        "roles": user.roles
+        "roles": user.roles,
     }
 
 
@@ -495,7 +527,14 @@ async def add_role_to_user(
     user_id: UUID,
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.update_positions", "members.assign_positions", "users.update_roles", "members.assign_roles")),
+    current_user: User = Depends(
+        require_permission(
+            "users.update_positions",
+            "members.assign_positions",
+            "users.update_roles",
+            "members.assign_roles",
+        )
+    ),
 ):
     """
     Add a single role to a user (keeps existing roles)
@@ -516,8 +555,7 @@ async def add_role_to_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     # Get role
@@ -530,15 +568,13 @@ async def add_role_to_user(
 
     if not role:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
         )
 
     # Check if user already has this role
     if role in user.roles:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User already has this role"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="User already has this role"
         )
 
     # Capture role name before commit expires the ORM object
@@ -556,7 +592,10 @@ async def add_role_to_user(
     )
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after role addition")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found after role addition",
+        )
 
     await log_audit_event(
         db=db,
@@ -577,7 +616,7 @@ async def add_role_to_user(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
-        "roles": user.roles
+        "roles": user.roles,
     }
 
 
@@ -586,7 +625,14 @@ async def remove_role_from_user(
     user_id: UUID,
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.update_positions", "members.assign_positions", "users.update_roles", "members.assign_roles")),
+    current_user: User = Depends(
+        require_permission(
+            "users.update_positions",
+            "members.assign_positions",
+            "users.update_roles",
+            "members.assign_roles",
+        )
+    ),
 ):
     """
     Remove a role from a user
@@ -607,8 +653,7 @@ async def remove_role_from_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     # Find and remove role (cast to str since role.id is String, role_id is UUID)
@@ -620,8 +665,7 @@ async def remove_role_from_user(
 
     if not role_to_remove:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User does not have this role"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User does not have this role"
         )
 
     role_removed_name = role_to_remove.name
@@ -636,7 +680,10 @@ async def remove_role_from_user(
     )
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after role removal")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found after role removal",
+        )
 
     await log_audit_event(
         db=db,
@@ -657,7 +704,7 @@ async def remove_role_from_user(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
-        "roles": user.roles
+        "roles": user.roles,
     }
 
 
@@ -686,8 +733,7 @@ async def get_user_with_roles(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     await log_audit_event(
@@ -724,10 +770,12 @@ async def update_contact_info(
     if current_user.id != str(user_id):
         # Admins with users.edit or members.manage can update other users
         user_perms = _collect_user_permissions(current_user)
-        if not _has_permission("users.edit", user_perms) and not _has_permission("members.manage", user_perms):
+        if not _has_permission("users.edit", user_perms) and not _has_permission(
+            "members.manage", user_perms
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only update your own contact information"
+                detail="You can only update your own contact information",
             )
 
     result = await db.execute(
@@ -741,8 +789,7 @@ async def update_contact_info(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     # Update fields if provided
@@ -758,7 +805,7 @@ async def update_contact_info(
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email is already in use"
+                detail="Email is already in use",
             )
         user.email = contact_update.email
 
@@ -769,7 +816,9 @@ async def update_contact_info(
         user.mobile = contact_update.mobile
 
     if contact_update.notification_preferences is not None:
-        user.notification_preferences = contact_update.notification_preferences.model_dump()
+        user.notification_preferences = (
+            contact_update.notification_preferences.model_dump()
+        )
 
     await db.commit()
 
@@ -781,7 +830,10 @@ async def update_contact_info(
     )
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after contact update")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found after contact update",
+        )
 
     await log_audit_event(
         db=db,
@@ -790,7 +842,9 @@ async def update_contact_info(
         severity="info",
         event_data={
             "updated_user_id": str(user_id),
-            "fields_updated": list(contact_update.model_dump(exclude_unset=True).keys()),
+            "fields_updated": list(
+                contact_update.model_dump(exclude_unset=True).keys()
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -825,10 +879,12 @@ async def update_user_profile(
         )
         perm_user = perm_result.scalar_one()
         user_permissions = _collect_user_permissions(perm_user)
-        if not _has_permission("users.update", user_permissions) and not _has_permission("members.manage", user_permissions):
+        if not _has_permission(
+            "users.update", user_permissions
+        ) and not _has_permission("members.manage", user_permissions):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to update this user's profile"
+                detail="You do not have permission to update this user's profile",
             )
 
     result = await db.execute(
@@ -842,8 +898,7 @@ async def update_user_profile(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     # Update only provided fields
@@ -861,7 +916,7 @@ async def update_user_profile(
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A member with this membership number already exists"
+                detail="A member with this membership number already exists",
             )
 
     # Rank, station, and membership number changes restricted to leadership / secretary / membership coordinator
@@ -869,26 +924,46 @@ async def update_user_profile(
     has_restricted = restricted_fields & update_data.keys()
     if has_restricted:
         perm_result = await db.execute(
-            select(User).where(User.id == current_user.id).options(selectinload(User.positions))
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.positions))
         )
         perm_user = perm_result.scalar_one_or_none()
-        if not perm_user or not _has_permission("members.manage", _collect_user_permissions(perm_user)):
+        if not perm_user or not _has_permission(
+            "members.manage", _collect_user_permissions(perm_user)
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, or membership number"
+                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, or membership number",
             )
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
         ec_list = update_data.pop("emergency_contacts")
         if ec_list is not None:
-            user.emergency_contacts = [ec.model_dump() if hasattr(ec, 'model_dump') else ec for ec in profile_update.emergency_contacts]
+            user.emergency_contacts = [
+                ec.model_dump() if hasattr(ec, "model_dump") else ec
+                for ec in profile_update.emergency_contacts
+            ]
 
     # Allowlist of safe fields to prevent mass-assignment of sensitive columns
     ALLOWED_PROFILE_FIELDS = {
-        "first_name", "middle_name", "last_name", "membership_number", "phone", "mobile",
-        "personal_email", "date_of_birth", "hire_date", "rank", "station",
-        "address_street", "address_city", "address_state", "address_zip", "address_country",
+        "first_name",
+        "middle_name",
+        "last_name",
+        "membership_number",
+        "phone",
+        "mobile",
+        "personal_email",
+        "date_of_birth",
+        "hire_date",
+        "rank",
+        "station",
+        "address_street",
+        "address_city",
+        "address_state",
+        "address_zip",
+        "address_country",
     }
     for field, value in update_data.items():
         if field in ALLOWED_PROFILE_FIELDS and hasattr(user, field):
@@ -904,7 +979,10 @@ async def update_user_profile(
     )
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after profile update")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found after profile update",
+        )
 
     await log_audit_event(
         db=db,
@@ -915,7 +993,9 @@ async def update_user_profile(
             "updated_user_id": str(user_id),
             "updated_by": str(current_user.id),
             "is_self_update": is_self,
-            "fields_updated": list(profile_update.model_dump(exclude_unset=True).keys()),
+            "fields_updated": list(
+                profile_update.model_dump(exclude_unset=True).keys()
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -927,7 +1007,9 @@ async def update_user_profile(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: UUID,
-    hard: bool = Query(False, description="Permanently delete the member and all associated records"),
+    hard: bool = Query(
+        False, description="Permanently delete the member and all associated records"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):
@@ -968,9 +1050,7 @@ async def delete_user(
 
     if hard:
         # Remove role assignments first
-        await db.execute(
-            delete(user_roles).where(user_roles.c.user_id == str(user_id))
-        )
+        await db.execute(delete(user_roles).where(user_roles.c.user_id == str(user_id)))
         # Hard delete the user record
         await db.delete(user)
         await db.commit()
@@ -1116,10 +1196,11 @@ async def get_deletion_impact(
     training_count = 0
     try:
         from app.models.training import TrainingRecord as TrainingRecordModel
+
         tr_result = await db.execute(
-            select(func.count()).select_from(TrainingRecordModel).where(
-                TrainingRecordModel.user_id == str(user_id)
-            )
+            select(func.count())
+            .select_from(TrainingRecordModel)
+            .where(TrainingRecordModel.user_id == str(user_id))
         )
         training_count = tr_result.scalar() or 0
     except Exception:
@@ -1129,8 +1210,11 @@ async def get_deletion_impact(
     inventory_count = 0
     try:
         from app.models.inventory import InventoryAssignment
+
         inv_result = await db.execute(
-            select(func.count()).select_from(InventoryAssignment).where(
+            select(func.count())
+            .select_from(InventoryAssignment)
+            .where(
                 InventoryAssignment.user_id == str(user_id),
                 InventoryAssignment.returned_at.is_(None),
             )
@@ -1144,7 +1228,7 @@ async def get_deletion_impact(
     return DeletionImpactResponse(
         user_id=str(user_id),
         full_name=user.full_name,
-        status=user.status.value if hasattr(user.status, 'value') else str(user.status),
+        status=user.status.value if hasattr(user.status, "value") else str(user.status),
         training_records=training_count,
         inventory_items=inventory_count,
         total_records=total,
@@ -1172,14 +1256,15 @@ async def upload_photo(
 
     **Authentication required**
     """
-    import io
     import base64
 
     # Permission check
     is_self = str(current_user.id) == str(user_id)
     if not is_self:
         perm_result = await db.execute(
-            select(User).where(User.id == current_user.id).options(selectinload(User.positions))
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.positions))
         )
         perm_user = perm_result.scalar_one()
         user_permissions = _collect_user_permissions(perm_user)
@@ -1202,14 +1287,15 @@ async def upload_photo(
     ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
     try:
         import magic
+
         detected_mime = magic.from_buffer(contents, mime=True)
     except ImportError:
         # Fallback: check file header bytes
-        if contents[:8] == b'\x89PNG\r\n\x1a\n':
+        if contents[:8] == b"\x89PNG\r\n\x1a\n":
             detected_mime = "image/png"
-        elif contents[:2] == b'\xff\xd8':
+        elif contents[:2] == b"\xff\xd8":
             detected_mime = "image/jpeg"
-        elif contents[:4] == b'RIFF' and contents[8:12] == b'WEBP':
+        elif contents[:4] == b"RIFF" and contents[8:12] == b"WEBP":
             detected_mime = "image/webp"
         else:
             detected_mime = "unknown"
@@ -1222,7 +1308,7 @@ async def upload_photo(
 
     # Optimize image: resize, strip EXIF, convert to WebP (smaller files)
     try:
-        from app.utils.image_processing import optimize_image, IMAGE_SIZE_LIMITS
+        from app.utils.image_processing import IMAGE_SIZE_LIMITS, optimize_image
 
         clean_contents = optimize_image(
             contents,
@@ -1237,7 +1323,9 @@ async def upload_photo(
         )
 
     # Store as base64 data URI
-    photo_data_uri = f"data:image/webp;base64,{base64.b64encode(clean_contents).decode()}"
+    photo_data_uri = (
+        f"data:image/webp;base64,{base64.b64encode(clean_contents).decode()}"
+    )
 
     result = await db.execute(
         select(User)
@@ -1248,7 +1336,9 @@ async def upload_photo(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     user.photo_url = photo_data_uri
     await db.commit()
@@ -1285,7 +1375,9 @@ async def delete_photo(
     is_self = str(current_user.id) == str(user_id)
     if not is_self:
         perm_result = await db.execute(
-            select(User).where(User.id == current_user.id).options(selectinload(User.positions))
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.positions))
         )
         perm_user = perm_result.scalar_one()
         user_permissions = _collect_user_permissions(perm_user)
@@ -1304,7 +1396,9 @@ async def delete_photo(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     user.photo_url = None
     await db.commit()
@@ -1374,7 +1468,9 @@ async def get_member_audit_history(
         .where(User.organization_id == str(current_user.organization_id))
     )
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     # Relevant event types for member history
     member_event_types = list(_AUDIT_EVENT_DESCRIPTIONS.keys())
@@ -1437,15 +1533,21 @@ async def get_member_audit_history(
             if prev and new:
                 description = f"Status changed: {prev} → {new}"
 
-        entries.append(MemberAuditLogEntry(
-            id=log.id,
-            timestamp=log.timestamp,
-            event_type=log.event_type,
-            severity=log.severity.value if hasattr(log.severity, 'value') else str(log.severity),
-            description=description,
-            changed_by_username=log.username,
-            changed_by_user_id=log.user_id,
-            event_data=data,
-        ))
+        entries.append(
+            MemberAuditLogEntry(
+                id=log.id,
+                timestamp=log.timestamp,
+                event_type=log.event_type,
+                severity=(
+                    log.severity.value
+                    if hasattr(log.severity, "value")
+                    else str(log.severity)
+                ),
+                description=description,
+                changed_by_username=log.username,
+                changed_by_user_id=log.user_id,
+                event_data=data,
+            )
+        )
 
     return entries

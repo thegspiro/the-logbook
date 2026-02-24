@@ -9,36 +9,35 @@ Post-Onboarding Role Management endpoints for:
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from uuid import UUID
 
-from app.core.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
-from app.core.utils import safe_error_detail
-from app.schemas.role import (
-    RoleResponse,
-    RoleCreate,
-    RoleUpdate,
-    PermissionDetail,
-    PermissionCategory,
-    RoleCloneRequest,
-    RoleWithUserCount,
-    RoleUserItem,
-    RoleUsersResponse,
-    UserPermissionsResponse,
-)
-from app.models.user import Role, User
+from app.core.database import get_db
 from app.core.permissions import (
+    get_admin_role_slugs,
     get_permission_details,
     get_permissions_by_category,
-    get_admin_role_slugs,
 )
-from app.api.dependencies import get_current_user, require_permission
+from app.core.utils import safe_error_detail
+from app.models.user import User
+from app.schemas.role import (
+    PermissionCategory,
+    PermissionDetail,
+    RoleCloneRequest,
+    RoleCreate,
+    RoleResponse,
+    RoleUpdate,
+    RoleUserItem,
+    RoleUsersResponse,
+    RoleWithUserCount,
+    UserPermissionsResponse,
+)
 from app.services.role_service import role_service
-
 
 router = APIRouter()
 
@@ -46,6 +45,7 @@ router = APIRouter()
 # ============================================
 # Permission Endpoints
 # ============================================
+
 
 @router.get("/permissions", response_model=List[PermissionDetail])
 async def list_permissions(
@@ -76,17 +76,19 @@ async def list_permissions_by_category(
 
     result = []
     for category, permissions in categorized.items():
-        result.append({
-            "category": category,
-            "permissions": [
-                {
-                    "name": p.name,
-                    "description": p.description,
-                    "category": p.category.value
-                }
-                for p in permissions
-            ]
-        })
+        result.append(
+            {
+                "category": category,
+                "permissions": [
+                    {
+                        "name": p.name,
+                        "description": p.description,
+                        "category": p.category.value,
+                    }
+                    for p in permissions
+                ],
+            }
+        )
 
     return result
 
@@ -95,9 +97,12 @@ async def list_permissions_by_category(
 # Role CRUD Endpoints
 # ============================================
 
+
 @router.get("", response_model=List[RoleWithUserCount])
 async def list_roles(
-    include_user_count: bool = Query(True, description="Include count of users per role"),
+    include_user_count: bool = Query(
+        True, description="Include count of users per role"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("positions.view", "roles.view")),
 ):
@@ -122,7 +127,9 @@ async def list_roles(
 async def create_role(
     role_data: RoleCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("positions.create", "roles.create")),
+    current_user: User = Depends(
+        require_permission("positions.create", "roles.create")
+    ),
 ):
     """
     Create a new custom role
@@ -163,8 +170,7 @@ async def create_role(
         return role
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
@@ -188,8 +194,7 @@ async def get_role(
 
     if not role:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
         )
 
     return role
@@ -200,7 +205,11 @@ async def update_role(
     role_id: UUID,
     role_update: RoleUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("positions.edit", "positions.update", "roles.edit", "roles.update")),
+    current_user: User = Depends(
+        require_permission(
+            "positions.edit", "positions.update", "roles.edit", "roles.update"
+        )
+    ),
 ):
     """
     Update a role
@@ -240,8 +249,7 @@ async def update_role(
         return role
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
@@ -249,7 +257,9 @@ async def update_role(
 async def delete_role(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("positions.delete", "roles.delete")),
+    current_user: User = Depends(
+        require_permission("positions.delete", "roles.delete")
+    ),
 ):
     """
     Delete a role
@@ -260,16 +270,17 @@ async def delete_role(
     **Authentication required**
     """
     # Guard: prevent deletion of system positions at the API layer
-    position = await role_service.get_role(db, str(role_id), str(current_user.organization_id))
+    position = await role_service.get_role(
+        db, str(role_id), str(current_user.organization_id)
+    )
     if not position:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
         )
     if position.is_system:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot delete system positions"
+            detail="Cannot delete system positions",
         )
 
     try:
@@ -292,21 +303,23 @@ async def delete_role(
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=safe_error_detail(e)
+                status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
             )
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
-@router.post("/{role_id}/clone", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{role_id}/clone", response_model=RoleResponse, status_code=status.HTTP_201_CREATED
+)
 async def clone_role(
     role_id: UUID,
     clone_request: RoleCloneRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("positions.create", "roles.create")),
+    current_user: User = Depends(
+        require_permission("positions.create", "roles.create")
+    ),
 ):
     """
     Clone an existing role with new name and slug
@@ -346,12 +359,10 @@ async def clone_role(
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=safe_error_detail(e)
+                status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
             )
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
@@ -359,7 +370,9 @@ async def clone_role(
 async def get_role_users(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("positions.view", "roles.view", "users.view")),
+    current_user: User = Depends(
+        require_permission("positions.view", "roles.view", "users.view")
+    ),
 ):
     """
     Get all users assigned to a specific role
@@ -375,8 +388,7 @@ async def get_role_users(
 
     if not role:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
         )
 
     users = await role_service.get_users_with_role(
@@ -395,7 +407,8 @@ async def get_role_users(
                 email=user.email,
                 first_name=user.first_name,
                 last_name=user.last_name,
-                full_name=f"{user.first_name or ''} {user.last_name or ''}".strip() or None,
+                full_name=f"{user.first_name or ''} {user.last_name or ''}".strip()
+                or None,
                 is_active=user.is_active,
             )
             for user in users
@@ -411,11 +424,14 @@ async def get_role_users(
 # This file only provides the permissions lookup and current-user helpers.
 # ============================================
 
+
 @router.get("/user/{user_id}/permissions", response_model=UserPermissionsResponse)
 async def get_user_permissions(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.view", "positions.view", "roles.view")),
+    current_user: User = Depends(
+        require_permission("users.view", "positions.view", "roles.view")
+    ),
 ):
     """
     Get all permissions for a specific user based on their roles
@@ -427,15 +443,14 @@ async def get_user_permissions(
     result = await db.execute(
         select(User).where(
             User.id == str(user_id),
-            User.organization_id == current_user.organization_id
+            User.organization_id == current_user.organization_id,
         )
     )
     user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     permissions = await role_service.get_user_permissions(db=db, user_id=str(user_id))
@@ -451,6 +466,7 @@ async def get_user_permissions(
 # ============================================
 # Current User Endpoints
 # ============================================
+
 
 @router.get("/my/roles", response_model=List[RoleResponse])
 async def get_my_roles(
@@ -478,7 +494,9 @@ async def get_my_permissions(
     No special permissions required - users can always view their own permissions.
     **Authentication required**
     """
-    permissions = await role_service.get_user_permissions(db=db, user_id=str(current_user.id))
+    permissions = await role_service.get_user_permissions(
+        db=db, user_id=str(current_user.id)
+    )
     roles = await role_service.get_user_roles(db=db, user_id=str(current_user.id))
 
     return UserPermissionsResponse(
@@ -492,6 +510,7 @@ async def get_my_permissions(
 # Admin Access Check
 # ============================================
 
+
 @router.get("/admin-access/check")
 async def check_admin_access(
     db: AsyncSession = Depends(get_db),
@@ -504,7 +523,9 @@ async def check_admin_access(
     **Authentication required**
     """
     # Get user's permissions
-    permissions = await role_service.get_user_permissions(db=db, user_id=str(current_user.id))
+    permissions = await role_service.get_user_permissions(
+        db=db, user_id=str(current_user.id)
+    )
     roles = await role_service.get_user_roles(db=db, user_id=str(current_user.id))
 
     # Check for admin access - either through admin roles or specific permissions
@@ -515,12 +536,21 @@ async def check_admin_access(
 
     # Admin permissions that grant access to member management
     admin_permissions = {
-        "users.view", "users.create", "users.edit", "users.delete",
-        "roles.view", "roles.create", "roles.edit", "roles.delete",
-        "admin.access", "members.manage",
+        "users.view",
+        "users.create",
+        "users.edit",
+        "users.delete",
+        "roles.view",
+        "roles.create",
+        "roles.edit",
+        "roles.delete",
+        "admin.access",
+        "members.manage",
     }
 
-    has_admin_permission = "*" in permissions or bool(permissions.intersection(admin_permissions))
+    has_admin_permission = "*" in permissions or bool(
+        permissions.intersection(admin_permissions)
+    )
 
     return {
         "has_access": has_admin_role or has_admin_permission,

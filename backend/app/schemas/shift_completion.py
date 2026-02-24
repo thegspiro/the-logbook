@@ -4,9 +4,10 @@ Shift Completion Report Schemas
 Pydantic models for shift officer reports on trainee experiences.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from datetime import date, datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class SkillObservation(BaseModel):
@@ -89,7 +90,7 @@ class ShiftCompletionReportResponse(BaseModel):
     requirements_progressed: Optional[List[RequirementProgressEntry]] = None
 
     # Review workflow
-    review_status: str = 'approved'
+    review_status: str = "approved"
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     reviewer_notes: Optional[str] = None

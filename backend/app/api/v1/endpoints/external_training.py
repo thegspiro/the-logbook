@@ -5,52 +5,54 @@ Endpoints for managing external training providers (Vector Solutions, Target Sol
 and syncing training records from external platforms.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+import logging
+from datetime import date, datetime, timezone
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, date, timedelta, timezone
-import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-from app.core.database import get_db
+from app.api.dependencies import require_permission
 from app.core.audit import log_audit_event
+from app.core.database import get_db
 from app.core.security import encrypt_data
-from app.services.external_training_service import ExternalTrainingSyncService
 from app.models.training import (
-    ExternalTrainingProvider,
     ExternalCategoryMapping,
-    ExternalUserMapping,
-    ExternalTrainingSyncLog,
     ExternalTrainingImport,
+    ExternalTrainingProvider,
+    ExternalTrainingSyncLog,
+    ExternalUserMapping,
+    SyncStatus,
     TrainingCategory,
     TrainingRecord,
     TrainingStatus,
-    SyncStatus,
 )
 from app.models.user import User
 from app.schemas.training import (
-    ExternalTrainingProviderCreate,
-    ExternalTrainingProviderUpdate,
-    ExternalTrainingProviderResponse,
-    ExternalCategoryMappingCreate,
-    ExternalCategoryMappingUpdate,
-    ExternalCategoryMappingResponse,
-    ExternalUserMappingUpdate,
-    ExternalUserMappingResponse,
-    ExternalTrainingSyncLogResponse,
-    ExternalTrainingImportResponse,
-    SyncRequest,
-    SyncResponse,
-    TestConnectionResponse,
-    ImportRecordRequest,
     BulkImportRequest,
     BulkImportResponse,
-    SyncStatus as SyncStatusEnum,
+    ExternalCategoryMappingResponse,
+    ExternalCategoryMappingUpdate,
+    ExternalTrainingImportResponse,
+    ExternalTrainingProviderCreate,
+    ExternalTrainingProviderResponse,
+    ExternalTrainingProviderUpdate,
+    ExternalTrainingSyncLogResponse,
+    ExternalUserMappingResponse,
+    ExternalUserMappingUpdate,
+    ImportRecordRequest,
+    SyncRequest,
+    SyncResponse,
 )
-from app.api.dependencies import get_current_user, require_permission
+from app.schemas.training import SyncStatus as SyncStatusEnum
+from app.schemas.training import (
+    TestConnectionResponse,
+)
+from app.services.external_training_service import ExternalTrainingSyncService
 
 router = APIRouter()
 
@@ -85,7 +87,11 @@ async def list_providers(
     return result.scalars().all()
 
 
-@router.post("/providers", response_model=ExternalTrainingProviderResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/providers",
+    response_model=ExternalTrainingProviderResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_provider(
     provider: ExternalTrainingProviderCreate,
     db: AsyncSession = Depends(get_db),
@@ -108,12 +114,16 @@ async def create_provider(
         api_key=encrypt_data(provider.api_key) if provider.api_key else None,
         api_secret=encrypt_data(provider.api_secret) if provider.api_secret else None,
         client_id=provider.client_id,
-        client_secret=encrypt_data(provider.client_secret) if provider.client_secret else None,
+        client_secret=(
+            encrypt_data(provider.client_secret) if provider.client_secret else None
+        ),
         auth_type=provider.auth_type,
         config=provider.config.model_dump() if provider.config else None,
         auto_sync_enabled=provider.auto_sync_enabled,
         sync_interval_hours=provider.sync_interval_hours,
-        default_category_id=str(provider.default_category_id) if provider.default_category_id else None,
+        default_category_id=(
+            str(provider.default_category_id) if provider.default_category_id else None
+        ),
     )
 
     db.add(new_provider)
@@ -158,14 +168,15 @@ async def get_provider(
 
     if not provider:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
         )
 
     return provider
 
 
-@router.patch("/providers/{provider_id}", response_model=ExternalTrainingProviderResponse)
+@router.patch(
+    "/providers/{provider_id}", response_model=ExternalTrainingProviderResponse
+)
 async def update_provider(
     provider_id: UUID,
     provider_update: ExternalTrainingProviderUpdate,
@@ -187,38 +198,58 @@ async def update_provider(
 
     if not provider:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
         )
 
     # Update fields
     update_data = provider_update.model_dump(exclude_unset=True)
 
     # Handle config separately
-    if 'config' in update_data and update_data['config']:
-        update_data['config'] = update_data['config'].model_dump() if hasattr(update_data['config'], 'model_dump') else update_data['config']
+    if "config" in update_data and update_data["config"]:
+        update_data["config"] = (
+            update_data["config"].model_dump()
+            if hasattr(update_data["config"], "model_dump")
+            else update_data["config"]
+        )
 
     # Handle UUID conversion
-    if 'default_category_id' in update_data:
-        update_data['default_category_id'] = str(update_data['default_category_id']) if update_data['default_category_id'] else None
+    if "default_category_id" in update_data:
+        update_data["default_category_id"] = (
+            str(update_data["default_category_id"])
+            if update_data["default_category_id"]
+            else None
+        )
 
     # Encrypt sensitive credential fields before storing
-    _secret_fields = ('api_key', 'api_secret', 'client_secret')
+    _secret_fields = ("api_key", "api_secret", "client_secret")
     for field in _secret_fields:
         if field in update_data and update_data[field]:
             update_data[field] = encrypt_data(update_data[field])
 
     ALLOWED_PROVIDER_FIELDS = {
-        "name", "description", "api_base_url", "api_key", "api_secret",
-        "client_id", "client_secret", "auth_type", "config",
-        "auto_sync_enabled", "sync_interval_hours", "default_category_id", "active",
+        "name",
+        "description",
+        "api_base_url",
+        "api_key",
+        "api_secret",
+        "client_id",
+        "client_secret",
+        "auth_type",
+        "config",
+        "auto_sync_enabled",
+        "sync_interval_hours",
+        "default_category_id",
+        "active",
     }
     for field, value in update_data.items():
         if field in ALLOWED_PROVIDER_FIELDS:
             setattr(provider, field, value)
 
     # Reset connection verification if credentials changed
-    if any(k in update_data for k in ['api_key', 'api_secret', 'client_id', 'client_secret', 'api_base_url']):
+    if any(
+        k in update_data
+        for k in ["api_key", "api_secret", "client_id", "client_secret", "api_base_url"]
+    ):
         provider.connection_verified = False
         provider.connection_error = None
 
@@ -249,8 +280,7 @@ async def delete_provider(
 
     if not provider:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
         )
 
     provider.active = False
@@ -280,8 +310,7 @@ async def test_provider_connection(
 
     if not provider:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
         )
 
     # Use the sync service to test the connection
@@ -299,7 +328,7 @@ async def test_provider_connection(
         return TestConnectionResponse(
             success=success,
             message=message,
-            details={"provider_type": provider.provider_type.value}
+            details={"provider_type": provider.provider_type.value},
         )
 
     except Exception as e:
@@ -312,7 +341,7 @@ async def test_provider_connection(
         return TestConnectionResponse(
             success=False,
             message="Connection test failed. Check provider credentials and URL.",
-            details=None
+            details=None,
         )
     finally:
         await sync_service.close()
@@ -344,8 +373,9 @@ async def perform_sync_task(
         try:
             # Get provider
             result = await db.execute(
-                select(ExternalTrainingProvider)
-                .where(ExternalTrainingProvider.id == str(provider_id))
+                select(ExternalTrainingProvider).where(
+                    ExternalTrainingProvider.id == str(provider_id)
+                )
             )
             provider = result.scalar_one_or_none()
 
@@ -405,19 +435,23 @@ async def trigger_sync(
     if not provider:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found or inactive"
+            detail="Provider not found or inactive",
         )
 
     # Check if there's already a sync in progress
     existing_sync = await db.execute(
         select(ExternalTrainingSyncLog)
         .where(ExternalTrainingSyncLog.provider_id == str(provider_id))
-        .where(ExternalTrainingSyncLog.status.in_([SyncStatus.PENDING, SyncStatus.IN_PROGRESS]))
+        .where(
+            ExternalTrainingSyncLog.status.in_(
+                [SyncStatus.PENDING, SyncStatus.IN_PROGRESS]
+            )
+        )
     )
     if existing_sync.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="A sync operation is already in progress for this provider"
+            detail="A sync operation is already in progress for this provider",
         )
 
     # Add background task to perform the sync
@@ -443,7 +477,10 @@ async def trigger_sync(
     )
 
 
-@router.get("/providers/{provider_id}/sync-logs", response_model=List[ExternalTrainingSyncLogResponse])
+@router.get(
+    "/providers/{provider_id}/sync-logs",
+    response_model=List[ExternalTrainingSyncLogResponse],
+)
 async def list_sync_logs(
     provider_id: UUID,
     limit: int = Query(20, ge=1, le=100),
@@ -459,7 +496,9 @@ async def list_sync_logs(
     result = await db.execute(
         select(ExternalTrainingSyncLog)
         .where(ExternalTrainingSyncLog.provider_id == str(provider_id))
-        .where(ExternalTrainingSyncLog.organization_id == str(current_user.organization_id))
+        .where(
+            ExternalTrainingSyncLog.organization_id == str(current_user.organization_id)
+        )
         .order_by(ExternalTrainingSyncLog.started_at.desc())
         .limit(limit)
     )
@@ -471,7 +510,10 @@ async def list_sync_logs(
 # ============================================
 
 
-@router.get("/providers/{provider_id}/category-mappings", response_model=List[ExternalCategoryMappingResponse])
+@router.get(
+    "/providers/{provider_id}/category-mappings",
+    response_model=List[ExternalCategoryMappingResponse],
+)
 async def list_category_mappings(
     provider_id: UUID,
     unmapped_only: bool = False,
@@ -487,7 +529,9 @@ async def list_category_mappings(
     query = (
         select(ExternalCategoryMapping)
         .where(ExternalCategoryMapping.provider_id == str(provider_id))
-        .where(ExternalCategoryMapping.organization_id == str(current_user.organization_id))
+        .where(
+            ExternalCategoryMapping.organization_id == str(current_user.organization_id)
+        )
     )
 
     if unmapped_only:
@@ -519,7 +563,9 @@ async def list_category_mappings(
 
         if mapping.internal_category_id:
             cat_result = await db.execute(
-                select(TrainingCategory.name).where(TrainingCategory.id == mapping.internal_category_id)
+                select(TrainingCategory.name).where(
+                    TrainingCategory.id == mapping.internal_category_id
+                )
             )
             cat_name = cat_result.scalar_one_or_none()
             mapping_dict["internal_category_name"] = cat_name
@@ -529,7 +575,10 @@ async def list_category_mappings(
     return response
 
 
-@router.patch("/providers/{provider_id}/category-mappings/{mapping_id}", response_model=ExternalCategoryMappingResponse)
+@router.patch(
+    "/providers/{provider_id}/category-mappings/{mapping_id}",
+    response_model=ExternalCategoryMappingResponse,
+)
 async def update_category_mapping(
     provider_id: UUID,
     mapping_id: UUID,
@@ -547,19 +596,24 @@ async def update_category_mapping(
         select(ExternalCategoryMapping)
         .where(ExternalCategoryMapping.id == str(mapping_id))
         .where(ExternalCategoryMapping.provider_id == str(provider_id))
-        .where(ExternalCategoryMapping.organization_id == str(current_user.organization_id))
+        .where(
+            ExternalCategoryMapping.organization_id == str(current_user.organization_id)
+        )
     )
     mapping = result.scalar_one_or_none()
 
     if not mapping:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Category mapping not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Category mapping not found"
         )
 
     # Update fields
     if mapping_update.internal_category_id is not None:
-        mapping.internal_category_id = str(mapping_update.internal_category_id) if mapping_update.internal_category_id else None
+        mapping.internal_category_id = (
+            str(mapping_update.internal_category_id)
+            if mapping_update.internal_category_id
+            else None
+        )
         mapping.is_mapped = mapping_update.internal_category_id is not None
         mapping.auto_mapped = False
         mapping.mapped_by = current_user.id
@@ -574,7 +628,9 @@ async def update_category_mapping(
     internal_category_name = None
     if mapping.internal_category_id:
         cat_result = await db.execute(
-            select(TrainingCategory.name).where(TrainingCategory.id == mapping.internal_category_id)
+            select(TrainingCategory.name).where(
+                TrainingCategory.id == mapping.internal_category_id
+            )
         )
         internal_category_name = cat_result.scalar_one_or_none()
 
@@ -600,7 +656,10 @@ async def update_category_mapping(
 # ============================================
 
 
-@router.get("/providers/{provider_id}/user-mappings", response_model=List[ExternalUserMappingResponse])
+@router.get(
+    "/providers/{provider_id}/user-mappings",
+    response_model=List[ExternalUserMappingResponse],
+)
 async def list_user_mappings(
     provider_id: UUID,
     unmapped_only: bool = False,
@@ -650,7 +709,9 @@ async def list_user_mappings(
 
         if mapping.internal_user_id:
             user_result = await db.execute(
-                select(User.full_name, User.email).where(User.id == mapping.internal_user_id)
+                select(User.full_name, User.email).where(
+                    User.id == mapping.internal_user_id
+                )
             )
             user_data = user_result.one_or_none()
             if user_data:
@@ -662,7 +723,10 @@ async def list_user_mappings(
     return response
 
 
-@router.patch("/providers/{provider_id}/user-mappings/{mapping_id}", response_model=ExternalUserMappingResponse)
+@router.patch(
+    "/providers/{provider_id}/user-mappings/{mapping_id}",
+    response_model=ExternalUserMappingResponse,
+)
 async def update_user_mapping(
     provider_id: UUID,
     mapping_id: UUID,
@@ -686,13 +750,16 @@ async def update_user_mapping(
 
     if not mapping:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User mapping not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User mapping not found"
         )
 
     # Update fields
     if mapping_update.internal_user_id is not None:
-        mapping.internal_user_id = str(mapping_update.internal_user_id) if mapping_update.internal_user_id else None
+        mapping.internal_user_id = (
+            str(mapping_update.internal_user_id)
+            if mapping_update.internal_user_id
+            else None
+        )
         mapping.is_mapped = mapping_update.internal_user_id is not None
         mapping.auto_mapped = False
         mapping.mapped_by = current_user.id
@@ -708,7 +775,9 @@ async def update_user_mapping(
     internal_user_email = None
     if mapping.internal_user_id:
         user_result = await db.execute(
-            select(User.full_name, User.email).where(User.id == mapping.internal_user_id)
+            select(User.full_name, User.email).where(
+                User.id == mapping.internal_user_id
+            )
         )
         user_data = user_result.one_or_none()
         if user_data:
@@ -739,7 +808,10 @@ async def update_user_mapping(
 # ============================================
 
 
-@router.get("/providers/{provider_id}/imports", response_model=List[ExternalTrainingImportResponse])
+@router.get(
+    "/providers/{provider_id}/imports",
+    response_model=List[ExternalTrainingImportResponse],
+)
 async def list_imported_records(
     provider_id: UUID,
     status: Optional[str] = Query(None, description="Filter by import status"),
@@ -757,19 +829,28 @@ async def list_imported_records(
     query = (
         select(ExternalTrainingImport)
         .where(ExternalTrainingImport.provider_id == str(provider_id))
-        .where(ExternalTrainingImport.organization_id == str(current_user.organization_id))
+        .where(
+            ExternalTrainingImport.organization_id == str(current_user.organization_id)
+        )
     )
 
     if status:
         query = query.where(ExternalTrainingImport.import_status == status)
 
-    query = query.order_by(ExternalTrainingImport.created_at.desc()).offset(offset).limit(limit)
+    query = (
+        query.order_by(ExternalTrainingImport.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
 
     result = await db.execute(query)
     return result.scalars().all()
 
 
-@router.post("/providers/{provider_id}/imports/{import_id}/import", response_model=ExternalTrainingImportResponse)
+@router.post(
+    "/providers/{provider_id}/imports/{import_id}/import",
+    response_model=ExternalTrainingImportResponse,
+)
 async def import_single_record(
     provider_id: UUID,
     import_id: UUID,
@@ -787,20 +868,21 @@ async def import_single_record(
         select(ExternalTrainingImport)
         .where(ExternalTrainingImport.id == str(import_id))
         .where(ExternalTrainingImport.provider_id == str(provider_id))
-        .where(ExternalTrainingImport.organization_id == str(current_user.organization_id))
+        .where(
+            ExternalTrainingImport.organization_id == str(current_user.organization_id)
+        )
     )
     ext_import = result.scalar_one_or_none()
 
     if not ext_import:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Import record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Import record not found"
         )
 
     if ext_import.import_status == "imported":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This record has already been imported"
+            detail="This record has already been imported",
         )
 
     try:
@@ -811,7 +893,11 @@ async def import_single_record(
             course_name=ext_import.course_title,
             course_code=ext_import.course_code,
             training_type="continuing_education",  # Default, could be mapped
-            completion_date=ext_import.completion_date.date() if ext_import.completion_date else None,
+            completion_date=(
+                ext_import.completion_date.date()
+                if ext_import.completion_date
+                else None
+            ),
             hours_completed=(ext_import.duration_minutes or 0) / 60.0,
             status=TrainingStatus.COMPLETED,
             score=ext_import.score,
@@ -860,7 +946,7 @@ async def import_single_record(
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to import record. Check the provider configuration and try again."
+            detail="Failed to import record. Check the provider configuration and try again.",
         )
 
 
@@ -887,7 +973,10 @@ async def bulk_import_records(
             select(ExternalTrainingImport)
             .where(ExternalTrainingImport.id == str(import_id))
             .where(ExternalTrainingImport.provider_id == str(provider_id))
-            .where(ExternalTrainingImport.organization_id == str(current_user.organization_id))
+            .where(
+                ExternalTrainingImport.organization_id
+                == str(current_user.organization_id)
+            )
         )
         ext_import = result.scalar_one_or_none()
 
@@ -907,7 +996,9 @@ async def bulk_import_records(
             mapping_result = await db.execute(
                 select(ExternalUserMapping)
                 .where(ExternalUserMapping.provider_id == str(provider_id))
-                .where(ExternalUserMapping.external_user_id == ext_import.external_user_id)
+                .where(
+                    ExternalUserMapping.external_user_id == ext_import.external_user_id
+                )
                 .where(ExternalUserMapping.is_mapped == True)  # noqa: E712
             )
             mapping = mapping_result.scalar_one_or_none()
@@ -927,7 +1018,11 @@ async def bulk_import_records(
                 course_name=ext_import.course_title,
                 course_code=ext_import.course_code,
                 training_type="continuing_education",
-                completion_date=ext_import.completion_date.date() if ext_import.completion_date else None,
+                completion_date=(
+                    ext_import.completion_date.date()
+                    if ext_import.completion_date
+                    else None
+                ),
                 hours_completed=(ext_import.duration_minutes or 0) / 60.0,
                 status=TrainingStatus.COMPLETED,
                 score=ext_import.score,
@@ -961,5 +1056,5 @@ async def bulk_import_records(
         imported=imported,
         skipped=skipped,
         failed=failed,
-        errors=errors[:10]  # Limit error messages
+        errors=errors[:10],  # Limit error messages
     )

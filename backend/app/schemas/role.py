@@ -4,14 +4,16 @@ Role Pydantic Schemas
 Request and response schemas for role-related endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RoleBase(BaseModel):
     """Base role schema"""
+
     name: str = Field(..., min_length=1, max_length=100)
     slug: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
@@ -19,12 +21,14 @@ class RoleBase(BaseModel):
 
 class RoleCreate(RoleBase):
     """Schema for creating a new role"""
+
     permissions: List[str] = Field(default_factory=list)
     priority: int = Field(default=0, ge=0, le=100)
 
 
 class RoleUpdate(BaseModel):
     """Schema for updating a role"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     permissions: Optional[List[str]] = None
@@ -33,6 +37,7 @@ class RoleUpdate(BaseModel):
 
 class RoleResponse(BaseModel):
     """Schema for role response"""
+
     id: UUID
     organization_id: UUID
     name: str
@@ -49,6 +54,7 @@ class RoleResponse(BaseModel):
 
 class PermissionDetail(BaseModel):
     """Schema for permission details"""
+
     name: str
     description: str
     category: str
@@ -56,17 +62,22 @@ class PermissionDetail(BaseModel):
 
 class PermissionCategory(BaseModel):
     """Schema for permission category with permissions"""
+
     category: str
     permissions: List[PermissionDetail]
 
 
 class UserRoleAssignment(BaseModel):
     """Schema for assigning roles to a user"""
-    role_ids: List[UUID] = Field(..., description="List of role IDs to assign to the user")
+
+    role_ids: List[UUID] = Field(
+        ..., description="List of role IDs to assign to the user"
+    )
 
 
 class UserRoleResponse(BaseModel):
     """Schema for user with their assigned roles"""
+
     user_id: UUID
     username: str
     full_name: Optional[str] = None
@@ -77,18 +88,27 @@ class UserRoleResponse(BaseModel):
 
 class RoleCloneRequest(BaseModel):
     """Schema for cloning a role"""
-    name: str = Field(..., min_length=1, max_length=100, description="Name for the new role")
-    slug: str = Field(..., min_length=1, max_length=100, description="Slug for the new role")
-    description: Optional[str] = Field(None, description="Optional description for the new role")
+
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="Name for the new role"
+    )
+    slug: str = Field(
+        ..., min_length=1, max_length=100, description="Slug for the new role"
+    )
+    description: Optional[str] = Field(
+        None, description="Optional description for the new role"
+    )
 
 
 class RoleWithUserCount(RoleResponse):
     """Role response with user count"""
+
     user_count: int = 0
 
 
 class RoleUserItem(BaseModel):
     """Basic user info for role user lists"""
+
     id: UUID
     username: str
     email: str
@@ -102,6 +122,7 @@ class RoleUserItem(BaseModel):
 
 class RoleUsersResponse(BaseModel):
     """Response for role users list"""
+
     role_id: UUID
     role_name: str
     users: List[RoleUserItem]
@@ -110,6 +131,7 @@ class RoleUsersResponse(BaseModel):
 
 class UserPermissionsResponse(BaseModel):
     """Response for user permissions"""
+
     user_id: UUID
     permissions: List[str]
     roles: List[str]  # Role names that grant these permissions

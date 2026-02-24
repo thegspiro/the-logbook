@@ -4,27 +4,23 @@ Analytics Database Models
 SQLAlchemy models for analytics event tracking.
 """
 
-from sqlalchemy import (
-    Column,
-    String,
-    DateTime,
-    JSON,
-    Index,
-)
+from sqlalchemy import JSON, Column, DateTime, Index, String
 from sqlalchemy.sql import func
 
-from app.core.utils import generate_uuid
-
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class AnalyticsEvent(Base):
     """Stores analytics events (QR scans, check-ins, etc.)"""
+
     __tablename__ = "analytics_events"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     organization_id = Column(String(36), nullable=False, index=True)
-    event_type = Column(String(50), nullable=False)  # qr_scan, check_in_success, check_in_failure, etc.
+    event_type = Column(
+        String(50), nullable=False
+    )  # qr_scan, check_in_success, check_in_failure, etc.
     event_id = Column(String(36), nullable=True)  # reference to the event being tracked
     user_id = Column(String(36), nullable=True)
     device_type = Column(String(20), nullable=True)

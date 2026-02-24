@@ -5,16 +5,18 @@ Request and response schemas for self-reported training submissions
 and self-report configuration.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import date, datetime
+from typing import Optional
 from uuid import UUID
 
+from pydantic import BaseModel, Field
 
 # ==================== Self-Report Config Schemas ====================
 
+
 class FieldConfig(BaseModel):
     """Configuration for a single form field"""
+
     visible: bool = True
     required: bool = False
     label: str = ""
@@ -22,6 +24,7 @@ class FieldConfig(BaseModel):
 
 class SelfReportConfigResponse(BaseModel):
     """Response schema for self-report configuration"""
+
     id: UUID
     organization_id: UUID
 
@@ -47,6 +50,7 @@ class SelfReportConfigResponse(BaseModel):
 
 class SelfReportConfigUpdate(BaseModel):
     """Schema for updating self-report configuration"""
+
     require_approval: Optional[bool] = None
     auto_approve_under_hours: Optional[float] = None
     approval_deadline_days: Optional[int] = Field(None, ge=1, le=90)
@@ -63,11 +67,16 @@ class SelfReportConfigUpdate(BaseModel):
 
 # ==================== Training Submission Schemas ====================
 
+
 class TrainingSubmissionCreate(BaseModel):
     """Schema for submitting self-reported training"""
+
     course_name: str = Field(..., min_length=1, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
-    training_type: str = Field(..., description="certification, continuing_education, skills_practice, orientation, refresher, specialty")
+    training_type: str = Field(
+        ...,
+        description="certification, continuing_education, skills_practice, orientation, refresher, specialty",
+    )
     description: Optional[str] = None
 
     completion_date: date
@@ -87,6 +96,7 @@ class TrainingSubmissionCreate(BaseModel):
 
 class TrainingSubmissionUpdate(BaseModel):
     """Schema for updating a submission (before approval)"""
+
     course_name: Optional[str] = Field(None, min_length=1, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
     training_type: Optional[str] = None
@@ -109,6 +119,7 @@ class TrainingSubmissionUpdate(BaseModel):
 
 class TrainingSubmissionResponse(BaseModel):
     """Response schema for a training submission"""
+
     id: UUID
     organization_id: UUID
     submitted_by: UUID
@@ -147,6 +158,7 @@ class TrainingSubmissionResponse(BaseModel):
 
 class SubmissionReviewRequest(BaseModel):
     """Schema for officer reviewing a submission"""
+
     action: str = Field(..., description="approve, reject, or revision_requested")
     reviewer_notes: Optional[str] = None
 

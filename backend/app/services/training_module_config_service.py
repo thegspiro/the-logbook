@@ -4,13 +4,13 @@ Training Module Configuration Service
 Handles get/create/update of per-organization training visibility settings.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from typing import Any, Dict, Optional
 from uuid import UUID
-from typing import Optional, Dict, Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import TrainingModuleConfig
-
 
 DEFAULT_VISIBILITY: Dict[str, Any] = {
     "show_training_history": True,

@@ -4,38 +4,55 @@ Membership Pipeline Pydantic Schemas
 Request and response schemas for the prospective member pipeline endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # --- Pipeline Schemas ---
 
+
 class PipelineStepBase(BaseModel):
     """Base schema for a pipeline step"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    step_type: str = Field(default="checkbox", description="Step type: action, checkbox, note")
-    action_type: Optional[str] = Field(None, description="Action type: send_email, schedule_meeting, collect_document, custom")
+    step_type: str = Field(
+        default="checkbox", description="Step type: action, checkbox, note"
+    )
+    action_type: Optional[str] = Field(
+        None,
+        description="Action type: send_email, schedule_meeting, collect_document, custom",
+    )
     is_first_step: bool = False
     is_final_step: bool = False
     sort_order: int = Field(default=0, ge=0)
     email_template_id: Optional[UUID] = None
     required: bool = True
-    config: Optional[Dict[str, Any]] = Field(None, description="Stage-specific configuration (form settings, election config, etc.)")
-    inactivity_timeout_days: Optional[int] = Field(None, description="Per-step inactivity timeout override in days")
-    notify_prospect_on_completion: bool = Field(default=False, description="Send notification to prospect when this step is completed")
-    public_visible: bool = Field(default=True, description="Show this step on the public application status page")
+    config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Stage-specific configuration (form settings, election config, etc.)",
+    )
+    inactivity_timeout_days: Optional[int] = Field(
+        None, description="Per-step inactivity timeout override in days"
+    )
+    notify_prospect_on_completion: bool = Field(
+        default=False,
+        description="Send notification to prospect when this step is completed",
+    )
+    public_visible: bool = Field(
+        default=True, description="Show this step on the public application status page"
+    )
 
 
 class PipelineStepCreate(PipelineStepBase):
     """Schema for creating a pipeline step"""
-    pass
 
 
 class PipelineStepUpdate(BaseModel):
     """Schema for updating a pipeline step"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     step_type: Optional[str] = None
@@ -53,6 +70,7 @@ class PipelineStepUpdate(BaseModel):
 
 class PipelineStepResponse(PipelineStepBase):
     """Schema for pipeline step response"""
+
     id: UUID
     pipeline_id: UUID
     created_at: datetime
@@ -63,23 +81,33 @@ class PipelineStepResponse(PipelineStepBase):
 
 class PipelineBase(BaseModel):
     """Base schema for a membership pipeline"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     is_template: bool = False
     is_default: bool = False
     is_active: bool = True
     auto_transfer_on_approval: bool = False
-    inactivity_config: Optional[Dict[str, Any]] = Field(None, description="Inactivity timeout and notification settings")
-    public_status_enabled: bool = Field(default=False, description="Allow prospects to check their status via a public link")
+    inactivity_config: Optional[Dict[str, Any]] = Field(
+        None, description="Inactivity timeout and notification settings"
+    )
+    public_status_enabled: bool = Field(
+        default=False,
+        description="Allow prospects to check their status via a public link",
+    )
 
 
 class PipelineCreate(PipelineBase):
     """Schema for creating a pipeline"""
-    steps: Optional[List[PipelineStepCreate]] = Field(None, description="Optional initial steps")
+
+    steps: Optional[List[PipelineStepCreate]] = Field(
+        None, description="Optional initial steps"
+    )
 
 
 class PipelineUpdate(BaseModel):
     """Schema for updating a pipeline"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     is_default: Optional[bool] = None
@@ -91,6 +119,7 @@ class PipelineUpdate(BaseModel):
 
 class PipelineResponse(PipelineBase):
     """Schema for pipeline response"""
+
     id: UUID
     organization_id: UUID
     created_by: Optional[UUID] = None
@@ -104,6 +133,7 @@ class PipelineResponse(PipelineBase):
 
 class PipelineListResponse(BaseModel):
     """Schema for pipeline list item"""
+
     id: UUID
     name: str
     description: Optional[str] = None
@@ -120,13 +150,16 @@ class PipelineListResponse(BaseModel):
 
 class StepReorderRequest(BaseModel):
     """Schema for reordering steps"""
+
     step_ids: List[UUID] = Field(..., description="Ordered list of step IDs")
 
 
 # --- Pipeline Stats Schema ---
 
+
 class PipelineStageStats(BaseModel):
     """Stats for a single pipeline stage"""
+
     stage_id: UUID
     stage_name: str
     count: int = 0
@@ -134,6 +167,7 @@ class PipelineStageStats(BaseModel):
 
 class PipelineStatsResponse(BaseModel):
     """Pipeline statistics"""
+
     pipeline_id: UUID
     total_prospects: int = 0
     active_count: int = 0
@@ -148,20 +182,26 @@ class PipelineStatsResponse(BaseModel):
 
 class PurgeInactiveRequest(BaseModel):
     """Schema for purging inactive prospects"""
-    prospect_ids: Optional[List[UUID]] = Field(None, description="Specific prospect IDs to purge, or all inactive if empty")
+
+    prospect_ids: Optional[List[UUID]] = Field(
+        None, description="Specific prospect IDs to purge, or all inactive if empty"
+    )
     confirm: bool = Field(default=False, description="Must be true to execute purge")
 
 
 class PurgeInactiveResponse(BaseModel):
     """Response after purging inactive prospects"""
+
     purged_count: int
     message: str
 
 
 # --- Prospective Member Schemas ---
 
+
 class ProspectBase(BaseModel):
     """Base schema for a prospective member"""
+
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     email: str = Field(..., min_length=1, max_length=255)
@@ -180,12 +220,16 @@ class ProspectBase(BaseModel):
 
 class ProspectCreate(ProspectBase):
     """Schema for creating a prospective member"""
-    pipeline_id: Optional[UUID] = Field(None, description="Pipeline to assign, uses org default if not specified")
+
+    pipeline_id: Optional[UUID] = Field(
+        None, description="Pipeline to assign, uses org default if not specified"
+    )
     metadata_: Optional[Dict[str, Any]] = Field(None, alias="metadata")
 
 
 class ProspectUpdate(BaseModel):
     """Schema for updating a prospective member"""
+
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -200,11 +244,15 @@ class ProspectUpdate(BaseModel):
     referral_source: Optional[str] = Field(None, max_length=255)
     referred_by: Optional[UUID] = None
     notes: Optional[str] = None
-    status: Optional[str] = Field(None, description="Status: active, on_hold, approved, rejected, withdrawn, inactive")
+    status: Optional[str] = Field(
+        None,
+        description="Status: active, on_hold, approved, rejected, withdrawn, inactive",
+    )
 
 
 class StepProgressResponse(BaseModel):
     """Schema for step progress record"""
+
     id: UUID
     prospect_id: UUID
     step_id: UUID
@@ -222,6 +270,7 @@ class StepProgressResponse(BaseModel):
 
 class ProspectResponse(ProspectBase):
     """Schema for prospective member response"""
+
     id: UUID
     organization_id: UUID
     pipeline_id: Optional[UUID] = None
@@ -245,6 +294,7 @@ class ProspectResponse(ProspectBase):
 
 class ProspectListResponse(BaseModel):
     """Schema for prospect list item"""
+
     id: UUID
     first_name: str
     last_name: str
@@ -262,6 +312,7 @@ class ProspectListResponse(BaseModel):
 
 class PaginatedProspectListResponse(BaseModel):
     """Paginated response wrapping a list of prospects with total count."""
+
     items: List[ProspectListResponse]
     total: int
     limit: int
@@ -270,8 +321,10 @@ class PaginatedProspectListResponse(BaseModel):
 
 # --- Step Completion Schemas ---
 
+
 class CompleteStepRequest(BaseModel):
     """Schema for completing a pipeline step for a prospect"""
+
     step_id: UUID
     notes: Optional[str] = None
     action_result: Optional[Dict[str, Any]] = None
@@ -279,28 +332,50 @@ class CompleteStepRequest(BaseModel):
 
 class AdvanceProspectRequest(BaseModel):
     """Schema for advancing a prospect to the next step"""
+
     notes: Optional[str] = Field(None, description="Optional notes for the advancement")
 
 
 # --- Transfer Schema ---
 
+
 class TransferProspectRequest(BaseModel):
     """Schema for transferring a prospect to full membership"""
-    username: Optional[str] = Field(None, description="Username for the new member account, auto-generated if not provided")
-    membership_id: Optional[str] = Field(None, description="Membership ID to assign; auto-assigned if not provided and membership ID is enabled")
+
+    username: Optional[str] = Field(
+        None,
+        description="Username for the new member account, auto-generated if not provided",
+    )
+    membership_id: Optional[str] = Field(
+        None,
+        description="Membership ID to assign; auto-assigned if not provided and membership ID is enabled",
+    )
     rank: Optional[str] = Field(None, description="Initial rank to assign")
     station: Optional[str] = Field(None, description="Station to assign")
-    role_ids: Optional[List[UUID]] = Field(None, description="Role IDs to assign to the new member")
-    send_welcome_email: bool = Field(default=False, description="Send welcome email with credentials")
+    role_ids: Optional[List[UUID]] = Field(
+        None, description="Role IDs to assign to the new member"
+    )
+    send_welcome_email: bool = Field(
+        default=False, description="Send welcome email with credentials"
+    )
     # Two-step wizard fields
-    middle_name: Optional[str] = Field(None, max_length=100, description="Middle name for the new member")
-    hire_date: Optional[date] = Field(None, description="Hire/join date for the new member")
-    emergency_contacts: Optional[List[Dict[str, Any]]] = Field(None, description="Emergency contacts for the new member")
-    membership_type: Optional[str] = Field(None, description="Membership type: probationary or administrative")
+    middle_name: Optional[str] = Field(
+        None, max_length=100, description="Middle name for the new member"
+    )
+    hire_date: Optional[date] = Field(
+        None, description="Hire/join date for the new member"
+    )
+    emergency_contacts: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Emergency contacts for the new member"
+    )
+    membership_type: Optional[str] = Field(
+        None, description="Membership type: probationary or administrative"
+    )
 
 
 class TransferProspectResponse(BaseModel):
     """Response after transferring a prospect"""
+
     success: bool
     prospect_id: UUID
     user_id: UUID
@@ -310,8 +385,10 @@ class TransferProspectResponse(BaseModel):
 
 # --- Activity Log Schema ---
 
+
 class ActivityLogResponse(BaseModel):
     """Schema for activity log entry"""
+
     id: UUID
     prospect_id: UUID
     action: str
@@ -325,8 +402,10 @@ class ActivityLogResponse(BaseModel):
 
 # --- Kanban Board Schema ---
 
+
 class PipelineKanbanColumn(BaseModel):
     """Schema for a kanban board column (one per step)"""
+
     step: PipelineStepResponse
     prospects: List[ProspectListResponse] = []
     count: int = 0
@@ -334,6 +413,7 @@ class PipelineKanbanColumn(BaseModel):
 
 class PipelineKanbanResponse(BaseModel):
     """Schema for the full kanban board view"""
+
     pipeline: PipelineListResponse
     columns: List[PipelineKanbanColumn] = []
     total_prospects: int = 0
@@ -341,12 +421,14 @@ class PipelineKanbanResponse(BaseModel):
 
 # --- Document Schemas ---
 
+
 class ProspectDocumentResponse(BaseModel):
     """Schema for a prospect document.
 
     Note: ``file_path`` is intentionally excluded from the response to
     avoid leaking internal server storage paths to API consumers.
     """
+
     id: UUID
     prospect_id: UUID
     step_id: Optional[UUID] = None
@@ -362,8 +444,10 @@ class ProspectDocumentResponse(BaseModel):
 
 # --- Election Package Schemas ---
 
+
 class ElectionPackageCreate(BaseModel):
     """Schema for creating an election package"""
+
     prospect_id: UUID
     pipeline_id: Optional[UUID] = None
     step_id: Optional[UUID] = None
@@ -373,6 +457,7 @@ class ElectionPackageCreate(BaseModel):
 
 class ElectionPackageUpdate(BaseModel):
     """Schema for updating an election package"""
+
     status: Optional[str] = None
     coordinator_notes: Optional[str] = None
     package_config: Optional[Dict[str, Any]] = None
@@ -381,6 +466,7 @@ class ElectionPackageUpdate(BaseModel):
 
 class ElectionPackageResponse(BaseModel):
     """Schema for an election package"""
+
     id: UUID
     prospect_id: UUID
     pipeline_id: Optional[UUID] = None
@@ -398,8 +484,10 @@ class ElectionPackageResponse(BaseModel):
 
 # --- Public Status Check Schema ---
 
+
 class PublicApplicationStatusResponse(BaseModel):
     """Public-safe response for prospect status check via token"""
+
     first_name: str
     last_name: str
     status: str
@@ -412,8 +500,10 @@ class PublicApplicationStatusResponse(BaseModel):
 
 # --- Inactivity Check Schemas ---
 
+
 class InactivityCheckResponse(BaseModel):
     """Response from processing inactivity warnings"""
+
     warnings_sent: int
     marked_inactive: int
     total_checked: int

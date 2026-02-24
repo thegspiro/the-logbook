@@ -4,32 +4,36 @@ Onboarding API Endpoints
 Handles first-time system setup and configuration.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr, Field, validator
-from loguru import logger
-import re
-import smtplib
-import ssl
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import asyncio
+import re
+import secrets
+from datetime import datetime, timedelta, timezone
 from functools import partial
+from typing import Any, Dict, List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from loguru import logger
+from pydantic import BaseModel, EmailStr, Field, validator
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1.email_test_helper import (
+    test_gmail_oauth,
+    test_microsoft_oauth,
+    test_smtp_connection,
+)
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit
 from app.core.utils import safe_error_detail
-from app.services.onboarding import OnboardingService
-from app.services.auth_service import AuthService
-from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
-from app.api.v1.email_test_helper import test_smtp_connection, test_gmail_oauth, test_microsoft_oauth
+from app.models.onboarding import (
+    OnboardingChecklistItem,
+    OnboardingSessionModel,
+    OnboardingStatus,
+)
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
+from app.services.auth_service import AuthService
+from app.services.onboarding import OnboardingService
 from app.utils.image_validator import validate_logo_image
-from datetime import datetime, timedelta, timezone
-import secrets
-
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
@@ -38,8 +42,10 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 # Request/Response Models
 # ============================================
 
+
 class OnboardingStatusResponse(BaseModel):
     """Response model for onboarding status"""
+
     needs_onboarding: bool
     is_completed: bool
     current_step: int
@@ -53,6 +59,7 @@ class OnboardingStatusResponse(BaseModel):
 
 class SecurityCheckResponse(BaseModel):
     """Response for security configuration check"""
+
     passed: bool
     issues: List[dict]
     warnings: List[dict]
@@ -62,28 +69,40 @@ class SecurityCheckResponse(BaseModel):
 
 class OrganizationCreate(BaseModel):
     """Request model for creating organization"""
-    name: str = Field(..., min_length=2, max_length=255, description="Organization name")
-    slug: str = Field(..., min_length=2, max_length=100, description="URL-friendly slug")
-    organization_type: str = Field(default="fire_department", description="Type of organization")
+
+    name: str = Field(
+        ..., min_length=2, max_length=255, description="Organization name"
+    )
+    slug: str = Field(
+        ..., min_length=2, max_length=100, description="URL-friendly slug"
+    )
+    organization_type: str = Field(
+        default="fire_department", description="Type of organization"
+    )
     timezone: str = Field(default="America/New_York")
 
-    @validator('slug')
+    @validator("slug")
     def validate_slug(cls, v):
-        if not re.match(r'^[a-z0-9-_]+$', v):
-            raise ValueError('Slug must contain only lowercase letters, numbers, hyphens, and underscores')
+        if not re.match(r"^[a-z0-9-_]+$", v):
+            raise ValueError(
+                "Slug must contain only lowercase letters, numbers, hyphens, and underscores"
+            )
         return v
 
-    @validator('organization_type')
+    @validator("organization_type")
     def validate_org_type(cls, v):
         # Must match OrganizationType enum values in models/user.py
-        valid_types = ['fire_department', 'ems_only', 'fire_ems_combined']
+        valid_types = ["fire_department", "ems_only", "fire_ems_combined"]
         if v not in valid_types:
-            raise ValueError(f'Organization type must be one of: {", ".join(valid_types)}')
+            raise ValueError(
+                f'Organization type must be one of: {", ".join(valid_types)}'
+            )
         return v
 
 
 class OrganizationResponse(BaseModel):
     """Response model for organization"""
+
     id: str
     name: str
     slug: str
@@ -97,6 +116,7 @@ class OrganizationResponse(BaseModel):
 
 class SystemOwnerCreate(BaseModel):
     """Request model for creating the System Owner (IT Manager) user"""
+
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=12)
@@ -105,21 +125,24 @@ class SystemOwnerCreate(BaseModel):
     last_name: str = Field(..., min_length=1, max_length=100)
     membership_number: Optional[str] = Field(None, max_length=50)
 
-    @validator('password_confirm')
+    @validator("password_confirm")
     def passwords_match(cls, v, values):
-        if 'password' in values and v != values['password']:
-            raise ValueError('Passwords do not match')
+        if "password" in values and v != values["password"]:
+            raise ValueError("Passwords do not match")
         return v
 
-    @validator('username')
+    @validator("username")
     def validate_username(cls, v):
-        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError('Username can only contain letters, numbers, hyphens, and underscores')
+        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError(
+                "Username can only contain letters, numbers, hyphens, and underscores"
+            )
         return v
 
 
 class UserResponse(BaseModel):
     """Response model for user"""
+
     id: str
     username: str
     email: str
@@ -134,6 +157,7 @@ class UserResponse(BaseModel):
 
 class SystemOwnerResponse(BaseModel):
     """Response model for System Owner creation with access token"""
+
     id: str
     username: str
     email: str
@@ -151,11 +175,13 @@ class SystemOwnerResponse(BaseModel):
 
 class ModulesConfig(BaseModel):
     """Request model for module configuration"""
+
     enabled_modules: List[str] = Field(default_factory=list)
 
 
 class NotificationsConfig(BaseModel):
     """Request model for notifications configuration"""
+
     email_enabled: bool = False
     smtp_host: Optional[str] = None
     smtp_port: Optional[int] = None
@@ -169,11 +195,13 @@ class NotificationsConfig(BaseModel):
 
 class CompleteOnboardingRequest(BaseModel):
     """Request model for completing onboarding"""
+
     notes: Optional[str] = Field(None, max_length=2000)
 
 
 class SystemInfoResponse(BaseModel):
     """Response model for system information"""
+
     app_name: str
     version: str
     environment: str
@@ -184,6 +212,7 @@ class SystemInfoResponse(BaseModel):
 
 class DatabaseCheckResponse(BaseModel):
     """Response model for database connectivity check"""
+
     connected: bool
     database: str
     host: str
@@ -195,6 +224,7 @@ class DatabaseCheckResponse(BaseModel):
 
 class ChecklistItemResponse(BaseModel):
     """Response model for checklist item"""
+
     id: str
     title: str
     description: Optional[str]
@@ -211,12 +241,15 @@ class ChecklistItemResponse(BaseModel):
 
 class EmailTestRequest(BaseModel):
     """Request model for testing email configuration"""
-    platform: str = Field(..., description="Email platform: gmail, microsoft, selfhosted, other")
+
+    platform: str = Field(
+        ..., description="Email platform: gmail, microsoft, selfhosted, other"
+    )
     config: Dict[str, Any] = Field(..., description="Email configuration")
 
-    @validator('platform')
+    @validator("platform")
     def validate_platform(cls, v):
-        valid_platforms = ['gmail', 'microsoft', 'selfhosted', 'other']
+        valid_platforms = ["gmail", "microsoft", "selfhosted", "other"]
         if v not in valid_platforms:
             raise ValueError(f'Platform must be one of: {", ".join(valid_platforms)}')
         return v
@@ -224,6 +257,7 @@ class EmailTestRequest(BaseModel):
 
 class EmailTestResponse(BaseModel):
     """Response model for email test"""
+
     success: bool
     message: str
     details: Optional[Dict[str, Any]] = None
@@ -231,6 +265,7 @@ class EmailTestResponse(BaseModel):
 
 class StartSessionResponse(BaseModel):
     """Response model for starting onboarding session"""
+
     session_id: str
     expires_at: str
     csrf_token: str
@@ -241,75 +276,92 @@ class StartSessionResponse(BaseModel):
 
 class DepartmentInfoRequest(BaseModel):
     """Request model for saving department information"""
+
     name: str = Field(..., min_length=3, max_length=100, description="Department name")
     logo: Optional[str] = Field(None, description="Base64-encoded logo image")
-    navigation_layout: str = Field(..., description="Navigation layout: 'top' or 'left'")
+    navigation_layout: str = Field(
+        ..., description="Navigation layout: 'top' or 'left'"
+    )
 
-    @validator('navigation_layout')
+    @validator("navigation_layout")
     def validate_layout(cls, v):
-        if v not in ['top', 'left']:
+        if v not in ["top", "left"]:
             raise ValueError('Navigation layout must be "top" or "left"')
         return v
 
 
 class EmailConfigRequest(BaseModel):
     """Request model for saving email configuration"""
-    platform: str = Field(..., description="Email platform: gmail, microsoft, selfhosted, other")
+
+    platform: str = Field(
+        ..., description="Email platform: gmail, microsoft, selfhosted, other"
+    )
     config: Dict[str, Any] = Field(..., description="Email configuration")
 
 
 class FileStorageConfigRequest(BaseModel):
     """Request model for saving file storage configuration"""
-    platform: str = Field(..., description="Platform: googledrive, onedrive, s3, local, other")
+
+    platform: str = Field(
+        ..., description="Platform: googledrive, onedrive, s3, local, other"
+    )
     config: Dict[str, Any] = Field(..., description="Storage configuration")
 
 
 class AuthConfigRequest(BaseModel):
     """Request model for saving authentication configuration"""
+
     platform: str = Field(..., description="Platform: google, microsoft, authentik")
 
 
 class ITTeamRequest(BaseModel):
     """Request model for saving IT team information"""
-    it_team: List[Dict[str, Any]] = Field(default_factory=list, description="IT team members")
+
+    it_team: List[Dict[str, Any]] = Field(
+        default_factory=list, description="IT team members"
+    )
     backup_access: Dict[str, Any] = Field(..., description="Backup access information")
 
 
 class SessionModulesRequest(BaseModel):
     """Request model for saving module configuration via session"""
-    modules: List[str] = Field(default_factory=list, description="List of enabled modules")
+
+    modules: List[str] = Field(
+        default_factory=list, description="List of enabled modules"
+    )
 
 
 class RolePermission(BaseModel):
     """Permission settings for a module"""
+
     view: bool = True
     manage: bool = False
 
 
 class RoleSetupItem(BaseModel):
     """Individual role configuration"""
+
     id: str = Field(..., description="Unique role identifier (slug)")
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     priority: int = Field(default=50, ge=0, le=100)
     permissions: Dict[str, RolePermission] = Field(
-        default_factory=dict,
-        description="Module permissions with view/manage flags"
+        default_factory=dict, description="Module permissions with view/manage flags"
     )
     is_custom: bool = Field(default=False, description="Whether this is a custom role")
 
 
 class RolesSetupRequest(BaseModel):
     """Request model for role setup during onboarding"""
+
     roles: List[RoleSetupItem] = Field(
-        ...,
-        min_length=1,
-        description="List of roles to create for the organization"
+        ..., min_length=1, description="List of roles to create for the organization"
     )
 
 
 class RolesSetupResponse(BaseModel):
     """Response model for role setup"""
+
     success: bool
     message: str
     created: List[str] = Field(default_factory=list)
@@ -319,15 +371,17 @@ class RolesSetupResponse(BaseModel):
 
 class PositionsSetupRequest(BaseModel):
     """Request model for position setup during onboarding (frontend uses 'positions' key)"""
+
     positions: List[RoleSetupItem] = Field(
         ...,
         min_length=1,
-        description="List of positions to create for the organization"
+        description="List of positions to create for the organization",
     )
 
 
 class PositionsSetupResponse(BaseModel):
     """Response model for position setup"""
+
     success: bool
     message: str
     created: List[str] = Field(default_factory=list)
@@ -337,6 +391,7 @@ class PositionsSetupResponse(BaseModel):
 
 class SessionDataResponse(BaseModel):
     """Response model for session data operations"""
+
     success: bool
     message: str
     step: Optional[str] = None
@@ -350,8 +405,7 @@ SESSION_EXPIRY_HOURS = 0.5  # 30 minutes
 
 
 async def get_or_create_session(
-    request: Request,
-    db: AsyncSession
+    request: Request, db: AsyncSession
 ) -> OnboardingSessionModel:
     """
     Get existing session or create a new one.
@@ -368,28 +422,31 @@ async def get_or_create_session(
     """
     # Guard: if an organization already exists, block new onboarding sessions
     from app.models.user import Organization
+
     org_result = await db.execute(select(Organization).limit(1))
     if org_result.scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Onboarding has already been completed"
+            detail="Onboarding has already been completed",
         )
 
-    session_id = request.headers.get('X-Session-ID')
+    session_id = request.headers.get("X-Session-ID")
 
     if session_id:
         # Try to get existing session
         result = await db.execute(
             select(OnboardingSessionModel).where(
                 OnboardingSessionModel.session_id == session_id,
-                OnboardingSessionModel.expires_at > datetime.now(timezone.utc)
+                OnboardingSessionModel.expires_at > datetime.now(timezone.utc),
             )
         )
         session = result.scalar_one_or_none()
 
         if session:
             # Update expiration on activity
-            session.expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS)
+            session.expires_at = datetime.now(timezone.utc) + timedelta(
+                hours=SESSION_EXPIRY_HOURS
+            )
             await db.commit()
             return session
 
@@ -402,7 +459,7 @@ async def get_or_create_session(
         data={},
         ip_address=ip_address,
         user_agent=user_agent,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS)
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS),
     )
 
     db.add(new_session)
@@ -413,9 +470,7 @@ async def get_or_create_session(
 
 
 async def validate_session(
-    request: Request,
-    db: AsyncSession,
-    require_csrf: bool = True
+    request: Request, db: AsyncSession, require_csrf: bool = True
 ) -> OnboardingSessionModel:
     """
     Validate an existing session from X-Session-ID header.
@@ -431,12 +486,12 @@ async def validate_session(
     Raises:
         HTTPException: If session is invalid or expired
     """
-    session_id = request.headers.get('X-Session-ID')
+    session_id = request.headers.get("X-Session-ID")
 
     if not session_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session ID required. Please start onboarding first."
+            detail="Session ID required. Please start onboarding first.",
         )
 
     # Get session
@@ -450,30 +505,40 @@ async def validate_session(
     if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid session. Please restart onboarding."
+            detail="Invalid session. Please restart onboarding.",
         )
 
     # Check expiration
-    session_exp = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at.tzinfo is None else session.expires_at
+    session_exp = (
+        session.expires_at.replace(tzinfo=timezone.utc)
+        if session.expires_at.tzinfo is None
+        else session.expires_at
+    )
     if session_exp < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Your onboarding session has expired due to inactivity (30-minute limit). Please refresh the page to start a new session. Your previously saved progress will be retained."
+            detail="Your onboarding session has expired due to inactivity (30-minute limit). Please refresh the page to start a new session. Your previously saved progress will be retained.",
         )
 
     # Validate CSRF token if required
     if require_csrf:
-        csrf_token = request.headers.get('X-CSRF-Token')
-        stored_csrf = session.data.get('csrf_token') if session.data else None
+        csrf_token = request.headers.get("X-CSRF-Token")
+        stored_csrf = session.data.get("csrf_token") if session.data else None
 
-        if not csrf_token or not stored_csrf or not secrets.compare_digest(csrf_token, stored_csrf):
+        if (
+            not csrf_token
+            or not stored_csrf
+            or not secrets.compare_digest(csrf_token, stored_csrf)
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="CSRF validation failed. Please refresh and try again."
+                detail="CSRF validation failed. Please refresh and try again.",
             )
 
     # Update expiration on activity
-    session.expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS)
+    session.expires_at = datetime.now(timezone.utc) + timedelta(
+        hours=SESSION_EXPIRY_HOURS
+    )
     await db.commit()
 
     return session
@@ -551,25 +616,34 @@ async def _persist_session_data_to_org(
         # Settings page (ModuleSettings schema).  Core modules like members,
         # events, documents are always on and not tracked here.
         configurable_keys = [
-            "training", "inventory", "scheduling", "elections", "minutes",
-            "reports", "notifications", "mobile", "forms", "integrations",
+            "training",
+            "inventory",
+            "scheduling",
+            "elections",
+            "minutes",
+            "reports",
+            "notifications",
+            "mobile",
+            "forms",
+            "integrations",
             "facilities",
         ]
         org_settings["modules"] = {k: k in enabled_list for k in configurable_keys}
 
     organization.settings = org_settings
     await db.flush()
-    logger.info("Persisted session data (IT team, auth, modules) to Organization.settings")
+    logger.info(
+        "Persisted session data (IT team, auth, modules) to Organization.settings"
+    )
 
 
 # ============================================
 # Endpoints
 # ============================================
 
+
 @router.get("/status", response_model=OnboardingStatusResponse)
-async def get_onboarding_status(
-    db: AsyncSession = Depends(get_db)
-):
+async def get_onboarding_status(db: AsyncSession = Depends(get_db)):
     """
     Check if onboarding is needed and get current status
 
@@ -591,7 +665,7 @@ async def get_onboarding_status(
             current_step=status.current_step,
             total_steps=len(service.STEPS),
             steps_completed=status.steps_completed or {},
-            organization_name=status.organization_name
+            organization_name=status.organization_name,
         )
     else:
         return OnboardingStatusResponse(
@@ -600,15 +674,13 @@ async def get_onboarding_status(
             current_step=0,
             total_steps=len(service.STEPS),
             steps_completed={},
-            organization_name=None
+            organization_name=None,
         )
 
 
 @router.post("/start", response_model=StartSessionResponse)
 async def start_onboarding(
-    request: Request,
-    response: Response,
-    db: AsyncSession = Depends(get_db)
+    request: Request, response: Response, db: AsyncSession = Depends(get_db)
 ):
     """
     Start the onboarding process
@@ -622,7 +694,7 @@ async def start_onboarding(
     if not await service.needs_onboarding():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Onboarding has already been completed"
+            detail="Onboarding has already been completed",
         )
 
     # Get client info
@@ -630,8 +702,7 @@ async def start_onboarding(
     user_agent = request.headers.get("user-agent")
 
     onboarding_status = await service.start_onboarding(
-        ip_address=ip_address,
-        user_agent=user_agent
+        ip_address=ip_address, user_agent=user_agent
     )
 
     # Create server-side session for secure data storage
@@ -642,11 +713,11 @@ async def start_onboarding(
 
     # Store CSRF token in session data
     session.data = session.data or {}
-    session.data['csrf_token'] = csrf_token
+    session.data["csrf_token"] = csrf_token
     await db.commit()
 
     # Set CSRF token in response header for client to store
-    response.headers['X-CSRF-Token'] = csrf_token
+    response.headers["X-CSRF-Token"] = csrf_token
 
     return StartSessionResponse(
         session_id=session.session_id,
@@ -654,14 +725,16 @@ async def start_onboarding(
         csrf_token=csrf_token,
         message="Onboarding started successfully",
         current_step=onboarding_status.current_step,
-        steps=service.STEPS
+        steps=service.STEPS,
     )
 
 
-@router.get("/system-info", response_model=SystemInfoResponse, dependencies=[Depends(check_rate_limit)])
-async def get_system_info(
-    db: AsyncSession = Depends(get_db)
-):
+@router.get(
+    "/system-info",
+    response_model=SystemInfoResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
+async def get_system_info(db: AsyncSession = Depends(get_db)):
     """
     Get system information for display during onboarding
 
@@ -671,10 +744,12 @@ async def get_system_info(
     return await service.get_system_info()
 
 
-@router.get("/security-check", response_model=SecurityCheckResponse, dependencies=[Depends(check_rate_limit)])
-async def verify_security(
-    db: AsyncSession = Depends(get_db)
-):
+@router.get(
+    "/security-check",
+    response_model=SecurityCheckResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
+async def verify_security(db: AsyncSession = Depends(get_db)):
     """
     Verify security configuration
 
@@ -699,10 +774,12 @@ async def verify_security(
     return result
 
 
-@router.get("/database-check", response_model=DatabaseCheckResponse, dependencies=[Depends(check_rate_limit)])
-async def verify_database(
-    db: AsyncSession = Depends(get_db)
-):
+@router.get(
+    "/database-check",
+    response_model=DatabaseCheckResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
+async def verify_database(db: AsyncSession = Depends(get_db)):
     """
     Verify database connectivity and configuration
 
@@ -723,9 +800,7 @@ async def verify_database(
 
 @router.post("/organization", response_model=OrganizationResponse)
 async def create_organization(
-    request: Request,
-    org_data: OrganizationCreate,
-    db: AsyncSession = Depends(get_db)
+    request: Request, org_data: OrganizationCreate, db: AsyncSession = Depends(get_db)
 ):
     """
     Create the first organization
@@ -742,7 +817,7 @@ async def create_organization(
     if not await service.needs_onboarding():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Onboarding has already been completed"
+            detail="Onboarding has already been completed",
         )
 
     try:
@@ -751,7 +826,7 @@ async def create_organization(
             slug=org_data.slug,
             organization_type=org_data.organization_type,
             description=None,
-            settings_dict={"timezone": org_data.timezone}
+            settings_dict={"timezone": org_data.timezone},
         )
 
         return OrganizationResponse(
@@ -760,20 +835,17 @@ async def create_organization(
             slug=org.slug,
             type=org.type,
             description=None,
-            active=org.active
+            active=org.active,
         )
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
 @router.post("/system-owner", response_model=SystemOwnerResponse)
 async def create_system_owner(
-    request: Request,
-    user_data: SystemOwnerCreate,
-    db: AsyncSession = Depends(get_db)
+    request: Request, user_data: SystemOwnerCreate, db: AsyncSession = Depends(get_db)
 ):
     """
     Create the System Owner (IT Manager) user
@@ -791,7 +863,7 @@ async def create_system_owner(
     if not await service.needs_onboarding():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Onboarding has already been completed"
+            detail="Onboarding has already been completed",
         )
 
     # Get organization from onboarding status
@@ -799,13 +871,14 @@ async def create_system_owner(
     if not onboarding_status or not onboarding_status.organization_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization must be created before adding an admin user. Please complete the organization setup step first."
+            detail="Organization must be created before adding an admin user. Please complete the organization setup step first.",
         )
 
     # Find organization — use first active org (single-org system).
     # Matching by name is fragile; onboarding creates exactly one org,
     # so look it up the same robust way as /auth/register.
     from app.models.user import Organization
+
     result = await db.execute(
         select(Organization)
         .where(Organization.active == True)  # noqa: E712
@@ -817,7 +890,7 @@ async def create_system_owner(
     if not org:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found. The organization setup may not have completed. Please go back and complete the organization setup step."
+            detail="Organization not found. The organization setup may not have completed. Please go back and complete the organization setup step.",
         )
 
     try:
@@ -828,7 +901,7 @@ async def create_system_owner(
             password=user_data.password,
             first_name=user_data.first_name,
             last_name=user_data.last_name,
-            membership_number=user_data.membership_number
+            membership_number=user_data.membership_number,
         )
 
         # Commit all changes (user, role assignment, onboarding step) before
@@ -860,25 +933,25 @@ async def create_system_owner(
     except ValueError as e:
         logger.error(f"Admin user creation failed with ValueError: {e}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
     except Exception as e:
         # Log full details server-side, return generic message to client
-        logger.error(f"Admin user creation failed with unexpected error: {type(e).__name__}: {e}")
+        logger.error(
+            f"Admin user creation failed with unexpected error: {type(e).__name__}: {e}"
+        )
         import traceback
+
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create admin user due to an unexpected error. Please try again. If the problem persists, check the server logs or contact support."
+            detail="Failed to create admin user due to an unexpected error. Please try again. If the problem persists, check the server logs or contact support.",
         )
 
 
 @router.post("/modules")
 async def configure_modules(
-    request: Request,
-    modules: ModulesConfig,
-    db: AsyncSession = Depends(get_db)
+    request: Request, modules: ModulesConfig, db: AsyncSession = Depends(get_db)
 ):
     """
     Configure enabled modules
@@ -892,22 +965,16 @@ async def configure_modules(
 
     try:
         result = await service.configure_modules(modules.enabled_modules)
-        return {
-            "message": "Modules configured successfully",
-            "modules": result
-        }
+        return {"message": "Modules configured successfully", "modules": result}
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
 @router.post("/notifications")
 async def configure_notifications(
-    request: Request,
-    config: NotificationsConfig,
-    db: AsyncSession = Depends(get_db)
+    request: Request, config: NotificationsConfig, db: AsyncSession = Depends(get_db)
 ):
     """
     Configure notification settings (optional)
@@ -928,7 +995,7 @@ async def configure_notifications(
     return {
         "message": "Notifications configured successfully",
         "email_enabled": config.email_enabled,
-        "sms_enabled": config.sms_enabled
+        "sms_enabled": config.sms_enabled,
     }
 
 
@@ -936,7 +1003,7 @@ async def configure_notifications(
 async def complete_onboarding(
     request: Request,
     request_data: CompleteOnboardingRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Complete the onboarding process
@@ -963,20 +1030,21 @@ async def complete_onboarding(
             "message": "Onboarding completed successfully!",
             "organization": onboarding_status.organization_name,
             "admin_user": onboarding_status.admin_username,
-            "completed_at": onboarding_status.completed_at.isoformat() if onboarding_status.completed_at else None,
-            "next_steps": "Review the post-onboarding checklist for additional configuration"
+            "completed_at": (
+                onboarding_status.completed_at.isoformat()
+                if onboarding_status.completed_at
+                else None
+            ),
+            "next_steps": "Review the post-onboarding checklist for additional configuration",
         }
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
 @router.get("/checklist", response_model=List[ChecklistItemResponse])
-async def get_post_onboarding_checklist(
-    db: AsyncSession = Depends(get_db)
-):
+async def get_post_onboarding_checklist(db: AsyncSession = Depends(get_db)):
     """
     Get post-onboarding checklist
 
@@ -995,7 +1063,7 @@ async def get_post_onboarding_checklist(
             is_completed=item.is_completed,
             completed_at=item.completed_at.isoformat() if item.completed_at else None,
             documentation_link=item.documentation_link,
-            estimated_time_minutes=item.estimated_time_minutes
+            estimated_time_minutes=item.estimated_time_minutes,
         )
         for item in items
     ]
@@ -1003,16 +1071,16 @@ async def get_post_onboarding_checklist(
 
 @router.patch("/checklist/{item_id}/complete")
 async def mark_checklist_item_complete(
-    item_id: str,
-    db: AsyncSession = Depends(get_db)
+    item_id: str, db: AsyncSession = Depends(get_db)
 ):
     """
     Mark a checklist item as completed
 
     Updates the completion status of a post-onboarding checklist item.
     """
-    from sqlalchemy import select, update
     from datetime import datetime
+
+    from sqlalchemy import select
 
     # Find item
     result = await db.execute(
@@ -1022,8 +1090,7 @@ async def mark_checklist_item_complete(
 
     if not item:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Checklist item not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Checklist item not found"
         )
 
     # Mark as completed
@@ -1034,15 +1101,17 @@ async def mark_checklist_item_complete(
     return {
         "message": "Checklist item marked as complete",
         "item_id": item_id,
-        "title": item.title
+        "title": item.title,
     }
 
 
-@router.post("/test/email", response_model=EmailTestResponse, dependencies=[Depends(check_rate_limit)])
+@router.post(
+    "/test/email",
+    response_model=EmailTestResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
 async def test_email_configuration(
-    request: EmailTestRequest,
-    raw_request: Request,
-    db: AsyncSession = Depends(get_db)
+    request: EmailTestRequest, raw_request: Request, db: AsyncSession = Depends(get_db)
 ):
     """
     Test email configuration without saving it
@@ -1072,35 +1141,31 @@ async def test_email_configuration(
     loop = asyncio.get_event_loop()
 
     try:
-        if platform == 'gmail':
+        if platform == "gmail":
             # Test Gmail configuration (OAuth or app password)
             test_func = partial(test_gmail_oauth, config)
-        elif platform == 'microsoft':
+        elif platform == "microsoft":
             # Test Microsoft 365 configuration (OAuth)
             test_func = partial(test_microsoft_oauth, config)
-        elif platform == 'selfhosted' or platform == 'other':
+        elif platform == "selfhosted" or platform == "other":
             # Test self-hosted SMTP configuration
             test_func = partial(test_smtp_connection, config)
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported email platform: {platform}"
+                detail=f"Unsupported email platform: {platform}",
             )
 
         async with asyncio.timeout(EMAIL_TEST_TIMEOUT):
             success, message, details = await loop.run_in_executor(None, test_func)
 
-        return EmailTestResponse(
-            success=success,
-            message=message,
-            details=details
-        )
+        return EmailTestResponse(success=success, message=message, details=details)
 
     except TimeoutError:
         return EmailTestResponse(
             success=False,
             message=f"Email connection test timed out after {EMAIL_TEST_TIMEOUT} seconds. The mail server may be unreachable or slow to respond.",
-            details={"error": "timeout", "timeout_seconds": EMAIL_TEST_TIMEOUT}
+            details={"error": "timeout", "timeout_seconds": EMAIL_TEST_TIMEOUT},
         )
 
     except Exception as e:
@@ -1109,7 +1174,7 @@ async def test_email_configuration(
         return EmailTestResponse(
             success=False,
             message=safe_error_detail(e, "Failed to test email configuration"),
-            details={"error": "internal_error"}
+            details={"error": "internal_error"},
         )
 
 
@@ -1117,11 +1182,10 @@ async def test_email_configuration(
 # Session Data Endpoints
 # ============================================
 
+
 @router.post("/session/department", response_model=SessionDataResponse)
 async def save_department_info(
-    request: Request,
-    data: DepartmentInfoRequest,
-    db: AsyncSession = Depends(get_db)
+    request: Request, data: DepartmentInfoRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Save department information to the onboarding session.
@@ -1137,11 +1201,11 @@ async def save_department_info(
 
     # Update session data with department info
     session.data = session.data or {}
-    session.data['department'] = {
-        'name': data.name,
-        'logo': validated_logo,
-        'navigation_layout': data.navigation_layout,
-        'saved_at': datetime.now(timezone.utc).isoformat()
+    session.data["department"] = {
+        "name": data.name,
+        "logo": validated_logo,
+        "navigation_layout": data.navigation_layout,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
     }
 
     await db.commit()
@@ -1149,15 +1213,13 @@ async def save_department_info(
     return SessionDataResponse(
         success=True,
         message="Department information saved successfully",
-        step="department"
+        step="department",
     )
 
 
 @router.post("/session/email", response_model=SessionDataResponse)
 async def save_email_config(
-    request: Request,
-    data: EmailConfigRequest,
-    db: AsyncSession = Depends(get_db)
+    request: Request, data: EmailConfigRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Save email configuration to the onboarding session.
@@ -1171,39 +1233,36 @@ async def save_email_config(
     session = await validate_session(request, db)
 
     # Validate platform
-    valid_platforms = ['gmail', 'microsoft', 'selfhosted', 'other']
+    valid_platforms = ["gmail", "microsoft", "selfhosted", "other"]
     if data.platform not in valid_platforms:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}"
+            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}",
         )
 
     # Encrypt sensitive config data (contains passwords, API keys, etc.)
     import json
+
     encrypted_config = encrypt_data(json.dumps(data.config))
 
     # Update session data - store config encrypted, platform in plain text
     session.data = session.data or {}
-    session.data['email'] = {
-        'platform': data.platform,
-        'config_encrypted': encrypted_config,
-        'saved_at': datetime.now(timezone.utc).isoformat()
+    session.data["email"] = {
+        "platform": data.platform,
+        "config_encrypted": encrypted_config,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
     }
 
     await db.commit()
 
     return SessionDataResponse(
-        success=True,
-        message="Email configuration saved successfully",
-        step="email"
+        success=True, message="Email configuration saved successfully", step="email"
     )
 
 
 @router.post("/session/file-storage", response_model=SessionDataResponse)
 async def save_file_storage_config(
-    request: Request,
-    data: FileStorageConfigRequest,
-    db: AsyncSession = Depends(get_db)
+    request: Request, data: FileStorageConfigRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Save file storage configuration to the onboarding session.
@@ -1217,23 +1276,24 @@ async def save_file_storage_config(
     session = await validate_session(request, db)
 
     # Validate platform
-    valid_platforms = ['googledrive', 'onedrive', 's3', 'local', 'other']
+    valid_platforms = ["googledrive", "onedrive", "s3", "local", "other"]
     if data.platform not in valid_platforms:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}"
+            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}",
         )
 
     # Encrypt sensitive config data (contains API keys, AWS credentials, etc.)
     import json
+
     encrypted_config = encrypt_data(json.dumps(data.config))
 
     # Update session data - store config encrypted, platform in plain text
     session.data = session.data or {}
-    session.data['file_storage'] = {
-        'platform': data.platform,
-        'config_encrypted': encrypted_config,
-        'saved_at': datetime.now(timezone.utc).isoformat()
+    session.data["file_storage"] = {
+        "platform": data.platform,
+        "config_encrypted": encrypted_config,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
     }
 
     await db.commit()
@@ -1241,15 +1301,13 @@ async def save_file_storage_config(
     return SessionDataResponse(
         success=True,
         message="File storage configuration saved successfully",
-        step="file_storage"
+        step="file_storage",
     )
 
 
 @router.post("/session/auth", response_model=SessionDataResponse)
 async def save_auth_config(
-    request: Request,
-    data: AuthConfigRequest,
-    db: AsyncSession = Depends(get_db)
+    request: Request, data: AuthConfigRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Save authentication platform preference to the onboarding session.
@@ -1258,34 +1316,30 @@ async def save_auth_config(
     session = await validate_session(request, db)
 
     # Validate platform
-    valid_platforms = ['google', 'microsoft', 'authentik', 'local']
+    valid_platforms = ["google", "microsoft", "authentik", "local"]
     if data.platform not in valid_platforms:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}"
+            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}",
         )
 
     # Update session data with auth config
     session.data = session.data or {}
-    session.data['auth'] = {
-        'platform': data.platform,
-        'saved_at': datetime.now(timezone.utc).isoformat()
+    session.data["auth"] = {
+        "platform": data.platform,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
     }
 
     await db.commit()
 
     return SessionDataResponse(
-        success=True,
-        message="Authentication platform saved successfully",
-        step="auth"
+        success=True, message="Authentication platform saved successfully", step="auth"
     )
 
 
 @router.post("/session/it-team", response_model=SessionDataResponse)
 async def save_it_team(
-    request: Request,
-    data: ITTeamRequest,
-    db: AsyncSession = Depends(get_db)
+    request: Request, data: ITTeamRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Save IT team and backup access information to the onboarding session.
@@ -1295,26 +1349,22 @@ async def save_it_team(
 
     # Update session data with IT team info
     session.data = session.data or {}
-    session.data['it_team'] = {
-        'members': data.it_team,
-        'backup_access': data.backup_access,
-        'saved_at': datetime.now(timezone.utc).isoformat()
+    session.data["it_team"] = {
+        "members": data.it_team,
+        "backup_access": data.backup_access,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
     }
 
     await db.commit()
 
     return SessionDataResponse(
-        success=True,
-        message="IT team information saved successfully",
-        step="it_team"
+        success=True, message="IT team information saved successfully", step="it_team"
     )
 
 
 @router.post("/session/modules", response_model=SessionDataResponse)
 async def save_session_modules(
-    request: Request,
-    data: SessionModulesRequest,
-    db: AsyncSession = Depends(get_db)
+    request: Request, data: SessionModulesRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Save module configuration to the onboarding session.
@@ -1327,49 +1377,60 @@ async def save_session_modules(
     # Validate modules - must match module IDs from frontend moduleRegistry.ts
     available_modules = [
         # Core modules (always enabled)
-        "members", "events", "documents", "forms",
+        "members",
+        "events",
+        "documents",
+        "forms",
         # Operations modules
-        "training", "inventory", "scheduling", "apparatus", "facilities",
+        "training",
+        "inventory",
+        "scheduling",
+        "apparatus",
+        "facilities",
         # Governance modules
-        "elections", "minutes", "reports",
+        "elections",
+        "minutes",
+        "reports",
         # Communication modules
-        "notifications", "mobile",
+        "notifications",
+        "mobile",
         # Advanced modules
         "integrations",
         # Membership
         "prospective_members",
         # Legacy/additional modules (for backwards compatibility)
-        "compliance", "meetings", "fundraising", "incidents",
-        "equipment", "vehicles", "budget"
+        "compliance",
+        "meetings",
+        "fundraising",
+        "incidents",
+        "equipment",
+        "vehicles",
+        "budget",
     ]
     invalid_modules = [m for m in data.modules if m not in available_modules]
     if invalid_modules:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid modules: {', '.join(invalid_modules)}"
+            detail=f"Invalid modules: {', '.join(invalid_modules)}",
         )
 
     # Update session data with modules
     session.data = session.data or {}
-    session.data['modules'] = {
-        'enabled': data.modules,
-        'saved_at': datetime.now(timezone.utc).isoformat()
+    session.data["modules"] = {
+        "enabled": data.modules,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
     }
 
     await db.commit()
 
     return SessionDataResponse(
-        success=True,
-        message="Module configuration saved successfully",
-        step="modules"
+        success=True, message="Module configuration saved successfully", step="modules"
     )
 
 
 @router.post("/session/organization", response_model=OrganizationSetupResponse)
 async def save_session_organization(
-    request: Request,
-    data: OrganizationSetupCreate,
-    db: AsyncSession = Depends(get_db)
+    request: Request, data: OrganizationSetupCreate, db: AsyncSession = Depends(get_db)
 ):
     """
     Create and save organization during onboarding (Step 1).
@@ -1395,14 +1456,14 @@ async def save_session_organization(
     if not await service.needs_onboarding():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Onboarding has already been completed"
+            detail="Onboarding has already been completed",
         )
 
     # Generate slug if not provided
     slug = data.slug
     if not slug:
         slug = data.name.lower().replace(" ", "-")
-        slug = re.sub(r'[^a-z0-9-]', '', slug)
+        slug = re.sub(r"[^a-z0-9-]", "", slug)
 
     try:
         # Extract address fields
@@ -1448,11 +1509,11 @@ async def save_session_organization(
 
         # Store organization ID in session for subsequent steps
         session.data = session.data or {}
-        session.data['department'] = {
-            'name': data.name,
-            'organization_id': str(org.id),
-            'logo': org.logo,  # Use sanitized logo from org object
-            'saved_at': datetime.now(timezone.utc).isoformat()
+        session.data["department"] = {
+            "name": data.name,
+            "organization_id": str(org.id),
+            "logo": org.logo,  # Use sanitized logo from org object
+            "saved_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.commit()
 
@@ -1460,29 +1521,28 @@ async def save_session_organization(
             id=org.id,
             name=org.name,
             slug=org.slug,
-            organization_type=org.organization_type.value if org.organization_type else org.type,
+            organization_type=(
+                org.organization_type.value if org.organization_type else org.type
+            ),
             timezone=org.timezone,
             active=org.active,
-            created_at=org.created_at
+            created_at=org.created_at,
         )
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
     except Exception as e:
         logger.error(f"Error creating organization during onboarding: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create organization. Please check the server logs for details."
+            detail="Failed to create organization. Please check the server logs for details.",
         )
 
 
 @router.post("/session/roles", response_model=RolesSetupResponse)
 async def save_session_roles(
-    request: Request,
-    data: RolesSetupRequest,
-    db: AsyncSession = Depends(get_db)
+    request: Request, data: RolesSetupRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Save role configuration during onboarding.
@@ -1503,8 +1563,8 @@ async def save_session_roles(
 
     # Get organization from session data
     organization_id = None
-    if session.data and 'department' in session.data:
-        organization_id = session.data['department'].get('organization_id')
+    if session.data and "department" in session.data:
+        organization_id = session.data["department"].get("organization_id")
 
     if not organization_id:
         # Try to get from onboarding status
@@ -1512,8 +1572,11 @@ async def save_session_roles(
         onboarding_status = await service.get_onboarding_status()
         if onboarding_status and onboarding_status.organization_name:
             from app.models.user import Organization
+
             result = await db.execute(
-                select(Organization).where(Organization.name == onboarding_status.organization_name)
+                select(Organization).where(
+                    Organization.name == onboarding_status.organization_name
+                )
             )
             org = result.scalar_one_or_none()
             if org:
@@ -1522,21 +1585,22 @@ async def save_session_roles(
     if not organization_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization must be created before configuring roles"
+            detail="Organization must be created before configuring roles",
         )
 
     # Convert role permissions to backend format
     # Frontend sends: { module_id: { view: bool, manage: bool } }
     # Backend stores: ["module.view", "module.manage", ...]
-    from app.models.user import Role
     from sqlalchemy import delete
+
     from app.core.permissions import DEFAULT_ROLES
+    from app.models.user import Role
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
     await db.execute(
         delete(Role).where(
             Role.organization_id == organization_id,
-            Role.is_system == False  # noqa: E712
+            Role.is_system == False,  # noqa: E712
         )
     )
 
@@ -1544,7 +1608,7 @@ async def save_session_roles(
     result = await db.execute(
         select(Role).where(
             Role.organization_id == organization_id,
-            Role.is_system == True  # noqa: E712
+            Role.is_system == True,  # noqa: E712
         )
     )
     existing_system_roles = {role.slug: role for role in result.scalars().all()}
@@ -1560,7 +1624,9 @@ async def save_session_roles(
                 permission_list.append(f"{module_id}.view")
             if perms.manage:
                 permission_list.append(f"{module_id}.manage")
-                permission_list.append(f"{module_id}.*")  # Also grant full access if manage
+                permission_list.append(
+                    f"{module_id}.*"
+                )  # Also grant full access if manage
 
         # Check if this is an existing system role
         if role_data.id in existing_system_roles:
@@ -1605,18 +1671,20 @@ async def save_session_roles(
                 description=role_data.description or f"Custom role: {role_data.name}",
                 permissions=permission_list,
                 is_system=not role_data.is_custom,  # System roles can't be deleted
-                priority=role_data.priority
+                priority=role_data.priority,
             )
             db.add(new_role)
             created_roles.append(role_data.name)
 
     # Update session data
     session.data = session.data or {}
-    session.data['roles'] = {
-        'configured': True,
-        'role_count': len(data.roles),
-        'roles': [{"id": r.id, "name": r.name, "priority": r.priority} for r in data.roles],
-        'saved_at': datetime.now(timezone.utc).isoformat()
+    session.data["roles"] = {
+        "configured": True,
+        "role_count": len(data.roles),
+        "roles": [
+            {"id": r.id, "name": r.name, "priority": r.priority} for r in data.roles
+        ],
+        "saved_at": datetime.now(timezone.utc).isoformat(),
     }
 
     await db.commit()
@@ -1626,15 +1694,13 @@ async def save_session_roles(
         message="Roles configured successfully",
         created=created_roles,
         updated=updated_roles,
-        total_roles=len(data.roles)
+        total_roles=len(data.roles),
     )
 
 
 @router.post("/session/positions", response_model=PositionsSetupResponse)
 async def save_session_positions(
-    request: Request,
-    data: PositionsSetupRequest,
-    db: AsyncSession = Depends(get_db)
+    request: Request, data: PositionsSetupRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Save position configuration during onboarding.
@@ -1657,10 +1723,7 @@ async def save_session_positions(
 
 
 @router.get("/session/data")
-async def get_session_data(
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_session_data(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Get current session data (non-sensitive fields only).
 
@@ -1674,46 +1737,43 @@ async def get_session_data(
 
     if session.data:
         # Department info is safe
-        if 'department' in session.data:
-            safe_data['department'] = session.data['department']
+        if "department" in session.data:
+            safe_data["department"] = session.data["department"]
 
         # Only return platform, not full config for sensitive sections
-        if 'email' in session.data:
-            safe_data['email'] = {
-                'platform': session.data['email'].get('platform'),
-                'configured': True
+        if "email" in session.data:
+            safe_data["email"] = {
+                "platform": session.data["email"].get("platform"),
+                "configured": True,
             }
 
-        if 'file_storage' in session.data:
-            safe_data['file_storage'] = {
-                'platform': session.data['file_storage'].get('platform'),
-                'configured': True
+        if "file_storage" in session.data:
+            safe_data["file_storage"] = {
+                "platform": session.data["file_storage"].get("platform"),
+                "configured": True,
             }
 
-        if 'auth' in session.data:
-            safe_data['auth'] = session.data['auth']
+        if "auth" in session.data:
+            safe_data["auth"] = session.data["auth"]
 
-        if 'it_team' in session.data:
-            safe_data['it_team'] = {
-                'members_count': len(session.data['it_team'].get('members', [])),
-                'has_backup_access': bool(session.data['it_team'].get('backup_access'))
+        if "it_team" in session.data:
+            safe_data["it_team"] = {
+                "members_count": len(session.data["it_team"].get("members", [])),
+                "has_backup_access": bool(session.data["it_team"].get("backup_access")),
             }
 
-        if 'modules' in session.data:
-            safe_data['modules'] = session.data['modules']
+        if "modules" in session.data:
+            safe_data["modules"] = session.data["modules"]
 
     return {
         "session_id": session.session_id,
         "expires_at": session.expires_at.isoformat(),
-        "data": safe_data
+        "data": safe_data,
     }
 
 
 @router.post("/reset", dependencies=[Depends(check_rate_limit)])
-async def reset_onboarding(
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-):
+async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Reset onboarding and clear all database records.
 
@@ -1727,19 +1787,23 @@ async def reset_onboarding(
     if onboarding_status and onboarding_status.is_completed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot reset after onboarding is completed. Use the admin panel to manage settings."
+            detail="Cannot reset after onboarding is completed. Use the admin panel to manage settings.",
         )
 
     # Require a valid session — never allow unauthenticated destructive operations
     await validate_session(request, db)
 
     # Import models for deletion
-    from app.models.user import Organization, User, Role
-    from app.models.onboarding import OnboardingChecklistItem, OnboardingSessionModel  # OnboardingStatus already imported at module level
+    from app.models.onboarding import (  # OnboardingStatus already imported at module level
+        OnboardingChecklistItem,
+        OnboardingSessionModel,
+    )
+    from app.models.user import Organization, Role, User
 
     try:
         # Log the reset BEFORE deletion to ensure we capture it
         from app.core.audit import log_audit_event
+
         await log_audit_event(
             db=db,
             event_type="onboarding.reset_initiated",
@@ -1748,47 +1812,38 @@ async def reset_onboarding(
             ip_address=request.client.host if request.client else None,
             event_data={
                 "action": "full_reset",
-                "message": "Onboarding reset initiated - clearing all data"
-            }
+                "message": "Onboarding reset initiated - clearing all data",
+            },
         )
 
         # Delete in order to respect foreign key constraints
         # 1. Delete onboarding sessions
-        await db.execute(
-            OnboardingSessionModel.__table__.delete()
-        )
+        await db.execute(OnboardingSessionModel.__table__.delete())
 
         # 2. Delete onboarding checklist items
-        await db.execute(
-            OnboardingChecklistItem.__table__.delete()
-        )
+        await db.execute(OnboardingChecklistItem.__table__.delete())
 
         # 3. Delete onboarding status
-        await db.execute(
-            OnboardingStatus.__table__.delete()
-        )
+        await db.execute(OnboardingStatus.__table__.delete())
 
         # 4. Delete user_positions associations (junction table for user-role/position mapping)
         try:
             from sqlalchemy import text
+
             await db.execute(text("DELETE FROM user_positions"))
         except Exception as e:
-            logger.warning(f"Could not delete user_positions (table may not exist yet): {e}")
+            logger.warning(
+                f"Could not delete user_positions (table may not exist yet): {e}"
+            )
 
         # 5. Delete users
-        await db.execute(
-            User.__table__.delete()
-        )
+        await db.execute(User.__table__.delete())
 
         # 6. Delete roles
-        await db.execute(
-            Role.__table__.delete()
-        )
+        await db.execute(Role.__table__.delete())
 
         # 7. Delete organizations
-        await db.execute(
-            Organization.__table__.delete()
-        )
+        await db.execute(Organization.__table__.delete())
 
         # Commit all deletions
         await db.commit()
@@ -1802,14 +1857,14 @@ async def reset_onboarding(
             ip_address=request.client.host if request.client else None,
             event_data={
                 "action": "full_reset",
-                "message": "Onboarding reset completed - all data cleared successfully"
-            }
+                "message": "Onboarding reset completed - all data cleared successfully",
+            },
         )
 
         return {
             "success": True,
             "message": "Onboarding has been reset. All data has been cleared.",
-            "next_step": "Navigate to /onboarding/start to begin again"
+            "next_step": "Navigate to /onboarding/start to begin again",
         }
 
     except Exception as e:
@@ -1817,5 +1872,5 @@ async def reset_onboarding(
         logger.error(f"Failed to reset onboarding: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reset onboarding. Please check the server logs for details."
+            detail="Failed to reset onboarding. Please check the server logs for details.",
         )

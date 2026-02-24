@@ -6,45 +6,47 @@ Endpoints for event management including events, RSVPs, and attendance tracking.
 
 import os
 import uuid as uuid_lib
-from loguru import logger
+from datetime import datetime
+from datetime import timezone as dt_timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
-from datetime import datetime, timezone as dt_timezone
 
-from app.core.database import get_db
-from app.core.audit import log_audit_event
-from app.core.utils import safe_error_detail
-from app.models.event import Event, EventRSVP, EventType, RSVPStatus
-from app.models.user import User
-from app.schemas.event import (
-    EventCreate,
-    EventUpdate,
-    EventResponse,
-    EventListItem,
-    EventCancel,
-    RSVPCreate,
-    RSVPResponse,
-    CheckInRequest,
-    SelfCheckInRequest,
-    EventStats,
-    RecordActualTimes,
-    QRCheckInData,
-    CheckInMonitoringStats,
-    ManagerAddAttendee,
-    RSVPOverride,
-    EventTemplateCreate,
-    EventTemplateUpdate,
-    EventTemplateResponse,
-    RecurringEventCreate,
-)
-from app.services.event_service import EventService
-from app.services.documents_service import DocumentsService
-from app.schemas.documents import DocumentFolderResponse
 from app.api.dependencies import get_current_user, require_permission
+from app.core.audit import log_audit_event
+from app.core.database import get_db
+from app.core.utils import safe_error_detail
+from app.models.event import Event, EventType, RSVPStatus
+from app.models.user import User
+from app.schemas.documents import DocumentFolderResponse
+from app.schemas.event import (
+    CheckInMonitoringStats,
+    CheckInRequest,
+    EventCancel,
+    EventCreate,
+    EventListItem,
+    EventResponse,
+    EventStats,
+    EventTemplateCreate,
+    EventTemplateResponse,
+    EventTemplateUpdate,
+    EventUpdate,
+    ManagerAddAttendee,
+    QRCheckInData,
+    RecordActualTimes,
+    RecurringEventCreate,
+    RSVPCreate,
+    RSVPOverride,
+    RSVPResponse,
+    SelfCheckInRequest,
+)
+from app.services.documents_service import DocumentsService
+from app.services.event_service import EventService
 
 router = APIRouter()
 
@@ -77,7 +79,11 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         allow_guests=event.allow_guests,
         send_reminders=event.send_reminders,
         reminder_schedule=event.reminder_schedule or [24],
-        check_in_window_type=event.check_in_window_type.value if event.check_in_window_type else "flexible",
+        check_in_window_type=(
+            event.check_in_window_type.value
+            if event.check_in_window_type
+            else "flexible"
+        ),
         check_in_minutes_before=event.check_in_minutes_before,
         check_in_minutes_after=event.check_in_minutes_after,
         require_checkout=event.require_checkout,
@@ -97,6 +103,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
 # ============================================
 # Event Endpoints
 # ============================================
+
 
 @router.get("", response_model=List[EventListItem])
 async def list_events(
@@ -147,7 +154,11 @@ async def list_events(
     event_list = []
     for event in events:
         rsvp_count = len(event.rsvps) if event.rsvps else 0
-        going_count = sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.GOING) if event.rsvps else 0
+        going_count = (
+            sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.GOING)
+            if event.rsvps
+            else 0
+        )
 
         location_name = None
         if event.location_obj:
@@ -212,8 +223,7 @@ async def create_event(
         return _build_event_response(event)
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
@@ -237,15 +247,26 @@ async def get_event(
 
     if not event:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Event not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
 
     # Count RSVPs
     rsvp_count = len(event.rsvps) if event.rsvps else 0
-    going_count = sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.GOING) if event.rsvps else 0
-    not_going_count = sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.NOT_GOING) if event.rsvps else 0
-    maybe_count = sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.MAYBE) if event.rsvps else 0
+    going_count = (
+        sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.GOING)
+        if event.rsvps
+        else 0
+    )
+    not_going_count = (
+        sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.NOT_GOING)
+        if event.rsvps
+        else 0
+    )
+    maybe_count = (
+        sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.MAYBE)
+        if event.rsvps
+        else 0
+    )
 
     return _build_event_response(
         event,
@@ -282,8 +303,7 @@ async def update_event(
 
         if not event:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Event not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
             )
 
         await log_audit_event(
@@ -302,12 +322,15 @@ async def update_event(
         return _build_event_response(event)
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
-@router.post("/{event_id}/duplicate", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{event_id}/duplicate",
+    response_model=EventResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def duplicate_event(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -331,8 +354,7 @@ async def duplicate_event(
 
     if not new_event:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Event not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
 
     await log_audit_event(
@@ -372,8 +394,7 @@ async def delete_event(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Event not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
 
     await log_audit_event(
@@ -412,21 +433,20 @@ async def cancel_event(
 
         if not event:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Event not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
             )
 
         return _build_event_response(event)
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 
 # ============================================
 # RSVP Endpoints
 # ============================================
+
 
 @router.post("/{event_id}/rsvp", response_model=RSVPResponse)
 async def create_or_update_rsvp(
@@ -449,10 +469,7 @@ async def create_or_update_rsvp(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return RSVPResponse(
         id=rsvp.id,
@@ -541,15 +558,10 @@ async def check_in_attendee(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     # Get user details
-    user_result = await db.execute(
-        select(User).where(User.id == rsvp.user_id)
-    )
+    user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
     user = user_result.scalar_one_or_none()
 
     await log_audit_event(
@@ -609,15 +621,10 @@ async def manager_add_attendee(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     # Get user details
-    user_result = await db.execute(
-        select(User).where(User.id == rsvp.user_id)
-    )
+    user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
     user = user_result.scalar_one_or_none()
 
     await log_audit_event(
@@ -682,15 +689,10 @@ async def override_rsvp_attendance(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     # Get user details
-    user_result = await db.execute(
-        select(User).where(User.id == rsvp.user_id)
-    )
+    user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
     user = user_result.scalar_one_or_none()
 
     await log_audit_event(
@@ -701,7 +703,9 @@ async def override_rsvp_attendance(
         event_data={
             "event_id": str(event_id),
             "overridden_user_id": str(user_id),
-            "override_fields": list(override_data.model_dump(exclude_unset=True).keys()),
+            "override_fields": list(
+                override_data.model_dump(exclude_unset=True).keys()
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -751,10 +755,7 @@ async def remove_attendee(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     await log_audit_event(
         db=db,
@@ -790,8 +791,7 @@ async def get_event_stats(
 
     if not stats:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Event not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
 
     return stats
@@ -822,10 +822,7 @@ async def record_actual_times(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return _build_event_response(event)
 
@@ -833,6 +830,7 @@ async def record_actual_times(
 # ============================================
 # QR Code Self Check-In Endpoints
 # ============================================
+
 
 @router.get("/{event_id}/qr-check-in-data", response_model=QRCheckInData)
 async def get_qr_check_in_data(
@@ -857,10 +855,7 @@ async def get_qr_check_in_data(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return QRCheckInData(**data)
 
@@ -896,9 +891,7 @@ async def self_check_in(
         # Special case: already checked in - return success with message
         if error == "ALREADY_CHECKED_IN":
             # Get user details
-            user_result = await db.execute(
-                select(User).where(User.id == rsvp.user_id)
-            )
+            user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
             user = user_result.scalar_one_or_none()
 
             response = RSVPResponse(
@@ -919,21 +912,17 @@ async def self_check_in(
             )
             # Add custom header to indicate already checked in
             from fastapi.responses import JSONResponse
+
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
-                content=response.model_dump(mode='json'),
-                headers={"X-Already-Checked-In": "true"}
+                content=response.model_dump(mode="json"),
+                headers={"X-Already-Checked-In": "true"},
             )
 
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     # Get user details
-    user_result = await db.execute(
-        select(User).where(User.id == rsvp.user_id)
-    )
+    user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
     user = user_result.scalar_one_or_none()
 
     await log_audit_event(
@@ -984,15 +973,11 @@ async def get_check_in_monitoring(
     service = EventService(db)
 
     stats, error = await service.get_check_in_monitoring_stats(
-        event_id=event_id,
-        organization_id=current_user.organization_id
+        event_id=event_id, organization_id=current_user.organization_id
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return stats
 
@@ -1001,7 +986,12 @@ async def get_check_in_monitoring(
 # Event Template Endpoints
 # ============================================
 
-@router.post("/templates", response_model=EventTemplateResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/templates",
+    response_model=EventTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_event_template(
     template_data: EventTemplateCreate,
     db: AsyncSession = Depends(get_db),
@@ -1068,8 +1058,7 @@ async def get_event_template(
     )
     if not template:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
         )
     return EventTemplateResponse.model_validate(template)
 
@@ -1097,8 +1086,7 @@ async def update_event_template(
     )
     if not template:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
         )
     return EventTemplateResponse.model_validate(template)
 
@@ -1122,8 +1110,7 @@ async def delete_event_template(
     )
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
         )
 
 
@@ -1131,7 +1118,12 @@ async def delete_event_template(
 # Recurring Event Endpoints
 # ============================================
 
-@router.post("/recurring", response_model=List[EventResponse], status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/recurring",
+    response_model=List[EventResponse],
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_recurring_event(
     recurring_data: RecurringEventCreate,
     db: AsyncSession = Depends(get_db),
@@ -1156,10 +1148,7 @@ async def create_recurring_event(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return [_build_event_response(event) for event in events]
 
@@ -1169,7 +1158,21 @@ async def create_recurring_event(
 # ============================================
 
 ATTACHMENT_UPLOAD_DIR = "/app/uploads/event-attachments"
-ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".jpg", ".jpeg", ".png", ".gif"}
+ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".txt",
+    ".csv",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+}
 MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25MB
 
 
@@ -1188,7 +1191,7 @@ async def upload_event_attachment(
     **Requires permission: events.manage**
     """
     # Verify event exists
-    service = EventService(db)
+    EventService(db)
     result = await db.execute(
         select(Event)
         .where(Event.id == str(event_id))
@@ -1204,16 +1207,20 @@ async def upload_event_attachment(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+            detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
         )
 
     # Read and validate size
     content = await file.read()
     if len(content) > MAX_ATTACHMENT_SIZE:
-        raise HTTPException(status_code=400, detail="File too large. Maximum size is 25MB.")
+        raise HTTPException(
+            status_code=400, detail="File too large. Maximum size is 25MB."
+        )
 
     # Save file
-    org_dir = os.path.join(ATTACHMENT_UPLOAD_DIR, str(current_user.organization_id), str(event_id))
+    org_dir = os.path.join(
+        ATTACHMENT_UPLOAD_DIR, str(current_user.organization_id), str(event_id)
+    )
     os.makedirs(org_dir, exist_ok=True)
 
     unique_name = f"{uuid_lib.uuid4().hex}{ext}"
@@ -1224,16 +1231,18 @@ async def upload_event_attachment(
 
     # Update event attachments list
     attachments = event.attachments or []
-    attachments.append({
-        "id": uuid_lib.uuid4().hex,
-        "file_name": file.filename or unique_name,
-        "file_path": file_path,
-        "file_size": len(content),
-        "file_type": file.content_type,
-        "description": description,
-        "uploaded_by": str(current_user.id),
-        "uploaded_at": datetime.now(dt_timezone.utc).isoformat(),
-    })
+    attachments.append(
+        {
+            "id": uuid_lib.uuid4().hex,
+            "file_name": file.filename or unique_name,
+            "file_path": file_path,
+            "file_size": len(content),
+            "file_type": file.content_type,
+            "description": description,
+            "uploaded_by": str(current_user.id),
+            "uploaded_at": datetime.now(dt_timezone.utc).isoformat(),
+        }
+    )
     event.attachments = attachments
     event.updated_at = datetime.now(dt_timezone.utc)
 
@@ -1304,8 +1313,13 @@ async def download_event_attachment(
     # to prevent path traversal attacks if database data is compromised
     resolved_path = os.path.realpath(file_path)
     allowed_base = os.path.realpath(ATTACHMENT_UPLOAD_DIR)
-    if not resolved_path.startswith(allowed_base + os.sep) and resolved_path != allowed_base:
-        logger.warning(f"Path traversal attempt blocked: {file_path} resolved to {resolved_path}")
+    if (
+        not resolved_path.startswith(allowed_base + os.sep)
+        and resolved_path != allowed_base
+    ):
+        logger.warning(
+            f"Path traversal attempt blocked: {file_path} resolved to {resolved_path}"
+        )
         raise HTTPException(status_code=403, detail="Access denied")
 
     if not os.path.exists(resolved_path):
@@ -1318,7 +1332,9 @@ async def download_event_attachment(
     )
 
 
-@router.delete("/{event_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{event_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_event_attachment(
     event_id: UUID,
     attachment_id: str,
@@ -1366,6 +1382,7 @@ async def delete_event_attachment(
 # Event Folder Endpoint (Document Management Integration)
 # ============================================================================
 
+
 @router.get("/{event_id}/folder", response_model=DocumentFolderResponse)
 async def get_event_folder(
     event_id: UUID,
@@ -1394,7 +1411,9 @@ async def get_event_folder(
     await db.commit()
 
     from sqlalchemy import func as sa_func
+
     from app.models.document import Document, DocumentStatus
+
     count_result = await db.execute(
         select(sa_func.count(Document.id))
         .where(Document.folder_id == folder.id)
@@ -1412,9 +1431,10 @@ async def get_event_folder(
 # External Attendees (for public outreach events)
 # ============================================
 
-from pydantic import BaseModel, EmailStr
-from app.models.event import EventExternalAttendee
+from pydantic import BaseModel
+
 from app.core.utils import generate_uuid
+from app.models.event import EventExternalAttendee
 
 
 class ExternalAttendeeCreate(BaseModel):
@@ -1439,7 +1459,9 @@ class ExternalAttendeeResponse(BaseModel):
     created_at: str
 
 
-@router.get("/{event_id}/external-attendees", response_model=List[ExternalAttendeeResponse])
+@router.get(
+    "/{event_id}/external-attendees", response_model=List[ExternalAttendeeResponse]
+)
 async def list_external_attendees(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1473,7 +1495,11 @@ async def list_external_attendees(
     ]
 
 
-@router.post("/{event_id}/external-attendees", response_model=ExternalAttendeeResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{event_id}/external-attendees",
+    response_model=ExternalAttendeeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_external_attendee(
     event_id: UUID,
     data: ExternalAttendeeCreate,
@@ -1529,7 +1555,10 @@ class ExternalAttendeeUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-@router.patch("/{event_id}/external-attendees/{attendee_id}", response_model=ExternalAttendeeResponse)
+@router.patch(
+    "/{event_id}/external-attendees/{attendee_id}",
+    response_model=ExternalAttendeeResponse,
+)
 async def update_external_attendee(
     event_id: UUID,
     attendee_id: UUID,
@@ -1566,7 +1595,9 @@ async def update_external_attendee(
         phone=attendee.phone,
         organization_name=attendee.organization_name,
         checked_in=attendee.checked_in,
-        checked_in_at=attendee.checked_in_at.isoformat() if attendee.checked_in_at else None,
+        checked_in_at=(
+            attendee.checked_in_at.isoformat() if attendee.checked_in_at else None
+        ),
         source=attendee.source,
         notes=attendee.notes,
         created_at=attendee.created_at.isoformat() if attendee.created_at else "",
@@ -1598,7 +1629,10 @@ async def check_in_external_attendee(
     return {"status": "checked_in", "attendee_id": attendee.id}
 
 
-@router.delete("/{event_id}/external-attendees/{attendee_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{event_id}/external-attendees/{attendee_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def remove_external_attendee(
     event_id: UUID,
     attendee_id: UUID,
@@ -1629,8 +1663,13 @@ from app.models.user import Organization
 
 EVENT_SETTINGS_DEFAULTS = {
     "enabled_event_types": [
-        "business_meeting", "public_education", "training",
-        "social", "fundraiser", "ceremony", "other",
+        "business_meeting",
+        "public_education",
+        "training",
+        "social",
+        "fundraiser",
+        "ceremony",
+        "other",
     ],
     "event_type_labels": {},
     "defaults": {
@@ -1742,6 +1781,7 @@ async def update_event_settings(
 # Public Calendar (no auth required)
 # ============================================
 
+
 class PublicEventItem(BaseModel):
     id: str
     title: str
@@ -1787,7 +1827,11 @@ async def get_public_calendar(
             id=e.id,
             title=e.title,
             description=e.description,
-            event_type=e.event_type.value if hasattr(e.event_type, 'value') else str(e.event_type),
+            event_type=(
+                e.event_type.value
+                if hasattr(e.event_type, "value")
+                else str(e.event_type)
+            ),
             start_datetime=e.start_datetime.isoformat(),
             end_datetime=e.end_datetime.isoformat(),
             location=e.location,

@@ -4,32 +4,35 @@ Training Session API Endpoints
 Endpoints for creating and managing training sessions and approvals.
 """
 
-from typing import Optional, List
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from typing import Optional
 from uuid import UUID
 
-from app.core.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
-from app.models.user import User
-from app.models.training import TrainingSession
+from app.core.database import get_db
 from app.models.event import Event
+from app.models.training import TrainingSession
+from app.models.user import User
 from app.schemas.training_session import (
-    TrainingSessionCreate,
-    TrainingSessionResponse,
     TrainingApprovalRequest,
     TrainingApprovalResponse,
+    TrainingSessionCreate,
+    TrainingSessionResponse,
 )
 from app.services.training_session_service import TrainingSessionService
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
 
-@router.post("", response_model=TrainingSessionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=TrainingSessionResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_training_session(
     session_data: TrainingSessionCreate,
     db: AsyncSession = Depends(get_db),
@@ -54,10 +57,7 @@ async def create_training_session(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     await log_audit_event(
         db=db,
@@ -124,10 +124,7 @@ async def finalize_training_session(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     await log_audit_event(
         db=db,
@@ -168,10 +165,7 @@ async def get_training_approval(
     approval_data, error = await service.get_training_approval_by_token(token=token)
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return TrainingApprovalResponse(**approval_data)
 
@@ -201,10 +195,7 @@ async def submit_training_approval(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     await log_audit_event(
         db=db,
@@ -227,8 +218,12 @@ async def submit_training_approval(
 
 @router.get("/calendar")
 async def list_training_sessions_calendar(
-    start_after: Optional[datetime] = Query(None, description="Filter sessions starting after this datetime"),
-    start_before: Optional[datetime] = Query(None, description="Filter sessions starting before this datetime"),
+    start_after: Optional[datetime] = Query(
+        None, description="Filter sessions starting after this datetime"
+    ),
+    start_before: Optional[datetime] = Query(
+        None, description="Filter sessions starting before this datetime"
+    ),
     training_type: Optional[str] = Query(None, description="Filter by training type"),
     include_finalized: bool = Query(True, description="Include finalized sessions"),
     db: AsyncSession = Depends(get_db),
@@ -274,25 +269,33 @@ async def list_training_sessions_calendar(
         if not event:
             continue
 
-        calendar_items.append({
-            "session_id": str(session.id),
-            "event_id": str(session.event_id),
-            "title": event.title,
-            "course_name": session.course_name,
-            "course_code": session.course_code,
-            "training_type": session.training_type.value if session.training_type else None,
-            "credit_hours": session.credit_hours,
-            "instructor": session.instructor,
-            "start_datetime": event.start_datetime.isoformat() if event.start_datetime else None,
-            "end_datetime": event.end_datetime.isoformat() if event.end_datetime else None,
-            "location": event.location,
-            "location_id": str(event.location_id) if event.location_id else None,
-            "is_mandatory": event.is_mandatory,
-            "is_finalized": session.is_finalized,
-            "issues_certification": session.issues_certification,
-            "requires_rsvp": event.requires_rsvp,
-            "max_attendees": event.max_attendees,
-        })
+        calendar_items.append(
+            {
+                "session_id": str(session.id),
+                "event_id": str(session.event_id),
+                "title": event.title,
+                "course_name": session.course_name,
+                "course_code": session.course_code,
+                "training_type": (
+                    session.training_type.value if session.training_type else None
+                ),
+                "credit_hours": session.credit_hours,
+                "instructor": session.instructor,
+                "start_datetime": (
+                    event.start_datetime.isoformat() if event.start_datetime else None
+                ),
+                "end_datetime": (
+                    event.end_datetime.isoformat() if event.end_datetime else None
+                ),
+                "location": event.location,
+                "location_id": str(event.location_id) if event.location_id else None,
+                "is_mandatory": event.is_mandatory,
+                "is_finalized": session.is_finalized,
+                "issues_certification": session.issues_certification,
+                "requires_rsvp": event.requires_rsvp,
+                "max_attendees": event.max_attendees,
+            }
+        )
 
     return {
         "count": len(calendar_items),

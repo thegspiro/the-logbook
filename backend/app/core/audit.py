@@ -7,14 +7,14 @@ with cryptographic integrity verification.
 
 import hashlib
 import time
-from typing import Dict, Any, Optional, List
-from datetime import datetime, UTC
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import UTC, datetime
+from typing import Any, Dict, Optional
+
 from loguru import logger
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditLog, AuditLogCheckpoint
-from app.core.database import get_db
 
 
 class AuditLogger:
@@ -38,24 +38,26 @@ class AuditLogger:
     def calculate_hash(log_data: Dict[str, Any], previous_hash: str) -> str:
         """
         Calculate SHA-256 hash for log entry
-        
+
         Creates a deterministic hash from log entry data and previous hash,
         forming a blockchain-inspired chain.
         """
         # Create deterministic string from log data
-        data_string = "|".join([
-            str(log_data.get("timestamp", "")),
-            str(log_data.get("timestamp_nanos", "")),
-            str(log_data.get("event_type", "")),
-            str(log_data.get("user_id", "")),
-            str(log_data.get("ip_address", "")),
-            str(log_data.get("event_data", {})),
-            previous_hash,
-        ])
-        
+        data_string = "|".join(
+            [
+                str(log_data.get("timestamp", "")),
+                str(log_data.get("timestamp_nanos", "")),
+                str(log_data.get("event_type", "")),
+                str(log_data.get("user_id", "")),
+                str(log_data.get("ip_address", "")),
+                str(log_data.get("event_data", {})),
+                previous_hash,
+            ]
+        )
+
         # Calculate SHA-256 hash
         return hashlib.sha256(data_string.encode()).hexdigest()
-    
+
     async def create_log_entry(
         self,
         db: AsyncSession,
@@ -72,7 +74,7 @@ class AuditLogger:
     ) -> AuditLog:
         """
         Create a new tamper-proof audit log entry
-        
+
         Each entry contains:
         - Event details
         - User/session information
@@ -85,9 +87,7 @@ class AuditLogger:
             async with db.begin_nested():
                 # Get the last log entry to get previous hash
                 result = await db.execute(
-                    select(AuditLog)
-                    .order_by(AuditLog.id.desc())
-                    .limit(1)
+                    select(AuditLog).order_by(AuditLog.id.desc()).limit(1)
                 )
                 last_log = result.scalar_one_or_none()
                 previous_hash = last_log.current_hash if last_log else "0" * 64
@@ -140,7 +140,7 @@ class AuditLogger:
             # operation. The savepoint rollback already undid the audit changes
             # without affecting the outer transaction.
             return None
-    
+
     async def verify_integrity(
         self,
         db: AsyncSession,
@@ -149,7 +149,7 @@ class AuditLogger:
     ) -> Dict[str, Any]:
         """
         Verify the integrity of the audit log chain
-        
+
         Returns:
             Dict with verification results including:
             - verified: bool - whether integrity check passed
@@ -158,15 +158,15 @@ class AuditLogger:
         """
         # Build query
         query = select(AuditLog).order_by(AuditLog.id)
-        
+
         if start_id:
             query = query.where(AuditLog.id >= start_id)
         if end_id:
             query = query.where(AuditLog.id <= end_id)
-        
+
         result = await db.execute(query)
         logs = result.scalars().all()
-        
+
         if not logs:
             return {
                 "verified": True,
@@ -175,7 +175,7 @@ class AuditLogger:
                 "last_id": None,
                 "errors": [],
             }
-        
+
         results = {
             "verified": True,
             "total_checked": len(logs),
@@ -183,7 +183,7 @@ class AuditLogger:
             "last_id": logs[-1].id,
             "errors": [],
         }
-        
+
         # Verify each log entry
         for i, log in enumerate(logs):
             # Recalculate hash
@@ -195,33 +195,37 @@ class AuditLogger:
                 "ip_address": log.ip_address,
                 "event_data": log.event_data,
             }
-            
+
             calculated_hash = self.calculate_hash(log_data, log.previous_hash)
-            
+
             # Check if hash matches
             if calculated_hash != log.current_hash:
                 results["verified"] = False
-                results["errors"].append({
-                    "log_id": log.id,
-                    "error": "Hash mismatch - log entry has been tampered with",
-                    "expected_hash": log.current_hash,
-                    "calculated_hash": calculated_hash,
-                })
-            
+                results["errors"].append(
+                    {
+                        "log_id": log.id,
+                        "error": "Hash mismatch - log entry has been tampered with",
+                        "expected_hash": log.current_hash,
+                        "calculated_hash": calculated_hash,
+                    }
+                )
+
             # Check chain integrity (except for first entry)
             if i > 0:
                 previous_log = logs[i - 1]
                 if log.previous_hash != previous_log.current_hash:
                     results["verified"] = False
-                    results["errors"].append({
-                        "log_id": log.id,
-                        "error": "Chain broken - previous hash does not match",
-                        "expected_previous": log.previous_hash,
-                        "actual_previous": previous_log.current_hash,
-                    })
-        
+                    results["errors"].append(
+                        {
+                            "log_id": log.id,
+                            "error": "Chain broken - previous hash does not match",
+                            "expected_previous": log.previous_hash,
+                            "actual_previous": previous_log.current_hash,
+                        }
+                    )
+
         return results
-    
+
     async def rehash_chain(self, db: AsyncSession) -> int:
         """
         Recompute and store correct hashes for the entire audit log chain.
@@ -232,9 +236,7 @@ class AuditLogger:
 
         Returns the number of entries rehashed.
         """
-        result = await db.execute(
-            select(AuditLog).order_by(AuditLog.id)
-        )
+        result = await db.execute(select(AuditLog).order_by(AuditLog.id))
         logs = result.scalars().all()
 
         if not logs:
@@ -272,7 +274,7 @@ class AuditLogger:
     ) -> AuditLogCheckpoint:
         """
         Create an integrity checkpoint for a range of audit logs
-        
+
         This provides a cryptographic snapshot that can be used
         to verify integrity of historical logs.
         """
@@ -284,18 +286,18 @@ class AuditLogger:
             .order_by(AuditLog.id)
         )
         logs = result.scalars().all()
-        
+
         if not logs:
             raise ValueError("No logs found in specified range")
-        
+
         # Calculate Merkle root (simplified - hash of all hashes)
         all_hashes = "".join([log.current_hash for log in logs])
         merkle_root = hashlib.sha256(all_hashes.encode()).hexdigest()
-        
+
         # Create checkpoint hash
         checkpoint_data = f"{first_log_id}|{last_log_id}|{len(logs)}|{merkle_root}"
         checkpoint_hash = hashlib.sha256(checkpoint_data.encode()).hexdigest()
-        
+
         # Create checkpoint
         checkpoint = AuditLogCheckpoint(
             first_log_id=first_log_id,
@@ -304,13 +306,13 @@ class AuditLogger:
             merkle_root=merkle_root,
             checkpoint_hash=checkpoint_hash,
         )
-        
+
         db.add(checkpoint)
         await db.flush()
         await db.refresh(checkpoint)
-        
+
         logger.info(f"Created checkpoint for logs {first_log_id}-{last_log_id}")
-        
+
         return checkpoint
 
 
@@ -433,9 +435,7 @@ async def get_audit_log_status(db: AsyncSession) -> Dict[str, Any]:
     total_count = result.scalar()
 
     # Get latest entry
-    result = await db.execute(
-        select(AuditLog).order_by(AuditLog.id.desc()).limit(1)
-    )
+    result = await db.execute(select(AuditLog).order_by(AuditLog.id.desc()).limit(1))
     latest_entry = result.scalar_one_or_none()
 
     # Get latest checkpoint
@@ -446,17 +446,37 @@ async def get_audit_log_status(db: AsyncSession) -> Dict[str, Any]:
 
     return {
         "total_entries": total_count,
-        "latest_entry": {
-            "id": latest_entry.id if latest_entry else None,
-            "timestamp": latest_entry.timestamp.isoformat() if latest_entry else None,
-            "event_type": latest_entry.event_type if latest_entry else None,
-            "current_hash": latest_entry.current_hash if latest_entry else None,
-        } if latest_entry else None,
-        "latest_checkpoint": {
-            "id": latest_checkpoint.id if latest_checkpoint else None,
-            "checkpoint_time": latest_checkpoint.checkpoint_time.isoformat() if latest_checkpoint else None,
-            "first_log_id": latest_checkpoint.first_log_id if latest_checkpoint else None,
-            "last_log_id": latest_checkpoint.last_log_id if latest_checkpoint else None,
-            "merkle_root": latest_checkpoint.merkle_root if latest_checkpoint else None,
-        } if latest_checkpoint else None,
+        "latest_entry": (
+            {
+                "id": latest_entry.id if latest_entry else None,
+                "timestamp": (
+                    latest_entry.timestamp.isoformat() if latest_entry else None
+                ),
+                "event_type": latest_entry.event_type if latest_entry else None,
+                "current_hash": latest_entry.current_hash if latest_entry else None,
+            }
+            if latest_entry
+            else None
+        ),
+        "latest_checkpoint": (
+            {
+                "id": latest_checkpoint.id if latest_checkpoint else None,
+                "checkpoint_time": (
+                    latest_checkpoint.checkpoint_time.isoformat()
+                    if latest_checkpoint
+                    else None
+                ),
+                "first_log_id": (
+                    latest_checkpoint.first_log_id if latest_checkpoint else None
+                ),
+                "last_log_id": (
+                    latest_checkpoint.last_log_id if latest_checkpoint else None
+                ),
+                "merkle_root": (
+                    latest_checkpoint.merkle_root if latest_checkpoint else None
+                ),
+            }
+            if latest_checkpoint
+            else None
+        ),
     }

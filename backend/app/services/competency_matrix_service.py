@@ -13,22 +13,25 @@ Gives training officers an at-a-glance department readiness picture.
 
 import calendar
 from datetime import date, timedelta
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import select
-from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
+    RequirementFrequency,
+    RequirementType,
     TrainingRecord,
     TrainingRequirement,
     TrainingStatus,
-    RequirementType,
-    RequirementFrequency,
 )
 from app.models.user import User, UserStatus
 from app.services.training_waiver_service import (
-    WaiverPeriod, fetch_org_waivers, adjust_required, get_rolling_period_months,
+    WaiverPeriod,
+    adjust_required,
+    fetch_org_waivers,
+    get_rolling_period_months,
 )
 
 
@@ -165,11 +168,13 @@ class CompetencyMatrixService:
                 else:
                     not_started_count += 1
 
-            member_rows.append({
-                "user_id": uid,
-                "name": member.full_name,
-                "statuses": statuses,
-            })
+            member_rows.append(
+                {
+                    "user_id": uid,
+                    "name": member.full_name,
+                    "statuses": statuses,
+                }
+            )
 
         total_cells = len(members) * len(requirements)
         readiness = (
@@ -196,7 +201,11 @@ class CompetencyMatrixService:
     @staticmethod
     def _get_date_window(req, today: date):
         """Return (start_date, end_date) for a requirement's frequency window."""
-        freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
+        freq = (
+            req.frequency.value
+            if hasattr(req.frequency, "value")
+            else str(req.frequency)
+        )
         current_year = today.year
 
         if freq == RequirementFrequency.ONE_TIME.value:
@@ -231,16 +240,26 @@ class CompetencyMatrixService:
         waivers: Optional[List[WaiverPeriod]] = None,
     ) -> Dict:
         """Evaluate a single requirement for a single member using type-aware matching."""
-        req_type = requirement.requirement_type.value if hasattr(requirement.requirement_type, 'value') else str(requirement.requirement_type)
+        req_type = (
+            requirement.requirement_type.value
+            if hasattr(requirement.requirement_type, "value")
+            else str(requirement.requirement_type)
+        )
         start_date, end_date = self._get_date_window(requirement, today)
-        not_started = {"status": "not_started", "expiration_date": None, "completion_date": None, "details": None}
+        not_started = {
+            "status": "not_started",
+            "expiration_date": None,
+            "completion_date": None,
+            "details": None,
+        }
         _waivers = waivers or []
 
         # Filter completed records within the date window
         completed = [r for r in user_records if r.status == TrainingStatus.COMPLETED]
         if start_date and end_date:
             windowed = [
-                r for r in completed
+                r
+                for r in completed
                 if r.completion_date and start_date <= r.completion_date <= end_date
             ]
         else:
@@ -250,7 +269,9 @@ class CompetencyMatrixService:
         if req_type == RequirementType.HOURS.value:
             type_matched = windowed
             if requirement.training_type:
-                type_matched = [r for r in windowed if r.training_type == requirement.training_type]
+                type_matched = [
+                    r for r in windowed if r.training_type == requirement.training_type
+                ]
 
             total_hours = sum(r.hours_completed or 0 for r in type_matched)
             required = requirement.required_hours or 0
@@ -258,11 +279,19 @@ class CompetencyMatrixService:
             # Adjust required hours for waived months
             if required > 0 and start_date and end_date and _waivers:
                 required, _, _ = adjust_required(
-                    required, start_date, end_date, _waivers, str(requirement.id),
+                    required,
+                    start_date,
+                    end_date,
+                    _waivers,
+                    str(requirement.id),
                     period_months=get_rolling_period_months(requirement),
                 )
 
-            most_recent = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
+            most_recent = (
+                max(type_matched, key=lambda r: r.completion_date or date.min)
+                if type_matched
+                else None
+            )
             if not most_recent:
                 return not_started
 
@@ -297,7 +326,11 @@ class CompetencyMatrixService:
                 return not_started
             completed_course_ids = {str(r.course_id) for r in windowed if r.course_id}
             matched_count = sum(1 for cid in course_ids if cid in completed_course_ids)
-            most_recent = max(windowed, key=lambda r: r.completion_date or date.min) if windowed else None
+            most_recent = (
+                max(windowed, key=lambda r: r.completion_date or date.min)
+                if windowed
+                else None
+            )
 
             if matched_count >= len(course_ids):
                 status = "current"
@@ -319,13 +352,24 @@ class CompetencyMatrixService:
         # ---- CERTIFICATION requirements ----
         if req_type == RequirementType.CERTIFICATION.value:
             matching = [
-                r for r in completed
+                r
+                for r in completed
                 if (
-                    (requirement.training_type and r.training_type == requirement.training_type)
-                    or (r.course_name and requirement.name
-                        and requirement.name.lower() in r.course_name.lower())
-                    or (r.certification_number and requirement.registry_code
-                        and requirement.registry_code.lower() in r.certification_number.lower())
+                    (
+                        requirement.training_type
+                        and r.training_type == requirement.training_type
+                    )
+                    or (
+                        r.course_name
+                        and requirement.name
+                        and requirement.name.lower() in r.course_name.lower()
+                    )
+                    or (
+                        r.certification_number
+                        and requirement.registry_code
+                        and requirement.registry_code.lower()
+                        in r.certification_number.lower()
+                    )
                 )
             ]
             if not matching:
@@ -342,22 +386,37 @@ class CompetencyMatrixService:
 
             if exp_date:
                 if exp_date < today:
-                    return {"status": "expired", "expiration_date": exp_date.isoformat(),
-                            "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
+                    return {
+                        "status": "expired",
+                        "expiration_date": exp_date.isoformat(),
+                        "completion_date": comp_date.isoformat() if comp_date else None,
+                        "details": details,
+                    }
                 elif exp_date <= expiring_threshold:
-                    return {"status": "expiring_soon", "expiration_date": exp_date.isoformat(),
-                            "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
+                    return {
+                        "status": "expiring_soon",
+                        "expiration_date": exp_date.isoformat(),
+                        "completion_date": comp_date.isoformat() if comp_date else None,
+                        "details": details,
+                    }
 
-            return {"status": "current", "expiration_date": exp_date.isoformat() if exp_date else None,
-                    "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
+            return {
+                "status": "current",
+                "expiration_date": exp_date.isoformat() if exp_date else None,
+                "completion_date": comp_date.isoformat() if comp_date else None,
+                "details": details,
+            }
 
         # ---- Fallback: shifts, calls, skills_evaluation, checklist, knowledge_test ----
         matching = []
         if requirement.training_type:
-            matching = [r for r in windowed if r.training_type == requirement.training_type]
+            matching = [
+                r for r in windowed if r.training_type == requirement.training_type
+            ]
         if not matching and requirement.name:
             matching = [
-                r for r in windowed
+                r
+                for r in windowed
                 if r.course_name and requirement.name.lower() in r.course_name.lower()
             ]
 
@@ -375,11 +434,23 @@ class CompetencyMatrixService:
 
         if exp_date:
             if exp_date < today:
-                return {"status": "expired", "expiration_date": exp_date.isoformat(),
-                        "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
+                return {
+                    "status": "expired",
+                    "expiration_date": exp_date.isoformat(),
+                    "completion_date": comp_date.isoformat() if comp_date else None,
+                    "details": details,
+                }
             elif exp_date <= expiring_threshold:
-                return {"status": "expiring_soon", "expiration_date": exp_date.isoformat(),
-                        "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
+                return {
+                    "status": "expiring_soon",
+                    "expiration_date": exp_date.isoformat(),
+                    "completion_date": comp_date.isoformat() if comp_date else None,
+                    "details": details,
+                }
 
-        return {"status": "current", "expiration_date": exp_date.isoformat() if exp_date else None,
-                "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
+        return {
+            "status": "current",
+            "expiration_date": exp_date.isoformat() if exp_date else None,
+            "completion_date": comp_date.isoformat() if comp_date else None,
+            "details": details,
+        }

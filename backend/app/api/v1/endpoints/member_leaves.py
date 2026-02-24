@@ -15,14 +15,20 @@ PATCH  /users/leaves-of-absence/{id}             - Update a leave
 DELETE /users/leaves-of-absence/{id}             - Deactivate a leave
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List
-from datetime import datetime, date
-from pydantic import BaseModel, Field
+from datetime import date, datetime
+from typing import List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
 from app.core.database import get_db
-from app.api.dependencies import get_current_user, require_permission, _collect_user_permissions, _has_permission
 from app.models.user import User
 from app.services.member_leave_service import MemberLeaveService
 
@@ -31,13 +37,16 @@ router = APIRouter()
 
 # ==================== Schemas ====================
 
+
 class LeaveOfAbsenceCreate(BaseModel):
     user_id: str
     leave_type: str = "leave_of_absence"
     reason: Optional[str] = None
     start_date: date
     end_date: Optional[date] = None  # None = permanent leave
-    exempt_from_training_waiver: bool = False  # Override: keep training requirements active
+    exempt_from_training_waiver: bool = (
+        False  # Override: keep training requirements active
+    )
 
 
 class LeaveOfAbsenceUpdate(BaseModel):
@@ -70,12 +79,17 @@ class LeaveOfAbsenceResponse(BaseModel):
 
 # ==================== Helpers ====================
 
+
 def _to_response(leave) -> LeaveOfAbsenceResponse:
     return LeaveOfAbsenceResponse(
         id=str(leave.id),
         organization_id=str(leave.organization_id),
         user_id=str(leave.user_id),
-        leave_type=leave.leave_type.value if hasattr(leave.leave_type, 'value') else str(leave.leave_type),
+        leave_type=(
+            leave.leave_type.value
+            if hasattr(leave.leave_type, "value")
+            else str(leave.leave_type)
+        ),
         reason=leave.reason,
         start_date=leave.start_date,
         end_date=leave.end_date,
@@ -91,7 +105,12 @@ def _to_response(leave) -> LeaveOfAbsenceResponse:
 
 # ==================== Endpoints ====================
 
-@router.post("/leaves-of-absence", response_model=LeaveOfAbsenceResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/leaves-of-absence",
+    response_model=LeaveOfAbsenceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_leave_of_absence(
     data: LeaveOfAbsenceCreate,
     db: AsyncSession = Depends(get_db),
@@ -129,7 +148,7 @@ async def list_leaves_of_absence(
         user_id=user_id,
         active_only=active_only,
     )
-    return [_to_response(l) for l in leaves]
+    return [_to_response(leave) for leave in leaves]
 
 
 @router.get("/leaves-of-absence/me", response_model=List[LeaveOfAbsenceResponse])
@@ -144,7 +163,7 @@ async def get_my_leaves(
         user_id=str(current_user.id),
         active_only=True,
     )
-    return [_to_response(l) for l in leaves]
+    return [_to_response(leave) for leave in leaves]
 
 
 @router.get("/{user_id}/leaves-of-absence", response_model=List[LeaveOfAbsenceResponse])
@@ -168,7 +187,7 @@ async def get_member_leaves(
         user_id=user_id,
         active_only=active_only,
     )
-    return [_to_response(l) for l in leaves]
+    return [_to_response(leave) for leave in leaves]
 
 
 @router.patch("/leaves-of-absence/{leave_id}", response_model=LeaveOfAbsenceResponse)

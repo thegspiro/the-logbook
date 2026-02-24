@@ -5,93 +5,75 @@ Endpoints for apparatus/vehicle management including CRUD operations,
 maintenance tracking, equipment, operators, and fleet management.
 """
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date, datetime
+from typing import List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
-from app.schemas.apparatus import (
-    # Apparatus Type
-    ApparatusTypeCreate,
-    ApparatusTypeUpdate,
-    ApparatusTypeResponse,
-    ApparatusTypeListItem,
-    # Apparatus Status
-    ApparatusStatusCreate,
-    ApparatusStatusUpdate,
-    ApparatusStatusResponse,
-    ApparatusStatusListItem,
-    # Main Apparatus
-    ApparatusCreate,
-    ApparatusUpdate,
-    ApparatusResponse,
-    ApparatusListItem,
-    ApparatusStatusChange,
+from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Apparatus; Custom Fields; Maintenance; Fuel; Operators; Equipment; Photos & Documents; NFPA Compliance; Report Configs; Service Providers; Components; Component Notes; Service Report
     ApparatusArchive,
-    ApparatusListFilters,
-    PaginatedApparatusList,
-    ApparatusFleetSummary,
-    # Custom Fields
-    ApparatusCustomFieldCreate,
-    ApparatusCustomFieldUpdate,
-    ApparatusCustomFieldResponse,
-    # Maintenance
-    ApparatusMaintenanceTypeCreate,
-    ApparatusMaintenanceTypeUpdate,
-    ApparatusMaintenanceTypeResponse,
-    ApparatusMaintenanceCreate,
-    ApparatusMaintenanceUpdate,
-    ApparatusMaintenanceResponse,
-    ApparatusMaintenanceDue,
-    # Fuel
-    ApparatusFuelLogCreate,
-    ApparatusFuelLogUpdate,
-    ApparatusFuelLogResponse,
-    # Operators
-    ApparatusOperatorCreate,
-    ApparatusOperatorUpdate,
-    ApparatusOperatorResponse,
-    # Equipment
-    ApparatusEquipmentCreate,
-    ApparatusEquipmentUpdate,
-    ApparatusEquipmentResponse,
-    # Photos & Documents
-    ApparatusPhotoCreate,
-    ApparatusPhotoUpdate,
-    ApparatusPhotoResponse,
-    ApparatusDocumentCreate,
-    ApparatusDocumentUpdate,
-    ApparatusDocumentResponse,
-    # NFPA Compliance
-    ApparatusNFPAComplianceCreate,
-    ApparatusNFPAComplianceUpdate,
-    ApparatusNFPAComplianceResponse,
-    # Report Configs
-    ApparatusReportConfigCreate,
-    ApparatusReportConfigUpdate,
-    ApparatusReportConfigResponse,
-    # Service Providers
-    ApparatusServiceProviderCreate,
-    ApparatusServiceProviderUpdate,
-    ApparatusServiceProviderResponse,
-    # Components
     ApparatusComponentCreate,
-    ApparatusComponentUpdate,
-    ApparatusComponentResponse,
-    # Component Notes
     ApparatusComponentNoteCreate,
-    ApparatusComponentNoteUpdate,
     ApparatusComponentNoteResponse,
-    # Service Report
+    ApparatusComponentNoteUpdate,
+    ApparatusComponentResponse,
+    ApparatusComponentUpdate,
+    ApparatusCreate,
+    ApparatusCustomFieldCreate,
+    ApparatusCustomFieldResponse,
+    ApparatusCustomFieldUpdate,
+    ApparatusDocumentCreate,
+    ApparatusDocumentResponse,
+    ApparatusEquipmentCreate,
+    ApparatusEquipmentResponse,
+    ApparatusEquipmentUpdate,
+    ApparatusFleetSummary,
+    ApparatusFuelLogCreate,
+    ApparatusFuelLogResponse,
+    ApparatusListFilters,
+    ApparatusMaintenanceCreate,
+    ApparatusMaintenanceDue,
+    ApparatusMaintenanceResponse,
+    ApparatusMaintenanceTypeCreate,
+    ApparatusMaintenanceTypeResponse,
+    ApparatusMaintenanceTypeUpdate,
+    ApparatusMaintenanceUpdate,
+    ApparatusNFPAComplianceCreate,
+    ApparatusNFPAComplianceResponse,
+    ApparatusNFPAComplianceUpdate,
+    ApparatusOperatorCreate,
+    ApparatusOperatorResponse,
+    ApparatusOperatorUpdate,
+    ApparatusPhotoCreate,
+    ApparatusPhotoResponse,
+    ApparatusReportConfigCreate,
+    ApparatusReportConfigResponse,
+    ApparatusReportConfigUpdate,
+    ApparatusResponse,
+    ApparatusServiceProviderCreate,
+    ApparatusServiceProviderResponse,
+    ApparatusServiceProviderUpdate,
     ApparatusServiceReport,
+    ApparatusStatusChange,
+    ApparatusStatusCreate,
+    ApparatusStatusListItem,
+    ApparatusStatusResponse,
+    ApparatusStatusUpdate,
+    ApparatusTypeCreate,
+    ApparatusTypeListItem,
+    ApparatusTypeResponse,
+    ApparatusTypeUpdate,
+    ApparatusUpdate,
+    PaginatedApparatusList,
 )
+from app.schemas.documents import FoldersListResponse
 from app.services.apparatus_service import ApparatusService
 from app.services.documents_service import DocumentsService
-from app.schemas.documents import DocumentFolderResponse, FoldersListResponse
-from app.api.dependencies import require_permission
 
 router = APIRouter()
 
@@ -100,12 +82,17 @@ router = APIRouter()
 # Apparatus Type Endpoints
 # ============================================================================
 
-@router.get("/types", response_model=List[ApparatusTypeListItem], tags=["Apparatus Types"])
+
+@router.get(
+    "/types", response_model=List[ApparatusTypeListItem], tags=["Apparatus Types"]
+)
 async def list_apparatus_types(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List all apparatus types
@@ -122,7 +109,12 @@ async def list_apparatus_types(
     return types
 
 
-@router.post("/types", response_model=ApparatusTypeResponse, status_code=status.HTTP_201_CREATED, tags=["Apparatus Types"])
+@router.post(
+    "/types",
+    response_model=ApparatusTypeResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Apparatus Types"],
+)
 async def create_apparatus_type(
     type_data: ApparatusTypeCreate,
     db: AsyncSession = Depends(get_db),
@@ -142,16 +134,22 @@ async def create_apparatus_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return apparatus_type
 
 
-@router.get("/types/{type_id}", response_model=ApparatusTypeResponse, tags=["Apparatus Types"])
+@router.get(
+    "/types/{type_id}", response_model=ApparatusTypeResponse, tags=["Apparatus Types"]
+)
 async def get_apparatus_type(
     type_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get a specific apparatus type by ID
@@ -167,14 +165,15 @@ async def get_apparatus_type(
 
     if not apparatus_type:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus type not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus type not found"
         )
 
     return apparatus_type
 
 
-@router.patch("/types/{type_id}", response_model=ApparatusTypeResponse, tags=["Apparatus Types"])
+@router.patch(
+    "/types/{type_id}", response_model=ApparatusTypeResponse, tags=["Apparatus Types"]
+)
 async def update_apparatus_type(
     type_id: str,
     type_data: ApparatusTypeUpdate,
@@ -196,18 +195,21 @@ async def update_apparatus_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not apparatus_type:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus type not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus type not found"
         )
 
     return apparatus_type
 
 
-@router.delete("/types/{type_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Apparatus Types"])
+@router.delete(
+    "/types/{type_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Apparatus Types"]
+)
 async def delete_apparatus_type(
     type_id: str,
     db: AsyncSession = Depends(get_db),
@@ -229,12 +231,13 @@ async def delete_apparatus_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus type not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus type not found"
         )
 
 
@@ -242,12 +245,19 @@ async def delete_apparatus_type(
 # Apparatus Status Endpoints
 # ============================================================================
 
-@router.get("/statuses", response_model=List[ApparatusStatusListItem], tags=["Apparatus Statuses"])
+
+@router.get(
+    "/statuses",
+    response_model=List[ApparatusStatusListItem],
+    tags=["Apparatus Statuses"],
+)
 async def list_apparatus_statuses(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined statuses"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List all apparatus statuses
@@ -264,7 +274,12 @@ async def list_apparatus_statuses(
     return statuses
 
 
-@router.post("/statuses", response_model=ApparatusStatusResponse, status_code=status.HTTP_201_CREATED, tags=["Apparatus Statuses"])
+@router.post(
+    "/statuses",
+    response_model=ApparatusStatusResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Apparatus Statuses"],
+)
 async def create_apparatus_status(
     status_data: ApparatusStatusCreate,
     db: AsyncSession = Depends(get_db),
@@ -284,16 +299,24 @@ async def create_apparatus_status(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return apparatus_status
 
 
-@router.get("/statuses/{status_id}", response_model=ApparatusStatusResponse, tags=["Apparatus Statuses"])
+@router.get(
+    "/statuses/{status_id}",
+    response_model=ApparatusStatusResponse,
+    tags=["Apparatus Statuses"],
+)
 async def get_apparatus_status(
     status_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get a specific apparatus status by ID
@@ -309,14 +332,17 @@ async def get_apparatus_status(
 
     if not apparatus_status:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus status not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus status not found"
         )
 
     return apparatus_status
 
 
-@router.patch("/statuses/{status_id}", response_model=ApparatusStatusResponse, tags=["Apparatus Statuses"])
+@router.patch(
+    "/statuses/{status_id}",
+    response_model=ApparatusStatusResponse,
+    tags=["Apparatus Statuses"],
+)
 async def update_apparatus_status(
     status_id: str,
     status_data: ApparatusStatusUpdate,
@@ -338,18 +364,23 @@ async def update_apparatus_status(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not apparatus_status:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus status not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus status not found"
         )
 
     return apparatus_status
 
 
-@router.delete("/statuses/{status_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Apparatus Statuses"])
+@router.delete(
+    "/statuses/{status_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Apparatus Statuses"],
+)
 async def delete_apparatus_status(
     status_id: str,
     db: AsyncSession = Depends(get_db),
@@ -371,12 +402,13 @@ async def delete_apparatus_status(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus status not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus status not found"
         )
 
 
@@ -384,12 +416,19 @@ async def delete_apparatus_status(
 # Main Apparatus Endpoints
 # ============================================================================
 
+
 @router.get("", response_model=PaginatedApparatusList, tags=["Apparatus"])
 async def list_apparatus(
-    apparatus_type_id: Optional[str] = Query(None, description="Filter by apparatus type"),
+    apparatus_type_id: Optional[str] = Query(
+        None, description="Filter by apparatus type"
+    ),
     status_id: Optional[str] = Query(None, description="Filter by status"),
-    primary_station_id: Optional[str] = Query(None, description="Filter by primary station"),
-    is_archived: Optional[bool] = Query(False, description="Include archived apparatus"),
+    primary_station_id: Optional[str] = Query(
+        None, description="Filter by primary station"
+    ),
+    is_archived: Optional[bool] = Query(
+        False, description="Include archived apparatus"
+    ),
     year_min: Optional[int] = Query(None, description="Minimum year"),
     year_max: Optional[int] = Query(None, description="Maximum year"),
     make: Optional[str] = Query(None, description="Filter by make"),
@@ -397,7 +436,9 @@ async def list_apparatus(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List apparatus with filtering and pagination
@@ -437,11 +478,18 @@ async def list_apparatus(
     )
 
 
-@router.post("", response_model=ApparatusResponse, status_code=status.HTTP_201_CREATED, tags=["Apparatus"])
+@router.post(
+    "",
+    response_model=ApparatusResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Apparatus"],
+)
 async def create_apparatus(
     apparatus_data: ApparatusCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.create", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.create", "apparatus.manage")
+    ),
 ):
     """
     Create a new apparatus
@@ -458,7 +506,9 @@ async def create_apparatus(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     # Reload with relations
     apparatus = await service.get_apparatus(
@@ -472,7 +522,9 @@ async def create_apparatus(
 @router.get("/summary", response_model=ApparatusFleetSummary, tags=["Apparatus"])
 async def get_fleet_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get fleet summary for dashboard
@@ -492,7 +544,9 @@ async def list_archived_apparatus(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List archived (previously owned) apparatus
@@ -527,7 +581,9 @@ async def list_archived_apparatus(
 async def get_apparatus(
     apparatus_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get a specific apparatus by ID
@@ -543,8 +599,7 @@ async def get_apparatus(
 
     if not apparatus:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
         )
 
     return apparatus
@@ -555,7 +610,9 @@ async def update_apparatus(
     apparatus_id: str,
     apparatus_data: ApparatusUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Update an apparatus
@@ -573,12 +630,13 @@ async def update_apparatus(
             updated_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not apparatus:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
         )
 
     # Reload with relations
@@ -590,12 +648,16 @@ async def update_apparatus(
     return apparatus
 
 
-@router.post("/{apparatus_id}/status", response_model=ApparatusResponse, tags=["Apparatus"])
+@router.post(
+    "/{apparatus_id}/status", response_model=ApparatusResponse, tags=["Apparatus"]
+)
 async def change_apparatus_status(
     apparatus_id: str,
     status_change: ApparatusStatusChange,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Change apparatus status
@@ -613,12 +675,13 @@ async def change_apparatus_status(
             changed_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not apparatus:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
         )
 
     # Reload with relations
@@ -630,7 +693,9 @@ async def change_apparatus_status(
     return apparatus
 
 
-@router.post("/{apparatus_id}/archive", response_model=ApparatusResponse, tags=["Apparatus"])
+@router.post(
+    "/{apparatus_id}/archive", response_model=ApparatusResponse, tags=["Apparatus"]
+)
 async def archive_apparatus(
     apparatus_id: str,
     archive_data: ApparatusArchive,
@@ -653,18 +718,21 @@ async def archive_apparatus(
             archived_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not apparatus:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
         )
 
     return apparatus
 
 
-@router.delete("/{apparatus_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Apparatus"])
+@router.delete(
+    "/{apparatus_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Apparatus"]
+)
 async def delete_apparatus(
     apparatus_id: str,
     db: AsyncSession = Depends(get_db),
@@ -688,8 +756,7 @@ async def delete_apparatus(
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apparatus not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
         )
 
 
@@ -697,12 +764,21 @@ async def delete_apparatus(
 # Custom Field Endpoints
 # ============================================================================
 
-@router.get("/custom-fields", response_model=List[ApparatusCustomFieldResponse], tags=["Custom Fields"])
+
+@router.get(
+    "/custom-fields",
+    response_model=List[ApparatusCustomFieldResponse],
+    tags=["Custom Fields"],
+)
 async def list_custom_fields(
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
-    apparatus_type_id: Optional[str] = Query(None, description="Filter by applicable apparatus type"),
+    apparatus_type_id: Optional[str] = Query(
+        None, description="Filter by applicable apparatus type"
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List custom field definitions
@@ -719,7 +795,12 @@ async def list_custom_fields(
     return fields
 
 
-@router.post("/custom-fields", response_model=ApparatusCustomFieldResponse, status_code=status.HTTP_201_CREATED, tags=["Custom Fields"])
+@router.post(
+    "/custom-fields",
+    response_model=ApparatusCustomFieldResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Custom Fields"],
+)
 async def create_custom_field(
     field_data: ApparatusCustomFieldCreate,
     db: AsyncSession = Depends(get_db),
@@ -740,12 +821,18 @@ async def create_custom_field(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return field
 
 
-@router.patch("/custom-fields/{field_id}", response_model=ApparatusCustomFieldResponse, tags=["Custom Fields"])
+@router.patch(
+    "/custom-fields/{field_id}",
+    response_model=ApparatusCustomFieldResponse,
+    tags=["Custom Fields"],
+)
 async def update_custom_field(
     field_id: str,
     field_data: ApparatusCustomFieldUpdate,
@@ -767,18 +854,23 @@ async def update_custom_field(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not field:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Custom field not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Custom field not found"
         )
 
     return field
 
 
-@router.delete("/custom-fields/{field_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Custom Fields"])
+@router.delete(
+    "/custom-fields/{field_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Custom Fields"],
+)
 async def delete_custom_field(
     field_id: str,
     db: AsyncSession = Depends(get_db),
@@ -799,8 +891,7 @@ async def delete_custom_field(
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Custom field not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Custom field not found"
         )
 
 
@@ -808,12 +899,19 @@ async def delete_custom_field(
 # Maintenance Type Endpoints
 # ============================================================================
 
-@router.get("/maintenance-types", response_model=List[ApparatusMaintenanceTypeResponse], tags=["Maintenance Types"])
+
+@router.get(
+    "/maintenance-types",
+    response_model=List[ApparatusMaintenanceTypeResponse],
+    tags=["Maintenance Types"],
+)
 async def list_maintenance_types(
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List maintenance type definitions
@@ -830,7 +928,12 @@ async def list_maintenance_types(
     return types
 
 
-@router.post("/maintenance-types", response_model=ApparatusMaintenanceTypeResponse, status_code=status.HTTP_201_CREATED, tags=["Maintenance Types"])
+@router.post(
+    "/maintenance-types",
+    response_model=ApparatusMaintenanceTypeResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Maintenance Types"],
+)
 async def create_maintenance_type(
     type_data: ApparatusMaintenanceTypeCreate,
     db: AsyncSession = Depends(get_db),
@@ -850,12 +953,18 @@ async def create_maintenance_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return maint_type
 
 
-@router.patch("/maintenance-types/{type_id}", response_model=ApparatusMaintenanceTypeResponse, tags=["Maintenance Types"])
+@router.patch(
+    "/maintenance-types/{type_id}",
+    response_model=ApparatusMaintenanceTypeResponse,
+    tags=["Maintenance Types"],
+)
 async def update_maintenance_type(
     type_id: str,
     type_data: ApparatusMaintenanceTypeUpdate,
@@ -877,18 +986,23 @@ async def update_maintenance_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not maint_type:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Maintenance type not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Maintenance type not found"
         )
 
     return maint_type
 
 
-@router.delete("/maintenance-types/{type_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Maintenance Types"])
+@router.delete(
+    "/maintenance-types/{type_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Maintenance Types"],
+)
 async def delete_maintenance_type(
     type_id: str,
     db: AsyncSession = Depends(get_db),
@@ -908,12 +1022,13 @@ async def delete_maintenance_type(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Maintenance type not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Maintenance type not found"
         )
 
 
@@ -921,19 +1036,37 @@ async def delete_maintenance_type(
 # Maintenance Record Endpoints
 # ============================================================================
 
-@router.get("/maintenance", response_model=List[ApparatusMaintenanceResponse], tags=["Maintenance"])
+
+@router.get(
+    "/maintenance",
+    response_model=List[ApparatusMaintenanceResponse],
+    tags=["Maintenance"],
+)
 async def list_maintenance_records(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    maintenance_type_id: Optional[str] = Query(None, description="Filter by maintenance type"),
-    is_completed: Optional[bool] = Query(None, description="Filter by completion status"),
+    maintenance_type_id: Optional[str] = Query(
+        None, description="Filter by maintenance type"
+    ),
+    is_completed: Optional[bool] = Query(
+        None, description="Filter by completion status"
+    ),
     is_overdue: Optional[bool] = Query(None, description="Filter by overdue status"),
-    is_historic: Optional[bool] = Query(None, description="Filter by historic entries (True=only historic, False=only current)"),
-    occurred_after: Optional[date] = Query(None, description="Filter records that occurred on or after this date"),
-    occurred_before: Optional[date] = Query(None, description="Filter records that occurred on or before this date"),
+    is_historic: Optional[bool] = Query(
+        None,
+        description="Filter by historic entries (True=only historic, False=only current)",
+    ),
+    occurred_after: Optional[date] = Query(
+        None, description="Filter records that occurred on or after this date"
+    ),
+    occurred_before: Optional[date] = Query(
+        None, description="Filter records that occurred on or before this date"
+    ),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List maintenance records.
@@ -960,12 +1093,18 @@ async def list_maintenance_records(
     return records
 
 
-@router.get("/maintenance/due", response_model=List[ApparatusMaintenanceDue], tags=["Maintenance"])
+@router.get(
+    "/maintenance/due",
+    response_model=List[ApparatusMaintenanceDue],
+    tags=["Maintenance"],
+)
 async def get_maintenance_due(
     days_ahead: int = Query(30, ge=1, le=365, description="Days ahead to check"),
     include_overdue: bool = Query(True, description="Include overdue maintenance"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get maintenance due within specified days
@@ -982,11 +1121,20 @@ async def get_maintenance_due(
     return due
 
 
-@router.post("/maintenance", response_model=ApparatusMaintenanceResponse, status_code=status.HTTP_201_CREATED, tags=["Maintenance"])
+@router.post(
+    "/maintenance",
+    response_model=ApparatusMaintenanceResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Maintenance"],
+)
 async def create_maintenance_record(
     maintenance_data: ApparatusMaintenanceCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "apparatus.maintenance", "apparatus.edit", "apparatus.manage"
+        )
+    ),
 ):
     """
     Create a maintenance record
@@ -1003,16 +1151,24 @@ async def create_maintenance_record(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return record
 
 
-@router.get("/maintenance/{record_id}", response_model=ApparatusMaintenanceResponse, tags=["Maintenance"])
+@router.get(
+    "/maintenance/{record_id}",
+    response_model=ApparatusMaintenanceResponse,
+    tags=["Maintenance"],
+)
 async def get_maintenance_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get a specific maintenance record
@@ -1028,19 +1184,26 @@ async def get_maintenance_record(
 
     if not record:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Maintenance record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Maintenance record not found"
         )
 
     return record
 
 
-@router.patch("/maintenance/{record_id}", response_model=ApparatusMaintenanceResponse, tags=["Maintenance"])
+@router.patch(
+    "/maintenance/{record_id}",
+    response_model=ApparatusMaintenanceResponse,
+    tags=["Maintenance"],
+)
 async def update_maintenance_record(
     record_id: str,
     maintenance_data: ApparatusMaintenanceUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "apparatus.maintenance", "apparatus.edit", "apparatus.manage"
+        )
+    ),
 ):
     """
     Update a maintenance record
@@ -1058,18 +1221,23 @@ async def update_maintenance_record(
             updated_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not record:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Maintenance record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Maintenance record not found"
         )
 
     return record
 
 
-@router.delete("/maintenance/{record_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Maintenance"])
+@router.delete(
+    "/maintenance/{record_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Maintenance"],
+)
 async def delete_maintenance_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
@@ -1090,8 +1258,7 @@ async def delete_maintenance_record(
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Maintenance record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Maintenance record not found"
         )
 
 
@@ -1099,7 +1266,10 @@ async def delete_maintenance_record(
 # Fuel Log Endpoints
 # ============================================================================
 
-@router.get("/fuel-logs", response_model=List[ApparatusFuelLogResponse], tags=["Fuel Logs"])
+
+@router.get(
+    "/fuel-logs", response_model=List[ApparatusFuelLogResponse], tags=["Fuel Logs"]
+)
 async def list_fuel_logs(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
     start_date: Optional[datetime] = Query(None, description="Start date filter"),
@@ -1107,7 +1277,9 @@ async def list_fuel_logs(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List fuel log entries
@@ -1127,11 +1299,20 @@ async def list_fuel_logs(
     return logs
 
 
-@router.post("/fuel-logs", response_model=ApparatusFuelLogResponse, status_code=status.HTTP_201_CREATED, tags=["Fuel Logs"])
+@router.post(
+    "/fuel-logs",
+    response_model=ApparatusFuelLogResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Fuel Logs"],
+)
 async def create_fuel_log(
     fuel_data: ApparatusFuelLogCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "apparatus.maintenance", "apparatus.edit", "apparatus.manage"
+        )
+    ),
 ):
     """
     Create a fuel log entry
@@ -1148,7 +1329,9 @@ async def create_fuel_log(
             recorded_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return log
 
@@ -1157,7 +1340,10 @@ async def create_fuel_log(
 # Operator Endpoints
 # ============================================================================
 
-@router.get("/operators", response_model=List[ApparatusOperatorResponse], tags=["Operators"])
+
+@router.get(
+    "/operators", response_model=List[ApparatusOperatorResponse], tags=["Operators"]
+)
 async def list_operators(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
     user_id: Optional[str] = Query(None, description="Filter by user"),
@@ -1165,7 +1351,9 @@ async def list_operators(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List apparatus operators
@@ -1185,7 +1373,12 @@ async def list_operators(
     return operators
 
 
-@router.post("/operators", response_model=ApparatusOperatorResponse, status_code=status.HTTP_201_CREATED, tags=["Operators"])
+@router.post(
+    "/operators",
+    response_model=ApparatusOperatorResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Operators"],
+)
 async def create_operator(
     operator_data: ApparatusOperatorCreate,
     db: AsyncSession = Depends(get_db),
@@ -1206,12 +1399,18 @@ async def create_operator(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return operator
 
 
-@router.patch("/operators/{operator_id}", response_model=ApparatusOperatorResponse, tags=["Operators"])
+@router.patch(
+    "/operators/{operator_id}",
+    response_model=ApparatusOperatorResponse,
+    tags=["Operators"],
+)
 async def update_operator(
     operator_id: str,
     operator_data: ApparatusOperatorUpdate,
@@ -1233,18 +1432,23 @@ async def update_operator(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not operator:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Operator not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Operator not found"
         )
 
     return operator
 
 
-@router.delete("/operators/{operator_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Operators"])
+@router.delete(
+    "/operators/{operator_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Operators"],
+)
 async def delete_operator(
     operator_id: str,
     db: AsyncSession = Depends(get_db),
@@ -1265,8 +1469,7 @@ async def delete_operator(
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Operator not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Operator not found"
         )
 
 
@@ -1274,14 +1477,21 @@ async def delete_operator(
 # Equipment Endpoints
 # ============================================================================
 
-@router.get("/equipment", response_model=List[ApparatusEquipmentResponse], tags=["Equipment"])
+
+@router.get(
+    "/equipment", response_model=List[ApparatusEquipmentResponse], tags=["Equipment"]
+)
 async def list_equipment(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    is_present: Optional[bool] = Query(None, description="Filter by presence on apparatus"),
+    is_present: Optional[bool] = Query(
+        None, description="Filter by presence on apparatus"
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List apparatus equipment
@@ -1300,11 +1510,18 @@ async def list_equipment(
     return equipment
 
 
-@router.post("/equipment", response_model=ApparatusEquipmentResponse, status_code=status.HTTP_201_CREATED, tags=["Equipment"])
+@router.post(
+    "/equipment",
+    response_model=ApparatusEquipmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Equipment"],
+)
 async def create_equipment(
     equipment_data: ApparatusEquipmentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Add equipment to apparatus
@@ -1321,17 +1538,25 @@ async def create_equipment(
             assigned_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return equipment
 
 
-@router.patch("/equipment/{equipment_id}", response_model=ApparatusEquipmentResponse, tags=["Equipment"])
+@router.patch(
+    "/equipment/{equipment_id}",
+    response_model=ApparatusEquipmentResponse,
+    tags=["Equipment"],
+)
 async def update_equipment(
     equipment_id: str,
     equipment_data: ApparatusEquipmentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Update equipment information
@@ -1348,18 +1573,23 @@ async def update_equipment(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not equipment:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Equipment not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Equipment not found"
         )
 
     return equipment
 
 
-@router.delete("/equipment/{equipment_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Equipment"])
+@router.delete(
+    "/equipment/{equipment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Equipment"],
+)
 async def delete_equipment(
     equipment_id: str,
     db: AsyncSession = Depends(get_db),
@@ -1380,8 +1610,7 @@ async def delete_equipment(
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Equipment not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Equipment not found"
         )
 
 
@@ -1389,11 +1618,18 @@ async def delete_equipment(
 # Photo Endpoints
 # ============================================================================
 
-@router.get("/{apparatus_id}/photos", response_model=List[ApparatusPhotoResponse], tags=["Photos"])
+
+@router.get(
+    "/{apparatus_id}/photos",
+    response_model=List[ApparatusPhotoResponse],
+    tags=["Photos"],
+)
 async def list_apparatus_photos(
     apparatus_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List photos for an apparatus
@@ -1409,12 +1645,19 @@ async def list_apparatus_photos(
     return photos
 
 
-@router.post("/{apparatus_id}/photos", response_model=ApparatusPhotoResponse, status_code=status.HTTP_201_CREATED, tags=["Photos"])
+@router.post(
+    "/{apparatus_id}/photos",
+    response_model=ApparatusPhotoResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Photos"],
+)
 async def create_apparatus_photo(
     apparatus_id: str,
     photo_data: ApparatusPhotoCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Add a photo to apparatus
@@ -1439,7 +1682,11 @@ async def create_apparatus_photo(
     return photo
 
 
-@router.delete("/{apparatus_id}/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Photos"])
+@router.delete(
+    "/{apparatus_id}/photos/{photo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Photos"],
+)
 async def delete_apparatus_photo(
     apparatus_id: str,
     photo_id: str,
@@ -1461,8 +1708,7 @@ async def delete_apparatus_photo(
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Photo not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found"
         )
 
 
@@ -1470,11 +1716,18 @@ async def delete_apparatus_photo(
 # Document Endpoints
 # ============================================================================
 
-@router.get("/{apparatus_id}/documents", response_model=List[ApparatusDocumentResponse], tags=["Documents"])
+
+@router.get(
+    "/{apparatus_id}/documents",
+    response_model=List[ApparatusDocumentResponse],
+    tags=["Documents"],
+)
 async def list_apparatus_documents(
     apparatus_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List documents for an apparatus
@@ -1490,12 +1743,19 @@ async def list_apparatus_documents(
     return documents
 
 
-@router.post("/{apparatus_id}/documents", response_model=ApparatusDocumentResponse, status_code=status.HTTP_201_CREATED, tags=["Documents"])
+@router.post(
+    "/{apparatus_id}/documents",
+    response_model=ApparatusDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Documents"],
+)
 async def create_apparatus_document(
     apparatus_id: str,
     document_data: ApparatusDocumentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Add a document to apparatus
@@ -1520,7 +1780,11 @@ async def create_apparatus_document(
     return document
 
 
-@router.delete("/{apparatus_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Documents"])
+@router.delete(
+    "/{apparatus_id}/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Documents"],
+)
 async def delete_apparatus_document(
     apparatus_id: str,
     document_id: str,
@@ -1542,8 +1806,7 @@ async def delete_apparatus_document(
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
 
 
@@ -1551,12 +1814,21 @@ async def delete_apparatus_document(
 # NFPA Compliance Endpoints
 # ============================================================================
 
-@router.get("/nfpa-compliance", response_model=List[ApparatusNFPAComplianceResponse], tags=["NFPA Compliance"])
+
+@router.get(
+    "/nfpa-compliance",
+    response_model=List[ApparatusNFPAComplianceResponse],
+    tags=["NFPA Compliance"],
+)
 async def list_nfpa_compliance(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    compliance_status: Optional[str] = Query(None, description="Filter by status (compliant, non_compliant, pending, exempt)"),
+    compliance_status: Optional[str] = Query(
+        None, description="Filter by status (compliant, non_compliant, pending, exempt)"
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List NFPA compliance records
@@ -1573,11 +1845,17 @@ async def list_nfpa_compliance(
     return records
 
 
-@router.get("/nfpa-compliance/{compliance_id}", response_model=ApparatusNFPAComplianceResponse, tags=["NFPA Compliance"])
+@router.get(
+    "/nfpa-compliance/{compliance_id}",
+    response_model=ApparatusNFPAComplianceResponse,
+    tags=["NFPA Compliance"],
+)
 async def get_nfpa_compliance(
     compliance_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get a specific NFPA compliance record
@@ -1594,17 +1872,24 @@ async def get_nfpa_compliance(
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="NFPA compliance record not found"
+            detail="NFPA compliance record not found",
         )
 
     return record
 
 
-@router.post("/nfpa-compliance", response_model=ApparatusNFPAComplianceResponse, status_code=status.HTTP_201_CREATED, tags=["NFPA Compliance"])
+@router.post(
+    "/nfpa-compliance",
+    response_model=ApparatusNFPAComplianceResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["NFPA Compliance"],
+)
 async def create_nfpa_compliance(
     compliance_data: ApparatusNFPAComplianceCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Create an NFPA compliance record
@@ -1621,17 +1906,25 @@ async def create_nfpa_compliance(
             checked_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return record
 
 
-@router.patch("/nfpa-compliance/{compliance_id}", response_model=ApparatusNFPAComplianceResponse, tags=["NFPA Compliance"])
+@router.patch(
+    "/nfpa-compliance/{compliance_id}",
+    response_model=ApparatusNFPAComplianceResponse,
+    tags=["NFPA Compliance"],
+)
 async def update_nfpa_compliance(
     compliance_id: str,
     compliance_data: ApparatusNFPAComplianceUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Update an NFPA compliance record
@@ -1649,18 +1942,24 @@ async def update_nfpa_compliance(
             checked_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="NFPA compliance record not found"
+            detail="NFPA compliance record not found",
         )
 
     return record
 
 
-@router.delete("/nfpa-compliance/{compliance_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["NFPA Compliance"])
+@router.delete(
+    "/nfpa-compliance/{compliance_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["NFPA Compliance"],
+)
 async def delete_nfpa_compliance(
     compliance_id: str,
     db: AsyncSession = Depends(get_db),
@@ -1682,7 +1981,7 @@ async def delete_nfpa_compliance(
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="NFPA compliance record not found"
+            detail="NFPA compliance record not found",
         )
 
 
@@ -1690,12 +1989,19 @@ async def delete_nfpa_compliance(
 # Report Config Endpoints
 # ============================================================================
 
-@router.get("/report-configs", response_model=List[ApparatusReportConfigResponse], tags=["Report Configs"])
+
+@router.get(
+    "/report-configs",
+    response_model=List[ApparatusReportConfigResponse],
+    tags=["Report Configs"],
+)
 async def list_report_configs(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     report_type: Optional[str] = Query(None, description="Filter by report type"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List report configurations
@@ -1712,11 +2018,17 @@ async def list_report_configs(
     return configs
 
 
-@router.get("/report-configs/{config_id}", response_model=ApparatusReportConfigResponse, tags=["Report Configs"])
+@router.get(
+    "/report-configs/{config_id}",
+    response_model=ApparatusReportConfigResponse,
+    tags=["Report Configs"],
+)
 async def get_report_config(
     config_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get a specific report config
@@ -1732,14 +2044,18 @@ async def get_report_config(
 
     if not config:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report config not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Report config not found"
         )
 
     return config
 
 
-@router.post("/report-configs", response_model=ApparatusReportConfigResponse, status_code=status.HTTP_201_CREATED, tags=["Report Configs"])
+@router.post(
+    "/report-configs",
+    response_model=ApparatusReportConfigResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Report Configs"],
+)
 async def create_report_config(
     config_data: ApparatusReportConfigCreate,
     db: AsyncSession = Depends(get_db),
@@ -1760,12 +2076,18 @@ async def create_report_config(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return config
 
 
-@router.patch("/report-configs/{config_id}", response_model=ApparatusReportConfigResponse, tags=["Report Configs"])
+@router.patch(
+    "/report-configs/{config_id}",
+    response_model=ApparatusReportConfigResponse,
+    tags=["Report Configs"],
+)
 async def update_report_config(
     config_id: str,
     config_data: ApparatusReportConfigUpdate,
@@ -1787,18 +2109,23 @@ async def update_report_config(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not config:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report config not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Report config not found"
         )
 
     return config
 
 
-@router.delete("/report-configs/{config_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Report Configs"])
+@router.delete(
+    "/report-configs/{config_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Report Configs"],
+)
 async def delete_report_config(
     config_id: str,
     db: AsyncSession = Depends(get_db),
@@ -1819,8 +2146,7 @@ async def delete_report_config(
 
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report config not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Report config not found"
         )
 
 
@@ -1828,15 +2154,27 @@ async def delete_report_config(
 # Service Provider Endpoints
 # ============================================================================
 
-@router.get("/service-providers", response_model=List[ApparatusServiceProviderResponse], tags=["Service Providers"])
+
+@router.get(
+    "/service-providers",
+    response_model=List[ApparatusServiceProviderResponse],
+    tags=["Service Providers"],
+)
 async def list_service_providers(
-    is_active: Optional[bool] = Query(True, description="Filter by active status. Set to false to see archived providers, or omit for all."),
-    is_preferred: Optional[bool] = Query(None, description="Filter preferred providers"),
+    is_active: Optional[bool] = Query(
+        True,
+        description="Filter by active status. Set to false to see archived providers, or omit for all.",
+    ),
+    is_preferred: Optional[bool] = Query(
+        None, description="Filter preferred providers"
+    ),
     specialty: Optional[str] = Query(None, description="Filter by component specialty"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List service providers.
@@ -1858,11 +2196,17 @@ async def list_service_providers(
     )
 
 
-@router.get("/service-providers/{provider_id}", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
+@router.get(
+    "/service-providers/{provider_id}",
+    response_model=ApparatusServiceProviderResponse,
+    tags=["Service Providers"],
+)
 async def get_service_provider(
     provider_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get a specific service provider
@@ -1870,17 +2214,28 @@ async def get_service_provider(
     **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
-    provider = await service.get_service_provider(provider_id, current_user.organization_id)
+    provider = await service.get_service_provider(
+        provider_id, current_user.organization_id
+    )
     if not provider:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found"
+        )
     return provider
 
 
-@router.post("/service-providers", response_model=ApparatusServiceProviderResponse, status_code=status.HTTP_201_CREATED, tags=["Service Providers"])
+@router.post(
+    "/service-providers",
+    response_model=ApparatusServiceProviderResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Service Providers"],
+)
 async def create_service_provider(
     provider_data: ApparatusServiceProviderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Create a service provider
@@ -1895,15 +2250,23 @@ async def create_service_provider(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
 
-@router.patch("/service-providers/{provider_id}", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
+@router.patch(
+    "/service-providers/{provider_id}",
+    response_model=ApparatusServiceProviderResponse,
+    tags=["Service Providers"],
+)
 async def update_service_provider(
     provider_id: str,
     provider_data: ApparatusServiceProviderUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Update a service provider
@@ -1912,15 +2275,25 @@ async def update_service_provider(
     """
     service = ApparatusService(db)
     try:
-        provider = await service.update_service_provider(provider_id, provider_data, current_user.organization_id)
+        provider = await service.update_service_provider(
+            provider_id, provider_data, current_user.organization_id
+        )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not provider:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found"
+        )
     return provider
 
 
-@router.post("/service-providers/{provider_id}/archive", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
+@router.post(
+    "/service-providers/{provider_id}/archive",
+    response_model=ApparatusServiceProviderResponse,
+    tags=["Service Providers"],
+)
 async def archive_service_provider(
     provider_id: str,
     db: AsyncSession = Depends(get_db),
@@ -1939,11 +2312,17 @@ async def archive_service_provider(
         provider_id, current_user.organization_id, current_user.id
     )
     if not provider:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found"
+        )
     return provider
 
 
-@router.post("/service-providers/{provider_id}/restore", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
+@router.post(
+    "/service-providers/{provider_id}/restore",
+    response_model=ApparatusServiceProviderResponse,
+    tags=["Service Providers"],
+)
 async def restore_service_provider(
     provider_id: str,
     db: AsyncSession = Depends(get_db),
@@ -1959,7 +2338,9 @@ async def restore_service_provider(
         provider_id, current_user.organization_id
     )
     if not provider:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found"
+        )
     return provider
 
 
@@ -1967,7 +2348,10 @@ async def restore_service_provider(
 # Component Endpoints
 # ============================================================================
 
-@router.get("/components", response_model=List[ApparatusComponentResponse], tags=["Components"])
+
+@router.get(
+    "/components", response_model=List[ApparatusComponentResponse], tags=["Components"]
+)
 async def list_components(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
     component_type: Optional[str] = Query(None, description="Filter by component type"),
@@ -1975,7 +2359,9 @@ async def list_components(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List apparatus components
@@ -1993,11 +2379,17 @@ async def list_components(
     )
 
 
-@router.get("/components/{component_id}", response_model=ApparatusComponentResponse, tags=["Components"])
+@router.get(
+    "/components/{component_id}",
+    response_model=ApparatusComponentResponse,
+    tags=["Components"],
+)
 async def get_component(
     component_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get a specific component
@@ -2007,15 +2399,24 @@ async def get_component(
     service = ApparatusService(db)
     component = await service.get_component(component_id, current_user.organization_id)
     if not component:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Component not found"
+        )
     return component
 
 
-@router.post("/components", response_model=ApparatusComponentResponse, status_code=status.HTTP_201_CREATED, tags=["Components"])
+@router.post(
+    "/components",
+    response_model=ApparatusComponentResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Components"],
+)
 async def create_component(
     component_data: ApparatusComponentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Create a component on an apparatus
@@ -2030,15 +2431,23 @@ async def create_component(
             created_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
 
-@router.patch("/components/{component_id}", response_model=ApparatusComponentResponse, tags=["Components"])
+@router.patch(
+    "/components/{component_id}",
+    response_model=ApparatusComponentResponse,
+    tags=["Components"],
+)
 async def update_component(
     component_id: str,
     component_data: ApparatusComponentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
 ):
     """
     Update a component
@@ -2047,15 +2456,25 @@ async def update_component(
     """
     service = ApparatusService(db)
     try:
-        component = await service.update_component(component_id, component_data, current_user.organization_id)
+        component = await service.update_component(
+            component_id, component_data, current_user.organization_id
+        )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not component:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Component not found"
+        )
     return component
 
 
-@router.delete("/components/{component_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Components"])
+@router.delete(
+    "/components/{component_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Components"],
+)
 async def delete_component(
     component_id: str,
     db: AsyncSession = Depends(get_db),
@@ -2068,27 +2487,42 @@ async def delete_component(
     """
     service = ApparatusService(db)
     if not await service.delete_component(
-        component_id, current_user.organization_id, archived_by=current_user.id,
+        component_id,
+        current_user.organization_id,
+        archived_by=current_user.id,
     ):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Component not found"
+        )
 
 
 # ============================================================================
 # Component Note Endpoints
 # ============================================================================
 
-@router.get("/component-notes", response_model=List[ApparatusComponentNoteResponse], tags=["Component Notes"])
+
+@router.get(
+    "/component-notes",
+    response_model=List[ApparatusComponentNoteResponse],
+    tags=["Component Notes"],
+)
 async def list_component_notes(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
     component_id: Optional[str] = Query(None, description="Filter by component"),
-    note_status: Optional[str] = Query(None, description="Filter by status (open, in_progress, resolved, deferred)"),
+    note_status: Optional[str] = Query(
+        None, description="Filter by status (open, in_progress, resolved, deferred)"
+    ),
     severity: Optional[str] = Query(None, description="Filter by severity"),
     note_type: Optional[str] = Query(None, description="Filter by note type"),
-    service_provider_id: Optional[str] = Query(None, description="Filter by service provider"),
+    service_provider_id: Optional[str] = Query(
+        None, description="Filter by service provider"
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     List component notes with filtering
@@ -2109,11 +2543,17 @@ async def list_component_notes(
     )
 
 
-@router.get("/component-notes/{note_id}", response_model=ApparatusComponentNoteResponse, tags=["Component Notes"])
+@router.get(
+    "/component-notes/{note_id}",
+    response_model=ApparatusComponentNoteResponse,
+    tags=["Component Notes"],
+)
 async def get_component_note(
     note_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get a specific component note
@@ -2123,15 +2563,26 @@ async def get_component_note(
     service = ApparatusService(db)
     note = await service.get_component_note(note_id, current_user.organization_id)
     if not note:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found"
+        )
     return note
 
 
-@router.post("/component-notes", response_model=ApparatusComponentNoteResponse, status_code=status.HTTP_201_CREATED, tags=["Component Notes"])
+@router.post(
+    "/component-notes",
+    response_model=ApparatusComponentNoteResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Component Notes"],
+)
 async def create_component_note(
     note_data: ApparatusComponentNoteCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "apparatus.maintenance", "apparatus.edit", "apparatus.manage"
+        )
+    ),
 ):
     """
     Create a component note (observation, issue, repair record, etc.)
@@ -2147,15 +2598,25 @@ async def create_component_note(
             reported_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
 
-@router.patch("/component-notes/{note_id}", response_model=ApparatusComponentNoteResponse, tags=["Component Notes"])
+@router.patch(
+    "/component-notes/{note_id}",
+    response_model=ApparatusComponentNoteResponse,
+    tags=["Component Notes"],
+)
 async def update_component_note(
     note_id: str,
     note_data: ApparatusComponentNoteUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission(
+            "apparatus.maintenance", "apparatus.edit", "apparatus.manage"
+        )
+    ),
 ):
     """
     Update a component note
@@ -2171,13 +2632,21 @@ async def update_component_note(
             resolved_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not note:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found"
+        )
     return note
 
 
-@router.delete("/component-notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Component Notes"])
+@router.delete(
+    "/component-notes/{note_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Component Notes"],
+)
 async def delete_component_note(
     note_id: str,
     db: AsyncSession = Depends(get_db),
@@ -2190,19 +2659,30 @@ async def delete_component_note(
     """
     service = ApparatusService(db)
     if not await service.delete_component_note(note_id, current_user.organization_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found"
+        )
 
 
 # ============================================================================
 # Service Report Generation
 # ============================================================================
 
-@router.get("/{apparatus_id}/service-report", response_model=ApparatusServiceReport, tags=["Service Reports"])
+
+@router.get(
+    "/{apparatus_id}/service-report",
+    response_model=ApparatusServiceReport,
+    tags=["Service Reports"],
+)
 async def generate_service_report(
     apparatus_id: str,
-    component_ids: Optional[str] = Query(None, description="Comma-separated component IDs to scope the report"),
+    component_ids: Optional[str] = Query(
+        None, description="Comma-separated component IDs to scope the report"
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Generate a service report for an apparatus.
@@ -2228,18 +2708,27 @@ async def generate_service_report(
             component_ids=parsed_ids,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
 
 # ============================================================================
 # Apparatus Folder Endpoints (Document Management Integration)
 # ============================================================================
 
-@router.get("/{apparatus_id}/folders", response_model=FoldersListResponse, tags=["Apparatus Folders"])
+
+@router.get(
+    "/{apparatus_id}/folders",
+    response_model=FoldersListResponse,
+    tags=["Apparatus Folders"],
+)
 async def get_apparatus_folders(
     apparatus_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
 ):
     """
     Get the hierarchical folder structure for an apparatus.

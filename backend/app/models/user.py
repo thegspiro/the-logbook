@@ -26,33 +26,34 @@ Taxonomy
   credentials).
 """
 
+import enum
+from datetime import datetime, timezone
+
 from sqlalchemy import (
-    Column,
-    String,
+    JSON,
     Boolean,
-    DateTime,
+    Column,
     Date,
-    Integer,
-    Text,
+    DateTime,
     Enum,
     ForeignKey,
-    Table,
     Index,
-    JSON,
+    Integer,
+    String,
+    Table,
+    Text,
 )
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.sql import func
-from datetime import datetime, timezone
-import enum
-
-from app.core.utils import generate_uuid
 
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class UserStatus(str, enum.Enum):
     """User account status"""
+
     ACTIVE = "active"
     INACTIVE = "inactive"
     SUSPENDED = "suspended"
@@ -72,6 +73,7 @@ class MembershipType(str, enum.Enum):
     organisational.  ``PROSPECTIVE`` members live in the separate
     ``prospects`` table; the enum value is here only for reference.
     """
+
     PROSPECTIVE = "prospective"
     PROBATIONARY = "probationary"
     ACTIVE = "active"
@@ -83,6 +85,7 @@ class MembershipType(str, enum.Enum):
 
 class OrganizationType(str, enum.Enum):
     """Organization/Department type"""
+
     FIRE_DEPARTMENT = "fire_department"
     EMS_ONLY = "ems_only"
     FIRE_EMS_COMBINED = "fire_ems_combined"
@@ -90,6 +93,7 @@ class OrganizationType(str, enum.Enum):
 
 class IdentifierType(str, enum.Enum):
     """Type of department identifier used"""
+
     FDID = "fdid"  # Fire Department ID (NFIRS)
     STATE_ID = "state_id"  # State license/certification number
     DEPARTMENT_ID = "department_id"  # Internal department ID only
@@ -115,7 +119,7 @@ class Organization(Base):
     organization_type = Column(
         Enum(OrganizationType, values_callable=lambda x: [e.value for e in x]),
         default=OrganizationType.FIRE_DEPARTMENT,
-        nullable=False
+        nullable=False,
     )
 
     # Timezone
@@ -148,7 +152,7 @@ class Organization(Base):
     identifier_type = Column(
         Enum(IdentifierType, values_callable=lambda x: [e.value for e in x]),
         default=IdentifierType.DEPARTMENT_ID,
-        nullable=False
+        nullable=False,
     )
     fdid = Column(String(50))  # Fire Department ID (NFIRS)
     state_id = Column(String(50))  # State license/certification number
@@ -160,7 +164,7 @@ class Organization(Base):
     tax_id = Column(String(50))  # EIN for 501(c)(3) organizations
 
     # Logo stored as base64 or URL (MEDIUMTEXT for large base64 images)
-    logo = Column(Text().with_variant(mysql.MEDIUMTEXT(), 'mysql'))
+    logo = Column(Text().with_variant(mysql.MEDIUMTEXT(), "mysql"))
 
     # Legacy field - keep for compatibility
     type = Column(String(50), default="fire_department")
@@ -170,7 +174,9 @@ class Organization(Base):
     active = Column(Boolean, default=True, index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     users = relationship("User", back_populates="organization")
@@ -180,7 +186,7 @@ class Organization(Base):
         "PublicPortalConfig",
         back_populates="organization",
         uselist=False,
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self):
@@ -198,17 +204,26 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Basic Info
     username = Column(String(100), nullable=False)
     email = Column(String(255), nullable=False, index=True)
-    personal_email = Column(String(255))  # Personal/home email for post-separation contact
+    personal_email = Column(
+        String(255)
+    )  # Personal/home email for post-separation contact
     password_hash = Column(String(255))
     first_name = Column(String(100))
     middle_name = Column(String(100))
     last_name = Column(String(100))
-    membership_number = Column(String(50))  # Organization-assigned membership ID (e.g., "001", "M-042")
+    membership_number = Column(
+        String(50)
+    )  # Organization-assigned membership ID (e.g., "001", "M-042")
     phone = Column(String(20))
     mobile = Column(String(20))
 
@@ -231,7 +246,9 @@ class User(Base):
     # Referral data preserved from prospect record on transfer
     referral_source = Column(String(255))
     interest_reason = Column(Text)
-    referred_by_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    referred_by_user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL")
+    )
 
     # Emergency Contacts (stored as JSON array)
     # Format: [{"name": "...", "relationship": "...", "phone": "...", "email": "...", "is_primary": true}, ...]
@@ -243,13 +260,23 @@ class User(Base):
 
     # Department Membership (one per member, no permissions – purely classification)
     membership_type = Column(String(50), default="active")  # See MembershipType enum
-    membership_type_changed_at = Column(DateTime(timezone=True))  # When membership tier last changed
+    membership_type_changed_at = Column(
+        DateTime(timezone=True)
+    )  # When membership tier last changed
 
     # Status
-    status = Column(Enum(UserStatus, values_callable=lambda x: [e.value for e in x]), default=UserStatus.ACTIVE, index=True)
-    status_changed_at = Column(DateTime(timezone=True))  # When status last changed (used for drop-date tracking)
+    status = Column(
+        Enum(UserStatus, values_callable=lambda x: [e.value for e in x]),
+        default=UserStatus.ACTIVE,
+        index=True,
+    )
+    status_changed_at = Column(
+        DateTime(timezone=True)
+    )  # When status last changed (used for drop-date tracking)
     status_change_reason = Column(Text)  # Reason for the last status change
-    archived_at = Column(DateTime(timezone=True))  # When the member was archived (after all property returned)
+    archived_at = Column(
+        DateTime(timezone=True)
+    )  # When the member was archived (after all property returned)
     email_verified = Column(Boolean, default=False)
     email_verified_at = Column(DateTime(timezone=True))
 
@@ -265,6 +292,7 @@ class User(Base):
             return None
         try:
             from app.core.security import decrypt_data
+
             return decrypt_data(self._mfa_secret_encrypted)
         except Exception:
             # Fallback for pre-encryption plaintext values
@@ -276,18 +304,26 @@ class User(Base):
             self._mfa_secret_encrypted = None
         else:
             from app.core.security import encrypt_data
+
             self._mfa_secret_encrypted = encrypt_data(value)
 
     @property
     def mfa_backup_codes(self) -> list | None:
-        import json as _json
+        pass
+
         raw = self._mfa_backup_codes_encrypted
         if raw is None:
             return None
         # If stored as a list of encrypted strings, decrypt each
-        if isinstance(raw, list) and raw and isinstance(raw[0], str) and len(raw[0]) > 40:
+        if (
+            isinstance(raw, list)
+            and raw
+            and isinstance(raw[0], str)
+            and len(raw[0]) > 40
+        ):
             try:
                 from app.core.security import decrypt_data
+
                 return [decrypt_data(c) for c in raw]
             except Exception:
                 return raw
@@ -299,11 +335,14 @@ class User(Base):
             self._mfa_backup_codes_encrypted = None
         else:
             from app.core.security import encrypt_data
+
             self._mfa_backup_codes_encrypted = [encrypt_data(c) for c in value]
 
     # Password Management
     password_changed_at = Column(DateTime(timezone=True))
-    must_change_password = Column(Boolean, default=False, nullable=False, server_default="0")
+    must_change_password = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     failed_login_attempts = Column(Integer, default=0)
     locked_until = Column(DateTime(timezone=True))
     password_reset_token = Column(String(128), index=True)
@@ -312,7 +351,9 @@ class User(Base):
     # Timestamps
     last_login_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     deleted_at = Column(DateTime(timezone=True))
 
     # Relationships
@@ -327,14 +368,19 @@ class User(Base):
 
     # Indexes and constraints
     __table_args__ = (
-        Index('idx_user_org_username', 'organization_id', 'username', unique=True),
-        Index('idx_user_org_email', 'organization_id', 'email', unique=True),
-        Index('idx_user_org_membership_number', 'organization_id', 'membership_number', unique=True),
+        Index("idx_user_org_username", "organization_id", "username", unique=True),
+        Index("idx_user_org_email", "organization_id", "email", unique=True),
+        Index(
+            "idx_user_org_membership_number",
+            "organization_id",
+            "membership_number",
+            unique=True,
+        ),
     )
 
     # Backward-compatible alias so ``selectinload(User.roles)`` and
     # ``user.roles`` both resolve to the ``positions`` relationship.
-    roles = synonym('positions')
+    roles = synonym("positions")
 
     @property
     def full_name(self) -> str:
@@ -351,7 +397,11 @@ class User(Base):
         """Check if account is locked"""
         if not self.locked_until:
             return False
-        locked = self.locked_until if self.locked_until.tzinfo else self.locked_until.replace(tzinfo=timezone.utc)
+        locked = (
+            self.locked_until
+            if self.locked_until.tzinfo
+            else self.locked_until.replace(tzinfo=timezone.utc)
+        )
         return datetime.now(timezone.utc) < locked
 
     def __repr__(self):
@@ -371,7 +421,12 @@ class Position(Base):
     __tablename__ = "positions"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     name = Column(String(100), nullable=False)
     slug = Column(String(100), nullable=False)
@@ -381,7 +436,9 @@ class Position(Base):
     priority = Column(Integer, default=0)  # Higher priority = more powerful
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="positions")
@@ -394,7 +451,7 @@ class Position(Base):
     )
 
     __table_args__ = (
-        Index('idx_position_org_slug', 'organization_id', 'slug', unique=True),
+        Index("idx_position_org_slug", "organization_id", "slug", unique=True),
     )
 
     def __repr__(self):
@@ -404,12 +461,24 @@ class Position(Base):
 # User-Position Association Table (Many-to-Many)
 # Uses composite primary key (user_id, position_id)
 user_positions = Table(
-    'user_positions',
+    "user_positions",
     Base.metadata,
-    Column('user_id', String(36), ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
-    Column('position_id', String(36), ForeignKey('positions.id', ondelete='CASCADE'), primary_key=True),
-    Column('assigned_at', DateTime(timezone=True), server_default=func.now(), index=True),
-    Column('assigned_by', String(36), ForeignKey('users.id'), index=True),
+    Column(
+        "user_id",
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "position_id",
+        String(36),
+        ForeignKey("positions.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "assigned_at", DateTime(timezone=True), server_default=func.now(), index=True
+    ),
+    Column("assigned_by", String(36), ForeignKey("users.id"), index=True),
 )
 
 
@@ -432,7 +501,12 @@ class Prospect(Base):
     __tablename__ = "prospects"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Contact Information
     first_name = Column(String(100), nullable=False)
@@ -450,7 +524,9 @@ class Prospect(Base):
 
     # Application Details
     application_date = Column(DateTime(timezone=True), server_default=func.now())
-    status = Column(String(50), default="applied")  # applied, interviewing, accepted, rejected, withdrawn
+    status = Column(
+        String(50), default="applied"
+    )  # applied, interviewing, accepted, rejected, withdrawn
     notes = Column(Text)
     referred_by = Column(String(255))  # Who referred them
 
@@ -460,22 +536,27 @@ class Prospect(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="prospects")
 
     __table_args__ = (
-        Index('idx_prospect_org_email', 'organization_id', 'email'),
-        Index('idx_prospect_org_status', 'organization_id', 'status'),
+        Index("idx_prospect_org_email", "organization_id", "email"),
+        Index("idx_prospect_org_status", "organization_id", "status"),
     )
 
     def __repr__(self):
-        return f"<Prospect(name={self.first_name} {self.last_name}, status={self.status})>"
+        return (
+            f"<Prospect(name={self.first_name} {self.last_name}, status={self.status})>"
+        )
 
 
 class LeaveType(str, enum.Enum):
     """Type of leave of absence."""
+
     LEAVE_OF_ABSENCE = "leave_of_absence"
     MEDICAL = "medical"
     MILITARY = "military"
@@ -540,15 +621,17 @@ class MemberLeaveOfAbsence(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     user = relationship("User", foreign_keys=[user_id])
     grantor = relationship("User", foreign_keys=[granted_by])
 
     __table_args__ = (
-        Index('idx_member_leave_org_user', 'organization_id', 'user_id'),
-        Index('idx_member_leave_dates', 'start_date', 'end_date'),
+        Index("idx_member_leave_org_user", "organization_id", "user_id"),
+        Index("idx_member_leave_dates", "start_date", "end_date"),
     )
 
     def __repr__(self):
@@ -563,7 +646,12 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     token = Column(String(512), nullable=False, unique=True, index=True)
     refresh_token = Column(String(512))
@@ -574,7 +662,9 @@ class Session(Base):
 
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    last_activity = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_activity = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     def __repr__(self):
         return f"<Session(user_id={self.user_id}, expires_at={self.expires_at})>"
@@ -592,10 +682,15 @@ class PasswordHistory(Base):
     __tablename__ = "password_history"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        Index('idx_password_history_user_created', 'user_id', 'created_at'),
+        Index("idx_password_history_user_created", "user_id", "created_at"),
     )

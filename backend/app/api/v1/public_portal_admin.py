@@ -5,41 +5,38 @@ Admin endpoints for configuring and managing the public portal.
 Requires authentication and appropriate permissions.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, desc
-from typing import List, Optional
 from datetime import datetime, timedelta, timezone
-from loguru import logger
+from typing import List, Optional
 
-from app.core.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from loguru import logger
+from sqlalchemy import and_, desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.dependencies import get_current_user
-from app.core.public_portal_security import (
-    generate_api_key,
-    hash_api_key,
+from app.core.database import get_db
+from app.core.public_portal_security import generate_api_key, hash_api_key
+from app.models.public_portal import (
+    PublicPortalAccessLog,
+    PublicPortalAPIKey,
+    PublicPortalConfig,
+    PublicPortalDataWhitelist,
 )
 from app.models.user import User
-from app.models.public_portal import (
-    PublicPortalConfig,
-    PublicPortalAPIKey,
-    PublicPortalAccessLog,
-    PublicPortalDataWhitelist
-)
 from app.schemas.public_portal import (
-    PublicPortalConfigCreate,
-    PublicPortalConfigUpdate,
-    PublicPortalConfigResponse,
+    PublicPortalAccessLogResponse,
     PublicPortalAPIKeyCreate,
     PublicPortalAPIKeyCreatedResponse,
     PublicPortalAPIKeyResponse,
     PublicPortalAPIKeyUpdate,
-    PublicPortalAccessLogResponse,
-    PublicPortalAccessLogFilter,
-    PublicPortalDataWhitelistCreate,
-    PublicPortalDataWhitelistUpdate,
-    PublicPortalDataWhitelistResponse,
+    PublicPortalConfigCreate,
+    PublicPortalConfigResponse,
+    PublicPortalConfigUpdate,
     PublicPortalDataWhitelistBulkUpdate,
-    PublicPortalUsageStats
+    PublicPortalDataWhitelistCreate,
+    PublicPortalDataWhitelistResponse,
+    PublicPortalDataWhitelistUpdate,
+    PublicPortalUsageStats,
 )
 
 router = APIRouter(prefix="/public-portal", tags=["public-portal-admin"])
@@ -49,10 +46,10 @@ router = APIRouter(prefix="/public-portal", tags=["public-portal-admin"])
 # Configuration Endpoints
 # ============================================================================
 
+
 @router.get("/config", response_model=PublicPortalConfigResponse)
 async def get_portal_config(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     """
     Get public portal configuration for the organization.
@@ -61,8 +58,9 @@ async def get_portal_config(
     """
     # Get or create config
     result = await db.execute(
-        select(PublicPortalConfig)
-        .where(PublicPortalConfig.organization_id == str(current_user.organization_id))
+        select(PublicPortalConfig).where(
+            PublicPortalConfig.organization_id == str(current_user.organization_id)
+        )
     )
     config = result.scalar_one_or_none()
 
@@ -74,7 +72,7 @@ async def get_portal_config(
             allowed_origins=[],
             default_rate_limit=1000,
             cache_ttl_seconds=300,
-            settings={}
+            settings={},
         )
         db.add(config)
         await db.commit()
@@ -87,7 +85,7 @@ async def get_portal_config(
 async def create_portal_config(
     config_data: PublicPortalConfigCreate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Create or update public portal configuration.
@@ -96,8 +94,9 @@ async def create_portal_config(
     """
     # Check if config already exists
     result = await db.execute(
-        select(PublicPortalConfig)
-        .where(PublicPortalConfig.organization_id == str(current_user.organization_id))
+        select(PublicPortalConfig).where(
+            PublicPortalConfig.organization_id == str(current_user.organization_id)
+        )
     )
     existing_config = result.scalar_one_or_none()
 
@@ -121,14 +120,16 @@ async def create_portal_config(
         allowed_origins=config_data.allowed_origins,
         default_rate_limit=config_data.default_rate_limit,
         cache_ttl_seconds=config_data.cache_ttl_seconds,
-        settings=config_data.settings
+        settings=config_data.settings,
     )
 
     db.add(config)
     await db.commit()
     await db.refresh(config)
 
-    logger.info(f"Public portal config created for organization {current_user.organization_id}")
+    logger.info(
+        f"Public portal config created for organization {current_user.organization_id}"
+    )
     return config
 
 
@@ -136,7 +137,7 @@ async def create_portal_config(
 async def update_portal_config(
     config_update: PublicPortalConfigUpdate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Update public portal configuration.
@@ -144,15 +145,16 @@ async def update_portal_config(
     Only updates fields that are provided (partial update).
     """
     result = await db.execute(
-        select(PublicPortalConfig)
-        .where(PublicPortalConfig.organization_id == str(current_user.organization_id))
+        select(PublicPortalConfig).where(
+            PublicPortalConfig.organization_id == str(current_user.organization_id)
+        )
     )
     config = result.scalar_one_or_none()
 
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Public portal not configured. Create it first."
+            detail="Public portal not configured. Create it first.",
         )
 
     # Update only provided fields
@@ -172,7 +174,9 @@ async def update_portal_config(
     await db.commit()
     await db.refresh(config)
 
-    logger.info(f"Public portal config updated for organization {current_user.organization_id}")
+    logger.info(
+        f"Public portal config updated for organization {current_user.organization_id}"
+    )
     return config
 
 
@@ -180,11 +184,12 @@ async def update_portal_config(
 # API Key Management Endpoints
 # ============================================================================
 
+
 @router.get("/api-keys", response_model=List[PublicPortalAPIKeyResponse])
 async def list_api_keys(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    include_inactive: bool = Query(False, description="Include revoked keys")
+    include_inactive: bool = Query(False, description="Include revoked keys"),
 ):
     """
     List all API keys for the organization.
@@ -210,7 +215,7 @@ async def list_api_keys(
 async def create_api_key(
     key_data: PublicPortalAPIKeyCreate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Create a new API key for public portal access.
@@ -219,15 +224,16 @@ async def create_api_key(
     """
     # Get portal config
     result = await db.execute(
-        select(PublicPortalConfig)
-        .where(PublicPortalConfig.organization_id == str(current_user.organization_id))
+        select(PublicPortalConfig).where(
+            PublicPortalConfig.organization_id == str(current_user.organization_id)
+        )
     )
     config = result.scalar_one_or_none()
 
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Public portal not configured. Configure it first."
+            detail="Public portal not configured. Configure it first.",
         )
 
     # Generate API key
@@ -244,14 +250,16 @@ async def create_api_key(
         rate_limit_override=key_data.rate_limit_override,
         expires_at=key_data.expires_at.isoformat() if key_data.expires_at else None,
         is_active=True,
-        created_by=str(current_user.id)
+        created_by=str(current_user.id),
     )
 
     db.add(api_key_obj)
     await db.commit()
     await db.refresh(api_key_obj)
 
-    logger.info(f"API key created: {key_prefix} for organization {current_user.organization_id}")
+    logger.info(
+        f"API key created: {key_prefix} for organization {current_user.organization_id}"
+    )
 
     # Return full key (only time it will be shown)
     return PublicPortalAPIKeyCreatedResponse(
@@ -260,9 +268,13 @@ async def create_api_key(
         key_prefix=key_prefix,
         name=api_key_obj.name,
         rate_limit_override=api_key_obj.rate_limit_override,
-        expires_at=datetime.fromisoformat(api_key_obj.expires_at) if api_key_obj.expires_at else None,
+        expires_at=(
+            datetime.fromisoformat(api_key_obj.expires_at)
+            if api_key_obj.expires_at
+            else None
+        ),
         is_active=api_key_obj.is_active,
-        created_at=datetime.fromisoformat(api_key_obj.created_at)
+        created_at=datetime.fromisoformat(api_key_obj.created_at),
     )
 
 
@@ -271,7 +283,7 @@ async def update_api_key(
     key_id: str,
     key_update: PublicPortalAPIKeyUpdate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Update an API key's settings.
@@ -279,11 +291,10 @@ async def update_api_key(
     Can update name, rate limit, expiration, or revoke the key.
     """
     result = await db.execute(
-        select(PublicPortalAPIKey)
-        .where(
+        select(PublicPortalAPIKey).where(
             and_(
                 PublicPortalAPIKey.id == key_id,
-                PublicPortalAPIKey.organization_id == str(current_user.organization_id)
+                PublicPortalAPIKey.organization_id == str(current_user.organization_id),
             )
         )
     )
@@ -291,8 +302,7 @@ async def update_api_key(
 
     if not api_key:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="API key not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="API key not found"
         )
 
     # Update fields
@@ -317,7 +327,7 @@ async def update_api_key(
 async def revoke_api_key(
     key_id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Revoke (deactivate) an API key.
@@ -325,11 +335,10 @@ async def revoke_api_key(
     The key is not deleted but marked as inactive.
     """
     result = await db.execute(
-        select(PublicPortalAPIKey)
-        .where(
+        select(PublicPortalAPIKey).where(
             and_(
                 PublicPortalAPIKey.id == key_id,
-                PublicPortalAPIKey.organization_id == str(current_user.organization_id)
+                PublicPortalAPIKey.organization_id == str(current_user.organization_id),
             )
         )
     )
@@ -337,8 +346,7 @@ async def revoke_api_key(
 
     if not api_key:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="API key not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="API key not found"
         )
 
     api_key.is_active = False
@@ -353,6 +361,7 @@ async def revoke_api_key(
 # Access Log Endpoints
 # ============================================================================
 
+
 @router.get("/access-logs", response_model=List[PublicPortalAccessLogResponse])
 async def get_access_logs(
     current_user: User = Depends(get_current_user),
@@ -365,7 +374,7 @@ async def get_access_logs(
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
 ):
     """
     Get access logs for the public portal.
@@ -386,7 +395,9 @@ async def get_access_logs(
     if status_code:
         query = query.where(PublicPortalAccessLog.status_code == status_code)
     if flagged_suspicious is not None:
-        query = query.where(PublicPortalAccessLog.flagged_suspicious == flagged_suspicious)
+        query = query.where(
+            PublicPortalAccessLog.flagged_suspicious == flagged_suspicious
+        )
     if start_date:
         query = query.where(PublicPortalAccessLog.timestamp >= start_date.isoformat())
     if end_date:
@@ -406,8 +417,7 @@ async def get_access_logs(
 
 @router.get("/usage-stats", response_model=PublicPortalUsageStats)
 async def get_usage_stats(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     """
     Get usage statistics for the public portal.
@@ -419,19 +429,19 @@ async def get_usage_stats(
 
     # Total requests
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id))
-        .where(PublicPortalAccessLog.organization_id == org_id)
+        select(func.count(PublicPortalAccessLog.id)).where(
+            PublicPortalAccessLog.organization_id == org_id
+        )
     )
     total_requests = result.scalar() or 0
 
     # Requests today
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id))
-        .where(
+        select(func.count(PublicPortalAccessLog.id)).where(
             and_(
                 PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.timestamp >= today_start.isoformat()
+                PublicPortalAccessLog.timestamp >= today_start.isoformat(),
             )
         )
     )
@@ -440,11 +450,10 @@ async def get_usage_stats(
     # Requests this week
     week_start = today_start - timedelta(days=today_start.weekday())
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id))
-        .where(
+        select(func.count(PublicPortalAccessLog.id)).where(
             and_(
                 PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.timestamp >= week_start.isoformat()
+                PublicPortalAccessLog.timestamp >= week_start.isoformat(),
             )
         )
     )
@@ -453,11 +462,10 @@ async def get_usage_stats(
     # Requests this month
     month_start = today_start.replace(day=1)
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id))
-        .where(
+        select(func.count(PublicPortalAccessLog.id)).where(
             and_(
                 PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.timestamp >= month_start.isoformat()
+                PublicPortalAccessLog.timestamp >= month_start.isoformat(),
             )
         )
     )
@@ -465,18 +473,18 @@ async def get_usage_stats(
 
     # Unique IPs
     result = await db.execute(
-        select(func.count(func.distinct(PublicPortalAccessLog.ip_address)))
-        .where(PublicPortalAccessLog.organization_id == org_id)
+        select(func.count(func.distinct(PublicPortalAccessLog.ip_address))).where(
+            PublicPortalAccessLog.organization_id == org_id
+        )
     )
     unique_ips = result.scalar() or 0
 
     # Average response time
     result = await db.execute(
-        select(func.avg(PublicPortalAccessLog.response_time_ms))
-        .where(
+        select(func.avg(PublicPortalAccessLog.response_time_ms)).where(
             and_(
                 PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.response_time_ms.isnot(None)
+                PublicPortalAccessLog.response_time_ms.isnot(None),
             )
         )
     )
@@ -487,44 +495,37 @@ async def get_usage_stats(
     result = await db.execute(
         select(
             PublicPortalAccessLog.endpoint,
-            func.count(PublicPortalAccessLog.id).label('count')
+            func.count(PublicPortalAccessLog.id).label("count"),
         )
         .where(
             and_(
                 PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.timestamp >= seven_days_ago.isoformat()
+                PublicPortalAccessLog.timestamp >= seven_days_ago.isoformat(),
             )
         )
         .group_by(PublicPortalAccessLog.endpoint)
-        .order_by(desc('count'))
+        .order_by(desc("count"))
         .limit(10)
     )
-    top_endpoints = [
-        {"endpoint": row[0], "count": row[1]}
-        for row in result.all()
-    ]
+    top_endpoints = [{"endpoint": row[0], "count": row[1]} for row in result.all()]
 
     # Requests by status code
     result = await db.execute(
         select(
             PublicPortalAccessLog.status_code,
-            func.count(PublicPortalAccessLog.id).label('count')
+            func.count(PublicPortalAccessLog.id).label("count"),
         )
         .where(PublicPortalAccessLog.organization_id == org_id)
         .group_by(PublicPortalAccessLog.status_code)
     )
-    requests_by_status = {
-        row[0]: row[1]
-        for row in result.all()
-    }
+    requests_by_status = {row[0]: row[1] for row in result.all()}
 
     # Flagged requests
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id))
-        .where(
+        select(func.count(PublicPortalAccessLog.id)).where(
             and_(
                 PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.flagged_suspicious == True  # noqa: E712
+                PublicPortalAccessLog.flagged_suspicious == True,  # noqa: E712
             )
         )
     )
@@ -539,7 +540,7 @@ async def get_usage_stats(
         average_response_time_ms=avg_response_time,
         top_endpoints=top_endpoints,
         requests_by_status=requests_by_status,
-        flagged_requests=flagged_requests
+        flagged_requests=flagged_requests,
     )
 
 
@@ -547,11 +548,12 @@ async def get_usage_stats(
 # Data Whitelist Endpoints
 # ============================================================================
 
+
 @router.get("/whitelist", response_model=List[PublicPortalDataWhitelistResponse])
 async def get_data_whitelist(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    category: Optional[str] = Query(None, description="Filter by category")
+    category: Optional[str] = Query(None, description="Filter by category"),
 ):
     """
     Get the data whitelist configuration.
@@ -575,7 +577,7 @@ async def get_data_whitelist(
 async def create_whitelist_entry(
     entry_data: PublicPortalDataWhitelistCreate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Add a new field to the data whitelist.
@@ -584,25 +586,25 @@ async def create_whitelist_entry(
     """
     # Get config
     result = await db.execute(
-        select(PublicPortalConfig)
-        .where(PublicPortalConfig.organization_id == str(current_user.organization_id))
+        select(PublicPortalConfig).where(
+            PublicPortalConfig.organization_id == str(current_user.organization_id)
+        )
     )
     config = result.scalar_one_or_none()
 
     if not config:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Public portal not configured"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Public portal not configured"
         )
 
     # Check if entry already exists
     result = await db.execute(
-        select(PublicPortalDataWhitelist)
-        .where(
+        select(PublicPortalDataWhitelist).where(
             and_(
-                PublicPortalDataWhitelist.organization_id == str(current_user.organization_id),
+                PublicPortalDataWhitelist.organization_id
+                == str(current_user.organization_id),
                 PublicPortalDataWhitelist.data_category == entry_data.data_category,
-                PublicPortalDataWhitelist.field_name == entry_data.field_name
+                PublicPortalDataWhitelist.field_name == entry_data.field_name,
             )
         )
     )
@@ -611,7 +613,7 @@ async def create_whitelist_entry(
     if existing_entry:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Whitelist entry already exists"
+            detail="Whitelist entry already exists",
         )
 
     # Create whitelist entry
@@ -620,7 +622,7 @@ async def create_whitelist_entry(
         config_id=str(config.id),
         data_category=entry_data.data_category,
         field_name=entry_data.field_name,
-        is_enabled=entry_data.is_enabled
+        is_enabled=entry_data.is_enabled,
     )
 
     db.add(whitelist_entry)
@@ -630,22 +632,24 @@ async def create_whitelist_entry(
     return whitelist_entry
 
 
-@router.patch("/whitelist/{whitelist_id}", response_model=PublicPortalDataWhitelistResponse)
+@router.patch(
+    "/whitelist/{whitelist_id}", response_model=PublicPortalDataWhitelistResponse
+)
 async def update_whitelist_entry(
     whitelist_id: str,
     entry_update: PublicPortalDataWhitelistUpdate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Update a whitelist entry (enable/disable a field).
     """
     result = await db.execute(
-        select(PublicPortalDataWhitelist)
-        .where(
+        select(PublicPortalDataWhitelist).where(
             and_(
                 PublicPortalDataWhitelist.id == whitelist_id,
-                PublicPortalDataWhitelist.organization_id == str(current_user.organization_id)
+                PublicPortalDataWhitelist.organization_id
+                == str(current_user.organization_id),
             )
         )
     )
@@ -653,8 +657,7 @@ async def update_whitelist_entry(
 
     if not whitelist_entry:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Whitelist entry not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Whitelist entry not found"
         )
 
     whitelist_entry.is_enabled = entry_update.is_enabled
@@ -670,7 +673,7 @@ async def update_whitelist_entry(
 async def bulk_update_whitelist(
     bulk_update: PublicPortalDataWhitelistBulkUpdate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Bulk update whitelist entries.
@@ -680,21 +683,21 @@ async def bulk_update_whitelist(
     updated_count = 0
 
     for update_item in bulk_update.updates:
-        category = update_item.get('category')
-        field = update_item.get('field')
-        enabled = update_item.get('enabled')
+        category = update_item.get("category")
+        field = update_item.get("field")
+        enabled = update_item.get("enabled")
 
         if not all([category, field, enabled is not None]):
             continue
 
         # Find and update entry
         result = await db.execute(
-            select(PublicPortalDataWhitelist)
-            .where(
+            select(PublicPortalDataWhitelist).where(
                 and_(
-                    PublicPortalDataWhitelist.organization_id == str(current_user.organization_id),
+                    PublicPortalDataWhitelist.organization_id
+                    == str(current_user.organization_id),
                     PublicPortalDataWhitelist.data_category == category,
-                    PublicPortalDataWhitelist.field_name == field
+                    PublicPortalDataWhitelist.field_name == field,
                 )
             )
         )
@@ -709,5 +712,5 @@ async def bulk_update_whitelist(
 
     return {
         "message": f"Updated {updated_count} whitelist entries",
-        "updated_count": updated_count
+        "updated_count": updated_count,
     }

@@ -5,25 +5,26 @@ CRUD endpoints for managing email templates.
 Accessible by admins via the membership module admin area.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
-import uuid
 import os
+import uuid
+from typing import List
 
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import require_permission
 from app.core.database import get_db
-from app.api.dependencies import get_current_active_user, require_permission
+from app.models.email_template import EmailAttachment, EmailTemplate
 from app.models.user import User
-from app.models.email_template import EmailTemplate, EmailAttachment, EmailTemplateType
-from app.services.email_template_service import EmailTemplateService
 from app.schemas.email_template import (
-    EmailTemplateResponse,
-    EmailTemplateUpdate,
+    EmailAttachmentResponse,
     EmailTemplatePreviewRequest,
     EmailTemplatePreviewResponse,
-    EmailAttachmentResponse,
+    EmailTemplateResponse,
+    EmailTemplateUpdate,
 )
-from loguru import logger
+from app.services.email_template_service import EmailTemplateService
 
 router = APIRouter()
 
@@ -31,7 +32,9 @@ router = APIRouter()
 @router.get("", response_model=List[EmailTemplateResponse])
 async def list_email_templates(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
 ):
     """
     List all email templates for the current user's organization.
@@ -55,7 +58,9 @@ async def list_email_templates(
 async def get_email_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
 ):
     """Get a specific email template by ID"""
     from sqlalchemy import select
@@ -72,8 +77,7 @@ async def get_email_template(
     template = result.scalar_one_or_none()
     if not template:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Email template not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
         )
     return template
 
@@ -83,7 +87,9 @@ async def update_email_template(
     template_id: str,
     update_data: EmailTemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
 ):
     """
     Update an email template's content, subject, CSS, or settings.
@@ -99,8 +105,7 @@ async def update_email_template(
     )
     if not template:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Email template not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
         )
     await db.commit()
     return template
@@ -111,7 +116,9 @@ async def preview_email_template(
     template_id: str,
     preview_data: EmailTemplatePreviewRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
 ):
     """
     Preview a rendered email template with sample data.
@@ -133,8 +140,7 @@ async def preview_email_template(
     template = result.scalar_one_or_none()
     if not template:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Email template not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
         )
 
     service = EmailTemplateService(db)
@@ -147,7 +153,9 @@ async def preview_email_template(
         css_styles=preview_data.css_styles or template.css_styles,
     )
 
-    subject, html_body, text_body = service.render(preview_template, preview_data.context)
+    subject, html_body, text_body = service.render(
+        preview_template, preview_data.context
+    )
 
     return EmailTemplatePreviewResponse(
         subject=subject,
@@ -161,7 +169,9 @@ async def upload_attachment(
     template_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
 ):
     """
     Upload a file attachment for an email template.
@@ -181,14 +191,13 @@ async def upload_attachment(
     template = result.scalar_one_or_none()
     if not template:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Email template not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
         )
 
     if not template.allow_attachments:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This template does not allow attachments"
+            detail="This template does not allow attachments",
         )
 
     # Read file and enforce size limit (10MB)
@@ -197,25 +206,41 @@ async def upload_attachment(
     if len(contents) > max_size:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="File exceeds 10MB limit"
+            detail="File exceeds 10MB limit",
         )
 
     # Validate file extension — block executable and script types
     ALLOWED_EXTENSIONS = {
-        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-        '.txt', '.csv', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg',
-        '.zip', '.ics',
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".ppt",
+        ".pptx",
+        ".txt",
+        ".csv",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".svg",
+        ".zip",
+        ".ics",
     }
     _, ext = os.path.splitext(file.filename or "attachment")
     ext = ext.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type '{ext}' is not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+            detail=f"File type '{ext}' is not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
         )
 
     # Store file with UUID name (prevents path traversal)
-    attachment_dir = os.path.join("storage", "email_attachments", current_user.organization_id)
+    attachment_dir = os.path.join(
+        "storage", "email_attachments", current_user.organization_id
+    )
     os.makedirs(attachment_dir, exist_ok=True)
 
     file_id = str(uuid.uuid4())
@@ -251,12 +276,16 @@ async def upload_attachment(
     return attachment
 
 
-@router.delete("/{template_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{template_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_attachment(
     template_id: str,
     attachment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
 ):
     """Delete an attachment from an email template"""
     from sqlalchemy import select
@@ -273,8 +302,7 @@ async def delete_attachment(
     attachment = result.scalar_one_or_none()
     if not attachment:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Attachment not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found"
         )
 
     # Remove file from disk
@@ -283,4 +311,6 @@ async def delete_attachment(
 
     await db.delete(attachment)
     await db.commit()
-    logger.info(f"Attachment deleted: {attachment.filename} from template {template_id}")
+    logger.info(
+        f"Attachment deleted: {attachment.filename} from template {template_id}"
+    )

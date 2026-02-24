@@ -4,10 +4,9 @@ Onboarding System Models
 Tracks onboarding progress and stores initial setup information.
 """
 
-from sqlalchemy import Column, String, Boolean, DateTime, Text, JSON, Integer
-from sqlalchemy.sql import func
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.ext.mutable import MutableDict
-from datetime import datetime
+from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.models.user import generate_uuid
@@ -57,7 +56,9 @@ class OnboardingStatus(Base):
     setup_notes = Column(Text)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     def __repr__(self):
         status = "Completed" if self.is_completed else "In Progress"
@@ -94,10 +95,14 @@ class OnboardingChecklistItem(Base):
     sort_order = Column(Integer, default=0)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     def __repr__(self):
-        return f"<OnboardingChecklistItem(title={self.title}, priority={self.priority})>"
+        return (
+            f"<OnboardingChecklistItem(title={self.title}, priority={self.priority})>"
+        )
 
 
 class OnboardingSessionModel(Base):
@@ -117,6 +122,7 @@ class OnboardingSessionModel(Base):
 
     Sessions expire after 2 hours of inactivity.
     """
+
     __tablename__ = "onboarding_sessions"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -134,7 +140,9 @@ class OnboardingSessionModel(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     def __repr__(self):
         return f"<OnboardingSession(id={self.id}, session_id={self.session_id[:8]}...)>"

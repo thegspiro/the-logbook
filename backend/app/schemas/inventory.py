@@ -4,19 +4,21 @@ Inventory Pydantic Schemas
 Request and response schemas for inventory-related endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date
-from uuid import UUID
+from datetime import date, datetime
 from decimal import Decimal
+from typing import Any, Dict, List, Optional
+from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============================================
 # Category Schemas
 # ============================================
 
+
 class InventoryCategoryBase(BaseModel):
     """Base inventory category schema"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     item_type: str
@@ -30,11 +32,11 @@ class InventoryCategoryBase(BaseModel):
 
 class InventoryCategoryCreate(InventoryCategoryBase):
     """Schema for creating a new inventory category"""
-    pass
 
 
 class InventoryCategoryUpdate(BaseModel):
     """Schema for updating an inventory category"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     item_type: Optional[str] = None
@@ -49,6 +51,7 @@ class InventoryCategoryUpdate(BaseModel):
 
 class InventoryCategoryResponse(InventoryCategoryBase):
     """Schema for inventory category response"""
+
     id: UUID
     organization_id: UUID
     active: bool
@@ -65,8 +68,10 @@ class InventoryCategoryResponse(InventoryCategoryBase):
 # Item Schemas
 # ============================================
 
+
 class InventoryItemBase(BaseModel):
     """Base inventory item schema"""
+
     category_id: Optional[UUID] = None
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -103,11 +108,11 @@ class InventoryItemBase(BaseModel):
 
 class InventoryItemCreate(InventoryItemBase):
     """Schema for creating a new inventory item"""
-    pass
 
 
 class InventoryItemUpdate(BaseModel):
     """Schema for updating an inventory item"""
+
     category_id: Optional[UUID] = None
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
@@ -147,6 +152,7 @@ class InventoryItemUpdate(BaseModel):
 
 class InventoryItemResponse(InventoryItemBase):
     """Schema for inventory item response"""
+
     id: UUID
     organization_id: UUID
     assigned_to_user_id: Optional[UUID] = None
@@ -164,6 +170,7 @@ class InventoryItemResponse(InventoryItemBase):
 
 class InventoryItemDetailResponse(InventoryItemResponse):
     """Extended item response with relationships"""
+
     category: Optional[InventoryCategoryResponse] = None
     assigned_to_user: Optional[Dict[str, Any]] = None  # User info
     checkout_count: int = 0
@@ -176,8 +183,10 @@ class InventoryItemDetailResponse(InventoryItemResponse):
 # Assignment Schemas
 # ============================================
 
+
 class ItemAssignmentBase(BaseModel):
     """Base assignment schema"""
+
     assignment_type: str = "permanent"
     assignment_reason: Optional[str] = None
     expected_return_date: Optional[datetime] = None
@@ -185,12 +194,14 @@ class ItemAssignmentBase(BaseModel):
 
 class ItemAssignmentCreate(ItemAssignmentBase):
     """Schema for creating an assignment"""
+
     item_id: UUID
     user_id: UUID
 
 
 class ItemAssignmentResponse(ItemAssignmentBase):
     """Schema for assignment response"""
+
     id: UUID
     organization_id: UUID
     item_id: UUID
@@ -210,6 +221,7 @@ class ItemAssignmentResponse(ItemAssignmentBase):
 
 class UnassignItemRequest(BaseModel):
     """Schema for unassigning an item"""
+
     return_condition: Optional[str] = None
     return_notes: Optional[str] = None
 
@@ -218,8 +230,10 @@ class UnassignItemRequest(BaseModel):
 # Pool Item Issuance Schemas
 # ============================================
 
+
 class ItemIssuanceCreate(BaseModel):
     """Schema for issuing units from a pool item to a member"""
+
     user_id: UUID
     quantity: int = Field(default=1, ge=1, description="Number of units to issue")
     issue_reason: Optional[str] = None
@@ -227,13 +241,17 @@ class ItemIssuanceCreate(BaseModel):
 
 class ItemIssuanceReturnRequest(BaseModel):
     """Schema for returning issued units back to the pool"""
+
     return_condition: Optional[str] = None
     return_notes: Optional[str] = None
-    quantity_returned: Optional[int] = Field(None, ge=1, description="Partial return; defaults to full issuance quantity")
+    quantity_returned: Optional[int] = Field(
+        None, ge=1, description="Partial return; defaults to full issuance quantity"
+    )
 
 
 class ItemIssuanceResponse(BaseModel):
     """Schema for issuance record response"""
+
     id: UUID
     organization_id: UUID
     item_id: UUID
@@ -257,26 +275,31 @@ class ItemIssuanceResponse(BaseModel):
 # Check-Out Schemas
 # ============================================
 
+
 class CheckOutRecordBase(BaseModel):
     """Base checkout record schema"""
+
     expected_return_at: Optional[datetime] = None
     checkout_reason: Optional[str] = None
 
 
 class CheckOutCreate(CheckOutRecordBase):
     """Schema for checking out an item"""
+
     item_id: UUID
     user_id: UUID
 
 
 class CheckInRequest(BaseModel):
     """Schema for checking in an item"""
+
     return_condition: str
     damage_notes: Optional[str] = None
 
 
 class CheckOutRecordResponse(CheckOutRecordBase):
     """Schema for checkout record response"""
+
     id: UUID
     organization_id: UUID
     item_id: UUID
@@ -300,8 +323,10 @@ class CheckOutRecordResponse(CheckOutRecordBase):
 # Maintenance Schemas
 # ============================================
 
+
 class MaintenanceRecordBase(BaseModel):
     """Base maintenance record schema"""
+
     maintenance_type: str
     scheduled_date: Optional[date] = None
     completed_date: Optional[date] = None
@@ -324,11 +349,13 @@ class MaintenanceRecordBase(BaseModel):
 
 class MaintenanceRecordCreate(MaintenanceRecordBase):
     """Schema for creating a maintenance record"""
+
     item_id: UUID
 
 
 class MaintenanceRecordUpdate(BaseModel):
     """Schema for updating a maintenance record"""
+
     maintenance_type: Optional[str] = None
     scheduled_date: Optional[date] = None
     completed_date: Optional[date] = None
@@ -351,6 +378,7 @@ class MaintenanceRecordUpdate(BaseModel):
 
 class MaintenanceRecordResponse(MaintenanceRecordBase):
     """Schema for maintenance record response"""
+
     id: UUID
     organization_id: UUID
     item_id: UUID
@@ -365,14 +393,17 @@ class MaintenanceRecordResponse(MaintenanceRecordBase):
 # Summary & Reporting Schemas
 # ============================================
 
+
 class LowStockItemDetail(BaseModel):
     """Schema for an individual item in a low stock category"""
+
     name: str
     quantity: int
 
 
 class LowStockItem(BaseModel):
     """Schema for low stock alert"""
+
     category_id: UUID
     category_name: str
     item_type: str
@@ -383,6 +414,7 @@ class LowStockItem(BaseModel):
 
 class InventorySummary(BaseModel):
     """Schema for overall inventory summary"""
+
     total_items: int
     items_by_status: Dict[str, int]
     items_by_condition: Dict[str, int]
@@ -394,6 +426,7 @@ class InventorySummary(BaseModel):
 
 class UserInventoryItem(BaseModel):
     """Schema for user's assigned item"""
+
     assignment_id: UUID
     item_id: UUID
     item_name: str
@@ -407,6 +440,7 @@ class UserInventoryItem(BaseModel):
 
 class UserCheckoutItem(BaseModel):
     """Schema for user's checked out item"""
+
     checkout_id: UUID
     item_id: UUID
     item_name: str
@@ -417,6 +451,7 @@ class UserCheckoutItem(BaseModel):
 
 class UserIssuedItem(BaseModel):
     """Schema for a pool item issued to a user"""
+
     issuance_id: UUID
     item_id: UUID
     item_name: str
@@ -428,6 +463,7 @@ class UserIssuedItem(BaseModel):
 
 class UserInventoryResponse(BaseModel):
     """Schema for user's complete inventory view"""
+
     permanent_assignments: List[UserInventoryItem]
     active_checkouts: List[UserCheckoutItem]
     issued_items: List[UserIssuedItem] = []
@@ -435,6 +471,7 @@ class UserInventoryResponse(BaseModel):
 
 class MemberInventorySummary(BaseModel):
     """Summary of a single member's inventory holdings"""
+
     user_id: UUID
     username: str
     first_name: Optional[str] = None
@@ -450,17 +487,20 @@ class MemberInventorySummary(BaseModel):
 
 class MembersInventoryListResponse(BaseModel):
     """Response listing all members with inventory summary"""
+
     members: List[MemberInventorySummary]
     total: int
 
 
 class ItemRetireRequest(BaseModel):
     """Schema for retiring an item"""
+
     notes: Optional[str] = None
 
 
 class ItemsListResponse(BaseModel):
     """Schema for paginated items list"""
+
     items: List[InventoryItemResponse]
     total: int
     skip: int
@@ -469,6 +509,7 @@ class ItemsListResponse(BaseModel):
 
 class MaintenanceDueItem(BaseModel):
     """Schema for item with maintenance due"""
+
     id: UUID
     name: str
     serial_number: Optional[str] = None
@@ -484,16 +525,21 @@ class MaintenanceDueItem(BaseModel):
 # Departure Clearance Schemas
 # ============================================
 
+
 class DepartureClearanceCreate(BaseModel):
     """Schema for initiating a departure clearance"""
+
     user_id: UUID
-    departure_type: Optional[str] = None  # "dropped_voluntary", "dropped_involuntary", "retired"
+    departure_type: Optional[str] = (
+        None  # "dropped_voluntary", "dropped_involuntary", "retired"
+    )
     return_deadline_days: int = Field(default=14, ge=1, le=90)
     notes: Optional[str] = None
 
 
 class ClearanceLineItemResponse(BaseModel):
     """Schema for a single clearance line item"""
+
     id: UUID
     clearance_id: UUID
     source_type: str  # "assignment", "checkout", "issuance"
@@ -504,7 +550,9 @@ class ClearanceLineItemResponse(BaseModel):
     item_asset_tag: Optional[str] = None
     item_value: Optional[float] = None
     quantity: int
-    disposition: str  # "pending", "returned", "returned_damaged", "written_off", "waived"
+    disposition: (
+        str  # "pending", "returned", "returned_damaged", "written_off", "waived"
+    )
     return_condition: Optional[str] = None
     resolved_at: Optional[datetime] = None
     resolved_by: Optional[UUID] = None
@@ -516,6 +564,7 @@ class ClearanceLineItemResponse(BaseModel):
 
 class DepartureClearanceResponse(BaseModel):
     """Schema for departure clearance response"""
+
     id: UUID
     organization_id: UUID
     user_id: UUID
@@ -541,6 +590,7 @@ class DepartureClearanceResponse(BaseModel):
 
 class DepartureClearanceSummaryResponse(BaseModel):
     """Lightweight clearance summary (no line items)"""
+
     id: UUID
     user_id: UUID
     member_name: Optional[str] = None
@@ -558,13 +608,17 @@ class DepartureClearanceSummaryResponse(BaseModel):
 
 class ResolveClearanceItemRequest(BaseModel):
     """Schema for resolving (returning/writing off) a clearance line item"""
-    disposition: str = Field(..., description="One of: returned, returned_damaged, written_off, waived")
+
+    disposition: str = Field(
+        ..., description="One of: returned, returned_damaged, written_off, waived"
+    )
     return_condition: Optional[str] = None
     resolution_notes: Optional[str] = None
 
 
 class CompleteClearanceRequest(BaseModel):
     """Schema for completing/closing a clearance"""
+
     force_close: bool = Field(
         default=False,
         description="If True, close with status 'closed_incomplete' even if items are outstanding",
@@ -576,8 +630,10 @@ class CompleteClearanceRequest(BaseModel):
 # Barcode Scan & Quick-Action Schemas
 # ============================================
 
+
 class ScanLookupResponse(BaseModel):
     """Response from scanning/looking up an item by barcode, serial, or asset tag"""
+
     item: InventoryItemResponse
     matched_field: str  # "barcode", "serial_number", or "asset_tag"
     matched_value: str
@@ -585,19 +641,26 @@ class ScanLookupResponse(BaseModel):
 
 class ScanLookupListResponse(BaseModel):
     """Response from searching items by partial barcode, serial, or asset tag"""
+
     results: List[ScanLookupResponse]
     total: int
 
 
 class BatchScanItem(BaseModel):
     """A single scanned item in a batch operation"""
-    code: str = Field(..., description="Barcode, serial number, or asset tag that was scanned")
-    item_id: Optional[UUID] = Field(default=None, description="Item ID for direct lookup (bypasses code search)")
+
+    code: str = Field(
+        ..., description="Barcode, serial number, or asset tag that was scanned"
+    )
+    item_id: Optional[UUID] = Field(
+        default=None, description="Item ID for direct lookup (bypasses code search)"
+    )
     quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
 
 
 class BatchCheckoutRequest(BaseModel):
     """Request to assign/checkout/issue multiple scanned items to a member at once"""
+
     user_id: UUID
     items: List[BatchScanItem] = Field(..., min_length=1)
     reason: Optional[str] = None
@@ -605,6 +668,7 @@ class BatchCheckoutRequest(BaseModel):
 
 class BatchCheckoutResultItem(BaseModel):
     """Result for a single item in a batch checkout"""
+
     code: str
     item_name: str
     item_id: str
@@ -615,6 +679,7 @@ class BatchCheckoutResultItem(BaseModel):
 
 class BatchCheckoutResponse(BaseModel):
     """Response from a batch checkout operation"""
+
     user_id: UUID
     total_scanned: int
     successful: int
@@ -624,15 +689,21 @@ class BatchCheckoutResponse(BaseModel):
 
 class BatchReturnItem(BaseModel):
     """A single scanned item being returned"""
+
     code: str = Field(..., description="Barcode, serial number, or asset tag")
-    item_id: Optional[UUID] = Field(default=None, description="Item ID for direct lookup (bypasses code search)")
+    item_id: Optional[UUID] = Field(
+        default=None, description="Item ID for direct lookup (bypasses code search)"
+    )
     return_condition: str = Field(default="good", description="Condition at return")
     damage_notes: Optional[str] = None
-    quantity: int = Field(default=1, ge=1, description="Quantity returned (for pool items)")
+    quantity: int = Field(
+        default=1, ge=1, description="Quantity returned (for pool items)"
+    )
 
 
 class BatchReturnRequest(BaseModel):
     """Request to return multiple scanned items from a member at once"""
+
     user_id: UUID
     items: List[BatchReturnItem] = Field(..., min_length=1)
     notes: Optional[str] = None
@@ -640,6 +711,7 @@ class BatchReturnRequest(BaseModel):
 
 class BatchReturnResultItem(BaseModel):
     """Result for a single item in a batch return"""
+
     code: str
     item_name: str
     item_id: str
@@ -650,6 +722,7 @@ class BatchReturnResultItem(BaseModel):
 
 class BatchReturnResponse(BaseModel):
     """Response from a batch return operation"""
+
     user_id: UUID
     total_scanned: int
     successful: int
@@ -659,21 +732,30 @@ class BatchReturnResponse(BaseModel):
 
 class LabelGenerateRequest(BaseModel):
     """Schema for generating barcode label PDFs"""
-    item_ids: List[UUID] = Field(..., min_length=1, description="Item UUIDs to generate labels for")
+
+    item_ids: List[UUID] = Field(
+        ..., min_length=1, description="Item UUIDs to generate labels for"
+    )
     label_format: str = Field(
         default="letter",
         description="Label format: letter, dymo_30252, dymo_30256, dymo_30334, rollo_4x6, or custom",
     )
-    custom_width: Optional[float] = Field(None, gt=0, description="Width in inches (required for custom format)")
-    custom_height: Optional[float] = Field(None, gt=0, description="Height in inches (required for custom format)")
+    custom_width: Optional[float] = Field(
+        None, gt=0, description="Width in inches (required for custom format)"
+    )
+    custom_height: Optional[float] = Field(
+        None, gt=0, description="Height in inches (required for custom format)"
+    )
 
 
 # ============================================
 # Equipment Request Schemas
 # ============================================
 
+
 class EquipmentRequestCreate(BaseModel):
     """Schema for creating an equipment request"""
+
     item_name: str = Field(..., min_length=1, max_length=255)
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
@@ -685,12 +767,14 @@ class EquipmentRequestCreate(BaseModel):
 
 class EquipmentRequestReview(BaseModel):
     """Schema for reviewing an equipment request"""
+
     status: str = Field(..., description="approved or denied")
     review_notes: Optional[str] = None
 
 
 class EquipmentRequestResponse(BaseModel):
     """Schema for equipment request response"""
+
     id: UUID
     organization_id: UUID
     requester_id: UUID
@@ -717,8 +801,10 @@ class EquipmentRequestResponse(BaseModel):
 # Storage Area Schemas
 # ============================================
 
+
 class StorageAreaCreate(BaseModel):
     """Schema for creating a storage area"""
+
     name: str = Field(..., min_length=1, max_length=255)
     label: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
@@ -731,6 +817,7 @@ class StorageAreaCreate(BaseModel):
 
 class StorageAreaUpdate(BaseModel):
     """Schema for updating a storage area"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     label: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
@@ -744,6 +831,7 @@ class StorageAreaUpdate(BaseModel):
 
 class StorageAreaResponse(BaseModel):
     """Schema for storage area response"""
+
     id: UUID
     organization_id: UUID
     name: str
@@ -771,8 +859,10 @@ class StorageAreaResponse(BaseModel):
 # Write-Off Schemas
 # ============================================
 
+
 class WriteOffRequestCreate(BaseModel):
     """Create a write-off request"""
+
     item_id: UUID
     reason: str  # lost, damaged_beyond_repair, obsolete, stolen, other
     description: str
@@ -780,12 +870,14 @@ class WriteOffRequestCreate(BaseModel):
 
 class WriteOffReview(BaseModel):
     """Approve or deny a write-off request"""
+
     status: str  # approved, denied
     review_notes: Optional[str] = None
 
 
 class WriteOffRequestResponse(BaseModel):
     """Write-off request response"""
+
     id: str
     item_id: Optional[str] = None
     item_name: str

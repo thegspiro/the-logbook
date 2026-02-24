@@ -4,20 +4,21 @@ Scheduling Pydantic Schemas
 Request and response schemas for scheduling/shift management endpoints.
 """
 
+from datetime import date, datetime
 from enum import Enum as PyEnum
-
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Any
-from datetime import datetime, date
+from typing import Any, List, Optional
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============================================
 # Shift Schemas
 # ============================================
 
+
 class ShiftCreate(BaseModel):
     """Schema for creating a shift"""
+
     shift_date: date
     start_time: datetime
     end_time: Optional[datetime] = None
@@ -30,6 +31,7 @@ class ShiftCreate(BaseModel):
 
 class ShiftUpdate(BaseModel):
     """Schema for updating a shift"""
+
     shift_date: Optional[date] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -42,6 +44,7 @@ class ShiftUpdate(BaseModel):
 
 class ShiftResponse(BaseModel):
     """Schema for shift response"""
+
     id: UUID
     organization_id: UUID
     shift_date: date
@@ -68,8 +71,10 @@ class ShiftResponse(BaseModel):
 # Shift Attendance Schemas
 # ============================================
 
+
 class ShiftAttendanceCreate(BaseModel):
     """Schema for recording shift attendance"""
+
     user_id: UUID
     checked_in_at: Optional[datetime] = None
     checked_out_at: Optional[datetime] = None
@@ -77,6 +82,7 @@ class ShiftAttendanceCreate(BaseModel):
 
 class ShiftAttendanceUpdate(BaseModel):
     """Schema for updating shift attendance"""
+
     checked_in_at: Optional[datetime] = None
     checked_out_at: Optional[datetime] = None
     duration_minutes: Optional[int] = None
@@ -84,6 +90,7 @@ class ShiftAttendanceUpdate(BaseModel):
 
 class ShiftAttendanceResponse(BaseModel):
     """Schema for shift attendance response"""
+
     id: UUID
     shift_id: UUID
     user_id: UUID
@@ -100,8 +107,10 @@ class ShiftAttendanceResponse(BaseModel):
 # Shift Detail & List Schemas
 # ============================================
 
+
 class ShiftDetailResponse(ShiftResponse):
     """Extended shift response with attendees"""
+
     attendees: List[ShiftAttendanceResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
@@ -109,6 +118,7 @@ class ShiftDetailResponse(ShiftResponse):
 
 class ShiftsListResponse(BaseModel):
     """Schema for paginated shifts list"""
+
     shifts: List[ShiftResponse]
     total: int
     skip: int
@@ -119,8 +129,10 @@ class ShiftsListResponse(BaseModel):
 # Summary Schemas
 # ============================================
 
+
 class SchedulingSummary(BaseModel):
     """Schema for scheduling module summary"""
+
     total_shifts: int
     shifts_this_week: int
     shifts_this_month: int
@@ -131,8 +143,10 @@ class SchedulingSummary(BaseModel):
 # Shift Call Schemas
 # ============================================
 
+
 class ShiftCallCreate(BaseModel):
     """Schema for creating a shift call"""
+
     incident_number: Optional[str] = None
     incident_type: str
     dispatched_at: Optional[datetime] = None
@@ -146,6 +160,7 @@ class ShiftCallCreate(BaseModel):
 
 class ShiftCallUpdate(BaseModel):
     """Schema for updating a shift call"""
+
     incident_number: Optional[str] = None
     incident_type: Optional[str] = None
     dispatched_at: Optional[datetime] = None
@@ -159,6 +174,7 @@ class ShiftCallUpdate(BaseModel):
 
 class ShiftCallResponse(BaseModel):
     """Schema for shift call response"""
+
     id: UUID
     organization_id: UUID
     shift_id: UUID
@@ -180,8 +196,10 @@ class ShiftCallResponse(BaseModel):
 # Enums
 # ============================================
 
+
 class ShiftPosition(str, PyEnum):
     """Enum for shift positions"""
+
     OFFICER = "officer"
     DRIVER = "driver"
     FIREFIGHTER = "firefighter"
@@ -195,6 +213,7 @@ class ShiftPosition(str, PyEnum):
 
 class AssignmentStatus(str, PyEnum):
     """Enum for shift assignment statuses"""
+
     ASSIGNED = "assigned"
     CONFIRMED = "confirmed"
     DECLINED = "declined"
@@ -203,6 +222,7 @@ class AssignmentStatus(str, PyEnum):
 
 class SwapRequestStatus(str, PyEnum):
     """Enum for shift swap request statuses"""
+
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
@@ -211,6 +231,7 @@ class SwapRequestStatus(str, PyEnum):
 
 class TimeOffStatus(str, PyEnum):
     """Enum for time off request statuses"""
+
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
@@ -219,6 +240,7 @@ class TimeOffStatus(str, PyEnum):
 
 class PatternType(str, PyEnum):
     """Enum for shift pattern types"""
+
     DAILY = "daily"
     WEEKLY = "weekly"
     PLATOON = "platoon"
@@ -229,8 +251,10 @@ class PatternType(str, PyEnum):
 # Shift Template Schemas
 # ============================================
 
+
 class TemplateCategory(str, PyEnum):
     """Enum for shift template categories"""
+
     STANDARD = "standard"
     SPECIALTY = "specialty"
     EVENT = "event"
@@ -238,6 +262,7 @@ class TemplateCategory(str, PyEnum):
 
 class ShiftTemplateCreate(BaseModel):
     """Schema for creating a shift template"""
+
     name: str
     description: Optional[str] = None
     start_time_of_day: str
@@ -253,6 +278,7 @@ class ShiftTemplateCreate(BaseModel):
 
 class ShiftTemplateUpdate(BaseModel):
     """Schema for updating a shift template"""
+
     name: Optional[str] = None
     description: Optional[str] = None
     start_time_of_day: Optional[str] = None
@@ -268,6 +294,7 @@ class ShiftTemplateUpdate(BaseModel):
 
 class ShiftTemplateResponse(BaseModel):
     """Schema for shift template response"""
+
     id: UUID
     organization_id: UUID
     name: str
@@ -293,8 +320,10 @@ class ShiftTemplateResponse(BaseModel):
 # Shift Pattern Schemas
 # ============================================
 
+
 class ShiftPatternCreate(BaseModel):
     """Schema for creating a shift pattern"""
+
     name: str
     description: Optional[str] = None
     pattern_type: PatternType
@@ -310,6 +339,7 @@ class ShiftPatternCreate(BaseModel):
 
 class ShiftPatternUpdate(BaseModel):
     """Schema for updating a shift pattern"""
+
     name: Optional[str] = None
     description: Optional[str] = None
     pattern_type: Optional[PatternType] = None
@@ -325,6 +355,7 @@ class ShiftPatternUpdate(BaseModel):
 
 class ShiftPatternResponse(BaseModel):
     """Schema for shift pattern response"""
+
     id: UUID
     organization_id: UUID
     name: str
@@ -348,6 +379,7 @@ class ShiftPatternResponse(BaseModel):
 
 class GenerateShiftsRequest(BaseModel):
     """Schema for requesting shift generation from a pattern"""
+
     pattern_id: UUID
     start_date: date
     end_date: date
@@ -355,6 +387,7 @@ class GenerateShiftsRequest(BaseModel):
 
 class GenerateShiftsResponse(BaseModel):
     """Schema for shift generation response"""
+
     shifts_created: int
     shifts: List[ShiftResponse]
 
@@ -363,8 +396,10 @@ class GenerateShiftsResponse(BaseModel):
 # Shift Assignment Schemas
 # ============================================
 
+
 class ShiftAssignmentCreate(BaseModel):
     """Schema for creating a shift assignment"""
+
     user_id: UUID
     position: ShiftPosition = ShiftPosition.FIREFIGHTER
     notes: Optional[str] = None
@@ -372,6 +407,7 @@ class ShiftAssignmentCreate(BaseModel):
 
 class ShiftAssignmentUpdate(BaseModel):
     """Schema for updating a shift assignment"""
+
     position: Optional[ShiftPosition] = None
     assignment_status: Optional[AssignmentStatus] = None
     notes: Optional[str] = None
@@ -379,6 +415,7 @@ class ShiftAssignmentUpdate(BaseModel):
 
 class ShiftAssignmentResponse(BaseModel):
     """Schema for shift assignment response"""
+
     id: UUID
     organization_id: UUID
     shift_id: UUID
@@ -399,8 +436,10 @@ class ShiftAssignmentResponse(BaseModel):
 # Shift Swap Request Schemas
 # ============================================
 
+
 class ShiftSwapRequestCreate(BaseModel):
     """Schema for creating a shift swap request"""
+
     offering_shift_id: UUID
     requesting_shift_id: Optional[UUID] = None
     target_user_id: Optional[UUID] = None
@@ -409,12 +448,14 @@ class ShiftSwapRequestCreate(BaseModel):
 
 class ShiftSwapReview(BaseModel):
     """Schema for reviewing a shift swap request"""
+
     status: SwapRequestStatus
     reviewer_notes: Optional[str] = None
 
 
 class ShiftSwapRequestResponse(BaseModel):
     """Schema for shift swap request response"""
+
     id: UUID
     organization_id: UUID
     requesting_user_id: UUID
@@ -440,8 +481,10 @@ class ShiftSwapRequestResponse(BaseModel):
 # Shift Time Off Schemas
 # ============================================
 
+
 class ShiftTimeOffCreate(BaseModel):
     """Schema for creating a time off request"""
+
     start_date: date
     end_date: date
     reason: Optional[str] = None
@@ -449,6 +492,7 @@ class ShiftTimeOffCreate(BaseModel):
 
 class ShiftTimeOffUpdate(BaseModel):
     """Schema for updating a time off request"""
+
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     reason: Optional[str] = None
@@ -456,12 +500,14 @@ class ShiftTimeOffUpdate(BaseModel):
 
 class ShiftTimeOffReview(BaseModel):
     """Schema for reviewing a time off request"""
+
     status: TimeOffStatus
     reviewer_notes: Optional[str] = None
 
 
 class ShiftTimeOffResponse(BaseModel):
     """Schema for time off request response"""
+
     id: UUID
     organization_id: UUID
     user_id: UUID
@@ -483,8 +529,10 @@ class ShiftTimeOffResponse(BaseModel):
 # Reporting Schemas
 # ============================================
 
+
 class MemberHoursReport(BaseModel):
     """Schema for member hours report"""
+
     user_id: UUID
     email: str
     shift_count: int
@@ -494,6 +542,7 @@ class MemberHoursReport(BaseModel):
 
 class ShiftCoverageReport(BaseModel):
     """Schema for shift coverage report"""
+
     date: str
     total_shifts: int
     total_assigned: int
@@ -503,6 +552,7 @@ class ShiftCoverageReport(BaseModel):
 
 class CallVolumeReport(BaseModel):
     """Schema for call volume report"""
+
     period: str
     total_calls: int
     by_type: dict
@@ -511,6 +561,7 @@ class CallVolumeReport(BaseModel):
 
 class MemberHoursListResponse(BaseModel):
     """Schema for member hours list response"""
+
     members: List[MemberHoursReport]
     period_start: date
     period_end: date
@@ -521,8 +572,10 @@ class MemberHoursListResponse(BaseModel):
 # Shift Signup (Member Self-Service)
 # ============================================
 
+
 class ShiftSignupRequest(BaseModel):
     """Schema for a member signing up for an open shift position"""
+
     position: ShiftPosition = ShiftPosition.FIREFIGHTER
 
 
@@ -530,8 +583,10 @@ class ShiftSignupRequest(BaseModel):
 # Basic Apparatus (Lightweight, for non-module departments)
 # ============================================
 
+
 class BasicApparatusCreate(BaseModel):
     """Schema for creating a basic apparatus entry"""
+
     unit_number: str = Field(..., min_length=1, max_length=20)
     name: str = Field(..., min_length=1, max_length=100)
     apparatus_type: str = Field(default="engine", max_length=50)
@@ -541,6 +596,7 @@ class BasicApparatusCreate(BaseModel):
 
 class BasicApparatusUpdate(BaseModel):
     """Schema for updating a basic apparatus entry"""
+
     unit_number: Optional[str] = Field(None, min_length=1, max_length=20)
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     apparatus_type: Optional[str] = Field(None, max_length=50)
@@ -550,6 +606,7 @@ class BasicApparatusUpdate(BaseModel):
 
 class BasicApparatusResponse(BaseModel):
     """Schema for basic apparatus response"""
+
     id: UUID
     organization_id: UUID
     unit_number: str
@@ -568,8 +625,10 @@ class BasicApparatusResponse(BaseModel):
 # Shift Compliance Schemas
 # ============================================
 
+
 class MemberComplianceRecord(BaseModel):
     """Per-member compliance status for a single requirement"""
+
     user_id: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -584,6 +643,7 @@ class MemberComplianceRecord(BaseModel):
 
 class RequirementComplianceSummary(BaseModel):
     """Compliance summary for a single shift/hours requirement"""
+
     requirement_id: str
     requirement_name: str
     requirement_type: str
@@ -600,6 +660,7 @@ class RequirementComplianceSummary(BaseModel):
 
 class ShiftComplianceResponse(BaseModel):
     """Response for shift compliance endpoint"""
+
     requirements: List[RequirementComplianceSummary]
     reference_date: str
     total_requirements: int

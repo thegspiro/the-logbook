@@ -4,19 +4,22 @@ Email Template Schemas
 Pydantic schemas for email template API requests and responses.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class TemplateVariable(BaseModel):
     """Describes an available template variable"""
+
     name: str
     description: str
 
 
 class EmailAttachmentResponse(BaseModel):
     """Response schema for an email attachment"""
+
     id: str
     filename: str
     content_type: str
@@ -28,6 +31,7 @@ class EmailAttachmentResponse(BaseModel):
 
 class EmailTemplateResponse(BaseModel):
     """Response schema for an email template"""
+
     id: str
     organization_id: str
     template_type: str
@@ -51,6 +55,7 @@ class EmailTemplateResponse(BaseModel):
 
 class EmailTemplateUpdate(BaseModel):
     """Schema for updating an email template"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     subject: Optional[str] = Field(None, min_length=1, max_length=500)
     html_body: Optional[str] = Field(None, min_length=1)
@@ -63,6 +68,7 @@ class EmailTemplateUpdate(BaseModel):
 
 class EmailTemplatePreviewRequest(BaseModel):
     """Request schema for previewing a rendered email template"""
+
     subject: Optional[str] = None
     html_body: Optional[str] = None
     text_body: Optional[str] = None
@@ -82,6 +88,7 @@ class EmailTemplatePreviewRequest(BaseModel):
 
 class EmailTemplatePreviewResponse(BaseModel):
     """Response schema for a rendered email preview"""
+
     subject: str
     html_body: str
     text_body: Optional[str] = None

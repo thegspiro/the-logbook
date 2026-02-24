@@ -6,20 +6,20 @@ where events can take place.
 """
 
 from sqlalchemy import (
-    Column,
-    String,
-    Text,
-    Integer,
     Boolean,
+    Column,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.core.utils import generate_uuid, generate_display_code
 
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class Location(Base):
@@ -30,13 +30,18 @@ class Location(Base):
     conference rooms, offices, etc. Supports room booking and QR code
     display for event check-ins.
     """
+
     __tablename__ = "locations"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Location details
-    name = Column(String(200), nullable=False)  # e.g., "Main Meeting Hall", "Conference Room A"
+    name = Column(
+        String(200), nullable=False
+    )  # e.g., "Main Meeting Hall", "Conference Room A"
     description = Column(Text, nullable=True)  # Additional info, amenities, equipment
 
     # Address
@@ -63,12 +68,21 @@ class Location(Base):
     # Facility link — when the Facilities module is enabled, this location can
     # optionally reference a Facility record for deep building management data.
     # The locations table remains the universal "place picker" for all modules.
-    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="SET NULL"), nullable=True)
+    facility_id = Column(
+        String(36), ForeignKey("facilities.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     # Relationships
     events = relationship("Event", back_populates="location_obj")

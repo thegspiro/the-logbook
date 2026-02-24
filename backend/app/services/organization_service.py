@@ -4,21 +4,22 @@ Organization Service
 Business logic for organization-related operations.
 """
 
-from typing import Optional, Dict, Any
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm.attributes import flag_modified
+from typing import Any, Dict, Optional
 from uuid import UUID
 
-from app.models.user import Organization
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
+
 from app.models.onboarding import OnboardingStatus
+from app.models.user import Organization
 from app.schemas.organization import (
-    OrganizationSettings,
     ContactInfoSettings,
-    MembershipIdSettings,
-    EnabledModulesResponse,
-    ModuleSettings,
     EmailServiceSettings,
+    EnabledModulesResponse,
+    MembershipIdSettings,
+    ModuleSettings,
+    OrganizationSettings,
 )
 
 
@@ -73,11 +74,21 @@ class OrganizationService:
 
             # If at least one module is enabled, or the user explicitly
             # configured modules via the Settings page, trust the dict.
-            any_enabled = any([
-                ms.training, ms.inventory, ms.scheduling, ms.elections,
-                ms.minutes, ms.reports, ms.notifications, ms.mobile,
-                ms.forms, ms.integrations, ms.facilities,
-            ])
+            any_enabled = any(
+                [
+                    ms.training,
+                    ms.inventory,
+                    ms.scheduling,
+                    ms.elections,
+                    ms.minutes,
+                    ms.reports,
+                    ms.notifications,
+                    ms.mobile,
+                    ms.forms,
+                    ms.integrations,
+                    ms.facilities,
+                ]
+            )
             if any_enabled or modules.get("_user_configured"):
                 return ms
 
@@ -133,8 +144,7 @@ class OrganizationService:
         return ModuleSettings()
 
     async def get_organization_settings(
-        self,
-        organization_id: UUID
+        self, organization_id: UUID
     ) -> OrganizationSettings:
         """
         Get organization settings
@@ -186,8 +196,13 @@ class OrganizationService:
         # Collect extra/custom settings (e.g. station_mode) that aren't
         # covered by a dedicated sub-schema so they round-trip through the API.
         known_keys = {
-            "contact_info_visibility", "email_service", "auth", "modules",
-            "it_team", "member_drop_notifications", "membership_tiers",
+            "contact_info_visibility",
+            "email_service",
+            "auth",
+            "modules",
+            "it_team",
+            "member_drop_notifications",
+            "membership_tiers",
             "membership_id",
         }
         extra_settings = {k: v for k, v in settings_dict.items() if k not in known_keys}
@@ -201,9 +216,7 @@ class OrganizationService:
         )
 
     async def update_organization_settings(
-        self,
-        organization_id: UUID,
-        settings_update: Dict[str, Any]
+        self, organization_id: UUID, settings_update: Dict[str, Any]
     ) -> OrganizationSettings:
         """
         Update organization settings
@@ -241,8 +254,7 @@ class OrganizationService:
         return settings.contact_info_visibility.enabled
 
     async def get_enabled_modules(
-        self,
-        organization_id: UUID
+        self, organization_id: UUID
     ) -> EnabledModulesResponse:
         """
         Get enabled modules for an organization
@@ -256,7 +268,7 @@ class OrganizationService:
             default_modules = ModuleSettings()
             return EnabledModulesResponse(
                 enabled_modules=default_modules.get_enabled_modules(),
-                module_settings=default_modules
+                module_settings=default_modules,
             )
 
         settings_dict = org.settings or {}
@@ -264,13 +276,11 @@ class OrganizationService:
 
         return EnabledModulesResponse(
             enabled_modules=module_settings.get_enabled_modules(),
-            module_settings=module_settings
+            module_settings=module_settings,
         )
 
     async def update_module_settings(
-        self,
-        organization_id: UUID,
-        module_updates: Dict[str, bool]
+        self, organization_id: UUID, module_updates: Dict[str, bool]
     ) -> EnabledModulesResponse:
         """
         Update module settings for an organization
@@ -292,22 +302,29 @@ class OrganizationService:
         resolved = await self._resolve_module_settings(current_settings, org=org)
         # Re-read settings after potential migration flush
         current_settings = org.settings or {}
-        current_modules = current_settings.get("modules", {
-            "training": resolved.training,
-            "inventory": resolved.inventory,
-            "scheduling": resolved.scheduling,
-            "elections": resolved.elections,
-            "minutes": resolved.minutes,
-            "reports": resolved.reports,
-            "notifications": resolved.notifications,
-            "mobile": resolved.mobile,
-            "forms": resolved.forms,
-            "integrations": resolved.integrations,
-            "facilities": resolved.facilities,
-        })
+        current_modules = current_settings.get(
+            "modules",
+            {
+                "training": resolved.training,
+                "inventory": resolved.inventory,
+                "scheduling": resolved.scheduling,
+                "elections": resolved.elections,
+                "minutes": resolved.minutes,
+                "reports": resolved.reports,
+                "notifications": resolved.notifications,
+                "mobile": resolved.mobile,
+                "forms": resolved.forms,
+                "integrations": resolved.integrations,
+                "facilities": resolved.facilities,
+            },
+        )
 
         # Merge the incoming toggles and mark as explicitly configured
-        updated_modules = {**current_modules, **module_updates, "_user_configured": True}
+        updated_modules = {
+            **current_modules,
+            **module_updates,
+            "_user_configured": True,
+        }
         current_settings["modules"] = updated_modules
 
         # Update in database — flag_modified needed for plain JSON column

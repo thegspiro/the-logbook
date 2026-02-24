@@ -5,21 +5,27 @@ Business logic for report generation including member roster,
 training summary, event attendance, and compliance reports.
 """
 
-from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, case
+from datetime import date, datetime, timezone
+from typing import Any, Dict, Optional, Tuple
 from uuid import UUID
 
+from sqlalchemy import case, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.user import User, UserStatus, Role, user_roles
 from app.models.event import Event, EventRSVP
 from app.models.training import (
-    TrainingCourse, TrainingRecord, TrainingRequirement, TrainingStatus,
-    ProgramEnrollment, RequirementProgress, TrainingProgram, ProgramRequirement,
-    ShiftCompletionReport, EnrollmentStatus, RequirementProgressStatus,
+    EnrollmentStatus,
+    ProgramEnrollment,
+    RequirementProgress,
+    RequirementProgressStatus,
+    ShiftCompletionReport,
+    TrainingCourse,
+    TrainingRecord,
+    TrainingRequirement,
+    TrainingStatus,
 )
+from app.models.user import User, UserStatus
 
 
 class ReportsService:
@@ -29,8 +35,11 @@ class ReportsService:
         self.db = db
 
     async def generate_report(
-        self, organization_id: UUID, report_type: str,
-        start_date: Optional[date] = None, end_date: Optional[date] = None,
+        self,
+        organization_id: UUID,
+        report_type: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate a report based on type"""
@@ -54,8 +63,10 @@ class ReportsService:
     # ============================================
 
     async def _generate_member_roster(
-        self, organization_id: UUID,
-        start_date: Optional[date] = None, end_date: Optional[date] = None,
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate a member roster report"""
@@ -85,7 +96,9 @@ class ReportsService:
         inactive_count = 0
 
         for user in users:
-            status_val = user.status.value if hasattr(user.status, 'value') else str(user.status)
+            status_val = (
+                user.status.value if hasattr(user.status, "value") else str(user.status)
+            )
             is_active = status_val == UserStatus.ACTIVE.value
             if is_active:
                 active_count += 1
@@ -95,18 +108,22 @@ class ReportsService:
             # Get roles
             role_names = [r.name for r in user.roles] if user.roles else []
 
-            members.append({
-                "id": str(user.id),
-                "first_name": user.first_name or "",
-                "last_name": user.last_name or "",
-                "email": user.email or "",
-                "membership_number": user.membership_number,
-                "rank": user.rank,
-                "status": status_val,
-                "station": user.station,
-                "joined_date": str(user.created_at.date()) if user.created_at else None,
-                "roles": role_names,
-            })
+            members.append(
+                {
+                    "id": str(user.id),
+                    "first_name": user.first_name or "",
+                    "last_name": user.last_name or "",
+                    "email": user.email or "",
+                    "membership_number": user.membership_number,
+                    "rank": user.rank,
+                    "status": status_val,
+                    "station": user.station,
+                    "joined_date": (
+                        str(user.created_at.date()) if user.created_at else None
+                    ),
+                    "roles": role_names,
+                }
+            )
 
         return {
             "report_type": "member_roster",
@@ -122,29 +139,33 @@ class ReportsService:
     # ============================================
 
     async def _generate_training_summary(
-        self, organization_id: UUID,
-        start_date: Optional[date] = None, end_date: Optional[date] = None,
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate a training summary report"""
         # Get training records
-        records_query = (
-            select(TrainingRecord)
-            .where(TrainingRecord.organization_id == str(organization_id))
+        records_query = select(TrainingRecord).where(
+            TrainingRecord.organization_id == str(organization_id)
         )
 
         if start_date:
-            records_query = records_query.where(TrainingRecord.completion_date >= start_date)
+            records_query = records_query.where(
+                TrainingRecord.completion_date >= start_date
+            )
         if end_date:
-            records_query = records_query.where(TrainingRecord.completion_date <= end_date)
+            records_query = records_query.where(
+                TrainingRecord.completion_date <= end_date
+            )
 
         records_result = await self.db.execute(records_query)
         records = records_result.scalars().all()
 
         # Get active (non-deleted) users
         users_result = await self.db.execute(
-            select(User)
-            .where(
+            select(User).where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
                 User.deleted_at.is_(None),
@@ -154,8 +175,9 @@ class ReportsService:
 
         # Total courses
         courses_result = await self.db.execute(
-            select(func.count(TrainingCourse.id))
-            .where(TrainingCourse.organization_id == str(organization_id))
+            select(func.count(TrainingCourse.id)).where(
+                TrainingCourse.organization_id == str(organization_id)
+            )
         )
         total_courses = courses_result.scalar() or 0
 
@@ -176,7 +198,11 @@ class ReportsService:
             uid = str(record.user_id)
             if uid in member_stats:
                 member_stats[uid]["total_courses"] += 1
-                status_val = record.status.value if hasattr(record.status, 'value') else str(record.status)
+                status_val = (
+                    record.status.value
+                    if hasattr(record.status, "value")
+                    else str(record.status)
+                )
                 if status_val == TrainingStatus.COMPLETED.value:
                     member_stats[uid]["completed_courses"] += 1
                     completed_count += 1
@@ -194,10 +220,16 @@ class ReportsService:
                 course_stats[cid] = {
                     "course_id": cid,
                     "course_name": record.course_name or cid,
-                    "total": 0, "completed": 0, "total_hours": 0,
+                    "total": 0,
+                    "completed": 0,
+                    "total_hours": 0,
                 }
             course_stats[cid]["total"] += 1
-            status_val2 = record.status.value if hasattr(record.status, 'value') else str(record.status)
+            status_val2 = (
+                record.status.value
+                if hasattr(record.status, "value")
+                else str(record.status)
+            )
             if status_val2 == TrainingStatus.COMPLETED.value:
                 course_stats[cid]["completed"] += 1
             if record.hours_completed:
@@ -225,16 +257,23 @@ class ReportsService:
                     RequirementProgress.requirement_id,
                     func.count(RequirementProgress.id),
                 )
-                .join(ProgramEnrollment, RequirementProgress.enrollment_id == ProgramEnrollment.id)
+                .join(
+                    ProgramEnrollment,
+                    RequirementProgress.enrollment_id == ProgramEnrollment.id,
+                )
                 .join(User, User.id == ProgramEnrollment.user_id)
                 .where(
                     RequirementProgress.requirement_id.in_(req_ids),
-                    RequirementProgress.status.in_([
-                        RequirementProgressStatus.COMPLETED,
-                        RequirementProgressStatus.VERIFIED,
-                    ]),
+                    RequirementProgress.status.in_(
+                        [
+                            RequirementProgressStatus.COMPLETED,
+                            RequirementProgressStatus.VERIFIED,
+                        ]
+                    ),
                     ProgramEnrollment.organization_id == str(organization_id),
-                    ProgramEnrollment.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]),
+                    ProgramEnrollment.status.in_(
+                        [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]
+                    ),
                     User.deleted_at.is_(None),
                 )
                 .group_by(RequirementProgress.requirement_id)
@@ -250,7 +289,9 @@ class ReportsService:
                 .join(User, User.id == ProgramEnrollment.user_id)
                 .where(
                     ProgramEnrollment.organization_id == str(organization_id),
-                    ProgramEnrollment.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]),
+                    ProgramEnrollment.status.in_(
+                        [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]
+                    ),
                     User.deleted_at.is_(None),
                 )
             )
@@ -262,13 +303,19 @@ class ReportsService:
         requirement_breakdown = []
         for req in requirements:
             completed_for_req = completed_by_req.get(str(req.id), 0)
-            requirement_breakdown.append({
-                "requirement_id": str(req.id),
-                "requirement_name": req.name,
-                "total_members": denominator,
-                "completed": completed_for_req,
-                "completion_pct": round(completed_for_req / denominator * 100, 1) if denominator > 0 else 0,
-            })
+            requirement_breakdown.append(
+                {
+                    "requirement_id": str(req.id),
+                    "requirement_name": req.name,
+                    "total_members": denominator,
+                    "completed": completed_for_req,
+                    "completion_pct": (
+                        round(completed_for_req / denominator * 100, 1)
+                        if denominator > 0
+                        else 0
+                    ),
+                }
+            )
 
         return {
             "report_type": "training_summary",
@@ -288,20 +335,26 @@ class ReportsService:
     # ============================================
 
     async def _generate_event_attendance(
-        self, organization_id: UUID,
-        start_date: Optional[date] = None, end_date: Optional[date] = None,
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate an event attendance report"""
-        events_query = (
-            select(Event)
-            .where(Event.organization_id == str(organization_id))
+        events_query = select(Event).where(
+            Event.organization_id == str(organization_id)
         )
 
         if start_date:
-            events_query = events_query.where(Event.start_datetime >= datetime.combine(start_date, datetime.min.time()))
+            events_query = events_query.where(
+                Event.start_datetime
+                >= datetime.combine(start_date, datetime.min.time())
+            )
         if end_date:
-            events_query = events_query.where(Event.start_datetime <= datetime.combine(end_date, datetime.max.time()))
+            events_query = events_query.where(
+                Event.start_datetime <= datetime.combine(end_date, datetime.max.time())
+            )
 
         events_query = events_query.order_by(Event.start_datetime.desc())
         events_result = await self.db.execute(events_query)
@@ -309,13 +362,17 @@ class ReportsService:
 
         # Batch-fetch RSVP and attendance counts for all events in a single query
         event_ids = [e.id for e in events]
-        rsvp_stats: Dict[str, Tuple[int, int]] = {}  # event_id -> (total_rsvps, attended)
+        rsvp_stats: Dict[str, Tuple[int, int]] = (
+            {}
+        )  # event_id -> (total_rsvps, attended)
         if event_ids:
             rsvp_agg = await self.db.execute(
                 select(
                     EventRSVP.event_id,
                     func.count(EventRSVP.id),
-                    func.sum(case((EventRSVP.checked_in == True, 1), else_=0)),  # noqa: E712
+                    func.sum(
+                        case((EventRSVP.checked_in == True, 1), else_=0)
+                    ),  # noqa: E712
                 )
                 .where(EventRSVP.event_id.in_(event_ids))
                 .group_by(EventRSVP.event_id)
@@ -330,14 +387,20 @@ class ReportsService:
             total_rsvps, attended = rsvp_stats.get(str(event.id), (0, 0))
             rate = (attended / total_rsvps * 100) if total_rsvps > 0 else 0
 
-            event_entries.append({
-                "event_id": str(event.id),
-                "event_title": event.title or "",
-                "event_date": str(event.start_datetime.date()) if event.start_datetime else None,
-                "total_rsvps": total_rsvps,
-                "attended": attended,
-                "attendance_rate": round(rate, 1),
-            })
+            event_entries.append(
+                {
+                    "event_id": str(event.id),
+                    "event_title": event.title or "",
+                    "event_date": (
+                        str(event.start_datetime.date())
+                        if event.start_datetime
+                        else None
+                    ),
+                    "total_rsvps": total_rsvps,
+                    "attended": attended,
+                    "attendance_rate": round(rate, 1),
+                }
+            )
             total_attendance_rate += rate
 
         avg_rate = (total_attendance_rate / len(event_entries)) if event_entries else 0
@@ -357,8 +420,10 @@ class ReportsService:
     # ============================================
 
     async def _generate_training_progress(
-        self, organization_id: UUID,
-        start_date: Optional[date] = None, end_date: Optional[date] = None,
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate a training pipeline progress report showing enrollment status and requirement completion."""
@@ -392,43 +457,78 @@ class ReportsService:
             )
         )
         users = users_result.scalars().all()
-        member_map = {str(u.id): f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username for u in users}
+        member_map = {
+            str(u.id): f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username
+            for u in users
+        }
 
         entries = []
         status_summary = {"active": 0, "completed": 0, "expired": 0, "withdrawn": 0}
 
         for enrollment in enrollments:
-            status_val = enrollment.status.value if hasattr(enrollment.status, 'value') else str(enrollment.status)
+            status_val = (
+                enrollment.status.value
+                if hasattr(enrollment.status, "value")
+                else str(enrollment.status)
+            )
             status_summary[status_val] = status_summary.get(status_val, 0) + 1
 
             # Count requirement progress
-            total_reqs = len(enrollment.requirement_progress) if enrollment.requirement_progress else 0
+            total_reqs = (
+                len(enrollment.requirement_progress)
+                if enrollment.requirement_progress
+                else 0
+            )
             completed_reqs = sum(
-                1 for rp in (enrollment.requirement_progress or [])
-                if rp.status in (RequirementProgressStatus.COMPLETED, RequirementProgressStatus.VERIFIED)
+                1
+                for rp in (enrollment.requirement_progress or [])
+                if rp.status
+                in (
+                    RequirementProgressStatus.COMPLETED,
+                    RequirementProgressStatus.VERIFIED,
+                )
             )
 
-            entries.append({
-                "enrollment_id": str(enrollment.id),
-                "member_name": member_map.get(str(enrollment.user_id), "Unknown"),
-                "member_id": str(enrollment.user_id),
-                "program_name": enrollment.program.name if enrollment.program else "Unknown",
-                "program_id": str(enrollment.program_id),
-                "status": status_val,
-                "progress_percentage": round(enrollment.progress_percentage or 0, 1),
-                "requirements_completed": completed_reqs,
-                "requirements_total": total_reqs,
-                "enrolled_at": enrollment.enrolled_at.isoformat() if enrollment.enrolled_at else None,
-                "target_completion": str(enrollment.target_completion_date) if enrollment.target_completion_date else None,
-                "completed_at": enrollment.completed_at.isoformat() if enrollment.completed_at else None,
-            })
+            entries.append(
+                {
+                    "enrollment_id": str(enrollment.id),
+                    "member_name": member_map.get(str(enrollment.user_id), "Unknown"),
+                    "member_id": str(enrollment.user_id),
+                    "program_name": (
+                        enrollment.program.name if enrollment.program else "Unknown"
+                    ),
+                    "program_id": str(enrollment.program_id),
+                    "status": status_val,
+                    "progress_percentage": round(
+                        enrollment.progress_percentage or 0, 1
+                    ),
+                    "requirements_completed": completed_reqs,
+                    "requirements_total": total_reqs,
+                    "enrolled_at": (
+                        enrollment.enrolled_at.isoformat()
+                        if enrollment.enrolled_at
+                        else None
+                    ),
+                    "target_completion": (
+                        str(enrollment.target_completion_date)
+                        if enrollment.target_completion_date
+                        else None
+                    ),
+                    "completed_at": (
+                        enrollment.completed_at.isoformat()
+                        if enrollment.completed_at
+                        else None
+                    ),
+                }
+            )
 
         # Sort by progress descending
         entries.sort(key=lambda e: e["progress_percentage"], reverse=True)
 
         avg_progress = (
             sum(e["progress_percentage"] for e in entries) / len(entries)
-            if entries else 0
+            if entries
+            else 0
         )
 
         return {
@@ -445,8 +545,10 @@ class ReportsService:
     # ============================================
 
     async def _generate_annual_training(
-        self, organization_id: UUID,
-        start_date: Optional[date] = None, end_date: Optional[date] = None,
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate an annual training report with hours, completions, shift reports, and member breakdown."""
@@ -460,7 +562,10 @@ class ReportsService:
         # Get members
         users_result = await self.db.execute(
             select(User)
-            .where(User.organization_id == organization_id, User.status == UserStatus.ACTIVE)
+            .where(
+                User.organization_id == organization_id,
+                User.status == UserStatus.ACTIVE,
+            )
             .order_by(User.last_name, User.first_name)
         )
         users = users_result.scalars().all()
@@ -468,8 +573,7 @@ class ReportsService:
 
         # Get training records in period
         records_result = await self.db.execute(
-            select(TrainingRecord)
-            .where(
+            select(TrainingRecord).where(
                 TrainingRecord.organization_id == organization_id,
                 TrainingRecord.completion_date >= start_date,
                 TrainingRecord.completion_date <= end_date,
@@ -479,8 +583,7 @@ class ReportsService:
 
         # Get shift completion reports in period
         shift_reports_result = await self.db.execute(
-            select(ShiftCompletionReport)
-            .where(
+            select(ShiftCompletionReport).where(
                 ShiftCompletionReport.organization_id == str(organization_id),
                 ShiftCompletionReport.shift_date >= start_date,
                 ShiftCompletionReport.shift_date <= end_date,
@@ -493,7 +596,8 @@ class ReportsService:
         for uid, user in member_map.items():
             member_data[uid] = {
                 "member_id": uid,
-                "member_name": f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username,
+                "member_name": f"{user.first_name or ''} {user.last_name or ''}".strip()
+                or user.username,
                 "rank": user.rank,
                 "training_hours": 0.0,
                 "courses_completed": 0,
@@ -510,9 +614,17 @@ class ReportsService:
 
         for record in records:
             uid = str(record.user_id)
-            status_val = record.status.value if hasattr(record.status, 'value') else str(record.status)
+            status_val = (
+                record.status.value
+                if hasattr(record.status, "value")
+                else str(record.status)
+            )
             hours = float(record.hours_completed or 0)
-            training_type = record.training_type.value if hasattr(record.training_type, 'value') else str(record.training_type)
+            training_type = (
+                record.training_type.value
+                if hasattr(record.training_type, "value")
+                else str(record.training_type)
+            )
 
             by_type[training_type] = by_type.get(training_type, 0) + 1
 
@@ -549,9 +661,15 @@ class ReportsService:
 
         for uid, r_list in member_ratings.items():
             if uid in member_data:
-                member_data[uid]["avg_performance_rating"] = round(sum(r_list) / len(r_list), 1)
+                member_data[uid]["avg_performance_rating"] = round(
+                    sum(r_list) / len(r_list), 1
+                )
 
-        entries = sorted(member_data.values(), key=lambda m: m["training_hours"] + m["shift_hours"], reverse=True)
+        entries = sorted(
+            member_data.values(),
+            key=lambda m: m["training_hours"] + m["shift_hours"],
+            reverse=True,
+        )
 
         return {
             "report_type": "annual_training",
@@ -566,8 +684,12 @@ class ReportsService:
                 "total_combined_hours": round(total_hours + total_shift_hours, 1),
                 "total_completions": total_completions,
                 "total_calls_responded": total_calls,
-                "avg_hours_per_member": round((total_hours + total_shift_hours) / max(1, len(users)), 1),
-                "avg_performance_rating": round(sum(ratings) / len(ratings), 1) if ratings else None,
+                "avg_hours_per_member": round(
+                    (total_hours + total_shift_hours) / max(1, len(users)), 1
+                ),
+                "avg_performance_rating": (
+                    round(sum(ratings) / len(ratings), 1) if ratings else None
+                ),
                 "training_by_type": by_type,
             },
             "entries": entries,
@@ -639,8 +761,10 @@ class ReportsService:
     # ============================================
 
     async def _generate_department_overview(
-        self, organization_id: UUID,
-        start_date: Optional[date] = None, end_date: Optional[date] = None,
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
@@ -648,17 +772,22 @@ class ReportsService:
         Aggregates key metrics from members, training, events, and action items.
         """
         from datetime import timedelta
-        from app.models.meeting import MeetingActionItem, ActionItemStatus
-        from app.models.minute import ActionItem as MinutesActionItem, MinutesActionItemStatus
+
+        from app.models.meeting import ActionItemStatus, MeetingActionItem
+        from app.models.minute import ActionItem as MinutesActionItem
+        from app.models.minute import MinutesActionItemStatus
 
         org_id = str(organization_id)
-        period_start = start_date or (datetime.now(timezone.utc) - timedelta(days=365)).date()
+        period_start = (
+            start_date or (datetime.now(timezone.utc) - timedelta(days=365)).date()
+        )
         period_end = end_date or datetime.now(timezone.utc).date()
 
         # ── Members ──
         total_result = await self.db.execute(
             select(func.count(User.id)).where(
-                User.organization_id == org_id, User.deleted_at.is_(None),
+                User.organization_id == org_id,
+                User.deleted_at.is_(None),
             )
         )
         total_members = total_result.scalar() or 0
@@ -706,8 +835,10 @@ class ReportsService:
         events_result = await self.db.execute(
             select(func.count(Event.id)).where(
                 Event.organization_id == org_id,
-                Event.start_datetime >= datetime.combine(period_start, datetime.min.time()),
-                Event.start_datetime <= datetime.combine(period_end, datetime.max.time()),
+                Event.start_datetime
+                >= datetime.combine(period_start, datetime.min.time()),
+                Event.start_datetime
+                <= datetime.combine(period_end, datetime.max.time()),
                 Event.is_cancelled == False,  # noqa: E712
             )
         )
@@ -725,15 +856,19 @@ class ReportsService:
         open_meeting_items = await self.db.execute(
             select(func.count(MeetingActionItem.id)).where(
                 MeetingActionItem.organization_id == org_id,
-                MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
+                MeetingActionItem.status.in_(
+                    [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
+                ),
             )
         )
         open_minutes_items = await self.db.execute(
             select(func.count(MinutesActionItem.id)).where(
-                MinutesActionItem.status.in_([
-                    MinutesActionItemStatus.PENDING.value,
-                    MinutesActionItemStatus.IN_PROGRESS.value,
-                ]),
+                MinutesActionItem.status.in_(
+                    [
+                        MinutesActionItemStatus.PENDING.value,
+                        MinutesActionItemStatus.IN_PROGRESS.value,
+                    ]
+                ),
             )
         )
 
@@ -752,7 +887,11 @@ class ReportsService:
                 "completed": t_completed,
                 "completion_rate": training_rate,
                 "total_hours": total_training_hours,
-                "avg_hours_per_member": round(total_training_hours / active_members, 1) if active_members > 0 else 0,
+                "avg_hours_per_member": (
+                    round(total_training_hours / active_members, 1)
+                    if active_members > 0
+                    else 0
+                ),
             },
             "events": {
                 "total_events": total_events,

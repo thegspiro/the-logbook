@@ -9,17 +9,18 @@ Provides comprehensive security measures for image uploads:
 - SVG and dangerous format blocking
 - Decompression bomb detection
 """
+
 import base64
 import io
+from typing import Optional, Tuple
+
 import magic
-from typing import Tuple, Optional
-from PIL import Image
 from fastapi import HTTPException
+from PIL import Image
 
 
 class ImageValidationError(Exception):
     """Custom exception for image validation failures"""
-    pass
 
 
 class ImageValidator:
@@ -42,19 +43,19 @@ class ImageValidator:
 
     # Allowed MIME types (whitelist only)
     ALLOWED_MIME_TYPES = {
-        'image/png': 'PNG',
-        'image/jpeg': 'JPEG',
-        'image/jpg': 'JPEG',
+        "image/png": "PNG",
+        "image/jpeg": "JPEG",
+        "image/jpg": "JPEG",
     }
 
     # Blocked formats (blacklist)
     BLOCKED_FORMATS = {
-        'SVG',  # Can contain JavaScript
-        'GIF',  # Can be animated, potential for exploits
-        'TIFF', # Complex format, multiple vulnerabilities
-        'BMP',  # Uncompressed, large size
-        'ICO',  # Not needed for logos
-        'WEBP', # Less common, reduce attack surface
+        "SVG",  # Can contain JavaScript
+        "GIF",  # Can be animated, potential for exploits
+        "TIFF",  # Complex format, multiple vulnerabilities
+        "BMP",  # Uncompressed, large size
+        "ICO",  # Not needed for logos
+        "WEBP",  # Less common, reduce attack surface
     }
 
     def __init__(self):
@@ -62,12 +63,12 @@ class ImageValidator:
         self.magic = magic.Magic(mime=True)
 
         # Configure Pillow security settings
-        Image.MAX_IMAGE_PIXELS = 178956970  # ~13000x13000 - prevents decompression bombs
+        Image.MAX_IMAGE_PIXELS = (
+            178956970  # ~13000x13000 - prevents decompression bombs
+        )
 
     def validate_and_process(
-        self,
-        base64_data: str,
-        enforce_square: bool = False
+        self, base64_data: str, enforce_square: bool = False
     ) -> Tuple[str, dict]:
         """
         Validate and process an image with comprehensive security checks.
@@ -105,12 +106,12 @@ class ImageValidator:
 
         # Step 8: Return metadata for audit logging
         metadata = {
-            'original_size': len(image_bytes),
-            'processed_size': len(base64.b64decode(clean_base64.split(',')[1])),
-            'mime_type': mime_type,
-            'format': format_name,
-            'dimensions': f"{image.width}x{image.height}",
-            'metadata_stripped': True
+            "original_size": len(image_bytes),
+            "processed_size": len(base64.b64decode(clean_base64.split(",")[1])),
+            "mime_type": mime_type,
+            "format": format_name,
+            "dimensions": f"{image.width}x{image.height}",
+            "metadata_stripped": True,
         }
 
         return clean_base64, metadata
@@ -125,8 +126,8 @@ class ImageValidator:
         """
         try:
             # Remove data URI prefix if present
-            if ',' in base64_data and base64_data.startswith('data:'):
-                base64_data = base64_data.split(',', 1)[1]
+            if "," in base64_data and base64_data.startswith("data:"):
+                base64_data = base64_data.split(",", 1)[1]
 
             # Decode base64
             image_bytes = base64.b64decode(base64_data, validate=True)
@@ -205,18 +206,14 @@ class ImageValidator:
 
             return image
 
-        except Image.DecompressionBombError as e:
+        except Image.DecompressionBombError:
             raise ImageValidationError(
                 "Potential decompression bomb detected. Image rejected."
             )
         except Exception as e:
             raise ImageValidationError(f"Invalid or corrupted image: {str(e)}")
 
-    def _validate_dimensions(
-        self,
-        image: Image.Image,
-        enforce_square: bool
-    ) -> None:
+    def _validate_dimensions(self, image: Image.Image, enforce_square: bool) -> None:
         """Validate image dimensions."""
         width, height = image.size
 
@@ -240,11 +237,7 @@ class ImageValidator:
                 f"Logo must be square. Current: {width}x{height}"
             )
 
-    def _sanitize_image(
-        self,
-        image: Image.Image,
-        mime_type: str
-    ) -> Tuple[bytes, str]:
+    def _sanitize_image(self, image: Image.Image, mime_type: str) -> Tuple[bytes, str]:
         """
         Sanitize image by:
         1. Stripping all metadata (EXIF, GPS, etc.)
@@ -262,12 +255,12 @@ class ImageValidator:
 
             # Convert to RGB mode (most compatible, strips alpha channel)
             # For PNG, we'll keep RGBA if it has transparency
-            if image.mode == 'RGBA' and format_name == 'PNG':
+            if image.mode == "RGBA" and format_name == "PNG":
                 # Keep transparency for PNG
                 output_image = image
-            elif image.mode != 'RGB':
+            elif image.mode != "RGB":
                 # Convert to RGB for JPEG or non-RGBA images
-                output_image = image.convert('RGB')
+                output_image = image.convert("RGB")
             else:
                 output_image = image
 
@@ -276,15 +269,15 @@ class ImageValidator:
 
             # Save with optimal settings (no metadata)
             save_kwargs = {
-                'format': format_name,
-                'optimize': True,
+                "format": format_name,
+                "optimize": True,
             }
 
-            if format_name == 'JPEG':
-                save_kwargs['quality'] = 90  # High quality, reasonable size
-                save_kwargs['progressive'] = True
-            elif format_name == 'PNG':
-                save_kwargs['compress_level'] = 6  # Good compression
+            if format_name == "JPEG":
+                save_kwargs["quality"] = 90  # High quality, reasonable size
+                save_kwargs["progressive"] = True
+            elif format_name == "PNG":
+                save_kwargs["compress_level"] = 6  # Good compression
 
             output_image.save(output_buffer, **save_kwargs)
 
@@ -299,18 +292,19 @@ class ImageValidator:
     def _encode_to_base64(self, image_bytes: bytes, format_name: str) -> str:
         """Encode sanitized image back to base64 with data URI."""
         mime_type_map = {
-            'PNG': 'image/png',
-            'JPEG': 'image/jpeg',
+            "PNG": "image/png",
+            "JPEG": "image/jpeg",
         }
 
-        mime_type = mime_type_map.get(format_name, 'image/png')
-        b64_encoded = base64.b64encode(image_bytes).decode('utf-8')
+        mime_type = mime_type_map.get(format_name, "image/png")
+        b64_encoded = base64.b64encode(image_bytes).decode("utf-8")
 
         return f"data:{mime_type};base64,{b64_encoded}"
 
 
 # Singleton instance
 _validator_instance = None
+
 
 def get_image_validator() -> ImageValidator:
     """Get singleton ImageValidator instance."""
@@ -340,8 +334,7 @@ def validate_logo_image(base64_data: Optional[str]) -> Optional[str]:
     try:
         validator = get_image_validator()
         clean_data, metadata = validator.validate_and_process(
-            base64_data,
-            enforce_square=False  # Allow rectangular logos
+            base64_data, enforce_square=False  # Allow rectangular logos
         )
 
         # Log metadata for audit trail (optional)
@@ -350,12 +343,8 @@ def validate_logo_image(base64_data: Optional[str]) -> Optional[str]:
         return clean_data
 
     except ImageValidationError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid image: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Image processing failed: {str(e)}"
+            status_code=500, detail=f"Image processing failed: {str(e)}"
         )

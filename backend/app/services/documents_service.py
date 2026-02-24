@@ -10,15 +10,21 @@ and HTTPException-style error handling rather than tuple returns).
 """
 
 import logging
-from typing import List, Optional, Dict, Any, Set, Tuple
-from datetime import datetime, date
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
-from app.models.document import Document, DocumentFolder, DocumentStatus, FolderVisibility
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
+from app.models.document import (
+    Document,
+    DocumentFolder,
+    DocumentStatus,
+    FolderVisibility,
+)
 from app.models.user import User
-from app.core.constants import FOLDER_FACILITIES, FOLDER_EVENTS
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +67,7 @@ class DocumentsService:
     ) -> DocumentFolder:
         """Create a new document folder. Raises on failure."""
         folder = DocumentFolder(
-            organization_id=organization_id,
-            created_by=created_by,
-            **folder_data
+            organization_id=organization_id, created_by=created_by, **folder_data
         )
         self.db.add(folder)
         await self.db.commit()
@@ -88,9 +92,8 @@ class DocumentsService:
         Users with documents.manage, members.manage, or wildcard '*'
         bypass all restrictions (leadership override).
         """
-        query = (
-            select(DocumentFolder)
-            .where(DocumentFolder.organization_id == str(organization_id))
+        query = select(DocumentFolder).where(
+            DocumentFolder.organization_id == str(organization_id)
         )
 
         if parent_id:
@@ -163,7 +166,9 @@ class DocumentsService:
             return False
 
         if vis == FolderVisibility.OWNER:
-            return folder.owner_user_id is not None and str(folder.owner_user_id) == str(user.id)
+            return folder.owner_user_id is not None and str(
+                folder.owner_user_id
+            ) == str(user.id)
 
         # organization visibility - check allowed_roles if set
         if folder.allowed_roles:
@@ -187,9 +192,7 @@ class DocumentsService:
         await self.db.refresh(folder)
         return folder
 
-    async def delete_folder(
-        self, folder_id: UUID, organization_id: UUID
-    ) -> bool:
+    async def delete_folder(self, folder_id: UUID, organization_id: UUID) -> bool:
         """Delete a folder and all its documents. Returns False if not found."""
         folder = await self.get_folder_by_id(folder_id, organization_id)
         if not folder:
@@ -211,9 +214,7 @@ class DocumentsService:
     ) -> Document:
         """Create a new document record. Raises on failure."""
         document = Document(
-            organization_id=organization_id,
-            uploaded_by=uploaded_by,
-            **doc_data
+            organization_id=organization_id, uploaded_by=uploaded_by, **doc_data
         )
         self.db.add(document)
         await self.db.commit()
@@ -230,10 +231,7 @@ class DocumentsService:
         limit: int = 100,
     ) -> Tuple[List[Document], int]:
         """Get documents with filtering and pagination"""
-        query = (
-            select(Document)
-            .where(Document.organization_id == str(organization_id))
-        )
+        query = select(Document).where(Document.organization_id == str(organization_id))
 
         if folder_id:
             query = query.where(Document.folder_id == str(folder_id))
@@ -244,7 +242,9 @@ class DocumentsService:
             query = query.where(Document.status == DocumentStatus.ACTIVE)
 
         if search:
-            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             search_term = f"%{safe_search}%"
             query = query.where(
                 Document.name.ilike(search_term)
@@ -290,9 +290,7 @@ class DocumentsService:
         await self.db.refresh(document)
         return document
 
-    async def delete_document(
-        self, document_id: UUID, organization_id: UUID
-    ) -> bool:
+    async def delete_document(self, document_id: UUID, organization_id: UUID) -> bool:
         """Delete a document. Returns False if not found."""
         document = await self.get_document_by_id(document_id, organization_id)
         if not document:
@@ -330,6 +328,7 @@ class DocumentsService:
         if not members_root:
             # Auto-create if missing (e.g. org created before this feature)
             from app.models.document import SYSTEM_FOLDERS
+
             members_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "members")
             members_root = DocumentFolder(
                 organization_id=organization_id,
@@ -406,6 +405,7 @@ class DocumentsService:
         if not apparatus_root:
             # Auto-create if missing (e.g. org created before this feature)
             from app.models.document import SYSTEM_FOLDERS
+
             apparatus_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "apparatus")
             apparatus_root = DocumentFolder(
                 organization_id=organization_id,
@@ -445,10 +445,13 @@ class DocumentsService:
             self.db.add(vehicle_folder)
             await self.db.flush()
             await self.db.refresh(vehicle_folder)
-            logger.info(f"Created apparatus folder '{apparatus_unit_number}' for apparatus {apparatus_id_str}")
+            logger.info(
+                f"Created apparatus folder '{apparatus_unit_number}' for apparatus {apparatus_id_str}"
+            )
 
             # Create standard sub-folders
             from app.models.document import APPARATUS_SUB_FOLDERS
+
             for sub_def in APPARATUS_SUB_FOLDERS:
                 sub_folder = DocumentFolder(
                     organization_id=organization_id,
@@ -465,7 +468,9 @@ class DocumentsService:
                 self.db.add(sub_folder)
 
             await self.db.flush()
-            logger.info(f"Created {len(APPARATUS_SUB_FOLDERS)} sub-folders for apparatus '{apparatus_unit_number}'")
+            logger.info(
+                f"Created {len(APPARATUS_SUB_FOLDERS)} sub-folders for apparatus '{apparatus_unit_number}'"
+            )
 
         return vehicle_folder
 
@@ -548,7 +553,10 @@ class DocumentsService:
 
         if not facilities_root:
             from app.models.document import SYSTEM_FOLDERS
-            facilities_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == FOLDER_FACILITIES)
+
+            facilities_def = next(
+                s for s in SYSTEM_FOLDERS if s["slug"] == FOLDER_FACILITIES
+            )
             facilities_root = DocumentFolder(
                 organization_id=organization_id,
                 name=facilities_def["name"],
@@ -587,10 +595,13 @@ class DocumentsService:
             self.db.add(facility_folder)
             await self.db.flush()
             await self.db.refresh(facility_folder)
-            logger.info(f"Created facility folder '{facility_display_name}' for facility {facility_id_str}")
+            logger.info(
+                f"Created facility folder '{facility_display_name}' for facility {facility_id_str}"
+            )
 
             # Create standard sub-folders
             from app.models.document import FACILITY_SUB_FOLDERS
+
             for sub_def in FACILITY_SUB_FOLDERS:
                 sub_folder = DocumentFolder(
                     organization_id=organization_id,
@@ -607,7 +618,9 @@ class DocumentsService:
                 self.db.add(sub_folder)
 
             await self.db.flush()
-            logger.info(f"Created {len(FACILITY_SUB_FOLDERS)} sub-folders for facility '{facility_display_name}'")
+            logger.info(
+                f"Created {len(FACILITY_SUB_FOLDERS)} sub-folders for facility '{facility_display_name}'"
+            )
 
         return facility_folder
 
@@ -682,6 +695,7 @@ class DocumentsService:
 
         if not events_root:
             from app.models.document import SYSTEM_FOLDERS
+
             events_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == FOLDER_EVENTS)
             events_root = DocumentFolder(
                 organization_id=organization_id,
@@ -721,7 +735,9 @@ class DocumentsService:
             self.db.add(event_folder)
             await self.db.flush()
             await self.db.refresh(event_folder)
-            logger.info(f"Created event folder '{event_title}' for event {event_id_str}")
+            logger.info(
+                f"Created event folder '{event_title}' for event {event_id_str}"
+            )
 
         return event_folder
 
@@ -741,8 +757,9 @@ class DocumentsService:
 
         # Total folders
         folder_result = await self.db.execute(
-            select(func.count(DocumentFolder.id))
-            .where(DocumentFolder.organization_id == str(organization_id))
+            select(func.count(DocumentFolder.id)).where(
+                DocumentFolder.organization_id == str(organization_id)
+            )
         )
         total_folders = folder_result.scalar() or 0
 
@@ -759,7 +776,10 @@ class DocumentsService:
         month_result = await self.db.execute(
             select(func.count(Document.id))
             .where(Document.organization_id == str(organization_id))
-            .where(Document.created_at >= datetime.combine(first_of_month, datetime.min.time()))
+            .where(
+                Document.created_at
+                >= datetime.combine(first_of_month, datetime.min.time())
+            )
         )
         documents_this_month = month_result.scalar() or 0
 

@@ -10,12 +10,12 @@ rolling-period requirement calculations.
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
-from sqlalchemy import select, and_, or_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
-from app.models.user import MemberLeaveOfAbsence, LeaveType
 from app.models.training import TrainingWaiver, TrainingWaiverType
+from app.models.user import LeaveType, MemberLeaveOfAbsence
 
 
 class MemberLeaveService:
@@ -47,7 +47,11 @@ class MemberLeaveService:
             organization_id=organization_id,
             user_id=user_id,
             waiver_type=wt,
-            reason=f"Auto-created from leave of absence: {reason}" if reason else "Auto-created from leave of absence",
+            reason=(
+                f"Auto-created from leave of absence: {reason}"
+                if reason
+                else "Auto-created from leave of absence"
+            ),
             start_date=start_date,
             end_date=end_date,
             requirement_ids=None,  # Applies to all requirements
@@ -58,9 +62,7 @@ class MemberLeaveService:
         self.db.add(waiver)
         return str(waiver.id)
 
-    async def _update_linked_waiver(
-        self, waiver_id: str, **kwargs
-    ) -> None:
+    async def _update_linked_waiver(self, waiver_id: str, **kwargs) -> None:
         """Update an auto-linked training waiver."""
         result = await self.db.execute(
             select(TrainingWaiver).where(TrainingWaiver.id == waiver_id)
@@ -197,15 +199,25 @@ class MemberLeaveService:
                 setattr(leave, key, value)
 
         # Handle exempt_from_training_waiver toggle
-        exempt_changed = "exempt_from_training_waiver" in kwargs and kwargs["exempt_from_training_waiver"] is not None
+        exempt_changed = (
+            "exempt_from_training_waiver" in kwargs
+            and kwargs["exempt_from_training_waiver"] is not None
+        )
         if exempt_changed:
             if leave.exempt_from_training_waiver and leave.linked_training_waiver_id:
                 # Was not exempt, now is → deactivate linked waiver
                 await self._deactivate_linked_waiver(leave.linked_training_waiver_id)
                 leave.linked_training_waiver_id = None
-            elif not leave.exempt_from_training_waiver and not leave.linked_training_waiver_id:
+            elif (
+                not leave.exempt_from_training_waiver
+                and not leave.linked_training_waiver_id
+            ):
                 # Was exempt, now is not → create linked waiver
-                lt_val = leave.leave_type.value if hasattr(leave.leave_type, 'value') else str(leave.leave_type)
+                lt_val = (
+                    leave.leave_type.value
+                    if hasattr(leave.leave_type, "value")
+                    else str(leave.leave_type)
+                )
                 waiver_id = await self._create_linked_waiver(
                     organization_id=organization_id,
                     user_id=str(leave.user_id),
@@ -225,16 +237,16 @@ class MemberLeaveService:
             if "end_date" in kwargs and kwargs["end_date"] is not None:
                 waiver_updates["end_date"] = leave.end_date
             if waiver_updates:
-                await self._update_linked_waiver(leave.linked_training_waiver_id, **waiver_updates)
+                await self._update_linked_waiver(
+                    leave.linked_training_waiver_id, **waiver_updates
+                )
 
         leave.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(leave)
         return leave
 
-    async def deactivate_leave(
-        self, organization_id: str, leave_id: str
-    ) -> bool:
+    async def deactivate_leave(self, organization_id: str, leave_id: str) -> bool:
         """Soft-delete a leave of absence record and its linked training waiver."""
         leave = await self.get_leave(organization_id, leave_id)
         if not leave:

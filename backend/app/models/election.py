@@ -4,28 +4,21 @@ Election Models
 Database models for election management, including elections, candidates, and votes.
 """
 
-from sqlalchemy import (
-    Column,
-    String,
-    Text,
-    Boolean,
-    DateTime,
-    ForeignKey,
-    Integer,
-    Enum as SQLEnum,
-    Index,
-    JSON,
-)
+from enum import Enum
+
+from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from enum import Enum
-from app.core.utils import generate_uuid
 
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class ElectionStatus(str, Enum):
     """Election status enumeration"""
+
     DRAFT = "draft"
     OPEN = "open"
     CLOSED = "closed"
@@ -39,6 +32,7 @@ class Election(Base):
     Supports various election types including officer elections,
     board elections, and general voting.
     """
+
     __tablename__ = "elections"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -47,7 +41,9 @@ class Election(Base):
     # Election details
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
-    election_type = Column(String(50), nullable=False, default="general")  # officer, board, general, poll
+    election_type = Column(
+        String(50), nullable=False, default="general"
+    )  # officer, board, general, poll
 
     # Positions being voted on (for multi-position elections)
     positions = Column(JSON, nullable=True)  # ["Chief", "President", "Secretary"]
@@ -64,15 +60,23 @@ class Election(Base):
     # Email notification tracking
     email_sent = Column(Boolean, nullable=False, default=False)
     email_sent_at = Column(DateTime(timezone=True), nullable=True)
-    email_recipients = Column(JSON, nullable=True)  # List of user IDs who received email
-    meeting_date = Column(DateTime(timezone=True), nullable=True)  # For meeting-based ballots
+    email_recipients = Column(
+        JSON, nullable=True
+    )  # List of user IDs who received email
+    meeting_date = Column(
+        DateTime(timezone=True), nullable=True
+    )  # For meeting-based ballots
 
     # Timing
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=False)
 
     # Status
-    status = Column(SQLEnum(ElectionStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ElectionStatus.DRAFT)
+    status = Column(
+        SQLEnum(ElectionStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ElectionStatus.DRAFT,
+    )
 
     # Election settings
     anonymous_voting = Column(Boolean, nullable=False, default=True)
@@ -145,12 +149,23 @@ class Election(Base):
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     # Relationships
-    candidates = relationship("Candidate", back_populates="election", cascade="all, delete-orphan")
-    votes = relationship("Vote", back_populates="election", cascade="all, delete-orphan")
+    candidates = relationship(
+        "Candidate", back_populates="election", cascade="all, delete-orphan"
+    )
+    votes = relationship(
+        "Vote", back_populates="election", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_elections_organization_id", "organization_id"),
@@ -165,20 +180,25 @@ class Candidate(Base):
 
     Can represent existing members or write-in candidates.
     """
+
     __tablename__ = "candidates"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
 
     # Candidate information
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # Null for write-ins
+    user_id = Column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )  # Null for write-ins
     name = Column(String(200), nullable=False)  # For display (or write-in name)
     position = Column(String(100), nullable=True)  # Position they're running for
     statement = Column(Text, nullable=True)  # Candidate statement
     photo_url = Column(String(500), nullable=True)
 
     # Nomination details
-    nomination_date = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    nomination_date = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     nominated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     accepted = Column(Boolean, nullable=False, default=True)  # For member candidates
     is_write_in = Column(Boolean, nullable=False, default=False)
@@ -187,12 +207,21 @@ class Candidate(Base):
     display_order = Column(Integer, nullable=False, default=0)
 
     # Metadata
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     # Relationships
     election = relationship("Election", back_populates="candidates")
-    votes = relationship("Vote", back_populates="candidate", cascade="all, delete-orphan")
+    votes = relationship(
+        "Vote", back_populates="candidate", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_candidates_election_id", "election_id"),
@@ -208,10 +237,13 @@ class VotingToken(Base):
     Each eligible voter receives a unique hashed token via email to access their ballot.
     The token ensures anonymous voting while preventing duplicate votes.
     """
+
     __tablename__ = "voting_tokens"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
     election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
 
     # Secure token for ballot access (sent via email)
@@ -221,7 +253,9 @@ class VotingToken(Base):
     voter_hash = Column(String(64), nullable=False)  # SHA256 hash
 
     # Token metadata
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
     # Usage tracking
@@ -252,6 +286,7 @@ class Vote(Base):
 
     Supports both anonymous and non-anonymous voting.
     """
+
     __tablename__ = "votes"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -262,12 +297,20 @@ class Vote(Base):
     voter_id = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     # For tracking purposes (even in anonymous voting, we can track that a user voted)
-    voter_hash = Column(String(64), nullable=True)  # SHA256 hash of voter_id + election_id
+    voter_hash = Column(
+        String(64), nullable=True
+    )  # SHA256 hash of voter_id + election_id
 
     # Vote details
-    position = Column(String(100), nullable=True)  # Position being voted for (multi-position elections)
-    vote_rank = Column(Integer, nullable=True)  # For ranked-choice voting (1 = first choice)
-    voted_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    position = Column(
+        String(100), nullable=True
+    )  # Position being voted for (multi-position elections)
+    vote_rank = Column(
+        Integer, nullable=True
+    )  # For ranked-choice voting (1 = first choice)
+    voted_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     # Cryptographic signature for tampering detection
     # HMAC-SHA256(election_id:candidate_id:voter_hash:voted_at, VOTE_SIGNING_KEY)
@@ -275,9 +318,15 @@ class Vote(Base):
 
     # Proxy voting — tracks when a vote is cast on behalf of another member
     is_proxy_vote = Column(Boolean, nullable=False, default=False)
-    proxy_voter_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # The person who physically voted
-    proxy_authorization_id = Column(String(36), nullable=True)  # References proxy_authorizations[].id on Election
-    proxy_delegating_user_id = Column(String(36), nullable=True)  # The absent member on whose behalf the vote is cast
+    proxy_voter_id = Column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )  # The person who physically voted
+    proxy_authorization_id = Column(
+        String(36), nullable=True
+    )  # References proxy_authorizations[].id on Election
+    proxy_delegating_user_id = Column(
+        String(36), nullable=True
+    )  # The absent member on whose behalf the vote is cast
 
     # IP and user agent for audit (not shown to users)
     ip_address = Column(String(45), nullable=True)

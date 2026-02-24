@@ -5,21 +5,22 @@ CRUD endpoints for per-organization operational rank management.
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.operational_rank import (
     RankCreate,
-    RankUpdate,
-    RankResponse,
     RankReorderRequest,
+    RankResponse,
+    RankUpdate,
     RankValidationResponse,
 )
 from app.services.operational_rank_service import OperationalRankService
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -198,6 +199,8 @@ async def reorder_ranks(
     service = OperationalRankService(db)
     ranks = await service.reorder_ranks(
         organization_id=current_user.organization_id,
-        items=[{"id": str(item.id), "sort_order": item.sort_order} for item in data.ranks],
+        items=[
+            {"id": str(item.id), "sort_order": item.sort_order} for item in data.ranks
+        ],
     )
     return [_rank_to_response(r) for r in ranks]

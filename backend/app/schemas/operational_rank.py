@@ -4,19 +4,34 @@ Operational Rank Pydantic Schemas
 Request and response schemas for the operational-ranks endpoints.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 
 class RankCreate(BaseModel):
     """Schema for creating a new operational rank."""
 
-    rank_code: str = Field(..., min_length=1, max_length=100, description="Machine-friendly code (e.g. 'captain')")
-    display_name: str = Field(..., min_length=1, max_length=200, description="Human-readable label (e.g. 'Captain')")
-    description: Optional[str] = Field(None, description="Optional description of this rank")
-    sort_order: int = Field(default=0, description="Display ordering (lower = higher rank)")
+    rank_code: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Machine-friendly code (e.g. 'captain')",
+    )
+    display_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Human-readable label (e.g. 'Captain')",
+    )
+    description: Optional[str] = Field(
+        None, description="Optional description of this rank"
+    )
+    sort_order: int = Field(
+        default=0, description="Display ordering (lower = higher rank)"
+    )
     is_active: bool = Field(default=True)
 
 

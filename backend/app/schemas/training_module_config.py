@@ -2,13 +2,15 @@
 Schemas for Training Module Configuration (Member Visibility Settings)
 """
 
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel
 
 
 class TrainingModuleConfigResponse(BaseModel):
     """Response schema for training module configuration."""
+
     id: str
     organization_id: str
 

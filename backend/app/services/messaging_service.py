@@ -5,12 +5,12 @@ Business logic for internal department messages/announcements.
 Handles creation, targeting, delivery, and read tracking.
 """
 
-from typing import List, Optional, Dict, Tuple, Any
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, case, desc
 from sqlalchemy.orm import selectinload
-from uuid import UUID
 
 from app.core.utils import generate_uuid
 from app.models.notification import (
@@ -19,7 +19,7 @@ from app.models.notification import (
     MessagePriority,
     MessageTargetType,
 )
-from app.models.user import User, UserStatus, Role, user_roles
+from app.models.user import Role, User
 
 
 class MessagingService:
@@ -81,16 +81,14 @@ class MessagingService:
         limit: int = 50,
     ) -> Tuple[List[DepartmentMessage], int]:
         """Get all messages for admin management"""
-        query = (
-            select(DepartmentMessage)
-            .where(DepartmentMessage.organization_id == organization_id)
+        query = select(DepartmentMessage).where(
+            DepartmentMessage.organization_id == organization_id
         )
         if not include_inactive:
             query = query.where(DepartmentMessage.is_active == True)  # noqa: E712
 
-        count_q = (
-            select(func.count(DepartmentMessage.id))
-            .where(DepartmentMessage.organization_id == organization_id)
+        count_q = select(func.count(DepartmentMessage.id)).where(
+            DepartmentMessage.organization_id == organization_id
         )
         if not include_inactive:
             count_q = count_q.where(DepartmentMessage.is_active == True)  # noqa: E712
@@ -99,8 +97,9 @@ class MessagingService:
         total = total_result.scalar() or 0
 
         query = (
-            query
-            .order_by(desc(DepartmentMessage.is_pinned), desc(DepartmentMessage.created_at))
+            query.order_by(
+                desc(DepartmentMessage.is_pinned), desc(DepartmentMessage.created_at)
+            )
             .offset(skip)
             .limit(limit)
         )
@@ -130,9 +129,17 @@ class MessagingService:
                 return None, "Message not found"
 
             allowed_fields = {
-                "title", "body", "priority", "target_type",
-                "target_roles", "target_statuses", "target_member_ids",
-                "is_pinned", "is_active", "requires_acknowledgment", "expires_at",
+                "title",
+                "body",
+                "priority",
+                "target_type",
+                "target_roles",
+                "target_statuses",
+                "target_member_ids",
+                "is_pinned",
+                "is_active",
+                "requires_acknowledgment",
+                "expires_at",
             }
             for key, value in updates.items():
                 if key in allowed_fields:
@@ -184,24 +191,21 @@ class MessagingService:
 
         # First get the user's roles and status
         user_result = await self.db.execute(
-            select(User)
-            .options(selectinload(User.roles))
-            .where(User.id == user_id)
+            select(User).options(selectinload(User.roles)).where(User.id == user_id)
         )
         user = user_result.scalar_one_or_none()
         if not user:
             return []
 
         user_role_names = [r.name for r in user.roles]
-        user_status = user.status.value if hasattr(user.status, 'value') else str(user.status)
+        user_status = (
+            user.status.value if hasattr(user.status, "value") else str(user.status)
+        )
 
         # Get all active, non-expired messages for this org
-        query = (
-            select(DepartmentMessage)
-            .where(
-                DepartmentMessage.organization_id == organization_id,
-                DepartmentMessage.is_active == True,  # noqa: E712
-            )
+        query = select(DepartmentMessage).where(
+            DepartmentMessage.organization_id == organization_id,
+            DepartmentMessage.is_active == True,  # noqa: E712
         )
         # Exclude expired
         query = query.where(
@@ -244,29 +248,57 @@ class MessagingService:
             is_read = read_record is not None
             if not include_read and is_read:
                 continue
-            enriched.append({
-                "id": msg.id,
-                "title": msg.title,
-                "body": msg.body,
-                "priority": msg.priority.value if hasattr(msg.priority, 'value') else str(msg.priority),
-                "target_type": msg.target_type.value if hasattr(msg.target_type, 'value') else str(msg.target_type),
-                "is_pinned": msg.is_pinned,
-                "requires_acknowledgment": msg.requires_acknowledgment,
-                "posted_by": msg.posted_by,
-                "author_name": None,  # Filled below
-                "created_at": msg.created_at.isoformat() if msg.created_at else None,
-                "expires_at": msg.expires_at.isoformat() if msg.expires_at else None,
-                "is_read": is_read,
-                "read_at": read_record.read_at.isoformat() if read_record and read_record.read_at else None,
-                "is_acknowledged": read_record.acknowledged_at is not None if read_record else False,
-                "acknowledged_at": read_record.acknowledged_at.isoformat() if read_record and read_record.acknowledged_at else None,
-            })
+            enriched.append(
+                {
+                    "id": msg.id,
+                    "title": msg.title,
+                    "body": msg.body,
+                    "priority": (
+                        msg.priority.value
+                        if hasattr(msg.priority, "value")
+                        else str(msg.priority)
+                    ),
+                    "target_type": (
+                        msg.target_type.value
+                        if hasattr(msg.target_type, "value")
+                        else str(msg.target_type)
+                    ),
+                    "is_pinned": msg.is_pinned,
+                    "requires_acknowledgment": msg.requires_acknowledgment,
+                    "posted_by": msg.posted_by,
+                    "author_name": None,  # Filled below
+                    "created_at": (
+                        msg.created_at.isoformat() if msg.created_at else None
+                    ),
+                    "expires_at": (
+                        msg.expires_at.isoformat() if msg.expires_at else None
+                    ),
+                    "is_read": is_read,
+                    "read_at": (
+                        read_record.read_at.isoformat()
+                        if read_record and read_record.read_at
+                        else None
+                    ),
+                    "is_acknowledged": (
+                        read_record.acknowledged_at is not None
+                        if read_record
+                        else False
+                    ),
+                    "acknowledged_at": (
+                        read_record.acknowledged_at.isoformat()
+                        if read_record and read_record.acknowledged_at
+                        else None
+                    ),
+                }
+            )
 
         # Resolve author names
         author_ids = list({m["posted_by"] for m in enriched if m["posted_by"]})
         if author_ids:
             authors_result = await self.db.execute(
-                select(User.id, User.first_name, User.last_name).where(User.id.in_(author_ids))
+                select(User.id, User.first_name, User.last_name).where(
+                    User.id.in_(author_ids)
+                )
             )
             author_map = {
                 row.id: f"{row.first_name or ''} {row.last_name or ''}".strip()
@@ -276,14 +308,12 @@ class MessagingService:
                 m["author_name"] = author_map.get(m["posted_by"], "Unknown")
 
         # Paginate
-        total_visible = len(enriched)
-        enriched = enriched[skip:skip + limit]
+        len(enriched)
+        enriched = enriched[skip : skip + limit]
 
         return enriched
 
-    async def get_unread_count(
-        self, organization_id: str, user_id: str
-    ) -> int:
+    async def get_unread_count(self, organization_id: str, user_id: str) -> int:
         """Get count of unread messages for a user"""
         inbox = await self.get_inbox(
             organization_id, user_id, include_read=False, limit=1000
@@ -298,7 +328,11 @@ class MessagingService:
         user_status: str,
     ) -> bool:
         """Check if a message targets the given user"""
-        tt = message.target_type.value if hasattr(message.target_type, 'value') else str(message.target_type)
+        tt = (
+            message.target_type.value
+            if hasattr(message.target_type, "value")
+            else str(message.target_type)
+        )
 
         if tt == "all":
             return True
@@ -405,8 +439,8 @@ class MessagingService:
     async def get_available_roles(self, organization_id: str) -> List[Dict[str, str]]:
         """Get list of roles for targeting dropdown"""
         result = await self.db.execute(
-            select(Role.name, Role.slug).where(
-                Role.organization_id == organization_id
-            ).order_by(Role.priority.desc())
+            select(Role.name, Role.slug)
+            .where(Role.organization_id == organization_id)
+            .order_by(Role.priority.desc())
         )
         return [{"name": r.name, "slug": r.slug} for r in result.all()]

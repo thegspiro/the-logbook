@@ -5,27 +5,26 @@ Handles self-reported training submissions, approval workflow,
 and self-report configuration management.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
-from typing import List, Optional
-from datetime import datetime, date, timezone
 import calendar
+from datetime import date, datetime, timedelta, timezone
+from typing import List, Optional
 
+from loguru import logger
+from sqlalchemy import and_
 from sqlalchemy import func as sa_func
-from datetime import timedelta
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import generate_uuid
 from app.models.training import (
-    TrainingSubmission,
     SelfReportConfig,
-    TrainingRecord,
-    TrainingCourse,
-    TrainingStatus,
-    TrainingType,
     SubmissionStatus,
+    TrainingCourse,
+    TrainingRecord,
+    TrainingStatus,
+    TrainingSubmission,
 )
 from app.models.user import User
-from app.core.utils import generate_uuid
-from loguru import logger
 
 
 class TrainingSubmissionService:
@@ -89,12 +88,18 @@ class TrainingSubmissionService:
         config = await self.get_config(organization_id)
 
         # Validate against config
-        if config.max_hours_per_submission and hours_completed > config.max_hours_per_submission:
+        if (
+            config.max_hours_per_submission
+            and hours_completed > config.max_hours_per_submission
+        ):
             raise ValueError(
                 f"Hours exceed maximum of {config.max_hours_per_submission} per submission"
             )
 
-        if config.allowed_training_types and training_type not in config.allowed_training_types:
+        if (
+            config.allowed_training_types
+            and training_type not in config.allowed_training_types
+        ):
             raise ValueError(
                 f"Training type '{training_type}' is not allowed for self-reporting"
             )
@@ -186,7 +191,9 @@ class TrainingSubmissionService:
             SubmissionStatus.PENDING_REVIEW,
             SubmissionStatus.REVISION_REQUESTED,
         ):
-            raise ValueError("Cannot edit a submission that has been approved or rejected")
+            raise ValueError(
+                "Cannot edit a submission that has been approved or rejected"
+            )
 
         for key, value in kwargs.items():
             if value is not None and hasattr(submission, key):
@@ -214,7 +221,9 @@ class TrainingSubmissionService:
             SubmissionStatus.PENDING_REVIEW,
             SubmissionStatus.REVISION_REQUESTED,
         ):
-            raise ValueError("Cannot delete a submission that has been approved or rejected")
+            raise ValueError(
+                "Cannot delete a submission that has been approved or rejected"
+            )
 
         await self.db.delete(submission)
         await self.db.commit()
@@ -265,7 +274,7 @@ class TrainingSubmissionService:
             duplicate_info = await self._check_duplicate(submission)
 
             # Create training record from the approved submission
-            record = await self._create_record_from_submission(submission)
+            await self._create_record_from_submission(submission)
 
             if duplicate_info:
                 logger.warning(
@@ -288,12 +297,12 @@ class TrainingSubmissionService:
             await self.db.commit()
 
         else:
-            raise ValueError(f"Invalid action: {action}. Use 'approve', 'reject', or 'revision_requested'")
+            raise ValueError(
+                f"Invalid action: {action}. Use 'approve', 'reject', or 'revision_requested'"
+            )
 
         await self.db.refresh(submission)
-        logger.info(
-            f"Submission {submission_id} reviewed: {action} by {reviewer_id}"
-        )
+        logger.info(f"Submission {submission_id} reviewed: {action} by {reviewer_id}")
         return submission
 
     async def get_pending_count(self, organization_id: str) -> int:
@@ -310,9 +319,7 @@ class TrainingSubmissionService:
 
     # ==================== Internal ====================
 
-    async def _check_duplicate(
-        self, submission: TrainingSubmission
-    ) -> Optional[dict]:
+    async def _check_duplicate(self, submission: TrainingSubmission) -> Optional[dict]:
         """Check for potential duplicate training records for this submission."""
         if not submission.completion_date:
             return None
@@ -321,9 +328,18 @@ class TrainingSubmissionService:
             select(TrainingRecord)
             .where(TrainingRecord.organization_id == submission.organization_id)
             .where(TrainingRecord.user_id == submission.submitted_by)
-            .where(sa_func.lower(TrainingRecord.course_name) == submission.course_name.lower())
-            .where(TrainingRecord.completion_date >= submission.completion_date - timedelta(days=1))
-            .where(TrainingRecord.completion_date <= submission.completion_date + timedelta(days=1))
+            .where(
+                sa_func.lower(TrainingRecord.course_name)
+                == submission.course_name.lower()
+            )
+            .where(
+                TrainingRecord.completion_date
+                >= submission.completion_date - timedelta(days=1)
+            )
+            .where(
+                TrainingRecord.completion_date
+                <= submission.completion_date + timedelta(days=1)
+            )
         )
         existing = result.scalars().first()
         if existing:
@@ -341,7 +357,11 @@ class TrainingSubmissionService:
         # Auto-calculate expiration_date from the course's expiration_months
         # when not explicitly provided but completion_date and course_code are set
         expiration_date = submission.expiration_date
-        if not expiration_date and submission.completion_date and submission.course_code:
+        if (
+            not expiration_date
+            and submission.completion_date
+            and submission.course_code
+        ):
             course_result = await self.db.execute(
                 select(TrainingCourse).where(
                     TrainingCourse.code == submission.course_code,

@@ -5,25 +5,39 @@ Business logic for meeting minutes management.
 """
 
 import logging
-from typing import List, Optional, Tuple
-from uuid import UUID
 from datetime import datetime, timezone
+from typing import List, Optional
+from uuid import UUID
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
 from app.models.minute import (
-    MeetingMinutes, MinutesTemplate, Motion, ActionItem,
-    MinutesMeetingType, MinutesStatus, MotionStatus,
-    MinutesActionItemStatus, ActionItemPriority,
-    DEFAULT_BUSINESS_SECTIONS, DEFAULT_SPECIAL_SECTIONS, DEFAULT_COMMITTEE_SECTIONS,
-    DEFAULT_TRUSTEE_SECTIONS, DEFAULT_EXECUTIVE_SECTIONS, DEFAULT_ANNUAL_SECTIONS,
+    DEFAULT_ANNUAL_SECTIONS,
+    DEFAULT_BUSINESS_SECTIONS,
+    DEFAULT_COMMITTEE_SECTIONS,
+    DEFAULT_EXECUTIVE_SECTIONS,
+    DEFAULT_SPECIAL_SECTIONS,
+    DEFAULT_TRUSTEE_SECTIONS,
+    ActionItem,
+    ActionItemPriority,
+    MeetingMinutes,
+    MinutesActionItemStatus,
+    MinutesMeetingType,
+    MinutesStatus,
+    MinutesTemplate,
+    Motion,
+    MotionStatus,
 )
 from app.models.user import User
 from app.schemas.minute import (
-    MinutesCreate, MinutesUpdate,
-    MotionCreate, MotionUpdate,
-    ActionItemCreate, ActionItemUpdate,
+    ActionItemCreate,
+    ActionItemUpdate,
+    MinutesCreate,
+    MinutesUpdate,
+    MotionCreate,
+    MotionUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,22 +69,32 @@ class MinuteService:
         # Serialize sections to dicts
         if minutes_dict.get("sections"):
             minutes_dict["sections"] = [
-                s.model_dump() if hasattr(s, "model_dump") else s
-                for s in data.sections
+                s.model_dump() if hasattr(s, "model_dump") else s for s in data.sections
             ]
 
         # Serialize header/footer configs
-        if minutes_dict.get("header_config") and hasattr(data.header_config, "model_dump"):
+        if minutes_dict.get("header_config") and hasattr(
+            data.header_config, "model_dump"
+        ):
             minutes_dict["header_config"] = data.header_config.model_dump()
-        if minutes_dict.get("footer_config") and hasattr(data.footer_config, "model_dump"):
+        if minutes_dict.get("footer_config") and hasattr(
+            data.footer_config, "model_dump"
+        ):
             minutes_dict["footer_config"] = data.footer_config.model_dump()
 
         # If a template_id is provided but no sections, populate from template
         if minutes_dict.get("template_id") and not minutes_dict.get("sections"):
-            template = await self._get_template(minutes_dict["template_id"], organization_id)
+            template = await self._get_template(
+                minutes_dict["template_id"], organization_id
+            )
             if template and template.sections:
                 minutes_dict["sections"] = [
-                    {"order": s["order"], "key": s["key"], "title": s["title"], "content": s.get("default_content", "")}
+                    {
+                        "order": s["order"],
+                        "key": s["key"],
+                        "title": s["title"],
+                        "content": s.get("default_content", ""),
+                    }
                     for s in template.sections
                 ]
                 # Inherit header/footer from template if not explicitly set
@@ -91,7 +115,12 @@ class MinuteService:
             }
             default = defaults_map.get(mt, DEFAULT_BUSINESS_SECTIONS)
             minutes_dict["sections"] = [
-                {"order": s["order"], "key": s["key"], "title": s["title"], "content": s.get("default_content", "")}
+                {
+                    "order": s["order"],
+                    "key": s["key"],
+                    "title": s["title"],
+                    "content": s.get("default_content", ""),
+                }
                 for s in default
             ]
 
@@ -194,7 +223,9 @@ class MinuteService:
             query = query.where(MeetingMinutes.status == status)
 
         if search:
-            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
@@ -207,7 +238,9 @@ class MinuteService:
                 )
             )
 
-        query = query.order_by(MeetingMinutes.meeting_date.desc()).offset(skip).limit(limit)
+        query = (
+            query.order_by(MeetingMinutes.meeting_date.desc()).offset(skip).limit(limit)
+        )
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -220,7 +253,10 @@ class MinuteService:
         if not minutes:
             return None
 
-        if minutes.status not in (MinutesStatus.DRAFT.value, MinutesStatus.REJECTED.value):
+        if minutes.status not in (
+            MinutesStatus.DRAFT.value,
+            MinutesStatus.REJECTED.value,
+        ):
             raise ValueError("Can only edit minutes in draft or rejected status")
 
         update_data = data.model_dump(exclude_unset=True)
@@ -239,14 +275,21 @@ class MinuteService:
         # Serialize sections
         if "sections" in update_data and update_data["sections"]:
             update_data["sections"] = [
-                s.model_dump() if hasattr(s, "model_dump") else s
-                for s in data.sections
+                s.model_dump() if hasattr(s, "model_dump") else s for s in data.sections
             ]
 
         # Serialize header/footer configs
-        if "header_config" in update_data and data.header_config and hasattr(data.header_config, "model_dump"):
+        if (
+            "header_config" in update_data
+            and data.header_config
+            and hasattr(data.header_config, "model_dump")
+        ):
             update_data["header_config"] = data.header_config.model_dump()
-        if "footer_config" in update_data and data.footer_config and hasattr(data.footer_config, "model_dump"):
+        if (
+            "footer_config" in update_data
+            and data.footer_config
+            and hasattr(data.footer_config, "model_dump")
+        ):
             update_data["footer_config"] = data.footer_config.model_dump()
 
         for field, value in update_data.items():
@@ -262,9 +305,7 @@ class MinuteService:
         await self.db.commit()
         return await self.get_minutes(minutes_id, organization_id)
 
-    async def delete_minutes(
-        self, minutes_id: str, organization_id: UUID
-    ) -> bool:
+    async def delete_minutes(self, minutes_id: str, organization_id: UUID) -> bool:
         """Delete meeting minutes (only if in draft status)"""
         minutes = await self.get_minutes(minutes_id, organization_id)
         if not minutes:
@@ -289,7 +330,10 @@ class MinuteService:
         if not minutes:
             return None
 
-        if minutes.status not in (MinutesStatus.DRAFT.value, MinutesStatus.REJECTED.value):
+        if minutes.status not in (
+            MinutesStatus.DRAFT.value,
+            MinutesStatus.REJECTED.value,
+        ):
             raise ValueError("Can only submit draft or rejected minutes")
 
         minutes.status = MinutesStatus.SUBMITTED
@@ -351,7 +395,10 @@ class MinuteService:
         if not minutes:
             return None
 
-        if minutes.status not in (MinutesStatus.DRAFT.value, MinutesStatus.REJECTED.value):
+        if minutes.status not in (
+            MinutesStatus.DRAFT.value,
+            MinutesStatus.REJECTED.value,
+        ):
             raise ValueError("Can only add motions to draft or rejected minutes")
 
         motion = Motion(
@@ -379,7 +426,10 @@ class MinuteService:
         if not minutes:
             return None
 
-        if minutes.status not in (MinutesStatus.DRAFT.value, MinutesStatus.REJECTED.value):
+        if minutes.status not in (
+            MinutesStatus.DRAFT.value,
+            MinutesStatus.REJECTED.value,
+        ):
             raise ValueError("Can only edit motions on draft or rejected minutes")
 
         result = await self.db.execute(
@@ -410,7 +460,10 @@ class MinuteService:
         if not minutes:
             return False
 
-        if minutes.status not in (MinutesStatus.DRAFT.value, MinutesStatus.REJECTED.value):
+        if minutes.status not in (
+            MinutesStatus.DRAFT.value,
+            MinutesStatus.REJECTED.value,
+        ):
             raise ValueError("Can only delete motions on draft or rejected minutes")
 
         result = await self.db.execute(
@@ -453,7 +506,11 @@ class MinuteService:
         return item
 
     async def update_action_item(
-        self, item_id: str, minutes_id: str, organization_id: UUID, data: ActionItemUpdate
+        self,
+        item_id: str,
+        minutes_id: str,
+        organization_id: UUID,
+        data: ActionItemUpdate,
     ) -> Optional[ActionItem]:
         """Update an action item (status can be updated even on approved minutes)"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -499,8 +556,13 @@ class MinuteService:
         if not minutes:
             return False
 
-        if minutes.status not in (MinutesStatus.DRAFT.value, MinutesStatus.REJECTED.value):
-            raise ValueError("Can only delete action items on draft or rejected minutes")
+        if minutes.status not in (
+            MinutesStatus.DRAFT.value,
+            MinutesStatus.REJECTED.value,
+        ):
+            raise ValueError(
+                "Can only delete action items on draft or rejected minutes"
+            )
 
         result = await self.db.execute(
             select(ActionItem)
@@ -541,11 +603,15 @@ class MinuteService:
             select(func.count(ActionItem.id))
             .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
             .where(MeetingMinutes.organization_id == str(organization_id))
-            .where(ActionItem.status.in_([
-                MinutesActionItemStatus.PENDING.value,
-                MinutesActionItemStatus.IN_PROGRESS.value,
-                MinutesActionItemStatus.OVERDUE.value,
-            ]))
+            .where(
+                ActionItem.status.in_(
+                    [
+                        MinutesActionItemStatus.PENDING.value,
+                        MinutesActionItemStatus.IN_PROGRESS.value,
+                        MinutesActionItemStatus.OVERDUE.value,
+                    ]
+                )
+            )
         )
         open_items = open_items_result.scalar() or 0
 
@@ -607,17 +673,31 @@ class MinuteService:
                     idx = lower_val.find(query.lower())
                     start = max(0, idx - 50)
                     end = min(len(field_value), idx + len(query) + 50)
-                    snippet = ("..." if start > 0 else "") + field_value[start:end] + ("..." if end < len(field_value) else "")
+                    snippet = (
+                        ("..." if start > 0 else "")
+                        + field_value[start:end]
+                        + ("..." if end < len(field_value) else "")
+                    )
 
-                    results.append({
-                        "id": row.id,
-                        "title": row.title,
-                        "meeting_type": row.meeting_type if isinstance(row.meeting_type, str) else row.meeting_type.value,
-                        "meeting_date": row.meeting_date,
-                        "status": row.status if isinstance(row.status, str) else row.status.value,
-                        "snippet": snippet,
-                        "match_field": field_name,
-                    })
+                    results.append(
+                        {
+                            "id": row.id,
+                            "title": row.title,
+                            "meeting_type": (
+                                row.meeting_type
+                                if isinstance(row.meeting_type, str)
+                                else row.meeting_type.value
+                            ),
+                            "meeting_date": row.meeting_date,
+                            "status": (
+                                row.status
+                                if isinstance(row.status, str)
+                                else row.status.value
+                            ),
+                            "snippet": snippet,
+                            "match_field": field_name,
+                        }
+                    )
 
         return results
 
@@ -633,7 +713,7 @@ class MinuteService:
         Bridges the Meeting module → Minutes module gap identified in architecture review.
         Copies: title, date, attendees, meeting type, and location.
         """
-        from app.models.meeting import Meeting, MeetingAttendee
+        from app.models.meeting import Meeting
 
         result = await self.db.execute(
             select(Meeting)
@@ -655,7 +735,11 @@ class MinuteService:
             "board": MinutesMeetingType.BOARD,
             "other": MinutesMeetingType.OTHER,
         }
-        meeting_type_val = meeting.meeting_type.value if hasattr(meeting.meeting_type, 'value') else str(meeting.meeting_type)
+        meeting_type_val = (
+            meeting.meeting_type.value
+            if hasattr(meeting.meeting_type, "value")
+            else str(meeting.meeting_type)
+        )
         minutes_type = type_map.get(meeting_type_val, MinutesMeetingType.BUSINESS)
 
         # Build attendees JSON from meeting attendees
@@ -666,12 +750,18 @@ class MinuteService:
                     select(User).where(User.id == att.user_id)
                 )
                 user = user_result.scalar_one_or_none()
-                attendees_json.append({
-                    "user_id": att.user_id,
-                    "name": f"{user.first_name} {user.last_name}" if user and user.first_name else (user.username if user else "Unknown"),
-                    "present": att.present,
-                    "excused": att.excused,
-                })
+                attendees_json.append(
+                    {
+                        "user_id": att.user_id,
+                        "name": (
+                            f"{user.first_name} {user.last_name}"
+                            if user and user.first_name
+                            else (user.username if user else "Unknown")
+                        ),
+                        "present": att.present,
+                        "excused": att.excused,
+                    }
+                )
 
         # Build default sections based on meeting type
         section_defaults = DEFAULT_BUSINESS_SECTIONS
@@ -681,7 +771,14 @@ class MinuteService:
             section_defaults = DEFAULT_COMMITTEE_SECTIONS
 
         from app.core.utils import generate_uuid
-        meeting_date_dt = datetime.combine(meeting.meeting_date, meeting.start_time or datetime.min.time()) if meeting.meeting_date else datetime.now(timezone.utc)
+
+        meeting_date_dt = (
+            datetime.combine(
+                meeting.meeting_date, meeting.start_time or datetime.min.time()
+            )
+            if meeting.meeting_date
+            else datetime.now(timezone.utc)
+        )
 
         minutes = MeetingMinutes(
             id=generate_uuid(),
@@ -693,7 +790,7 @@ class MinuteService:
             called_by=meeting.called_by,
             attendees=attendees_json,
             sections=[{**s} for s in section_defaults],
-            agenda=meeting.agenda if hasattr(meeting, 'agenda') else None,
+            agenda=meeting.agenda if hasattr(meeting, "agenda") else None,
             meeting_id=str(meeting_id),
             event_id=meeting.event_id,
             status=MinutesStatus.DRAFT,

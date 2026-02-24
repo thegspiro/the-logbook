@@ -6,49 +6,48 @@ Combines all API route modules into a single router.
 
 from fastapi import APIRouter, Depends
 
-from app.core.security_middleware import verify_csrf_token
-
 # Import route modules
 from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
     analytics,
+    apparatus,
     auth,
     dashboard,
     documents,
+    elections,
+    email_templates,
     error_logs,
     events,
+    external_training,
+    facilities,
     forms,
     integrations,
+    inventory,
     locations,
     meetings,
+    member_leaves,
+    member_status,
     membership_pipeline,
+    messages,
+    minutes,
     notifications,
-    roles,
-    reports,
-    scheduling,
-    users,
+    operational_ranks,
     organizations,
-    apparatus,
-    facilities,
+    reports,
+    roles,
+    scheduled,
+    scheduling,
     security_monitoring,
+    shift_completion,
     training,
+    training_module_config,
     training_programs,
     training_sessions,
     training_submissions,
-    shift_completion,
-    training_module_config,
-    elections,
-    inventory,
-    external_training,
-    member_status,
-    email_templates,
-    minutes,
-    messages,
-    scheduled,
     training_waivers,
-    member_leaves,
-    operational_ranks,
+    users,
 )
+from app.core.security_middleware import verify_csrf_token
 
 api_router = APIRouter(dependencies=[Depends(verify_csrf_token)])
 
@@ -58,40 +57,77 @@ api_router.include_router(events.router, prefix="/events", tags=["events"])
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
-api_router.include_router(organizations.router, prefix="/organization", tags=["organization"])
+api_router.include_router(
+    organizations.router, prefix="/organization", tags=["organization"]
+)
 api_router.include_router(apparatus.router, prefix="/apparatus", tags=["apparatus"])
 api_router.include_router(facilities.router, prefix="/facilities", tags=["facilities"])
-api_router.include_router(security_monitoring.router, prefix="/security", tags=["security"])
+api_router.include_router(
+    security_monitoring.router, prefix="/security", tags=["security"]
+)
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(training.router, prefix="/training", tags=["training"])
-api_router.include_router(training_programs.router, prefix="/training/programs", tags=["training-programs"])
-api_router.include_router(training_sessions.router, prefix="/training/sessions", tags=["training-sessions"])
+api_router.include_router(
+    training_programs.router, prefix="/training/programs", tags=["training-programs"]
+)
+api_router.include_router(
+    training_sessions.router, prefix="/training/sessions", tags=["training-sessions"]
+)
 api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
-api_router.include_router(training_submissions.router, prefix="/training/submissions", tags=["training-submissions"])
-api_router.include_router(shift_completion.router, prefix="/training/shift-reports", tags=["shift-completion"])
-api_router.include_router(external_training.router, prefix="/training/external", tags=["external-training"])
-api_router.include_router(training_module_config.router, prefix="/training/module-config", tags=["training-module-config"])
-api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
+api_router.include_router(
+    training_submissions.router,
+    prefix="/training/submissions",
+    tags=["training-submissions"],
+)
+api_router.include_router(
+    shift_completion.router, prefix="/training/shift-reports", tags=["shift-completion"]
+)
+api_router.include_router(
+    external_training.router, prefix="/training/external", tags=["external-training"]
+)
+api_router.include_router(
+    training_module_config.router,
+    prefix="/training/module-config",
+    tags=["training-module-config"],
+)
+api_router.include_router(
+    email_templates.router, prefix="/email-templates", tags=["email-templates"]
+)
 api_router.include_router(member_status.router, prefix="/users", tags=["member-status"])
-api_router.include_router(membership_pipeline.router, prefix="/prospective-members", tags=["prospective-members"])
+api_router.include_router(
+    membership_pipeline.router,
+    prefix="/prospective-members",
+    tags=["prospective-members"],
+)
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
 api_router.include_router(minutes.router, prefix="/minutes-records", tags=["minutes"])
 api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
-api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(
+    notifications.router, prefix="/notifications", tags=["notifications"]
+)
 api_router.include_router(messages.router, prefix="/messages", tags=["messages"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
-api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
-api_router.include_router(scheduled.router, prefix="/scheduled", tags=["scheduled-tasks"])
-api_router.include_router(training_waivers.router, prefix="/training/waivers", tags=["training-waivers"])
+api_router.include_router(
+    integrations.router, prefix="/integrations", tags=["integrations"]
+)
+api_router.include_router(
+    scheduled.router, prefix="/scheduled", tags=["scheduled-tasks"]
+)
+api_router.include_router(
+    training_waivers.router, prefix="/training/waivers", tags=["training-waivers"]
+)
 api_router.include_router(member_leaves.router, prefix="/users", tags=["member-leaves"])
-api_router.include_router(operational_ranks.router, prefix="/operational-ranks", tags=["operational-ranks"])
+api_router.include_router(
+    operational_ranks.router, prefix="/operational-ranks", tags=["operational-ranks"]
+)
 api_router.include_router(public_portal_admin.router)
+
 
 # Placeholder routes
 @api_router.get("/")
@@ -131,6 +167,6 @@ async def api_root():
             "errors": "/api/v1/errors",
             "integrations": "/api/v1/integrations",
             "prospective_members": "/api/v1/prospective-members",
-            "public_portal": "/api/v1/public-portal"
-        }
+            "public_portal": "/api/v1/public-portal",
+        },
     }

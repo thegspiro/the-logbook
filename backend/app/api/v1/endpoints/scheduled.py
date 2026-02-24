@@ -7,9 +7,9 @@ Endpoints for triggering and inspecting scheduled/cron tasks.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.models.user import User
-from app.api.dependencies import require_permission
 from app.services.scheduled_tasks import SCHEDULE, TASK_RUNNERS
 
 router = APIRouter()
@@ -24,12 +24,7 @@ async def list_scheduled_tasks(
 
     **Requires admin.access or settings.manage permission**
     """
-    return {
-        "tasks": [
-            {"id": task_id, **info}
-            for task_id, info in SCHEDULE.items()
-        ]
-    }
+    return {"tasks": [{"id": task_id, **info} for task_id, info in SCHEDULE.items()]}
 
 
 @router.post("/run-task")
@@ -54,7 +49,7 @@ async def run_scheduled_task(
     if not runner:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown task '{task}'. Available: {list(TASK_RUNNERS.keys())}"
+            detail=f"Unknown task '{task}'. Available: {list(TASK_RUNNERS.keys())}",
         )
 
     result = await runner(db)

@@ -5,22 +5,16 @@ Comprehensive service for managing roles, permissions, and user-role assignments
 Includes audit logging for all role-related changes.
 """
 
-from typing import Optional, List, Dict, Any, Set
-from datetime import datetime
-from uuid import UUID, uuid4
-from sqlalchemy import select, delete, insert, func, and_
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from loguru import logger
+from typing import Any, Dict, List, Optional, Set
+from uuid import uuid4
 
-from app.models.user import Role, User, user_roles, Organization
-from app.core.permissions import (
-    get_all_permissions,
-    get_permission_details,
-    get_permissions_by_category,
-    DEFAULT_ROLES,
-)
+from loguru import logger
+from sqlalchemy import delete, func, insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.audit import log_audit_event
+from app.core.permissions import DEFAULT_ROLES, get_all_permissions
+from app.models.user import Role, User, user_roles
 
 
 class RoleManagementService:
@@ -100,8 +94,7 @@ class RoleManagementService:
         """Get a specific role by ID."""
         result = await db.execute(
             select(Role).where(
-                Role.id == role_id,
-                Role.organization_id == organization_id
+                Role.id == role_id, Role.organization_id == organization_id
             )
         )
         return result.scalar_one_or_none()
@@ -115,8 +108,7 @@ class RoleManagementService:
         """Get a role by its slug."""
         result = await db.execute(
             select(Role).where(
-                Role.slug == slug,
-                Role.organization_id == organization_id
+                Role.slug == slug, Role.organization_id == organization_id
             )
         )
         return result.scalar_one_or_none()
@@ -245,7 +237,10 @@ class RoleManagementService:
                 invalid = set(permissions) - valid_permissions
                 if invalid:
                     raise ValueError(f"Invalid permissions: {', '.join(invalid)}")
-                changes["permissions"] = {"old_count": len(role.permissions or []), "new_count": len(permissions)}
+                changes["permissions"] = {
+                    "old_count": len(role.permissions or []),
+                    "new_count": len(permissions),
+                }
                 role.permissions = permissions
         else:
             # Custom roles: allow all updates
@@ -260,7 +255,10 @@ class RoleManagementService:
                 invalid = set(permissions) - valid_permissions
                 if invalid:
                     raise ValueError(f"Invalid permissions: {', '.join(invalid)}")
-                changes["permissions"] = {"old_count": len(role.permissions or []), "new_count": len(permissions)}
+                changes["permissions"] = {
+                    "old_count": len(role.permissions or []),
+                    "new_count": len(permissions),
+                }
                 role.permissions = permissions
             if priority is not None:
                 changes["priority"] = {"old": role.priority, "new": priority}
@@ -349,7 +347,9 @@ class RoleManagementService:
             user_id=deleted_by,
         )
 
-        logger.info(f"Role deleted: {role_name} ({role_slug}) by user {deleted_by}, {affected_users} users affected")
+        logger.info(
+            f"Role deleted: {role_name} ({role_slug}) by user {deleted_by}, {affected_users} users affected"
+        )
 
         return True
 
@@ -411,7 +411,7 @@ class RoleManagementService:
             .join(user_roles, User.id == user_roles.c.user_id)
             .where(
                 user_roles.c.position_id == role_id,
-                User.organization_id == organization_id
+                User.organization_id == organization_id,
             )
             .order_by(User.last_name, User.first_name)
         )
@@ -451,10 +451,8 @@ class RoleManagementService:
         """
         # Check if already assigned
         result = await db.execute(
-            select(user_roles)
-            .where(
-                user_roles.c.user_id == user_id,
-                user_roles.c.position_id == role_id
+            select(user_roles).where(
+                user_roles.c.user_id == user_id, user_roles.c.position_id == role_id
             )
         )
         if result.first():
@@ -516,10 +514,8 @@ class RoleManagementService:
 
         # Delete assignment
         result = await db.execute(
-            delete(user_roles)
-            .where(
-                user_roles.c.user_id == user_id,
-                user_roles.c.position_id == role_id
+            delete(user_roles).where(
+                user_roles.c.user_id == user_id, user_roles.c.position_id == role_id
             )
         )
         await db.commit()
@@ -641,7 +637,9 @@ class RoleManagementService:
     ) -> bool:
         """Check if a user has any of the specified permissions."""
         user_permissions = await self.get_user_permissions(db, user_id)
-        return "*" in user_permissions or bool(user_permissions.intersection(permissions))
+        return "*" in user_permissions or bool(
+            user_permissions.intersection(permissions)
+        )
 
     # ============================================
     # Initialization
@@ -692,7 +690,9 @@ class RoleManagementService:
             for role in created_roles:
                 await db.refresh(role)
 
-            logger.info(f"Initialized {len(created_roles)} default roles for organization {organization_id}")
+            logger.info(
+                f"Initialized {len(created_roles)} default roles for organization {organization_id}"
+            )
 
         return created_roles
 

@@ -9,23 +9,18 @@ manual API call).
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from html import escape
-from typing import Dict, Any, List, Tuple, Optional
-from uuid import UUID
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 
-from app.models.user import User, UserStatus, Organization
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
-from app.models.inventory import (
-    ItemAssignment,
-    CheckOutRecord,
-    PropertyReturnReminder,
-)
+from app.models.inventory import CheckOutRecord, ItemAssignment, PropertyReturnReminder
+from app.models.user import Organization, User, UserStatus
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +61,9 @@ class PropertyReturnReminderService:
         dropped_result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.status.in_([UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY]),
+                User.status.in_(
+                    [UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY]
+                ),
                 User.status_changed_at.isnot(None),
                 User.deleted_at.is_(None),
             )
@@ -104,7 +101,9 @@ class PropertyReturnReminderService:
                     continue  # Already sent
 
                 # Check if member still has outstanding items
-                items_info = await self._get_outstanding_items(str(member.id), organization_id)
+                items_info = await self._get_outstanding_items(
+                    str(member.id), organization_id
+                )
                 if items_info["count"] == 0:
                     continue  # Nothing to remind about
 
@@ -147,9 +146,12 @@ class PropertyReturnReminderService:
         org_tz = org.timezone if org and org.timezone else "America/New_York"
 
         dropped_result = await self.db.execute(
-            select(User).where(
+            select(User)
+            .where(
                 User.organization_id == organization_id,
-                User.status.in_([UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY]),
+                User.status.in_(
+                    [UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY]
+                ),
                 User.status_changed_at.isnot(None),
                 User.deleted_at.is_(None),
             )
@@ -159,7 +161,9 @@ class PropertyReturnReminderService:
 
         overdue_list = []
         for member in dropped_members:
-            items_info = await self._get_outstanding_items(str(member.id), organization_id)
+            items_info = await self._get_outstanding_items(
+                str(member.id), organization_id
+            )
             if items_info["count"] == 0:
                 continue
 
@@ -178,18 +182,20 @@ class PropertyReturnReminderService:
             sent_reminders = [r.reminder_type for r in reminder_result.scalars().all()]
 
             local_drop_date = self._to_local(member.status_changed_at, org_tz)
-            overdue_list.append({
-                "user_id": str(member.id),
-                "member_name": member.full_name,
-                "email": member.email,
-                "status": member.status.value,
-                "dropped_date": local_drop_date.strftime("%Y-%m-%d"),
-                "days_since_drop": days_since_drop,
-                "items_outstanding": items_info["count"],
-                "total_value": float(items_info["total_value"]),
-                "items": items_info["items"],
-                "reminders_sent": sent_reminders,
-            })
+            overdue_list.append(
+                {
+                    "user_id": str(member.id),
+                    "member_name": member.full_name,
+                    "email": member.email,
+                    "status": member.status.value,
+                    "dropped_date": local_drop_date.strftime("%Y-%m-%d"),
+                    "days_since_drop": days_since_drop,
+                    "items_outstanding": items_info["count"],
+                    "total_value": float(items_info["total_value"]),
+                    "items": items_info["items"],
+                    "reminders_sent": sent_reminders,
+                }
+            )
 
         return overdue_list
 
@@ -198,7 +204,9 @@ class PropertyReturnReminderService:
     # ------------------------------------------------------------------
 
     async def _get_outstanding_items(
-        self, user_id: str, organization_id: str,
+        self,
+        user_id: str,
+        organization_id: str,
     ) -> Dict[str, Any]:
         """Get count and value of items still assigned/checked out to a member."""
         # Active assignments
@@ -231,24 +239,28 @@ class PropertyReturnReminderService:
         for a in assignments:
             val = float(a.item.current_value or a.item.purchase_price or 0)
             total_value += val
-            items.append({
-                "name": a.item.name,
-                "serial_number": a.item.serial_number or "-",
-                "asset_tag": a.item.asset_tag or "-",
-                "value": val,
-                "type": "assigned",
-            })
+            items.append(
+                {
+                    "name": a.item.name,
+                    "serial_number": a.item.serial_number or "-",
+                    "asset_tag": a.item.asset_tag or "-",
+                    "value": val,
+                    "type": "assigned",
+                }
+            )
 
         for c in checkouts:
             val = float(c.item.current_value or c.item.purchase_price or 0)
             total_value += val
-            items.append({
-                "name": c.item.name,
-                "serial_number": c.item.serial_number or "-",
-                "asset_tag": c.item.asset_tag or "-",
-                "value": val,
-                "type": "checked_out",
-            })
+            items.append(
+                {
+                    "name": c.item.name,
+                    "serial_number": c.item.serial_number or "-",
+                    "asset_tag": c.item.asset_tag or "-",
+                    "value": val,
+                    "type": "checked_out",
+                }
+            )
 
         return {"count": len(items), "total_value": total_value, "items": items}
 
@@ -282,7 +294,11 @@ class PropertyReturnReminderService:
 
         local_drop_date = self._to_local(member.status_changed_at, org_tz)
         drop_date_display = local_drop_date.strftime("%B %d, %Y")
-        drop_type_display = "Voluntary Separation" if member.status == UserStatus.DROPPED_VOLUNTARY else "Involuntary Separation"
+        drop_type_display = (
+            "Voluntary Separation"
+            if member.status == UserStatus.DROPPED_VOLUNTARY
+            else "Involuntary Separation"
+        )
 
         escalation_notice = ""
         if threshold["type"] == "90_day":
@@ -395,6 +411,7 @@ class PropertyReturnReminderService:
         if member.email:
             try:
                 from app.services.email_service import EmailService
+
                 email_svc = EmailService(org)
                 success, _ = await email_svc.send_email(
                     to_emails=[member.email],
@@ -404,7 +421,9 @@ class PropertyReturnReminderService:
                 )
                 member_sent = success > 0
             except Exception as e:
-                logger.error(f"Failed to send {reminder_type} reminder to {member.email}: {e}")
+                logger.error(
+                    f"Failed to send {reminder_type} reminder to {member.email}: {e}"
+                )
 
         # Send summary to admin/quartermaster
         admin_sent = False
@@ -423,11 +442,13 @@ class PropertyReturnReminderService:
         )
         # Find admin users to notify
         admin_result = await self.db.execute(
-            select(User).where(
+            select(User)
+            .where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
                 User.deleted_at.is_(None),
-            ).options(selectinload(User.roles))
+            )
+            .options(selectinload(User.roles))
         )
         admins = admin_result.scalars().all()
         admin_emails = []
@@ -440,6 +461,7 @@ class PropertyReturnReminderService:
         if admin_emails:
             try:
                 from app.services.email_service import EmailService
+
                 email_svc = EmailService(org)
                 success, _ = await email_svc.send_email(
                     to_emails=admin_emails,
@@ -453,6 +475,7 @@ class PropertyReturnReminderService:
 
         # Record the reminder
         from app.core.utils import generate_uuid
+
         reminder = PropertyReturnReminder(
             id=generate_uuid(),
             organization_id=organization_id,

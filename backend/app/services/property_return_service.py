@@ -14,17 +14,16 @@ The report:
 import logging
 from datetime import date, datetime, timedelta, timezone
 from html import escape
+from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
-from typing import Dict, Any, Optional, List, Tuple
-from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.user import User, Organization, UserStatus
-from app.models.inventory import InventoryItem, ItemAssignment, CheckOutRecord
-from app.models.document import Document, DocumentFolder, DocumentType, DocumentStatus
+from app.models.document import Document, DocumentFolder, DocumentStatus, DocumentType
+from app.models.inventory import CheckOutRecord, ItemAssignment
+from app.models.user import Organization, User
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +60,7 @@ class PropertyReturnService:
             Tuple of (report_data dict, html_content string).
         """
         # Load member
-        result = await self.db.execute(
-            select(User).where(User.id == str(user_id))
-        )
+        result = await self.db.execute(select(User).where(User.id == str(user_id)))
         member = result.scalar_one_or_none()
         if not member:
             raise ValueError(f"Member {user_id} not found")
@@ -74,7 +71,11 @@ class PropertyReturnService:
         )
         org = org_result.scalar_one_or_none()
         org_name = org.name if org else "Department"
-        org_tz = ZoneInfo(org.timezone) if org and org.timezone else ZoneInfo("America/New_York")
+        org_tz = (
+            ZoneInfo(org.timezone)
+            if org and org.timezone
+            else ZoneInfo("America/New_York")
+        )
 
         # Load the officer who performed the action
         officer_result = await self.db.execute(
@@ -114,29 +115,45 @@ class PropertyReturnService:
             item = a.item
             value = float(item.current_value or item.purchase_price or 0)
             total_value += value
-            items.append({
-                "name": item.name,
-                "serial_number": item.serial_number or "-",
-                "asset_tag": item.asset_tag or "-",
-                "condition": item.condition.value if item.condition else "unknown",
-                "value": value,
-                "type": "assigned",
-                "assigned_date": a.assigned_date.astimezone(org_tz).strftime("%m/%d/%Y") if a.assigned_date else "-",
-            })
+            items.append(
+                {
+                    "name": item.name,
+                    "serial_number": item.serial_number or "-",
+                    "asset_tag": item.asset_tag or "-",
+                    "condition": item.condition.value if item.condition else "unknown",
+                    "value": value,
+                    "type": "assigned",
+                    "assigned_date": (
+                        a.assigned_date.astimezone(org_tz).strftime("%m/%d/%Y")
+                        if a.assigned_date
+                        else "-"
+                    ),
+                }
+            )
 
         for c in checkouts:
             item = c.item
             value = float(item.current_value or item.purchase_price or 0)
             total_value += value
-            items.append({
-                "name": item.name,
-                "serial_number": item.serial_number or "-",
-                "asset_tag": item.asset_tag or "-",
-                "condition": c.checkout_condition.value if c.checkout_condition else (item.condition.value if item.condition else "unknown"),
-                "value": value,
-                "type": "checked_out",
-                "assigned_date": c.checked_out_at.astimezone(org_tz).strftime("%m/%d/%Y") if c.checked_out_at else "-",
-            })
+            items.append(
+                {
+                    "name": item.name,
+                    "serial_number": item.serial_number or "-",
+                    "asset_tag": item.asset_tag or "-",
+                    "condition": (
+                        c.checkout_condition.value
+                        if c.checkout_condition
+                        else (item.condition.value if item.condition else "unknown")
+                    ),
+                    "value": value,
+                    "type": "checked_out",
+                    "assigned_date": (
+                        c.checked_out_at.astimezone(org_tz).strftime("%m/%d/%Y")
+                        if c.checked_out_at
+                        else "-"
+                    ),
+                }
+            )
 
         today = date.today()
         return_deadline = today + timedelta(days=return_deadline_days)
@@ -151,7 +168,11 @@ class PropertyReturnService:
             "organization_name": org_name,
             "organization_address": self._format_org_address(org) if org else "",
             "drop_type": drop_type,
-            "drop_type_display": "Voluntary Separation" if drop_type == "dropped_voluntary" else "Involuntary Separation",
+            "drop_type_display": (
+                "Voluntary Separation"
+                if drop_type == "dropped_voluntary"
+                else "Involuntary Separation"
+            ),
             "reason": reason,
             "effective_date": today.strftime("%B %d, %Y"),
             "return_deadline": return_deadline.strftime("%B %d, %Y"),
@@ -159,8 +180,12 @@ class PropertyReturnService:
             "items": items,
             "total_value": total_value,
             "item_count": len(items),
-            "performed_by_name": officer.full_name if officer else "Department Administration",
-            "performed_by_title": officer.rank if officer and officer.rank else "Administrator",
+            "performed_by_name": (
+                officer.full_name if officer else "Department Administration"
+            ),
+            "performed_by_title": (
+                officer.rank if officer and officer.rank else "Administrator"
+            ),
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -211,9 +236,7 @@ class PropertyReturnService:
         parts = []
         if user.address_street:
             parts.append(user.address_street)
-        city_state = ", ".join(
-            filter(None, [user.address_city, user.address_state])
-        )
+        city_state = ", ".join(filter(None, [user.address_city, user.address_state]))
         if city_state and user.address_zip:
             city_state += f" {user.address_zip}"
         if city_state:
@@ -248,7 +271,9 @@ class PropertyReturnService:
         # Build the item rows
         item_rows = ""
         for idx, item in enumerate(data["items"], 1):
-            item_type_label = "Assigned" if item["type"] == "assigned" else "Checked Out"
+            item_type_label = (
+                "Assigned" if item["type"] == "assigned" else "Checked Out"
+            )
             item_rows += f"""
             <tr>
                 <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">{idx}</td>

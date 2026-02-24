@@ -5,15 +5,15 @@ Provides a secretary/leadership view of member attendance status,
 meeting attendance percentages, waivers, and voting eligibility.
 """
 
-from datetime import datetime, timedelta, date, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from loguru import logger
 
-from app.models.user import User, UserStatus, Organization, MemberLeaveOfAbsence
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.meeting import Meeting, MeetingAttendee
+from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
 from app.services.membership_tier_service import MembershipTierService
 
 
@@ -37,7 +37,7 @@ class AttendanceDashboardService:
         - membership_tier, voting_eligible, voting_blocked_reason
         """
         org_id = str(organization_id)
-        tier_service = MembershipTierService(self.db)
+        MembershipTierService(self.db)
 
         # Load org for tier config
         org_result = await self.db.execute(
@@ -74,11 +74,15 @@ class AttendanceDashboardService:
         # Get all attendance records for the period
         meeting_ids = [m.id for m in meetings]
 
-        att_result = await self.db.execute(
-            select(MeetingAttendee).where(
-                MeetingAttendee.meeting_id.in_(meeting_ids)
+        att_result = (
+            await self.db.execute(
+                select(MeetingAttendee).where(
+                    MeetingAttendee.meeting_id.in_(meeting_ids)
+                )
             )
-        ) if meeting_ids else None
+            if meeting_ids
+            else None
+        )
         all_attendance = list(att_result.scalars().all()) if att_result else []
 
         # Fetch active leaves of absence for all org members
@@ -122,7 +126,11 @@ class AttendanceDashboardService:
             absent = total_meetings - attended - waived - on_leave_count
 
             eligible_meetings = total_meetings - waived - on_leave_count
-            pct = round((attended / eligible_meetings) * 100, 1) if eligible_meetings > 0 else 100.0
+            pct = (
+                round((attended / eligible_meetings) * 100, 1)
+                if eligible_meetings > 0
+                else 100.0
+            )
 
             # Tier and voting info
             member_tier_id = member.membership_type or "active"
@@ -132,7 +140,9 @@ class AttendanceDashboardService:
             voting_eligible = benefits.get("voting_eligible", True)
             voting_blocked_reason = None
             if not voting_eligible:
-                voting_blocked_reason = f"Tier '{member_tier_id}' is not eligible to vote"
+                voting_blocked_reason = (
+                    f"Tier '{member_tier_id}' is not eligible to vote"
+                )
             elif benefits.get("voting_requires_meeting_attendance", False):
                 min_pct = benefits.get("voting_min_attendance_pct", 0.0)
                 if pct < min_pct:
@@ -142,27 +152,44 @@ class AttendanceDashboardService:
                         f"(requires {min_pct}% over {period_months} months)"
                     )
 
-            rows.append({
-                "user_id": uid,
-                "name": member.full_name,
-                "membership_tier": member_tier_id,
-                "tier_name": tier_def.get("name", member_tier_id) if tier_def else member_tier_id,
-                "hire_date": member.hire_date.isoformat() if member.hire_date else None,
-                "attendance_pct": pct,
-                "meetings_attended": attended,
-                "meetings_waived": waived,
-                "meetings_on_leave": on_leave_count,
-                "meetings_absent": max(0, absent),
-                "total_meetings": total_meetings,
-                "eligible_meetings": eligible_meetings,
-                "voting_eligible": voting_eligible,
-                "voting_blocked_reason": voting_blocked_reason,
-            })
+            rows.append(
+                {
+                    "user_id": uid,
+                    "name": member.full_name,
+                    "membership_tier": member_tier_id,
+                    "tier_name": (
+                        tier_def.get("name", member_tier_id)
+                        if tier_def
+                        else member_tier_id
+                    ),
+                    "hire_date": (
+                        member.hire_date.isoformat() if member.hire_date else None
+                    ),
+                    "attendance_pct": pct,
+                    "meetings_attended": attended,
+                    "meetings_waived": waived,
+                    "meetings_on_leave": on_leave_count,
+                    "meetings_absent": max(0, absent),
+                    "total_meetings": total_meetings,
+                    "eligible_meetings": eligible_meetings,
+                    "voting_eligible": voting_eligible,
+                    "voting_blocked_reason": voting_blocked_reason,
+                }
+            )
 
         # Summary
-        avg_attendance = round(sum(r["attendance_pct"] for r in rows) / len(rows), 1) if rows else 0.0
+        avg_attendance = (
+            round(sum(r["attendance_pct"] for r in rows) / len(rows), 1)
+            if rows
+            else 0.0
+        )
         voting_eligible_count = sum(1 for r in rows if r["voting_eligible"])
-        below_threshold_count = sum(1 for r in rows if r["voting_blocked_reason"] and "Attendance" in (r["voting_blocked_reason"] or ""))
+        below_threshold_count = sum(
+            1
+            for r in rows
+            if r["voting_blocked_reason"]
+            and "Attendance" in (r["voting_blocked_reason"] or "")
+        )
 
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -236,8 +263,7 @@ class AttendanceDashboardService:
     ) -> List[Dict]:
         """List all waivers for a meeting."""
         result = await self.db.execute(
-            select(MeetingAttendee)
-            .where(
+            select(MeetingAttendee).where(
                 MeetingAttendee.meeting_id == meeting_id,
                 MeetingAttendee.waiver_reason.isnot(None),
             )
@@ -252,19 +278,29 @@ class AttendanceDashboardService:
             )
             user = user_result.scalar_one_or_none()
 
-            grantor_result = await self.db.execute(
-                select(User).where(User.id == w.waiver_granted_by)
-            ) if w.waiver_granted_by else None
+            grantor_result = (
+                await self.db.execute(
+                    select(User).where(User.id == w.waiver_granted_by)
+                )
+                if w.waiver_granted_by
+                else None
+            )
             grantor = grantor_result.scalar_one_or_none() if grantor_result else None
 
-            waiver_list.append({
-                "attendee_id": str(w.id),
-                "user_id": str(w.user_id),
-                "member_name": user.full_name if user else "Unknown",
-                "waiver_reason": w.waiver_reason,
-                "granted_by": str(w.waiver_granted_by) if w.waiver_granted_by else None,
-                "granted_by_name": grantor.full_name if grantor else None,
-                "granted_at": w.waiver_granted_at.isoformat() if w.waiver_granted_at else None,
-            })
+            waiver_list.append(
+                {
+                    "attendee_id": str(w.id),
+                    "user_id": str(w.user_id),
+                    "member_name": user.full_name if user else "Unknown",
+                    "waiver_reason": w.waiver_reason,
+                    "granted_by": (
+                        str(w.waiver_granted_by) if w.waiver_granted_by else None
+                    ),
+                    "granted_by_name": grantor.full_name if grantor else None,
+                    "granted_at": (
+                        w.waiver_granted_at.isoformat() if w.waiver_granted_at else None
+                    ),
+                }
+            )
 
         return waiver_list

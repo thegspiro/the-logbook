@@ -4,18 +4,18 @@ Location Service
 Business logic for location management.
 """
 
-from typing import List, Optional, Tuple
-from uuid import UUID
 from datetime import datetime, timedelta, timezone
+from typing import List, Optional
+from uuid import UUID
+
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
 
-from app.models.location import Location
-from app.models.event import Event
-from app.models.user import User
-from app.schemas.location import LocationCreate, LocationUpdate
 from app.core.utils import generate_display_code
+from app.models.event import Event
+from app.models.location import Location
+from app.schemas.location import LocationCreate, LocationUpdate
 
 
 class LocationService:
@@ -43,7 +43,9 @@ class LocationService:
         result = await self.db.execute(dup_query)
         existing = result.scalar_one_or_none()
         if existing:
-            raise ValueError(f"Location with name '{location_data.name}' already exists")
+            raise ValueError(
+                f"Location with name '{location_data.name}' already exists"
+            )
 
         # Generate a unique display code for public kiosk URLs
         display_code = await self._generate_unique_display_code()
@@ -53,7 +55,7 @@ class LocationService:
             organization_id=organization_id,
             created_by=created_by,
             display_code=display_code,
-            **location_data.model_dump()
+            **location_data.model_dump(),
         )
 
         self.db.add(location)
@@ -106,7 +108,11 @@ class LocationService:
         # Check if name is being changed and already exists within the same
         # building/station scope
         if location_data.name and location_data.name != location.name:
-            building = location_data.building if location_data.building is not None else location.building
+            building = (
+                location_data.building
+                if location_data.building is not None
+                else location.building
+            )
             dup_query = (
                 select(Location)
                 .where(Location.organization_id == str(organization_id))
@@ -120,7 +126,9 @@ class LocationService:
             result = await self.db.execute(dup_query)
             existing = result.scalar_one_or_none()
             if existing:
-                raise ValueError(f"Location with name '{location_data.name}' already exists")
+                raise ValueError(
+                    f"Location with name '{location_data.name}' already exists"
+                )
 
         # Update fields
         update_data = location_data.model_dump(exclude_unset=True)
@@ -134,9 +142,7 @@ class LocationService:
 
         return location
 
-    async def delete_location(
-        self, location_id: UUID, organization_id: str
-    ) -> bool:
+    async def delete_location(self, location_id: UUID, organization_id: str) -> bool:
         """
         Delete a location
 
@@ -153,8 +159,7 @@ class LocationService:
 
         # Check if location has any events
         result = await self.db.execute(
-            select(func.count(Event.id))
-            .where(Event.location_id == str(location_id))
+            select(func.count(Event.id)).where(Event.location_id == str(location_id))
         )
         event_count = result.scalar()
         if event_count > 0:
@@ -207,7 +212,9 @@ class LocationService:
         (1 hour before start to end time, respecting actual_end_time if set)
         """
         now = datetime.now(timezone.utc)
-        check_in_start_threshold = now + timedelta(hours=1)  # Can check in up to 1 hour before
+        check_in_start_threshold = now + timedelta(
+            hours=1
+        )  # Can check in up to 1 hour before
 
         query = (
             select(Event)
@@ -218,7 +225,7 @@ class LocationService:
             .where(
                 or_(
                     and_(Event.actual_end_time.is_(None), Event.end_datetime >= now),
-                    Event.actual_end_time >= now
+                    Event.actual_end_time >= now,
                 )
             )
             .options(selectinload(Event.rsvps))
@@ -251,17 +258,17 @@ class LocationService:
                     # New event starts during existing event
                     and_(
                         Event.start_datetime <= start_datetime,
-                        Event.end_datetime > start_datetime
+                        Event.end_datetime > start_datetime,
                     ),
                     # New event ends during existing event
                     and_(
                         Event.start_datetime < end_datetime,
-                        Event.end_datetime >= end_datetime
+                        Event.end_datetime >= end_datetime,
                     ),
                     # New event completely contains existing event
                     and_(
                         Event.start_datetime >= start_datetime,
-                        Event.end_datetime <= end_datetime
+                        Event.end_datetime <= end_datetime,
                     ),
                 )
             )
@@ -273,7 +280,9 @@ class LocationService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_location_by_display_code(self, display_code: str) -> Optional[Location]:
+    async def get_location_by_display_code(
+        self, display_code: str
+    ) -> Optional[Location]:
         """Look up a location by its public display code (for kiosk URLs)"""
         result = await self.db.execute(
             select(Location)

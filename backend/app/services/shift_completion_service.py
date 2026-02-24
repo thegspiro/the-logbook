@@ -5,21 +5,22 @@ Business logic for shift officer reports on trainee experiences,
 including automatic pipeline requirement progress updates.
 """
 
-from typing import Optional, List, Tuple
+from datetime import date, datetime, timezone
+from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, date, timezone
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
 
 from app.models.training import (
-    ShiftCompletionReport,
-    ProgramEnrollment,
-    RequirementProgress,
-    ProgramRequirement,
-    TrainingRequirement,
-    RequirementType,
-    RequirementProgressStatus,
     EnrollmentStatus,
+    ProgramEnrollment,
+    ProgramRequirement,
+    RequirementProgress,
+    RequirementProgressStatus,
+    RequirementType,
+    ShiftCompletionReport,
+    TrainingRequirement,
 )
 from app.services.training_program_service import TrainingProgramService
 
@@ -47,7 +48,7 @@ class ShiftCompletionService:
         skills_observed: Optional[list] = None,
         tasks_performed: Optional[list] = None,
         enrollment_id: Optional[str] = None,
-        review_status: str = 'approved',
+        review_status: str = "approved",
     ) -> ShiftCompletionReport:
         """Create a shift completion report and update pipeline progress."""
 
@@ -64,8 +65,22 @@ class ShiftCompletionService:
             areas_of_strength=areas_of_strength,
             areas_for_improvement=areas_for_improvement,
             officer_narrative=officer_narrative,
-            skills_observed=[s.model_dump() if hasattr(s, 'model_dump') else s for s in skills_observed] if skills_observed else None,
-            tasks_performed=[t.model_dump() if hasattr(t, 'model_dump') else t for t in tasks_performed] if tasks_performed else None,
+            skills_observed=(
+                [
+                    s.model_dump() if hasattr(s, "model_dump") else s
+                    for s in skills_observed
+                ]
+                if skills_observed
+                else None
+            ),
+            tasks_performed=(
+                [
+                    t.model_dump() if hasattr(t, "model_dump") else t
+                    for t in tasks_performed
+                ]
+                if tasks_performed
+                else None
+            ),
             enrollment_id=enrollment_id,
             review_status=review_status,
         )
@@ -108,18 +123,17 @@ class ShiftCompletionService:
         requirements_progressed = []
 
         # Find active enrollments for this trainee
-        enrollment_query = (
-            select(ProgramEnrollment)
-            .where(
-                ProgramEnrollment.user_id == trainee_id,
-                ProgramEnrollment.organization_id == str(organization_id),
-                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
-            )
+        enrollment_query = select(ProgramEnrollment).where(
+            ProgramEnrollment.user_id == trainee_id,
+            ProgramEnrollment.organization_id == str(organization_id),
+            ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
         )
 
         # If specific enrollment provided, narrow down
         if enrollment_id:
-            enrollment_query = enrollment_query.where(ProgramEnrollment.id == str(enrollment_id))
+            enrollment_query = enrollment_query.where(
+                ProgramEnrollment.id == str(enrollment_id)
+            )
 
         result = await self.db.execute(enrollment_query)
         enrollments = result.scalars().all()
@@ -132,15 +146,18 @@ class ShiftCompletionService:
                 select(RequirementProgress, TrainingRequirement)
                 .join(
                     ProgramRequirement,
-                    ProgramRequirement.requirement_id == RequirementProgress.requirement_id
+                    ProgramRequirement.requirement_id
+                    == RequirementProgress.requirement_id,
                 )
                 .join(TrainingRequirement)
                 .where(
                     RequirementProgress.enrollment_id == enrollment.id,
-                    RequirementProgress.status.in_([
-                        RequirementProgressStatus.NOT_STARTED,
-                        RequirementProgressStatus.IN_PROGRESS,
-                    ]),
+                    RequirementProgress.status.in_(
+                        [
+                            RequirementProgressStatus.NOT_STARTED,
+                            RequirementProgressStatus.IN_PROGRESS,
+                        ]
+                    ),
                 )
             )
             progress_entries = progress_result.all()
@@ -152,14 +169,18 @@ class ShiftCompletionService:
                 if requirement.requirement_type == RequirementType.SHIFTS:
                     # Each shift report counts as 1 shift
                     value_to_add = 1.0
-                elif requirement.requirement_type == RequirementType.CALLS and calls_responded > 0:
+                elif (
+                    requirement.requirement_type == RequirementType.CALLS
+                    and calls_responded > 0
+                ):
                     # Check if requirement specifies required call types
                     required_call_types = requirement.required_call_types or []
                     if required_call_types and call_types:
                         # Count only calls matching the required types
                         required_lower = [rct.lower() for rct in required_call_types]
                         matching_calls = [
-                            ct for ct in call_types
+                            ct
+                            for ct in call_types
                             if isinstance(ct, str) and ct.lower() in required_lower
                         ]
                         value_to_add = float(len(matching_calls))
@@ -179,17 +200,20 @@ class ShiftCompletionService:
 
                 if value_to_add > 0:
                     from app.schemas.training_program import RequirementProgressUpdate
+
                     new_value = (progress.progress_value or 0) + value_to_add
 
                     # Track call type breakdown in progress_notes
                     notes = dict(progress.progress_notes or {})
                     if call_type_detail:
                         call_type_history = notes.get("call_type_history", [])
-                        call_type_history.append({
-                            "date": str(date.today()),
-                            "types": call_type_detail["matched_types"],
-                            "count": len(call_type_detail["matched_types"]),
-                        })
+                        call_type_history.append(
+                            {
+                                "date": str(date.today()),
+                                "types": call_type_detail["matched_types"],
+                                "count": len(call_type_detail["matched_types"]),
+                            }
+                        )
                         notes["call_type_history"] = call_type_history
 
                         # Build running totals per call type
@@ -204,11 +228,13 @@ class ShiftCompletionService:
                         progress_notes=notes if notes else None,
                     )
 
-                    updated_progress, error = await program_service.update_requirement_progress(
-                        progress_id=progress.id,
-                        organization_id=organization_id,
-                        updates=update_data,
-                        verified_by=officer_id,
+                    updated_progress, error = (
+                        await program_service.update_requirement_progress(
+                            progress_id=progress.id,
+                            organization_id=organization_id,
+                            updates=update_data,
+                            verified_by=officer_id,
+                        )
                     )
 
                     if updated_progress and not error:
@@ -217,7 +243,9 @@ class ShiftCompletionService:
                             "value_added": value_to_add,
                         }
                         if call_type_detail:
-                            entry["call_types_matched"] = call_type_detail["matched_types"]
+                            entry["call_types_matched"] = call_type_detail[
+                                "matched_types"
+                            ]
                         requirements_progressed.append(entry)
 
         return requirements_progressed
@@ -355,8 +383,11 @@ class ShiftCompletionService:
 
         # Redact specified fields before approving (clear sensitive content)
         REDACTABLE_FIELDS = {
-            'performance_rating', 'areas_of_strength', 'areas_for_improvement',
-            'officer_narrative', 'skills_observed',
+            "performance_rating",
+            "areas_of_strength",
+            "areas_for_improvement",
+            "officer_narrative",
+            "skills_observed",
         }
         if redact_fields:
             for field in redact_fields:
@@ -381,17 +412,14 @@ class ShiftCompletionService:
         end_date: Optional[date] = None,
     ) -> dict:
         """Get aggregate stats for a trainee's shift completion reports."""
-        query = (
-            select(
-                func.count(ShiftCompletionReport.id).label("total_reports"),
-                func.sum(ShiftCompletionReport.hours_on_shift).label("total_hours"),
-                func.sum(ShiftCompletionReport.calls_responded).label("total_calls"),
-                func.avg(ShiftCompletionReport.performance_rating).label("avg_rating"),
-            )
-            .where(
-                ShiftCompletionReport.organization_id == str(organization_id),
-                ShiftCompletionReport.trainee_id == trainee_id,
-            )
+        query = select(
+            func.count(ShiftCompletionReport.id).label("total_reports"),
+            func.sum(ShiftCompletionReport.hours_on_shift).label("total_hours"),
+            func.sum(ShiftCompletionReport.calls_responded).label("total_calls"),
+            func.avg(ShiftCompletionReport.performance_rating).label("avg_rating"),
+        ).where(
+            ShiftCompletionReport.organization_id == str(organization_id),
+            ShiftCompletionReport.trainee_id == trainee_id,
         )
         if start_date:
             query = query.where(ShiftCompletionReport.shift_date >= start_date)
@@ -405,5 +433,7 @@ class ShiftCompletionService:
             "total_reports": row.total_reports or 0,
             "total_hours": float(row.total_hours or 0),
             "total_calls": int(row.total_calls or 0),
-            "avg_rating": round(float(row.avg_rating or 0), 1) if row.avg_rating else None,
+            "avg_rating": (
+                round(float(row.avg_rating or 0), 1) if row.avg_rating else None
+            ),
         }

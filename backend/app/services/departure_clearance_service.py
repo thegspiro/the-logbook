@@ -16,23 +16,22 @@ stay accurate.
 import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.models.inventory import (
+    CheckOutRecord,
+    ClearanceLineDisposition,
+    ClearanceStatus,
     DepartureClearance,
     DepartureClearanceItem,
     ItemAssignment,
-    CheckOutRecord,
-    ItemIssuance,
-    InventoryItem,
-    ClearanceStatus,
-    ClearanceLineDisposition,
     ItemCondition,
+    ItemIssuance,
 )
 from app.models.user import User
 
@@ -71,14 +70,19 @@ class DepartureClearanceService:
                 select(DepartureClearance).where(
                     DepartureClearance.organization_id == organization_id,
                     DepartureClearance.user_id == user_id,
-                    DepartureClearance.status.in_([
-                        ClearanceStatus.INITIATED,
-                        ClearanceStatus.IN_PROGRESS,
-                    ]),
+                    DepartureClearance.status.in_(
+                        [
+                            ClearanceStatus.INITIATED,
+                            ClearanceStatus.IN_PROGRESS,
+                        ]
+                    ),
                 )
             )
             if existing.scalar_one_or_none():
-                return None, "An open departure clearance already exists for this member"
+                return (
+                    None,
+                    "An open departure clearance already exists for this member",
+                )
 
             deadline = datetime.now(timezone.utc) + timedelta(days=return_deadline_days)
 
@@ -108,19 +112,21 @@ class DepartureClearanceService:
             )
             for assignment in assign_result.scalars().all():
                 item = assignment.item
-                line_items.append(DepartureClearanceItem(
-                    clearance_id=clearance.id,
-                    organization_id=organization_id,
-                    source_type="assignment",
-                    source_id=str(assignment.id),
-                    item_id=str(item.id) if item else None,
-                    item_name=item.name if item else "Unknown Item",
-                    item_serial_number=item.serial_number if item else None,
-                    item_asset_tag=item.asset_tag if item else None,
-                    item_value=item.current_value if item else None,
-                    quantity=1,
-                    disposition=ClearanceLineDisposition.PENDING,
-                ))
+                line_items.append(
+                    DepartureClearanceItem(
+                        clearance_id=clearance.id,
+                        organization_id=organization_id,
+                        source_type="assignment",
+                        source_id=str(assignment.id),
+                        item_id=str(item.id) if item else None,
+                        item_name=item.name if item else "Unknown Item",
+                        item_serial_number=item.serial_number if item else None,
+                        item_asset_tag=item.asset_tag if item else None,
+                        item_value=item.current_value if item else None,
+                        quantity=1,
+                        disposition=ClearanceLineDisposition.PENDING,
+                    )
+                )
 
             # --- Active checkouts ---
             checkout_result = await self.db.execute(
@@ -134,19 +140,21 @@ class DepartureClearanceService:
             )
             for checkout in checkout_result.scalars().all():
                 item = checkout.item
-                line_items.append(DepartureClearanceItem(
-                    clearance_id=clearance.id,
-                    organization_id=organization_id,
-                    source_type="checkout",
-                    source_id=str(checkout.id),
-                    item_id=str(item.id) if item else None,
-                    item_name=item.name if item else "Unknown Item",
-                    item_serial_number=item.serial_number if item else None,
-                    item_asset_tag=item.asset_tag if item else None,
-                    item_value=item.current_value if item else None,
-                    quantity=1,
-                    disposition=ClearanceLineDisposition.PENDING,
-                ))
+                line_items.append(
+                    DepartureClearanceItem(
+                        clearance_id=clearance.id,
+                        organization_id=organization_id,
+                        source_type="checkout",
+                        source_id=str(checkout.id),
+                        item_id=str(item.id) if item else None,
+                        item_name=item.name if item else "Unknown Item",
+                        item_serial_number=item.serial_number if item else None,
+                        item_asset_tag=item.asset_tag if item else None,
+                        item_value=item.current_value if item else None,
+                        quantity=1,
+                        disposition=ClearanceLineDisposition.PENDING,
+                    )
+                )
 
             # --- Unreturned pool issuances ---
             issuance_result = await self.db.execute(
@@ -161,22 +169,28 @@ class DepartureClearanceService:
             for issuance in issuance_result.scalars().all():
                 item = issuance.item
                 per_unit_value = (
-                    float(item.current_value or 0) / max(1, (item.quantity or 0) + (item.quantity_issued or 0))
-                    if item else 0
+                    float(item.current_value or 0)
+                    / max(1, (item.quantity or 0) + (item.quantity_issued or 0))
+                    if item
+                    else 0
                 )
-                line_items.append(DepartureClearanceItem(
-                    clearance_id=clearance.id,
-                    organization_id=organization_id,
-                    source_type="issuance",
-                    source_id=str(issuance.id),
-                    item_id=str(item.id) if item else None,
-                    item_name=item.name if item else "Unknown Item",
-                    item_serial_number=None,  # pool items don't have individual serials
-                    item_asset_tag=None,
-                    item_value=Decimal(str(round(per_unit_value * issuance.quantity_issued, 2))),
-                    quantity=issuance.quantity_issued,
-                    disposition=ClearanceLineDisposition.PENDING,
-                ))
+                line_items.append(
+                    DepartureClearanceItem(
+                        clearance_id=clearance.id,
+                        organization_id=organization_id,
+                        source_type="issuance",
+                        source_id=str(issuance.id),
+                        item_id=str(item.id) if item else None,
+                        item_name=item.name if item else "Unknown Item",
+                        item_serial_number=None,  # pool items don't have individual serials
+                        item_asset_tag=None,
+                        item_value=Decimal(
+                            str(round(per_unit_value * issuance.quantity_issued, 2))
+                        ),
+                        quantity=issuance.quantity_issued,
+                        disposition=ClearanceLineDisposition.PENDING,
+                    )
+                )
 
             for li in line_items:
                 self.db.add(li)
@@ -222,8 +236,15 @@ class DepartureClearanceService:
             try:
                 disp = ClearanceLineDisposition(disposition)
             except ValueError:
-                valid = [d.value for d in ClearanceLineDisposition if d != ClearanceLineDisposition.PENDING]
-                return None, f"Invalid disposition '{disposition}'. Valid values: {valid}"
+                valid = [
+                    d.value
+                    for d in ClearanceLineDisposition
+                    if d != ClearanceLineDisposition.PENDING
+                ]
+                return (
+                    None,
+                    f"Invalid disposition '{disposition}'. Valid values: {valid}",
+                )
 
             if disp == ClearanceLineDisposition.PENDING:
                 return None, "Cannot set disposition back to 'pending'"
@@ -246,7 +267,10 @@ class DepartureClearanceService:
                 return None, f"Item already resolved as '{line_item.disposition.value}'"
 
             clearance = line_item.clearance
-            if clearance.status in (ClearanceStatus.COMPLETED, ClearanceStatus.CLOSED_INCOMPLETE):
+            if clearance.status in (
+                ClearanceStatus.COMPLETED,
+                ClearanceStatus.CLOSED_INCOMPLETE,
+            ):
                 return None, "Clearance is already closed"
 
             cond_enum = None
@@ -258,11 +282,17 @@ class DepartureClearanceService:
 
             # --- Perform the underlying inventory operation ---
             from app.services.inventory_service import InventoryService
+
             inv_svc = InventoryService(self.db)
 
-            if disp in (ClearanceLineDisposition.RETURNED, ClearanceLineDisposition.RETURNED_DAMAGED):
+            if disp in (
+                ClearanceLineDisposition.RETURNED,
+                ClearanceLineDisposition.RETURNED_DAMAGED,
+            ):
                 effective_condition = cond_enum or (
-                    ItemCondition.DAMAGED if disp == ClearanceLineDisposition.RETURNED_DAMAGED else ItemCondition.GOOD
+                    ItemCondition.DAMAGED
+                    if disp == ClearanceLineDisposition.RETURNED_DAMAGED
+                    else ItemCondition.GOOD
                 )
                 if line_item.source_type == "assignment":
                     success, err = await inv_svc.unassign_item(
@@ -281,7 +311,11 @@ class DepartureClearanceService:
                         organization_id=UUID(organization_id),
                         checked_in_by=UUID(resolved_by),
                         return_condition=effective_condition,
-                        damage_notes=resolution_notes if disp == ClearanceLineDisposition.RETURNED_DAMAGED else None,
+                        damage_notes=(
+                            resolution_notes
+                            if disp == ClearanceLineDisposition.RETURNED_DAMAGED
+                            else None
+                        ),
                     )
                     if err:
                         return None, f"Failed to check in item: {err}"
@@ -351,11 +385,15 @@ class DepartureClearanceService:
             if not clearance:
                 return None, "Clearance not found"
 
-            if clearance.status in (ClearanceStatus.COMPLETED, ClearanceStatus.CLOSED_INCOMPLETE):
+            if clearance.status in (
+                ClearanceStatus.COMPLETED,
+                ClearanceStatus.CLOSED_INCOMPLETE,
+            ):
                 return None, f"Clearance is already {clearance.status.value}"
 
             pending_count = sum(
-                1 for li in clearance.line_items
+                1
+                for li in clearance.line_items
                 if li.disposition == ClearanceLineDisposition.PENDING
             )
 
@@ -369,7 +407,11 @@ class DepartureClearanceService:
             clearance.completed_at = now
             clearance.completed_by = completed_by
             if notes:
-                clearance.notes = (clearance.notes or "") + f"\n\nClosure note: {notes}" if clearance.notes else notes
+                clearance.notes = (
+                    (clearance.notes or "") + f"\n\nClosure note: {notes}"
+                    if clearance.notes
+                    else notes
+                )
 
             if pending_count == 0:
                 clearance.status = ClearanceStatus.COMPLETED
@@ -381,6 +423,7 @@ class DepartureClearanceService:
 
             # After completing clearance, check if auto-archive should trigger
             from app.services.member_archive_service import check_and_auto_archive
+
             await check_and_auto_archive(self.db, clearance.user_id, organization_id)
 
             return clearance, None
@@ -412,17 +455,23 @@ class DepartureClearanceService:
         self, user_id: str, organization_id: str, active_only: bool = True
     ) -> Optional[DepartureClearance]:
         """Get the active clearance for a specific user."""
-        query = select(DepartureClearance).where(
-            DepartureClearance.organization_id == organization_id,
-            DepartureClearance.user_id == user_id,
-        ).options(selectinload(DepartureClearance.line_items))
+        query = (
+            select(DepartureClearance)
+            .where(
+                DepartureClearance.organization_id == organization_id,
+                DepartureClearance.user_id == user_id,
+            )
+            .options(selectinload(DepartureClearance.line_items))
+        )
 
         if active_only:
             query = query.where(
-                DepartureClearance.status.in_([
-                    ClearanceStatus.INITIATED,
-                    ClearanceStatus.IN_PROGRESS,
-                ])
+                DepartureClearance.status.in_(
+                    [
+                        ClearanceStatus.INITIATED,
+                        ClearanceStatus.IN_PROGRESS,
+                    ]
+                )
             )
 
         query = query.order_by(DepartureClearance.initiated_at.desc()).limit(1)
@@ -458,26 +507,32 @@ class DepartureClearanceService:
         total = (await self.db.execute(count_q)).scalar()
 
         # Paginate
-        query = query.order_by(DepartureClearance.initiated_at.desc()).offset(skip).limit(limit)
+        query = (
+            query.order_by(DepartureClearance.initiated_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         rows = (await self.db.execute(query)).all()
 
         summaries = []
         for clearance, first_name, last_name in rows:
-            summaries.append({
-                "id": clearance.id,
-                "user_id": clearance.user_id,
-                "member_name": f"{first_name} {last_name}".strip(),
-                "status": clearance.status.value,
-                "total_items": clearance.total_items,
-                "items_cleared": clearance.items_cleared,
-                "items_outstanding": clearance.items_outstanding,
-                "total_value": float(clearance.total_value),
-                "value_outstanding": float(clearance.value_outstanding),
-                "initiated_at": clearance.initiated_at,
-                "completed_at": clearance.completed_at,
-                "return_deadline": clearance.return_deadline,
-                "departure_type": clearance.departure_type,
-            })
+            summaries.append(
+                {
+                    "id": clearance.id,
+                    "user_id": clearance.user_id,
+                    "member_name": f"{first_name} {last_name}".strip(),
+                    "status": clearance.status.value,
+                    "total_items": clearance.total_items,
+                    "items_cleared": clearance.items_cleared,
+                    "items_outstanding": clearance.items_outstanding,
+                    "total_value": float(clearance.total_value),
+                    "value_outstanding": float(clearance.value_outstanding),
+                    "initiated_at": clearance.initiated_at,
+                    "completed_at": clearance.completed_at,
+                    "return_deadline": clearance.return_deadline,
+                    "departure_type": clearance.departure_type,
+                }
+            )
 
         return summaries, total
 

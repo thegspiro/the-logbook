@@ -4,14 +4,16 @@ User Pydantic Schemas
 Request and response schemas for user-related endpoints.
 """
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List, Any
-from datetime import datetime, date
+from datetime import date, datetime
+from typing import List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class EmergencyContact(BaseModel):
     """Emergency contact schema"""
+
     name: str = Field(..., min_length=1, max_length=100)
     relationship: str = Field(..., min_length=1, max_length=50)
     phone: str = Field(..., max_length=20)
@@ -21,6 +23,7 @@ class EmergencyContact(BaseModel):
 
 class AddressInfo(BaseModel):
     """Address information schema"""
+
     street: Optional[str] = Field(None, max_length=255)
     city: Optional[str] = Field(None, max_length=100)
     state: Optional[str] = Field(None, max_length=50)
@@ -30,6 +33,7 @@ class AddressInfo(BaseModel):
 
 class UserBase(BaseModel):
     """Base user schema with common fields"""
+
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
     first_name: Optional[str] = Field(None, max_length=100)
@@ -42,6 +46,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Schema for creating a new user"""
+
     password: str = Field(..., min_length=12)
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
@@ -49,12 +54,17 @@ class UserCreate(UserBase):
 
 class AdminUserCreate(BaseModel):
     """Schema for admin/secretary creating a new member"""
+
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
     first_name: str = Field(..., min_length=1, max_length=100)
     middle_name: Optional[str] = Field(None, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    membership_number: Optional[str] = Field(None, max_length=50, description="Membership number; auto-assigned if not provided and membership ID is enabled")
+    membership_number: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Membership number; auto-assigned if not provided and membership ID is enabled",
+    )
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
     date_of_birth: Optional[date] = None
@@ -75,13 +85,22 @@ class AdminUserCreate(BaseModel):
     emergency_contacts: List[EmergencyContact] = Field(default_factory=list)
 
     # Admin options
-    password: Optional[str] = Field(None, min_length=12, description="Optional initial password. If omitted a temporary password is auto-generated.")
-    role_ids: List[UUID] = Field(default_factory=list, description="Initial roles to assign")
-    send_welcome_email: bool = Field(default=True, description="Send welcome email with password setup link")
+    password: Optional[str] = Field(
+        None,
+        min_length=12,
+        description="Optional initial password. If omitted a temporary password is auto-generated.",
+    )
+    role_ids: List[UUID] = Field(
+        default_factory=list, description="Initial roles to assign"
+    )
+    send_welcome_email: bool = Field(
+        default=True, description="Send welcome email with password setup link"
+    )
 
 
 class UserUpdate(BaseModel):
     """Schema for updating a user"""
+
     first_name: Optional[str] = Field(None, max_length=100)
     middle_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
@@ -114,6 +133,7 @@ class UserResponse(UserBase):
     Contact information (phone, email, mobile) will be conditionally
     included based on organization settings.
     """
+
     id: UUID
     organization_id: UUID
     photo_url: Optional[str] = None
@@ -152,6 +172,7 @@ class UserResponse(UserBase):
 
 class UserListResponse(BaseModel):
     """Schema for listing users with optional contact information"""
+
     id: UUID
     organization_id: UUID
     username: str
@@ -177,6 +198,7 @@ class UserListResponse(BaseModel):
 
 class RoleResponse(BaseModel):
     """Schema for role response"""
+
     id: UUID
     name: str
     slug: str
@@ -190,14 +212,18 @@ class RoleResponse(BaseModel):
 
 class UserWithRolesResponse(UserResponse):
     """User response with roles included"""
+
     roles: List[RoleResponse] = []
-    temporary_password: Optional[str] = Field(None, description="Auto-generated temporary password (only present on creation)")
+    temporary_password: Optional[str] = Field(
+        None, description="Auto-generated temporary password (only present on creation)"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationPreferences(BaseModel):
     """Notification preferences schema"""
+
     email: bool = True
     sms: bool = False
     push: bool = False
@@ -211,6 +237,7 @@ class NotificationPreferences(BaseModel):
 
 class ContactInfoUpdate(BaseModel):
     """Schema for updating contact information and notification preferences"""
+
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
@@ -219,6 +246,7 @@ class ContactInfoUpdate(BaseModel):
 
 class MembershipNumberAssignment(BaseModel):
     """Schema for manually assigning or updating a member's membership number"""
+
     membership_number: str = Field(
         ...,
         min_length=1,
@@ -229,6 +257,7 @@ class MembershipNumberAssignment(BaseModel):
 
 class UserProfileResponse(UserResponse):
     """Extended user response with roles and notification preferences"""
+
     roles: List[RoleResponse] = []
     notification_preferences: Optional[dict] = None
 
@@ -237,12 +266,19 @@ class UserProfileResponse(UserResponse):
 
 class AdminPasswordReset(BaseModel):
     """Schema for admin resetting a user's password"""
-    new_password: str = Field(..., min_length=12, description="New password for the user")
-    force_change: bool = Field(default=True, description="Require the user to change the password on next login")
+
+    new_password: str = Field(
+        ..., min_length=12, description="New password for the user"
+    )
+    force_change: bool = Field(
+        default=True,
+        description="Require the user to change the password on next login",
+    )
 
 
 class MemberAuditLogEntry(BaseModel):
     """Schema for member audit history entries"""
+
     id: int
     timestamp: datetime
     event_type: str
@@ -257,6 +293,7 @@ class MemberAuditLogEntry(BaseModel):
 
 class DeletionImpactResponse(BaseModel):
     """Schema for member deletion impact assessment"""
+
     user_id: str
     full_name: Optional[str] = None
     status: str

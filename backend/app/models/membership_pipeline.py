@@ -7,33 +7,33 @@ with customizable pipeline steps that membership coordinators can
 configure per-department.
 """
 
+import enum
+
 from sqlalchemy import (
-    Column,
-    String,
+    JSON,
     Boolean,
-    DateTime,
+    Column,
     Date,
-    Integer,
-    Text,
+    DateTime,
     Enum,
     ForeignKey,
     Index,
-    JSON,
+    Integer,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from datetime import datetime
-import enum
-
-from app.core.utils import generate_uuid
 
 from app.core.database import Base
-
+from app.core.utils import generate_uuid
 
 # --- Enums ---
 
+
 class PipelineStepType(str, enum.Enum):
     """Type of pipeline step, determines UI behavior"""
+
     ACTION = "action"
     CHECKBOX = "checkbox"
     NOTE = "note"
@@ -41,6 +41,7 @@ class PipelineStepType(str, enum.Enum):
 
 class ActionType(str, enum.Enum):
     """Specific action type for action steps"""
+
     SEND_EMAIL = "send_email"
     SCHEDULE_MEETING = "schedule_meeting"
     COLLECT_DOCUMENT = "collect_document"
@@ -49,6 +50,7 @@ class ActionType(str, enum.Enum):
 
 class ProspectStatus(str, enum.Enum):
     """Status of a prospective member"""
+
     ACTIVE = "active"
     ON_HOLD = "on_hold"
     APPROVED = "approved"
@@ -60,6 +62,7 @@ class ProspectStatus(str, enum.Enum):
 
 class StepProgressStatus(str, enum.Enum):
     """Status of a prospect's progress on a single step"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -68,6 +71,7 @@ class StepProgressStatus(str, enum.Enum):
 
 # --- Models ---
 
+
 class MembershipPipeline(Base):
     """
     Pipeline definition for prospective member onboarding.
@@ -75,6 +79,7 @@ class MembershipPipeline(Base):
     Each organization can have multiple pipelines (e.g., from templates)
     but only one is marked as the default active pipeline.
     """
+
     __tablename__ = "membership_pipelines"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -96,7 +101,9 @@ class MembershipPipeline(Base):
 
     created_by = Column(String(36), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     steps = relationship(
@@ -128,6 +135,7 @@ class MembershipPipelineStep(Base):
     checkbox-based (mark complete), or note-based (add comments).
     Coordinators can add, remove, and reorder steps.
     """
+
     __tablename__ = "membership_pipeline_steps"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -164,7 +172,9 @@ class MembershipPipelineStep(Base):
     public_visible = Column(Boolean, default=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     pipeline = relationship("MembershipPipeline", back_populates="steps")
@@ -174,9 +184,7 @@ class MembershipPipelineStep(Base):
         cascade="all, delete-orphan",
     )
 
-    __table_args__ = (
-        Index("idx_pipeline_step_order", "pipeline_id", "sort_order"),
-    )
+    __table_args__ = (Index("idx_pipeline_step_order", "pipeline_id", "sort_order"),)
 
     def __repr__(self):
         return f"<MembershipPipelineStep(name={self.name}, type={self.step_type})>"
@@ -189,6 +197,7 @@ class ProspectiveMember(Base):
     Only copied to the users table when elected into membership,
     either automatically or via manual transfer by the coordinator.
     """
+
     __tablename__ = "prospective_members"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -257,11 +266,15 @@ class ProspectiveMember(Base):
     notes = Column(Text)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     pipeline = relationship("MembershipPipeline", back_populates="prospects")
-    current_step = relationship("MembershipPipelineStep", foreign_keys=[current_step_id])
+    current_step = relationship(
+        "MembershipPipelineStep", foreign_keys=[current_step_id]
+    )
     referrer = relationship("User", foreign_keys=[referred_by])
     transferred_user = relationship("User", foreign_keys=[transferred_user_id])
     step_progress = relationship(
@@ -297,6 +310,7 @@ class ProspectStepProgress(Base):
     One record per prospect-step combination, updated as the
     prospect advances through the pipeline.
     """
+
     __tablename__ = "prospect_step_progress"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -323,7 +337,9 @@ class ProspectStepProgress(Base):
     action_result = Column(JSON)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     prospect = relationship("ProspectiveMember", back_populates="step_progress")
@@ -345,6 +361,7 @@ class ProspectActivityLog(Base):
     Records every meaningful action taken on a prospect
     for accountability and history tracking.
     """
+
     __tablename__ = "prospect_activity_log"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -370,7 +387,9 @@ class ProspectActivityLog(Base):
     )
 
     def __repr__(self):
-        return f"<ProspectActivityLog(prospect={self.prospect_id}, action={self.action})>"
+        return (
+            f"<ProspectActivityLog(prospect={self.prospect_id}, action={self.action})>"
+        )
 
 
 class ProspectDocument(Base):
@@ -380,6 +399,7 @@ class ProspectDocument(Base):
     Tracks files attached during the pipeline process,
     such as ID photos, background checks, certifications, etc.
     """
+
     __tablename__ = "prospect_documents"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -409,9 +429,7 @@ class ProspectDocument(Base):
     step = relationship("MembershipPipelineStep")
     uploader = relationship("User", foreign_keys=[uploaded_by])
 
-    __table_args__ = (
-        Index("idx_prospect_doc_prospect", "prospect_id"),
-    )
+    __table_args__ = (Index("idx_prospect_doc_prospect", "prospect_id"),)
 
     def __repr__(self):
         return f"<ProspectDocument(prospect={self.prospect_id}, type={self.document_type})>"
@@ -424,6 +442,7 @@ class ProspectElectionPackage(Base):
     Bundles applicant information for the membership vote,
     integrating with the Elections module.
     """
+
     __tablename__ = "prospect_election_packages"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -449,13 +468,17 @@ class ProspectElectionPackage(Base):
         nullable=True,
     )
 
-    status = Column(String(20), default="draft", nullable=False)  # draft, ready, submitted, voted
+    status = Column(
+        String(20), default="draft", nullable=False
+    )  # draft, ready, submitted, voted
     applicant_snapshot = Column(JSON, default=dict)
     coordinator_notes = Column(Text)
     package_config = Column(JSON, default=dict)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     prospect = relationship("ProspectiveMember", backref="election_packages")

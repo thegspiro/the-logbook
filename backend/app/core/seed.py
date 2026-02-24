@@ -4,17 +4,20 @@ Database Seed Script
 Seeds the database with default roles and test data.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 import uuid
 from typing import Optional
 
-from app.models.user import Organization, Role
-from app.core.permissions import DEFAULT_ROLES, get_admin_role_slugs
 from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.permissions import DEFAULT_ROLES
+from app.models.user import Organization, Role
 
 
-async def seed_organization(db: AsyncSession, org_id: Optional[uuid.UUID] = None) -> Organization:
+async def seed_organization(
+    db: AsyncSession, org_id: Optional[uuid.UUID] = None
+) -> Organization:
     """
     Create or get a test organization
 
@@ -27,9 +30,7 @@ async def seed_organization(db: AsyncSession, org_id: Optional[uuid.UUID] = None
     """
     # Check if organization already exists
     if org_id:
-        result = await db.execute(
-            select(Organization).where(Organization.id == org_id)
-        )
+        result = await db.execute(select(Organization).where(Organization.id == org_id))
         existing_org = result.scalar_one_or_none()
         if existing_org:
             logger.info(f"Organization already exists: {existing_org.name}")
@@ -75,8 +76,7 @@ async def seed_roles(db: AsyncSession, organization_id: uuid.UUID):
         # Check if role already exists
         result = await db.execute(
             select(Role).where(
-                Role.organization_id == organization_id,
-                Role.slug == role_slug
+                Role.organization_id == organization_id, Role.slug == role_slug
             )
         )
         existing_role = result.scalar_one_or_none()
@@ -84,8 +84,8 @@ async def seed_roles(db: AsyncSession, organization_id: uuid.UUID):
         if existing_role:
             logger.info(f"Role already exists: {role_data['name']}")
             # Update permissions in case they changed
-            existing_role.permissions = role_data['permissions']
-            existing_role.priority = role_data['priority']
+            existing_role.permissions = role_data["permissions"]
+            existing_role.priority = role_data["priority"]
             await db.commit()
             continue
 
@@ -93,12 +93,12 @@ async def seed_roles(db: AsyncSession, organization_id: uuid.UUID):
         role = Role(
             id=uuid.uuid4(),
             organization_id=organization_id,
-            name=role_data['name'],
-            slug=role_data['slug'],
-            description=role_data['description'],
-            permissions=role_data['permissions'],
-            is_system=role_data['is_system'],
-            priority=role_data['priority'],
+            name=role_data["name"],
+            slug=role_data["slug"],
+            description=role_data["description"],
+            permissions=role_data["permissions"],
+            is_system=role_data["is_system"],
+            priority=role_data["priority"],
         )
 
         db.add(role)
@@ -132,6 +132,7 @@ async def seed_database(db: AsyncSession):
 # Command-line script
 if __name__ == "__main__":
     import asyncio
+
     from app.core.database import database_manager
 
     async def run_seed():

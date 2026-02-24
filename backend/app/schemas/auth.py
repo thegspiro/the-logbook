@@ -10,15 +10,14 @@ Security Features:
 - Rate limiting applied at endpoint level
 """
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional
-from datetime import datetime
-from uuid import UUID
 import re
+from typing import Optional
+from uuid import UUID
 
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 # Safe characters for usernames - prevents SQL injection and XSS
-USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
+USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 class UserLogin(BaseModel):
@@ -28,22 +27,25 @@ class UserLogin(BaseModel):
     - Username restricted to alphanumeric, underscores, hyphens
     - Also accepts email format for login flexibility
     """
+
     username: str = Field(..., min_length=3, max_length=100)
     password: str = Field(..., min_length=8)
 
-    @field_validator('username')
+    @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
         """Validate username contains only safe characters or is a valid email"""
         # Allow email format for login (contains @)
-        if '@' in v:
+        if "@" in v:
             # Basic email validation - more thorough validation happens in auth service
-            if not re.match(r'^[^@]+@[^@]+\.[^@]+$', v):
-                raise ValueError('Invalid email format')
+            if not re.match(r"^[^@]+@[^@]+\.[^@]+$", v):
+                raise ValueError("Invalid email format")
             return v.lower().strip()
         # For usernames, only allow safe characters
         if not USERNAME_PATTERN.match(v):
-            raise ValueError('Username can only contain letters, numbers, hyphens, and underscores')
+            raise ValueError(
+                "Username can only contain letters, numbers, hyphens, and underscores"
+            )
         return v.strip()
 
 
@@ -56,6 +58,7 @@ class UserRegister(BaseModel):
     - Email validated via Pydantic EmailStr
     - Names stripped and length-limited
     """
+
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=12)
@@ -63,26 +66,28 @@ class UserRegister(BaseModel):
     last_name: str = Field(..., min_length=1, max_length=100)
     membership_number: Optional[str] = Field(None, max_length=50)
 
-    @field_validator('username')
+    @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
         """Validate username contains only safe characters"""
         if not USERNAME_PATTERN.match(v):
-            raise ValueError('Username can only contain letters, numbers, hyphens, and underscores')
+            raise ValueError(
+                "Username can only contain letters, numbers, hyphens, and underscores"
+            )
         return v.strip()
 
-    @field_validator('first_name', 'last_name')
+    @field_validator("first_name", "last_name")
     @classmethod
     def validate_name(cls, v: str) -> str:
         """Validate and sanitize names"""
         # Strip whitespace
         v = v.strip()
         # Block obvious injection attempts
-        if any(char in v for char in ['<', '>', ';', '--', '/*', '*/']):
-            raise ValueError('Name contains invalid characters')
+        if any(char in v for char in ["<", ">", ";", "--", "/*", "*/"]):
+            raise ValueError("Name contains invalid characters")
         return v
 
-    @field_validator('membership_number')
+    @field_validator("membership_number")
     @classmethod
     def validate_membership_number(cls, v: Optional[str]) -> Optional[str]:
         """Validate membership number contains only safe characters"""
@@ -90,13 +95,16 @@ class UserRegister(BaseModel):
             return v
         v = v.strip()
         # Allow alphanumeric and common membership number separators
-        if not re.match(r'^[a-zA-Z0-9_\-\.]+$', v):
-            raise ValueError('Membership number can only contain letters, numbers, hyphens, underscores, and periods')
+        if not re.match(r"^[a-zA-Z0-9_\-\.]+$", v):
+            raise ValueError(
+                "Membership number can only contain letters, numbers, hyphens, underscores, and periods"
+            )
         return v
 
 
 class TokenResponse(BaseModel):
     """Schema for token response"""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -105,11 +113,13 @@ class TokenResponse(BaseModel):
 
 class TokenRefresh(BaseModel):
     """Schema for token refresh request"""
+
     refresh_token: str
 
 
 class CurrentUser(BaseModel):
     """Schema for current user info"""
+
     id: UUID
     username: str
     email: str
@@ -117,7 +127,9 @@ class CurrentUser(BaseModel):
     last_name: Optional[str] = None
     full_name: Optional[str] = None
     organization_id: UUID
-    timezone: str = Field(default="America/New_York", description="Organization timezone")
+    timezone: str = Field(
+        default="America/New_York", description="Organization timezone"
+    )
     roles: list[str] = []  # List of role/position names (backward-compatible alias)
     positions: list[str] = []  # List of position names (same as roles)
     rank: Optional[str] = None  # Operational rank, e.g. "captain", "firefighter"
@@ -127,33 +139,40 @@ class CurrentUser(BaseModel):
     email_verified: bool
     mfa_enabled: bool
     password_expired: bool = False  # True when password age exceeds HIPAA max
-    must_change_password: bool = False  # True when admin requires password change on next login
+    must_change_password: bool = (
+        False  # True when admin requires password change on next login
+    )
 
 
 class PasswordChange(BaseModel):
     """Schema for changing password"""
+
     current_password: str
     new_password: str = Field(..., min_length=12)
 
 
 class PasswordResetRequest(BaseModel):
     """Schema for requesting password reset"""
+
     email: EmailStr
 
 
 class PasswordReset(BaseModel):
     """Schema for resetting password with token"""
+
     token: str
     new_password: str = Field(..., min_length=12)
 
 
 class EmailVerification(BaseModel):
     """Schema for email verification"""
+
     token: str
 
 
 class MFASetup(BaseModel):
     """Schema for MFA setup response"""
+
     secret: str
     qr_code_url: str
     backup_codes: list[str]
@@ -161,10 +180,12 @@ class MFASetup(BaseModel):
 
 class MFAVerify(BaseModel):
     """Schema for MFA verification"""
+
     code: str = Field(..., min_length=6, max_length=6)
 
 
 class MFALogin(BaseModel):
     """Schema for MFA login (second step)"""
+
     temp_token: str
     code: str = Field(..., min_length=6, max_length=6)

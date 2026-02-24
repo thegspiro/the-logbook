@@ -4,16 +4,20 @@ Training Pydantic Schemas
 Request and response schemas for training-related endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
-from datetime import datetime, date
-from uuid import UUID
+from datetime import date, datetime
 from enum import Enum
+from typing import List, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DueDateType(str, Enum):
     """How the due date for a requirement is calculated"""
-    CALENDAR_PERIOD = "calendar_period"  # Due by end of calendar period (e.g., Dec 31st)
+
+    CALENDAR_PERIOD = (
+        "calendar_period"  # Due by end of calendar period (e.g., Dec 31st)
+    )
     ROLLING = "rolling"  # Due X months from last completion
     CERTIFICATION_PERIOD = "certification_period"  # Due when certification expires
     FIXED_DATE = "fixed_date"  # Due by a specific fixed date
@@ -21,6 +25,7 @@ class DueDateType(str, Enum):
 
 class RequirementType(str, Enum):
     """Type of training requirement"""
+
     HOURS = "hours"
     COURSES = "courses"
     CERTIFICATION = "certification"
@@ -33,12 +38,14 @@ class RequirementType(str, Enum):
 
 # Training Category Schemas
 
+
 class TrainingCategoryBase(BaseModel):
     """Base training category schema"""
+
     name: str = Field(..., min_length=1, max_length=255)
     code: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
-    color: Optional[str] = Field(None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    color: Optional[str] = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
     parent_category_id: Optional[UUID] = None
     sort_order: int = 0
     icon: Optional[str] = Field(None, max_length=50)
@@ -46,15 +53,15 @@ class TrainingCategoryBase(BaseModel):
 
 class TrainingCategoryCreate(TrainingCategoryBase):
     """Schema for creating a new training category"""
-    pass
 
 
 class TrainingCategoryUpdate(BaseModel):
     """Schema for updating a training category"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     code: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
-    color: Optional[str] = Field(None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    color: Optional[str] = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
     parent_category_id: Optional[UUID] = None
     sort_order: Optional[int] = None
     icon: Optional[str] = Field(None, max_length=50)
@@ -63,6 +70,7 @@ class TrainingCategoryUpdate(BaseModel):
 
 class TrainingCategoryResponse(TrainingCategoryBase):
     """Schema for training category response"""
+
     id: UUID
     organization_id: UUID
     active: bool
@@ -75,8 +83,10 @@ class TrainingCategoryResponse(TrainingCategoryBase):
 
 # Training Course Schemas
 
+
 class TrainingCourseBase(BaseModel):
     """Base training course schema"""
+
     name: str = Field(..., min_length=1, max_length=255)
     code: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
@@ -93,11 +103,11 @@ class TrainingCourseBase(BaseModel):
 
 class TrainingCourseCreate(TrainingCourseBase):
     """Schema for creating a new training course"""
-    pass
 
 
 class TrainingCourseUpdate(BaseModel):
     """Schema for updating a training course"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     code: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
@@ -115,6 +125,7 @@ class TrainingCourseUpdate(BaseModel):
 
 class TrainingCourseResponse(TrainingCourseBase):
     """Schema for training course response"""
+
     id: UUID
     organization_id: UUID
     active: bool
@@ -128,8 +139,10 @@ class TrainingCourseResponse(TrainingCourseBase):
 
 # Training Record Schemas
 
+
 class TrainingRecordBase(BaseModel):
     """Base training record schema"""
+
     course_name: str = Field(..., min_length=1, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
     training_type: str
@@ -154,12 +167,14 @@ class TrainingRecordBase(BaseModel):
 
 class TrainingRecordCreate(TrainingRecordBase):
     """Schema for creating a new training record"""
+
     user_id: UUID
     course_id: Optional[UUID] = None
 
 
 class TrainingRecordUpdate(BaseModel):
     """Schema for updating a training record"""
+
     course_name: Optional[str] = Field(None, min_length=1, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
     training_type: Optional[str] = None
@@ -182,6 +197,7 @@ class TrainingRecordUpdate(BaseModel):
 
 class TrainingRecordResponse(TrainingRecordBase):
     """Schema for training record response"""
+
     id: UUID
     organization_id: UUID
     user_id: UUID
@@ -195,8 +211,10 @@ class TrainingRecordResponse(TrainingRecordBase):
 
 # Training Requirement Schemas
 
+
 class TrainingRequirementBase(BaseModel):
     """Base training requirement schema"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     requirement_type: RequirementType
@@ -220,11 +238,11 @@ class TrainingRequirementBase(BaseModel):
 
 class TrainingRequirementCreate(TrainingRequirementBase):
     """Schema for creating a new training requirement"""
-    pass
 
 
 class TrainingRequirementUpdate(BaseModel):
     """Schema for updating a training requirement"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     requirement_type: Optional[RequirementType] = None
@@ -248,6 +266,7 @@ class TrainingRequirementUpdate(BaseModel):
 
 class TrainingRequirementResponse(TrainingRequirementBase):
     """Schema for training requirement response"""
+
     id: UUID
     organization_id: UUID
     active: bool
@@ -260,8 +279,10 @@ class TrainingRequirementResponse(TrainingRequirementBase):
 
 # Training Statistics and Reports
 
+
 class UserTrainingStats(BaseModel):
     """Training statistics for a user"""
+
     user_id: UUID
     total_hours: float
     hours_this_year: float
@@ -274,6 +295,7 @@ class UserTrainingStats(BaseModel):
 
 class TrainingHoursSummary(BaseModel):
     """Summary of training hours by type"""
+
     training_type: str
     total_hours: float
     record_count: int
@@ -281,6 +303,7 @@ class TrainingHoursSummary(BaseModel):
 
 class TrainingReport(BaseModel):
     """Comprehensive training report"""
+
     user_id: Optional[UUID] = None
     start_date: date
     end_date: date
@@ -293,6 +316,7 @@ class TrainingReport(BaseModel):
 
 class RequirementProgress(BaseModel):
     """Progress towards a training requirement"""
+
     requirement_id: UUID
     requirement_name: str
     required_hours: Optional[float]
@@ -306,6 +330,7 @@ class RequirementProgress(BaseModel):
 
 class ComplianceSummary(BaseModel):
     """Compliance summary for a member's profile card"""
+
     user_id: UUID
     requirements_met: int
     requirements_total: int
@@ -324,6 +349,7 @@ class ComplianceSummary(BaseModel):
 
 class ExternalProviderType(str, Enum):
     """Supported external training providers"""
+
     VECTOR_SOLUTIONS = "vector_solutions"
     TARGET_SOLUTIONS = "target_solutions"
     LEXIPOL = "lexipol"
@@ -333,6 +359,7 @@ class ExternalProviderType(str, Enum):
 
 class SyncStatus(str, Enum):
     """Status of sync operations"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -342,6 +369,7 @@ class SyncStatus(str, Enum):
 
 class ImportStatus(str, Enum):
     """Status of individual record imports"""
+
     PENDING = "pending"
     IMPORTED = "imported"
     FAILED = "failed"
@@ -351,34 +379,49 @@ class ImportStatus(str, Enum):
 
 # External Training Provider Schemas
 
+
 class ExternalProviderConfig(BaseModel):
     """Provider-specific configuration"""
+
     # Vector Solutions / TargetSolutions specific
-    site_id: Optional[str] = None  # Required for Vector Solutions - the TS site identifier
-    page_size: Optional[int] = Field(None, ge=1, le=1000)  # Max records per page (VS max: 1000)
+    site_id: Optional[str] = (
+        None  # Required for Vector Solutions - the TS site identifier
+    )
+    page_size: Optional[int] = Field(
+        None, ge=1, le=1000
+    )  # Max records per page (VS max: 1000)
     date_filter_param: Optional[str] = None  # Custom date filter parameter name
 
     # General endpoint overrides
     records_endpoint: Optional[str] = None  # Override default records endpoint path
     users_endpoint: Optional[str] = None  # Override default users endpoint path
-    categories_endpoint: Optional[str] = None  # Override default categories endpoint path
+    categories_endpoint: Optional[str] = (
+        None  # Override default categories endpoint path
+    )
     test_endpoint: Optional[str] = None  # Override default connection test endpoint
 
     # Custom API support
-    param_mapping: Optional[dict] = None  # Map standard param names to provider-specific names
-    field_mapping: Optional[dict] = None  # Map standard field names to provider-specific names
-    records_path: Optional[str] = None  # JSON path to records array in response (e.g. "data.records")
+    param_mapping: Optional[dict] = (
+        None  # Map standard param names to provider-specific names
+    )
+    field_mapping: Optional[dict] = (
+        None  # Map standard field names to provider-specific names
+    )
+    records_path: Optional[str] = (
+        None  # JSON path to records array in response (e.g. "data.records")
+    )
     additional_headers: Optional[dict] = None
     date_format: Optional[str] = None  # Date format used by the API
 
 
 class ExternalTrainingProviderBase(BaseModel):
     """Base external training provider schema"""
+
     name: str = Field(..., min_length=1, max_length=255)
     provider_type: ExternalProviderType
     description: Optional[str] = None
     api_base_url: Optional[str] = Field(None, max_length=500)
-    auth_type: str = Field("api_key", pattern=r'^(api_key|oauth2|basic)$')
+    auth_type: str = Field("api_key", pattern=r"^(api_key|oauth2|basic)$")
     config: Optional[ExternalProviderConfig] = None
     auto_sync_enabled: bool = False
     sync_interval_hours: int = Field(24, ge=1, le=168)  # 1 hour to 1 week
@@ -387,6 +430,7 @@ class ExternalTrainingProviderBase(BaseModel):
 
 class ExternalTrainingProviderCreate(ExternalTrainingProviderBase):
     """Schema for creating a new external training provider"""
+
     api_key: Optional[str] = None
     api_secret: Optional[str] = None
     client_id: Optional[str] = Field(None, max_length=255)
@@ -395,6 +439,7 @@ class ExternalTrainingProviderCreate(ExternalTrainingProviderBase):
 
 class ExternalTrainingProviderUpdate(BaseModel):
     """Schema for updating an external training provider"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     api_base_url: Optional[str] = Field(None, max_length=500)
@@ -402,7 +447,7 @@ class ExternalTrainingProviderUpdate(BaseModel):
     api_secret: Optional[str] = None
     client_id: Optional[str] = Field(None, max_length=255)
     client_secret: Optional[str] = None
-    auth_type: Optional[str] = Field(None, pattern=r'^(api_key|oauth2|basic)$')
+    auth_type: Optional[str] = Field(None, pattern=r"^(api_key|oauth2|basic)$")
     config: Optional[ExternalProviderConfig] = None
     auto_sync_enabled: Optional[bool] = None
     sync_interval_hours: Optional[int] = Field(None, ge=1, le=168)
@@ -412,6 +457,7 @@ class ExternalTrainingProviderUpdate(BaseModel):
 
 class ExternalTrainingProviderResponse(ExternalTrainingProviderBase):
     """Schema for external training provider response"""
+
     id: UUID
     organization_id: UUID
     active: bool
@@ -430,8 +476,10 @@ class ExternalTrainingProviderResponse(ExternalTrainingProviderBase):
 
 # External Category Mapping Schemas
 
+
 class ExternalCategoryMappingBase(BaseModel):
     """Base external category mapping schema"""
+
     external_category_id: str = Field(..., max_length=255)
     external_category_name: str = Field(..., max_length=255)
     external_category_code: Optional[str] = Field(None, max_length=100)
@@ -440,17 +488,18 @@ class ExternalCategoryMappingBase(BaseModel):
 
 class ExternalCategoryMappingCreate(ExternalCategoryMappingBase):
     """Schema for creating a new external category mapping"""
-    pass
 
 
 class ExternalCategoryMappingUpdate(BaseModel):
     """Schema for updating an external category mapping"""
+
     internal_category_id: Optional[UUID] = None
     is_mapped: Optional[bool] = None
 
 
 class ExternalCategoryMappingResponse(ExternalCategoryMappingBase):
     """Schema for external category mapping response"""
+
     id: UUID
     provider_id: UUID
     organization_id: UUID
@@ -467,8 +516,10 @@ class ExternalCategoryMappingResponse(ExternalCategoryMappingBase):
 
 # External User Mapping Schemas
 
+
 class ExternalUserMappingBase(BaseModel):
     """Base external user mapping schema"""
+
     external_user_id: str = Field(..., max_length=255)
     external_username: Optional[str] = Field(None, max_length=255)
     external_email: Optional[str] = Field(None, max_length=255)
@@ -478,17 +529,18 @@ class ExternalUserMappingBase(BaseModel):
 
 class ExternalUserMappingCreate(ExternalUserMappingBase):
     """Schema for creating a new external user mapping"""
-    pass
 
 
 class ExternalUserMappingUpdate(BaseModel):
     """Schema for updating an external user mapping"""
+
     internal_user_id: Optional[UUID] = None
     is_mapped: Optional[bool] = None
 
 
 class ExternalUserMappingResponse(ExternalUserMappingBase):
     """Schema for external user mapping response"""
+
     id: UUID
     provider_id: UUID
     organization_id: UUID
@@ -506,8 +558,10 @@ class ExternalUserMappingResponse(ExternalUserMappingBase):
 
 # Sync Log Schemas
 
+
 class ExternalTrainingSyncLogResponse(BaseModel):
     """Schema for external training sync log response"""
+
     id: UUID
     provider_id: UUID
     organization_id: UUID
@@ -531,8 +585,10 @@ class ExternalTrainingSyncLogResponse(BaseModel):
 
 # External Training Import Schemas
 
+
 class ExternalTrainingImportResponse(BaseModel):
     """Schema for external training import response"""
+
     id: UUID
     provider_id: UUID
     organization_id: UUID
@@ -560,15 +616,18 @@ class ExternalTrainingImportResponse(BaseModel):
 
 # Sync Request/Response Schemas
 
+
 class SyncRequest(BaseModel):
     """Request to trigger a sync operation"""
-    sync_type: str = Field("incremental", pattern=r'^(full|incremental)$')
+
+    sync_type: str = Field("incremental", pattern=r"^(full|incremental)$")
     from_date: Optional[date] = None  # For incremental sync
     to_date: Optional[date] = None
 
 
 class SyncResponse(BaseModel):
     """Response after initiating a sync"""
+
     sync_log_id: Optional[UUID] = None  # May be None for background tasks
     status: SyncStatus
     message: str
@@ -579,6 +638,7 @@ class SyncResponse(BaseModel):
 
 class TestConnectionResponse(BaseModel):
     """Response after testing provider connection"""
+
     success: bool
     message: str
     details: Optional[dict] = None
@@ -586,6 +646,7 @@ class TestConnectionResponse(BaseModel):
 
 class ImportRecordRequest(BaseModel):
     """Request to import a specific external record"""
+
     external_import_id: UUID
     user_id: UUID  # Internal user to assign record to
     category_id: Optional[UUID] = None  # Override category
@@ -593,6 +654,7 @@ class ImportRecordRequest(BaseModel):
 
 class BulkImportRequest(BaseModel):
     """Request to bulk import external records"""
+
     external_import_ids: List[UUID] = Field(..., max_length=500)
     auto_map_users: bool = True  # Try to match users by email
     default_category_id: Optional[UUID] = None
@@ -600,6 +662,7 @@ class BulkImportRequest(BaseModel):
 
 class BulkImportResponse(BaseModel):
     """Response after bulk import"""
+
     total: int
     imported: int
     skipped: int
@@ -614,6 +677,7 @@ class BulkImportResponse(BaseModel):
 
 class HistoricalImportParsedRow(BaseModel):
     """A single parsed row from the CSV with match status"""
+
     row_number: int
     email: Optional[str] = None
     membership_number: Optional[str] = None
@@ -642,6 +706,7 @@ class HistoricalImportParsedRow(BaseModel):
 
 class UnmatchedCourse(BaseModel):
     """A course from the CSV that doesn't match any existing course"""
+
     csv_course_name: str
     csv_course_code: Optional[str] = None
     occurrences: int = 1
@@ -649,6 +714,7 @@ class UnmatchedCourse(BaseModel):
 
 class HistoricalImportParseResponse(BaseModel):
     """Response from parsing a historical training CSV"""
+
     total_rows: int
     valid_rows: int
     members_matched: int
@@ -662,14 +728,16 @@ class HistoricalImportParseResponse(BaseModel):
 
 class CourseMappingEntry(BaseModel):
     """Maps a CSV course to an existing course or creates a new one"""
+
     csv_course_name: str
-    action: str = Field(..., pattern=r'^(map_existing|create_new|skip)$')
+    action: str = Field(..., pattern=r"^(map_existing|create_new|skip)$")
     existing_course_id: Optional[str] = None  # If action == map_existing
     new_training_type: Optional[str] = None  # If action == create_new
 
 
 class HistoricalImportConfirmRequest(BaseModel):
     """Request to confirm and execute a historical import"""
+
     rows: List[HistoricalImportParsedRow]
     course_mappings: List[CourseMappingEntry] = []
     default_training_type: str = "continuing_education"
@@ -678,6 +746,7 @@ class HistoricalImportConfirmRequest(BaseModel):
 
 class HistoricalImportResult(BaseModel):
     """Result of a confirmed historical import"""
+
     total: int
     imported: int
     skipped: int
@@ -692,6 +761,7 @@ class HistoricalImportResult(BaseModel):
 
 class BulkTrainingRecordEntry(BaseModel):
     """A single entry in a bulk training record creation request"""
+
     user_id: UUID
     course_name: str = Field(..., min_length=1, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
@@ -714,13 +784,17 @@ class BulkTrainingRecordEntry(BaseModel):
 
 class BulkTrainingRecordCreate(BaseModel):
     """Request to create training records for multiple members at once"""
+
     records: List[BulkTrainingRecordEntry] = Field(..., min_length=1, max_length=500)
-    skip_duplicates: bool = False  # If True, silently skip duplicates instead of flagging
+    skip_duplicates: bool = (
+        False  # If True, silently skip duplicates instead of flagging
+    )
     override_duplicates: bool = False  # If True, create even if duplicates detected
 
 
 class DuplicateWarning(BaseModel):
     """Warning about a potential duplicate training record"""
+
     user_id: UUID
     course_name: str
     completion_date: Optional[date] = None
@@ -731,6 +805,7 @@ class DuplicateWarning(BaseModel):
 
 class BulkTrainingRecordResult(BaseModel):
     """Result of a bulk training record creation"""
+
     total: int
     created: int
     skipped: int

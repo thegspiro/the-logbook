@@ -6,19 +6,24 @@ and publishing meeting minutes as formatted documents.
 """
 
 import logging
+from datetime import datetime, timezone
+from html import escape
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from html import escape
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
 
-from app.models.document import Document, DocumentFolder, DocumentType, SYSTEM_FOLDERS
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.document import SYSTEM_FOLDERS, Document, DocumentFolder, DocumentType
 from app.models.minute import MeetingMinutes, MinutesStatus
 from app.models.user import Organization
-from app.schemas.document import FolderCreate, FolderUpdate, DocumentCreate, DocumentUpdate
+from app.schemas.document import (
+    DocumentCreate,
+    DocumentUpdate,
+    FolderCreate,
+    FolderUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +38,9 @@ class DocumentService:
     # Folder Management
     # ============================================
 
-    async def initialize_system_folders(self, organization_id: UUID, created_by: UUID) -> List[DocumentFolder]:
+    async def initialize_system_folders(
+        self, organization_id: UUID, created_by: UUID
+    ) -> List[DocumentFolder]:
         """Create system folders for an organization if none exist"""
         existing = await self.db.execute(
             select(func.count(DocumentFolder.id))
@@ -63,9 +70,8 @@ class DocumentService:
         self, organization_id: UUID, parent_id: Optional[str] = None
     ) -> List[DocumentFolder]:
         """List folders for an organization"""
-        query = (
-            select(DocumentFolder)
-            .where(DocumentFolder.organization_id == str(organization_id))
+        query = select(DocumentFolder).where(
+            DocumentFolder.organization_id == str(organization_id)
         )
         if parent_id:
             query = query.where(DocumentFolder.parent_id == parent_id)
@@ -141,9 +147,7 @@ class DocumentService:
         await self.db.refresh(folder)
         return folder
 
-    async def delete_folder(
-        self, folder_id: str, organization_id: UUID
-    ) -> bool:
+    async def delete_folder(self, folder_id: str, organization_id: UUID) -> bool:
         """Delete a folder (system folders cannot be deleted)"""
         folder = await self.get_folder(folder_id, organization_id)
         if not folder or folder.is_system:
@@ -178,16 +182,15 @@ class DocumentService:
         limit: int = 50,
     ) -> List[Document]:
         """List documents with filtering"""
-        query = (
-            select(Document)
-            .where(Document.organization_id == str(organization_id))
-        )
+        query = select(Document).where(Document.organization_id == str(organization_id))
         if folder_id:
             query = query.where(Document.folder_id == folder_id)
         if document_type:
             query = query.where(Document.document_type == document_type)
         if search:
-            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             query = query.where(Document.name.ilike(f"%{safe_search}%"))
 
         query = query.order_by(Document.created_at.desc()).offset(skip).limit(limit)
@@ -206,9 +209,14 @@ class DocumentService:
         return result.scalar_one_or_none()
 
     async def create_document(
-        self, data: DocumentCreate, organization_id: UUID, uploaded_by: UUID,
-        document_type: str = "uploaded", source_type: Optional[str] = None,
-        source_id: Optional[str] = None, content_html: Optional[str] = None,
+        self,
+        data: DocumentCreate,
+        organization_id: UUID,
+        uploaded_by: UUID,
+        document_type: str = "uploaded",
+        source_type: Optional[str] = None,
+        source_id: Optional[str] = None,
+        content_html: Optional[str] = None,
     ) -> Document:
         """Create a document record"""
         doc = Document(
@@ -256,9 +264,7 @@ class DocumentService:
         await self.db.refresh(doc)
         return doc
 
-    async def delete_document(
-        self, document_id: str, organization_id: UUID
-    ) -> bool:
+    async def delete_document(self, document_id: str, organization_id: UUID) -> bool:
         """Delete a document"""
         doc = await self.get_document(document_id, organization_id)
         if not doc:
@@ -284,7 +290,9 @@ class DocumentService:
         # Get or create the meeting-minutes folder
         folder = await self.get_folder_by_slug("meeting-minutes", organization_id)
         if not folder:
-            folders = await self.initialize_system_folders(organization_id, published_by)
+            folders = await self.initialize_system_folders(
+                organization_id, published_by
+            )
             folder = next((f for f in folders if f.slug == "meeting-minutes"), None)
             if not folder:
                 raise RuntimeError("Failed to create meeting-minutes folder")
@@ -301,7 +309,9 @@ class DocumentService:
 
         # Check if already published (update instead of creating duplicate)
         if minutes.published_document_id:
-            existing = await self.get_document(minutes.published_document_id, organization_id)
+            existing = await self.get_document(
+                minutes.published_document_id, organization_id
+            )
             if existing:
                 existing.content_html = html
                 existing.name = minutes.title
@@ -311,8 +321,16 @@ class DocumentService:
                 return existing
 
         # Create the document
-        meeting_date = minutes.meeting_date.strftime("%Y-%m-%d") if minutes.meeting_date else "unknown"
-        mt_value = minutes.meeting_type if isinstance(minutes.meeting_type, str) else minutes.meeting_type.value
+        meeting_date = (
+            minutes.meeting_date.strftime("%Y-%m-%d")
+            if minutes.meeting_date
+            else "unknown"
+        )
+        mt_value = (
+            minutes.meeting_type
+            if isinstance(minutes.meeting_type, str)
+            else minutes.meeting_type.value
+        )
         doc = Document(
             organization_id=str(organization_id),
             folder_id=folder.id,
@@ -341,68 +359,109 @@ class DocumentService:
             return dt
         return dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
 
-    def _generate_minutes_html(self, minutes: MeetingMinutes, tz_name: Optional[str] = None) -> str:
+    def _generate_minutes_html(
+        self, minutes: MeetingMinutes, tz_name: Optional[str] = None
+    ) -> str:
         """Generate formatted HTML for published meeting minutes"""
         header = minutes.get_effective_header() or {}
         footer = minutes.get_effective_footer() or {}
 
-        mt_display = minutes.meeting_type if isinstance(minutes.meeting_type, str) else minutes.meeting_type.value
-        meeting_date = self._to_local(minutes.meeting_date, tz_name).strftime("%B %d, %Y at %I:%M %p") if minutes.meeting_date else ""
+        mt_display = (
+            minutes.meeting_type
+            if isinstance(minutes.meeting_type, str)
+            else minutes.meeting_type.value
+        )
+        meeting_date = (
+            self._to_local(minutes.meeting_date, tz_name).strftime(
+                "%B %d, %Y at %I:%M %p"
+            )
+            if minutes.meeting_date
+            else ""
+        )
 
         parts = []
 
         # Document header
         parts.append('<div class="minutes-document">')
-        parts.append('<div class="minutes-header" style="text-align:center; border-bottom:2px solid #1e3a5f; padding-bottom:16px; margin-bottom:24px;">')
+        parts.append(
+            '<div class="minutes-header" style="text-align:center; border-bottom:2px solid #1e3a5f; padding-bottom:16px; margin-bottom:24px;">'
+        )
         if header.get("org_name"):
-            parts.append(f'<h1 style="margin:0; font-size:24px; color:#1e3a5f;">{escape(header["org_name"])}</h1>')
+            parts.append(
+                f'<h1 style="margin:0; font-size:24px; color:#1e3a5f;">{escape(header["org_name"])}</h1>'
+            )
         subtitle = header.get("subtitle", "Official Meeting Minutes")
-        parts.append(f'<h2 style="margin:4px 0 0; font-size:16px; color:#666; font-weight:normal;">{escape(subtitle)}</h2>')
-        parts.append('</div>')
+        parts.append(
+            f'<h2 style="margin:4px 0 0; font-size:16px; color:#666; font-weight:normal;">{escape(subtitle)}</h2>'
+        )
+        parts.append("</div>")
 
         # Meeting info
         parts.append('<div class="minutes-info" style="margin-bottom:24px;">')
-        parts.append(f'<h3 style="margin:0 0 8px; font-size:20px; color:#1e3a5f;">{escape(minutes.title)}</h3>')
+        parts.append(
+            f'<h3 style="margin:0 0 8px; font-size:20px; color:#1e3a5f;">{escape(minutes.title)}</h3>'
+        )
         info_items = []
         if header.get("show_meeting_type", True):
-            info_items.append(f'<strong>Type:</strong> {escape(mt_display.replace("_", " ").title())}')
+            info_items.append(
+                f'<strong>Type:</strong> {escape(mt_display.replace("_", " ").title())}'
+            )
         if header.get("show_date", True):
-            info_items.append(f'<strong>Date:</strong> {escape(meeting_date)}')
+            info_items.append(f"<strong>Date:</strong> {escape(meeting_date)}")
         if minutes.location:
-            info_items.append(f'<strong>Location:</strong> {escape(minutes.location)}')
+            info_items.append(f"<strong>Location:</strong> {escape(minutes.location)}")
         if minutes.called_by:
-            info_items.append(f'<strong>Called by:</strong> {escape(minutes.called_by)}')
+            info_items.append(
+                f"<strong>Called by:</strong> {escape(minutes.called_by)}"
+            )
         if info_items:
-            parts.append('<p style="color:#444; font-size:14px; margin:4px 0;">' + ' &nbsp;|&nbsp; '.join(info_items) + '</p>')
+            parts.append(
+                '<p style="color:#444; font-size:14px; margin:4px 0;">'
+                + " &nbsp;|&nbsp; ".join(info_items)
+                + "</p>"
+            )
 
         # Called to order / adjourned
         if minutes.called_to_order_at:
-            parts.append(f'<p style="font-size:13px; color:#666;">Called to order: {self._to_local(minutes.called_to_order_at, tz_name).strftime("%I:%M %p")}</p>')
+            parts.append(
+                f'<p style="font-size:13px; color:#666;">Called to order: {self._to_local(minutes.called_to_order_at, tz_name).strftime("%I:%M %p")}</p>'
+            )
         if minutes.adjourned_at:
-            parts.append(f'<p style="font-size:13px; color:#666;">Adjourned: {self._to_local(minutes.adjourned_at, tz_name).strftime("%I:%M %p")}</p>')
-        parts.append('</div>')
+            parts.append(
+                f'<p style="font-size:13px; color:#666;">Adjourned: {self._to_local(minutes.adjourned_at, tz_name).strftime("%I:%M %p")}</p>'
+            )
+        parts.append("</div>")
 
         # Attendees
         if minutes.attendees:
             parts.append('<div class="minutes-attendees" style="margin-bottom:24px;">')
-            parts.append('<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Attendance</h4>')
+            parts.append(
+                '<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Attendance</h4>'
+            )
             present = [a for a in minutes.attendees if a.get("present", True)]
             absent = [a for a in minutes.attendees if not a.get("present", True)]
             if present:
                 names = ", ".join(
-                    f'{escape(a["name"])}' + (f' ({escape(a["role"])})' if a.get("role") else "")
+                    f'{escape(a["name"])}'
+                    + (f' ({escape(a["role"])})' if a.get("role") else "")
                     for a in present
                 )
-                parts.append(f'<p style="font-size:13px;"><strong>Present ({len(present)}):</strong> {names}</p>')
+                parts.append(
+                    f'<p style="font-size:13px;"><strong>Present ({len(present)}):</strong> {names}</p>'
+                )
             if absent:
                 names = ", ".join(escape(a["name"]) for a in absent)
-                parts.append(f'<p style="font-size:13px; color:#999;"><strong>Absent ({len(absent)}):</strong> {names}</p>')
+                parts.append(
+                    f'<p style="font-size:13px; color:#999;"><strong>Absent ({len(absent)}):</strong> {names}</p>'
+                )
             if minutes.quorum_met is not None:
                 q_text = "Quorum met" if minutes.quorum_met else "Quorum NOT met"
                 if minutes.quorum_count:
                     q_text += f" ({minutes.quorum_count} members)"
-                parts.append(f'<p style="font-size:13px;"><strong>{q_text}</strong></p>')
-            parts.append('</div>')
+                parts.append(
+                    f'<p style="font-size:13px;"><strong>{q_text}</strong></p>'
+                )
+            parts.append("</div>")
 
         # Content sections
         sections = minutes.get_sections()
@@ -411,48 +470,99 @@ class DocumentService:
                 content = section.get("content", "")
                 if content and content.strip():
                     title = escape(section.get("title", section.get("key", "Section")))
-                    parts.append('<div class="minutes-section" style="margin-bottom:20px;">')
-                    parts.append(f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">{title}</h4>')
-                    parts.append(f'<div style="font-size:14px; color:#333; white-space:pre-wrap;">{escape(content)}</div>')
-                    parts.append('</div>')
+                    parts.append(
+                        '<div class="minutes-section" style="margin-bottom:20px;">'
+                    )
+                    parts.append(
+                        f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">{title}</h4>'
+                    )
+                    parts.append(
+                        f'<div style="font-size:14px; color:#333; white-space:pre-wrap;">{escape(content)}</div>'
+                    )
+                    parts.append("</div>")
 
         # Motions
         if minutes.motions:
             parts.append('<div class="minutes-motions" style="margin-bottom:24px;">')
-            parts.append(f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Motions ({len(minutes.motions)})</h4>')
+            parts.append(
+                f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Motions ({len(minutes.motions)})</h4>'
+            )
             for i, motion in enumerate(minutes.motions, 1):
-                status = motion.status if isinstance(motion.status, str) else motion.status.value
-                color = "#16a34a" if status == "passed" else "#dc2626" if status == "failed" else "#ca8a04"
-                parts.append('<div style="border:1px solid #ddd; border-radius:4px; padding:12px; margin-bottom:8px;">')
-                parts.append(f'<p style="margin:0 0 4px; font-size:14px;"><strong>Motion #{i}</strong> — <span style="color:{color}; font-weight:bold;">{escape(status.upper())}</span></p>')
-                parts.append(f'<p style="margin:0 0 8px; font-size:14px;">{escape(motion.motion_text)}</p>')
+                status = (
+                    motion.status
+                    if isinstance(motion.status, str)
+                    else motion.status.value
+                )
+                color = (
+                    "#16a34a"
+                    if status == "passed"
+                    else "#dc2626" if status == "failed" else "#ca8a04"
+                )
+                parts.append(
+                    '<div style="border:1px solid #ddd; border-radius:4px; padding:12px; margin-bottom:8px;">'
+                )
+                parts.append(
+                    f'<p style="margin:0 0 4px; font-size:14px;"><strong>Motion #{i}</strong> — <span style="color:{color}; font-weight:bold;">{escape(status.upper())}</span></p>'
+                )
+                parts.append(
+                    f'<p style="margin:0 0 8px; font-size:14px;">{escape(motion.motion_text)}</p>'
+                )
                 detail_parts = []
                 if motion.moved_by:
-                    detail_parts.append(f'Moved by: {escape(motion.moved_by)}')
+                    detail_parts.append(f"Moved by: {escape(motion.moved_by)}")
                 if motion.seconded_by:
-                    detail_parts.append(f'Seconded by: {escape(motion.seconded_by)}')
+                    detail_parts.append(f"Seconded by: {escape(motion.seconded_by)}")
                 if motion.votes_for is not None:
-                    detail_parts.append(f'Vote: {motion.votes_for}-{motion.votes_against or 0}' + (f' ({motion.votes_abstain} abstain)' if motion.votes_abstain else ''))
+                    detail_parts.append(
+                        f"Vote: {motion.votes_for}-{motion.votes_against or 0}"
+                        + (
+                            f" ({motion.votes_abstain} abstain)"
+                            if motion.votes_abstain
+                            else ""
+                        )
+                    )
                 if detail_parts:
-                    parts.append(f'<p style="margin:0; font-size:12px; color:#666;">{" | ".join(detail_parts)}</p>')
-                parts.append('</div>')
-            parts.append('</div>')
+                    parts.append(
+                        f'<p style="margin:0; font-size:12px; color:#666;">{" | ".join(detail_parts)}</p>'
+                    )
+                parts.append("</div>")
+            parts.append("</div>")
 
         # Action Items
         if minutes.action_items:
-            parts.append('<div class="minutes-action-items" style="margin-bottom:24px;">')
-            parts.append(f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Action Items ({len(minutes.action_items)})</h4>')
-            parts.append('<table style="width:100%; border-collapse:collapse; font-size:13px;">')
-            parts.append('<tr style="background:#f3f4f6;"><th style="padding:6px; text-align:left; border:1px solid #ddd;">Description</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Assignee</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Due</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Priority</th></tr>')
+            parts.append(
+                '<div class="minutes-action-items" style="margin-bottom:24px;">'
+            )
+            parts.append(
+                f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Action Items ({len(minutes.action_items)})</h4>'
+            )
+            parts.append(
+                '<table style="width:100%; border-collapse:collapse; font-size:13px;">'
+            )
+            parts.append(
+                '<tr style="background:#f3f4f6;"><th style="padding:6px; text-align:left; border:1px solid #ddd;">Description</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Assignee</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Due</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Priority</th></tr>'
+            )
             for item in minutes.action_items:
-                due = self._to_local(item.due_date, tz_name).strftime("%Y-%m-%d") if item.due_date else "—"
-                priority = item.priority if isinstance(item.priority, str) else item.priority.value
-                parts.append(f'<tr><td style="padding:6px; border:1px solid #ddd;">{escape(item.description)}</td><td style="padding:6px; border:1px solid #ddd;">{escape(item.assignee_name or "—")}</td><td style="padding:6px; border:1px solid #ddd;">{escape(due)}</td><td style="padding:6px; border:1px solid #ddd;">{escape(priority)}</td></tr>')
-            parts.append('</table>')
-            parts.append('</div>')
+                due = (
+                    self._to_local(item.due_date, tz_name).strftime("%Y-%m-%d")
+                    if item.due_date
+                    else "—"
+                )
+                priority = (
+                    item.priority
+                    if isinstance(item.priority, str)
+                    else item.priority.value
+                )
+                parts.append(
+                    f'<tr><td style="padding:6px; border:1px solid #ddd;">{escape(item.description)}</td><td style="padding:6px; border:1px solid #ddd;">{escape(item.assignee_name or "—")}</td><td style="padding:6px; border:1px solid #ddd;">{escape(due)}</td><td style="padding:6px; border:1px solid #ddd;">{escape(priority)}</td></tr>'
+                )
+            parts.append("</table>")
+            parts.append("</div>")
 
         # Footer
-        parts.append('<div class="minutes-footer" style="border-top:1px solid #ddd; padding-top:12px; margin-top:32px; font-size:11px; color:#999;">')
+        parts.append(
+            '<div class="minutes-footer" style="border-top:1px solid #ddd; padding-top:12px; margin-top:32px; font-size:11px; color:#999;">'
+        )
         footer_parts = []
         if footer.get("left_text"):
             footer_parts.append(escape(footer["left_text"]))
@@ -461,11 +571,17 @@ class DocumentService:
         if footer.get("confidentiality_notice"):
             footer_parts.append(escape(footer["confidentiality_notice"]))
         if footer_parts:
-            parts.append('<p style="text-align:center;">' + ' &nbsp;|&nbsp; '.join(footer_parts) + '</p>')
+            parts.append(
+                '<p style="text-align:center;">'
+                + " &nbsp;|&nbsp; ".join(footer_parts)
+                + "</p>"
+            )
 
         if minutes.approved_at:
-            parts.append(f'<p style="text-align:center;">Approved: {self._to_local(minutes.approved_at, tz_name).strftime("%B %d, %Y")}</p>')
-        parts.append('</div>')
+            parts.append(
+                f'<p style="text-align:center;">Approved: {self._to_local(minutes.approved_at, tz_name).strftime("%B %d, %Y")}</p>'
+            )
+        parts.append("</div>")
 
-        parts.append('</div>')
-        return '\n'.join(parts)
+        parts.append("</div>")
+        return "\n".join(parts)

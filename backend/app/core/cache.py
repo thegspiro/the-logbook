@@ -6,9 +6,10 @@ Includes retry logic and graceful degradation for robust startup.
 """
 
 import asyncio
-import redis.asyncio as redis
-from typing import Optional, Any
 import json
+from typing import Any, Optional
+
+import redis.asyncio as redis
 from loguru import logger
 
 from app.core.config import settings
@@ -48,7 +49,9 @@ class CacheManager:
 
         for attempt in range(1, settings.REDIS_CONNECT_RETRIES + 1):
             try:
-                logger.info(f"Redis connection attempt {attempt}/{settings.REDIS_CONNECT_RETRIES}...")
+                logger.info(
+                    f"Redis connection attempt {attempt}/{settings.REDIS_CONNECT_RETRIES}..."
+                )
 
                 # Create Redis client with timeout
                 self.redis_client = redis.Redis.from_url(
@@ -68,7 +71,9 @@ class CacheManager:
                 return  # Success - exit the retry loop
 
             except asyncio.TimeoutError:
-                last_exception = TimeoutError(f"Redis connection timed out after {settings.REDIS_CONNECT_TIMEOUT}s")
+                last_exception = TimeoutError(
+                    f"Redis connection timed out after {settings.REDIS_CONNECT_TIMEOUT}s"
+                )
                 logger.warning(f"Redis connection attempt {attempt} timed out")
             except Exception as e:
                 last_exception = e
@@ -91,12 +96,18 @@ class CacheManager:
         # All retries exhausted
         self._connected = False
         if settings.REDIS_REQUIRED:
-            logger.error(f"Redis connection failed after {settings.REDIS_CONNECT_RETRIES} attempts")
+            logger.error(
+                f"Redis connection failed after {settings.REDIS_CONNECT_RETRIES} attempts"
+            )
             raise last_exception or ConnectionError("Failed to connect to Redis")
         else:
-            logger.warning(f"Redis unavailable after {settings.REDIS_CONNECT_RETRIES} attempts - running in degraded mode")
-            logger.warning("Caching will be disabled. Set REDIS_REQUIRED=true to enforce Redis connection.")
-    
+            logger.warning(
+                f"Redis unavailable after {settings.REDIS_CONNECT_RETRIES} attempts - running in degraded mode"
+            )
+            logger.warning(
+                "Caching will be disabled. Set REDIS_REQUIRED=true to enforce Redis connection."
+            )
+
     async def disconnect(self):
         """Close Redis connection"""
         if self.redis_client:
@@ -108,12 +119,12 @@ class CacheManager:
             finally:
                 self.redis_client = None
                 self._connected = False
-    
+
     async def get(self, key: str) -> Optional[Any]:
         """Get value from cache"""
         if not self.redis_client:
             return None
-        
+
         try:
             value = await self.redis_client.get(key)
             if value:
@@ -122,7 +133,7 @@ class CacheManager:
         except Exception as e:
             logger.error(f"Cache get error: {e}")
             return None
-    
+
     async def set(
         self,
         key: str,
@@ -131,7 +142,7 @@ class CacheManager:
     ) -> bool:
         """
         Set value in cache
-        
+
         Args:
             key: Cache key
             value: Value to cache (will be JSON encoded)
@@ -139,7 +150,7 @@ class CacheManager:
         """
         if not self.redis_client:
             return False
-        
+
         try:
             ttl = ttl or settings.REDIS_TTL
             serialized = json.dumps(value)
@@ -148,49 +159,49 @@ class CacheManager:
         except Exception as e:
             logger.error(f"Cache set error: {e}")
             return False
-    
+
     async def delete(self, key: str) -> bool:
         """Delete key from cache"""
         if not self.redis_client:
             return False
-        
+
         try:
             await self.redis_client.delete(key)
             return True
         except Exception as e:
             logger.error(f"Cache delete error: {e}")
             return False
-    
+
     async def clear_pattern(self, pattern: str) -> int:
         """
         Delete all keys matching pattern
-        
+
         Args:
             pattern: Redis key pattern (e.g., "user:*")
-        
+
         Returns:
             Number of keys deleted
         """
         if not self.redis_client:
             return 0
-        
+
         try:
             keys = []
             async for key in self.redis_client.scan_iter(match=pattern):
                 keys.append(key)
-            
+
             if keys:
                 return await self.redis_client.delete(*keys)
             return 0
         except Exception as e:
             logger.error(f"Cache clear pattern error: {e}")
             return 0
-    
+
     async def exists(self, key: str) -> bool:
         """Check if key exists"""
         if not self.redis_client:
             return False
-        
+
         try:
             return await self.redis_client.exists(key) > 0
         except Exception as e:
@@ -206,10 +217,11 @@ cache_manager = CacheManager()
 # Caching Decorators for FastAPI Endpoints
 # ============================================
 
-from functools import wraps
-from fastapi import Request
-from typing import Callable
 import hashlib
+from functools import wraps
+from typing import Callable
+
+from fastapi import Request
 
 
 def cache_response(
@@ -240,6 +252,7 @@ def cache_response(
         await cache_manager.delete(f"org_settings:{org_id}:/settings")
         await cache_manager.clear_pattern(f"org_settings:{org_id}:*")
     """
+
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -271,7 +284,11 @@ def cache_response(
             # Create deterministic cache key
             key_data = f"{path}?{query}"
             key_hash = hashlib.md5(key_data.encode()).hexdigest()[:12]
-            cache_key = f"{key_prefix}:{org_id}{path}:{key_hash}" if key_prefix else f"{org_id}{path}:{key_hash}"
+            cache_key = (
+                f"{key_prefix}:{org_id}{path}:{key_hash}"
+                if key_prefix
+                else f"{org_id}{path}:{key_hash}"
+            )
 
             # Try to get from cache
             cached = await cache_manager.get(cache_key)
@@ -289,6 +306,7 @@ def cache_response(
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -306,6 +324,7 @@ def invalidate_cache_pattern(pattern: str) -> Callable:
             # Cache will be cleared after this executes
             return {"updated": True}
     """
+
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -319,4 +338,5 @@ def invalidate_cache_pattern(pattern: str) -> Callable:
             return result
 
         return wrapper
+
     return decorator

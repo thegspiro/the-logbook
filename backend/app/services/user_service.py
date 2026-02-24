@@ -4,13 +4,14 @@ User Service
 Business logic for user-related operations.
 """
 
-from typing import List, Optional, Dict, Any
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from app.models.user import User, Organization
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.user import User
 from app.schemas.user import UserListResponse
 
 
@@ -24,7 +25,7 @@ class UserService:
         self,
         organization_id: UUID,
         include_contact_info: bool = False,
-        contact_settings: Optional[Dict[str, Any]] = None
+        contact_settings: Optional[Dict[str, Any]] = None,
     ) -> List[UserListResponse]:
         """
         Get all users for an organization
@@ -90,9 +91,7 @@ class UserService:
         return user_responses
 
     async def get_user_by_id(
-        self,
-        user_id: UUID,
-        organization_id: UUID
+        self, user_id: UUID, organization_id: UUID
     ) -> Optional[User]:
         """Get a user by ID within an organization"""
         result = await self.db.execute(

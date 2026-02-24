@@ -5,22 +5,22 @@ Business logic for meeting minutes including meetings,
 attendees, action items, and approval workflows.
 """
 
-from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
+from datetime import date, datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.models.meeting import (
-    Meeting,
-    MeetingAttendee,
-    MeetingActionItem,
-    MeetingType,
-    MeetingStatus,
     ActionItemStatus,
+    Meeting,
+    MeetingActionItem,
+    MeetingAttendee,
+    MeetingStatus,
+    MeetingType,
 )
-from app.models.user import User
 
 
 class MeetingsService:
@@ -42,9 +42,7 @@ class MeetingsService:
             action_items_data = meeting_data.pop("action_items", None) or []
 
             meeting = Meeting(
-                organization_id=organization_id,
-                created_by=created_by,
-                **meeting_data
+                organization_id=organization_id, created_by=created_by, **meeting_data
             )
             self.db.add(meeting)
             await self.db.flush()
@@ -65,7 +63,7 @@ class MeetingsService:
                     action_item = MeetingActionItem(
                         meeting_id=meeting.id,
                         organization_id=organization_id,
-                        **item_data
+                        **item_data,
                     )
                     self.db.add(action_item)
 
@@ -96,10 +94,7 @@ class MeetingsService:
         limit: int = 100,
     ) -> Tuple[List[Meeting], int]:
         """Get meetings with filtering and pagination"""
-        query = (
-            select(Meeting)
-            .where(Meeting.organization_id == str(organization_id))
-        )
+        query = select(Meeting).where(Meeting.organization_id == str(organization_id))
 
         if meeting_type:
             try:
@@ -116,7 +111,9 @@ class MeetingsService:
                 pass
 
         if search:
-            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
@@ -270,9 +267,7 @@ class MeetingsService:
                 return None, "Meeting not found"
 
             action_item = MeetingActionItem(
-                meeting_id=meeting_id,
-                organization_id=organization_id,
-                **item_data
+                meeting_id=meeting_id, organization_id=organization_id, **item_data
             )
             self.db.add(action_item)
             await self.db.commit()
@@ -299,7 +294,10 @@ class MeetingsService:
             # Handle status changes
             if "status" in update_data:
                 new_status = update_data["status"]
-                if new_status == ActionItemStatus.COMPLETED.value and item.status != ActionItemStatus.COMPLETED:
+                if (
+                    new_status == ActionItemStatus.COMPLETED.value
+                    and item.status != ActionItemStatus.COMPLETED
+                ):
                     item.completed_at = datetime.now(timezone.utc)
 
             for key, value in update_data.items():
@@ -340,7 +338,11 @@ class MeetingsService:
         query = (
             select(MeetingActionItem)
             .where(MeetingActionItem.organization_id == str(organization_id))
-            .where(MeetingActionItem.status.in_([ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]))
+            .where(
+                MeetingActionItem.status.in_(
+                    [ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]
+                )
+            )
         )
 
         if assigned_to:
@@ -358,8 +360,9 @@ class MeetingsService:
         """Get meetings summary statistics"""
         # Total meetings
         total_result = await self.db.execute(
-            select(func.count(Meeting.id))
-            .where(Meeting.organization_id == str(organization_id))
+            select(func.count(Meeting.id)).where(
+                Meeting.organization_id == str(organization_id)
+            )
         )
         total_meetings = total_result.scalar() or 0
 
@@ -376,7 +379,11 @@ class MeetingsService:
         open_result = await self.db.execute(
             select(func.count(MeetingActionItem.id))
             .where(MeetingActionItem.organization_id == str(organization_id))
-            .where(MeetingActionItem.status.in_([ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]))
+            .where(
+                MeetingActionItem.status.in_(
+                    [ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]
+                )
+            )
         )
         open_action_items = open_result.scalar() or 0
 
@@ -407,8 +414,8 @@ class MeetingsService:
         Bridges Event check-in attendance → Meeting attendance.
         Pre-populates attendees from EventRSVP check-in data.
         """
-        from app.models.event import Event, EventRSVP, RSVPStatus
         from app.core.utils import generate_uuid
+        from app.models.event import Event, EventRSVP, RSVPStatus
 
         # Get the event
         result = await self.db.execute(
@@ -437,9 +444,21 @@ class MeetingsService:
                 organization_id=str(organization_id),
                 title=event.title,
                 meeting_type=MeetingType.BUSINESS,
-                meeting_date=event.start_datetime.date() if event.start_datetime else date.today(),
-                start_time=event.actual_start_time.time() if event.actual_start_time else (event.start_datetime.time() if event.start_datetime else None),
-                end_time=event.actual_end_time.time() if event.actual_end_time else (event.end_datetime.time() if event.end_datetime else None),
+                meeting_date=(
+                    event.start_datetime.date()
+                    if event.start_datetime
+                    else date.today()
+                ),
+                start_time=(
+                    event.actual_start_time.time()
+                    if event.actual_start_time
+                    else (event.start_datetime.time() if event.start_datetime else None)
+                ),
+                end_time=(
+                    event.actual_end_time.time()
+                    if event.actual_end_time
+                    else (event.end_datetime.time() if event.end_datetime else None)
+                ),
                 location=event.location,
                 location_id=event.location_id,
                 event_id=str(event_id),
@@ -463,7 +482,11 @@ class MeetingsService:
                     meeting_id=meeting.id,
                     user_id=rsvp.user_id,
                     present=rsvp.checked_in,
-                    excused=not rsvp.checked_in and rsvp.status == RSVPStatus.NOT_GOING if hasattr(rsvp.status, 'value') else False,
+                    excused=(
+                        not rsvp.checked_in and rsvp.status == RSVPStatus.NOT_GOING
+                        if hasattr(rsvp.status, "value")
+                        else False
+                    ),
                 )
                 self.db.add(attendee)
 

@@ -5,16 +5,17 @@ Internal messaging for department announcements and targeted
 communications. Visible on member dashboards.
 """
 
-from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from datetime import datetime
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime
 
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.services.messaging_service import MessagingService
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -22,6 +23,7 @@ router = APIRouter()
 # ============================================
 # Pydantic Schemas
 # ============================================
+
 
 class MessageCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
@@ -108,8 +110,14 @@ def _serialize_message(msg) -> dict:
         "organization_id": msg.organization_id,
         "title": msg.title,
         "body": msg.body,
-        "priority": msg.priority.value if hasattr(msg.priority, 'value') else str(msg.priority),
-        "target_type": msg.target_type.value if hasattr(msg.target_type, 'value') else str(msg.target_type),
+        "priority": (
+            msg.priority.value if hasattr(msg.priority, "value") else str(msg.priority)
+        ),
+        "target_type": (
+            msg.target_type.value
+            if hasattr(msg.target_type, "value")
+            else str(msg.target_type)
+        ),
         "target_roles": msg.target_roles,
         "target_statuses": msg.target_statuses,
         "target_member_ids": msg.target_member_ids,
@@ -260,7 +268,9 @@ async def delete_message(
 ):
     """Delete a department message"""
     service = MessagingService(db)
-    success, error = await service.delete_message(message_id, current_user.organization_id)
+    success, error = await service.delete_message(
+        message_id, current_user.organization_id
+    )
     if not success:
         raise HTTPException(status_code=400, detail=error)
 

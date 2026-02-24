@@ -4,18 +4,22 @@ Reports Pydantic Schemas
 Request and response schemas for report generation endpoints.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List, Any, Dict
 from datetime import date
+from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel
 
 # ============================================
 # Report Request Schemas
 # ============================================
 
+
 class ReportRequest(BaseModel):
     """Schema for requesting a report"""
-    report_type: str  # member_roster, training_summary, event_attendance, compliance_status
+
+    report_type: (
+        str  # member_roster, training_summary, event_attendance, compliance_status
+    )
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     filters: Optional[Dict[str, Any]] = None
@@ -25,8 +29,10 @@ class ReportRequest(BaseModel):
 # Member Roster Report
 # ============================================
 
+
 class MemberRosterEntry(BaseModel):
     """Single member entry in roster report"""
+
     id: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -41,6 +47,7 @@ class MemberRosterEntry(BaseModel):
 
 class MemberRosterReport(BaseModel):
     """Member roster report"""
+
     report_type: str = "member_roster"
     generated_at: str
     total_members: int
@@ -53,8 +60,10 @@ class MemberRosterReport(BaseModel):
 # Training Summary Report
 # ============================================
 
+
 class TrainingSummaryEntry(BaseModel):
     """Training summary per member"""
+
     member_id: str
     member_name: str
     total_courses: int = 0
@@ -65,6 +74,7 @@ class TrainingSummaryEntry(BaseModel):
 
 class TrainingSummaryReport(BaseModel):
     """Training summary report"""
+
     report_type: str = "training_summary"
     generated_at: str
     period_start: Optional[str] = None
@@ -79,8 +89,10 @@ class TrainingSummaryReport(BaseModel):
 # Event Attendance Report
 # ============================================
 
+
 class EventAttendanceEntry(BaseModel):
     """Event attendance entry"""
+
     event_id: str
     event_title: str
     event_date: Optional[str] = None
@@ -91,6 +103,7 @@ class EventAttendanceEntry(BaseModel):
 
 class EventAttendanceReport(BaseModel):
     """Event attendance report"""
+
     report_type: str = "event_attendance"
     generated_at: str
     period_start: Optional[str] = None
@@ -104,6 +117,8 @@ class EventAttendanceReport(BaseModel):
 # Reports Summary
 # ============================================
 
+
 class ReportsSummary(BaseModel):
     """Available reports summary"""
+
     available_reports: List[Dict[str, Any]]

@@ -10,9 +10,9 @@ gracefully — if decryption fails, the raw value is returned (backward compatib
 during migration).
 """
 
+from cryptography.fernet import InvalidToken
 from sqlalchemy import Text
 from sqlalchemy.types import TypeDecorator
-from cryptography.fernet import InvalidToken
 
 
 class EncryptedText(TypeDecorator):
@@ -29,16 +29,18 @@ class EncryptedText(TypeDecorator):
 
     def process_bind_param(self, value, dialect):
         """Encrypt value before storing in database."""
-        if value is not None and value != '':
+        if value is not None and value != "":
             from app.core.security import encrypt_data
+
             return encrypt_data(value)
         return value
 
     def process_result_value(self, value, dialect):
         """Decrypt value when reading from database."""
-        if value is not None and value != '':
+        if value is not None and value != "":
             try:
                 from app.core.security import decrypt_data
+
                 return decrypt_data(value)
             except (InvalidToken, Exception):
                 # Backward compatibility: return plaintext if not yet encrypted

@@ -4,62 +4,57 @@ Apparatus Service
 Business logic for apparatus/vehicle management.
 """
 
-from typing import List, Optional, Tuple, Dict, Any
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
-from datetime import datetime, date, timedelta, timezone
-from decimal import Decimal
+
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func, desc
 from sqlalchemy.orm import selectinload
 
 from app.models.apparatus import (
     Apparatus,
-    ApparatusType,
-    ApparatusStatus,
-    ApparatusCustomField,
-    ApparatusPhoto,
-    ApparatusDocument,
-    ApparatusMaintenanceType,
-    ApparatusMaintenance,
-    ApparatusFuelLog,
-    ApparatusOperator,
-    ApparatusEquipment,
-    ApparatusLocationHistory,
-    ApparatusStatusHistory,
-    ApparatusNFPACompliance,
-    ApparatusReportConfig,
-    ApparatusServiceProvider,
     ApparatusComponent,
     ApparatusComponentNote,
-    DefaultApparatusType,
-    DefaultApparatusStatus,
+    ApparatusCustomField,
+    ApparatusDocument,
+    ApparatusEquipment,
+    ApparatusFuelLog,
+    ApparatusLocationHistory,
+    ApparatusMaintenance,
+    ApparatusMaintenanceType,
+    ApparatusNFPACompliance,
+    ApparatusOperator,
+    ApparatusPhoto,
+    ApparatusReportConfig,
+    ApparatusServiceProvider,
+    ApparatusStatus,
+    ApparatusStatusHistory,
+    ApparatusType,
 )
 from app.schemas.apparatus import (
-    ApparatusCreate,
-    ApparatusUpdate,
-    ApparatusStatusChange,
     ApparatusArchive,
-    ApparatusTypeCreate,
-    ApparatusTypeUpdate,
-    ApparatusStatusCreate,
-    ApparatusStatusUpdate,
+    ApparatusCreate,
     ApparatusCustomFieldCreate,
     ApparatusCustomFieldUpdate,
-    ApparatusMaintenanceTypeCreate,
-    ApparatusMaintenanceTypeUpdate,
-    ApparatusMaintenanceCreate,
-    ApparatusMaintenanceUpdate,
-    ApparatusFuelLogCreate,
-    ApparatusFuelLogUpdate,
-    ApparatusOperatorCreate,
-    ApparatusOperatorUpdate,
+    ApparatusDocumentCreate,
     ApparatusEquipmentCreate,
     ApparatusEquipmentUpdate,
-    ApparatusPhotoCreate,
-    ApparatusPhotoUpdate,
-    ApparatusDocumentCreate,
-    ApparatusDocumentUpdate,
+    ApparatusFuelLogCreate,
     ApparatusListFilters,
+    ApparatusMaintenanceCreate,
+    ApparatusMaintenanceTypeCreate,
+    ApparatusMaintenanceTypeUpdate,
+    ApparatusMaintenanceUpdate,
+    ApparatusOperatorCreate,
+    ApparatusOperatorUpdate,
+    ApparatusPhotoCreate,
+    ApparatusStatusChange,
+    ApparatusStatusCreate,
+    ApparatusStatusUpdate,
+    ApparatusTypeCreate,
+    ApparatusTypeUpdate,
+    ApparatusUpdate,
 )
 
 
@@ -85,19 +80,19 @@ class ApparatusService:
             .where(
                 or_(
                     ApparatusType.organization_id == organization_id,
-                    ApparatusType.organization_id.is_(None)  # System types
+                    ApparatusType.organization_id.is_(None),  # System types
                 )
             )
             .where(ApparatusType.code == type_data.code)
         )
         existing = result.scalar_one_or_none()
         if existing:
-            raise ValueError(f"Apparatus type with code '{type_data.code}' already exists")
+            raise ValueError(
+                f"Apparatus type with code '{type_data.code}' already exists"
+            )
 
         apparatus_type = ApparatusType(
-            organization_id=organization_id,
-            is_system=False,
-            **type_data.model_dump()
+            organization_id=organization_id, is_system=False, **type_data.model_dump()
         )
 
         self.db.add(apparatus_type)
@@ -116,7 +111,7 @@ class ApparatusService:
             .where(
                 or_(
                     ApparatusType.organization_id == organization_id,
-                    ApparatusType.organization_id.is_(None)  # System types
+                    ApparatusType.organization_id.is_(None),  # System types
                 )
             )
         )
@@ -135,7 +130,7 @@ class ApparatusService:
             conditions.append(
                 or_(
                     ApparatusType.organization_id == organization_id,
-                    ApparatusType.organization_id.is_(None)
+                    ApparatusType.organization_id.is_(None),
                 )
             )
         else:
@@ -175,14 +170,16 @@ class ApparatusService:
                 .where(
                     or_(
                         ApparatusType.organization_id == organization_id,
-                        ApparatusType.organization_id.is_(None)
+                        ApparatusType.organization_id.is_(None),
                     )
                 )
                 .where(ApparatusType.code == type_data.code)
                 .where(ApparatusType.id != type_id)
             )
             if result.scalar_one_or_none():
-                raise ValueError(f"Apparatus type with code '{type_data.code}' already exists")
+                raise ValueError(
+                    f"Apparatus type with code '{type_data.code}' already exists"
+                )
 
         update_data = type_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -193,9 +190,7 @@ class ApparatusService:
 
         return apparatus_type
 
-    async def delete_apparatus_type(
-        self, type_id: str, organization_id: str
-    ) -> bool:
+    async def delete_apparatus_type(self, type_id: str, organization_id: str) -> bool:
         """Delete apparatus type"""
         apparatus_type = await self.get_apparatus_type(type_id, organization_id)
         if not apparatus_type:
@@ -234,19 +229,19 @@ class ApparatusService:
             .where(
                 or_(
                     ApparatusStatus.organization_id == organization_id,
-                    ApparatusStatus.organization_id.is_(None)
+                    ApparatusStatus.organization_id.is_(None),
                 )
             )
             .where(ApparatusStatus.code == status_data.code)
         )
         existing = result.scalar_one_or_none()
         if existing:
-            raise ValueError(f"Apparatus status with code '{status_data.code}' already exists")
+            raise ValueError(
+                f"Apparatus status with code '{status_data.code}' already exists"
+            )
 
         apparatus_status = ApparatusStatus(
-            organization_id=organization_id,
-            is_system=False,
-            **status_data.model_dump()
+            organization_id=organization_id, is_system=False, **status_data.model_dump()
         )
 
         self.db.add(apparatus_status)
@@ -265,7 +260,7 @@ class ApparatusService:
             .where(
                 or_(
                     ApparatusStatus.organization_id == organization_id,
-                    ApparatusStatus.organization_id.is_(None)
+                    ApparatusStatus.organization_id.is_(None),
                 )
             )
         )
@@ -284,7 +279,7 @@ class ApparatusService:
             conditions.append(
                 or_(
                     ApparatusStatus.organization_id == organization_id,
-                    ApparatusStatus.organization_id.is_(None)
+                    ApparatusStatus.organization_id.is_(None),
                 )
             )
         else:
@@ -322,14 +317,16 @@ class ApparatusService:
                 .where(
                     or_(
                         ApparatusStatus.organization_id == organization_id,
-                        ApparatusStatus.organization_id.is_(None)
+                        ApparatusStatus.organization_id.is_(None),
                     )
                 )
                 .where(ApparatusStatus.code == status_data.code)
                 .where(ApparatusStatus.id != status_id)
             )
             if result.scalar_one_or_none():
-                raise ValueError(f"Apparatus status with code '{status_data.code}' already exists")
+                raise ValueError(
+                    f"Apparatus status with code '{status_data.code}' already exists"
+                )
 
         update_data = status_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -358,7 +355,9 @@ class ApparatusService:
         )
         count = result.scalar()
         if count > 0:
-            raise ValueError(f"Cannot delete status. {count} apparatus use this status.")
+            raise ValueError(
+                f"Cannot delete status. {count} apparatus use this status."
+            )
 
         await self.db.delete(apparatus_status)
         await self.db.commit()
@@ -383,15 +382,21 @@ class ApparatusService:
             .where(Apparatus.unit_number == apparatus_data.unit_number)
         )
         if result.scalar_one_or_none():
-            raise ValueError(f"Apparatus with unit number '{apparatus_data.unit_number}' already exists")
+            raise ValueError(
+                f"Apparatus with unit number '{apparatus_data.unit_number}' already exists"
+            )
 
         # Verify type exists
-        apparatus_type = await self.get_apparatus_type(apparatus_data.apparatus_type_id, organization_id)
+        apparatus_type = await self.get_apparatus_type(
+            apparatus_data.apparatus_type_id, organization_id
+        )
         if not apparatus_type:
             raise ValueError("Invalid apparatus type")
 
         # Verify status exists
-        status = await self.get_apparatus_status(apparatus_data.status_id, organization_id)
+        status = await self.get_apparatus_status(
+            apparatus_data.status_id, organization_id
+        )
         if not status:
             raise ValueError("Invalid apparatus status")
 
@@ -400,7 +405,7 @@ class ApparatusService:
             created_by=created_by,
             status_changed_at=datetime.now(timezone.utc),
             status_changed_by=created_by,
-            **apparatus_data.model_dump()
+            **apparatus_data.model_dump(),
         )
 
         self.db.add(apparatus)
@@ -470,11 +475,15 @@ class ApparatusService:
 
         if filters:
             if filters.apparatus_type_id:
-                conditions.append(Apparatus.apparatus_type_id == filters.apparatus_type_id)
+                conditions.append(
+                    Apparatus.apparatus_type_id == filters.apparatus_type_id
+                )
             if filters.status_id:
                 conditions.append(Apparatus.status_id == filters.status_id)
             if filters.primary_station_id:
-                conditions.append(Apparatus.primary_station_id == filters.primary_station_id)
+                conditions.append(
+                    Apparatus.primary_station_id == filters.primary_station_id
+                )
             if filters.is_archived is not None:
                 conditions.append(Apparatus.is_archived == filters.is_archived)
             if filters.year_min:
@@ -482,10 +491,18 @@ class ApparatusService:
             if filters.year_max:
                 conditions.append(Apparatus.year <= filters.year_max)
             if filters.make:
-                safe_make = filters.make.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                safe_make = (
+                    filters.make.replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_")
+                )
                 conditions.append(Apparatus.make.ilike(f"%{safe_make}%"))
             if filters.search:
-                safe_search = filters.search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                safe_search = (
+                    filters.search.replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_")
+                )
                 search_term = f"%{safe_search}%"
                 conditions.append(
                     or_(
@@ -528,12 +545,17 @@ class ApparatusService:
         updated_by: str,
     ) -> Optional[Apparatus]:
         """Update apparatus"""
-        apparatus = await self.get_apparatus(apparatus_id, organization_id, include_relations=False)
+        apparatus = await self.get_apparatus(
+            apparatus_id, organization_id, include_relations=False
+        )
         if not apparatus:
             return None
 
         # Check unit number uniqueness if changing
-        if apparatus_data.unit_number and apparatus_data.unit_number != apparatus.unit_number:
+        if (
+            apparatus_data.unit_number
+            and apparatus_data.unit_number != apparatus.unit_number
+        ):
             result = await self.db.execute(
                 select(Apparatus)
                 .where(Apparatus.organization_id == str(organization_id))
@@ -541,7 +563,9 @@ class ApparatusService:
                 .where(Apparatus.id != apparatus_id)
             )
             if result.scalar_one_or_none():
-                raise ValueError(f"Apparatus with unit number '{apparatus_data.unit_number}' already exists")
+                raise ValueError(
+                    f"Apparatus with unit number '{apparatus_data.unit_number}' already exists"
+                )
 
         # Track status change
         if apparatus_data.status_id and apparatus_data.status_id != apparatus.status_id:
@@ -560,7 +584,10 @@ class ApparatusService:
             apparatus.status_changed_by = updated_by
 
         # Track station change
-        if apparatus_data.primary_station_id and apparatus_data.primary_station_id != apparatus.primary_station_id:
+        if (
+            apparatus_data.primary_station_id
+            and apparatus_data.primary_station_id != apparatus.primary_station_id
+        ):
             # Close previous location history
             result = await self.db.execute(
                 select(ApparatusLocationHistory)
@@ -606,12 +633,16 @@ class ApparatusService:
         changed_by: str,
     ) -> Optional[Apparatus]:
         """Change apparatus status with tracking"""
-        apparatus = await self.get_apparatus(apparatus_id, organization_id, include_relations=False)
+        apparatus = await self.get_apparatus(
+            apparatus_id, organization_id, include_relations=False
+        )
         if not apparatus:
             return None
 
         # Verify new status
-        status = await self.get_apparatus_status(status_change.status_id, organization_id)
+        status = await self.get_apparatus_status(
+            status_change.status_id, organization_id
+        )
         if not status:
             raise ValueError("Invalid status")
 
@@ -627,7 +658,8 @@ class ApparatusService:
             changed_at=datetime.now(timezone.utc),
             changed_by=changed_by,
             reason=status_change.reason,
-            mileage_at_change=status_change.current_mileage or apparatus.current_mileage,
+            mileage_at_change=status_change.current_mileage
+            or apparatus.current_mileage,
             hours_at_change=status_change.current_hours or apparatus.current_hours,
         )
         self.db.add(status_history)
@@ -658,7 +690,9 @@ class ApparatusService:
         archived_by: str,
     ) -> Optional[Apparatus]:
         """Archive apparatus (sold/disposed)"""
-        apparatus = await self.get_apparatus(apparatus_id, organization_id, include_relations=False)
+        apparatus = await self.get_apparatus(
+            apparatus_id, organization_id, include_relations=False
+        )
         if not apparatus:
             return None
 
@@ -671,7 +705,7 @@ class ApparatusService:
             .where(
                 or_(
                     ApparatusStatus.organization_id == organization_id,
-                    ApparatusStatus.organization_id.is_(None)
+                    ApparatusStatus.organization_id.is_(None),
                 )
             )
             .where(ApparatusStatus.is_archived_status == True)  # noqa: E712
@@ -680,7 +714,9 @@ class ApparatusService:
         archived_status = result.scalars().first()
 
         if not archived_status:
-            raise ValueError("No archived status found. Please create an archived status first.")
+            raise ValueError(
+                "No archived status found. Please create an archived status first."
+            )
 
         # Update apparatus
         apparatus.is_archived = True
@@ -732,11 +768,11 @@ class ApparatusService:
 
         return apparatus
 
-    async def delete_apparatus(
-        self, apparatus_id: str, organization_id: str
-    ) -> bool:
+    async def delete_apparatus(self, apparatus_id: str, organization_id: str) -> bool:
         """Delete apparatus (hard delete - use archive for soft delete)"""
-        apparatus = await self.get_apparatus(apparatus_id, organization_id, include_relations=False)
+        apparatus = await self.get_apparatus(
+            apparatus_id, organization_id, include_relations=False
+        )
         if not apparatus:
             return False
 
@@ -762,12 +798,14 @@ class ApparatusService:
             .where(ApparatusCustomField.field_key == field_data.field_key)
         )
         if result.scalar_one_or_none():
-            raise ValueError(f"Custom field with key '{field_data.field_key}' already exists")
+            raise ValueError(
+                f"Custom field with key '{field_data.field_key}' already exists"
+            )
 
         custom_field = ApparatusCustomField(
             organization_id=organization_id,
             created_by=created_by,
-            **field_data.model_dump()
+            **field_data.model_dump(),
         )
 
         self.db.add(custom_field)
@@ -811,7 +849,8 @@ class ApparatusService:
         # Filter by apparatus type if specified
         if apparatus_type_id:
             fields = [
-                f for f in fields
+                f
+                for f in fields
                 if f.applies_to_types is None or apparatus_type_id in f.applies_to_types
             ]
 
@@ -836,7 +875,9 @@ class ApparatusService:
                 .where(ApparatusCustomField.id != field_id)
             )
             if result.scalar_one_or_none():
-                raise ValueError(f"Custom field with key '{field_data.field_key}' already exists")
+                raise ValueError(
+                    f"Custom field with key '{field_data.field_key}' already exists"
+                )
 
         update_data = field_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -847,9 +888,7 @@ class ApparatusService:
 
         return custom_field
 
-    async def delete_custom_field(
-        self, field_id: str, organization_id: str
-    ) -> bool:
+    async def delete_custom_field(self, field_id: str, organization_id: str) -> bool:
         """Delete custom field"""
         custom_field = await self.get_custom_field(field_id, organization_id)
         if not custom_field:
@@ -875,18 +914,18 @@ class ApparatusService:
             .where(
                 or_(
                     ApparatusMaintenanceType.organization_id == organization_id,
-                    ApparatusMaintenanceType.organization_id.is_(None)
+                    ApparatusMaintenanceType.organization_id.is_(None),
                 )
             )
             .where(ApparatusMaintenanceType.code == type_data.code)
         )
         if result.scalar_one_or_none():
-            raise ValueError(f"Maintenance type with code '{type_data.code}' already exists")
+            raise ValueError(
+                f"Maintenance type with code '{type_data.code}' already exists"
+            )
 
         maintenance_type = ApparatusMaintenanceType(
-            organization_id=organization_id,
-            is_system=False,
-            **type_data.model_dump()
+            organization_id=organization_id, is_system=False, **type_data.model_dump()
         )
 
         self.db.add(maintenance_type)
@@ -905,7 +944,7 @@ class ApparatusService:
             .where(
                 or_(
                     ApparatusMaintenanceType.organization_id == organization_id,
-                    ApparatusMaintenanceType.organization_id.is_(None)
+                    ApparatusMaintenanceType.organization_id.is_(None),
                 )
             )
         )
@@ -924,11 +963,13 @@ class ApparatusService:
             conditions.append(
                 or_(
                     ApparatusMaintenanceType.organization_id == organization_id,
-                    ApparatusMaintenanceType.organization_id.is_(None)
+                    ApparatusMaintenanceType.organization_id.is_(None),
                 )
             )
         else:
-            conditions.append(ApparatusMaintenanceType.organization_id == str(organization_id))
+            conditions.append(
+                ApparatusMaintenanceType.organization_id == str(organization_id)
+            )
 
         if is_active is not None:
             conditions.append(ApparatusMaintenanceType.is_active == is_active)
@@ -936,7 +977,9 @@ class ApparatusService:
         query = (
             select(ApparatusMaintenanceType)
             .where(and_(*conditions))
-            .order_by(ApparatusMaintenanceType.sort_order, ApparatusMaintenanceType.name)
+            .order_by(
+                ApparatusMaintenanceType.sort_order, ApparatusMaintenanceType.name
+            )
         )
 
         result = await self.db.execute(query)
@@ -962,14 +1005,16 @@ class ApparatusService:
                 .where(
                     or_(
                         ApparatusMaintenanceType.organization_id == organization_id,
-                        ApparatusMaintenanceType.organization_id.is_(None)
+                        ApparatusMaintenanceType.organization_id.is_(None),
                     )
                 )
                 .where(ApparatusMaintenanceType.code == type_data.code)
                 .where(ApparatusMaintenanceType.id != type_id)
             )
             if result.scalar_one_or_none():
-                raise ValueError(f"Maintenance type with code '{type_data.code}' already exists")
+                raise ValueError(
+                    f"Maintenance type with code '{type_data.code}' already exists"
+                )
 
         update_data = type_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -980,9 +1025,7 @@ class ApparatusService:
 
         return maintenance_type
 
-    async def delete_maintenance_type(
-        self, type_id: str, organization_id: str
-    ) -> bool:
+    async def delete_maintenance_type(self, type_id: str, organization_id: str) -> bool:
         """Delete maintenance type"""
         maintenance_type = await self.get_maintenance_type(type_id, organization_id)
         if not maintenance_type:
@@ -998,7 +1041,9 @@ class ApparatusService:
         )
         count = result.scalar()
         if count > 0:
-            raise ValueError(f"Cannot delete type. {count} maintenance records use this type.")
+            raise ValueError(
+                f"Cannot delete type. {count} maintenance records use this type."
+            )
 
         await self.db.delete(maintenance_type)
         await self.db.commit()
@@ -1017,12 +1062,16 @@ class ApparatusService:
     ) -> ApparatusMaintenance:
         """Create maintenance record (current or historic)"""
         # Verify apparatus
-        apparatus = await self.get_apparatus(maintenance_data.apparatus_id, organization_id, include_relations=False)
+        apparatus = await self.get_apparatus(
+            maintenance_data.apparatus_id, organization_id, include_relations=False
+        )
         if not apparatus:
             raise ValueError("Invalid apparatus")
 
         # Verify maintenance type
-        maint_type = await self.get_maintenance_type(maintenance_data.maintenance_type_id, organization_id)
+        maint_type = await self.get_maintenance_type(
+            maintenance_data.maintenance_type_id, organization_id
+        )
         if not maint_type:
             raise ValueError("Invalid maintenance type")
 
@@ -1046,7 +1095,11 @@ class ApparatusService:
         # For historic records that are already completed, don't flag as overdue
         if maintenance.is_historic and maintenance.is_completed:
             maintenance.is_overdue = False
-        elif maintenance.due_date and maintenance.due_date < date.today() and not maintenance.is_completed:
+        elif (
+            maintenance.due_date
+            and maintenance.due_date < date.today()
+            and not maintenance.is_completed
+        ):
             maintenance.is_overdue = True
 
         self.db.add(maintenance)
@@ -1086,7 +1139,9 @@ class ApparatusService:
         if apparatus_id:
             conditions.append(ApparatusMaintenance.apparatus_id == str(apparatus_id))
         if maintenance_type_id:
-            conditions.append(ApparatusMaintenance.maintenance_type_id == maintenance_type_id)
+            conditions.append(
+                ApparatusMaintenance.maintenance_type_id == maintenance_type_id
+            )
         if is_completed is not None:
             conditions.append(ApparatusMaintenance.is_completed == is_completed)
         if is_overdue is not None:
@@ -1131,7 +1186,11 @@ class ApparatusService:
             ]
 
         # Handle completion
-        if "is_completed" in update_data and update_data["is_completed"] and not maintenance.is_completed:
+        if (
+            "is_completed" in update_data
+            and update_data["is_completed"]
+            and not maintenance.is_completed
+        ):
             maintenance.completed_by = updated_by
             if not maintenance.completed_date:
                 maintenance.completed_date = date.today()
@@ -1141,7 +1200,11 @@ class ApparatusService:
             setattr(maintenance, field, value)
 
         # Recheck overdue status
-        if maintenance.due_date and maintenance.due_date < date.today() and not maintenance.is_completed:
+        if (
+            maintenance.due_date
+            and maintenance.due_date < date.today()
+            and not maintenance.is_completed
+        ):
             maintenance.is_overdue = True
         else:
             maintenance.is_overdue = False
@@ -1206,8 +1269,12 @@ class ApparatusService:
             {
                 "id": r.id,
                 "apparatus_id": r.apparatus_id,
-                "apparatus_unit_number": r.apparatus.unit_number if r.apparatus else None,
-                "maintenance_type_name": r.maintenance_type.name if r.maintenance_type else None,
+                "apparatus_unit_number": (
+                    r.apparatus.unit_number if r.apparatus else None
+                ),
+                "maintenance_type_name": (
+                    r.maintenance_type.name if r.maintenance_type else None
+                ),
                 "due_date": r.due_date,
                 "is_overdue": r.is_overdue,
             }
@@ -1225,14 +1292,16 @@ class ApparatusService:
         recorded_by: str,
     ) -> ApparatusFuelLog:
         """Create fuel log entry"""
-        apparatus = await self.get_apparatus(fuel_data.apparatus_id, organization_id, include_relations=False)
+        apparatus = await self.get_apparatus(
+            fuel_data.apparatus_id, organization_id, include_relations=False
+        )
         if not apparatus:
             raise ValueError("Invalid apparatus")
 
         fuel_log = ApparatusFuelLog(
             organization_id=organization_id,
             recorded_by=recorded_by,
-            **fuel_data.model_dump()
+            **fuel_data.model_dump(),
         )
 
         self.db.add(fuel_log)
@@ -1304,7 +1373,7 @@ class ApparatusService:
         operator = ApparatusOperator(
             organization_id=organization_id,
             created_by=created_by,
-            **operator_data.model_dump()
+            **operator_data.model_dump(),
         )
 
         self.db.add(operator)
@@ -1368,9 +1437,7 @@ class ApparatusService:
 
         return operator
 
-    async def delete_operator(
-        self, operator_id: str, organization_id: str
-    ) -> bool:
+    async def delete_operator(self, operator_id: str, organization_id: str) -> bool:
         """Delete operator"""
         result = await self.db.execute(
             select(ApparatusOperator)
@@ -1400,7 +1467,7 @@ class ApparatusService:
         equipment = ApparatusEquipment(
             organization_id=organization_id,
             assigned_by=assigned_by,
-            **equipment_data.model_dump()
+            **equipment_data.model_dump(),
         )
 
         self.db.add(equipment)
@@ -1461,9 +1528,7 @@ class ApparatusService:
 
         return equipment
 
-    async def delete_equipment(
-        self, equipment_id: str, organization_id: str
-    ) -> bool:
+    async def delete_equipment(self, equipment_id: str, organization_id: str) -> bool:
         """Delete equipment"""
         result = await self.db.execute(
             select(ApparatusEquipment)
@@ -1504,7 +1569,7 @@ class ApparatusService:
         photo = ApparatusPhoto(
             organization_id=organization_id,
             uploaded_by=uploaded_by,
-            **photo_data.model_dump()
+            **photo_data.model_dump(),
         )
 
         self.db.add(photo)
@@ -1527,9 +1592,7 @@ class ApparatusService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def delete_photo(
-        self, photo_id: str, organization_id: str
-    ) -> bool:
+    async def delete_photo(self, photo_id: str, organization_id: str) -> bool:
         """Delete photo"""
         result = await self.db.execute(
             select(ApparatusPhoto)
@@ -1555,7 +1618,7 @@ class ApparatusService:
         document = ApparatusDocument(
             organization_id=organization_id,
             uploaded_by=uploaded_by,
-            **document_data.model_dump()
+            **document_data.model_dump(),
         )
 
         self.db.add(document)
@@ -1572,15 +1635,15 @@ class ApparatusService:
             select(ApparatusDocument)
             .where(ApparatusDocument.apparatus_id == str(apparatus_id))
             .where(ApparatusDocument.organization_id == str(organization_id))
-            .order_by(ApparatusDocument.document_type, desc(ApparatusDocument.uploaded_at))
+            .order_by(
+                ApparatusDocument.document_type, desc(ApparatusDocument.uploaded_at)
+            )
         )
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def delete_document(
-        self, document_id: str, organization_id: str
-    ) -> bool:
+    async def delete_document(self, document_id: str, organization_id: str) -> bool:
         """Delete document"""
         result = await self.db.execute(
             select(ApparatusDocument)
@@ -1600,16 +1663,14 @@ class ApparatusService:
     # Fleet Summary/Dashboard Methods
     # =========================================================================
 
-    async def get_fleet_summary(
-        self, organization_id: str
-    ) -> Dict[str, Any]:
+    async def get_fleet_summary(self, organization_id: str) -> Dict[str, Any]:
         """Get fleet summary for dashboard"""
         # Total counts by status
         status_counts_query = (
             select(
                 ApparatusStatus.name,
                 ApparatusStatus.code,
-                func.count(Apparatus.id).label("count")
+                func.count(Apparatus.id).label("count"),
             )
             .join(Apparatus, Apparatus.status_id == ApparatusStatus.id)
             .where(Apparatus.organization_id == str(organization_id))
@@ -1620,10 +1681,7 @@ class ApparatusService:
 
         # Total counts by type
         type_counts_query = (
-            select(
-                ApparatusType.name,
-                func.count(Apparatus.id).label("count")
-            )
+            select(ApparatusType.name, func.count(Apparatus.id).label("count"))
             .join(Apparatus, Apparatus.apparatus_type_id == ApparatusType.id)
             .where(Apparatus.organization_id == str(organization_id))
             .where(Apparatus.is_archived == False)  # noqa: E712
@@ -1642,7 +1700,7 @@ class ApparatusService:
         # Archived count
         archived_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
-            Apparatus.is_archived == True  # noqa: E712
+            Apparatus.is_archived == True,  # noqa: E712
         )
         archived_result = await self.db.execute(archived_query)
         archived = archived_result.scalar()
@@ -1658,7 +1716,7 @@ class ApparatusService:
             Apparatus.organization_id == organization_id,
             Apparatus.is_archived == False,  # noqa: E712
             Apparatus.registration_expiration <= expiration_date,
-            Apparatus.registration_expiration >= date.today()
+            Apparatus.registration_expiration >= date.today(),
         )
         reg_result = await self.db.execute(reg_expiring_query)
         reg_expiring = reg_result.scalar()
@@ -1667,7 +1725,7 @@ class ApparatusService:
             Apparatus.organization_id == organization_id,
             Apparatus.is_archived == False,  # noqa: E712
             Apparatus.inspection_expiration <= expiration_date,
-            Apparatus.inspection_expiration >= date.today()
+            Apparatus.inspection_expiration >= date.today(),
         )
         insp_result = await self.db.execute(insp_expiring_query)
         insp_expiring = insp_result.scalar()
@@ -1676,7 +1734,7 @@ class ApparatusService:
             Apparatus.organization_id == organization_id,
             Apparatus.is_archived == False,  # noqa: E712
             Apparatus.insurance_expiration <= expiration_date,
-            Apparatus.insurance_expiration >= date.today()
+            Apparatus.insurance_expiration >= date.today(),
         )
         ins_result = await self.db.execute(ins_expiring_query)
         ins_expiring = ins_result.scalar()
@@ -1711,9 +1769,13 @@ class ApparatusService:
             ApparatusNFPACompliance.organization_id == organization_id
         )
         if apparatus_id:
-            query = query.where(ApparatusNFPACompliance.apparatus_id == str(apparatus_id))
+            query = query.where(
+                ApparatusNFPACompliance.apparatus_id == str(apparatus_id)
+            )
         if compliance_status:
-            query = query.where(ApparatusNFPACompliance.compliance_status == compliance_status)
+            query = query.where(
+                ApparatusNFPACompliance.compliance_status == compliance_status
+            )
 
         query = query.order_by(ApparatusNFPACompliance.next_due_date.asc())
         result = await self.db.execute(query)
@@ -1731,7 +1793,10 @@ class ApparatusService:
         return result.scalar_one_or_none()
 
     async def create_nfpa_compliance(
-        self, compliance_data, organization_id: UUID, checked_by: UUID = None,
+        self,
+        compliance_data,
+        organization_id: UUID,
+        checked_by: UUID = None,
     ) -> ApparatusNFPACompliance:
         """Create an NFPA compliance record"""
         # Verify apparatus exists and belongs to org
@@ -1753,7 +1818,11 @@ class ApparatusService:
         return record
 
     async def update_nfpa_compliance(
-        self, compliance_id: str, compliance_data, organization_id: UUID, checked_by: UUID = None,
+        self,
+        compliance_id: str,
+        compliance_data,
+        organization_id: UUID,
+        checked_by: UUID = None,
     ) -> Optional[ApparatusNFPACompliance]:
         """Update an NFPA compliance record"""
         record = await self.get_nfpa_compliance(compliance_id, organization_id)
@@ -1818,7 +1887,10 @@ class ApparatusService:
         return result.scalar_one_or_none()
 
     async def create_report_config(
-        self, config_data, organization_id: UUID, created_by: UUID = None,
+        self,
+        config_data,
+        organization_id: UUID,
+        created_by: UUID = None,
     ) -> ApparatusReportConfig:
         """Create a report config"""
         config = ApparatusReportConfig(
@@ -1832,7 +1904,10 @@ class ApparatusService:
         return config
 
     async def update_report_config(
-        self, config_id: str, config_data, organization_id: UUID,
+        self,
+        config_id: str,
+        config_data,
+        organization_id: UUID,
     ) -> Optional[ApparatusReportConfig]:
         """Update a report config"""
         config = await self.get_report_config(config_id, organization_id)
@@ -1847,9 +1922,7 @@ class ApparatusService:
         await self.db.refresh(config)
         return config
 
-    async def delete_report_config(
-        self, config_id: str, organization_id: UUID
-    ) -> bool:
+    async def delete_report_config(self, config_id: str, organization_id: UUID) -> bool:
         """Delete a report config"""
         config = await self.get_report_config(config_id, organization_id)
         if not config:
@@ -1864,9 +1937,13 @@ class ApparatusService:
     # ========================================================================
 
     async def list_service_providers(
-        self, organization_id: UUID, is_active: Optional[bool] = None,
-        specialty: Optional[str] = None, is_preferred: Optional[bool] = None,
-        skip: int = 0, limit: int = 100,
+        self,
+        organization_id: UUID,
+        is_active: Optional[bool] = None,
+        specialty: Optional[str] = None,
+        is_preferred: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[ApparatusServiceProvider]:
         """List service providers"""
         query = select(ApparatusServiceProvider).where(
@@ -1877,10 +1954,14 @@ class ApparatusService:
         if is_preferred is not None:
             query = query.where(ApparatusServiceProvider.is_preferred == is_preferred)
 
-        query = query.order_by(
-            ApparatusServiceProvider.is_preferred.desc(),
-            ApparatusServiceProvider.name,
-        ).offset(skip).limit(limit)
+        query = (
+            query.order_by(
+                ApparatusServiceProvider.is_preferred.desc(),
+                ApparatusServiceProvider.name,
+            )
+            .offset(skip)
+            .limit(limit)
+        )
         result = await self.db.execute(query)
         return result.scalars().all()
 
@@ -1896,7 +1977,10 @@ class ApparatusService:
         return result.scalar_one_or_none()
 
     async def create_service_provider(
-        self, provider_data, organization_id: UUID, created_by: UUID = None,
+        self,
+        provider_data,
+        organization_id: UUID,
+        created_by: UUID = None,
     ) -> ApparatusServiceProvider:
         """Create a service provider"""
         provider = ApparatusServiceProvider(
@@ -1910,7 +1994,10 @@ class ApparatusService:
         return provider
 
     async def update_service_provider(
-        self, provider_id: str, provider_data, organization_id: UUID,
+        self,
+        provider_id: str,
+        provider_data,
+        organization_id: UUID,
     ) -> Optional[ApparatusServiceProvider]:
         """Update a service provider"""
         provider = await self.get_service_provider(provider_id, organization_id)
@@ -1964,9 +2051,13 @@ class ApparatusService:
     # ========================================================================
 
     async def list_components(
-        self, organization_id: UUID, apparatus_id: Optional[str] = None,
-        component_type: Optional[str] = None, is_active: Optional[bool] = None,
-        skip: int = 0, limit: int = 100,
+        self,
+        organization_id: UUID,
+        apparatus_id: Optional[str] = None,
+        component_type: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[ApparatusComponent]:
         """List apparatus components"""
         query = select(ApparatusComponent).where(
@@ -1979,9 +2070,14 @@ class ApparatusService:
         if is_active is not None:
             query = query.where(ApparatusComponent.is_active == is_active)
 
-        query = query.order_by(
-            ApparatusComponent.sort_order, ApparatusComponent.name,
-        ).offset(skip).limit(limit)
+        query = (
+            query.order_by(
+                ApparatusComponent.sort_order,
+                ApparatusComponent.name,
+            )
+            .offset(skip)
+            .limit(limit)
+        )
         result = await self.db.execute(query)
         return result.scalars().all()
 
@@ -1997,7 +2093,10 @@ class ApparatusService:
         return result.scalar_one_or_none()
 
     async def create_component(
-        self, component_data, organization_id: UUID, created_by: UUID = None,
+        self,
+        component_data,
+        organization_id: UUID,
+        created_by: UUID = None,
     ) -> ApparatusComponent:
         """Create a component"""
         apparatus = await self.get_apparatus(
@@ -2018,7 +2117,10 @@ class ApparatusService:
         return component
 
     async def update_component(
-        self, component_id: str, component_data, organization_id: UUID,
+        self,
+        component_id: str,
+        component_data,
+        organization_id: UUID,
     ) -> Optional[ApparatusComponent]:
         """Update a component"""
         component = await self.get_component(component_id, organization_id)
@@ -2034,7 +2136,9 @@ class ApparatusService:
         return component
 
     async def delete_component(
-        self, component_id: str, organization_id: UUID,
+        self,
+        component_id: str,
+        organization_id: UUID,
         archived_by: UUID = None,
     ) -> bool:
         """Soft-delete (archive) a component"""
@@ -2053,20 +2157,29 @@ class ApparatusService:
     # ========================================================================
 
     async def list_component_notes(
-        self, organization_id: UUID, apparatus_id: Optional[str] = None,
-        component_id: Optional[str] = None, note_status: Optional[str] = None,
-        severity: Optional[str] = None, note_type: Optional[str] = None,
+        self,
+        organization_id: UUID,
+        apparatus_id: Optional[str] = None,
+        component_id: Optional[str] = None,
+        note_status: Optional[str] = None,
+        severity: Optional[str] = None,
+        note_type: Optional[str] = None,
         service_provider_id: Optional[str] = None,
-        skip: int = 0, limit: int = 100,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[ApparatusComponentNote]:
         """List component notes with filtering"""
         query = select(ApparatusComponentNote).where(
             ApparatusComponentNote.organization_id == organization_id
         )
         if apparatus_id:
-            query = query.where(ApparatusComponentNote.apparatus_id == str(apparatus_id))
+            query = query.where(
+                ApparatusComponentNote.apparatus_id == str(apparatus_id)
+            )
         if component_id:
-            query = query.where(ApparatusComponentNote.component_id == str(component_id))
+            query = query.where(
+                ApparatusComponentNote.component_id == str(component_id)
+            )
         if note_status:
             query = query.where(ApparatusComponentNote.status == note_status)
         if severity:
@@ -2074,11 +2187,17 @@ class ApparatusService:
         if note_type:
             query = query.where(ApparatusComponentNote.note_type == note_type)
         if service_provider_id:
-            query = query.where(ApparatusComponentNote.service_provider_id == service_provider_id)
+            query = query.where(
+                ApparatusComponentNote.service_provider_id == service_provider_id
+            )
 
-        query = query.order_by(
-            ApparatusComponentNote.created_at.desc(),
-        ).offset(skip).limit(limit)
+        query = (
+            query.order_by(
+                ApparatusComponentNote.created_at.desc(),
+            )
+            .offset(skip)
+            .limit(limit)
+        )
         result = await self.db.execute(query)
         return result.scalars().all()
 
@@ -2094,8 +2213,11 @@ class ApparatusService:
         return result.scalar_one_or_none()
 
     async def create_component_note(
-        self, note_data, organization_id: UUID,
-        created_by: UUID = None, reported_by: UUID = None,
+        self,
+        note_data,
+        organization_id: UUID,
+        created_by: UUID = None,
+        reported_by: UUID = None,
     ) -> ApparatusComponentNote:
         """Create a component note"""
         component = await self.get_component(note_data.component_id, organization_id)
@@ -2105,7 +2227,9 @@ class ApparatusService:
         dump = note_data.model_dump()
         # Convert attachment models to dicts for JSON storage
         if dump.get("attachments"):
-            dump["attachments"] = [a if isinstance(a, dict) else a for a in dump["attachments"]]
+            dump["attachments"] = [
+                a if isinstance(a, dict) else a for a in dump["attachments"]
+            ]
 
         note = ApparatusComponentNote(
             organization_id=organization_id,
@@ -2119,7 +2243,10 @@ class ApparatusService:
         return note
 
     async def update_component_note(
-        self, note_id: str, note_data, organization_id: UUID,
+        self,
+        note_id: str,
+        note_data,
+        organization_id: UUID,
         resolved_by: UUID = None,
     ) -> Optional[ApparatusComponentNote]:
         """Update a component note"""
@@ -2147,9 +2274,7 @@ class ApparatusService:
         await self.db.refresh(note)
         return note
 
-    async def delete_component_note(
-        self, note_id: str, organization_id: UUID
-    ) -> bool:
+    async def delete_component_note(self, note_id: str, organization_id: UUID) -> bool:
         """Delete a component note"""
         note = await self.get_component_note(note_id, organization_id)
         if not note:
@@ -2164,7 +2289,9 @@ class ApparatusService:
     # ========================================================================
 
     async def generate_service_report(
-        self, apparatus_id: str, organization_id: UUID,
+        self,
+        apparatus_id: str,
+        organization_id: UUID,
         component_ids: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
@@ -2212,10 +2339,14 @@ class ApparatusService:
 
         # Get recent maintenance (last 12 months)
         cutoff = date.today() - timedelta(days=365)
-        maint_query = select(ApparatusMaintenance).where(
-            ApparatusMaintenance.organization_id == organization_id,
-            ApparatusMaintenance.apparatus_id == apparatus_id,
-        ).options(selectinload(ApparatusMaintenance.maintenance_type))
+        maint_query = (
+            select(ApparatusMaintenance)
+            .where(
+                ApparatusMaintenance.organization_id == organization_id,
+                ApparatusMaintenance.apparatus_id == apparatus_id,
+            )
+            .options(selectinload(ApparatusMaintenance.maintenance_type))
+        )
         if resolved_component_ids:
             maint_query = maint_query.where(
                 or_(

@@ -5,16 +5,21 @@ Endpoints for tracking and retrieving analytics data.
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-import sqlalchemy as sa
-from sqlalchemy import select, func, extract
 
+import sqlalchemy as sa
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import extract, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user, require_permission
+from app.core.constants import (
+    ANALYTICS_CHECK_IN_FAILURE,
+    ANALYTICS_CHECK_IN_SUCCESS,
+    ANALYTICS_QR_SCAN,
+)
 from app.core.database import get_db
 from app.models.analytics import AnalyticsEvent
 from app.models.user import User
-from app.api.dependencies import get_current_user, require_permission
-from app.core.constants import ANALYTICS_QR_SCAN, ANALYTICS_CHECK_IN_SUCCESS, ANALYTICS_CHECK_IN_FAILURE
 
 router = APIRouter()
 
@@ -52,25 +57,25 @@ async def get_metrics(
 
     # Total scans
     scans_result = await db.execute(
-        select(func.count()).select_from(AnalyticsEvent).where(
-            *base_filter, AnalyticsEvent.event_type == ANALYTICS_QR_SCAN
-        )
+        select(func.count())
+        .select_from(AnalyticsEvent)
+        .where(*base_filter, AnalyticsEvent.event_type == ANALYTICS_QR_SCAN)
     )
     total_scans = scans_result.scalar() or 0
 
     # Successful check-ins
     success_result = await db.execute(
-        select(func.count()).select_from(AnalyticsEvent).where(
-            *base_filter, AnalyticsEvent.event_type == ANALYTICS_CHECK_IN_SUCCESS
-        )
+        select(func.count())
+        .select_from(AnalyticsEvent)
+        .where(*base_filter, AnalyticsEvent.event_type == ANALYTICS_CHECK_IN_SUCCESS)
     )
     successful = success_result.scalar() or 0
 
     # Failed check-ins
     fail_result = await db.execute(
-        select(func.count()).select_from(AnalyticsEvent).where(
-            *base_filter, AnalyticsEvent.event_type == ANALYTICS_CHECK_IN_FAILURE
-        )
+        select(func.count())
+        .select_from(AnalyticsEvent)
+        .where(*base_filter, AnalyticsEvent.event_type == ANALYTICS_CHECK_IN_FAILURE)
     )
     failed = fail_result.scalar() or 0
 
@@ -79,7 +84,8 @@ async def get_metrics(
 
     # Device breakdown
     device_result = await db.execute(
-        select(AnalyticsEvent.device_type, func.count()).where(*base_filter)
+        select(AnalyticsEvent.device_type, func.count())
+        .where(*base_filter)
         .group_by(AnalyticsEvent.device_type)
     )
     device_breakdown = {}
@@ -98,9 +104,9 @@ async def get_metrics(
 
     # Error breakdown from failure events
     error_events = await db.execute(
-        select(AnalyticsEvent.event_metadata).where(
-            *base_filter, AnalyticsEvent.event_type == ANALYTICS_CHECK_IN_FAILURE
-        ).limit(500)
+        select(AnalyticsEvent.event_metadata)
+        .where(*base_filter, AnalyticsEvent.event_type == ANALYTICS_CHECK_IN_FAILURE)
+        .limit(500)
     )
     error_breakdown: dict[str, int] = {}
     for (metadata,) in error_events.all():
@@ -113,6 +119,7 @@ async def get_metrics(
     avg_time_to_check_in = 0.0
     if total_scans > 0 and successful > 0:
         from sqlalchemy.orm import aliased
+
         scan = aliased(AnalyticsEvent)
         checkin = aliased(AnalyticsEvent)
         avg_result = await db.execute(
@@ -165,7 +172,10 @@ async def export_analytics(
         base_filter.append(AnalyticsEvent.event_id == event_id)
 
     result = await db.execute(
-        select(AnalyticsEvent).where(*base_filter).order_by(AnalyticsEvent.created_at.desc()).limit(1000)
+        select(AnalyticsEvent)
+        .where(*base_filter)
+        .order_by(AnalyticsEvent.created_at.desc())
+        .limit(1000)
     )
     events = result.scalars().all()
     return {

@@ -7,13 +7,19 @@ Business logic for managing meeting minutes templates.
 import logging
 from typing import List, Optional
 from uuid import UUID
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
 from app.models.minute import (
-    MinutesTemplate, MinutesMeetingType,
-    DEFAULT_BUSINESS_SECTIONS, DEFAULT_SPECIAL_SECTIONS, DEFAULT_COMMITTEE_SECTIONS,
-    DEFAULT_TRUSTEE_SECTIONS, DEFAULT_EXECUTIVE_SECTIONS, DEFAULT_ANNUAL_SECTIONS,
+    DEFAULT_ANNUAL_SECTIONS,
+    DEFAULT_BUSINESS_SECTIONS,
+    DEFAULT_COMMITTEE_SECTIONS,
+    DEFAULT_EXECUTIVE_SECTIONS,
+    DEFAULT_SPECIAL_SECTIONS,
+    DEFAULT_TRUSTEE_SECTIONS,
+    MinutesMeetingType,
+    MinutesTemplate,
 )
 from app.schemas.minute import TemplateCreate, TemplateUpdate
 
@@ -26,11 +32,14 @@ class TemplateService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def initialize_defaults(self, organization_id: UUID, created_by: UUID) -> List[MinutesTemplate]:
+    async def initialize_defaults(
+        self, organization_id: UUID, created_by: UUID
+    ) -> List[MinutesTemplate]:
         """Create default templates for an organization if none exist"""
         existing = await self.db.execute(
-            select(func.count(MinutesTemplate.id))
-            .where(MinutesTemplate.organization_id == str(organization_id))
+            select(func.count(MinutesTemplate.id)).where(
+                MinutesTemplate.organization_id == str(organization_id)
+            )
         )
         if (existing.scalar() or 0) > 0:
             return await self.list_templates(organization_id)
@@ -171,9 +180,8 @@ class TemplateService:
         self, organization_id: UUID, meeting_type: Optional[str] = None
     ) -> List[MinutesTemplate]:
         """List all templates for an organization"""
-        query = (
-            select(MinutesTemplate)
-            .where(MinutesTemplate.organization_id == str(organization_id))
+        query = select(MinutesTemplate).where(
+            MinutesTemplate.organization_id == str(organization_id)
         )
         if meeting_type:
             query = query.where(MinutesTemplate.meeting_type == meeting_type)
@@ -200,8 +208,7 @@ class TemplateService:
 
         # Serialize sections
         tpl_dict["sections"] = [
-            s.model_dump() if hasattr(s, "model_dump") else s
-            for s in data.sections
+            s.model_dump() if hasattr(s, "model_dump") else s for s in data.sections
         ]
         if data.header_config and hasattr(data.header_config, "model_dump"):
             tpl_dict["header_config"] = data.header_config.model_dump()
@@ -235,17 +242,28 @@ class TemplateService:
         # Serialize sections
         if "sections" in update_data and data.sections:
             update_data["sections"] = [
-                s.model_dump() if hasattr(s, "model_dump") else s
-                for s in data.sections
+                s.model_dump() if hasattr(s, "model_dump") else s for s in data.sections
             ]
-        if "header_config" in update_data and data.header_config and hasattr(data.header_config, "model_dump"):
+        if (
+            "header_config" in update_data
+            and data.header_config
+            and hasattr(data.header_config, "model_dump")
+        ):
             update_data["header_config"] = data.header_config.model_dump()
-        if "footer_config" in update_data and data.footer_config and hasattr(data.footer_config, "model_dump"):
+        if (
+            "footer_config" in update_data
+            and data.footer_config
+            and hasattr(data.footer_config, "model_dump")
+        ):
             update_data["footer_config"] = data.footer_config.model_dump()
 
         # Handle default toggle
         if update_data.get("is_default"):
-            mt = update_data.get("meeting_type") or (tpl.meeting_type if isinstance(tpl.meeting_type, str) else tpl.meeting_type.value)
+            mt = update_data.get("meeting_type") or (
+                tpl.meeting_type
+                if isinstance(tpl.meeting_type, str)
+                else tpl.meeting_type.value
+            )
             await self._clear_defaults(organization_id, mt)
 
         for field, value in update_data.items():
@@ -255,9 +273,7 @@ class TemplateService:
         await self.db.refresh(tpl)
         return tpl
 
-    async def delete_template(
-        self, template_id: str, organization_id: UUID
-    ) -> bool:
+    async def delete_template(self, template_id: str, organization_id: UUID) -> bool:
         """Delete a template"""
         tpl = await self.get_template(template_id, organization_id)
         if not tpl:

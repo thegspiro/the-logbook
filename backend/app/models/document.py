@@ -5,80 +5,237 @@ SQLAlchemy models for document management including folders,
 documents, and version tracking.
 """
 
+import enum
+
 from sqlalchemy import (
-    Column,
-    String,
+    JSON,
+    BigInteger,
     Boolean,
+    Column,
     DateTime,
-    Integer,
-    Text,
     Enum,
     ForeignKey,
     Index,
-    BigInteger,
-    JSON,
+    Integer,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import enum
-
-from app.core.utils import generate_uuid
 
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class DocumentStatus(str, enum.Enum):
     """Status of a document"""
+
     ACTIVE = "active"
     ARCHIVED = "archived"
 
 
 class DocumentType(str, enum.Enum):
     """How the document was created"""
+
     UPLOADED = "uploaded"
     GENERATED = "generated"
 
 
 class FolderVisibility(str, enum.Enum):
     """Who can see a folder and its contents"""
+
     ORGANIZATION = "organization"  # All org members with documents.view
-    LEADERSHIP = "leadership"      # Only users with members.manage or documents.manage
-    OWNER = "owner"                # Only the owner_user_id (+ leadership)
+    LEADERSHIP = "leadership"  # Only users with members.manage or documents.manage
+    OWNER = "owner"  # Only the owner_user_id (+ leadership)
 
 
 # System folders created automatically for each organization
 SYSTEM_FOLDERS = [
-    {"slug": "meeting-minutes", "name": "Meeting Minutes", "description": "Published meeting minutes", "sort_order": 0, "icon": "clipboard-list", "color": "text-cyan-400"},
-    {"slug": "sops", "name": "SOPs & Procedures", "description": "Standard Operating Procedures", "sort_order": 1, "icon": "file-text", "color": "text-amber-400"},
-    {"slug": "policies", "name": "Policies", "description": "Department policies and guidelines", "sort_order": 2, "icon": "shield", "color": "text-blue-400"},
-    {"slug": "forms", "name": "Forms & Templates", "description": "Blank forms and document templates", "sort_order": 3, "icon": "file", "color": "text-green-400"},
-    {"slug": "reports", "name": "Reports", "description": "Monthly, quarterly, and annual reports", "sort_order": 4, "icon": "bar-chart", "color": "text-purple-400"},
-    {"slug": "training", "name": "Training Materials", "description": "Training manuals and reference materials", "sort_order": 5, "icon": "book-open", "color": "text-red-400"},
-    {"slug": "general", "name": "General Documents", "description": "Miscellaneous department files", "sort_order": 6, "icon": "folder", "color": "text-slate-400"},
-    {"slug": "members", "name": "Member Files", "description": "Per-member folders (auto-created, access-controlled)", "sort_order": 7, "icon": "users", "color": "text-emerald-400"},
-    {"slug": "apparatus", "name": "Apparatus Files", "description": "Per-vehicle folders with categorized sub-folders", "sort_order": 8, "icon": "truck", "color": "text-orange-400"},
-    {"slug": "facilities", "name": "Facility Files", "description": "Per-facility folders with categorized sub-folders", "sort_order": 9, "icon": "building", "color": "text-indigo-400"},
-    {"slug": "events", "name": "Event Attachments", "description": "Per-event attachment folders", "sort_order": 10, "icon": "calendar", "color": "text-rose-400"},
+    {
+        "slug": "meeting-minutes",
+        "name": "Meeting Minutes",
+        "description": "Published meeting minutes",
+        "sort_order": 0,
+        "icon": "clipboard-list",
+        "color": "text-cyan-400",
+    },
+    {
+        "slug": "sops",
+        "name": "SOPs & Procedures",
+        "description": "Standard Operating Procedures",
+        "sort_order": 1,
+        "icon": "file-text",
+        "color": "text-amber-400",
+    },
+    {
+        "slug": "policies",
+        "name": "Policies",
+        "description": "Department policies and guidelines",
+        "sort_order": 2,
+        "icon": "shield",
+        "color": "text-blue-400",
+    },
+    {
+        "slug": "forms",
+        "name": "Forms & Templates",
+        "description": "Blank forms and document templates",
+        "sort_order": 3,
+        "icon": "file",
+        "color": "text-green-400",
+    },
+    {
+        "slug": "reports",
+        "name": "Reports",
+        "description": "Monthly, quarterly, and annual reports",
+        "sort_order": 4,
+        "icon": "bar-chart",
+        "color": "text-purple-400",
+    },
+    {
+        "slug": "training",
+        "name": "Training Materials",
+        "description": "Training manuals and reference materials",
+        "sort_order": 5,
+        "icon": "book-open",
+        "color": "text-red-400",
+    },
+    {
+        "slug": "general",
+        "name": "General Documents",
+        "description": "Miscellaneous department files",
+        "sort_order": 6,
+        "icon": "folder",
+        "color": "text-slate-400",
+    },
+    {
+        "slug": "members",
+        "name": "Member Files",
+        "description": "Per-member folders (auto-created, access-controlled)",
+        "sort_order": 7,
+        "icon": "users",
+        "color": "text-emerald-400",
+    },
+    {
+        "slug": "apparatus",
+        "name": "Apparatus Files",
+        "description": "Per-vehicle folders with categorized sub-folders",
+        "sort_order": 8,
+        "icon": "truck",
+        "color": "text-orange-400",
+    },
+    {
+        "slug": "facilities",
+        "name": "Facility Files",
+        "description": "Per-facility folders with categorized sub-folders",
+        "sort_order": 9,
+        "icon": "building",
+        "color": "text-indigo-400",
+    },
+    {
+        "slug": "events",
+        "name": "Event Attachments",
+        "description": "Per-event attachment folders",
+        "sort_order": 10,
+        "icon": "calendar",
+        "color": "text-rose-400",
+    },
 ]
 
 
 # Standard sub-folders auto-created inside each apparatus folder
 APPARATUS_SUB_FOLDERS = [
-    {"slug": "photos", "name": "Photos", "description": "Exterior, interior, damage, and detail photos", "sort_order": 0, "icon": "camera", "color": "text-sky-400"},
-    {"slug": "registration-insurance", "name": "Registration & Insurance", "description": "Titles, registration, and insurance documents", "sort_order": 1, "icon": "shield", "color": "text-blue-400"},
-    {"slug": "maintenance", "name": "Maintenance Records", "description": "Invoices, work orders, and service reports", "sort_order": 2, "icon": "wrench", "color": "text-amber-400"},
-    {"slug": "inspections", "name": "Inspection & Compliance", "description": "Inspection certificates and NFPA documentation", "sort_order": 3, "icon": "clipboard-check", "color": "text-green-400"},
-    {"slug": "manuals", "name": "Manuals & References", "description": "Operator manuals and technical documentation", "sort_order": 4, "icon": "book-open", "color": "text-purple-400"},
+    {
+        "slug": "photos",
+        "name": "Photos",
+        "description": "Exterior, interior, damage, and detail photos",
+        "sort_order": 0,
+        "icon": "camera",
+        "color": "text-sky-400",
+    },
+    {
+        "slug": "registration-insurance",
+        "name": "Registration & Insurance",
+        "description": "Titles, registration, and insurance documents",
+        "sort_order": 1,
+        "icon": "shield",
+        "color": "text-blue-400",
+    },
+    {
+        "slug": "maintenance",
+        "name": "Maintenance Records",
+        "description": "Invoices, work orders, and service reports",
+        "sort_order": 2,
+        "icon": "wrench",
+        "color": "text-amber-400",
+    },
+    {
+        "slug": "inspections",
+        "name": "Inspection & Compliance",
+        "description": "Inspection certificates and NFPA documentation",
+        "sort_order": 3,
+        "icon": "clipboard-check",
+        "color": "text-green-400",
+    },
+    {
+        "slug": "manuals",
+        "name": "Manuals & References",
+        "description": "Operator manuals and technical documentation",
+        "sort_order": 4,
+        "icon": "book-open",
+        "color": "text-purple-400",
+    },
 ]
 
 # Standard sub-folders auto-created inside each facility folder
 FACILITY_SUB_FOLDERS = [
-    {"slug": "photos", "name": "Photos", "description": "Building exterior, interior, and detail photos", "sort_order": 0, "icon": "camera", "color": "text-sky-400"},
-    {"slug": "blueprints-permits", "name": "Blueprints & Permits", "description": "Floor plans, blueprints, and building permits", "sort_order": 1, "icon": "map", "color": "text-blue-400"},
-    {"slug": "maintenance", "name": "Maintenance Records", "description": "Work orders, service reports, and repair records", "sort_order": 2, "icon": "wrench", "color": "text-amber-400"},
-    {"slug": "inspections", "name": "Inspection Reports", "description": "Building inspections and compliance reports", "sort_order": 3, "icon": "clipboard-check", "color": "text-green-400"},
-    {"slug": "insurance-leases", "name": "Insurance & Leases", "description": "Insurance policies, lease agreements, and property documents", "sort_order": 4, "icon": "shield", "color": "text-red-400"},
-    {"slug": "capital-projects", "name": "Capital Projects", "description": "Renovation plans, bids, and project documents", "sort_order": 5, "icon": "hard-hat", "color": "text-orange-400"},
+    {
+        "slug": "photos",
+        "name": "Photos",
+        "description": "Building exterior, interior, and detail photos",
+        "sort_order": 0,
+        "icon": "camera",
+        "color": "text-sky-400",
+    },
+    {
+        "slug": "blueprints-permits",
+        "name": "Blueprints & Permits",
+        "description": "Floor plans, blueprints, and building permits",
+        "sort_order": 1,
+        "icon": "map",
+        "color": "text-blue-400",
+    },
+    {
+        "slug": "maintenance",
+        "name": "Maintenance Records",
+        "description": "Work orders, service reports, and repair records",
+        "sort_order": 2,
+        "icon": "wrench",
+        "color": "text-amber-400",
+    },
+    {
+        "slug": "inspections",
+        "name": "Inspection Reports",
+        "description": "Building inspections and compliance reports",
+        "sort_order": 3,
+        "icon": "clipboard-check",
+        "color": "text-green-400",
+    },
+    {
+        "slug": "insurance-leases",
+        "name": "Insurance & Leases",
+        "description": "Insurance policies, lease agreements, and property documents",
+        "sort_order": 4,
+        "icon": "shield",
+        "color": "text-red-400",
+    },
+    {
+        "slug": "capital-projects",
+        "name": "Capital Projects",
+        "description": "Renovation plans, bids, and project documents",
+        "sort_order": 5,
+        "icon": "hard-hat",
+        "color": "text-orange-400",
+    },
 ]
 
 
@@ -93,7 +250,12 @@ class DocumentFolder(Base):
     __tablename__ = "document_folders"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Folder Information
     name = Column(String(255), nullable=False)
@@ -105,7 +267,9 @@ class DocumentFolder(Base):
     sort_order = Column(Integer, default=0)
 
     # Hierarchy
-    parent_id = Column(String(36), ForeignKey("document_folders.id", ondelete="CASCADE"))
+    parent_id = Column(
+        String(36), ForeignKey("document_folders.id", ondelete="CASCADE")
+    )
 
     # Access control
     visibility = Column(
@@ -114,17 +278,31 @@ class DocumentFolder(Base):
         nullable=False,
         server_default="organization",
     )
-    owner_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    allowed_roles = Column(JSON, nullable=True)  # List of role slugs; null = no restriction
+    owner_user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    allowed_roles = Column(
+        JSON, nullable=True
+    )  # List of role slugs; null = no restriction
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
-    documents = relationship("Document", back_populates="folder", cascade="all, delete-orphan")
-    children = relationship("DocumentFolder", backref="parent", remote_side=[id], cascade="all, delete-orphan", single_parent=True)
+    documents = relationship(
+        "Document", back_populates="folder", cascade="all, delete-orphan"
+    )
+    children = relationship(
+        "DocumentFolder",
+        backref="parent",
+        remote_side=[id],
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
     owner = relationship("User", foreign_keys=[owner_user_id])
 
     __table_args__ = (
@@ -147,8 +325,15 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    folder_id = Column(String(36), ForeignKey("document_folders.id", ondelete="SET NULL"), index=True)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    folder_id = Column(
+        String(36), ForeignKey("document_folders.id", ondelete="SET NULL"), index=True
+    )
 
     # Document Information
     name = Column(String(255), nullable=False)
@@ -157,8 +342,15 @@ class Document(Base):
     file_path = Column(String(500))
     file_size = Column(BigInteger, default=0)  # Size in bytes
     file_type = Column(String(100))  # MIME type
-    document_type = Column(Enum(DocumentType, values_callable=lambda x: [e.value for e in x]), default=DocumentType.UPLOADED)
-    status = Column(Enum(DocumentStatus, values_callable=lambda x: [e.value for e in x]), default=DocumentStatus.ACTIVE, nullable=False)
+    document_type = Column(
+        Enum(DocumentType, values_callable=lambda x: [e.value for e in x]),
+        default=DocumentType.UPLOADED,
+    )
+    status = Column(
+        Enum(DocumentStatus, values_callable=lambda x: [e.value for e in x]),
+        default=DocumentStatus.ACTIVE,
+        nullable=False,
+    )
 
     # Rich content (for generated documents like published minutes)
     content_html = Column(Text, nullable=True)
@@ -175,7 +367,9 @@ class Document(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     uploaded_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships

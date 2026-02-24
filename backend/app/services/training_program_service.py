@@ -5,31 +5,48 @@ Business logic for training program management, enrollment, and progress trackin
 """
 
 import json
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
-from datetime import datetime, date, timedelta, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func, update
+
+from loguru import logger
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import (
-    TrainingRequirement, TrainingProgram, ProgramPhase, ProgramRequirement,
-    ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation,
-    SkillCheckoff, RequirementType, RequirementSource, ProgramStructureType,
-    EnrollmentStatus, RequirementProgressStatus
+    EnrollmentStatus,
+    ProgramEnrollment,
+    ProgramMilestone,
+    ProgramPhase,
+    ProgramRequirement,
+    ProgramStructureType,
+    RequirementProgress,
+    RequirementProgressStatus,
+    RequirementSource,
+    RequirementType,
+    TrainingProgram,
+    TrainingRequirement,
 )
 from app.models.user import User
 from app.schemas.training_program import (
-    TrainingRequirementEnhancedCreate, TrainingProgramCreate, ProgramPhaseCreate,
-    ProgramRequirementCreate, ProgramMilestoneCreate, ProgramEnrollmentCreate,
-    RequirementProgressUpdate, SkillEvaluationCreate, SkillCheckoffCreate
+    ProgramEnrollmentCreate,
+    ProgramMilestoneCreate,
+    ProgramPhaseCreate,
+    ProgramRequirementCreate,
+    RequirementProgressUpdate,
+    TrainingProgramCreate,
+    TrainingRequirementEnhancedCreate,
 )
-from app.models.notification import NotificationChannel, NotificationCategory
-from app.services.training_waiver_service import fetch_user_waivers, adjust_required, get_rolling_period_months
 from app.services.notifications_service import NotificationsService
-from loguru import logger
+from app.services.training_waiver_service import (
+    adjust_required,
+    fetch_user_waivers,
+    get_rolling_period_months,
+)
 
 
 class TrainingProgramService:
@@ -69,7 +86,7 @@ class TrainingProgramService:
         )
 
         # Notify mentor/assigned officer if configured on the enrollment
-        if getattr(enrollment, 'mentor_id', None):
+        if getattr(enrollment, "mentor_id", None):
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
@@ -110,7 +127,7 @@ class TrainingProgramService:
         )
 
         # Notify mentor
-        if getattr(enrollment, 'mentor_id', None):
+        if getattr(enrollment, "mentor_id", None):
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
@@ -150,7 +167,7 @@ class TrainingProgramService:
         )
 
         # Notify mentor
-        if getattr(enrollment, 'mentor_id', None):
+        if getattr(enrollment, "mentor_id", None):
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
@@ -182,7 +199,10 @@ class TrainingProgramService:
         try:
             req_type = RequirementType(requirement_data.requirement_type)
         except ValueError:
-            return None, f"Invalid requirement type: {requirement_data.requirement_type}"
+            return (
+                None,
+                f"Invalid requirement type: {requirement_data.requirement_type}",
+            )
 
         # Validate source
         try:
@@ -208,8 +228,8 @@ class TrainingProgramService:
             required_call_types=requirement_data.required_call_types,
             required_skills=requirement_data.required_skills,
             checklist_items=requirement_data.checklist_items,
-            passing_score=getattr(requirement_data, 'passing_score', None),
-            max_attempts=getattr(requirement_data, 'max_attempts', None),
+            passing_score=getattr(requirement_data, "passing_score", None),
+            max_attempts=getattr(requirement_data, "max_attempts", None),
             frequency=requirement_data.frequency,
             time_limit_days=requirement_data.time_limit_days,
             applies_to_all=requirement_data.applies_to_all,
@@ -237,7 +257,7 @@ class TrainingProgramService:
         """
         query = select(TrainingRequirement).where(
             TrainingRequirement.organization_id == organization_id,
-            TrainingRequirement.active == True  # noqa: E712
+            TrainingRequirement.active == True,  # noqa: E712
         )
 
         if source:
@@ -245,10 +265,14 @@ class TrainingProgramService:
         if registry_name:
             query = query.where(TrainingRequirement.registry_name == registry_name)
         if requirement_type:
-            query = query.where(TrainingRequirement.requirement_type == requirement_type)
+            query = query.where(
+                TrainingRequirement.requirement_type == requirement_type
+            )
         if position:
             # Check if position is in the required_positions JSONB array
-            query = query.where(TrainingRequirement.required_positions.contains([position]))
+            query = query.where(
+                TrainingRequirement.required_positions.contains([position])
+            )
 
         result = await self.db.execute(query.order_by(TrainingRequirement.name))
         return result.scalars().all()
@@ -340,15 +364,16 @@ class TrainingProgramService:
         """
         query = select(TrainingProgram).where(
             TrainingProgram.id == str(program_id),
-            TrainingProgram.organization_id == str(organization_id)
+            TrainingProgram.organization_id == str(organization_id),
         )
 
         if include_phases:
             query = query.options(selectinload(TrainingProgram.phases))
         if include_requirements:
             query = query.options(
-                selectinload(TrainingProgram.program_requirements)
-                .selectinload(ProgramRequirement.requirement)
+                selectinload(TrainingProgram.program_requirements).selectinload(
+                    ProgramRequirement.requirement
+                )
             )
 
         result = await self.db.execute(query)
@@ -365,7 +390,7 @@ class TrainingProgramService:
         """
         query = select(TrainingProgram).where(
             TrainingProgram.organization_id == organization_id,
-            TrainingProgram.active == True  # noqa: E712
+            TrainingProgram.active == True,  # noqa: E712
         )
 
         if target_position:
@@ -397,11 +422,14 @@ class TrainingProgramService:
         existing_phase = await self.db.execute(
             select(ProgramPhase).where(
                 ProgramPhase.program_id == str(phase_data.program_id),
-                ProgramPhase.phase_number == phase_data.phase_number
+                ProgramPhase.phase_number == phase_data.phase_number,
             )
         )
         if existing_phase.scalar_one_or_none():
-            return None, f"Phase {phase_data.phase_number} already exists for this program"
+            return (
+                None,
+                f"Phase {phase_data.phase_number} already exists for this program",
+            )
 
         # Create phase (DB-level unique constraint prevents race conditions)
         phase = ProgramPhase(
@@ -418,7 +446,10 @@ class TrainingProgramService:
             await self.db.commit()
         except IntegrityError:
             await self.db.rollback()
-            return None, f"Phase {phase_data.phase_number} already exists for this program"
+            return (
+                None,
+                f"Phase {phase_data.phase_number} already exists for this program",
+            )
         await self.db.refresh(phase)
 
         return phase, None
@@ -456,7 +487,9 @@ class TrainingProgramService:
         Returns: (program_requirement, error_message)
         """
         # Verify program exists
-        program = await self.get_program_by_id(program_requirement_data.program_id, organization_id)
+        program = await self.get_program_by_id(
+            program_requirement_data.program_id, organization_id
+        )
         if not program:
             return None, "Training program not found"
 
@@ -475,7 +508,9 @@ class TrainingProgramService:
             phase_result = await self.db.execute(
                 select(ProgramPhase)
                 .where(ProgramPhase.id == str(program_requirement_data.phase_id))
-                .where(ProgramPhase.program_id == str(program_requirement_data.program_id))
+                .where(
+                    ProgramPhase.program_id == str(program_requirement_data.program_id)
+                )
             )
             if not phase_result.scalar_one_or_none():
                 return None, "Program phase not found"
@@ -483,9 +518,16 @@ class TrainingProgramService:
         # Check for duplicate
         existing = await self.db.execute(
             select(ProgramRequirement).where(
-                ProgramRequirement.program_id == str(program_requirement_data.program_id),
-                ProgramRequirement.requirement_id == str(program_requirement_data.requirement_id),
-                ProgramRequirement.phase_id == (str(program_requirement_data.phase_id) if program_requirement_data.phase_id else None)
+                ProgramRequirement.program_id
+                == str(program_requirement_data.program_id),
+                ProgramRequirement.requirement_id
+                == str(program_requirement_data.requirement_id),
+                ProgramRequirement.phase_id
+                == (
+                    str(program_requirement_data.phase_id)
+                    if program_requirement_data.phase_id
+                    else None
+                ),
             )
         )
         if existing.scalar_one_or_none():
@@ -521,9 +563,11 @@ class TrainingProgramService:
         if not program:
             return []
 
-        query = select(ProgramRequirement).options(
-            selectinload(ProgramRequirement.requirement)
-        ).where(ProgramRequirement.program_id == str(program_id))
+        query = (
+            select(ProgramRequirement)
+            .options(selectinload(ProgramRequirement.requirement))
+            .where(ProgramRequirement.program_id == str(program_id))
+        )
 
         if phase_id:
             query = query.where(ProgramRequirement.phase_id == str(phase_id))
@@ -546,7 +590,9 @@ class TrainingProgramService:
         Returns: (milestone, error_message)
         """
         # Verify program exists
-        program = await self.get_program_by_id(milestone_data.program_id, organization_id)
+        program = await self.get_program_by_id(
+            milestone_data.program_id, organization_id
+        )
         if not program:
             return None, "Training program not found"
 
@@ -590,7 +636,9 @@ class TrainingProgramService:
         Returns: (enrollment, error_message)
         """
         # Verify program exists
-        program = await self.get_program_by_id(enrollment_data.program_id, organization_id, include_phases=True)
+        program = await self.get_program_by_id(
+            enrollment_data.program_id, organization_id, include_phases=True
+        )
         if not program:
             return None, "Training program not found"
 
@@ -607,7 +655,7 @@ class TrainingProgramService:
             select(ProgramEnrollment).where(
                 ProgramEnrollment.user_id == str(enrollment_data.user_id),
                 ProgramEnrollment.program_id == str(enrollment_data.program_id),
-                ProgramEnrollment.status == EnrollmentStatus.ACTIVE
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
             )
         )
         if existing.scalar_one_or_none():
@@ -616,7 +664,9 @@ class TrainingProgramService:
         # Calculate target completion date if not provided
         target_completion_date = enrollment_data.target_completion_date
         if not target_completion_date and program.time_limit_days:
-            target_completion_date = date.today() + timedelta(days=program.time_limit_days)
+            target_completion_date = date.today() + timedelta(
+                days=program.time_limit_days
+            )
 
         # Determine initial phase for phase-based programs
         current_phase_id = None
@@ -641,7 +691,9 @@ class TrainingProgramService:
         await self.db.flush()
 
         # Create requirement progress tracking for all program requirements
-        program_requirements = await self.get_program_requirements(program.id, organization_id)
+        program_requirements = await self.get_program_requirements(
+            program.id, organization_id
+        )
         for prog_req in program_requirements:
             req_progress = RequirementProgress(
                 enrollment_id=enrollment.id,
@@ -672,18 +724,25 @@ class TrainingProgramService:
         """
         Get all program enrollments for a member
         """
-        query = select(ProgramEnrollment).options(
-            selectinload(ProgramEnrollment.program),
-            selectinload(ProgramEnrollment.current_phase)
-        ).join(TrainingProgram).where(
-            ProgramEnrollment.user_id == user_id,
-            TrainingProgram.organization_id == organization_id
+        query = (
+            select(ProgramEnrollment)
+            .options(
+                selectinload(ProgramEnrollment.program),
+                selectinload(ProgramEnrollment.current_phase),
+            )
+            .join(TrainingProgram)
+            .where(
+                ProgramEnrollment.user_id == user_id,
+                TrainingProgram.organization_id == organization_id,
+            )
         )
 
         if status:
             query = query.where(ProgramEnrollment.status == status)
 
-        result = await self.db.execute(query.order_by(ProgramEnrollment.enrolled_at.desc()))
+        result = await self.db.execute(
+            query.order_by(ProgramEnrollment.enrolled_at.desc())
+        )
         return result.scalars().all()
 
     async def get_enrollment_by_id(
@@ -699,13 +758,14 @@ class TrainingProgramService:
             .options(
                 selectinload(ProgramEnrollment.program),
                 selectinload(ProgramEnrollment.current_phase),
-                selectinload(ProgramEnrollment.requirement_progress)
-                .selectinload(RequirementProgress.requirement)
+                selectinload(ProgramEnrollment.requirement_progress).selectinload(
+                    RequirementProgress.requirement
+                ),
             )
             .join(TrainingProgram)
             .where(
                 ProgramEnrollment.id == enrollment_id,
-                TrainingProgram.organization_id == organization_id
+                TrainingProgram.organization_id == organization_id,
             )
         )
         return result.scalar_one_or_none()
@@ -728,14 +788,16 @@ class TrainingProgramService:
         result = await self.db.execute(
             select(RequirementProgress)
             .options(
-                selectinload(RequirementProgress.enrollment).selectinload(ProgramEnrollment.program),
-                selectinload(RequirementProgress.requirement)
+                selectinload(RequirementProgress.enrollment).selectinload(
+                    ProgramEnrollment.program
+                ),
+                selectinload(RequirementProgress.requirement),
             )
             .join(ProgramEnrollment)
             .join(TrainingProgram)
             .where(
                 RequirementProgress.id == progress_id,
-                TrainingProgram.organization_id == organization_id
+                TrainingProgram.organization_id == organization_id,
             )
         )
         progress = result.scalar_one_or_none()
@@ -749,7 +811,10 @@ class TrainingProgramService:
                 status = RequirementProgressStatus(updates.status)
                 progress.status = status
 
-                if status == RequirementProgressStatus.IN_PROGRESS and not progress.started_at:
+                if (
+                    status == RequirementProgressStatus.IN_PROGRESS
+                    and not progress.started_at
+                ):
                     progress.started_at = datetime.now(timezone.utc)
                 elif status == RequirementProgressStatus.COMPLETED:
                     progress.completed_at = datetime.now(timezone.utc)
@@ -772,32 +837,78 @@ class TrainingProgramService:
             )
 
             # Determine evaluation window from enrollment period
-            enroll_start = enrollment.enrolled_at.date() if enrollment.enrolled_at else date.today()
+            enroll_start = (
+                enrollment.enrolled_at.date()
+                if enrollment.enrolled_at
+                else date.today()
+            )
             enroll_end = enrollment.target_completion_date or date.today()
 
             # Calculate percentage based on requirement type (with waiver adjustment)
             requirement = progress.requirement
-            if requirement.requirement_type == RequirementType.HOURS and requirement.required_hours:
-                adj_required, _, _ = adjust_required(
-                    requirement.required_hours, enroll_start, enroll_end, user_waivers, str(requirement.id),
-                    period_months=get_rolling_period_months(requirement),
-                ) if user_waivers else (requirement.required_hours, 0, 0)
-                progress.progress_percentage = min(100.0, (updates.progress_value / adj_required) * 100)
-            elif requirement.requirement_type == RequirementType.SHIFTS and requirement.required_shifts:
-                adj_required, _, _ = adjust_required(
-                    requirement.required_shifts, enroll_start, enroll_end, user_waivers, str(requirement.id),
-                    period_months=get_rolling_period_months(requirement),
-                ) if user_waivers else (requirement.required_shifts, 0, 0)
-                progress.progress_percentage = min(100.0, (updates.progress_value / adj_required) * 100)
-            elif requirement.requirement_type == RequirementType.CALLS and requirement.required_calls:
-                adj_required, _, _ = adjust_required(
-                    requirement.required_calls, enroll_start, enroll_end, user_waivers, str(requirement.id),
-                    period_months=get_rolling_period_months(requirement),
-                ) if user_waivers else (requirement.required_calls, 0, 0)
-                progress.progress_percentage = min(100.0, (updates.progress_value / adj_required) * 100)
+            if (
+                requirement.requirement_type == RequirementType.HOURS
+                and requirement.required_hours
+            ):
+                adj_required, _, _ = (
+                    adjust_required(
+                        requirement.required_hours,
+                        enroll_start,
+                        enroll_end,
+                        user_waivers,
+                        str(requirement.id),
+                        period_months=get_rolling_period_months(requirement),
+                    )
+                    if user_waivers
+                    else (requirement.required_hours, 0, 0)
+                )
+                progress.progress_percentage = min(
+                    100.0, (updates.progress_value / adj_required) * 100
+                )
+            elif (
+                requirement.requirement_type == RequirementType.SHIFTS
+                and requirement.required_shifts
+            ):
+                adj_required, _, _ = (
+                    adjust_required(
+                        requirement.required_shifts,
+                        enroll_start,
+                        enroll_end,
+                        user_waivers,
+                        str(requirement.id),
+                        period_months=get_rolling_period_months(requirement),
+                    )
+                    if user_waivers
+                    else (requirement.required_shifts, 0, 0)
+                )
+                progress.progress_percentage = min(
+                    100.0, (updates.progress_value / adj_required) * 100
+                )
+            elif (
+                requirement.requirement_type == RequirementType.CALLS
+                and requirement.required_calls
+            ):
+                adj_required, _, _ = (
+                    adjust_required(
+                        requirement.required_calls,
+                        enroll_start,
+                        enroll_end,
+                        user_waivers,
+                        str(requirement.id),
+                        period_months=get_rolling_period_months(requirement),
+                    )
+                    if user_waivers
+                    else (requirement.required_calls, 0, 0)
+                )
+                progress.progress_percentage = min(
+                    100.0, (updates.progress_value / adj_required) * 100
+                )
 
             # Auto-complete if reached 100%
-            if progress.progress_percentage >= 100.0 and progress.status != RequirementProgressStatus.COMPLETED:
+            if (
+                progress.progress_percentage >= 100.0
+                and progress.status != RequirementProgressStatus.COMPLETED
+            ):
                 progress.status = RequirementProgressStatus.COMPLETED
                 progress.completed_at = datetime.now(timezone.utc)
 
@@ -829,8 +940,7 @@ class TrainingProgramService:
         """
         # Get enrollment before update to detect state changes
         enrollment_result = await self.db.execute(
-            select(ProgramEnrollment)
-            .where(ProgramEnrollment.id == str(enrollment_id))
+            select(ProgramEnrollment).where(ProgramEnrollment.id == str(enrollment_id))
         )
         enrollment = enrollment_result.scalar_one_or_none()
         if not enrollment:
@@ -844,7 +954,7 @@ class TrainingProgramService:
             .join(ProgramRequirement)
             .where(
                 RequirementProgress.enrollment_id == enrollment_id,
-                ProgramRequirement.is_required == True  # noqa: E712
+                ProgramRequirement.is_required == True,  # noqa: E712
             )
         )
         all_progress = result.scalars().all()
@@ -862,7 +972,7 @@ class TrainingProgramService:
             .where(ProgramEnrollment.id == str(enrollment_id))
             .values(
                 progress_percentage=avg_percentage,
-                updated_at=datetime.now(timezone.utc)
+                updated_at=datetime.now(timezone.utc),
             )
         )
 
@@ -873,7 +983,7 @@ class TrainingProgramService:
                 .where(ProgramEnrollment.id == str(enrollment_id))
                 .values(
                     status=EnrollmentStatus.COMPLETED,
-                    completed_at=datetime.now(timezone.utc)
+                    completed_at=datetime.now(timezone.utc),
                 )
             )
 
@@ -885,7 +995,9 @@ class TrainingProgramService:
                 # Re-fetch enrollment for notification
                 await self.db.refresh(enrollment)
                 program_result = await self.db.execute(
-                    select(TrainingProgram).where(TrainingProgram.id == str(enrollment.program_id))
+                    select(TrainingProgram).where(
+                        TrainingProgram.id == str(enrollment.program_id)
+                    )
                 )
                 program = program_result.scalar_one_or_none()
                 user_result = await self.db.execute(
@@ -918,10 +1030,12 @@ class TrainingProgramService:
         source_result = await self.db.execute(
             select(TrainingProgram)
             .options(
-                selectinload(TrainingProgram.phases)
-                .selectinload(ProgramPhase.requirements),
-                selectinload(TrainingProgram.phases)
-                .selectinload(ProgramPhase.milestones)
+                selectinload(TrainingProgram.phases).selectinload(
+                    ProgramPhase.requirements
+                ),
+                selectinload(TrainingProgram.phases).selectinload(
+                    ProgramPhase.milestones
+                ),
             )
             .where(TrainingProgram.id == str(source_program_id))
             .where(TrainingProgram.organization_id == str(organization_id))
@@ -932,7 +1046,9 @@ class TrainingProgramService:
             return None, "Source program not found"
 
         # Calculate new version
-        new_version = source_program.version + 1 if increment_version else source_program.version
+        new_version = (
+            source_program.version + 1 if increment_version else source_program.version
+        )
 
         # Create new program
         new_program = TrainingProgram(
@@ -1026,7 +1142,9 @@ class TrainingProgramService:
         program_reqs_result = await self.db.execute(
             select(ProgramRequirement)
             .where(ProgramRequirement.program_id == str(source_program_id))
-            .where(ProgramRequirement.phase_id == None)  # noqa: E711 — SQLAlchemy IS NULL
+            .where(
+                ProgramRequirement.phase_id == None
+            )  # noqa: E711 — SQLAlchemy IS NULL
         )
         program_reqs = program_reqs_result.scalars().all()
 
@@ -1088,7 +1206,9 @@ class TrainingProgramService:
         Returns: (enrollments, errors)
         """
         # Verify program exists
-        program = await self.get_program_by_id(program_id, organization_id, include_phases=True)
+        program = await self.get_program_by_id(
+            program_id, organization_id, include_phases=True
+        )
         if not program:
             return [], ["Training program not found"]
 
@@ -1195,25 +1315,26 @@ class TrainingProgramService:
             return 0, [f"Registry file not found: {registry_file_path}"]
 
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 registry_data = json.load(f)
         except json.JSONDecodeError as e:
             return 0, [f"Invalid JSON in registry file: {str(e)}"]
 
-        registry_name = registry_data.get('registry_name')
-        requirements_data = registry_data.get('requirements', [])
+        registry_name = registry_data.get("registry_name")
+        requirements_data = registry_data.get("requirements", [])
 
         imported_count = 0
         errors = []
 
         for req_data in requirements_data:
             # Check if requirement already exists
-            if skip_existing and req_data.get('registry_code'):
+            if skip_existing and req_data.get("registry_code"):
                 existing = await self.db.execute(
                     select(TrainingRequirement).where(
                         TrainingRequirement.organization_id == organization_id,
                         TrainingRequirement.registry_name == registry_name,
-                        TrainingRequirement.registry_code == req_data.get('registry_code')
+                        TrainingRequirement.registry_code
+                        == req_data.get("registry_code"),
                     )
                 )
                 if existing.scalar_one_or_none():
@@ -1223,33 +1344,37 @@ class TrainingProgramService:
                 # Create requirement from registry data
                 requirement = TrainingRequirement(
                     organization_id=organization_id,
-                    name=req_data.get('name'),
-                    description=req_data.get('description'),
-                    requirement_type=RequirementType(req_data.get('requirement_type', 'hours')),
+                    name=req_data.get("name"),
+                    description=req_data.get("description"),
+                    requirement_type=RequirementType(
+                        req_data.get("requirement_type", "hours")
+                    ),
                     source=RequirementSource.NATIONAL,
                     registry_name=registry_name,
-                    registry_code=req_data.get('registry_code'),
-                    is_editable=req_data.get('is_editable', True),
-                    training_type=req_data.get('training_type'),
-                    required_hours=req_data.get('required_hours'),
-                    required_courses=req_data.get('required_courses'),
-                    required_shifts=req_data.get('required_shifts'),
-                    required_calls=req_data.get('required_calls'),
-                    required_call_types=req_data.get('required_call_types'),
-                    required_skills=req_data.get('required_skills'),
-                    checklist_items=req_data.get('checklist_items'),
-                    frequency=req_data.get('frequency', 'annual'),
-                    time_limit_days=req_data.get('time_limit_days'),
-                    applies_to_all=req_data.get('applies_to_all', False),
-                    required_positions=req_data.get('required_positions'),
-                    required_roles=req_data.get('required_roles'),
+                    registry_code=req_data.get("registry_code"),
+                    is_editable=req_data.get("is_editable", True),
+                    training_type=req_data.get("training_type"),
+                    required_hours=req_data.get("required_hours"),
+                    required_courses=req_data.get("required_courses"),
+                    required_shifts=req_data.get("required_shifts"),
+                    required_calls=req_data.get("required_calls"),
+                    required_call_types=req_data.get("required_call_types"),
+                    required_skills=req_data.get("required_skills"),
+                    checklist_items=req_data.get("checklist_items"),
+                    frequency=req_data.get("frequency", "annual"),
+                    time_limit_days=req_data.get("time_limit_days"),
+                    applies_to_all=req_data.get("applies_to_all", False),
+                    required_positions=req_data.get("required_positions"),
+                    required_roles=req_data.get("required_roles"),
                     created_by=created_by,
                 )
                 self.db.add(requirement)
                 imported_count += 1
 
             except Exception as e:
-                errors.append(f"Error importing {req_data.get('name', 'unknown')}: {str(e)}")
+                errors.append(
+                    f"Error importing {req_data.get('name', 'unknown')}: {str(e)}"
+                )
 
         await self.db.commit()
         return imported_count, errors

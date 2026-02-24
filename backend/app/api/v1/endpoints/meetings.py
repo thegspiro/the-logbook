@@ -6,27 +6,28 @@ action items, and approval workflows.
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.meetings import (
-    MeetingCreate,
-    MeetingUpdate,
-    MeetingResponse,
-    MeetingDetailResponse,
-    MeetingsListResponse,
+    ActionItemCreate,
+    ActionItemResponse,
+    ActionItemUpdate,
     MeetingAttendeeCreate,
     MeetingAttendeeResponse,
-    ActionItemCreate,
-    ActionItemUpdate,
-    ActionItemResponse,
+    MeetingCreate,
+    MeetingDetailResponse,
+    MeetingResponse,
+    MeetingsListResponse,
     MeetingsSummary,
+    MeetingUpdate,
 )
 from app.services.meetings_service import MeetingsService
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -34,6 +35,7 @@ router = APIRouter()
 # ============================================
 # Meeting Endpoints
 # ============================================
+
 
 @router.get("", response_model=MeetingsListResponse)
 async def list_meetings(
@@ -64,7 +66,9 @@ async def list_meetings(
     }
 
 
-@router.post("", response_model=MeetingDetailResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=MeetingDetailResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_meeting(
     meeting: MeetingCreate,
     db: AsyncSession = Depends(get_db),
@@ -77,7 +81,9 @@ async def create_meeting(
         current_user.organization_id, meeting_data, current_user.id
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to create meeting. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to create meeting. {error}"
+        )
     return result
 
 
@@ -109,7 +115,9 @@ async def update_meeting(
         meeting_id, current_user.organization_id, update_data
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to update meeting. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to update meeting. {error}"
+        )
     return result
 
 
@@ -121,9 +129,13 @@ async def delete_meeting(
 ):
     """Delete a meeting and all its attendees/action items"""
     service = MeetingsService(db)
-    success, error = await service.delete_meeting(meeting_id, current_user.organization_id)
+    success, error = await service.delete_meeting(
+        meeting_id, current_user.organization_id
+    )
     if not success:
-        raise HTTPException(status_code=400, detail=f"Unable to delete meeting. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to delete meeting. {error}"
+        )
 
 
 @router.post("/{meeting_id}/approve", response_model=MeetingResponse)
@@ -138,7 +150,9 @@ async def approve_meeting(
         meeting_id, current_user.organization_id, current_user.id
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to approve meeting. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to approve meeting. {error}"
+        )
     return result
 
 
@@ -146,7 +160,12 @@ async def approve_meeting(
 # Attendee Endpoints
 # ============================================
 
-@router.post("/{meeting_id}/attendees", response_model=MeetingAttendeeResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/{meeting_id}/attendees",
+    response_model=MeetingAttendeeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_attendee(
     meeting_id: UUID,
     attendee: MeetingAttendeeCreate,
@@ -163,7 +182,9 @@ async def add_attendee(
     return result
 
 
-@router.delete("/{meeting_id}/attendees/{attendee_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{meeting_id}/attendees/{attendee_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def remove_attendee(
     meeting_id: UUID,
     attendee_id: UUID,
@@ -172,16 +193,25 @@ async def remove_attendee(
 ):
     """Remove an attendee from a meeting"""
     service = MeetingsService(db)
-    success, error = await service.remove_attendee(meeting_id, attendee_id, current_user.organization_id)
+    success, error = await service.remove_attendee(
+        meeting_id, attendee_id, current_user.organization_id
+    )
     if not success:
-        raise HTTPException(status_code=400, detail=f"Unable to remove attendee. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to remove attendee. {error}"
+        )
 
 
 # ============================================
 # Action Item Endpoints
 # ============================================
 
-@router.post("/{meeting_id}/action-items", response_model=ActionItemResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/{meeting_id}/action-items",
+    response_model=ActionItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_action_item(
     meeting_id: UUID,
     item: ActionItemCreate,
@@ -194,7 +224,9 @@ async def create_action_item(
         meeting_id, current_user.organization_id, item.model_dump(exclude_none=True)
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to create action item. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to create action item. {error}"
+        )
     return result
 
 
@@ -211,7 +243,9 @@ async def update_action_item(
         item_id, current_user.organization_id, item.model_dump(exclude_none=True)
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to update action item. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to update action item. {error}"
+        )
     return result
 
 
@@ -223,9 +257,13 @@ async def delete_action_item(
 ):
     """Delete an action item"""
     service = MeetingsService(db)
-    success, error = await service.delete_action_item(item_id, current_user.organization_id)
+    success, error = await service.delete_action_item(
+        item_id, current_user.organization_id
+    )
     if not success:
-        raise HTTPException(status_code=400, detail=f"Unable to delete action item. {error}")
+        raise HTTPException(
+            status_code=400, detail=f"Unable to delete action item. {error}"
+        )
 
 
 @router.get("/action-items/open", response_model=list[ActionItemResponse])
@@ -237,13 +275,16 @@ async def get_open_action_items(
     """Get all open action items"""
     service = MeetingsService(db)
     assigned_uuid = UUID(assigned_to) if assigned_to else None
-    items = await service.get_open_action_items(current_user.organization_id, assigned_uuid)
+    items = await service.get_open_action_items(
+        current_user.organization_id, assigned_uuid
+    )
     return items
 
 
 # ============================================
 # Summary Endpoint
 # ============================================
+
 
 @router.get("/stats/summary", response_model=MeetingsSummary)
 async def get_meetings_summary(
@@ -259,10 +300,15 @@ async def get_meetings_summary(
 # Attendance Dashboard & Waivers
 # ============================================
 
+
 @router.get("/attendance/dashboard")
 async def get_attendance_dashboard(
-    period_months: int = Query(default=12, ge=1, le=60, description="Look-back period in months"),
-    meeting_type: Optional[str] = Query(None, description="Filter by meeting type (e.g. 'business')"),
+    period_months: int = Query(
+        default=12, ge=1, le=60, description="Look-back period in months"
+    ),
+    meeting_type: Optional[str] = Query(
+        None, description="Filter by meeting type (e.g. 'business')"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("meetings.manage")),
 ):
@@ -276,6 +322,7 @@ async def get_attendance_dashboard(
     **Requires permission: meetings.manage**
     """
     from app.services.attendance_dashboard_service import AttendanceDashboardService
+
     service = AttendanceDashboardService(db)
     return await service.get_dashboard(
         organization_id=current_user.organization_id,
@@ -288,7 +335,9 @@ async def get_attendance_dashboard(
 async def grant_attendance_waiver(
     meeting_id: UUID,
     user_id: UUID = Query(..., description="Member to grant the waiver to"),
-    reason: str = Query(..., min_length=5, max_length=500, description="Reason for the waiver"),
+    reason: str = Query(
+        ..., min_length=5, max_length=500, description="Reason for the waiver"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("meetings.manage")),
 ):
@@ -301,12 +350,14 @@ async def grant_attendance_waiver(
 
     **Requires permission: meetings.manage**
     """
-    from app.services.attendance_dashboard_service import AttendanceDashboardService
+    from sqlalchemy import select
+
     from app.core.audit import log_audit_event
 
     # Verify the meeting belongs to this org
     from app.models.meeting import Meeting
-    from sqlalchemy import select
+    from app.services.attendance_dashboard_service import AttendanceDashboardService
+
     result = await db.execute(
         select(Meeting)
         .where(Meeting.id == str(meeting_id))
@@ -314,7 +365,9 @@ async def grant_attendance_waiver(
     )
     meeting = result.scalar_one_or_none()
     if not meeting:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found"
+        )
 
     service = AttendanceDashboardService(db)
     waiver = await service.grant_waiver(
@@ -355,6 +408,7 @@ async def list_attendance_waivers(
     **Requires permission: meetings.manage**
     """
     from app.services.attendance_dashboard_service import AttendanceDashboardService
+
     service = AttendanceDashboardService(db)
     return await service.list_waivers(
         meeting_id=str(meeting_id),
@@ -365,6 +419,7 @@ async def list_attendance_waivers(
 # ============================================
 # Cross-module Bridges
 # ============================================
+
 
 @router.post("/from-event/{event_id}", status_code=201)
 async def create_meeting_from_event(
@@ -392,8 +447,14 @@ async def create_meeting_from_event(
     return {
         "id": meeting.id,
         "title": meeting.title,
-        "meeting_date": meeting.meeting_date.isoformat() if meeting.meeting_date else None,
-        "status": meeting.status.value if hasattr(meeting.status, 'value') else str(meeting.status),
+        "meeting_date": (
+            meeting.meeting_date.isoformat() if meeting.meeting_date else None
+        ),
+        "status": (
+            meeting.status.value
+            if hasattr(meeting.status, "value")
+            else str(meeting.status)
+        ),
         "event_id": meeting.event_id,
         "message": "Meeting created from event with attendees imported from check-in data",
     }

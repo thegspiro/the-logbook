@@ -5,23 +5,24 @@ Handles self-reported training from members, officer review/approval,
 and self-report configuration management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.api.dependencies import get_current_user, require_permission
 from app.models.user import User
-from app.services.training_submission_service import TrainingSubmissionService
 from app.schemas.training_submission import (
     SelfReportConfigResponse,
     SelfReportConfigUpdate,
-    TrainingSubmissionCreate,
-    TrainingSubmissionUpdate,
-    TrainingSubmissionResponse,
     SubmissionReviewRequest,
+    TrainingSubmissionCreate,
+    TrainingSubmissionResponse,
+    TrainingSubmissionUpdate,
 )
+from app.services.training_submission_service import TrainingSubmissionService
 
 router = APIRouter()
 

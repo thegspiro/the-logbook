@@ -8,16 +8,16 @@ Permission aggregation combines **position permissions** (from the
 (from the ``OPERATIONAL_RANKS`` config keyed by ``User.rank``).
 """
 
-from typing import Optional, List
-from fastapi import Depends, HTTPException, status, Header, Cookie, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List, Optional
+
+from fastapi import Cookie, Depends, Header, HTTPException, status
 from sqlalchemy import select
-from uuid import UUID
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.user import User, Organization, Position
-from app.services.auth_service import AuthService
 from app.core.permissions import get_rank_default_permissions
+from app.models.user import Organization, User
+from app.services.auth_service import AuthService
 
 
 def _collect_user_permissions(user: User) -> set:
@@ -134,8 +134,7 @@ class PermissionChecker:
                 return current_user
 
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
         )
 
 
@@ -156,11 +155,14 @@ class AllPermissionChecker:
         """Check if user has all of the required permissions (AND logic)"""
         user_permissions = _collect_user_permissions(current_user)
 
-        missing = [p for p in self.required_permissions if not _has_permission(p, user_permissions)]
+        missing = [
+            p
+            for p in self.required_permissions
+            if not _has_permission(p, user_permissions)
+        ]
         if missing:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
             )
 
         return current_user
@@ -186,8 +188,7 @@ async def get_current_active_user(
     """Get current active user (not deleted, not suspended)"""
     if not current_user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
+            status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
         )
     return current_user
 
@@ -204,8 +205,7 @@ async def get_user_organization(
 
     if not organization:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
         )
 
     return organization
@@ -217,5 +217,5 @@ def require_secretary():
     return require_permission(
         "settings.manage",
         "settings.manage_contact_visibility",
-        "organization.update_settings"
+        "organization.update_settings",
     )

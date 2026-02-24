@@ -4,53 +4,47 @@ Election API Endpoints
 Endpoints for election management including elections, candidates, voting, and results.
 """
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
-from uuid import UUID, uuid4
 from datetime import datetime, timezone
-from loguru import logger
+from typing import List, Optional
+from uuid import UUID, uuid4
 
-from app.core.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from loguru import logger
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
-from app.models.election import (
-    Election,
-    Candidate,
-    Vote,
-    ElectionStatus,
-)
+from app.core.database import get_db
+from app.models.election import Candidate, Election, ElectionStatus, Vote
 from app.models.user import User
 from app.schemas.election import (
-    ElectionCreate,
-    ElectionUpdate,
-    ElectionResponse,
-    ElectionListResponse,
-    CandidateCreate,
-    CandidateUpdate,
-    CandidateResponse,
-    CandidateAcceptance,
-    VoteCreate,
-    VoteResponse,
-    ElectionResults,
-    ElectionStats,
-    VoterEligibility,
-    BulkVoteCreate,
-    EmailBallot,
-    EmailBallotResponse,
-    ElectionRollback,
-    ElectionRollbackResponse,
-    ElectionDelete,
-    ElectionDeleteResponse,
     AttendeeCheckIn,
     AttendeeCheckInResponse,
-    BallotTemplatesResponse,
     BallotSubmission,
     BallotSubmissionResponse,
+    BallotTemplatesResponse,
+    BulkVoteCreate,
+    CandidateCreate,
+    CandidateResponse,
+    CandidateUpdate,
+    ElectionCreate,
+    ElectionDelete,
+    ElectionDeleteResponse,
+    ElectionListResponse,
+    ElectionResponse,
+    ElectionResults,
+    ElectionRollback,
+    ElectionRollbackResponse,
+    ElectionStats,
+    ElectionUpdate,
+    EmailBallot,
+    EmailBallotResponse,
+    VoteCreate,
+    VoterEligibility,
+    VoteResponse,
 )
 from app.services.election_service import ElectionService
-from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -58,6 +52,7 @@ router = APIRouter()
 # ============================================
 # Election Endpoints
 # ============================================
+
 
 @router.get("", response_model=List[ElectionListResponse])
 async def list_elections(
@@ -82,7 +77,7 @@ async def list_elections(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status: {status_filter}"
+                detail=f"Invalid status: {status_filter}",
             )
 
     query = query.order_by(Election.start_date.desc())
@@ -136,14 +131,17 @@ async def create_election(
     if election.end_date <= election.start_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="End date must be after start date"
+            detail="End date must be after start date",
         )
 
     import secrets as _secrets
+
     election_data = election.model_dump()
     # Convert UUID objects to strings for JSON-serializable storage
     if election_data.get("eligible_voters"):
-        election_data["eligible_voters"] = [str(v) for v in election_data["eligible_voters"]]
+        election_data["eligible_voters"] = [
+            str(v) for v in election_data["eligible_voters"]
+        ]
     new_election = Election(
         id=uuid4(),
         organization_id=current_user.organization_id,
@@ -151,14 +149,16 @@ async def create_election(
         status=ElectionStatus.DRAFT,
         # SEC-12: Generate per-election salt for anonymous voter hash privacy
         voter_anonymity_salt=_secrets.token_hex(32),
-        **election_data
+        **election_data,
     )
 
     db.add(new_election)
     await db.commit()
     await db.refresh(new_election)
 
-    logger.info(f"Election created | id={new_election.id} title={election.title!r} by={current_user.id}")
+    logger.info(
+        f"Election created | id={new_election.id} title={election.title!r} by={current_user.id}"
+    )
     await log_audit_event(
         db=db,
         event_type="election_created",
@@ -180,6 +180,7 @@ async def create_election(
 # ============================================
 # Ballot Templates (must be before /{election_id} wildcard)
 # ============================================
+
 
 @router.get("/templates/ballot-items", response_model=BallotTemplatesResponse)
 async def get_ballot_templates(
@@ -203,6 +204,7 @@ async def get_ballot_templates(
 # IMPORTANT: These must be defined BEFORE the /{election_id} wildcard
 # ============================================
 
+
 @router.get("/ballot", response_model=ElectionResponse)
 async def get_ballot_by_token(
     token: str,
@@ -220,10 +222,7 @@ async def get_ballot_by_token(
     election, voting_token, error = await service.get_ballot_by_token(token)
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return election
 
@@ -242,10 +241,7 @@ async def get_ballot_candidates(
     election, voting_token, error = await service.get_ballot_by_token(token)
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     # Get candidates for this election
     result = await db.execute(
@@ -260,10 +256,13 @@ async def get_ballot_candidates(
 
 class VoteWithToken(VoteCreate):
     """Vote payload that includes the voting token in the body (not URL)."""
+
     token: str
 
 
-@router.post("/ballot/vote", response_model=VoteResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/ballot/vote", response_model=VoteResponse, status_code=status.HTTP_201_CREATED
+)
 async def cast_vote_with_token(
     vote_data: VoteWithToken,
     request: Request,
@@ -291,10 +290,7 @@ async def cast_vote_with_token(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     # Return vote without revealing voter information
     return VoteResponse(
@@ -309,10 +305,15 @@ async def cast_vote_with_token(
 
 class BallotSubmissionWithToken(BallotSubmission):
     """Ballot submission that includes the voting token in the body."""
+
     token: str
 
 
-@router.post("/ballot/vote/bulk", response_model=BallotSubmissionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/ballot/vote/bulk",
+    response_model=BallotSubmissionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def submit_ballot_with_token(
     ballot: BallotSubmissionWithToken,
     request: Request,
@@ -339,10 +340,7 @@ async def submit_ballot_with_token(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return BallotSubmissionResponse(**result)
 
@@ -350,6 +348,7 @@ async def submit_ballot_with_token(
 # ============================================
 # Election Detail Endpoints
 # ============================================
+
 
 @router.get("/{election_id}", response_model=ElectionResponse)
 async def get_election(
@@ -372,8 +371,7 @@ async def get_election(
 
     if not election:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
     return election
@@ -401,8 +399,7 @@ async def update_election(
 
     if not election:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
     # Get update data
@@ -418,7 +415,7 @@ async def update_election(
         if disallowed_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot update {', '.join(disallowed_fields)} for open election. Only end_date can be updated while voting is active."
+                detail=f"Cannot update {', '.join(disallowed_fields)} for open election. Only end_date can be updated while voting is active.",
             )
 
         # If updating end_date, validate it's in the future and after start_date
@@ -426,16 +423,20 @@ async def update_election(
             new_end_date = update_data["end_date"]
             if new_end_date.tzinfo is None:
                 new_end_date = new_end_date.replace(tzinfo=timezone.utc)
-            e_start = election.start_date.replace(tzinfo=timezone.utc) if election.start_date and election.start_date.tzinfo is None else election.start_date
+            e_start = (
+                election.start_date.replace(tzinfo=timezone.utc)
+                if election.start_date and election.start_date.tzinfo is None
+                else election.start_date
+            )
             if e_start and new_end_date <= e_start:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="End date must be after start date"
+                    detail="End date must be after start date",
                 )
             if new_end_date <= datetime.now(timezone.utc):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="End date must be in the future"
+                    detail="End date must be in the future",
                 )
 
     elif election.status == ElectionStatus.CLOSED:
@@ -445,7 +446,7 @@ async def update_election(
         if disallowed_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot update {', '.join(disallowed_fields)} for closed election. Only results_visible_immediately can be updated."
+                detail=f"Cannot update {', '.join(disallowed_fields)} for closed election. Only results_visible_immediately can be updated.",
             )
 
     # For draft elections, validate dates if they're being updated
@@ -454,43 +455,68 @@ async def update_election(
             new_end = update_data["end_date"]
             if new_end and new_end.tzinfo is None:
                 new_end = new_end.replace(tzinfo=timezone.utc)
-            db_start = election.start_date.replace(tzinfo=timezone.utc) if election.start_date and election.start_date.tzinfo is None else election.start_date
+            db_start = (
+                election.start_date.replace(tzinfo=timezone.utc)
+                if election.start_date and election.start_date.tzinfo is None
+                else election.start_date
+            )
             if db_start and new_end <= db_start:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="End date must be after start date"
+                    detail="End date must be after start date",
                 )
         elif "start_date" in update_data and "end_date" not in update_data:
             new_start = update_data["start_date"]
             if new_start and new_start.tzinfo is None:
                 new_start = new_start.replace(tzinfo=timezone.utc)
-            db_end = election.end_date.replace(tzinfo=timezone.utc) if election.end_date and election.end_date.tzinfo is None else election.end_date
+            db_end = (
+                election.end_date.replace(tzinfo=timezone.utc)
+                if election.end_date and election.end_date.tzinfo is None
+                else election.end_date
+            )
             if db_end and db_end <= new_start:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="End date must be after start date"
+                    detail="End date must be after start date",
                 )
         elif "end_date" in update_data and "start_date" in update_data:
             if update_data["end_date"] <= update_data["start_date"]:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="End date must be after start date"
+                    detail="End date must be after start date",
                 )
 
     # Convert UUID objects to strings for JSON-serializable storage
     if "eligible_voters" in update_data and update_data["eligible_voters"]:
-        update_data["eligible_voters"] = [str(v) for v in update_data["eligible_voters"]]
+        update_data["eligible_voters"] = [
+            str(v) for v in update_data["eligible_voters"]
+        ]
 
     # Update fields — explicit allowlist prevents writing to read-only columns
     # (e.g. organization_id, created_by, voter_anonymity_salt) if the Pydantic
     # schema is ever inadvertently expanded.
     ALLOWED_ELECTION_UPDATE_FIELDS = {
-        "title", "description", "election_type", "positions", "ballot_items",
-        "position_eligibility", "meeting_date", "start_date", "end_date",
-        "anonymous_voting", "allow_write_ins", "max_votes_per_position",
-        "results_visible_immediately", "eligible_voters", "voting_method",
-        "victory_condition", "victory_threshold", "victory_percentage",
-        "enable_runoffs", "runoff_type", "max_runoff_rounds",
+        "title",
+        "description",
+        "election_type",
+        "positions",
+        "ballot_items",
+        "position_eligibility",
+        "meeting_date",
+        "start_date",
+        "end_date",
+        "anonymous_voting",
+        "allow_write_ins",
+        "max_votes_per_position",
+        "results_visible_immediately",
+        "eligible_voters",
+        "voting_method",
+        "victory_condition",
+        "victory_threshold",
+        "victory_percentage",
+        "enable_runoffs",
+        "runoff_type",
+        "max_runoff_rounds",
     }
     for field, value in update_data.items():
         if field in ALLOWED_ELECTION_UPDATE_FIELDS:
@@ -531,8 +557,7 @@ async def delete_election(
 
     if not election:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
     election_title = election.title
@@ -545,7 +570,7 @@ async def delete_election(
         if not reason or len(reason.strip()) < 10:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A reason of at least 10 characters is required to delete a non-draft election"
+                detail="A reason of at least 10 characters is required to delete a non-draft election",
             )
 
         # Count active votes for audit context
@@ -588,7 +613,9 @@ async def delete_election(
             user_id=str(current_user.id),
         )
     else:
-        logger.info(f"Draft election deleted | id={election_id} title={election_title!r} by={current_user.id}")
+        logger.info(
+            f"Draft election deleted | id={election_id} title={election_title!r} by={current_user.id}"
+        )
 
         await log_audit_event(
             db=db,
@@ -627,13 +654,12 @@ async def open_election(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    election, error = await service.open_election(election_id, current_user.organization_id)
+    election, error = await service.open_election(
+        election_id, current_user.organization_id
+    )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return election
 
@@ -655,8 +681,7 @@ async def close_election(
 
     if not election:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
     return election
@@ -687,10 +712,7 @@ async def rollback_election(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return ElectionRollbackResponse(
         success=True,
@@ -703,6 +725,7 @@ async def rollback_election(
 # ============================================
 # Candidate Endpoints
 # ============================================
+
 
 @router.get("/{election_id}/candidates", response_model=List[CandidateResponse])
 async def list_candidates(
@@ -726,8 +749,7 @@ async def list_candidates(
 
     if not election:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
     result = await db.execute(
@@ -739,7 +761,11 @@ async def list_candidates(
     return result.scalars().all()
 
 
-@router.post("/{election_id}/candidates", response_model=CandidateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{election_id}/candidates",
+    response_model=CandidateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_candidate(
     election_id: UUID,
     candidate: CandidateCreate,
@@ -762,22 +788,20 @@ async def create_candidate(
 
     if not election:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
     # Cannot add candidates to closed elections
     if election.status == ElectionStatus.CLOSED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot add candidates to closed election"
+            detail="Cannot add candidates to closed election",
         )
 
     # Verify election_id matches
     if candidate.election_id != election_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Election ID mismatch"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Election ID mismatch"
         )
 
     # Validate candidate position against election positions (if positions are defined)
@@ -785,7 +809,7 @@ async def create_candidate(
         if candidate.position not in election.positions:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Position '{candidate.position}' is not defined for this election. Valid positions: {', '.join(election.positions)}"
+                detail=f"Position '{candidate.position}' is not defined for this election. Valid positions: {', '.join(election.positions)}",
             )
 
     new_candidate = Candidate(
@@ -793,7 +817,7 @@ async def create_candidate(
         nominated_by=current_user.id,
         nomination_date=datetime.now(timezone.utc),
         accepted=True,  # Auto-accept if nominated by admin
-        **candidate.model_dump()
+        **candidate.model_dump(),
     )
 
     db.add(new_candidate)
@@ -803,7 +827,9 @@ async def create_candidate(
     return new_candidate
 
 
-@router.patch("/{election_id}/candidates/{candidate_id}", response_model=CandidateResponse)
+@router.patch(
+    "/{election_id}/candidates/{candidate_id}", response_model=CandidateResponse
+)
 async def update_candidate(
     election_id: UUID,
     candidate_id: UUID,
@@ -826,8 +852,7 @@ async def update_candidate(
 
     if not candidate:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidate not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
         )
 
     # Update fields
@@ -843,7 +868,9 @@ async def update_candidate(
     return candidate
 
 
-@router.delete("/{election_id}/candidates/{candidate_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{election_id}/candidates/{candidate_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_candidate(
     election_id: UUID,
     candidate_id: UUID,
@@ -865,8 +892,7 @@ async def delete_candidate(
 
     if not candidate:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidate not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
         )
 
     # Check for active (non-deleted) votes
@@ -880,7 +906,7 @@ async def delete_candidate(
     if vote_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete candidate with existing votes"
+            detail="Cannot delete candidate with existing votes",
         )
 
     await db.delete(candidate)
@@ -890,6 +916,7 @@ async def delete_candidate(
 # ============================================
 # Voting Endpoints
 # ============================================
+
 
 @router.get("/{election_id}/eligibility", response_model=VoterEligibility)
 async def check_eligibility(
@@ -908,7 +935,11 @@ async def check_eligibility(
     )
 
 
-@router.post("/{election_id}/vote", response_model=VoteResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{election_id}/vote",
+    response_model=VoteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def cast_vote(
     election_id: UUID,
     vote: VoteCreate,
@@ -924,8 +955,7 @@ async def cast_vote(
     # Verify election_id matches
     if vote.election_id != election_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Election ID mismatch"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Election ID mismatch"
         )
 
     service = ElectionService(db)
@@ -941,15 +971,16 @@ async def cast_vote(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return new_vote
 
 
-@router.post("/{election_id}/vote/bulk", response_model=List[VoteResponse], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{election_id}/vote/bulk",
+    response_model=List[VoteResponse],
+    status_code=status.HTTP_201_CREATED,
+)
 async def cast_bulk_votes(
     election_id: UUID,
     bulk_vote: BulkVoteCreate,
@@ -968,8 +999,7 @@ async def cast_bulk_votes(
     # Verify election_id matches
     if bulk_vote.election_id != election_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Election ID mismatch"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Election ID mismatch"
         )
 
     service = ElectionService(db)
@@ -1003,8 +1033,7 @@ async def cast_bulk_votes(
             # Roll back all votes from this batch
             await savepoint.rollback()
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="; ".join(errors)
+                status_code=status.HTTP_400_BAD_REQUEST, detail="; ".join(errors)
             )
 
         await savepoint.commit()
@@ -1014,7 +1043,7 @@ async def cast_bulk_votes(
         await savepoint.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to cast bulk votes — all votes rolled back"
+            detail="Failed to cast bulk votes — all votes rolled back",
         )
 
     return votes
@@ -1023,6 +1052,7 @@ async def cast_bulk_votes(
 # ============================================
 # Results Endpoints
 # ============================================
+
 
 @router.get("/{election_id}/results", response_model=ElectionResults)
 async def get_results(
@@ -1046,8 +1076,7 @@ async def get_results(
 
     if not results:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Results not available yet"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Results not available yet"
         )
 
     return results
@@ -1070,8 +1099,7 @@ async def get_stats(
 
     if not stats:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
     return stats
@@ -1101,8 +1129,7 @@ async def send_ballot_emails(
 
     if not election:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
     # Build base ballot URL pointing to the frontend ballot page
@@ -1110,7 +1137,9 @@ async def send_ballot_emails(
     base_url = str(request.base_url).rstrip("/")
     # Strip /api/v1 prefix if present to get the frontend origin
     frontend_origin = base_url.replace("/api/v1", "").replace("/api", "")
-    base_ballot_url = f"{frontend_origin}/ballot" if email_data.include_ballot_link else None
+    base_ballot_url = (
+        f"{frontend_origin}/ballot" if email_data.include_ballot_link else None
+    )
 
     service = ElectionService(db)
     recipients_count, failed_count = await service.send_ballot_emails(
@@ -1126,13 +1155,18 @@ async def send_ballot_emails(
         success=failed_count == 0,
         recipients_count=recipients_count,
         failed_count=failed_count,
-        message=f"Ballot emails sent to {recipients_count} recipient(s)" if failed_count == 0 else f"Sent to {recipients_count} recipients with {failed_count} failures",
+        message=(
+            f"Ballot emails sent to {recipients_count} recipient(s)"
+            if failed_count == 0
+            else f"Sent to {recipients_count} recipients with {failed_count} failures"
+        ),
     )
 
 
 # ============================================
 # Vote Integrity and Audit Endpoints
 # ============================================
+
 
 @router.get("/{election_id}/integrity")
 async def verify_vote_integrity(
@@ -1149,12 +1183,13 @@ async def verify_vote_integrity(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    result = await service.verify_vote_integrity(election_id, current_user.organization_id)
+    result = await service.verify_vote_integrity(
+        election_id, current_user.organization_id
+    )
 
     if "error" in result:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=result["error"]
+            status_code=status.HTTP_404_NOT_FOUND, detail=result["error"]
         )
 
     return result
@@ -1183,7 +1218,7 @@ async def soft_delete_vote(
     if not vote:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vote not found or already deleted"
+            detail="Vote not found or already deleted",
         )
 
     return {"message": "Vote soft-deleted successfully", "vote_id": str(vote.id)}
@@ -1206,15 +1241,18 @@ async def get_election_forensics(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    report = await service.get_election_forensics(election_id, current_user.organization_id)
+    report = await service.get_election_forensics(
+        election_id, current_user.organization_id
+    )
 
     if not report:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    logger.info(f"Forensics report requested | election={election_id} by={current_user.id}")
+    logger.info(
+        f"Forensics report requested | election={election_id} by={current_user.id}"
+    )
 
     return report
 
@@ -1222,6 +1260,7 @@ async def get_election_forensics(
 # ============================================
 # Meeting Attendance Endpoints
 # ============================================
+
 
 @router.get("/{election_id}/attendees")
 async def get_attendees(
@@ -1240,14 +1279,17 @@ async def get_attendees(
 
     if attendees is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
     return {"attendees": attendees, "total": len(attendees)}
 
 
-@router.post("/{election_id}/attendees", response_model=AttendeeCheckInResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{election_id}/attendees",
+    response_model=AttendeeCheckInResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def check_in_attendee(
     election_id: UUID,
     check_in: AttendeeCheckIn,
@@ -1269,10 +1311,7 @@ async def check_in_attendee(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     # Get updated total
     attendees = await service.get_attendees(election_id, current_user.organization_id)
@@ -1307,10 +1346,7 @@ async def remove_attendee(
     )
 
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return {"success": True, "message": "Attendee removed"}
 
@@ -1318,14 +1354,20 @@ async def remove_attendee(
 # ==================== Voter Eligibility Overrides ====================
 
 
-from pydantic import BaseModel as _PydanticBase, Field as _Field
-from typing import Optional as _Opt
+from pydantic import BaseModel as _PydanticBase
+from pydantic import Field as _Field
 
 
 class VoterOverrideRequest(_PydanticBase):
     """Request to grant a member voting rights despite tier/attendance restrictions."""
+
     user_id: UUID
-    reason: str = _Field(..., min_length=1, max_length=500, description="Why this member is being allowed to vote")
+    reason: str = _Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Why this member is being allowed to vote",
+    )
 
 
 @router.post("/{election_id}/voter-overrides", status_code=status.HTTP_201_CREATED)
@@ -1353,7 +1395,9 @@ async def add_voter_override(
     )
     election = result.scalar_one_or_none()
     if not election:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
 
     # Verify the target user exists in the same org
     user_result = await db.execute(
@@ -1363,7 +1407,9 @@ async def add_voter_override(
     )
     target_user = user_result.scalar_one_or_none()
     if not target_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
 
     overrides = election.voter_overrides or []
 
@@ -1430,7 +1476,9 @@ async def list_voter_overrides(
     )
     election = result.scalar_one_or_none()
     if not election:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
 
     return {
         "election_id": str(election_id),
@@ -1439,7 +1487,9 @@ async def list_voter_overrides(
     }
 
 
-@router.delete("/{election_id}/voter-overrides/{user_id}", status_code=status.HTTP_200_OK)
+@router.delete(
+    "/{election_id}/voter-overrides/{user_id}", status_code=status.HTTP_200_OK
+)
 async def remove_voter_override(
     election_id: UUID,
     user_id: UUID,
@@ -1458,7 +1508,9 @@ async def remove_voter_override(
     )
     election = result.scalar_one_or_none()
     if not election:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
 
     overrides = election.voter_overrides or []
     original_len = len(overrides)
@@ -1491,8 +1543,14 @@ async def remove_voter_override(
 
 class BulkVoterOverrideRequest(_PydanticBase):
     """Bulk grant voting overrides for multiple members at once."""
+
     user_ids: list
-    reason: str = _Field(..., min_length=10, max_length=500, description="Shared reason for all overrides (e.g. 'Shift B excused due to weather emergency')")
+    reason: str = _Field(
+        ...,
+        min_length=10,
+        max_length=500,
+        description="Shared reason for all overrides (e.g. 'Shift B excused due to weather emergency')",
+    )
 
 
 @router.post("/{election_id}/voter-overrides/bulk", status_code=status.HTTP_201_CREATED)
@@ -1521,7 +1579,9 @@ async def bulk_add_voter_overrides(
     )
     election = result.scalar_one_or_none()
     if not election:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
 
     overrides = election.voter_overrides or []
     existing_ids = {o.get("user_id") for o in overrides}
@@ -1646,7 +1706,9 @@ async def add_proxy_authorization(
     return auth_record
 
 
-@router.get("/{election_id}/proxy-authorizations", response_model=ProxyAuthorizationListResponse)
+@router.get(
+    "/{election_id}/proxy-authorizations", response_model=ProxyAuthorizationListResponse
+)
 async def list_proxy_authorizations(
     election_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1667,12 +1729,17 @@ async def list_proxy_authorizations(
     )
 
     if result is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
 
     return result
 
 
-@router.delete("/{election_id}/proxy-authorizations/{authorization_id}", status_code=status.HTTP_200_OK)
+@router.delete(
+    "/{election_id}/proxy-authorizations/{authorization_id}",
+    status_code=status.HTTP_200_OK,
+)
 async def revoke_proxy_authorization(
     election_id: UUID,
     authorization_id: str,
@@ -1696,13 +1763,21 @@ async def revoke_proxy_authorization(
     )
 
     if error:
-        status_code = status.HTTP_404_NOT_FOUND if "not found" in error.lower() else status.HTTP_400_BAD_REQUEST
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
         raise HTTPException(status_code=status_code, detail=error)
 
     return {"success": True, "message": "Proxy authorization revoked"}
 
 
-@router.post("/{election_id}/proxy-vote", response_model=VoteResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{election_id}/proxy-vote",
+    response_model=VoteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def cast_proxy_vote(
     election_id: UUID,
     vote: ProxyVoteCreate,

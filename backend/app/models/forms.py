@@ -5,27 +5,27 @@ SQLAlchemy models for custom forms including form definitions,
 fields, submissions, integrations, and public access.
 """
 
+import enum
+import uuid
+
 from sqlalchemy import (
-    Column,
-    String,
+    JSON,
     Boolean,
+    Column,
     DateTime,
-    Integer,
-    Text,
     Enum,
     ForeignKey,
     Index,
-    JSON,
+    Integer,
+    String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import enum
-import uuid
-
-from app.core.utils import generate_uuid
 
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 def generate_slug() -> str:
@@ -35,6 +35,7 @@ def generate_slug() -> str:
 
 class FormStatus(str, enum.Enum):
     """Status of a form"""
+
     DRAFT = "draft"
     PUBLISHED = "published"
     ARCHIVED = "archived"
@@ -42,6 +43,7 @@ class FormStatus(str, enum.Enum):
 
 class FormCategory(str, enum.Enum):
     """Category of form"""
+
     SAFETY = "Safety"
     OPERATIONS = "Operations"
     ADMINISTRATION = "Administration"
@@ -51,6 +53,7 @@ class FormCategory(str, enum.Enum):
 
 class FieldType(str, enum.Enum):
     """Type of form field"""
+
     TEXT = "text"
     TEXTAREA = "textarea"
     NUMBER = "number"
@@ -71,6 +74,7 @@ class FieldType(str, enum.Enum):
 
 class IntegrationTarget(str, enum.Enum):
     """Target module for form integrations"""
+
     MEMBERSHIP = "membership"
     INVENTORY = "inventory"
     EVENTS = "events"
@@ -78,6 +82,7 @@ class IntegrationTarget(str, enum.Enum):
 
 class IntegrationType(str, enum.Enum):
     """Type of integration action"""
+
     MEMBERSHIP_INTEREST = "membership_interest"
     EQUIPMENT_ASSIGNMENT = "equipment_assignment"
     EVENT_REGISTRATION = "event_registration"
@@ -94,13 +99,27 @@ class Form(Base):
     __tablename__ = "forms"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Form Information
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    category = Column(Enum(FormCategory, values_callable=lambda x: [e.value for e in x]), default=FormCategory.OPERATIONS, nullable=False)
-    status = Column(Enum(FormStatus, values_callable=lambda x: [e.value for e in x]), default=FormStatus.DRAFT, nullable=False, index=True)
+    category = Column(
+        Enum(FormCategory, values_callable=lambda x: [e.value for e in x]),
+        default=FormCategory.OPERATIONS,
+        nullable=False,
+    )
+    status = Column(
+        Enum(FormStatus, values_callable=lambda x: [e.value for e in x]),
+        default=FormStatus.DRAFT,
+        nullable=False,
+        index=True,
+    )
 
     # Settings
     allow_multiple_submissions = Column(Boolean, default=True)
@@ -118,14 +137,25 @@ class Form(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     published_at = Column(DateTime(timezone=True))
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
-    fields = relationship("FormField", back_populates="form", cascade="all, delete-orphan", order_by="FormField.sort_order")
-    submissions = relationship("FormSubmission", back_populates="form", cascade="all, delete-orphan")
-    integrations = relationship("FormIntegration", back_populates="form", cascade="all, delete-orphan")
+    fields = relationship(
+        "FormField",
+        back_populates="form",
+        cascade="all, delete-orphan",
+        order_by="FormField.sort_order",
+    )
+    submissions = relationship(
+        "FormSubmission", back_populates="form", cascade="all, delete-orphan"
+    )
+    integrations = relationship(
+        "FormIntegration", back_populates="form", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_forms_org_status", "organization_id", "status"),
@@ -144,11 +174,18 @@ class FormField(Base):
     __tablename__ = "form_fields"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    form_id = Column(String(36), ForeignKey("forms.id", ondelete="CASCADE"), nullable=False, index=True)
+    form_id = Column(
+        String(36),
+        ForeignKey("forms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Field Configuration
     label = Column(String(255), nullable=False)
-    field_type = Column(Enum(FieldType, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    field_type = Column(
+        Enum(FieldType, values_callable=lambda x: [e.value for e in x]), nullable=False
+    )
     placeholder = Column(String(255))
     help_text = Column(Text)
     default_value = Column(Text)
@@ -166,9 +203,13 @@ class FormField(Base):
 
     # Conditional visibility
     # When set, this field is only shown if the referenced field's value matches.
-    condition_field_id = Column(String(36), nullable=True)   # ID of the controlling field
-    condition_operator = Column(String(20), nullable=True)    # "equals", "not_equals", "contains", "not_empty", "is_empty"
-    condition_value = Column(String(500), nullable=True)      # Value to compare against
+    condition_field_id = Column(
+        String(36), nullable=True
+    )  # ID of the controlling field
+    condition_operator = Column(
+        String(20), nullable=True
+    )  # "equals", "not_equals", "contains", "not_empty", "is_empty"
+    condition_value = Column(String(500), nullable=True)  # Value to compare against
 
     # Layout
     sort_order = Column(Integer, default=0, nullable=False)
@@ -176,14 +217,14 @@ class FormField(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     form = relationship("Form", back_populates="fields")
 
-    __table_args__ = (
-        Index("idx_form_fields_form_order", "form_id", "sort_order"),
-    )
+    __table_args__ = (Index("idx_form_fields_form_order", "form_id", "sort_order"),)
 
 
 class FormSubmission(Base):
@@ -196,11 +237,23 @@ class FormSubmission(Base):
     __tablename__ = "form_submissions"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    form_id = Column(String(36), ForeignKey("forms.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    form_id = Column(
+        String(36),
+        ForeignKey("forms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Submission Info
-    submitted_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    submitted_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Data stored as JSON for flexibility
@@ -221,7 +274,9 @@ class FormSubmission(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     form = relationship("Form", back_populates="submissions")
@@ -245,12 +300,25 @@ class FormIntegration(Base):
     __tablename__ = "form_integrations"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    form_id = Column(String(36), ForeignKey("forms.id", ondelete="CASCADE"), nullable=False, index=True)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    form_id = Column(
+        String(36),
+        ForeignKey("forms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Integration configuration
-    target_module = Column(Enum(IntegrationTarget, values_callable=lambda x: [e.value for e in x]), nullable=False)
-    integration_type = Column(Enum(IntegrationType, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    target_module = Column(
+        Enum(IntegrationTarget, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    integration_type = Column(
+        Enum(IntegrationType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
 
     # Field mappings: maps form field IDs to target module field names
     # e.g., {"field-uuid-1": "first_name", "field-uuid-2": "email", "field-uuid-3": "phone"}
@@ -260,7 +328,9 @@ class FormIntegration(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     form = relationship("Form", back_populates="integrations")
