@@ -13,6 +13,7 @@ services:
     # Note: host_cache_size is set via initialization script (database/schemas/00-init-settings.sql)
     # instead of command-line flag to follow MySQL 8.0+ recommendations
     command: >
+      --default-authentication-plugin=mysql_native_password
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
       --max_connections=500
