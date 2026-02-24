@@ -290,6 +290,7 @@ class InventoryService:
         category_id: Optional[UUID] = None,
         status: Optional[ItemStatus] = None,
         assigned_to: Optional[UUID] = None,
+        storage_area_id: Optional[UUID] = None,
         search: Optional[str] = None,
         active_only: bool = True,
         skip: int = 0,
@@ -313,6 +314,9 @@ class InventoryService:
 
         if assigned_to:
             query = query.where(InventoryItem.assigned_to_user_id == assigned_to)
+
+        if storage_area_id:
+            query = query.where(InventoryItem.storage_area_id == str(storage_area_id))
 
         if search:
             safe_search = (

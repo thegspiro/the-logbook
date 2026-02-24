@@ -27,6 +27,7 @@ import {
   locationsService,
   type StorageAreaResponse,
   type StorageAreaCreate,
+  type InventoryItem,
   type Location,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -54,6 +55,15 @@ const TYPE_ICONS: Record<string, string> = {
   other: '📍',
 };
 
+const STATUS_STYLES: Record<string, string> = {
+  available: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30',
+  assigned: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
+  checked_out: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30',
+  in_maintenance: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30',
+  lost: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30',
+  retired: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border',
+};
+
 interface StorageTreeNodeProps {
   area: StorageAreaResponse;
   depth: number;
@@ -66,6 +76,29 @@ interface StorageTreeNodeProps {
 const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, onDelete, onAddChild, canManage }) => {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = area.children && area.children.length > 0;
+
+  // Items display state (lazy-loaded)
+  const [showItems, setShowItems] = useState(false);
+  const [items, setItems] = useState<InventoryItem[] | null>(null);
+  const [loadingItems, setLoadingItems] = useState(false);
+
+  const toggleItems = async () => {
+    if (showItems) {
+      setShowItems(false);
+      return;
+    }
+    setShowItems(true);
+    if (items !== null) return; // Already loaded
+    setLoadingItems(true);
+    try {
+      const data = await inventoryService.getItems({ storage_area_id: area.id, limit: 100 });
+      setItems(data.items);
+    } catch {
+      setItems([]);
+    } finally {
+      setLoadingItems(false);
+    }
+  };
 
   return (
     <div>
@@ -98,10 +131,22 @@ const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, 
           )}
         </div>
 
-        {/* Item count badge */}
-        {area.item_count > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs">
+        {/* Item count badge — clickable to show items */}
+        {area.item_count > 0 ? (
+          <button
+            onClick={() => void toggleItems()}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors ${
+              showItems
+                ? 'bg-emerald-600 text-white'
+                : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20'
+            }`}
+            title={showItems ? 'Hide items' : 'Show items'}
+          >
             <Package className="w-3 h-3" /> {area.item_count}
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-theme-surface-secondary text-theme-text-muted text-xs">
+            <Package className="w-3 h-3" /> 0
           </span>
         )}
 
@@ -125,6 +170,51 @@ const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, 
           </div>
         )}
       </div>
+
+      {/* Items in this storage area */}
+      {showItems && (
+        <div
+          className="border-l-2 border-emerald-500/30 ml-4 my-1"
+          style={{ marginLeft: `${depth * 24 + 36}px` }}
+        >
+          {loadingItems ? (
+            <div className="flex items-center gap-2 px-3 py-2 text-theme-text-muted text-xs">
+              <Loader2 className="w-3 h-3 animate-spin" /> Loading items...
+            </div>
+          ) : items && items.length > 0 ? (
+            <div className="py-1">
+              {items.map(item => (
+                <Link
+                  key={item.id}
+                  to={`/inventory?item=${item.id}`}
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-theme-surface-hover rounded text-xs group/item"
+                >
+                  <span className="text-theme-text-primary font-medium truncate">
+                    {item.name}
+                  </span>
+                  {item.serial_number && (
+                    <span className="text-theme-text-muted font-mono hidden sm:inline">
+                      {item.serial_number}
+                    </span>
+                  )}
+                  {item.quantity > 1 && (
+                    <span className="text-theme-text-muted">
+                      x{item.quantity}
+                    </span>
+                  )}
+                  <span className={`ml-auto px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase whitespace-nowrap ${STATUS_STYLES[item.status] ?? 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'}`}>
+                    {item.status.replace('_', ' ')}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="px-3 py-2 text-theme-text-muted text-xs">
+              No items found
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Children */}
       {expanded && hasChildren && (
