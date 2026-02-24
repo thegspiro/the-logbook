@@ -2267,6 +2267,7 @@ export const inventoryService = {
   async getItems(params?: {
     category_id?: string;
     status?: string;
+    storage_area_id?: string;
     search?: string;
     active_only?: boolean;
     skip?: number;

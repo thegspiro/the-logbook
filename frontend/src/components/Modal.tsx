@@ -35,6 +35,12 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  // Keep the ref current without triggering the effect
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   const sizeClasses = {
     sm: 'max-w-[calc(100vw-2rem)] sm:max-w-md',
@@ -55,7 +61,7 @@ export const Modal: React.FC<ModalProps> = ({
     // Handle escape key
     const handleEscape = (e: KeyboardEvent) => {
       if (closeOnEscape && e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
       }
     };
 
@@ -93,7 +99,7 @@ export const Modal: React.FC<ModalProps> = ({
       // Return focus to previous element
       previousFocusRef.current?.focus();
     };
-  }, [isOpen, onClose, closeOnEscape]);
+  }, [isOpen, closeOnEscape]);
 
   if (!isOpen) return null;
 
