@@ -59,6 +59,9 @@
     "@typescript-eslint/no-misused-promises": "warn",
 
     // Strict null checks (disabled for now - too many false positives in existing code)
-    "@typescript-eslint/strict-boolean-expressions": "off"
+    "@typescript-eslint/strict-boolean-expressions": "off",
+
+    // Disallow console.* in production code (use proper logging/error tracking)
+    "no-console": ["warn", { "allow": ["warn", "error"] }]
   }
 }

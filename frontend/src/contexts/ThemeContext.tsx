@@ -7,8 +7,8 @@ import React, {
   useState,
 } from 'react';
 
-type Theme = 'light' | 'dark' | 'system';
-type ResolvedTheme = 'light' | 'dark';
+type Theme = 'light' | 'dark' | 'system' | 'high-contrast';
+type ResolvedTheme = 'light' | 'dark' | 'high-contrast';
 
 interface ThemeContextValue {
   theme: Theme;
@@ -33,7 +33,7 @@ function getSavedTheme(): Theme {
     return 'light';
   }
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved === 'light' || saved === 'dark' || saved === 'system') {
+  if (saved === 'light' || saved === 'dark' || saved === 'system' || saved === 'high-contrast') {
     return saved;
   }
   return 'system';
@@ -41,10 +41,16 @@ function getSavedTheme(): Theme {
 
 function applyThemeToDocument(resolved: ResolvedTheme): void {
   const root = document.documentElement;
-  if (resolved === 'dark') {
+  if (resolved === 'high-contrast') {
     root.classList.add('dark');
+    root.classList.add('high-contrast');
   } else {
-    root.classList.remove('dark');
+    root.classList.remove('high-contrast');
+    if (resolved === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
   }
   root.setAttribute('data-theme', resolved);
 }
@@ -53,7 +59,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getSavedTheme);
   const [systemPreference, setSystemPreference] = useState<ResolvedTheme>(getSystemPreference);
 
-  const resolvedTheme: ResolvedTheme = theme === 'system' ? systemPreference : theme;
+  const resolvedTheme: ResolvedTheme = theme === 'system' ? systemPreference : theme === 'high-contrast' ? 'high-contrast' : theme;
 
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);

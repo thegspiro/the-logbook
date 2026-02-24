@@ -97,13 +97,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Set default signup position
   useEffect(() => {
     if (positionOptions.length > 0 && !signupPosition) {
-      setSignupPosition(positionOptions[0][0]);
+      setSignupPosition(positionOptions[0]![0]);
     }
   }, [positionOptions.length]);
 
   useEffect(() => {
     if (positionOptions.length > 0 && !assignForm.position) {
-      setAssignForm(f => ({ ...f, position: positionOptions[0][0] }));
+      setAssignForm(f => ({ ...f, position: positionOptions[0]![0] }));
     }
   }, [positionOptions.length]);
 

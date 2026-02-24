@@ -72,14 +72,39 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false, // Disabled in production to prevent source code exposure
-    // Temporarily disable manual code splitting to diagnose bundling issue
-    // rollupOptions: {
-    //   output: {
-    //     manualChunks: ...
-    //   },
-    // },
-    // Additional optimizations
-    chunkSizeWarningLimit: 1000, // Warn for chunks > 1MB
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            // Check specific sub-framework chunks first (before the
+            // broad 'react' match below catches them)
+            if (id.includes('react-router') || id.includes('@remix-run')) {
+              return 'vendor-router';
+            }
+            if (id.includes('lucide-react') || id.includes('@headlessui')) {
+              return 'vendor-ui';
+            }
+            if (id.includes('recharts') || id.includes('d3-')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('date-fns')) {
+              return 'vendor-date';
+            }
+            if (id.includes('zustand')) {
+              return 'vendor-state';
+            }
+            // React core + scheduler + all React-dependent libs in one
+            // chunk. This prevents circular inter-chunk dependencies
+            // (e.g. react-dom→scheduler in vendor, vendor→react).
+            if (id.includes('react') || id.includes('scheduler') || id.includes('@hookform')) {
+              return 'vendor-react';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600, // Warn for chunks > 600KB
     minify: 'esbuild', // Fast minification
   },
   preview: {

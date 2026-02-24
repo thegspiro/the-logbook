@@ -43,6 +43,7 @@ function SignaturePad({ value, onChange, isDark, inputClass, disabled }: Signatu
     const scaleY = canvas.height / rect.height;
     if ('touches' in e) {
       const touch = e.touches[0];
+      if (!touch) return { x: 0, y: 0 };
       return { x: (touch.clientX - rect.left) * scaleX, y: (touch.clientY - rect.top) * scaleY };
     }
     return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
@@ -180,6 +181,8 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
   const [searchingMembers, setSearchingMembers] = useState(false);
 
   const isDark = theme === 'dark';
+  const errorId = `field-error-${field.id}`;
+  const ariaProps = error ? { 'aria-describedby': errorId, 'aria-invalid': true as const } : {};
 
   const inputClass = isDark
     ? `w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
@@ -244,6 +247,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
             minLength={field.min_length || undefined}
             maxLength={field.max_length || undefined}
             pattern={field.validation_pattern || undefined}
+            {...ariaProps}
           />
         );
 
@@ -259,6 +263,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
             disabled={disabled}
             min={field.min_value || undefined}
             max={field.max_value || undefined}
+            {...ariaProps}
           />
         );
 
@@ -273,6 +278,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
             disabled={disabled}
             minLength={field.min_length || undefined}
             maxLength={field.max_length || undefined}
+            {...ariaProps}
           />
         );
 
@@ -285,6 +291,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
             onChange={(e) => onChange(field.id, e.target.value)}
             required={field.required}
             disabled={disabled}
+            {...ariaProps}
           />
         );
 
@@ -298,6 +305,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
             onChange={(e) => onChange(field.id, e.target.value)}
             required={field.required}
             disabled={disabled}
+            {...ariaProps}
           />
         );
 
@@ -311,6 +319,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
             onChange={(e) => onChange(field.id, e.target.value)}
             required={field.required}
             disabled={disabled}
+            {...ariaProps}
           />
         );
 
@@ -322,6 +331,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
             onChange={(e) => onChange(field.id, e.target.value)}
             required={field.required}
             disabled={disabled}
+            {...ariaProps}
           >
             <option value="">{field.placeholder || 'Select an option...'}</option>
             {field.options?.map((opt) => (
@@ -420,6 +430,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
                 value={memberQuery}
                 onChange={(e) => handleMemberSearch(e.target.value)}
                 disabled={disabled}
+                {...ariaProps}
               />
               {searchingMembers && (
                 <div className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isDark ? 'border-pink-500' : 'border-blue-500'}`} />
@@ -551,6 +562,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
             onChange={(e) => onChange(field.id, e.target.value)}
             required={field.required}
             disabled={disabled}
+            {...ariaProps}
           />
         );
     }
@@ -566,7 +578,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
         <p className={`text-xs mb-2 ${sectionSubClass}`}>{field.help_text}</p>
       )}
       {renderInput()}
-      {error && <p className="text-xs text-red-700 dark:text-red-400 mt-1">{error}</p>}
+      {error && <p id={errorId} className="text-xs text-red-700 dark:text-red-400 mt-1" role="alert">{error}</p>}
     </div>
   );
 };

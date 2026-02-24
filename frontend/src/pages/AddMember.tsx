@@ -83,13 +83,13 @@ const AddMember: React.FC = () => {
     // Load positions (roles) for dropdown
     roleService.getRoles().then((roles) => {
       setAvailablePositions(roles.map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
-    }).catch(() => {});
+    }).catch(() => { /* non-critical */ });
 
     // Load stations for dropdown (only top-level locations with an address)
     locationsService.getLocations({ is_active: true }).then((locs) => {
       const stations = locs.filter((l: Location) => l.address && !l.room_number);
       setAvailableStations(stations);
-    }).catch(() => {});
+    }).catch(() => { /* non-critical */ });
   }, []);
 
   const handleInputChange = (
@@ -161,7 +161,7 @@ const AddMember: React.FC = () => {
 
     try {
       // Generate username from email (part before @)
-      const username = formData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      const username = formData.email.split('@')[0]!.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
       // Build emergency contacts array
       const emergencyContacts: Array<{

@@ -408,7 +408,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
   const updateResourceQuantity = (index: number, qty: number) => {
     setFormData(prev => {
       const updated = [...prev.resources];
-      updated[index] = { ...updated[index], quantity: Math.max(1, qty) };
+      updated[index] = { ...updated[index], quantity: Math.max(1, qty) } as ResourceUnit;
       return { ...prev, resources: updated };
     });
   };
@@ -416,7 +416,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
   const updateResourcePositions = (index: number, positions: string[]) => {
     setFormData(prev => {
       const updated = [...prev.resources];
-      updated[index] = { ...updated[index], positions };
+      updated[index] = { ...updated[index], positions } as ResourceUnit;
       return { ...prev, resources: updated };
     });
   };

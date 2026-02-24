@@ -34,7 +34,7 @@ import {
   Rocket,
   ShieldCheck,
 } from 'lucide-react';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor, Contrast } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
@@ -103,14 +103,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   }, [location.pathname]);
 
   const cycleTheme = () => {
-    const order = ['light', 'dark', 'system'] as const;
+    const order = ['light', 'dark', 'system', 'high-contrast'] as const;
     const currentIndex = order.indexOf(theme as typeof order[number]);
     const nextIndex = (currentIndex + 1) % order.length;
-    setTheme(order[nextIndex]);
+    setTheme(order[nextIndex] ?? 'system');
   };
 
-  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
-  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
+  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
+  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   // Determine if user has any admin permission (to show/hide Administration section)
   const hasAnyAdminPermission =
@@ -277,7 +277,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
                   src={logoPreview}
-                  alt=""
+                  alt={`${departmentName} logo`}
                   className="max-w-full max-h-full object-contain"
                 />
               </div>
@@ -334,7 +334,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                         <img
                           src={logoPreview}
-                          alt=""
+                          alt={`${departmentName} logo`}
                           className="max-w-full max-h-full object-contain"
                         />
                       </div>
@@ -360,7 +360,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                       <img
                         src={logoPreview}
-                        alt=""
+                        alt={`${departmentName} logo`}
                         className="max-w-full max-h-full object-contain"
                       />
                     </div>

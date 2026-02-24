@@ -178,7 +178,7 @@ const ErrorMonitoringPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        error.errorType.startsWith('BACKEND_')
+                        error.errorType?.startsWith('BACKEND_')
                           ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
                           : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
                       }`}>
@@ -208,7 +208,7 @@ const ErrorMonitoringPage: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-xs text-theme-text-muted font-mono">
-                      {error.id.split('-')[0]}
+                      {error.id?.split('-')[0]}
                     </td>
                   </tr>
                 ))}

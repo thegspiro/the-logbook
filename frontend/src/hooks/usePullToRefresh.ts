@@ -34,7 +34,9 @@ export function usePullToRefresh({
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
       if (disabled || window.scrollY > 0) return;
-      startYRef.current = e.touches[0].clientY;
+      const touch = e.touches[0];
+      if (!touch) return;
+      startYRef.current = touch.clientY;
       pullingRef.current = true;
     },
     [disabled]
@@ -44,7 +46,9 @@ export function usePullToRefresh({
     (e: TouchEvent) => {
       if (!pullingRef.current || disabled) return;
 
-      const currentY = e.touches[0].clientY;
+      const touch = e.touches[0];
+      if (!touch) return;
+      const currentY = touch.clientY;
       const distance = Math.max(0, (currentY - startYRef.current) * 0.5);
 
       if (distance > 0 && window.scrollY <= 0) {

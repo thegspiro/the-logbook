@@ -251,7 +251,7 @@ const InventoryPage: React.FC = () => {
     onEvent: useCallback(() => {
       // Refresh item list and summary when another user makes a change
       loadItems();
-      inventoryService.getSummary().then(setSummary).catch(() => {});
+      inventoryService.getSummary().then(setSummary).catch(() => { /* non-critical refresh */ });
     }, [searchQuery, statusFilter, categoryFilter]),
   });
 
@@ -276,18 +276,18 @@ const InventoryPage: React.FC = () => {
       // Rooms are locations that have a room_number or a building (parent station) set
       setRooms(locationsData.filter(l => l.room_number || l.building));
       // Low stock alerts (non-critical)
-      inventoryService.getLowStockItems().then(setLowStockAlerts).catch(() => {});
+      inventoryService.getLowStockItems().then(setLowStockAlerts).catch(() => { /* non-critical */ });
       // Load members for pool issuance and pending requests (non-critical)
       if (canManage) {
         inventoryService.getMembersSummary().then(data => {
           setMembers((data.members || []).map(m => ({ id: m.user_id, name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username || 'Unknown' })));
-        }).catch(() => {});
+        }).catch(() => { /* non-critical */ });
         inventoryService.getEquipmentRequests({ status: 'pending' }).then(data => {
           setPendingRequests(data.requests || []);
-        }).catch(() => {});
+        }).catch(() => { /* non-critical */ });
         inventoryService.getWriteOffRequests({ status: 'pending' }).then(data => {
           setWriteOffRequests(data || []);
-        }).catch(() => {});
+        }).catch(() => { /* non-critical */ });
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to load inventory data. Please check your connection and refresh the page.'));
@@ -717,7 +717,7 @@ const InventoryPage: React.FC = () => {
       // Refresh write-off list
       inventoryService.getWriteOffRequests({ status: 'pending' }).then(data => {
         setWriteOffRequests(data || []);
-      }).catch(() => {});
+      }).catch(() => { /* non-critical refresh */ });
     } catch (err: unknown) {
       setFormError(getErrorMessage(err, 'Failed to create write-off request'));
     } finally {
@@ -1502,7 +1502,7 @@ const InventoryPage: React.FC = () => {
               <div className="space-y-4">
                 {/* Overdue / Due Soon / In Maintenance sections */}
                 {(() => {
-                  const today = new Date().toISOString().split('T')[0];
+                  const today = new Date().toISOString().split('T')[0]!;
                   const overdue = maintenanceDueItems.filter(i => i.next_inspection_due && i.next_inspection_due < today);
                   const dueSoon = maintenanceDueItems.filter(i => i.next_inspection_due && i.next_inspection_due >= today);
                   const inMaintenance = maintenanceDueItems.filter(i => i.status === 'in_maintenance' && !i.next_inspection_due);

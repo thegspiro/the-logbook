@@ -127,7 +127,7 @@ const TrainingOfficerDashboard: React.FC = () => {
       // Process expiring certifications
       const expiringItems: ExpirationItem[] = expiring.map((record) => {
         const member = memberMapData.get(record.user_id);
-        const expDate = new Date(record.expiration_date!);
+        const expDate = new Date(record.expiration_date ?? '');
         const now = new Date();
         const daysLeft = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         return {
@@ -136,7 +136,7 @@ const TrainingOfficerDashboard: React.FC = () => {
           memberId: record.user_id,
           courseName: record.course_name,
           daysLeft,
-          expirationDate: record.expiration_date!,
+          expirationDate: record.expiration_date ?? '',
         };
       }).sort((a, b) => a.daysLeft - b.daysLeft);
       setExpiringCertifications(expiringItems);
@@ -146,8 +146,8 @@ const TrainingOfficerDashboard: React.FC = () => {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const recentRecords = allRecords
         .filter((r) => r.status === 'completed' && r.completion_date)
-        .filter((r) => new Date(r.completion_date!) >= thirtyDaysAgo)
-        .sort((a, b) => new Date(b.completion_date!).getTime() - new Date(a.completion_date!).getTime());
+        .filter((r) => new Date(r.completion_date ?? '') >= thirtyDaysAgo)
+        .sort((a, b) => new Date(b.completion_date ?? '').getTime() - new Date(a.completion_date ?? '').getTime());
 
       const completionItems: CompletionItem[] = recentRecords.slice(0, 10).map((record) => {
         const member = memberMapData.get(record.user_id);
@@ -156,7 +156,7 @@ const TrainingOfficerDashboard: React.FC = () => {
           memberName: member?.name || 'Unknown',
           memberId: record.user_id,
           courseName: record.course_name,
-          completionDate: record.completion_date!,
+          completionDate: record.completion_date ?? '',
           hoursCompleted: record.hours_completed || 0,
         };
       });
@@ -738,8 +738,8 @@ const RequirementStatusItem: React.FC<RequirementStatusItemProps> = ({ name, sta
     <div className="p-3 bg-theme-input-bg/50 rounded">
       <div className="flex items-center justify-between">
         <span className="text-theme-text-primary text-sm font-medium truncate flex-1 mr-2">{name}</span>
-        <span className={`text-xs font-semibold px-2 py-1 rounded ${statusConfig[status].color} text-theme-text-primary whitespace-nowrap`}>
-          {statusConfig[status].label}
+        <span className={`text-xs font-semibold px-2 py-1 rounded ${(statusConfig[status] ?? { color: 'bg-gray-600', label: status }).color} text-theme-text-primary whitespace-nowrap`}>
+          {(statusConfig[status] ?? { color: 'bg-gray-600', label: status }).label}
         </span>
       </div>
     </div>

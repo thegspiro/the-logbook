@@ -1220,30 +1220,16 @@ async def upload_photo(
             detail=f"Invalid file type. Allowed: JPEG, PNG, WebP. Detected: {detected_mime}",
         )
 
-    # Re-encode image using Pillow (strips EXIF, prevents polyglot attacks)
+    # Optimize image: resize, strip EXIF, convert to WebP (smaller files)
     try:
-        from PIL import Image
+        from app.utils.image_processing import optimize_image, IMAGE_SIZE_LIMITS
 
-        img = Image.open(io.BytesIO(contents))
-
-        # Convert to RGB if necessary (handles RGBA, palette, etc.)
-        if img.mode in ("RGBA", "LA", "P"):
-            img = img.convert("RGBA")
-            # Create white background for transparency
-            background = Image.new("RGBA", img.size, (255, 255, 255, 255))
-            background.paste(img, mask=img.split()[-1])
-            img = background.convert("RGB")
-        elif img.mode != "RGB":
-            img = img.convert("RGB")
-
-        # Resize to max 512x512 maintaining aspect ratio
-        img.thumbnail((512, 512), Image.LANCZOS)
-
-        # Re-encode as JPEG (strips all metadata)
-        output = io.BytesIO()
-        img.save(output, format="JPEG", quality=85, optimize=True)
-        output.seek(0)
-        clean_contents = output.read()
+        clean_contents = optimize_image(
+            contents,
+            max_size=IMAGE_SIZE_LIMITS["avatar"],  # 400x400 for profile photos
+            quality=85,
+            output_format="WEBP",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1251,7 +1237,7 @@ async def upload_photo(
         )
 
     # Store as base64 data URI
-    photo_data_uri = f"data:image/jpeg;base64,{base64.b64encode(clean_contents).decode()}"
+    photo_data_uri = f"data:image/webp;base64,{base64.b64encode(clean_contents).decode()}"
 
     result = await db.execute(
         select(User)

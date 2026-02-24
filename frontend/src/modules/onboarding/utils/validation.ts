@@ -4,6 +4,7 @@
  */
 
 import { PasswordStrength } from '../types';
+import { MAX_AVATAR_SIZE } from '../../../constants/config';
 import {
   isValidEmailSecure,
   isValidUsernameSecure,
@@ -59,7 +60,7 @@ export const isValidUsername = (username: string): boolean => {
 export const isValidImageFile = (file: File): { valid: boolean; error?: string; warning?: string } => {
   // SECURITY: Removed SVG from allowed types due to XSS risk
   const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-  const maxSize = 5 * 1024 * 1024; // 5MB
+  const maxSize = MAX_AVATAR_SIZE;
   const recommendedMaxSize = 2 * 1024 * 1024; // 2MB recommended
 
   if (!validTypes.includes(file.type)) {

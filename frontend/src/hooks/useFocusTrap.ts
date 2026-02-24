@@ -39,7 +39,7 @@ export function useFocusTrap<T extends HTMLElement>(isActive: boolean) {
     // Focus the first element
     const focusableElements = getFocusableElements();
     if (focusableElements.length > 0) {
-      focusableElements[0].focus();
+      focusableElements[0]?.focus();
     }
 
     // Handle tab key press
@@ -56,13 +56,13 @@ export function useFocusTrap<T extends HTMLElement>(isActive: boolean) {
         // Shift + Tab: going backwards
         if (document.activeElement === firstElement) {
           event.preventDefault();
-          lastElement.focus();
+          lastElement?.focus();
         }
       } else {
         // Tab: going forwards
         if (document.activeElement === lastElement) {
           event.preventDefault();
-          firstElement.focus();
+          firstElement?.focus();
         }
       }
     };

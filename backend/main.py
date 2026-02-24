@@ -17,6 +17,10 @@ from loguru import logger
 import sys
 import signal
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from app.core.config import settings
 from app.core.database import database_manager
 from app.core.cache import cache_manager
@@ -25,14 +29,47 @@ from app.api.public.portal import router as public_portal_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.display import router as public_display_router
 
-
-# Configure logging
-logger.remove()
-logger.add(
-    sys.stdout,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    level="INFO" if settings.ENVIRONMENT == "production" else "DEBUG",
+# Create rate limiter instance (uses Redis if available, falls back to in-memory)
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[settings.RATE_LIMIT_DEFAULT],
+    storage_uri=f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/1"
+    if settings.REDIS_HOST
+    else "memory://",
 )
+
+
+# Configure logging (#19: structured JSON logging option)
+logger.remove()
+
+if settings.LOG_FORMAT == "json":
+    # Structured JSON logging for production monitoring (ELK, Datadog, CloudWatch)
+    import json as _json
+
+    def _json_sink(message):
+        record = message.record
+        log_entry = {
+            "timestamp": record["time"].isoformat(),
+            "level": record["level"].name,
+            "message": record["message"],
+            "module": record["name"],
+            "function": record["function"],
+            "line": record["line"],
+        }
+        if record["exception"]:
+            log_entry["exception"] = str(record["exception"])
+        print(_json.dumps(log_entry), flush=True)
+
+    logger.add(
+        _json_sink,
+        level=settings.LOG_LEVEL if settings.ENVIRONMENT == "production" else "DEBUG",
+    )
+else:
+    logger.add(
+        sys.stdout,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level=settings.LOG_LEVEL if settings.ENVIRONMENT == "production" else "DEBUG",
+    )
 
 # Add file logging with directory creation
 import os
@@ -496,7 +533,7 @@ def _run_migration_file(engine_or_conn, migration_path):
                 module.upgrade()
 
 
-def _fast_path_init(engine, alembic_cfg, base_dir):
+def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
     """
     Fast-path database initialization for fresh installs.
 
@@ -583,10 +620,58 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
                 logger.debug("Could not re-enable FOREIGN_KEY_CHECKS during fast-path init", exc_info=True)
 
     # 6. Stamp alembic to head so future startups skip all migrations
-    command.stamp(alembic_cfg, "head")
+    try:
+        command.stamp(alembic_cfg, "head")
+    except Exception as stamp_err:
+        # If the revision graph is broken (missing migration file), stamp
+        # directly with the manually-resolved head revision ID.
+        logger.warning(
+            f"command.stamp('head') failed ({stamp_err}). "
+            "Falling back to manual head resolution for stamp."
+        )
+        import re as _stamp_re
+        _rev_pat = _stamp_re.compile(
+            r"^revision\s*[:=]\s*['\"](.+?)['\"]", _stamp_re.MULTILINE
+        )
+        _down_pat = _stamp_re.compile(
+            r"^down_revision\s*[:=]\s*['\"](.+?)['\"]", _stamp_re.MULTILINE
+        )
+        _versions_dir = os.path.join(base_dir, "alembic", "versions")
+        _all_revs = {}
+        _all_down = set()
+        for _fn in os.listdir(_versions_dir):
+            if not _fn.endswith('.py') or _fn.startswith('_'):
+                continue
+            try:
+                with open(os.path.join(_versions_dir, _fn)) as _mf:
+                    _c = _mf.read(2048)
+                _rm = _rev_pat.search(_c)
+                _dm = _down_pat.search(_c)
+                if _rm:
+                    _all_revs[_rm.group(1)] = _dm.group(1) if _dm else None
+                    if _dm:
+                        _all_down.add(_dm.group(1))
+            except Exception:
+                continue
+        _heads = sorted([r for r in _all_revs if r not in _all_down])
+        if _heads:
+            _manual_head = _heads[-1]
+            logger.info(f"Stamping alembic_version to {_manual_head} via SQL")
+            with engine.connect() as _sc:
+                _sc.execute(text("DELETE FROM alembic_version"))
+                _sc.execute(
+                    text("INSERT INTO alembic_version (version_num) VALUES (:rev)"),
+                    {"rev": _manual_head},
+                )
+                _sc.commit()
+        else:
+            logger.error("Could not determine head revision for stamp")
 
-    head_rev = ScriptDirectory.from_config(alembic_cfg).get_current_head()
-    logger.info(f"Database stamped to head revision: {head_rev}")
+    try:
+        head_rev = ScriptDirectory.from_config(alembic_cfg).get_current_head()
+        logger.info(f"Database stamped to head revision: {head_rev}")
+    except Exception:
+        logger.info("Database stamped (could not resolve head for display)")
     logger.info("Fast-path database initialization complete")
 
 
@@ -648,68 +733,22 @@ def run_migrations():
                 )
 
     if not _walk_ok:
-
-        # --- Diagnostic: figure out why Alembic can't load a revision ---
-        import importlib.util as _ilu
         missing_rev = str(_walk_err).strip("'\"")
         py_files = sorted(
             f for f in os.listdir(versions_dir)
             if f.endswith('.py') and not f.startswith('_')
         )
-        logger.info(
-            f"Migration diagnostic: {len(py_files)} .py files in {versions_dir}"
+        # Check if the referenced migration file physically exists
+        found = any(missing_rev in f for f in py_files)
+        logger.warning(
+            f"Revision '{missing_rev}' missing from graph. "
+            f"{len(py_files)} .py files in versions dir. "
+            f"File on disk: {found}"
         )
-        # Find and test-import the file(s) that declare the missing revision
-        for fname in py_files:
-            if missing_rev in fname:
-                fpath = os.path.join(versions_dir, fname)
-                logger.info(
-                    f"  File exists: {fname} "
-                    f"(size={os.path.getsize(fpath)}, "
-                    f"readable={os.access(fpath, os.R_OK)})"
-                )
-                try:
-                    spec = _ilu.spec_from_file_location(
-                        f"_diag_{fname.replace('.', '_')}", fpath
-                    )
-                    if spec is None or spec.loader is None:
-                        logger.error(f"  importlib returned None spec for {fname}")
-                        continue
-                    mod = _ilu.module_from_spec(spec)
-                    spec.loader.exec_module(mod)
-                    logger.info(
-                        f"  Manual import OK: revision={getattr(mod, 'revision', '?')}"
-                    )
-                except Exception as imp_err:
-                    logger.error(
-                        f"  Manual import FAILED for {fname}: "
-                        f"{type(imp_err).__name__}: {imp_err}"
-                    )
-        # Also check if any OTHER file declares the same revision (hidden dup)
-        import re as _re
-        _rev_re = _re.compile(
-            r"^revision\s*[:=]\s*['\"](.+?)['\"]", _re.MULTILINE
-        )
-        for fname in py_files:
-            fpath = os.path.join(versions_dir, fname)
-            try:
-                with open(fpath, 'r') as _f:
-                    content = _f.read(2048)
-                m = _rev_re.search(content)
-                if m and m.group(1) == missing_rev and missing_rev not in fname:
-                    logger.error(
-                        f"  HIDDEN DUPLICATE: {fname} also declares "
-                        f"revision='{missing_rev}'"
-                    )
-            except Exception:
-                pass
-        # --- End diagnostic ---
 
-        # The failed walk leaves a broken cached revision map on script_dir.
-        # Create a fresh ScriptDirectory so that get_current_head() below
-        # doesn't re-raise the same error.
+        # Create a fresh ScriptDirectory (the failed walk corrupts the
+        # cached revision map on the old one).
         script_dir = ScriptDirectory.from_config(alembic_cfg)
-        # Fall back to counting .py migration files
         total_migrations = len(py_files)
     startup_status.migrations_total = total_migrations
 
@@ -878,7 +917,7 @@ def run_migrations():
             for attempt in range(1, max_attempts + 1):
                 try:
                     with timeout_context(1200, "Fast-path database initialization"):
-                        _fast_path_init(engine, alembic_cfg, base_dir)
+                        _fast_path_init(engine, alembic_cfg, base_dir, head_revision)
                     break  # Success
                 except Exception as init_error:
                     if attempt < max_attempts:
@@ -932,7 +971,7 @@ def run_migrations():
 
         try:
             with timeout_context(1800, "Database migrations"):
-                command.upgrade(alembic_cfg, "head")
+                command.upgrade(alembic_cfg, head_revision)
 
             startup_status.migrations_completed = total_migrations
             startup_status.set_phase("migrations", "Database migrations complete")
@@ -948,15 +987,37 @@ def run_migrations():
             )
         except Exception as upgrade_error:
             error_str = str(upgrade_error).lower()
-            if "already exists" in error_str or "duplicate" in error_str:
+            # Recoverable errors: table/index already exists, or Alembic
+            # revision graph is broken (common on Unraid union filesystems
+            # where bind-mounted files are transiently invisible).
+            _is_dup = "already exists" in error_str or "duplicate" in error_str
+            _is_graph = not _walk_ok  # revision graph was already broken
+            if _is_dup or _is_graph:
                 logger.warning(
                     f"Migration failed ({upgrade_error}). Stamping to head..."
                 )
+                if _is_graph:
+                    # Ensure all model-defined tables exist since individual
+                    # migrations couldn't run.
+                    try:
+                        _import_all_models()
+                        from app.core.database import Base as _Base
+                        _Base.metadata.create_all(engine, checkfirst=True)
+                    except Exception as create_err:
+                        logger.warning(f"create_all fallback failed: {create_err}")
                 try:
-                    command.stamp(alembic_cfg, "head")
+                    # Use direct SQL to stamp — Alembic's command.stamp()
+                    # re-builds the revision graph which can fail on union
+                    # filesystems (Unraid shfs) when files are invisible.
+                    with engine.begin() as stamp_conn:
+                        stamp_conn.execute(text("DELETE FROM alembic_version"))
+                        stamp_conn.execute(
+                            text("INSERT INTO alembic_version (version_num) VALUES (:rev)"),
+                            {"rev": head_revision},
+                        )
                     schema_was_stamped = True
                     startup_status.migrations_completed = total_migrations
-                    logger.info("Stamped database to head")
+                    logger.info(f"Stamped database to {head_revision}")
                 except Exception as stamp_error:
                     logger.warning(f"Could not stamp database: {stamp_error}")
                     startup_status.add_error(f"Migration stamp failed: {stamp_error}")
@@ -1225,6 +1286,10 @@ app = FastAPI(
     lifespan=lifespan,
     redirect_slashes=False,
 )
+
+# Attach rate limiter to application
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ============================================
 # Middleware

@@ -113,7 +113,7 @@ export default function ApparatusBasicPage() {
       name: '',
       apparatus_type: 'engine',
       min_staffing: 4,
-      positions: [...DEFAULT_POSITIONS_BY_TYPE.engine],
+      positions: [...(DEFAULT_POSITIONS_BY_TYPE.engine ?? [])],
     });
     setShowModal(true);
   };
@@ -266,7 +266,7 @@ export default function ApparatusBasicPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-lg flex-shrink-0">
-                      {typeInfo.icon}
+                      {typeInfo?.icon}
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-theme-text-primary">{apparatus.name}</h3>
@@ -289,7 +289,7 @@ export default function ApparatusBasicPage() {
 
                 <div className="flex items-center gap-2 mb-3">
                   <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-theme-surface-hover rounded-lg text-theme-text-secondary">
-                    <Wrench className="w-3 h-3" /> {typeInfo.label}
+                    <Wrench className="w-3 h-3" /> {typeInfo?.label}
                   </span>
                   <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-theme-surface-hover rounded-lg text-theme-text-secondary">
                     <Users className="w-3 h-3" /> {apparatus.min_staffing || 0} crew

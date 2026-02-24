@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, LogOut, Menu, X, Sun, Moon, Monitor, ChevronDown, Bell, UserCog } from 'lucide-react';
+import { Home, LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserCog } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
@@ -54,14 +54,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   }, []);
 
   const cycleTheme = () => {
-    const order = ['light', 'dark', 'system'] as const;
+    const order = ['light', 'dark', 'system', 'high-contrast'] as const;
     const currentIndex = order.indexOf(theme as typeof order[number]);
     const nextIndex = (currentIndex + 1) % order.length;
-    setTheme(order[nextIndex]);
+    setTheme(order[nextIndex] ?? 'system');
   };
 
-  const themeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
-  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
+  const themeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
+  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
   const hasAnyAdminPermission =
@@ -208,7 +208,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
                   src={logoPreview}
-                  alt=""
+                  alt={`${departmentName} logo`}
                   className="max-w-full max-h-full object-contain"
                 />
               </div>

@@ -115,16 +115,16 @@ export const localToUTC = (localDateTimeStr?: string | null, timezone?: string):
   if (!localDateTimeStr) return '';
 
   const [datePart, timePart] = localDateTimeStr.split('T');
-  const [year, month, day] = datePart.split('-').map(Number);
+  const [year, month, day] = datePart!.split('-').map(Number);
   const [hour, minute] = (timePart || '00:00').split(':').map(Number);
 
   if (!timezone) {
     // No timezone specified — interpret as browser-local time
-    return new Date(year, month - 1, day, hour, minute).toISOString();
+    return new Date(year!, month! - 1, day!, hour!, minute!).toISOString();
   }
 
   // Treat the local datetime components as if they were UTC to get a reference point
-  const refUtcMs = Date.UTC(year, month - 1, day, hour, minute);
+  const refUtcMs = Date.UTC(year!, month! - 1, day!, hour!, minute!);
 
   // Determine what local time that UTC instant corresponds to in the target timezone
   const fmt = new Intl.DateTimeFormat('en-CA', {

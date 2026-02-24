@@ -595,23 +595,26 @@ const PositionSetup: React.FC = () => {
   const updatePositionPermission = (positionId: string, category: string, type: 'view' | 'manage', value: boolean) => {
     if (positionId === 'it_manager') return; // IT Manager always has all permissions
 
-    setSelectedPositions(prev => ({
-      ...prev,
-      [positionId]: {
-        ...prev[positionId],
-        permissions: {
-          ...prev[positionId].permissions,
-          [category]: {
-            ...prev[positionId].permissions[category],
-            [type]: value,
-            // If manage is enabled, view must be enabled too
-            ...(type === 'manage' && value ? { view: true } : {}),
-            // If view is disabled, manage must be disabled too
-            ...(type === 'view' && !value ? { manage: false } : {}),
+    setSelectedPositions(prev => {
+      if (!prev[positionId]) return prev;
+      return {
+        ...prev,
+        [positionId]: {
+          ...prev[positionId],
+          permissions: {
+            ...prev[positionId].permissions,
+            [category]: {
+              ...prev[positionId].permissions?.[category],
+              [type]: value,
+              // If manage is enabled, view must be enabled too
+              ...(type === 'manage' && value ? { view: true } : {}),
+              // If view is disabled, manage must be disabled too
+              ...(type === 'view' && !value ? { manage: false } : {}),
+            },
           },
         },
-      },
-    }));
+      } as Record<string, RoleConfig>;
+    });
   };
 
   const createCustomPosition = () => {

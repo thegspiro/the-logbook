@@ -149,7 +149,7 @@ const SubmissionForm: React.FC<{
       return;
     }
 
-    const completionDate = startDatetime.split('T')[0]; // YYYY-MM-DD
+    const completionDate = startDatetime.split('T')[0]!; // YYYY-MM-DD
 
     try {
       const submitData = {

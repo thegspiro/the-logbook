@@ -89,7 +89,7 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
   const removeFile = (index: number) => {
     const updated = files.filter((_, i) => i !== index);
     // Revoke object URLs to avoid memory leaks
-    if (files[index].preview) URL.revokeObjectURL(files[index].preview!);
+    if (files[index]?.preview) URL.revokeObjectURL(files[index]!.preview!);
     setFiles(updated);
     onFilesSelected(updated.map((f) => f.file));
   };

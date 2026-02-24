@@ -90,7 +90,7 @@ export const MembersAdminPage: React.FC = () => {
     locationsService.getLocations({ is_active: true }).then((locs) => {
       const stations = locs.filter((l: Location) => l.address && !l.room_number);
       setAvailableStations(stations);
-    }).catch(() => {});
+    }).catch(() => { /* non-critical UI data */ });
   }, []);
 
   const fetchData = async () => {
@@ -501,7 +501,7 @@ export const MembersAdminPage: React.FC = () => {
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10 rounded-full bg-theme-surface flex items-center justify-center">
                         <span className="text-theme-text-secondary font-medium">
-                          {(user.first_name?.[0] || user.username[0]).toUpperCase()}
+                          {(user.first_name?.[0] ?? user.username[0] ?? '').toUpperCase()}
                         </span>
                       </div>
                       <div className="ml-4">
@@ -641,7 +641,7 @@ export const MembersAdminPage: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
                               <span className="text-xs text-theme-text-muted font-medium">
-                                {(user.first_name?.[0] || user.username[0]).toUpperCase()}
+                                {(user.first_name?.[0] || user.username[0] || '').toUpperCase()}
                               </span>
                             </div>
                             <div>
@@ -978,7 +978,7 @@ export const MembersAdminPage: React.FC = () => {
               <div className="ml-3 flex items-center gap-2">
                 <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
                   <span className="text-xs text-theme-text-muted font-medium">
-                    {(user.first_name?.[0] || user.username[0]).toUpperCase()}
+                    {(user.first_name?.[0] || user.username[0] || '').toUpperCase()}
                   </span>
                 </div>
                 <div>

@@ -132,7 +132,7 @@ export const MemberAdminEditPage: React.FC = () => {
     locationsService.getLocations({ is_active: true }).then((locs) => {
       const stations = locs.filter((l: Location) => l.address && !l.room_number);
       setAvailableStations(stations);
-    }).catch(() => {});
+    }).catch(() => { /* non-critical UI data */ });
   }, []);
 
   const handleFieldChange = (field: keyof Omit<FormData, 'emergency_contacts'>, value: string) => {
@@ -147,7 +147,7 @@ export const MemberAdminEditPage: React.FC = () => {
     setForm((prev) => {
       if (!prev) return prev;
       const updatedContacts = [...prev.emergency_contacts];
-      updatedContacts[index] = { ...updatedContacts[index], [field]: value };
+      updatedContacts[index] = { ...updatedContacts[index], [field]: value } as EmergencyContact;
       return { ...prev, emergency_contacts: updatedContacts };
     });
   };

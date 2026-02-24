@@ -74,11 +74,11 @@ const CreateTrainingSessionPage: React.FC = () => {
 
   useEffect(() => {
     // Load available courses, members, apparatus, and locations from API
-    trainingService.getCourses().then(setAvailableCourses).catch(() => {});
-    userService.getUsers().then(setMembers).catch(() => {});
+    trainingService.getCourses().then(setAvailableCourses).catch(() => { /* non-critical */ });
+    userService.getUsers().then(setMembers).catch(() => { /* non-critical */ });
     schedulingService.getBasicApparatus({ is_active: true }).then((data) => {
       setApparatusList(data.map((a: Record<string, unknown>) => ({ id: a.id as string, name: (a.name || a.unit_number || 'Unknown') as string })));
-    }).catch(() => {});
+    }).catch(() => { /* non-critical */ });
     locationsService.getLocations({ is_active: true }).then((data) => {
       setLocations(data);
       if (data.length === 0) setLocationMode('other');
@@ -87,7 +87,7 @@ const CreateTrainingSessionPage: React.FC = () => {
     });
   }, []);
 
-  const updateField = (field: keyof TrainingSessionCreate, value: any) => {
+  const updateField = (field: keyof TrainingSessionCreate, value: TrainingSessionCreate[keyof TrainingSessionCreate]) => {
     setFormData({ ...formData, [field]: value });
   };
 

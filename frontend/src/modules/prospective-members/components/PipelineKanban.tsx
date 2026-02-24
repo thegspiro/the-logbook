@@ -59,7 +59,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
     }
     for (const applicant of applicants) {
       if (grouped[applicant.current_stage_id]) {
-        grouped[applicant.current_stage_id].push(applicant);
+        grouped[applicant.current_stage_id]!.push(applicant);
       }
     }
     return grouped;
@@ -114,7 +114,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
     try {
       await advanceApplicant(draggedApplicant.id);
       toast.success(
-        `${draggedApplicant.first_name} advanced to ${sortedStages[targetStageIndex].name}`
+        `${draggedApplicant.first_name} advanced to ${sortedStages[targetStageIndex]!.name}`
       );
     } catch {
       toast.error('Failed to advance applicant');

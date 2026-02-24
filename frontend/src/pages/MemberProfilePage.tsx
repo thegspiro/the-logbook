@@ -26,6 +26,7 @@ import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
+import { MAX_AVATAR_SIZE } from '../constants/config';
 
 // Types for inventory data
 interface InventoryItem {
@@ -307,7 +308,7 @@ export const MemberProfilePage: React.FC = () => {
       setError('Please select a JPEG, PNG, or WebP image.');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_AVATAR_SIZE) {
       setError('Image must be under 5MB.');
       return;
     }
@@ -1172,7 +1173,7 @@ export const MemberProfilePage: React.FC = () => {
                   <div key={leave.id} className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium text-yellow-700 dark:text-yellow-400 capitalize">
-                        {leave.leave_type.replace(/_/g, ' ')}
+                        {(leave.leave_type ?? '').replace(/_/g, ' ')}
                       </span>
                       <span className="text-xs text-theme-text-muted">Active</span>
                     </div>
