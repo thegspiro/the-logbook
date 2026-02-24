@@ -143,7 +143,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
   };
 
   const getLabelsValue = (): Record<string, string> => {
-    return (draft.rating_scale_labels ?? config.rating_scale_labels ?? DEFAULT_COMPETENCY_LABELS) as Record<string, string>;
+    return (draft.rating_scale_labels ?? config.rating_scale_labels ?? DEFAULT_COMPETENCY_LABELS);
   };
 
   const handleSave = async () => {

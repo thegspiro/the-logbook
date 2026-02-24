@@ -29,7 +29,6 @@ import {
   Bell,
   FormInput,
   Plug,
-  Send,
   MapPin,
   Rocket,
   ShieldCheck,

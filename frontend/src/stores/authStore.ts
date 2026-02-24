@@ -44,12 +44,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       set({ isLoading: false });
     } catch (err: unknown) {
-      const error = toAppError(err);
+      const appError = toAppError(err);
       set({
         isLoading: false,
         error: getErrorMessage(err, 'Login failed. Please try again.'),
       });
-      throw error;
+      throw Object.assign(new Error(appError.message), appError);
     }
   },
 
@@ -65,12 +65,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       set({ isLoading: false });
     } catch (err: unknown) {
-      const error = toAppError(err);
+      const appError = toAppError(err);
       set({
         isLoading: false,
         error: getErrorMessage(err, 'Registration failed. Please try again.'),
       });
-      throw error;
+      throw Object.assign(new Error(appError.message), appError);
     }
   },
 

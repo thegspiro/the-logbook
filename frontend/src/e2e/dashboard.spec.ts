@@ -362,7 +362,7 @@ test.describe('Dashboard', () => {
   });
 
   test.describe('Responsive Layout', () => {
-    test('should render the dashboard correctly on a mobile viewport', async ({ page, browserName }) => {
+    test('should render the dashboard correctly on a mobile viewport', async ({ page, browserName: _browserName }) => {
       // Set a mobile-sized viewport
       await page.setViewportSize({ width: 375, height: 812 });
 

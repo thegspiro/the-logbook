@@ -437,7 +437,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     onClick={async () => {
                       try {
-                        const meeting = await meetingsService.createFromEvent(eventId!);
+                        const _meeting = await meetingsService.createFromEvent(eventId!);
                         toast.success('Meeting created from event');
                         navigate(`/minutes`);
                       } catch (err) {

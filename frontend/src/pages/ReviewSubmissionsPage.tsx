@@ -214,7 +214,7 @@ const EditRecordPanel: React.FC<{
   const [saving, setSaving] = useState(false);
   const [fields, setFields] = useState({
     course_name: submission.course_name,
-    training_type: submission.training_type as TrainingType,
+    training_type: submission.training_type,
     hours_completed: submission.hours_completed,
     completion_date: submission.completion_date,
     certification_number: submission.certification_number || '',

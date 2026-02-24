@@ -87,7 +87,6 @@ class AuthService:
         """
         # Try to find user by username or email, scoped to the single org
         # to prevent cross-organization auth if multiple orgs ever exist.
-        from app.models.organization import Organization
         org_result = await self.db.execute(select(Organization).limit(1))
         org = org_result.scalar_one_or_none()
 

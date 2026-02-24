@@ -22,6 +22,7 @@ export const checkPasswordStrength = (password: string): PasswordStrength => {
     uppercase: /[A-Z]/.test(password),
     lowercase: /[a-z]/.test(password),
     number: /[0-9]/.test(password),
+    // eslint-disable-next-line no-useless-escape
     special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
   };
 

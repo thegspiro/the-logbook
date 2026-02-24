@@ -137,7 +137,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
     updated[index] = { ...updated[index], [key]: val } as FormFieldOption;
     // Auto-generate value from label if value is empty
     if (key === 'label' && !updated[index]?.value) {
-      updated[index]!.value = val.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      updated[index].value = val.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     }
     setOptions(updated);
   };

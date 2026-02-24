@@ -16,7 +16,7 @@
   "parserOptions": {
     "ecmaVersion": "latest",
     "sourceType": "module",
-    "project": "./tsconfig.json"
+    "project": "./tsconfig.eslint.json"
   },
   "plugins": [
     "react-refresh",
@@ -63,5 +63,20 @@
 
     // Disallow console.* in production code (use proper logging/error tracking)
     "no-console": ["warn", { "allow": ["warn", "error"] }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.spec.ts", "src/**/*.spec.tsx", "src/test/**/*"],
+      "env": {
+        "jest": true
+      },
+      "rules": {
+        "@typescript-eslint/unbound-method": "off",
+        "@typescript-eslint/no-require-imports": "off",
+        "@typescript-eslint/require-await": "off",
+        "@typescript-eslint/prefer-promise-reject-errors": "off",
+        "no-console": "off"
+      }
+    }
+  ]
 }

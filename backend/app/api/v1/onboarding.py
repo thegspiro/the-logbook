@@ -1735,7 +1735,7 @@ async def reset_onboarding(
 
     # Import models for deletion
     from app.models.user import Organization, User, Role
-    from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
+    from app.models.onboarding import OnboardingChecklistItem, OnboardingSessionModel  # OnboardingStatus already imported at module level
 
     try:
         # Log the reset BEFORE deletion to ensure we capture it

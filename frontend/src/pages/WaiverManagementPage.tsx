@@ -87,7 +87,7 @@ export const WaiverManagementPage: React.FC = () => {
     tabParam && ['active', 'create', 'history'].includes(tabParam) ? tabParam : 'active'
   );
   const tz = useTimezone();
-  const { checkPermission } = useAuthStore();
+  const { checkPermission: _checkPermission } = useAuthStore();
 
   // Data
   const [leaves, setLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
@@ -143,7 +143,7 @@ export const WaiverManagementPage: React.FC = () => {
       setLeaves(leavesData);
       setTrainingWaivers(waiversData);
       setMembers(membersData);
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to load waiver data');
     } finally {
       setLoading(false);

@@ -27,7 +27,6 @@ import {
   ChevronDown,
   X,
   Check,
-  Globe,
   Phone,
   Mail,
   MapPin,

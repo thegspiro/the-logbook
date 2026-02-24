@@ -1026,7 +1026,7 @@ class TrainingProgramService:
         program_reqs_result = await self.db.execute(
             select(ProgramRequirement)
             .where(ProgramRequirement.program_id == str(source_program_id))
-            .where(ProgramRequirement.phase_id == None)
+            .where(ProgramRequirement.phase_id == None)  # noqa: E711 — SQLAlchemy IS NULL
         )
         program_reqs = program_reqs_result.scalars().all()
 
@@ -1049,7 +1049,7 @@ class TrainingProgramService:
         program_milestones_result = await self.db.execute(
             select(ProgramMilestone)
             .where(ProgramMilestone.program_id == str(source_program_id))
-            .where(ProgramMilestone.phase_id == None)
+            .where(ProgramMilestone.phase_id == None)  # noqa: E711 — SQLAlchemy IS NULL
         )
         program_milestones = program_milestones_result.scalars().all()
 

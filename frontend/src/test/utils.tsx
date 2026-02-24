@@ -142,7 +142,7 @@ export const waitFor = (callback: () => void, timeout = 1000) => {
       } catch (error) {
         if (Date.now() - startTime > timeout) {
           clearInterval(interval);
-          reject(error);
+          reject(error instanceof Error ? error : new Error(String(error)));
         }
       }
     }, 50);

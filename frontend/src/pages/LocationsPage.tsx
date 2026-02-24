@@ -12,7 +12,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   MapPin, Plus, Search, Building2, DoorOpen, Pencil, Trash2,
-  Loader2, X, Save, ChevronDown, ChevronUp, QrCode, Users,
+  Loader2, X, Save, ChevronDown, ChevronUp, QrCode,
   Building, HelpCircle, Monitor, Copy, Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -48,7 +48,7 @@ function groupLocations(locations: Location[]): { stations: Location[]; rooms: M
   return { stations, rooms };
 }
 
-const ROOM_TYPE_LABELS: Record<string, string> = {
+const _ROOM_TYPE_LABELS: Record<string, string> = {
   APPARATUS_BAY: 'Apparatus Bay',
   BUNK_ROOM: 'Bunk Room',
   KITCHEN: 'Kitchen',

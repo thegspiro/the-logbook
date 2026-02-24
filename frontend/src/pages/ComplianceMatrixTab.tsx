@@ -12,7 +12,7 @@ import type { ComplianceMatrix, ComplianceMatrixMember } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
 
-const STATUS_COLORS: Record<string, string> = {
+const _STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-500',
   verified: 'bg-green-600',
   in_progress: 'bg-blue-500',

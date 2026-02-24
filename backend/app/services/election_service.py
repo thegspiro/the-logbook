@@ -509,7 +509,7 @@ class ElectionService:
                         has_voted=False,
                         positions_voted=[],
                         positions_remaining=[],
-                        reason=f"Your member class is not eligible to vote on this item",
+                        reason="Your member class is not eligible to vote on this item",
                     )
                 # Check attendance requirement
                 if item.get("require_attendance", False):
