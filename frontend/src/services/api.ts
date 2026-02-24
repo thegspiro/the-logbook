@@ -5,7 +5,19 @@
  */
 
 import axios from 'axios';
+import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
+import {
+  getCacheKey,
+  getCached,
+  setCache,
+  invalidateByPrefix,
+  getResourcePrefix,
+  isRevalidating,
+  markRevalidating,
+  clearRevalidating,
+  clearCache,
+} from '../utils/apiCache';
 import type { User, ContactInfoSettings, ContactInfoUpdate, UserProfileUpdate } from '../types/user';
 import type {
   Role,
@@ -118,10 +130,49 @@ function getCookie(name: string): string | null {
 // Request interceptor — httpOnly cookies are sent automatically via
 // withCredentials. No tokens are stored in localStorage or sent via
 // Authorization header; the browser handles cookie transport.
+//
+// GET responses are cached in-memory with stale-while-revalidate semantics
+// to eliminate redundant fetches when navigating between pages.
 api.interceptors.request.use(
   (config) => {
-    // Double-submit CSRF token for state-changing requests
     const method = (config.method || '').toUpperCase();
+
+    // --- GET response cache ---
+    // Skip cache for requests explicitly marked (e.g. background revalidation)
+    const skipCache = (config as unknown as Record<string, unknown>)._skipCache === true;
+    if (method === 'GET' && !skipCache && config.url) {
+      const key = getCacheKey(config.url, config.params as Record<string, unknown> | undefined);
+      const cached = getCached(key);
+
+      if (cached) {
+        // Build a synthetic response so the caller receives data immediately
+        const syntheticResponse: AxiosResponse = {
+          data: cached.data,
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config: config as InternalAxiosRequestConfig,
+        };
+
+        // Mark this config so the response interceptor doesn't re-cache stale data
+        (config as unknown as Record<string, unknown>)._fromCache = true;
+
+        // Return cached data via adapter override (skips network entirely)
+        config.adapter = () => Promise.resolve(syntheticResponse);
+
+        // If stale, trigger a background revalidation for the next caller
+        if (!cached.fresh && !isRevalidating(key)) {
+          markRevalidating(key);
+          const bgConfig = { ...config, _skipCache: true, adapter: undefined };
+          api.request(bgConfig)
+            .then((res) => setCache(key, res.data))
+            .catch(() => { /* background revalidation failure is non-critical */ })
+            .finally(() => clearRevalidating(key));
+        }
+      }
+    }
+
+    // Double-submit CSRF token for state-changing requests
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       const csrf = getCookie('csrf_token');
       if (csrf) {
@@ -144,9 +195,28 @@ api.interceptors.request.use(
 // callers receive the same new access token.
 let refreshPromise: Promise<void> | null = null;
 
-// Response interceptor to handle token expiration
+// Response interceptor to handle caching and token expiration
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = (response.config.method || '').toUpperCase();
+
+    // Cache successful GET responses (skip if this was already a cache hit)
+    if (method === 'GET' && response.config.url && !(response.config as unknown as Record<string, unknown>)._fromCache) {
+      const key = getCacheKey(
+        response.config.url,
+        response.config.params as Record<string, unknown> | undefined,
+      );
+      setCache(key, response.data);
+    }
+
+    // Invalidate related cache entries after mutations
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && response.config.url) {
+      const prefix = getResourcePrefix(response.config.url);
+      invalidateByPrefix(prefix);
+    }
+
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
 
@@ -657,6 +727,7 @@ export const authService = {
    */
   async logout(): Promise<void> {
     await api.post('/auth/logout');
+    clearCache();
   },
 
   /**
