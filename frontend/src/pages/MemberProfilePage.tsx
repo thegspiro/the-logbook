@@ -1178,7 +1178,7 @@ export const MemberProfilePage: React.FC = () => {
                       <span className="text-xs text-theme-text-muted">Active</span>
                     </div>
                     <p className="text-xs text-theme-text-secondary">
-                      {new Date(leave.start_date + 'T00:00:00').toLocaleDateString()} &ndash; {new Date(leave.end_date + 'T00:00:00').toLocaleDateString()}
+                      {new Date(leave.start_date + 'T00:00:00').toLocaleDateString()} &ndash; {leave.end_date ? new Date(leave.end_date + 'T00:00:00').toLocaleDateString() : 'Permanent'}
                     </p>
                     {leave.reason && (
                       <p className="text-xs text-theme-text-muted mt-1">{leave.reason}</p>

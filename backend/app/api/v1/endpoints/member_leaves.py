@@ -36,7 +36,7 @@ class LeaveOfAbsenceCreate(BaseModel):
     leave_type: str = "leave_of_absence"
     reason: Optional[str] = None
     start_date: date
-    end_date: date
+    end_date: Optional[date] = None  # None = permanent leave
     exempt_from_training_waiver: bool = False  # Override: keep training requirements active
 
 
@@ -56,7 +56,7 @@ class LeaveOfAbsenceResponse(BaseModel):
     leave_type: str
     reason: Optional[str] = None
     start_date: date
-    end_date: date
+    end_date: Optional[date] = None
     granted_by: Optional[str] = None
     granted_at: Optional[datetime] = None
     active: bool
@@ -98,7 +98,7 @@ async def create_leave_of_absence(
     current_user: User = Depends(require_permission("members.manage")),
 ):
     """Create a leave of absence for a member."""
-    if data.end_date < data.start_date:
+    if data.end_date and data.end_date < data.start_date:
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
     svc = MemberLeaveService(db)

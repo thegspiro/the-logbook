@@ -31,6 +31,7 @@ const WAIVER_TYPES = [
   { value: 'military', label: 'Military' },
   { value: 'personal', label: 'Personal' },
   { value: 'administrative', label: 'Administrative' },
+  { value: 'new_member', label: 'New Member' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -44,13 +45,16 @@ function getWaiverTypeLabel(type: string): string {
   return WAIVER_TYPES.find((t) => t.value === type)?.label || type.replace(/_/g, ' ');
 }
 
-function getStatusBadge(waiver: { start_date: string; end_date: string; active: boolean }) {
+function getStatusBadge(waiver: { start_date: string; end_date: string | null; active: boolean }) {
   if (!waiver.active) {
     return { label: 'Inactive', color: 'bg-gray-500/20 text-gray-400' };
   }
   const today = new Date().toISOString().split('T')[0]!;
   if (waiver.start_date > today) {
     return { label: 'Future', color: 'bg-blue-500/20 text-blue-400' };
+  }
+  if (!waiver.end_date) {
+    return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-400' };
   }
   if (waiver.end_date < today) {
     return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-400' };
@@ -67,7 +71,7 @@ interface UnifiedWaiver {
   applies_to: string; // 'training' | 'meetings' | 'all'
   reason: string | null;
   start_date: string;
-  end_date: string;
+  end_date: string | null;
   granted_by: string | null;
   granted_at: string | null;
   active: boolean;
@@ -100,6 +104,7 @@ export const WaiverManagementPage: React.FC = () => {
     reason: '',
     start_date: '',
     end_date: '',
+    is_permanent: false,
     exempt_from_training_waiver: false,
   });
   const [creating, setCreating] = useState(false);
@@ -212,7 +217,7 @@ export const WaiverManagementPage: React.FC = () => {
   const activeWaivers = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]!;
     return unifiedWaivers.filter(
-      (w) => w.active && w.start_date <= today && w.end_date >= today
+      (w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today)
     );
   }, [unifiedWaivers]);
 
@@ -222,9 +227,9 @@ export const WaiverManagementPage: React.FC = () => {
     const today = new Date().toISOString().split('T')[0]!;
 
     if (historyFilter === 'active') {
-      result = result.filter((w) => w.active && w.start_date <= today && w.end_date >= today);
+      result = result.filter((w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today));
     } else if (historyFilter === 'inactive') {
-      result = result.filter((w) => !w.active || w.end_date < today);
+      result = result.filter((w) => !w.active || (w.end_date && w.end_date < today));
     } else if (historyFilter === 'future') {
       result = result.filter((w) => w.active && w.start_date > today);
     }
@@ -246,9 +251,11 @@ export const WaiverManagementPage: React.FC = () => {
     try {
       if (!formData.user_id) throw new Error('Please select a member');
       if (formData.applies_to.length === 0) throw new Error('Please select at least one area');
-      if (!formData.start_date || !formData.end_date) throw new Error('Start and end dates are required');
-      if (formData.end_date < formData.start_date) throw new Error('End date must be after start date');
+      if (!formData.start_date) throw new Error('Start date is required');
+      if (!formData.is_permanent && !formData.end_date) throw new Error('End date is required (or select Permanent)');
+      if (!formData.is_permanent && formData.end_date < formData.start_date) throw new Error('End date must be after start date');
 
+      const endDate = formData.is_permanent ? undefined : formData.end_date;
       const hasTraining = formData.applies_to.includes('training');
       const hasMeetingsOrShifts = formData.applies_to.includes('meetings') || formData.applies_to.includes('shifts');
 
@@ -259,7 +266,7 @@ export const WaiverManagementPage: React.FC = () => {
           waiver_type: formData.waiver_type,
           reason: formData.reason || undefined,
           start_date: formData.start_date,
-          end_date: formData.end_date,
+          end_date: endDate,
         });
       } else if (hasMeetingsOrShifts) {
         // Meetings/shifts selected — create leave of absence
@@ -269,7 +276,7 @@ export const WaiverManagementPage: React.FC = () => {
           leave_type: formData.waiver_type,
           reason: formData.reason || undefined,
           start_date: formData.start_date,
-          end_date: formData.end_date,
+          end_date: endDate,
           exempt_from_training_waiver: !hasTraining || formData.exempt_from_training_waiver,
         });
       }
@@ -283,6 +290,7 @@ export const WaiverManagementPage: React.FC = () => {
         reason: '',
         start_date: '',
         end_date: '',
+        is_permanent: false,
         exempt_from_training_waiver: false,
       });
       fetchData();
@@ -415,7 +423,7 @@ export const WaiverManagementPage: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-theme-text-secondary">
-                          {formatDate(waiver.start_date, tz)} - {formatDate(waiver.end_date, tz)}
+                          {formatDate(waiver.start_date, tz)} - {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                         </td>
                         <td className="px-4 py-3 text-sm text-theme-text-muted max-w-xs truncate">
                           {waiver.reason || '-'}
@@ -520,27 +528,47 @@ export const WaiverManagementPage: React.FC = () => {
                 </div>
 
                 {/* Date Range */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={formData.start_date}
-                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                      className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
-                      required
-                    />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date</label>
+                      <input
+                        type="date"
+                        value={formData.start_date}
+                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                        className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        required
+                      />
+                    </div>
+                    {!formData.is_permanent && (
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-1">End Date</label>
+                        <input
+                          type="date"
+                          value={formData.end_date}
+                          onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                          className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                          required
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">End Date</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
-                      type="date"
-                      value={formData.end_date}
-                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
-                      required
+                      type="checkbox"
+                      checked={formData.is_permanent}
+                      onChange={(e) => setFormData({ ...formData, is_permanent: e.target.checked, end_date: '' })}
+                      className="rounded border-theme-surface-border text-red-600 focus:ring-red-500"
                     />
-                  </div>
+                    <span className="text-sm text-theme-text-secondary">
+                      Permanent (no end date)
+                    </span>
+                  </label>
+                  {formData.is_permanent && (
+                    <p className="text-xs text-theme-text-muted">
+                      This waiver will remain active indefinitely until manually deactivated. Use for long-service members exempt from certain requirements.
+                    </p>
+                  )}
                 </div>
 
                 {/* Reason */}
@@ -644,7 +672,7 @@ export const WaiverManagementPage: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-theme-text-secondary">
-                            {formatDate(waiver.start_date, tz)} - {formatDate(waiver.end_date, tz)}
+                            {formatDate(waiver.start_date, tz)} - {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                           </td>
                           <td className="px-4 py-3 text-sm text-theme-text-muted max-w-xs truncate">
                             {waiver.reason || '-'}

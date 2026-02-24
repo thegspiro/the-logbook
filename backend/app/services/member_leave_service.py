@@ -10,7 +10,7 @@ rolling-period requirement calculations.
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -32,7 +32,7 @@ class MemberLeaveService:
         user_id: str,
         leave_type: str,
         start_date: date,
-        end_date: date,
+        end_date: Optional[date],
         reason: Optional[str],
         granted_by: Optional[str],
     ) -> str:
@@ -92,7 +92,7 @@ class MemberLeaveService:
         organization_id: str,
         user_id: str,
         start_date: date,
-        end_date: date,
+        end_date: Optional[date] = None,
         leave_type: str = "leave_of_absence",
         reason: Optional[str] = None,
         granted_by: Optional[str] = None,
@@ -272,7 +272,10 @@ class MemberLeaveService:
                 MemberLeaveOfAbsence.user_id == user_id,
                 MemberLeaveOfAbsence.active == True,  # noqa: E712
                 MemberLeaveOfAbsence.start_date <= period_end,
-                MemberLeaveOfAbsence.end_date >= period_start,
+                or_(
+                    MemberLeaveOfAbsence.end_date >= period_start,
+                    MemberLeaveOfAbsence.end_date.is_(None),  # permanent leave
+                ),
             )
         )
         return list(result.scalars().all())
@@ -298,8 +301,10 @@ class MemberLeaveService:
         leave_months = set()
         for leave in leaves:
             # Clamp leave dates to the evaluation period
+            # Permanent leaves (end_date=None) are treated as extending to period_end
+            leave_end = leave.end_date or period_end
             effective_start = max(leave.start_date, period_start)
-            effective_end = min(leave.end_date, period_end)
+            effective_end = min(leave_end, period_end)
 
             # Walk month-by-month
             y, m = effective_start.year, effective_start.month
@@ -312,7 +317,7 @@ class MemberLeaveService:
                     next_month_first = date(y, m + 1, 1)
                 month_last = next_month_first - timedelta(days=1)
 
-                if leave.start_date <= month_first and leave.end_date >= month_last:
+                if leave.start_date <= month_first and leave_end >= month_last:
                     leave_months.add((y, m))
 
                 # Advance
