@@ -9,11 +9,13 @@ Guide to developing the React/TypeScript frontend for The Logbook.
 | Technology | Version | Purpose |
 |-----------|---------|---------|
 | React | 18.3 | UI framework |
-| TypeScript | 5.7 | Type-safe JavaScript |
-| Vite | 6.0 | Build tool and dev server |
+| TypeScript | 5.9 | Type-safe JavaScript |
+| Vite | 7.3 | Build tool and dev server |
+| Vitest | 3.2 | Unit/integration testing |
 | Tailwind CSS | 3.x | Utility-first CSS |
 | React Router | 6.x | Client-side routing |
-| Lucide React | 0.468+ | Icons |
+| React Hook Form | 7.71 | Form management |
+| Lucide React | 0.575+ | Icons |
 | React Hot Toast | — | Toast notifications |
 | DOMPurify | — | XSS sanitization |
 
@@ -75,7 +77,9 @@ frontend/src/
 ├── components/        # Reusable UI components
 │   ├── common/        # Shared components (Modal, Button, Table, etc.)
 │   ├── layout/        # Layout components (Sidebar, Header, etc.)
-│   └── modules/       # Module-specific components
+│   ├── modules/       # Module-specific components
+│   └── ux/            # UX components (Skeleton, Breadcrumbs, Pagination, etc.)
+├── constants/         # Centralized constants (config.ts, enums.ts)
 ├── pages/             # Page components (one per route)
 ├── modules/           # Feature modules
 │   ├── onboarding/    # Onboarding wizard
@@ -143,12 +147,15 @@ The application targets WCAG 2.1 Level AA:
 
 - Semantic HTML elements
 - ARIA labels on interactive elements
-- Keyboard navigation support
-- Focus indicators on all interactive elements
-- Skip-to-main-content links
+- `aria-describedby` linking form validation errors to inputs
+- Keyboard navigation support (including G/E/M shortcuts)
+- Focus indicators on all interactive elements (`focus-visible` styles)
+- Skip-to-main-content links (targeting correct element inside React root)
 - High contrast ratios (4.5:1 body text, 3:1 large text)
+- High-contrast accessibility theme option (pure black/white, yellow focus rings)
 - Screen reader friendly
 - Zoom to 200% without horizontal scroll
+- Print-optimized CSS (`@media print` hides nav, resets backgrounds, shows link URLs)
 
 ---
 

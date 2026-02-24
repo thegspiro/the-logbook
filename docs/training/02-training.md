@@ -272,12 +272,16 @@ This unified page covers:
 ### Creating a Waiver
 
 1. Click the **Create Waiver** tab.
-2. Select the member, leave type, and date range.
-3. Choose the **Applies To** scope:
-   - **All (LOA + Training Waiver)** — Creates a Leave of Absence and automatically links a training waiver. This is the most common option.
-   - **Training Only** — Creates a standalone training waiver without affecting meeting attendance or scheduling.
-   - **Meetings & Shifts Only** — Creates a Leave of Absence with `exempt_from_training_waiver` enabled, so training requirements are not adjusted.
-4. Click **Create Waiver**.
+2. Select the member and leave type. Available leave types include standard types plus **New Member** for long-service members exempt from certain requirements.
+3. Set the date range, or check **Permanent (no end date)** for waivers that should never expire. Permanent waivers display a purple "Permanent" badge in status columns.
+4. Choose the **Applies To** scope (multi-select checkboxes — pick any combination):
+   - **Training** — Adjusts training requirements for the member
+   - **Meetings** — Excludes meetings during leave periods from attendance calculations
+   - **Shifts** — Excludes members from scheduling during leave
+   - Selecting **Training + Meetings/Shifts** creates both a Leave of Absence and an auto-linked training waiver.
+   - Selecting **Training only** creates a standalone training waiver without affecting meetings or scheduling.
+   - Selecting **Meetings and/or Shifts only** creates a Leave of Absence with `exempt_from_training_waiver` enabled.
+5. Click **Create Waiver**.
 
 ### Training Waivers Tab (Officer View)
 

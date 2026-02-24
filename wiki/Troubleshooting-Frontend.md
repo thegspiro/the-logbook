@@ -134,4 +134,45 @@ docker exec logbook-frontend sh -c "cat /usr/share/nginx/html/assets/index-*.js"
 
 ---
 
+## Dependency Conflicts (2026-02-24)
+
+### npm install Fails with ERESOLVE
+
+Multiple peer dependency conflicts were resolved in February 2026:
+
+| Package | Issue | Fix |
+|---------|-------|-----|
+| `@vitest/coverage-v8`, `@vitest/ui` | Pinned at 3.0.0 vs vitest 3.2.4 | Updated to 3.2.4 |
+| `@typescript-eslint/*` | 8.21.0 required TypeScript <5.8.0 | Updated to 8.56.1 |
+| `esbuild` override | 0.25.x vs Vite 7.3.1 needing ^0.27.0 | Updated to 0.27.0 |
+| `postcss` | 8.5.0 vs Vite needing ^8.5.6 | Updated to 8.5.6 |
+| `react-hook-form` | Dual instances (7.54.2 / 7.71.1) | Updated to 7.71.1 |
+
+If you encounter ERESOLVE errors, pull latest changes and run:
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+```
+
+---
+
+## Stale Assets After Deployment
+
+**Symptom:** 404 errors for JS/CSS files after deploying a new version.
+
+**Status:** Fixed in February 2026. Nginx now sends `Cache-Control: no-cache` for `index.html` so browsers always fetch fresh asset references.
+
+**Workaround:** Hard refresh (Ctrl+Shift+R) or clear browser cache.
+
+---
+
+## Circular Chunk Dependency
+
+**Symptom:** `React.memo` is undefined at runtime, causing crashes.
+
+**Status:** Fixed in February 2026. The Vite manual chunk splitting was reordered to eliminate circular dependencies between vendor chunk groups.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

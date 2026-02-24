@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dependency Updates, Security Hardening & UX Improvements (2026-02-24)
+
+#### Backend Dependency Updates (Python 3.13 Compatibility)
+- **cryptography** 43.0.3 → 44.0.0 (Python 3.13 support)
+- **greenlet** 3.3.1 → 3.3.2
+- **hiredis** 3.0.0 → 3.1.0
+- **python-ldap** 3.4.4 → 3.4.5
+- **psutil** 6.1.1 → 7.0.0
+- **Pillow** 11.1.0 → 11.3.0 (image processing)
+- **argon2-cffi** 23.1.0 → 25.1.0 (password hashing)
+- **reportlab** 4.2.5 → 4.3.0 (PDF/label generation)
+- **pysaml2** 7.5.0 → 7.5.4 (SAML authentication)
+- **pytest-asyncio** 0.24.0 → 0.25.0
+- **black** 24.10.0 → 25.1.0 (code formatter)
+- **flake8** 7.1.1 → 7.2.0 (linter)
+
+#### Frontend Dependency Updates
+- **@typescript-eslint/eslint-plugin** and **@typescript-eslint/parser** 8.21.0 → 8.56.1 (fixes TypeScript 5.9 compatibility; old versions required `<5.8.0`)
+- **@vitest/coverage-v8** and **@vitest/ui** 3.0.0 → 3.2.4 (aligned with vitest 3.2.4; fixes `npm install` ERESOLVE failure)
+- **esbuild** override 0.25.0 → 0.27.0 (match Vite 7.3.1 peer dependency)
+- **postcss** 8.5.0 → 8.5.6 (match Vite 7.3.1 peer dependency, eliminate dual instances)
+- **react-hook-form** 7.54.2 → 7.71.1 (deduplicate with @hookform/resolvers)
+- **jsdom** (root) ^24.1.3 → ^26.0.0 (align with frontend)
+- **@types/dompurify** moved from `dependencies` to `devDependencies`
+- Removed redundant `vite` override from `frontend/package.json` (root handles it)
+
+#### Security Fixes (Insider Threat Analysis — 19 Findings)
+- **Token storage**: Removed localStorage JWT storage; authentication now uses httpOnly cookies exclusively
+- **WebSocket security**: WebSocket endpoint now validates user is active (not just JWT signature)
+- **Permission enforcement**: Added `require_permission` to user list, role query, and profile endpoints that were previously open to any authenticated user
+- **Error log injection**: Replace raw dict with Pydantic schema + 4KB context size limit on error log endpoint
+- **Cross-org auth prevention**: Scoped authentication query to organization to prevent cross-org authentication
+- **CSRF protection**: Wired up `verify_csrf_token` as global dependency on `api_router`
+- **Onboarding lockdown**: Block onboarding session creation if organization already exists
+- **Docker security**: Removed insecure default values from `docker-compose.yml`; credentials now require `.env` configuration
+- **Voting token**: Moved voting token from URL query param to request body (prevents token leakage in server logs)
+- **File upload safety**: File extension now derived from detected MIME type, not user-supplied filename
+- **Error tracking**: Strip query params from URLs in error tracking to prevent token leaks
+- **SQL injection prevention**: Escape backticks in DDL table/column names; drop tables individually
+- **Mass assignment prevention**: Added explicit field allowlists to `setattr` update loops in elections, events, external training, and inventory endpoints
+
+#### Docker & Infrastructure
+- **MinIO env vars**: Changed MinIO service environment variables from `:?` (required) to `:-` (default) syntax. Docker Compose validates `:?` variables even for inactive profiles (`with-s3`), causing startup failures for users who don't need S3 storage. MinIO credentials are now optional with sensible defaults.
+- **Memory resource limits**: Added `deploy.resources.limits` and `reservations` to all docker-compose services
+
+#### Bug Fixes
+- **Training compliance mismatch**: Dashboard "Training Compliance" showed 0% while Training Admin showed 100% due to different data sources. Extracted shared `compute_org_compliance_pct()` used by both endpoints.
+- **Waiver off-by-one**: Fixed rolling period waiver adjustment calculation (12-month rolling period spanning 13 calendar months now correctly adjusts denominator)
+- **Facilities 500 error**: Fixed `ResponseValidationError` on `GET /api/v1/facilities` where the service returned `(items, total)` tuple but the endpoint returned it directly without unpacking
+- **Auto-create facility**: Onboarding now auto-creates a "Station 1" facility from the organization's physical address
+- **Circular chunk dependency**: Fixed Vite manual chunk splitting that caused `React.memo` to be undefined at runtime due to circular dependency between vendor chunks
+- **Stale asset 404s**: Added `Cache-Control: no-cache` headers to `index.html` so browsers always fetch fresh asset references after deployments
+- **Runtime null safety**: Comprehensive audit and fix of patterns that could cause runtime crashes from undefined data (API response arrays, optional chaining, fallback defaults across 10+ components)
+- **TypeScript strict null checks**: Resolved all `tsc` build errors caused by strict null/undefined checks across 56 frontend source files
+- **Migration startup crashes (Unraid)**: Multiple fixes for Alembic migration failures on Unraid's union filesystem (shfs): retry with backoff, stale `__pycache__` cleanup, SQL-based stamp fallback, diagnostic logging
+- **Public portal timestamp overflow**: `datetime.isoformat()` produced 32-char strings exceeding `String(26)` columns; replaced with `strftime` helper
+- **Inventory barcode**: Fixed barcode not showing in edit form after label generation; fixed Total Value not reflecting purchase price
+- **Audit logging**: Fixed `log_audit_event()` call in `update_organization_profile` using wrong parameter names
+- **Login page dark mode**: Fixed white text on white background in dark mode by using theme-aware gradient background
+- **Migration collision**: Resolved revision ID collision between storage_areas and write-offs migrations
+
+#### Training & Waiver Enhancements
+- **New Member waiver type**: Added `NEW_MEMBER` to waiver type enums for long-service members exempt from requirements
+- **Permanent waivers**: End date is now optional; permanent waivers show purple "Permanent" badge; calculation layer maps null end_date to far-future sentinel
+- **Waiver multi-select**: "Applies To" field converted from single-select to checkboxes (Training, Meetings, Shifts can be combined)
+- **Auto-set Training Type**: Selecting a Requirement Type now auto-populates Training Type and Due Date Type (e.g., certification → cert_period)
+- **Smart field visibility**: Year and Frequency fields are hidden when not relevant to the selected due date type
+
+#### Accessibility & UX
+- **Alt text**: Added meaningful alt text to all avatar/logo images
+- **Skip-to-content**: Fixed skip-to-content link targeting empty element outside React root
+- **Focus-visible**: Added `focus-visible` styles to suppress focus rings on mouse clicks
+- **High-contrast theme**: New accessibility theme with pure black/white, yellow focus rings, and stronger borders
+- **ARIA form validation**: Added `aria-describedby` linking validation errors to inputs, with `aria-invalid` and `role="alert"`
+- **Print CSS**: Added `@media print` hiding navigation, resetting backgrounds, showing link URLs, preventing page breaks
+- **Bulk selection & export**: Added checkboxes and CSV export for member list and events list
+- **PWA install prompt**: Added install prompt on Dashboard with `beforeinstallprompt` handler
+- **Recent Activity feed**: New Dashboard section showing latest notification entries in timeline layout
+- **Command Palette**: Ctrl+K shortcut for search, navigation, and admin actions
+- **26 new UX components**: Skeleton loading, Breadcrumbs, Pagination, EmptyState, ConfirmDialog, Tooltip, ProgressSteps, TopProgressBar, SuccessAnimation, DateRangePicker, FileDropzone, InlineEdit, AutoSaveIndicator, WhatsNew modal, SortableHeader, Collapsible, PageTransition, and 6 new hooks (keyboard shortcuts, relative time, unsaved changes, pull-to-refresh, optimistic updates, form auto-focus)
+
+#### Inventory Module
+- **My Equipment cards**: Cards now show item name, quantity, category badge, and assignment date
+- **Dashboard fixes**: Active Checkouts, Maintenance Due, and Low Stock alerts now use accurate queries
+- **Maintenance tracking tab**: New tab with overdue/due-soon/in-maintenance sections and Log Maintenance modal
+- **Storage Areas**: New feature with hierarchical model (rack/closet → shelf → box), full CRUD, tree view, and integration with Add/Edit Item modals
+- **Detail chips**: Inventory list items now show size, color, and asset tag as compact colored chips
+- **Broader search**: Backend search now matches barcode, manufacturer, model, size, and color
+
+#### Code Quality & Performance
+- **useAutoSave hook**: Fixed interval reset on every keystroke and broken JSON.stringify comparison
+- **Vite chunk splitting**: Manual chunk splitting for vendor-react, vendor-router, vendor-ui, vendor-charts, vendor-date, vendor-state bundles
+- **Lazy-load DOMPurify**: Dynamic import on form submit instead of bundle-time import
+- **ESLint no-console**: Added warn rule on `console.log` (allow warn/error)
+- **Strict index access**: Enabled `noUncheckedIndexedAccess` in tsconfig for stricter null safety
+- **Centralized constants**: Extracted hardcoded values to `constants/config.ts` (API_TIMEOUT_MS, DEFAULT_PAGE_SIZE, etc.)
+- **Pre-commit hooks**: Added Python linting (black, flake8, isort) to pre-commit hooks for backend files
+
+#### Testing
+- **Frontend unit tests**: ErrorBoundary, Modal component tests; authStore (12 cases), errorHandling (9 cases)
+- **E2E tests**: Playwright tests for navigation, dashboard, and auth flows
+- **Backend tests**: Auth/security, inventory service (30 tests), security middleware (CSRF, rate limiter, input sanitization)
+- **Alembic migration tracking**: New `docs/ALEMBIC_MIGRATIONS.md` documenting complete chain of 114 migrations
+
+#### Documentation
+- **Insider threat analysis report**: Comprehensive report identifying 19 security findings with recommended fixes and prioritization
+
 ### Training Compliance & Waiver Management (2026-02-23)
 
 #### Training Module Enhancements

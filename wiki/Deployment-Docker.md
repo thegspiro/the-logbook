@@ -85,6 +85,19 @@ VITE_ENV=production
 | MySQL | logbook-db | 3306 (internal) | Database |
 | Redis | logbook-redis | 6379 (internal) | Cache & sessions |
 
+### Optional Services (Profiles)
+
+| Service | Profile | Description |
+|---------|---------|-------------|
+| Nginx | `production` | Reverse proxy with SSL |
+| Elasticsearch | `with-search` | Advanced search |
+| MinIO | `with-s3` | S3-compatible storage |
+| Mailhog | `development` | Email testing |
+
+Enable a profile: `docker compose --profile with-search up -d`
+
+> **Note:** Optional services use default values for credentials. Set `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` in `.env` if you enable the `with-s3` profile in production.
+
 ---
 
 ## Common Operations

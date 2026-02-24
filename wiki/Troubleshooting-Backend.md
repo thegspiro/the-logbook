@@ -161,4 +161,48 @@ The backend automatically generates API documentation:
 
 ---
 
+## Migration Issues on Unraid (2026-02-24)
+
+### Alembic Revision KeyError on Startup
+
+**Error:** `KeyError: '20260223_0200'` or `Revision X is not present`
+
+**Cause:** Unraid's union filesystem (shfs) can make Docker bind-mounted migration files transiently invisible. Stale `__pycache__` from a different Python version also confuses module loading.
+
+**Status:** Fixed with multiple resilience improvements:
+- Automatic `__pycache__` cleanup before Alembic loads
+- Retry with backoff (up to 3 attempts with 1s/2s delays)
+- SQL-based stamp fallback when graph resolution fails
+- Model-based `create_all` fallback when upgrade fails
+
+```bash
+git pull origin main
+docker-compose build --no-cache backend
+docker-compose up -d
+```
+
+---
+
+## Security Updates (2026-02-24)
+
+### Authentication Now Uses httpOnly Cookies
+
+JWT tokens are no longer stored in `localStorage`. Authentication uses httpOnly cookies exclusively. WebSocket connections use cookies instead of URL tokens.
+
+**Impact:** If you have custom API integrations using `Authorization: Bearer` headers, update them to handle cookie-based authentication.
+
+### Rate Limiting Added
+
+Application-level rate limiting (slowapi + Redis) has been added. If you see 429 errors, reduce request frequency or adjust rate limit settings.
+
+---
+
+## Dependency Updates (2026-02-24)
+
+Backend dependencies updated for Python 3.13 compatibility:
+- cryptography 44.0.0, Pillow 11.3.0, argon2-cffi 25.1.0, psutil 7.0.0, reportlab 4.3.0
+- See CHANGELOG for full list
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)

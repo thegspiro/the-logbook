@@ -11,16 +11,19 @@ This guide covers common issues and their solutions for The Logbook deployment.
 5. [Malformed API URLs](#malformed-api-urls)
 6. [Build Errors](#build-errors)
 7. [Docker Issues](#docker-issues)
-8. [Network & Connectivity](#network--connectivity)
-9. [Security Issues](#security-issues)
-10. [Accessibility Issues](#accessibility-issues)
-11. [Events Module Issues](#events-module-issues)
-12. [Scheduling Module Issues](#scheduling-module-issues)
-13. [TypeScript Quality Issues](#typescript-quality-issues)
-14. [Inventory Module Issues](#inventory-module-issues)
-15. [Notification Issues](#notification-issues)
-16. [Training & Compliance Issues](#training--compliance-issues)
-17. [Membership Admin Issues](#membership-admin-issues)
+8. [Docker Compose Profile Issues](#docker-compose-profile-issues)
+9. [Network & Connectivity](#network--connectivity)
+10. [Security Issues](#security-issues)
+11. [Accessibility Issues](#accessibility-issues)
+12. [Events Module Issues](#events-module-issues)
+13. [Scheduling Module Issues](#scheduling-module-issues)
+14. [TypeScript Quality Issues](#typescript-quality-issues)
+15. [Frontend Dependency Issues](#frontend-dependency-issues)
+16. [Inventory Module Issues](#inventory-module-issues)
+17. [Notification Issues](#notification-issues)
+18. [Training & Compliance Issues](#training--compliance-issues)
+19. [Migration Issues on Unraid](#migration-issues-on-unraid)
+20. [Membership Admin Issues](#membership-admin-issues)
 
 ---
 
@@ -1433,3 +1436,78 @@ If you find new `as any` assertions, replace them with proper types. See `docs/T
 **Root Cause:** Audit entries are only created for changes made after the audit history feature was deployed.
 
 **Solution:** Changes made before the feature was added will not appear. Future changes will be tracked automatically.
+
+---
+
+## Docker Compose Profile Issues
+
+### Problem: MinIO required variable error blocks startup
+
+**Error:** `required variable MINIO_ROOT_PASSWORD is missing a value`
+
+**Root Cause:** The MinIO service used `:?` (required variable) syntax in `docker-compose.yml`. Docker Compose validates all `:?` variables at parse time, even for services in inactive profiles like `with-s3`.
+
+**Solution:** This has been fixed. MinIO now uses `:-` (default value) syntax. Pull latest changes:
+```bash
+git pull origin main
+docker-compose up -d
+```
+
+MinIO only starts when you explicitly activate the `with-s3` profile.
+
+---
+
+## Frontend Dependency Issues
+
+### Problem: npm install fails with ERESOLVE (vitest peer dependency)
+
+**Error:** `ERESOLVE unable to resolve dependency tree` referencing `@vitest/coverage-v8` or `@vitest/ui`
+
+**Root Cause:** `@vitest/coverage-v8` and `@vitest/ui` were pinned at 3.0.0 while `vitest` was at 3.2.4.
+
+**Solution:** Updated to 3.2.4. Pull latest and run `npm install`.
+
+### Problem: npm install fails with ERESOLVE (@typescript-eslint)
+
+**Error:** `ERESOLVE` referencing `@typescript-eslint/*` and TypeScript version
+
+**Root Cause:** `@typescript-eslint/*` 8.21.0 required `typescript <5.8.0`, conflicting with TypeScript 5.9.3.
+
+**Solution:** Updated to 8.56.1 (supports `<6.0.0`). Pull latest and run `npm install`.
+
+### Problem: esbuild override causes Vite build issues
+
+**Root Cause:** esbuild override pinned to 0.25.x, but Vite 7.3.1 requires `^0.27.0`.
+
+**Solution:** Updated esbuild override to 0.27.0. Pull latest and run `rm -rf node_modules package-lock.json && npm install`.
+
+---
+
+## Migration Issues on Unraid
+
+### Problem: Backend crashes with KeyError on Alembic revision
+
+**Error:** `KeyError: '20260223_0200'` or `Revision X is not present`
+
+**Root Cause:** Unraid's union filesystem (shfs) can make Docker bind-mounted migration files transiently invisible. Stale `__pycache__` from different Python versions also confuse module loading.
+
+**Solution:** Multiple resilience improvements have been added:
+- `__pycache__` cleanup before Alembic loads
+- Retry with backoff (up to 3 attempts)
+- SQL-based stamp fallback when graph resolution fails
+- Model-based `create_all` fallback when upgrade fails
+
+Pull latest and rebuild:
+```bash
+git pull origin main
+docker-compose build --no-cache backend
+docker-compose up -d
+```
+
+### Problem: Stale assets return 404 after deployment
+
+**Symptom:** After deploying, browsers show 404 errors for JS/CSS files.
+
+**Root Cause:** Cached `index.html` references old asset filenames with different Vite content hashes.
+
+**Solution:** Fixed with `Cache-Control: no-cache` on `index.html`. Pull latest and rebuild frontend. Users can also hard-refresh (Ctrl+Shift+R).

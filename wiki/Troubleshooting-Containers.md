@@ -146,4 +146,37 @@ docker-compose up -d
 
 ---
 
+## Docker Compose Profile Issues (2026-02-24)
+
+### MinIO Required Variable Error
+
+**Error:** `required variable MINIO_ROOT_PASSWORD is missing a value`
+
+**Cause:** The MinIO service used `:?` (required variable) syntax. Docker Compose validates these even for inactive profiles (`with-s3`).
+
+**Fix:** Updated to `:-` (default value) syntax. Pull latest:
+```bash
+git pull origin main
+docker-compose up -d
+```
+
+MinIO only starts when you explicitly use `docker compose --profile with-s3 up -d`.
+
+---
+
+### Memory Resource Limits
+
+All services in `docker-compose.yml` now have memory limits configured:
+
+| Service | Limit | Reservation |
+|---------|-------|-------------|
+| MySQL | 512M | 256M |
+| Redis | 128M | 64M |
+| Backend | 768M | 384M |
+| Frontend | 128M | 64M |
+
+If containers are being OOM-killed, increase limits in `docker-compose.override.yml`.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Backend Issues](Troubleshooting-Backend) | [Quick Reference](Quick-Reference)

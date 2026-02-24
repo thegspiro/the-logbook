@@ -176,4 +176,33 @@ docker-compose exec mysql mysql -u root -p the_logbook \
 
 ---
 
+## Migration Issues on Unraid (2026-02-24)
+
+### Alembic Revision Not Found on Unraid Filesystem
+
+**Error:** `KeyError` or `Revision X is not present` during startup
+
+**Cause:** Unraid's union filesystem (shfs) can make Docker bind-mounted `.py` files transiently invisible. Combined with stale `__pycache__` bytecode from a different Python version (e.g., host 3.11 vs container 3.13), Alembic fails to build its revision graph.
+
+**Solution:** Multiple resilience improvements added:
+1. `__pycache__` is automatically cleaned before Alembic loads the revision graph
+2. Graph loading retries up to 3 times with 1s/2s backoff
+3. SQL-based stamp fallback when `command.stamp("head")` fails
+4. `create_all` + SQL stamp fallback when `command.upgrade()` fails
+
+Pull latest and rebuild:
+```bash
+git pull origin main
+docker-compose build --no-cache backend
+docker-compose up -d
+```
+
+### Migration Revision ID Collision
+
+**Error:** `Multiple heads detected` or duplicate revision errors
+
+**Prevention:** A complete migration tracking document now exists at `docs/ALEMBIC_MIGRATIONS.md` with all 114+ revisions, naming conventions, and a template for new migrations. Check it before creating new migration files to avoid revision ID collisions.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-23 (includes LOA–training waiver auto-linking, waiver management page, compliance summary card, bulk training record creation with duplicate detection, certification expiration alert tiers, rank/station snapshot on training records, member admin edit/audit history/delete modal, rank validation, 15-minute time increment enforcement; plus training waiver consistency across all compliance views, meeting attendance Leave of Absence exclusion, shared training waiver service, DateTime timezone consistency, CI pipeline; hardcoded value elimination across 43 files, centralized constants for role groups/event types/folder slugs, CSS variable consolidation for toast/status colors, dependency version bumps; comprehensive security and stability audit with 63 fixes across auth, IDOR, MissingGreenlet, multi-tenant data isolation, mass-assignment prevention, CSP headers, dark theme colors, WCAG accessibility; member deletion feature, comprehensive JavaScript runtime error audit and fixes across 8 pages/components/stores, member profile crash fix, unique membership number enforcement, training session creation fix, role endpoint crash fix, dashboard zero-member fix, login 500 error fix, scheduling shift template improvements, expanded event system, mobile optimization, Section 508 accessibility improvements, taxonomy refactor Role→Position, database migration reliability, Docker/Unraid deployment fixes; plus all previous updates)
+**Last Updated**: 2026-02-24 (includes dependency updates for Python 3.13 compatibility and frontend peer dependency resolution; insider threat security hardening with 19 fixes across auth, CSRF, localStorage, WebSocket, mass assignment, SQL injection, and file upload; Docker Compose MinIO profile fix; 26 new UX components; inventory storage areas and maintenance tracking; training waiver enhancements with permanent waivers and multi-select; accessibility improvements including high-contrast theme, ARIA validation, print CSS, and Command Palette; migration reliability fixes for Unraid union filesystem; comprehensive TypeScript strict null check fixes across 56 files; plus all previous updates)
 
 ---
 
@@ -3731,6 +3731,20 @@ docker compose logs backend | head -50
 
 All bumps are minor/patch within the same major version — no breaking API changes.
 
+**Versions bumped (2026-02-24)**:
+| Package | From | To |
+|---|---|---|
+| cryptography | 43.0.3 | 44.0.0 |
+| greenlet | 3.3.1 | 3.3.2 |
+| hiredis | 3.0.0 | 3.1.0 |
+| psutil | 6.1.1 | 7.0.0 |
+| Pillow | 11.1.0 | 11.3.0 |
+| argon2-cffi | 23.1.0 | 25.1.0 |
+| reportlab | 4.2.5 | 4.3.0 |
+| pysaml2 | 7.5.0 | 7.5.4 |
+| black | 24.10.0 | 25.1.0 |
+| flake8 | 7.1.1 | 7.2.0 |
+
 ---
 
 ### After Dependency Bump: Frontend Build Fails
@@ -3755,6 +3769,17 @@ npm run build
 
 **Note**: `@vitejs/plugin-react` jumped to v5 which requires `vite` v7 (already in use). If you're on an older vite version, update vite first.
 
+**Versions bumped (2026-02-24)**:
+| Package | From | To | Reason |
+|---|---|---|---|
+| @typescript-eslint/* | 8.21.0 | 8.56.1 | TypeScript 5.9 compatibility |
+| @vitest/coverage-v8 | 3.0.0 | 3.2.4 | Match vitest 3.2.4 |
+| @vitest/ui | 3.0.0 | 3.2.4 | Match vitest 3.2.4 |
+| esbuild (override) | 0.25.0 | 0.27.0 | Vite 7.3.1 peer dep |
+| postcss | 8.5.0 | 8.5.6 | Vite 7.3.1 peer dep |
+| react-hook-form | 7.54.2 | 7.71.1 | Deduplicate with @hookform/resolvers |
+| jsdom (root) | ^24.1.3 | ^26.0.0 | Align with frontend |
+
 ---
 
 ### Major Versions Intentionally Skipped
@@ -3773,7 +3798,146 @@ These can be upgraded individually when the team is ready to handle the migratio
 
 ---
 
+## Docker Compose Profile Issues
+
+### MinIO Required Variable Error Blocks Startup
+
+**Error**: `required variable MINIO_ROOT_PASSWORD is missing a value: MINIO_ROOT_PASSWORD must be set in .env`
+
+**Cause**: The MinIO service in `docker-compose.yml` used `:?` (required variable) syntax for its environment variables. Docker Compose validates all `:?` variables at parse time, even for services in inactive profiles like `with-s3`. If you're not using S3 storage, you don't have these variables in your `.env` file, causing the error.
+
+**Fix**: This has been fixed in the codebase. MinIO now uses `:-` (default value) syntax:
+```yaml
+environment:
+  MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+```
+
+Pull the latest changes:
+```bash
+git pull origin main
+docker-compose up -d
+```
+
+**Note**: MinIO only starts when you explicitly activate the `with-s3` profile: `docker compose --profile with-s3 up -d`. The default values are only used if you enable the profile without setting credentials.
+
+---
+
+### Stale Assets After Deployment (404 Errors on JS/CSS Files)
+
+**Symptom**: After deploying a new version, users see a broken page with 404 errors for JavaScript or CSS files in the browser console.
+
+**Cause**: Browsers cache `index.html` and continue requesting old asset filenames (with different Vite content hashes) that no longer exist on the server.
+
+**Fix**: This has been fixed in the codebase. The nginx configuration now sends `Cache-Control: no-cache` headers for `index.html`, so browsers always fetch fresh asset references. The `error_page 404 → index.html` redirect has also been removed (it was serving HTML content for missing JS/CSS files, causing parse errors).
+
+Pull the latest changes and rebuild:
+```bash
+git pull origin main
+docker-compose build --no-cache frontend
+docker-compose up -d
+```
+
+**Workaround for users**: Hard refresh (Ctrl+Shift+R) or clear browser cache.
+
+---
+
+## Frontend Dependency Issues
+
+### npm install Fails with ERESOLVE (Vitest Peer Dependency)
+
+**Error**: `npm ERR! ERESOLVE unable to resolve dependency tree` referencing `@vitest/coverage-v8` or `@vitest/ui`
+
+**Cause**: `@vitest/coverage-v8` and `@vitest/ui` were pinned at 3.0.0 while `vitest` was at 3.2.4. These packages require matching versions.
+
+**Fix**: Updated `@vitest/coverage-v8` and `@vitest/ui` to 3.2.4 in `frontend/package.json`. Pull latest changes.
+
+---
+
+### npm install Fails with ERESOLVE (@typescript-eslint)
+
+**Error**: `npm ERR! ERESOLVE` referencing `@typescript-eslint/eslint-plugin` or `@typescript-eslint/parser` and TypeScript version
+
+**Cause**: `@typescript-eslint/*` 8.21.0 required `typescript <5.8.0`, which conflicted with TypeScript 5.9.3.
+
+**Fix**: Updated `@typescript-eslint/eslint-plugin` and `@typescript-eslint/parser` to 8.56.1 (supports `typescript >=4.8.4 <6.0.0`). Pull latest changes.
+
+---
+
+### esbuild Override Causes Vite Build Issues
+
+**Symptom**: Vite build fails or produces unexpected output after updating to Vite 7.3.1.
+
+**Cause**: The `esbuild` override in `package.json` was pinning esbuild to 0.25.x, but Vite 7.3.1 requires `esbuild ^0.27.0`. The two-minor-version gap includes API changes that Vite 7.x depends on.
+
+**Fix**: The esbuild override has been updated to `0.27.0`. If you had a local override, update it:
+```json
+{
+  "overrides": {
+    "esbuild": "0.27.0"
+  }
+}
+```
+Then run `rm -rf node_modules package-lock.json && npm install`.
+
+---
+
+## Migration Issues on Unraid
+
+### Backend Crashes with KeyError on Alembic Revision
+
+**Error**: `KeyError: '20260223_0200'` during startup, or `Revision X is not present`
+
+**Cause**: On Unraid's union filesystem (shfs), Docker bind-mounted migration files can be transiently invisible. Additionally, stale `__pycache__` files from a different Python version (e.g., host Python 3.11 vs container Python 3.13) can confuse module loading.
+
+**Fix**: Multiple resilience improvements have been added:
+1. `__pycache__` directories in the versions folder are automatically cleaned before Alembic loads
+2. Revision graph loading retries up to 3 times with 1s/2s backoff
+3. If `command.stamp("head")` fails due to graph issues, a SQL-based fallback stamps the version directly
+4. If `command.upgrade("head")` fails, tables are created from models (`create_all`) and stamped via SQL
+
+Pull the latest changes and restart:
+```bash
+git pull origin main
+docker-compose build --no-cache backend
+docker-compose up -d
+```
+
+---
+
+## Insider Threat Security Fixes
+
+### Authentication Now Uses httpOnly Cookies
+
+**Change**: JWT tokens are no longer stored in `localStorage`. Authentication now uses httpOnly cookies exclusively.
+
+**Impact**:
+- The `Authorization: Bearer <token>` header pattern is no longer used for browser requests
+- WebSocket connections use cookies instead of passing tokens in the URL
+- Frontend `authStore` no longer reads/writes tokens to localStorage
+- Onboarding PII is no longer persisted in localStorage
+
+**If you have custom API integrations**: Update them to handle cookie-based authentication. API documentation at `/docs` reflects the new auth flow.
+
+---
+
+### Voting Token Moved from URL to Request Body
+
+**Change**: The voting token for elections has been moved from a URL query parameter to the request body.
+
+**Impact**: If you have bookmarked or shared voting URLs that contain `?token=...`, these will no longer work. Voters should access the voting page directly and authenticate normally.
+
+---
+
 ## Version History
+
+**v2.1** - 2026-02-24
+- Added Docker Compose profile issues section (MinIO required variable error)
+- Added stale assets after deployment troubleshooting
+- Added frontend dependency issues section (vitest, typescript-eslint, esbuild)
+- Added migration issues on Unraid section (Alembic revision KeyError, filesystem visibility)
+- Added insider threat security fixes section (httpOnly cookies, voting token change)
+- Updated dependency version tables with 2026-02-24 backend and frontend bumps
 
 **v2.0** - 2026-02-20
 - Added centralized constants and enum usage troubleshooting (4 new entries)
