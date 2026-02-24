@@ -18,6 +18,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -27,10 +28,13 @@ from app.core.utils import safe_error_detail
 from app.core.websocket_manager import ws_manager
 from app.models.inventory import (
     AssignmentType,
+    CheckOutRecord,
     EquipmentRequest,
+    InventoryItem,
     ItemStatus,
     StorageArea,
 )
+from app.models.operational_rank import OperationalRank
 from app.models.user import User
 from app.schemas.inventory import (  # Category schemas; Item schemas; Assignment schemas; Issuance schemas; Checkout schemas; Maintenance schemas; Summary schemas; Departure clearance schemas; Scan / quick-action schemas; Members summary; Equipment request schemas; Storage area schemas; Write-off schemas
     BatchCheckoutRequest,
@@ -40,6 +44,7 @@ from app.schemas.inventory import (  # Category schemas; Item schemas; Assignmen
     CheckInRequest,
     CheckOutCreate,
     CheckOutRecordResponse,
+    CheckoutExtendRequest,
     ClearanceLineItemResponse,
     CompleteClearanceRequest,
     DepartureClearanceCreate,
@@ -995,6 +1000,79 @@ async def checkin_item(
     return {"message": "Item checked in successfully"}
 
 
+@router.patch("/checkout/{checkout_id}/extend", status_code=status.HTTP_200_OK)
+async def extend_checkout(
+    checkout_id: UUID,
+    extend_data: CheckoutExtendRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Extend a checkout's expected return date.
+
+    Members can extend their own checkouts.
+    Quartermasters (inventory.manage) can extend any checkout in their org.
+
+    **Authentication required**
+    """
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(CheckOutRecord).where(
+            CheckOutRecord.id == str(checkout_id),
+            CheckOutRecord.organization_id == str(current_user.organization_id),
+        )
+    )
+    checkout = result.scalar_one_or_none()
+
+    if not checkout:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+
+    if checkout.is_returned:
+        raise HTTPException(
+            status_code=400, detail="Cannot extend a returned checkout"
+        )
+
+    # Authorization: own checkout or inventory.manage
+    is_own = str(checkout.user_id) == str(current_user.id)
+    can_manage = any(
+        p in (role.permissions or [])
+        for role in current_user.roles
+        for p in ("inventory.manage", "inventory.*", "*")
+    )
+    if not is_own and not can_manage:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to extend this checkout"
+        )
+
+    checkout.expected_return_at = extend_data.expected_return_at
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_checkout_extended",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "checkout_id": str(checkout_id),
+            "new_return_date": extend_data.expected_return_at.isoformat(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    await _publish_inventory_event(
+        str(current_user.organization_id),
+        "checkout_extended",
+        {"checkout_id": str(checkout_id)},
+    )
+
+    return {
+        "message": "Checkout extended successfully",
+        "expected_return_at": extend_data.expected_return_at.isoformat(),
+    }
+
+
 @router.get("/checkout/active")
 async def get_active_checkouts(
     user_id: Optional[UUID] = None,
@@ -1846,8 +1924,31 @@ async def create_equipment_request(
     Create an equipment request.
 
     Any authenticated member can submit a request for checkout, issuance, or purchase.
+    Items with a rank restriction will be validated against the requester's rank.
     """
     from app.core.utils import generate_uuid as gen_id
+
+    # --- Rank-based access check ---
+    if request_data.item_id:
+        item_result = await db.execute(
+            select(InventoryItem.min_rank_order).where(
+                InventoryItem.id == str(request_data.item_id)
+            )
+        )
+        min_rank = item_result.scalar_one_or_none()
+        if min_rank is not None and current_user.rank:
+            rank_result = await db.execute(
+                select(OperationalRank.sort_order).where(
+                    OperationalRank.organization_id == str(current_user.organization_id),
+                    OperationalRank.rank_code == current_user.rank,
+                )
+            )
+            user_sort = rank_result.scalar_one_or_none()
+            if user_sort is not None and user_sort > min_rank:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This item is restricted to higher-ranked members",
+                )
 
     req = EquipmentRequest(
         id=gen_id(),

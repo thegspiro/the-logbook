@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Package, AlertTriangle, Clock, CheckCircle, ArrowDownToLine, RefreshCw, Plus, ClipboardList } from 'lucide-react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { Package, AlertTriangle, Clock, CheckCircle, ArrowDownToLine, RefreshCw, Plus, ClipboardList, CalendarClock, Search } from 'lucide-react';
 import {
   inventoryService,
   type UserInventoryResponse,
@@ -7,8 +7,10 @@ import {
   type UserCheckoutItem,
   type UserIssuedItem,
   type EquipmentRequestItem,
+  type InventoryItem,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { useRanks } from '../hooks/useRanks';
 import { getErrorMessage } from '../utils/errorHandling';
 import toast from 'react-hot-toast';
 
@@ -27,6 +29,7 @@ function formatDate(dateStr: string): string {
 
 const MyEquipmentPage: React.FC = () => {
   const { user } = useAuthStore();
+  const { ranks } = useRanks();
   const [data, setData] = useState<UserInventoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,11 +40,65 @@ const MyEquipmentPage: React.FC = () => {
   const [damageNotes, setDamageNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Extend checkout state
+  const [extendModal, setExtendModal] = useState<{ open: boolean; checkoutId: string; itemName: string; currentDue: string }>({ open: false, checkoutId: '', itemName: '', currentDue: '' });
+  const [extendDate, setExtendDate] = useState('');
+
   // Equipment request state
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [requestForm, setRequestForm] = useState({ item_name: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
+  const [requestForm, setRequestForm] = useState({ item_name: '', item_id: '', category_id: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
   const [myRequests, setMyRequests] = useState<EquipmentRequestItem[]>([]);
   const [showRequests, setShowRequests] = useState(false);
+
+  // Item search autocomplete state
+  const [itemSearch, setItemSearch] = useState('');
+  const [itemResults, setItemResults] = useState<InventoryItem[]>([]);
+  const [searchingItems, setSearchingItems] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const searchItems = useCallback(async (query: string) => {
+    if (query.length < 2) { setItemResults([]); return; }
+    setSearchingItems(true);
+    try {
+      const res = await inventoryService.getItems({ search: query, status: 'available', limit: 15 });
+      // Resolve the member's rank code to a sort_order via the ranks list
+      const memberRank = ranks.find(r => r.rank_code === user?.rank);
+      const memberSortOrder = memberRank?.sort_order;
+      // Filter out items the member's rank doesn't qualify for
+      const filtered = res.items.filter(item => {
+        if (item.min_rank_order == null) return true;
+        if (memberSortOrder == null) return true; // no rank info → show all
+        return memberSortOrder <= item.min_rank_order;
+      });
+      setItemResults(filtered);
+    } catch {
+      setItemResults([]);
+    } finally {
+      setSearchingItems(false);
+    }
+  }, [ranks, user?.rank]);
+
+  const handleItemSearchChange = (value: string) => {
+    setItemSearch(value);
+    setRequestForm(prev => ({ ...prev, item_name: value, item_id: '', category_id: '' }));
+    setShowDropdown(true);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => void searchItems(value), 300);
+  };
+
+  const selectItem = (item: InventoryItem) => {
+    setItemSearch(item.name);
+    setRequestForm(prev => ({
+      ...prev,
+      item_name: item.name,
+      item_id: item.id,
+      category_id: item.category_id ?? '',
+    }));
+    setShowDropdown(false);
+    setItemResults([]);
+  };
 
   const loadData = async () => {
     if (!user?.id) return;
@@ -83,12 +140,30 @@ const MyEquipmentPage: React.FC = () => {
     }
   };
 
+  const handleExtend = async () => {
+    if (!extendModal.checkoutId || !extendDate) return;
+    setSubmitting(true);
+    try {
+      await inventoryService.extendCheckout(extendModal.checkoutId, new Date(extendDate).toISOString());
+      toast.success(`Return date extended to ${new Date(extendDate).toLocaleDateString()}`);
+      setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' });
+      setExtendDate('');
+      await loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to extend checkout'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmitRequest = async () => {
     if (!requestForm.item_name.trim()) return;
     setSubmitting(true);
     try {
       await inventoryService.createEquipmentRequest({
         item_name: requestForm.item_name,
+        item_id: requestForm.item_id || undefined,
+        category_id: requestForm.category_id || undefined,
         request_type: requestForm.request_type,
         priority: requestForm.priority,
         quantity: requestForm.quantity,
@@ -96,7 +171,8 @@ const MyEquipmentPage: React.FC = () => {
       });
       toast.success('Equipment request submitted');
       setShowRequestModal(false);
-      setRequestForm({ item_name: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
+      setRequestForm({ item_name: '', item_id: '', category_id: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
+      setItemSearch('');
       loadRequests();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to submit request'));
@@ -252,12 +328,21 @@ const MyEquipmentPage: React.FC = () => {
                             ) : '--'}
                           </td>
                           <td className="p-3">
-                            <button
-                              onClick={() => setCheckInModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name })}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
-                            >
-                              <ArrowDownToLine className="w-3.5 h-3.5" /> Return
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => setCheckInModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name })}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+                              >
+                                <ArrowDownToLine className="w-3.5 h-3.5" /> Return
+                              </button>
+                              <button
+                                onClick={() => { setExtendModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name, currentDue: co.expected_return_at || '' }); setExtendDate(''); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover text-xs rounded-lg transition-colors"
+                                title="Extend return date"
+                              >
+                                <CalendarClock className="w-3.5 h-3.5" /> Extend
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -366,9 +451,49 @@ const MyEquipmentPage: React.FC = () => {
                 <div className="px-4 sm:px-6 pt-5 pb-4">
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4">Request Equipment</h3>
                   <div className="space-y-4">
-                    <div>
+                    <div className="relative" ref={dropdownRef}>
                       <label htmlFor="req-item-name" className="block text-sm font-medium text-theme-text-secondary mb-1">What do you need? *</label>
-                      <input id="req-item-name" type="text" required value={requestForm.item_name} onChange={(e) => setRequestForm({ ...requestForm, item_name: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Turnout gear, Radio, Flashlight" />
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted pointer-events-none" aria-hidden="true" />
+                        <input
+                          id="req-item-name"
+                          type="text"
+                          required
+                          autoComplete="off"
+                          value={itemSearch}
+                          onChange={(e) => handleItemSearchChange(e.target.value)}
+                          onFocus={() => { if (itemResults.length > 0) setShowDropdown(true); }}
+                          onBlur={() => { setTimeout(() => setShowDropdown(false), 200); }}
+                          className="w-full pl-9 pr-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          placeholder="Search inventory items..."
+                        />
+                        {searchingItems && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted animate-spin" />}
+                      </div>
+                      {requestForm.item_id && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">Linked to inventory item</p>
+                      )}
+                      {showDropdown && itemResults.length > 0 && (
+                        <ul className="absolute z-20 mt-1 w-full bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {itemResults.map(item => (
+                            <li key={item.id}>
+                              <button
+                                type="button"
+                                className="w-full text-left px-3 py-2 hover:bg-theme-surface-hover flex items-center justify-between gap-2"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => selectItem(item)}
+                              >
+                                <span className="text-sm text-theme-text-primary truncate">{item.name}</span>
+                                <span className="text-xs text-theme-text-muted shrink-0">{item.status}{item.size ? ` · ${item.size}` : ''}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {showDropdown && itemSearch.length >= 2 && !searchingItems && itemResults.length === 0 && (
+                        <div className="absolute z-20 mt-1 w-full bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-lg px-3 py-2 text-sm text-theme-text-muted">
+                          No matching items found
+                        </div>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -438,6 +563,41 @@ const MyEquipmentPage: React.FC = () => {
                   <button onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
                   <button onClick={handleCheckIn} disabled={submitting} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Returning...' : 'Return Item'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Extend Checkout Modal */}
+        {extendModal.open && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' }); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border">
+                <div className="px-4 sm:px-6 pt-5 pb-4">
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-1">Extend Return Date</h3>
+                  <p className="text-theme-text-muted text-sm mb-4">{extendModal.itemName}</p>
+                  {extendModal.currentDue && (
+                    <p className="text-theme-text-secondary text-xs mb-3">Currently due: {formatDate(extendModal.currentDue)}</p>
+                  )}
+                  <div>
+                    <label htmlFor="extend-date" className="block text-sm font-medium text-theme-text-secondary mb-1">New return date *</label>
+                    <input
+                      id="extend-date"
+                      type="date"
+                      value={extendDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setExtendDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={handleExtend} disabled={submitting || !extendDate} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Extending...' : 'Extend'}
                   </button>
                 </div>
               </div>

@@ -1926,6 +1926,7 @@ export interface InventoryItem {
   inspection_interval_days?: number;
   assigned_to_user_id?: string;
   assigned_date?: string;
+  min_rank_order?: number | null;
   notes?: string;
   active: boolean;
   created_at: string;
@@ -2087,6 +2088,7 @@ export interface InventoryItemCreate {
   quantity?: number;
   unit_of_measure?: string;
   inspection_interval_days?: number;
+  min_rank_order?: number | null;
   notes?: string;
 }
 
@@ -2321,6 +2323,11 @@ export const inventoryService = {
 
   async checkInItem(checkoutId: string, returnCondition: string, damageNotes?: string): Promise<void> {
     await api.post(`/inventory/checkout/${checkoutId}/checkin`, { return_condition: returnCondition, damage_notes: damageNotes });
+  },
+
+  async extendCheckout(checkoutId: string, expectedReturnAt: string): Promise<{ message: string; expected_return_at: string }> {
+    const response = await api.patch<{ message: string; expected_return_at: string }>(`/inventory/checkout/${checkoutId}/extend`, { expected_return_at: expectedReturnAt });
+    return response.data;
   },
 
   async getActiveCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {

@@ -273,6 +273,14 @@ class InventoryService:
             if "purchase_price" in item_data and "current_value" not in item_data:
                 item_data["current_value"] = item_data["purchase_price"]
 
+            # Auto-generate a barcode if none was provided.  Format: INV-XXXXXXXX
+            # (8 uppercase alphanumeric chars derived from the item's UUID).
+            if not item_data.get("barcode"):
+                from app.core.utils import generate_uuid as _gen
+
+                raw_id = _gen().replace("-", "").upper()[:8]
+                item_data["barcode"] = f"INV-{raw_id}"
+
             item = InventoryItem(
                 organization_id=organization_id, created_by=created_by, **item_data
             )
