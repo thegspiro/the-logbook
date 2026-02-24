@@ -320,7 +320,12 @@ class InventoryService:
                     InventoryItem.name.ilike(search_term),
                     InventoryItem.serial_number.ilike(search_term),
                     InventoryItem.asset_tag.ilike(search_term),
+                    InventoryItem.barcode.ilike(search_term),
                     InventoryItem.description.ilike(search_term),
+                    InventoryItem.manufacturer.ilike(search_term),
+                    InventoryItem.model_number.ilike(search_term),
+                    InventoryItem.size.ilike(search_term),
+                    InventoryItem.color.ilike(search_term),
                 )
             )
 
