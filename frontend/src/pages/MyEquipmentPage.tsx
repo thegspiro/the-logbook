@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Package, AlertTriangle, Clock, CheckCircle, ArrowDownToLine, RefreshCw, Plus, ClipboardList, CalendarClock } from 'lucide-react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { Package, AlertTriangle, Clock, CheckCircle, ArrowDownToLine, RefreshCw, Plus, ClipboardList, CalendarClock, Search } from 'lucide-react';
 import {
   inventoryService,
   type UserInventoryResponse,
@@ -7,8 +7,10 @@ import {
   type UserCheckoutItem,
   type UserIssuedItem,
   type EquipmentRequestItem,
+  type InventoryItem,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { useRanks } from '../hooks/useRanks';
 import { getErrorMessage } from '../utils/errorHandling';
 import toast from 'react-hot-toast';
 
@@ -27,6 +29,7 @@ function formatDate(dateStr: string): string {
 
 const MyEquipmentPage: React.FC = () => {
   const { user } = useAuthStore();
+  const { ranks } = useRanks();
   const [data, setData] = useState<UserInventoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,9 +46,59 @@ const MyEquipmentPage: React.FC = () => {
 
   // Equipment request state
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [requestForm, setRequestForm] = useState({ item_name: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
+  const [requestForm, setRequestForm] = useState({ item_name: '', item_id: '', category_id: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
   const [myRequests, setMyRequests] = useState<EquipmentRequestItem[]>([]);
   const [showRequests, setShowRequests] = useState(false);
+
+  // Item search autocomplete state
+  const [itemSearch, setItemSearch] = useState('');
+  const [itemResults, setItemResults] = useState<InventoryItem[]>([]);
+  const [searchingItems, setSearchingItems] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const searchItems = useCallback(async (query: string) => {
+    if (query.length < 2) { setItemResults([]); return; }
+    setSearchingItems(true);
+    try {
+      const res = await inventoryService.getItems({ search: query, status: 'available', limit: 15 });
+      // Resolve the member's rank code to a sort_order via the ranks list
+      const memberRank = ranks.find(r => r.rank_code === user?.rank);
+      const memberSortOrder = memberRank?.sort_order;
+      // Filter out items the member's rank doesn't qualify for
+      const filtered = res.items.filter(item => {
+        if (item.min_rank_order == null) return true;
+        if (memberSortOrder == null) return true; // no rank info → show all
+        return memberSortOrder <= item.min_rank_order;
+      });
+      setItemResults(filtered);
+    } catch {
+      setItemResults([]);
+    } finally {
+      setSearchingItems(false);
+    }
+  }, [ranks, user?.rank]);
+
+  const handleItemSearchChange = (value: string) => {
+    setItemSearch(value);
+    setRequestForm(prev => ({ ...prev, item_name: value, item_id: '', category_id: '' }));
+    setShowDropdown(true);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => void searchItems(value), 300);
+  };
+
+  const selectItem = (item: InventoryItem) => {
+    setItemSearch(item.name);
+    setRequestForm(prev => ({
+      ...prev,
+      item_name: item.name,
+      item_id: item.id,
+      category_id: item.category_id ?? '',
+    }));
+    setShowDropdown(false);
+    setItemResults([]);
+  };
 
   const loadData = async () => {
     if (!user?.id) return;
@@ -109,6 +162,8 @@ const MyEquipmentPage: React.FC = () => {
     try {
       await inventoryService.createEquipmentRequest({
         item_name: requestForm.item_name,
+        item_id: requestForm.item_id || undefined,
+        category_id: requestForm.category_id || undefined,
         request_type: requestForm.request_type,
         priority: requestForm.priority,
         quantity: requestForm.quantity,
@@ -116,7 +171,8 @@ const MyEquipmentPage: React.FC = () => {
       });
       toast.success('Equipment request submitted');
       setShowRequestModal(false);
-      setRequestForm({ item_name: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
+      setRequestForm({ item_name: '', item_id: '', category_id: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
+      setItemSearch('');
       loadRequests();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to submit request'));
@@ -395,9 +451,49 @@ const MyEquipmentPage: React.FC = () => {
                 <div className="px-4 sm:px-6 pt-5 pb-4">
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4">Request Equipment</h3>
                   <div className="space-y-4">
-                    <div>
+                    <div className="relative" ref={dropdownRef}>
                       <label htmlFor="req-item-name" className="block text-sm font-medium text-theme-text-secondary mb-1">What do you need? *</label>
-                      <input id="req-item-name" type="text" required value={requestForm.item_name} onChange={(e) => setRequestForm({ ...requestForm, item_name: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Turnout gear, Radio, Flashlight" />
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted pointer-events-none" aria-hidden="true" />
+                        <input
+                          id="req-item-name"
+                          type="text"
+                          required
+                          autoComplete="off"
+                          value={itemSearch}
+                          onChange={(e) => handleItemSearchChange(e.target.value)}
+                          onFocus={() => { if (itemResults.length > 0) setShowDropdown(true); }}
+                          onBlur={() => { setTimeout(() => setShowDropdown(false), 200); }}
+                          className="w-full pl-9 pr-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          placeholder="Search inventory items..."
+                        />
+                        {searchingItems && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted animate-spin" />}
+                      </div>
+                      {requestForm.item_id && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">Linked to inventory item</p>
+                      )}
+                      {showDropdown && itemResults.length > 0 && (
+                        <ul className="absolute z-20 mt-1 w-full bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {itemResults.map(item => (
+                            <li key={item.id}>
+                              <button
+                                type="button"
+                                className="w-full text-left px-3 py-2 hover:bg-theme-surface-hover flex items-center justify-between gap-2"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => selectItem(item)}
+                              >
+                                <span className="text-sm text-theme-text-primary truncate">{item.name}</span>
+                                <span className="text-xs text-theme-text-muted shrink-0">{item.status}{item.size ? ` · ${item.size}` : ''}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {showDropdown && itemSearch.length >= 2 && !searchingItems && itemResults.length === 0 && (
+                        <div className="absolute z-20 mt-1 w-full bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-lg px-3 py-2 text-sm text-theme-text-muted">
+                          No matching items found
+                        </div>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>

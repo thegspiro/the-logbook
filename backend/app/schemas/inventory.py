@@ -101,6 +101,7 @@ class InventoryItemBase(BaseModel):
     quantity: int = Field(default=1, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     inspection_interval_days: Optional[int] = Field(None, ge=0)
+    min_rank_order: Optional[int] = None
     notes: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[str]] = None
@@ -144,6 +145,7 @@ class InventoryItemUpdate(BaseModel):
     last_inspection_date: Optional[date] = None
     next_inspection_due: Optional[date] = None
     inspection_interval_days: Optional[int] = Field(None, ge=0)
+    min_rank_order: Optional[int] = None
     notes: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[str]] = None

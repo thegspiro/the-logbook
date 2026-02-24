@@ -1926,6 +1926,7 @@ export interface InventoryItem {
   inspection_interval_days?: number;
   assigned_to_user_id?: string;
   assigned_date?: string;
+  min_rank_order?: number | null;
   notes?: string;
   active: boolean;
   created_at: string;
@@ -2087,6 +2088,7 @@ export interface InventoryItemCreate {
   quantity?: number;
   unit_of_measure?: string;
   inspection_interval_days?: number;
+  min_rank_order?: number | null;
   notes?: string;
 }
 

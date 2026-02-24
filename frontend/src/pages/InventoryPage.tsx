@@ -46,6 +46,7 @@ import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
 import { useInventoryWebSocket } from '../hooks/useInventoryWebSocket';
+import { useRanks } from '../hooks/useRanks';
 import toast from 'react-hot-toast';
 
 const ITEM_TYPES = [
@@ -92,6 +93,7 @@ type Tab = 'items' | 'categories' | 'maintenance';
 const InventoryPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('inventory.manage');
+  const { ranks } = useRanks();
 
   const [activeTab, setActiveTab] = useState<Tab>('items');
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -451,6 +453,7 @@ const InventoryPage: React.FC = () => {
       vendor: item.vendor || '',
       warranty_expiration: item.warranty_expiration || '',
       inspection_interval_days: item.inspection_interval_days,
+      min_rank_order: item.min_rank_order ?? null,
       notes: item.notes || '',
     });
     setFormError(null);
@@ -1810,8 +1813,11 @@ const InventoryPage: React.FC = () => {
                               type="text" value={itemForm.barcode}
                               onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })}
                               className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                              placeholder="Scan or type barcode"
+                              placeholder="Auto-generated if blank"
                             />
+                            {!itemForm.barcode && (
+                              <p className="text-xs text-theme-text-muted mt-1">A unique barcode (INV-XXXXXXXX) will be assigned automatically.</p>
+                            )}
                           </div>
                         </div>
                       </fieldset>
@@ -2395,6 +2401,16 @@ const InventoryPage: React.FC = () => {
                           </div>
                         </div>
                       </details>
+
+                      {/* Rank Restriction */}
+                      <div>
+                        <label htmlFor="edit-item-min-rank" className="block text-sm font-medium text-theme-text-secondary mb-1">Minimum Rank to Request</label>
+                        <select id="edit-item-min-rank" value={editForm.min_rank_order ?? ''} onChange={(e) => setEditForm({ ...editForm, min_rank_order: e.target.value === '' ? null : Number(e.target.value) })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          <option value="">No restriction (all members)</option>
+                          {ranks.map(r => <option key={r.id} value={r.sort_order}>{r.display_name} and above</option>)}
+                        </select>
+                        <p className="text-xs text-theme-text-muted mt-1">Only members at or above this rank can request this item.</p>
+                      </div>
 
                       {/* Notes */}
                       <div>

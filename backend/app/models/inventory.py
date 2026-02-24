@@ -260,6 +260,10 @@ class InventoryItem(Base):
     )
     assigned_date = Column(DateTime(timezone=True))
 
+    # Rank restriction — only members at or above this rank (sort_order <= value)
+    # can request this item.  NULL means no restriction (available to all).
+    min_rank_order = Column(Integer, nullable=True)
+
     # Additional Data
     notes = Column(Text)
     custom_fields = Column(JSON)  # Organization-specific fields

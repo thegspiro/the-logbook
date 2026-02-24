@@ -18,6 +18,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -29,9 +30,11 @@ from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
     EquipmentRequest,
+    InventoryItem,
     ItemStatus,
     StorageArea,
 )
+from app.models.operational_rank import OperationalRank
 from app.models.user import User
 from app.schemas.inventory import (  # Category schemas; Item schemas; Assignment schemas; Issuance schemas; Checkout schemas; Maintenance schemas; Summary schemas; Departure clearance schemas; Scan / quick-action schemas; Members summary; Equipment request schemas; Storage area schemas; Write-off schemas
     BatchCheckoutRequest,
@@ -1921,8 +1924,31 @@ async def create_equipment_request(
     Create an equipment request.
 
     Any authenticated member can submit a request for checkout, issuance, or purchase.
+    Items with a rank restriction will be validated against the requester's rank.
     """
     from app.core.utils import generate_uuid as gen_id
+
+    # --- Rank-based access check ---
+    if request_data.item_id:
+        item_result = await db.execute(
+            select(InventoryItem.min_rank_order).where(
+                InventoryItem.id == str(request_data.item_id)
+            )
+        )
+        min_rank = item_result.scalar_one_or_none()
+        if min_rank is not None and current_user.rank:
+            rank_result = await db.execute(
+                select(OperationalRank.sort_order).where(
+                    OperationalRank.organization_id == str(current_user.organization_id),
+                    OperationalRank.rank_code == current_user.rank,
+                )
+            )
+            user_sort = rank_result.scalar_one_or_none()
+            if user_sort is not None and user_sort > min_rank:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This item is restricted to higher-ranked members",
+                )
 
     req = EquipmentRequest(
         id=gen_id(),
