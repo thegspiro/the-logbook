@@ -1190,7 +1190,7 @@ const OrganizationSetup: React.FC = () => {
           <p className="text-theme-text-muted text-sm">
             Need help?{' '}
             <a
-              href="/docs"
+              href="https://github.com/thegspiro/the-logbook/wiki/Onboarding"
               className="text-theme-accent-red hover:text-theme-accent-red underline"
               target="_blank"
               rel="noopener noreferrer"

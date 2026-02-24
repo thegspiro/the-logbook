@@ -37,18 +37,18 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
   const getDocUrl = (): string => {
     if (docUrl) return docUrl;
 
-    const baseUrl = '/docs'; // This would be your documentation base URL
+    const baseUrl = 'https://github.com/thegspiro/the-logbook/wiki';
     const topicUrls: Record<string, string> = {
-      'dashboard': `${baseUrl}/dashboard`,
-      'organization-setup': `${baseUrl}/onboarding/organization`,
-      'members': `${baseUrl}/members/overview`,
-      'events': `${baseUrl}/events/overview`,
-      'reports': `${baseUrl}/reports`,
-      'training': `${baseUrl}/training`,
-      'settings': `${baseUrl}/settings`,
+      'dashboard': `${baseUrl}/Quick-Reference`,
+      'organization-setup': `${baseUrl}/Onboarding`,
+      'members': `${baseUrl}/Module-Training#membership`,
+      'events': `${baseUrl}/Quick-Reference`,
+      'reports': `${baseUrl}/Module-Compliance`,
+      'training': `${baseUrl}/Module-Training`,
+      'settings': `${baseUrl}/Quick-Reference`,
     };
 
-    return topicUrls[topic] || `${baseUrl}/${topic}`;
+    return topicUrls[topic] || `${baseUrl}`;
   };
 
   const handleClick = () => {
