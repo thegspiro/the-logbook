@@ -687,7 +687,25 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               <select
                 id="req-requirement-type"
                 value={formData.requirement_type}
-                onChange={(e) => setFormData({ ...formData, requirement_type: e.target.value as RequirementType })}
+                onChange={(e) => {
+                  const reqType = e.target.value as RequirementType;
+                  // Auto-set related fields when there's a direct mapping
+                  const trainingTypeMap: Record<string, string> = {
+                    certification: 'certification',
+                    skills_evaluation: 'skills_practice',
+                  };
+                  const dueDateTypeMap: Record<string, DueDateType> = {
+                    certification: 'certification_period' as DueDateType,
+                  };
+                  const autoTrainingType = trainingTypeMap[reqType];
+                  const autoDueDateType = dueDateTypeMap[reqType];
+                  setFormData({
+                    ...formData,
+                    requirement_type: reqType,
+                    ...(autoTrainingType ? { training_type: autoTrainingType } : {}),
+                    ...(autoDueDateType ? { due_date_type: autoDueDateType } : {}),
+                  });
+                }}
                 className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 required
                 aria-required="true"
