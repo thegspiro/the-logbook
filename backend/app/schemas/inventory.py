@@ -297,6 +297,12 @@ class CheckInRequest(BaseModel):
     damage_notes: Optional[str] = None
 
 
+class CheckoutExtendRequest(BaseModel):
+    """Schema for extending a checkout's return date"""
+
+    expected_return_at: datetime
+
+
 class CheckOutRecordResponse(CheckOutRecordBase):
     """Schema for checkout record response"""
 

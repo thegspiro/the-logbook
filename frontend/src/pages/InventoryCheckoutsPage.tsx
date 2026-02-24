@@ -13,6 +13,7 @@ import {
   ArrowDownToLine,
   Clock,
   Search,
+  CalendarClock,
 } from 'lucide-react';
 import { inventoryService } from '../services/api';
 import type { UserCheckoutItem } from '../services/api';
@@ -39,6 +40,8 @@ export const InventoryCheckoutsPage: React.FC = () => {
   const [returnCondition, setReturnCondition] = useState('good');
   const [damageNotes, setDamageNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [extendModal, setExtendModal] = useState<{ open: boolean; checkoutId: string; itemName: string; currentDue: string }>({ open: false, checkoutId: '', itemName: '', currentDue: '' });
+  const [extendDate, setExtendDate] = useState('');
 
   const fetchCheckouts = useCallback(async () => {
     setLoading(true);
@@ -82,6 +85,22 @@ export const InventoryCheckoutsPage: React.FC = () => {
     setCheckInModal({ open: true, checkoutId, itemName });
     setReturnCondition('good');
     setDamageNotes('');
+  };
+
+  const handleExtend = async () => {
+    if (!extendModal.checkoutId || !extendDate) return;
+    setSubmitting(true);
+    try {
+      await inventoryService.extendCheckout(extendModal.checkoutId, new Date(extendDate).toISOString());
+      toast.success('Return date extended');
+      setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' });
+      setExtendDate('');
+      await fetchCheckouts();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to extend checkout'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const currentList = activeTab === 'active' ? activeCheckouts : overdueCheckouts;
@@ -262,13 +281,23 @@ export const InventoryCheckoutsPage: React.FC = () => {
                           )}
                         </td>
                         <td className="p-3">
-                          <button
-                            onClick={() => openCheckInModal(checkout.checkout_id, checkout.item_name)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
-                          >
-                            <ArrowDownToLine className="w-3.5 h-3.5" aria-hidden="true" />
-                            Check In
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => openCheckInModal(checkout.checkout_id, checkout.item_name)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+                            >
+                              <ArrowDownToLine className="w-3.5 h-3.5" aria-hidden="true" />
+                              Check In
+                            </button>
+                            <button
+                              onClick={() => { setExtendModal({ open: true, checkoutId: checkout.checkout_id, itemName: checkout.item_name, currentDue: checkout.expected_return_at || '' }); setExtendDate(''); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover text-xs rounded-lg transition-colors"
+                              title="Extend return date"
+                            >
+                              <CalendarClock className="w-3.5 h-3.5" aria-hidden="true" />
+                              <span className="hidden sm:inline">Extend</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -350,6 +379,58 @@ export const InventoryCheckoutsPage: React.FC = () => {
                   >
                     {submitting && <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />}
                     <span>{submitting ? 'Checking In...' : 'Check In'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Extend Checkout Modal */}
+        {extendModal.open && (
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="extend-modal-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' }); }}
+          >
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border">
+                <div className="px-4 sm:px-6 pt-5 pb-4">
+                  <h3 id="extend-modal-title" className="text-lg font-medium text-theme-text-primary mb-1">Extend Return Date</h3>
+                  <p className="text-theme-text-muted text-sm mb-4">{extendModal.itemName}</p>
+                  {extendModal.currentDue && (
+                    <p className="text-theme-text-secondary text-xs mb-3">
+                      Currently due: {new Date(extendModal.currentDue).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: tz })}
+                    </p>
+                  )}
+                  <div>
+                    <label htmlFor="admin-extend-date" className="block text-sm font-medium text-theme-text-primary mb-1">New return date *</label>
+                    <input
+                      id="admin-extend-date"
+                      type="date"
+                      value={extendDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setExtendDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-3 sm:gap-0 rounded-b-lg">
+                  <button
+                    onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
+                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleExtend}
+                    disabled={submitting || !extendDate}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {submitting ? 'Extending...' : 'Extend'}
                   </button>
                 </div>
               </div>

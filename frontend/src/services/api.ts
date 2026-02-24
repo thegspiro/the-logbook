@@ -2323,6 +2323,11 @@ export const inventoryService = {
     await api.post(`/inventory/checkout/${checkoutId}/checkin`, { return_condition: returnCondition, damage_notes: damageNotes });
   },
 
+  async extendCheckout(checkoutId: string, expectedReturnAt: string): Promise<{ message: string; expected_return_at: string }> {
+    const response = await api.patch<{ message: string; expected_return_at: string }>(`/inventory/checkout/${checkoutId}/extend`, { expected_return_at: expectedReturnAt });
+    return response.data;
+  },
+
   async getActiveCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
     const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/active');
     return response.data;

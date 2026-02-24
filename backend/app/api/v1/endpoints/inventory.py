@@ -27,6 +27,7 @@ from app.core.utils import safe_error_detail
 from app.core.websocket_manager import ws_manager
 from app.models.inventory import (
     AssignmentType,
+    CheckOutRecord,
     EquipmentRequest,
     ItemStatus,
     StorageArea,
@@ -40,6 +41,7 @@ from app.schemas.inventory import (  # Category schemas; Item schemas; Assignmen
     CheckInRequest,
     CheckOutCreate,
     CheckOutRecordResponse,
+    CheckoutExtendRequest,
     ClearanceLineItemResponse,
     CompleteClearanceRequest,
     DepartureClearanceCreate,
@@ -993,6 +995,79 @@ async def checkin_item(
     )
 
     return {"message": "Item checked in successfully"}
+
+
+@router.patch("/checkout/{checkout_id}/extend", status_code=status.HTTP_200_OK)
+async def extend_checkout(
+    checkout_id: UUID,
+    extend_data: CheckoutExtendRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Extend a checkout's expected return date.
+
+    Members can extend their own checkouts.
+    Quartermasters (inventory.manage) can extend any checkout in their org.
+
+    **Authentication required**
+    """
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(CheckOutRecord).where(
+            CheckOutRecord.id == str(checkout_id),
+            CheckOutRecord.organization_id == str(current_user.organization_id),
+        )
+    )
+    checkout = result.scalar_one_or_none()
+
+    if not checkout:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+
+    if checkout.is_returned:
+        raise HTTPException(
+            status_code=400, detail="Cannot extend a returned checkout"
+        )
+
+    # Authorization: own checkout or inventory.manage
+    is_own = str(checkout.user_id) == str(current_user.id)
+    can_manage = any(
+        p in (role.permissions or [])
+        for role in current_user.roles
+        for p in ("inventory.manage", "inventory.*", "*")
+    )
+    if not is_own and not can_manage:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to extend this checkout"
+        )
+
+    checkout.expected_return_at = extend_data.expected_return_at
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_checkout_extended",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "checkout_id": str(checkout_id),
+            "new_return_date": extend_data.expected_return_at.isoformat(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    await _publish_inventory_event(
+        str(current_user.organization_id),
+        "checkout_extended",
+        {"checkout_id": str(checkout_id)},
+    )
+
+    return {
+        "message": "Checkout extended successfully",
+        "expected_return_at": extend_data.expected_return_at.isoformat(),
+    }
 
 
 @router.get("/checkout/active")
