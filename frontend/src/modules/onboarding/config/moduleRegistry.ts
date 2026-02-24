@@ -420,7 +420,7 @@ export const getModulesByCategory = () => {
     if (!categories[module.category]) {
       categories[module.category] = [];
     }
-    categories[module.category].push(module);
+    categories[module.category]!.push(module);
   });
   return categories;
 };

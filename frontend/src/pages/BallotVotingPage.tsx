@@ -104,7 +104,7 @@ export const BallotVotingPage: React.FC = () => {
         ...prev[itemId],
         write_in_name: name,
       },
-    }));
+    } as Record<string, ItemChoice>));
   }, []);
 
   const handleSubmitBallot = () => {

@@ -114,7 +114,7 @@ export const ProspectiveMembersPage: React.FC = () => {
   useEffect(() => {
     if (pipelines.length > 0 && !currentPipeline) {
       const activePipeline = pipelines.find((p) => p.is_active) ?? pipelines[0];
-      fetchPipeline(activePipeline.id);
+      fetchPipeline(activePipeline!.id);
     }
   }, [pipelines, currentPipeline, fetchPipeline]);
 

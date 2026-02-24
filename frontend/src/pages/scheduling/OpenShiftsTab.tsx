@@ -148,7 +148,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                   {dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz })}
                 </h3>
                 <div className="space-y-3">
-                  {dayShifts.map(shift => (
+                  {dayShifts!.map(shift => (
                     <div key={shift.id}
                       className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 hover:border-violet-500/30 transition-colors"
                     >

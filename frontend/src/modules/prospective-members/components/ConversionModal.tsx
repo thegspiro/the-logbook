@@ -77,7 +77,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       setRank('');
       setStation('');
       setMiddleName('');
-      setHireDate(new Date().toISOString().split('T')[0]);
+      setHireDate(new Date().toISOString().split('T')[0] ?? '');
       setSendWelcomeEmail(true);
       setNotes('');
       setEmergencyContact({ name: '', relationship: '', phone: '' });

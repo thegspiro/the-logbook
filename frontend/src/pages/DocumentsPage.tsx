@@ -200,7 +200,7 @@ const DocumentsPage: React.FC = () => {
     setUploadForm({
       name: '',
       description: '',
-      folder: selectedFolder || (folders.length > 0 ? folders[0].id : 'general'),
+      folder: selectedFolder || (folders.length > 0 ? folders[0]!.id : 'general'),
       file: null,
     });
     setShowUploadModal(true);

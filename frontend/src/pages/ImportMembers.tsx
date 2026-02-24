@@ -82,9 +82,8 @@ const ImportMembers: React.FC = () => {
       // Parse preview (first 5 rows)
       const preview: CSVMemberRow[] = [];
       for (let i = 1; i < Math.min(6, rows.length); i++) {
-        if (rows[i].length < 2) continue; // Skip empty rows
-
         const row = rows[i];
+        if (!row || row.length < 2) continue; // Skip empty rows
         preview.push({
           firstName: row[headers.indexOf('firstname')]?.trim() || '',
           lastName: row[headers.indexOf('lastname')]?.trim() || '',
@@ -148,7 +147,7 @@ const ImportMembers: React.FC = () => {
       // Process each row (skip header)
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        if (row.length < 2) continue; // Skip empty rows
+        if (!row || row.length < 2) continue; // Skip empty rows
 
         const rowData: CSVMemberRow = {
           firstName: row[headers.indexOf('firstname')]?.trim() || '',
@@ -191,7 +190,7 @@ const ImportMembers: React.FC = () => {
 
         try {
           // Generate username from email
-          const username = rowData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
+          const username = rowData.email.split('@')[0]!.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
           // Build emergency contacts array
           const emergencyContacts: Array<{

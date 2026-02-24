@@ -161,7 +161,7 @@ const AddMember: React.FC = () => {
 
     try {
       // Generate username from email (part before @)
-      const username = formData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      const username = formData.email.split('@')[0]!.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
       // Build emergency contacts array
       const emergencyContacts: Array<{

@@ -1481,7 +1481,7 @@ const InventoryPage: React.FC = () => {
               <div className="space-y-4">
                 {/* Overdue / Due Soon / In Maintenance sections */}
                 {(() => {
-                  const today = new Date().toISOString().split('T')[0];
+                  const today = new Date().toISOString().split('T')[0]!;
                   const overdue = maintenanceDueItems.filter(i => i.next_inspection_due && i.next_inspection_due < today);
                   const dueSoon = maintenanceDueItems.filter(i => i.next_inspection_due && i.next_inspection_due >= today);
                   const inMaintenance = maintenanceDueItems.filter(i => i.status === 'in_maintenance' && !i.next_inspection_due);

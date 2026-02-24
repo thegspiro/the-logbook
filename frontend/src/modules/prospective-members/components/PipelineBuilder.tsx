@@ -124,7 +124,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
 
     const reordered = [...stages];
     const [moved] = reordered.splice(fromIndex, 1);
-    reordered.splice(toIndex, 0, moved);
+    reordered.splice(toIndex, 0, moved!);
 
     // Update sort_order values
     const withNewOrder = reordered.map((s, idx) => ({

@@ -177,15 +177,15 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
   const updateCondition = (recordId: string, condition: string) => {
     setSelections((prev) => ({
       ...prev,
-      [recordId]: { ...prev[recordId], returnCondition: condition },
-    }));
+      [recordId]: { ...prev[recordId]!, returnCondition: condition },
+    } as Record<string, ReturnSelection>));
   };
 
   const updateQuantity = (recordId: string, qty: number) => {
     setSelections((prev) => ({
       ...prev,
-      [recordId]: { ...prev[recordId], quantityReturning: qty },
-    }));
+      [recordId]: { ...prev[recordId]!, quantityReturning: qty },
+    } as Record<string, ReturnSelection>));
   };
 
   const selectAll = () => {

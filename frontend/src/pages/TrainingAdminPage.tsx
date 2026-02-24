@@ -173,7 +173,7 @@ export const TrainingAdminPage: React.FC = () => {
 
     // Legacy format: ?tab=submissions (old flat tab IDs)
     if (tabParam && tabParam in legacyTabMap) {
-      return legacyTabMap[tabParam];
+      return legacyTabMap[tabParam]!;
     }
 
     return { page: 'dashboard', tab: 'overview' };

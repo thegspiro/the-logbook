@@ -600,9 +600,9 @@ const PositionSetup: React.FC = () => {
       [positionId]: {
         ...prev[positionId],
         permissions: {
-          ...prev[positionId].permissions,
+          ...prev[positionId]!.permissions,
           [category]: {
-            ...prev[positionId].permissions[category],
+            ...prev[positionId]!.permissions[category],
             [type]: value,
             // If manage is enabled, view must be enabled too
             ...(type === 'manage' && value ? { view: true } : {}),
@@ -611,7 +611,7 @@ const PositionSetup: React.FC = () => {
           },
         },
       },
-    }));
+    } as Record<string, RoleConfig>));
   };
 
   const createCustomPosition = () => {

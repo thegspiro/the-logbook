@@ -561,7 +561,7 @@ const ConfigEditor: React.FC<{
     setFieldConfig((prev) => ({
       ...prev,
       [fieldName]: { ...prev[fieldName], [prop]: value },
-    }));
+    } as Record<string, FieldConfig>));
   };
 
   const handleSave = async () => {

@@ -112,7 +112,7 @@ const api = axios.create({
 // Helper to read a cookie value by name
 function getCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]) : null;
+  return match ? decodeURIComponent(match[1]!) : null;
 }
 
 // Request interceptor — httpOnly cookies are sent automatically.

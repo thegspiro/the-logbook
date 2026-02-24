@@ -142,10 +142,10 @@ const FormBuilder = ({
       try {
         setSaving(true);
         if (editingFieldId) {
-          await formsService.updateField(formId, editingFieldId, fieldData);
+          await formsService.updateField(formId!, editingFieldId, fieldData);
         } else {
           fieldData.sort_order = fields.length;
-          await formsService.addField(formId, fieldData);
+          await formsService.addField(formId!, fieldData);
         }
         await loadFields();
       } catch {
@@ -160,7 +160,7 @@ const FormBuilder = ({
       if (editingFieldId) {
         const idx = updated.findIndex((f) => f.id === editingFieldId);
         if (idx >= 0) {
-          updated[idx] = { ...updated[idx], ...fieldData };
+          updated[idx] = { ...updated[idx]!, ...fieldData, id: updated[idx]!.id };
         }
       } else {
         const newField: FieldDefinition = {
@@ -189,7 +189,7 @@ const FormBuilder = ({
     if (isConnected) {
       try {
         setSaving(true);
-        await formsService.deleteField(formId, fieldId);
+        await formsService.deleteField(formId!, fieldId);
         await loadFields();
       } catch {
         setError('Failed to delete field.');
@@ -214,16 +214,18 @@ const FormBuilder = ({
     if (swapIdx < 0 || swapIdx >= sorted.length) return;
 
     // Swap sort_orders
-    const tempOrder = sorted[idx].sort_order;
-    sorted[idx].sort_order = sorted[swapIdx].sort_order;
-    sorted[swapIdx].sort_order = tempOrder;
+    const fieldA = sorted[idx]!;
+    const fieldB = sorted[swapIdx]!;
+    const tempOrder = fieldA.sort_order;
+    fieldA.sort_order = fieldB.sort_order;
+    fieldB.sort_order = tempOrder;
 
     if (isConnected) {
       try {
         setSaving(true);
         await Promise.all([
-          formsService.updateField(formId, sorted[idx].id, { sort_order: sorted[idx].sort_order }),
-          formsService.updateField(formId, sorted[swapIdx].id, { sort_order: sorted[swapIdx].sort_order }),
+          formsService.updateField(formId!, fieldA.id, { sort_order: fieldA.sort_order }),
+          formsService.updateField(formId!, fieldB.id, { sort_order: fieldB.sort_order }),
         ]);
         await loadFields();
       } catch {

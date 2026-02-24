@@ -49,7 +49,7 @@ function getStatusBadge(waiver: { start_date: string; end_date: string; active: 
   if (!waiver.active) {
     return { label: 'Inactive', color: 'bg-gray-500/20 text-gray-400' };
   }
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0]!;
   if (waiver.start_date > today) {
     return { label: 'Future', color: 'bg-blue-500/20 text-blue-400' };
   }
@@ -211,7 +211,7 @@ export const WaiverManagementPage: React.FC = () => {
 
   // Active waivers (current period)
   const activeWaivers = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0]!;
     return unifiedWaivers.filter(
       (w) => w.active && w.start_date <= today && w.end_date >= today
     );
@@ -220,7 +220,7 @@ export const WaiverManagementPage: React.FC = () => {
   // Filtered history
   const filteredHistory = useMemo(() => {
     let result = unifiedWaivers;
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0]!;
 
     if (historyFilter === 'active') {
       result = result.filter((w) => w.active && w.start_date <= today && w.end_date >= today);
