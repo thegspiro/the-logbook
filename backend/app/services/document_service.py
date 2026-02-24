@@ -411,7 +411,7 @@ class DocumentService:
                 content = section.get("content", "")
                 if content and content.strip():
                     title = escape(section.get("title", section.get("key", "Section")))
-                    parts.append(f'<div class="minutes-section" style="margin-bottom:20px;">')
+                    parts.append('<div class="minutes-section" style="margin-bottom:20px;">')
                     parts.append(f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">{title}</h4>')
                     parts.append(f'<div style="font-size:14px; color:#333; white-space:pre-wrap;">{escape(content)}</div>')
                     parts.append('</div>')
@@ -423,7 +423,7 @@ class DocumentService:
             for i, motion in enumerate(minutes.motions, 1):
                 status = motion.status if isinstance(motion.status, str) else motion.status.value
                 color = "#16a34a" if status == "passed" else "#dc2626" if status == "failed" else "#ca8a04"
-                parts.append(f'<div style="border:1px solid #ddd; border-radius:4px; padding:12px; margin-bottom:8px;">')
+                parts.append('<div style="border:1px solid #ddd; border-radius:4px; padding:12px; margin-bottom:8px;">')
                 parts.append(f'<p style="margin:0 0 4px; font-size:14px;"><strong>Motion #{i}</strong> — <span style="color:{color}; font-weight:bold;">{escape(status.upper())}</span></p>')
                 parts.append(f'<p style="margin:0 0 8px; font-size:14px;">{escape(motion.motion_text)}</p>')
                 detail_parts = []

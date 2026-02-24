@@ -123,7 +123,7 @@ def test_smtp_connection(config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, A
         elif '534' in error_str:
             message = "Authentication method not supported. Try enabling SSL/TLS or STARTTLS."
         else:
-            message = f"SMTP authentication failed. Check your username and password. For Gmail/Outlook, use an app-specific password instead of your regular password."
+            message = "SMTP authentication failed. Check your username and password. For Gmail/Outlook, use an app-specific password instead of your regular password."
 
         return False, message, details
 
@@ -157,13 +157,13 @@ def test_smtp_connection(config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, A
 
         # Provide helpful SSL/TLS error messages
         if 'wrong version number' in error_str or 'ssl23_get_server_hello' in error_str:
-            message = f"SSL/TLS version mismatch. Try changing the encryption method: Use STARTTLS for port 587, or SSL/TLS for port 465."
+            message = "SSL/TLS version mismatch. Try changing the encryption method: Use STARTTLS for port 587, or SSL/TLS for port 465."
         elif 'certificate' in error_str:
-            message = f"SSL certificate error. The server's SSL certificate may be invalid or expired."
+            message = "SSL certificate error. The server's SSL certificate may be invalid or expired."
         elif 'ssl3_get_record' in error_str:
-            message = f"SSL handshake failed. Verify the correct encryption method for your port (STARTTLS for 587, SSL for 465)."
+            message = "SSL handshake failed. Verify the correct encryption method for your port (STARTTLS for 587, SSL for 465)."
         else:
-            message = f"SSL/TLS connection error. Ensure you're using the correct encryption type for your port. Port 587 uses STARTTLS, port 465 uses SSL/TLS."
+            message = "SSL/TLS connection error. Ensure you're using the correct encryption type for your port. Port 587 uses STARTTLS, port 465 uses SSL/TLS."
 
         return False, message, details
 
@@ -322,7 +322,7 @@ def _validate_google_oauth_token(
 
     except urllib.error.URLError as e:
         logger.error(f"Network error during Google OAuth validation: {e}")
-        return False, f"Network error: Unable to reach Google OAuth servers", details
+        return False, "Network error: Unable to reach Google OAuth servers", details
 
     except Exception as e:
         logger.error(f"Error validating Google OAuth token: {e}")

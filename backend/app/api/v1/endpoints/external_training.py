@@ -13,6 +13,8 @@ from uuid import UUID
 from datetime import datetime, date, timedelta, timezone
 import logging
 
+logger = logging.getLogger(__name__)
+
 from app.core.database import get_db
 from app.core.audit import log_audit_event
 from app.core.security import encrypt_data

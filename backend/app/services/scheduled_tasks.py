@@ -413,7 +413,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                         # Sub-day reminder: fire at exactly X hours before
                         start_dt = event.start_datetime
                         if start_dt and start_dt.tzinfo is None:
-                            start_dt = start_dt.replace(tzinfo=timezone.utc)
+                            start_dt = start_dt.replace(tzinfo=dt_timezone.utc)
                         threshold = start_dt - timedelta(hours=hours)
 
                     if now >= threshold:

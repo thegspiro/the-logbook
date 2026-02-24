@@ -114,7 +114,7 @@ class StartupStatus:
         self.migrations_completed = completed
         self.migrations_total = total
         self.message = f"Running migration {completed}/{total}: {current}"
-        self.detailed_message = f"Applying database schema changes to keep your data structure up to date. This may take a few minutes on first startup."
+        self.detailed_message = "Applying database schema changes to keep your data structure up to date. This may take a few minutes on first startup."
 
     def set_ready(self):
         self.ready = True
@@ -1562,7 +1562,7 @@ async def root():
     return {
         "message": "The Logbook API",
         "version": settings.VERSION,
-        "docs": f"/docs" if settings.ENABLE_DOCS else "Documentation disabled",
+        "docs": "/docs" if settings.ENABLE_DOCS else "Documentation disabled",
     }
 
 
