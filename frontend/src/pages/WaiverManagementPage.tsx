@@ -38,7 +38,6 @@ const APPLIES_TO_OPTIONS = [
   { value: 'training', label: 'Training Requirements' },
   { value: 'meetings', label: 'Meeting Attendance' },
   { value: 'shifts', label: 'Shift Requirements' },
-  { value: 'all', label: 'All (Training, Meetings, Shifts)' },
 ];
 
 function getWaiverTypeLabel(type: string): string {
@@ -97,7 +96,7 @@ export const WaiverManagementPage: React.FC = () => {
   const [formData, setFormData] = useState({
     user_id: '',
     waiver_type: 'leave_of_absence',
-    applies_to: 'all',
+    applies_to: ['training', 'meetings', 'shifts'] as string[],
     reason: '',
     start_date: '',
     end_date: '',
@@ -246,11 +245,15 @@ export const WaiverManagementPage: React.FC = () => {
 
     try {
       if (!formData.user_id) throw new Error('Please select a member');
+      if (formData.applies_to.length === 0) throw new Error('Please select at least one area');
       if (!formData.start_date || !formData.end_date) throw new Error('Start and end dates are required');
       if (formData.end_date < formData.start_date) throw new Error('End date must be after start date');
 
-      if (formData.applies_to === 'training') {
-        // Create standalone training waiver
+      const hasTraining = formData.applies_to.includes('training');
+      const hasMeetingsOrShifts = formData.applies_to.includes('meetings') || formData.applies_to.includes('shifts');
+
+      if (hasTraining && !hasMeetingsOrShifts) {
+        // Training only — create standalone training waiver
         await memberStatusService.createTrainingWaiver({
           user_id: formData.user_id,
           waiver_type: formData.waiver_type,
@@ -258,15 +261,16 @@ export const WaiverManagementPage: React.FC = () => {
           start_date: formData.start_date,
           end_date: formData.end_date,
         });
-      } else {
-        // Create leave of absence (auto-links to training waiver unless exempt)
+      } else if (hasMeetingsOrShifts) {
+        // Meetings/shifts selected — create leave of absence
+        // If training is also selected, the LOA auto-generates a training waiver
         await memberStatusService.createLeaveOfAbsence({
           user_id: formData.user_id,
           leave_type: formData.waiver_type,
           reason: formData.reason || undefined,
           start_date: formData.start_date,
           end_date: formData.end_date,
-          exempt_from_training_waiver: formData.applies_to === 'meetings' || formData.exempt_from_training_waiver,
+          exempt_from_training_waiver: !hasTraining || formData.exempt_from_training_waiver,
         });
       }
 
@@ -275,7 +279,7 @@ export const WaiverManagementPage: React.FC = () => {
       setFormData({
         user_id: '',
         waiver_type: 'leave_of_absence',
-        applies_to: 'all',
+        applies_to: ['training', 'meetings', 'shifts'],
         reason: '',
         start_date: '',
         end_date: '',
@@ -486,23 +490,32 @@ export const WaiverManagementPage: React.FC = () => {
                 {/* Applies To */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Applies To</label>
-                  <select
-                    value={formData.applies_to}
-                    onChange={(e) => setFormData({ ...formData, applies_to: e.target.value })}
-                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
-                  >
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
                     {APPLIES_TO_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <label key={o.value} className="flex items-center gap-2 cursor-pointer text-sm text-theme-text-primary">
+                        <input
+                          type="checkbox"
+                          checked={formData.applies_to.includes(o.value)}
+                          onChange={(e) => {
+                            const updated = e.target.checked
+                              ? [...formData.applies_to, o.value]
+                              : formData.applies_to.filter((v) => v !== o.value);
+                            setFormData({ ...formData, applies_to: updated });
+                          }}
+                          className="rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                        />
+                        {o.label}
+                      </label>
                     ))}
-                  </select>
+                  </div>
                   <p className="mt-1 text-xs text-theme-text-muted">
-                    {formData.applies_to === 'all'
-                      ? 'Creates a leave of absence that automatically generates a training waiver.'
-                      : formData.applies_to === 'training'
+                    {formData.applies_to.length === 0
+                      ? 'Select at least one area to waive.'
+                      : formData.applies_to.includes('training') && !formData.applies_to.includes('meetings') && !formData.applies_to.includes('shifts')
                       ? 'Creates a standalone training waiver without a leave of absence.'
-                      : formData.applies_to === 'meetings'
-                      ? 'Creates a leave of absence for meetings/shifts but keeps training requirements active.'
-                      : 'Creates waivers for shift requirements only.'}
+                      : !formData.applies_to.includes('training') && (formData.applies_to.includes('meetings') || formData.applies_to.includes('shifts'))
+                      ? 'Creates a leave of absence but keeps training requirements active.'
+                      : 'Creates a leave of absence that automatically generates a training waiver.'}
                   </p>
                 </div>
 

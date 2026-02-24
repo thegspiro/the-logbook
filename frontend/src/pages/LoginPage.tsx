@@ -124,7 +124,7 @@ export const LoginPage: React.FC = () => {
   const hasOAuthEnabled = oauthConfig.googleEnabled || oauthConfig.microsoftEnabled;
 
   return (
-    <main className="relative min-h-screen flex items-center justify-center bg-theme-surface-secondary py-12 px-4 sm:px-6 lg:px-8 pb-24" id="main-content">
+    <main className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8 pb-24" id="main-content">
       <div className="max-w-md w-full space-y-8">
         <div>
           {branding.logo ? (
