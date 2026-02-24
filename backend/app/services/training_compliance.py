@@ -23,6 +23,7 @@ from app.models.user import User, UserStatus
 from app.services.training_waiver_service import (
     fetch_org_waivers,
     adjust_required,
+    get_rolling_period_months,
 )
 
 
@@ -113,7 +114,10 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
         required = req.required_hours or 0
 
         if required > 0 and start_date and end_date and _waivers:
-            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
+            required, _, _ = adjust_required(
+                required, start_date, end_date, _waivers, str(req.id),
+                period_months=get_rolling_period_months(req),
+            )
 
         latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
@@ -193,7 +197,10 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
         required = req.required_shifts or 0
 
         if required > 0 and start_date and end_date and _waivers:
-            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
+            required, _, _ = adjust_required(
+                required, start_date, end_date, _waivers, str(req.id),
+                period_months=get_rolling_period_months(req),
+            )
 
         latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
@@ -214,7 +221,10 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
         required = req.required_calls or 0
 
         if required > 0 and start_date and end_date and _waivers:
-            required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(req.id))
+            required, _, _ = adjust_required(
+                required, start_date, end_date, _waivers, str(req.id),
+                period_months=get_rolling_period_months(req),
+            )
 
         latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
         latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None

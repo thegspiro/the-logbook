@@ -28,7 +28,7 @@ from app.models.training import (
 )
 from app.models.user import User, UserStatus
 from app.services.training_waiver_service import (
-    WaiverPeriod, fetch_org_waivers, adjust_required,
+    WaiverPeriod, fetch_org_waivers, adjust_required, get_rolling_period_months,
 )
 
 
@@ -257,7 +257,10 @@ class CompetencyMatrixService:
 
             # Adjust required hours for waived months
             if required > 0 and start_date and end_date and _waivers:
-                required, _, _ = adjust_required(required, start_date, end_date, _waivers, str(requirement.id))
+                required, _, _ = adjust_required(
+                    required, start_date, end_date, _waivers, str(requirement.id),
+                    period_months=get_rolling_period_months(requirement),
+                )
 
             most_recent = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
             if not most_recent:

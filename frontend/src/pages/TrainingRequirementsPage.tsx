@@ -687,7 +687,25 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               <select
                 id="req-requirement-type"
                 value={formData.requirement_type}
-                onChange={(e) => setFormData({ ...formData, requirement_type: e.target.value as RequirementType })}
+                onChange={(e) => {
+                  const reqType = e.target.value as RequirementType;
+                  // Auto-set related fields when there's a direct mapping
+                  const trainingTypeMap: Record<string, string> = {
+                    certification: 'certification',
+                    skills_evaluation: 'skills_practice',
+                  };
+                  const dueDateTypeMap: Record<string, DueDateType> = {
+                    certification: 'certification_period' as DueDateType,
+                  };
+                  const autoTrainingType = trainingTypeMap[reqType];
+                  const autoDueDateType = dueDateTypeMap[reqType];
+                  setFormData({
+                    ...formData,
+                    requirement_type: reqType,
+                    ...(autoTrainingType ? { training_type: autoTrainingType } : {}),
+                    ...(autoDueDateType ? { due_date_type: autoDueDateType } : {}),
+                  });
+                }}
                 className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 required
                 aria-required="true"
@@ -835,37 +853,40 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="req-frequency" className="block text-sm font-medium text-theme-text-secondary mb-2">Frequency</label>
-                <select
-                  id="req-frequency"
-                  value={formData.frequency}
-                  onChange={(e) => setFormData({ ...formData, frequency: e.target.value as RequirementFrequency })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
-                >
-                  <option value="annual">Annual</option>
-                  <option value="biannual">Biannual (Every 2 Years)</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="one_time">One Time</option>
-                </select>
-              </div>
+            {/* Frequency & Year only apply to calendar-period due dates */}
+            {formData.due_date_type === 'calendar_period' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="req-frequency" className="block text-sm font-medium text-theme-text-secondary mb-2">Frequency</label>
+                  <select
+                    id="req-frequency"
+                    value={formData.frequency}
+                    onChange={(e) => setFormData({ ...formData, frequency: e.target.value as RequirementFrequency })}
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  >
+                    <option value="annual">Annual</option>
+                    <option value="biannual">Biannual (Every 2 Years)</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="one_time">One Time</option>
+                  </select>
+                </div>
 
-              <div>
-                <label htmlFor="req-year" className="block text-sm font-medium text-theme-text-secondary mb-2">Year</label>
-                <input
-                  id="req-year"
-                  type="number"
-                  value={formData.year || ''}
-                  onChange={(e) => setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
-                  placeholder="e.g., 2026"
-                  min="2020"
-                  max="2100"
-                />
+                <div>
+                  <label htmlFor="req-year" className="block text-sm font-medium text-theme-text-secondary mb-2">Year</label>
+                  <input
+                    id="req-year"
+                    type="number"
+                    value={formData.year || ''}
+                    onChange={(e) => setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })}
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                    placeholder="e.g., 2026"
+                    min="2020"
+                    max="2100"
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Categories */}
