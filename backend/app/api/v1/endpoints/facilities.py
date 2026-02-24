@@ -366,7 +366,7 @@ async def list_facilities(
     **Permissions required:** facilities.view or facilities.manage
     """
     service = FacilitiesService(db)
-    facilities = await service.list_facilities(
+    facilities, _total = await service.list_facilities(
         organization_id=current_user.organization_id,
         facility_type_id=facility_type_id,
         status_id=status_id,

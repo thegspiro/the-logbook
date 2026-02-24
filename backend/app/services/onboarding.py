@@ -7,7 +7,7 @@ This module guides users through initial setup and can be disabled once complete
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import ProgrammingError, OperationalError
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, UTC
 import secrets
@@ -15,11 +15,13 @@ import os
 
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem
 from app.models.user import Organization, User, Role, UserStatus, OrganizationType, IdentifierType
+from app.models.facilities import Facility, FacilityType, FacilityStatus
 from app.services.auth_service import AuthService
 from app.core.config import settings
 from app.core.audit import log_audit_event
 from app.core.permissions import DEFAULT_ROLES
 from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
+from app.core.utils import generate_uuid
 
 
 class OnboardingService:
@@ -438,6 +440,9 @@ class OnboardingService:
         # Create default roles for organization
         await self._create_default_roles(org.id)
 
+        # Create headquarters facility from station address
+        await self._create_headquarters_facility(org)
+
         # Update onboarding status
         status = await self.get_onboarding_status()
         if status:
@@ -446,6 +451,96 @@ class OnboardingService:
             await self._mark_step_completed(status, 1, "organization")  # Now Step 1
 
         return org
+
+    async def _create_headquarters_facility(self, org: Organization):
+        """Create a headquarters facility from the organization's physical address.
+
+        Uses the physical address (or mailing address if same) from onboarding
+        to auto-create the primary station/headquarters as a facility record,
+        so the Facilities module is pre-populated with the station's address.
+        """
+        # Determine address source: physical address if different, else mailing
+        if org.physical_address_same:
+            addr_line1 = org.mailing_address_line1
+            addr_line2 = org.mailing_address_line2
+            city = org.mailing_city
+            state = org.mailing_state
+            zip_code = org.mailing_zip
+        else:
+            addr_line1 = org.physical_address_line1
+            addr_line2 = org.physical_address_line2
+            city = org.physical_city
+            state = org.physical_state
+            zip_code = org.physical_zip
+
+        # Look up the system "Fire Station" type (or first available station type)
+        type_result = await self.db.execute(
+            select(FacilityType).where(
+                or_(
+                    FacilityType.organization_id == org.id,
+                    FacilityType.organization_id.is_(None),
+                ),
+                FacilityType.is_active.is_(True),
+                FacilityType.name == "Fire Station",
+            )
+        )
+        facility_type = type_result.scalar_one_or_none()
+
+        # Fallback to any active station-category type
+        if not facility_type:
+            type_result = await self.db.execute(
+                select(FacilityType).where(
+                    or_(
+                        FacilityType.organization_id == org.id,
+                        FacilityType.organization_id.is_(None),
+                    ),
+                    FacilityType.is_active.is_(True),
+                ).limit(1)
+            )
+            facility_type = type_result.scalar_one_or_none()
+
+        if not facility_type:
+            return  # No facility types available, skip
+
+        # Look up the system "Operational" status
+        status_result = await self.db.execute(
+            select(FacilityStatus).where(
+                or_(
+                    FacilityStatus.organization_id == org.id,
+                    FacilityStatus.organization_id.is_(None),
+                ),
+                FacilityStatus.is_active.is_(True),
+                FacilityStatus.name == "Operational",
+            )
+        )
+        facility_status = status_result.scalar_one_or_none()
+
+        if not facility_status:
+            return  # No statuses available, skip
+
+        facility = Facility(
+            id=generate_uuid(),
+            organization_id=org.id,
+            name=org.name,
+            facility_number="Station 1",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+            address_line1=addr_line1,
+            address_line2=addr_line2,
+            city=city,
+            state=state,
+            zip_code=zip_code,
+            county=org.county,
+            phone=org.phone,
+            fax=org.fax,
+            email=org.email,
+            is_owned=True,
+            is_archived=False,
+            status_changed_at=datetime.now(UTC),
+        )
+
+        self.db.add(facility)
+        await self.db.flush()
 
     async def _create_default_roles(self, organization_id: str):
         """Create default positions for an organization.
