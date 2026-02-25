@@ -2129,6 +2129,14 @@ export interface InventoryItemsListResponse {
   limit: number;
 }
 
+export interface ItemHistoryEvent {
+  type: 'assignment' | 'return' | 'checkout' | 'checkin' | 'issuance' | 'issuance_return' | 'maintenance';
+  id: string;
+  date: string;
+  summary: string;
+  details: Record<string, unknown>;
+}
+
 export interface InventorySummary {
   total_items: number;
   items_by_status: Record<string, number>;
@@ -2341,9 +2349,13 @@ export const inventoryService = {
   async getItems(params?: {
     category_id?: string;
     status?: string;
+    condition?: string;
+    item_type?: string;
     storage_area_id?: string;
     search?: string;
     active_only?: boolean;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
     skip?: number;
     limit?: number;
   }): Promise<InventoryItemsListResponse> {
@@ -2353,6 +2365,11 @@ export const inventoryService = {
 
   async getItem(itemId: string): Promise<InventoryItem> {
     const response = await api.get<InventoryItem>(`/inventory/items/${itemId}`);
+    return response.data;
+  },
+
+  async getItemHistory(itemId: string): Promise<{ events: ItemHistoryEvent[] }> {
+    const response = await api.get<{ events: ItemHistoryEvent[] }>(`/inventory/items/${itemId}/history`);
     return response.data;
   },
 

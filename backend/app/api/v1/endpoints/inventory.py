@@ -31,7 +31,9 @@ from app.models.inventory import (
     CheckOutRecord,
     EquipmentRequest,
     InventoryItem,
+    ItemCondition,
     ItemStatus,
+    ItemType,
     NFPAExposureRecord,
     NFPAInspectionDetail,
     NFPAItemCompliance,
@@ -265,17 +267,21 @@ async def get_category(
 async def list_items(
     category_id: Optional[UUID] = None,
     status: Optional[str] = None,
+    condition: Optional[str] = None,
+    item_type: Optional[str] = None,
     assigned_to: Optional[UUID] = None,
     storage_area_id: Optional[UUID] = None,
     search: Optional[str] = None,
     active_only: bool = True,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = Query(None, regex="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
-    List inventory items with filtering and pagination
+    List inventory items with filtering, sorting, and pagination
 
     **Authentication required**
     **Requires permission: inventory.view**
@@ -289,18 +295,44 @@ async def list_items(
             status_enum = ItemStatus(status)
         except ValueError:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail=f"Invalid status: {status}",
+            )
+
+    # Convert condition string to enum if provided
+    condition_enum = None
+    if condition:
+        try:
+            condition_enum = ItemCondition(condition)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid condition: {condition}",
+            )
+
+    # Convert item_type string to enum if provided
+    item_type_enum = None
+    if item_type:
+        try:
+            item_type_enum = ItemType(item_type)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid item_type: {item_type}",
             )
 
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
         category_id=category_id,
         status=status_enum,
+        condition=condition_enum,
+        item_type=item_type_enum,
         assigned_to=assigned_to,
         storage_area_id=storage_area_id,
         search=search,
         active_only=active_only,
+        sort_by=sort_by,
+        sort_order=sort_order,
         skip=skip,
         limit=limit,
     )
@@ -489,6 +521,41 @@ async def get_item(
         )
 
     return item
+
+
+@router.get("/items/{item_id}/history")
+async def get_item_history(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get unified activity history for an item.
+
+    Returns a chronologically sorted list of all assignments, checkouts,
+    pool issuances, and maintenance events.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+
+    # Verify item exists and belongs to user's org
+    item = await service.get_item_by_id(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+    )
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found",
+        )
+
+    events = await service.get_item_history(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+    )
+    return {"events": events}
 
 
 @router.patch("/items/{item_id}", response_model=InventoryItemResponse)

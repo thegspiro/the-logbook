@@ -11,6 +11,13 @@ import {
   XCircle,
   Plus,
   Loader2,
+  Clock,
+  UserCheck,
+  LogOut,
+  LogIn,
+  Send,
+  Undo2,
+  Wrench,
 } from 'lucide-react';
 import {
   inventoryService,
@@ -19,6 +26,7 @@ import {
   type NFPACompliance,
   type NFPAExposureRecord,
   type MaintenanceRecord,
+  type ItemHistoryEvent,
 } from '../../services/api';
 import {
   NFPA_CONTAMINATION_LEVEL_OPTIONS,
@@ -27,7 +35,7 @@ import {
 } from '../../constants/enums';
 import toast from 'react-hot-toast';
 
-type DetailTab = 'general' | 'nfpa' | 'inspections' | 'exposures';
+type DetailTab = 'general' | 'history' | 'nfpa' | 'inspections' | 'exposures';
 
 interface ItemDetailModalProps {
   item: InventoryItem;
@@ -909,6 +917,130 @@ function ExposuresTab({
 }
 
 // ============================================
+// History / Activity Timeline Tab
+// ============================================
+
+const EVENT_ICON: Record<string, React.ReactNode> = {
+  assignment: <UserCheck className="h-4 w-4 text-blue-500" />,
+  return: <Undo2 className="h-4 w-4 text-green-500" />,
+  checkout: <LogOut className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />,
+  checkin: <LogIn className="h-4 w-4 text-green-500" />,
+  issuance: <Send className="h-4 w-4 text-purple-500" />,
+  issuance_return: <Undo2 className="h-4 w-4 text-purple-400" />,
+  maintenance: <Wrench className="h-4 w-4 text-orange-500" />,
+};
+
+const EVENT_LABEL: Record<string, string> = {
+  assignment: 'Assignment',
+  return: 'Return',
+  checkout: 'Checkout',
+  checkin: 'Check-in',
+  issuance: 'Issuance',
+  issuance_return: 'Return',
+  maintenance: 'Maintenance',
+};
+
+function HistoryTab({ item }: { item: InventoryItem }) {
+  const [events, setEvents] = useState<ItemHistoryEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    inventoryService
+      .getItemHistory(item.id)
+      .then((data) => {
+        if (!cancelled) setEvents(data.events);
+      })
+      .catch(() => {
+        if (!cancelled) setEvents([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
+
+  if (events.length === 0) {
+    return (
+      <p className="text-sm text-theme-text-muted py-8 text-center">
+        No activity recorded for this item yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="relative">
+      {/* Timeline line */}
+      <div className="absolute left-[17px] top-2 bottom-2 w-px bg-theme-surface-border" />
+
+      <ul className="space-y-4">
+        {events.map((event) => (
+          <li key={event.id} className="relative flex gap-3">
+            {/* Icon circle */}
+            <div className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-theme-surface-secondary border border-theme-surface-border">
+              {EVENT_ICON[event.type] ?? <Clock className="h-4 w-4 text-theme-text-muted" />}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0 pt-0.5">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted">
+                  {EVENT_LABEL[event.type] ?? event.type}
+                </span>
+                <time className="text-xs text-theme-text-muted">
+                  {new Date(event.date).toLocaleString()}
+                </time>
+              </div>
+              <p className="text-sm text-theme-text-primary mt-0.5">
+                {event.summary}
+              </p>
+              {/* Extra details */}
+              {event.details.reason && (
+                <p className="text-xs text-theme-text-muted mt-0.5">
+                  Reason: {String(event.details.reason)}
+                </p>
+              )}
+              {event.details.notes && (
+                <p className="text-xs text-theme-text-muted mt-0.5">
+                  Notes: {String(event.details.notes)}
+                </p>
+              )}
+              {event.details.return_notes && (
+                <p className="text-xs text-theme-text-muted mt-0.5">
+                  Notes: {String(event.details.return_notes)}
+                </p>
+              )}
+              {event.details.damage_notes && (
+                <p className="text-xs text-theme-text-muted mt-0.5">
+                  Damage: {String(event.details.damage_notes)}
+                </p>
+              )}
+              {event.type === 'maintenance' && event.details.passed !== undefined && event.details.passed !== null && (
+                <span className={`inline-flex items-center gap-1 text-xs mt-1 ${event.details.passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {event.details.passed ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                  {event.details.passed ? 'Passed' : 'Failed'}
+                </span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ============================================
 // Main ItemDetailModal
 // ============================================
 
@@ -933,6 +1065,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const tabs: Array<{ key: DetailTab; label: string; icon: React.ReactNode }> =
     [
       { key: 'general', label: 'General', icon: <Info className="h-4 w-4" /> },
+      { key: 'history', label: 'History', icon: <Clock className="h-4 w-4" /> },
       ...(isNFPA
         ? [
             {
@@ -1016,6 +1149,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto p-4">
           {activeTab === 'general' && <GeneralTab item={item} />}
+          {activeTab === 'history' && <HistoryTab item={item} />}
           {activeTab === 'nfpa' && (
             <NFPAComplianceTab item={item} canManage={canManage} />
           )}
