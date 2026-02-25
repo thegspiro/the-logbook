@@ -99,6 +99,17 @@ import type {
   ComplianceSummary,
 } from '../types/training';
 import type {
+  SkillTemplate,
+  SkillTemplateCreate,
+  SkillTemplateUpdate,
+  SkillTemplateListItem,
+  SkillTest,
+  SkillTestCreate,
+  SkillTestUpdate,
+  SkillTestListItem,
+  SkillTestingSummary,
+} from '../types/skillsTesting';
+import type {
   Event,
   EventListItem,
   EventCreate,
@@ -5143,5 +5154,76 @@ export const messagesService = {
   },
   async acknowledge(messageId: string): Promise<void> {
     await api.post(`/messages/${messageId}/acknowledge`);
+  },
+};
+
+// ==================== Skills Testing Service ====================
+
+export const skillsTestingService = {
+  // Templates
+  async getTemplates(params?: { status?: string; category?: string }): Promise<SkillTemplateListItem[]> {
+    const response = await api.get<SkillTemplateListItem[]>('/training/skills-testing/templates', { params });
+    return response.data;
+  },
+
+  async getTemplate(templateId: string): Promise<SkillTemplate> {
+    const response = await api.get<SkillTemplate>(`/training/skills-testing/templates/${templateId}`);
+    return response.data;
+  },
+
+  async createTemplate(data: SkillTemplateCreate): Promise<SkillTemplate> {
+    const response = await api.post<SkillTemplate>('/training/skills-testing/templates', data);
+    return response.data;
+  },
+
+  async updateTemplate(templateId: string, data: SkillTemplateUpdate): Promise<SkillTemplate> {
+    const response = await api.put<SkillTemplate>(`/training/skills-testing/templates/${templateId}`, data);
+    return response.data;
+  },
+
+  async deleteTemplate(templateId: string): Promise<void> {
+    await api.delete(`/training/skills-testing/templates/${templateId}`);
+  },
+
+  async publishTemplate(templateId: string): Promise<SkillTemplate> {
+    const response = await api.post<SkillTemplate>(`/training/skills-testing/templates/${templateId}/publish`);
+    return response.data;
+  },
+
+  async duplicateTemplate(templateId: string): Promise<SkillTemplate> {
+    const response = await api.post<SkillTemplate>(`/training/skills-testing/templates/${templateId}/duplicate`);
+    return response.data;
+  },
+
+  // Tests
+  async getTests(params?: { status?: string; candidate_id?: string; template_id?: string }): Promise<SkillTestListItem[]> {
+    const response = await api.get<SkillTestListItem[]>('/training/skills-testing/tests', { params });
+    return response.data;
+  },
+
+  async getTest(testId: string): Promise<SkillTest> {
+    const response = await api.get<SkillTest>(`/training/skills-testing/tests/${testId}`);
+    return response.data;
+  },
+
+  async createTest(data: SkillTestCreate): Promise<SkillTest> {
+    const response = await api.post<SkillTest>('/training/skills-testing/tests', data);
+    return response.data;
+  },
+
+  async updateTest(testId: string, data: SkillTestUpdate): Promise<SkillTest> {
+    const response = await api.put<SkillTest>(`/training/skills-testing/tests/${testId}`, data);
+    return response.data;
+  },
+
+  async completeTest(testId: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/complete`);
+    return response.data;
+  },
+
+  // Summary
+  async getSummary(): Promise<SkillTestingSummary> {
+    const response = await api.get<SkillTestingSummary>('/training/skills-testing/summary');
+    return response.data;
   },
 };

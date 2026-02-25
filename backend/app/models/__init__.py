@@ -158,6 +158,7 @@ from app.models.public_portal import (
     PublicPortalConfig,
     PublicPortalDataWhitelist,
 )
+from app.models.skills_testing import SkillTemplate, SkillTest
 from app.models.training import (
     ExternalCategoryMapping,
     ExternalTrainingImport,
@@ -331,6 +332,9 @@ __all__ = [
     "Shift",
     "ShiftAttendance",
     "ShiftCall",
+    # Skills testing models
+    "SkillTemplate",
+    "SkillTest",
     # Inventory models
     "InventoryCategory",
     "InventoryItem",

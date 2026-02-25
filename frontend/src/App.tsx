@@ -57,6 +57,12 @@ const CourseLibraryPage = lazy(() => import('./pages/CourseLibraryPage'));
 const SubmitTrainingPage = lazy(() => import('./pages/SubmitTrainingPage'));
 const MyTrainingPage = lazy(() => import('./pages/MyTrainingPage'));
 
+// Skills Testing Module
+const SkillsTestingPage = lazy(() => import('./pages/SkillsTestingPage').then(m => ({ default: m.SkillsTestingPage })));
+const SkillTemplateBuilderPage = lazy(() => import('./pages/SkillTemplateBuilderPage'));
+const StartSkillTestPage = lazy(() => import('./pages/StartSkillTestPage'));
+const ActiveSkillTestPage = lazy(() => import('./pages/ActiveSkillTestPage'));
+
 // Admin/Monitoring
 const ErrorMonitoringPage = lazy(() => import('./pages/ErrorMonitoringPage'));
 const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'));
@@ -198,6 +204,15 @@ function App() {
               <Route path="/training/programs/new" element={<Navigate to="/training/admin?page=setup&tab=pipelines" replace />} />
               <Route path="/training/shift-reports" element={<Navigate to="/training/admin?page=records&tab=shift-reports" replace />} />
               <Route path="/training/integrations" element={<Navigate to="/training/admin?page=setup&tab=integrations" replace />} />
+
+              {/* Skills Testing Module */}
+              <Route path="/training/skills-testing" element={<ProtectedRoute requiredPermission="training.manage"><SkillsTestingPage /></ProtectedRoute>} />
+              <Route path="/training/skills-testing/templates/new" element={<ProtectedRoute requiredPermission="training.manage"><SkillTemplateBuilderPage /></ProtectedRoute>} />
+              <Route path="/training/skills-testing/templates/:id" element={<ProtectedRoute requiredPermission="training.manage"><SkillTemplateBuilderPage /></ProtectedRoute>} />
+              <Route path="/training/skills-testing/templates/:id/edit" element={<ProtectedRoute requiredPermission="training.manage"><SkillTemplateBuilderPage /></ProtectedRoute>} />
+              <Route path="/training/skills-testing/test/new" element={<StartSkillTestPage />} />
+              <Route path="/training/skills-testing/test/:testId" element={<ActiveSkillTestPage />} />
+              <Route path="/training/skills-testing/test/:testId/active" element={<ActiveSkillTestPage />} />
 
               {/* Inventory Module */}
               <Route path="/inventory" element={<InventoryPage />} />
