@@ -86,6 +86,7 @@ class IntegrationType(str, enum.Enum):
     MEMBERSHIP_INTEREST = "membership_interest"
     EQUIPMENT_ASSIGNMENT = "equipment_assignment"
     EVENT_REGISTRATION = "event_registration"
+    EVENT_REQUEST = "event_request"
 
 
 class Form(Base):

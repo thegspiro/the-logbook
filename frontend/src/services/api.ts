@@ -1932,6 +1932,33 @@ export const eventService = {
   },
 };
 
+// ============================================
+// Event Request Pipeline Service
+// ============================================
+
+export const eventRequestService = {
+  async listRequests(params?: { status?: string; outreach_type?: string }): Promise<import('../types/event').EventRequestListItem[]> {
+    const response = await api.get<import('../types/event').EventRequestListItem[]>('/event-requests', { params });
+    return response.data;
+  },
+  async getRequest(requestId: string): Promise<import('../types/event').EventRequest> {
+    const response = await api.get<import('../types/event').EventRequest>(`/event-requests/${requestId}`);
+    return response.data;
+  },
+  async updateRequestStatus(requestId: string, data: { status: string; notes?: string; decline_reason?: string; assigned_to?: string; event_id?: string }): Promise<{ message: string; status: string }> {
+    const response = await api.patch<{ message: string; status: string }>(`/event-requests/${requestId}/status`, data);
+    return response.data;
+  },
+  async checkPublicStatus(token: string): Promise<import('../types/event').EventRequestPublicStatus> {
+    const response = await api.get<import('../types/event').EventRequestPublicStatus>(`/event-requests/status/${token}`);
+    return response.data;
+  },
+  async getOutreachTypeLabels(): Promise<Record<string, string>> {
+    const response = await api.get<Record<string, string>>('/event-requests/types/labels');
+    return response.data;
+  },
+};
+
 export interface UserInventoryItem {
   assignment_id: string;
   item_id: string;

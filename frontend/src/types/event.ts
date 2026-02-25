@@ -387,3 +387,86 @@ export interface EventModuleSettings {
     notify_attendees: boolean;
   };
 }
+
+// Event Request Pipeline
+export type EventRequestStatus =
+  | 'submitted'
+  | 'under_review'
+  | 'approved'
+  | 'scheduled'
+  | 'declined'
+  | 'cancelled'
+  | 'completed';
+
+export type OutreachEventType =
+  | 'fire_safety_demo'
+  | 'station_tour'
+  | 'cpr_first_aid'
+  | 'career_talk'
+  | 'other';
+
+export interface EventRequestActivity {
+  id: string;
+  action: string;
+  old_status?: string;
+  new_status?: string;
+  notes?: string;
+  details?: Record<string, unknown>;
+  performed_by?: string;
+  performer_name?: string;
+  created_at: string;
+}
+
+export interface EventRequest {
+  id: string;
+  organization_id: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string;
+  organization_name?: string;
+  outreach_type: OutreachEventType;
+  description: string;
+  preferred_date_start?: string;
+  preferred_date_end?: string;
+  audience_size?: number;
+  age_group?: string;
+  venue_preference: string;
+  venue_address?: string;
+  special_requests?: string;
+  status: EventRequestStatus;
+  assigned_to?: string;
+  assignee_name?: string;
+  reviewer_notes?: string;
+  decline_reason?: string;
+  event_id?: string;
+  status_token?: string;
+  created_at: string;
+  updated_at: string;
+  activity_log: EventRequestActivity[];
+}
+
+export interface EventRequestListItem {
+  id: string;
+  contact_name: string;
+  contact_email: string;
+  organization_name?: string;
+  outreach_type: OutreachEventType;
+  status: EventRequestStatus;
+  preferred_date_start?: string;
+  audience_size?: number;
+  assigned_to?: string;
+  assignee_name?: string;
+  created_at: string;
+}
+
+export interface EventRequestPublicStatus {
+  contact_name: string;
+  outreach_type: OutreachEventType;
+  status: EventRequestStatus;
+  preferred_date_start?: string;
+  preferred_date_end?: string;
+  created_at: string;
+  updated_at: string;
+  event_date?: string;
+  decline_reason?: string;
+}

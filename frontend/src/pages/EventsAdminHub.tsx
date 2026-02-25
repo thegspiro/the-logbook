@@ -14,13 +14,15 @@ const EventCreatePage = lazy(() => import('./EventCreatePage').then(m => ({ defa
 const AnalyticsDashboardPage = lazy(() => import('./AnalyticsDashboardPage'));
 const CommunityEngagementTab = lazy(() => import('./CommunityEngagementTab'));
 const PastEventsTab = lazy(() => import('./PastEventsTab'));
+const EventRequestsTab = lazy(() => import('./EventRequestsTab'));
 const EventsSettingsTab = lazy(() => import('./EventsSettingsTab'));
 
-type AdminTab = 'create' | 'past_events' | 'analytics' | 'community' | 'settings';
+type AdminTab = 'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'settings';
 
 const tabs: { id: AdminTab; label: string }[] = [
   { id: 'create', label: 'Create Event' },
   { id: 'past_events', label: 'Past Events' },
+  { id: 'requests', label: 'Requests' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'community', label: 'Community Engagement' },
   { id: 'settings', label: 'Settings' },
@@ -83,6 +85,7 @@ export const EventsAdminHub: React.FC = () => {
       <Suspense fallback={<TabLoading />}>
         {activeTab === 'create' && <EventCreatePage />}
         {activeTab === 'past_events' && <PastEventsTab />}
+        {activeTab === 'requests' && <EventRequestsTab />}
         {activeTab === 'analytics' && <AnalyticsDashboardPage />}
         {activeTab === 'community' && <CommunityEngagementTab />}
         {activeTab === 'settings' && <EventsSettingsTab />}
