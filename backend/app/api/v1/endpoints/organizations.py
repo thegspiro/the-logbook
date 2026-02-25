@@ -252,6 +252,8 @@ async def update_module_settings(
     - training: Training & Certifications
     - inventory: Equipment & Inventory
     - scheduling: Scheduling & Shifts
+    - apparatus: Apparatus Management
+    - communications: Communications
     - elections: Elections & Voting
     - minutes: Meeting Minutes
     - reports: Reports & Analytics
@@ -259,6 +261,12 @@ async def update_module_settings(
     - mobile: Mobile App Access
     - forms: Custom Forms
     - integrations: External Integrations
+    - facilities: Facilities Management
+    - incidents: Incidents & Reports
+    - hr_payroll: HR & Payroll
+    - grants: Grants & Fundraising
+    - prospective_members: Prospective Members Pipeline
+    - public_info: Public Information
 
     **Authentication and admin permission required**
     """

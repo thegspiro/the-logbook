@@ -36,6 +36,34 @@ class OrganizationService:
         )
         return result.scalar_one_or_none()
 
+    # Mapping from onboarding module IDs (hyphenated) to ModuleSettings
+    # field names (snake_case).  Entries where the ID already matches the
+    # field name are included for clarity.
+    _ONBOARDING_ID_TO_FIELD: Dict[str, str] = {
+        "training": "training",
+        "inventory": "inventory",
+        "scheduling": "scheduling",
+        "apparatus": "apparatus",
+        "communications": "communications",
+        "elections": "elections",
+        "minutes": "minutes",
+        "reports": "reports",
+        "notifications": "notifications",
+        "mobile": "mobile",
+        "forms": "forms",
+        "documents": "forms",  # legacy alias
+        "integrations": "integrations",
+        "facilities": "facilities",
+        "incidents": "incidents",
+        "hr-payroll": "hr_payroll",
+        "hr_payroll": "hr_payroll",
+        "grants": "grants",
+        "prospective-members": "prospective_members",
+        "prospective_members": "prospective_members",
+        "public-info": "public_info",
+        "public_info": "public_info",
+    }
+
     async def _resolve_module_settings(
         self,
         settings_dict: Dict[str, Any],
@@ -55,40 +83,16 @@ class OrganizationService:
         Settings page (_user_configured flag), we check OnboardingStatus
         to recover from failed dual-writes during onboarding.
         """
+        field_names = list(ModuleSettings.model_fields.keys())
         modules = settings_dict.get("modules")
 
         if isinstance(modules, dict) and len(modules) > 0:
-            ms = ModuleSettings(
-                training=bool(modules.get("training", False)),
-                inventory=bool(modules.get("inventory", False)),
-                scheduling=bool(modules.get("scheduling", False)),
-                elections=bool(modules.get("elections", False)),
-                minutes=bool(modules.get("minutes", False)),
-                reports=bool(modules.get("reports", False)),
-                notifications=bool(modules.get("notifications", False)),
-                mobile=bool(modules.get("mobile", False)),
-                forms=bool(modules.get("forms", False)),
-                integrations=bool(modules.get("integrations", False)),
-                facilities=bool(modules.get("facilities", False)),
-            )
+            kwargs = {f: bool(modules.get(f, False)) for f in field_names}
+            ms = ModuleSettings(**kwargs)
 
             # If at least one module is enabled, or the user explicitly
             # configured modules via the Settings page, trust the dict.
-            any_enabled = any(
-                [
-                    ms.training,
-                    ms.inventory,
-                    ms.scheduling,
-                    ms.elections,
-                    ms.minutes,
-                    ms.reports,
-                    ms.notifications,
-                    ms.mobile,
-                    ms.forms,
-                    ms.integrations,
-                    ms.facilities,
-                ]
-            )
+            any_enabled = any(getattr(ms, f) for f in field_names)
             if any_enabled or modules.get("_user_configured"):
                 return ms
 
@@ -102,38 +106,24 @@ class OrganizationService:
 
         if onboarding and onboarding.enabled_modules:
             enabled_list = onboarding.enabled_modules
-            migrated = ModuleSettings(
-                training="training" in enabled_list,
-                inventory="inventory" in enabled_list,
-                scheduling="scheduling" in enabled_list,
-                elections="elections" in enabled_list,
-                minutes="minutes" in enabled_list,
-                reports="reports" in enabled_list,
-                notifications="notifications" in enabled_list,
-                mobile="mobile" in enabled_list,
-                forms="forms" in enabled_list or "documents" in enabled_list,
-                integrations="integrations" in enabled_list,
-                facilities="facilities" in enabled_list,
-            )
+            # Map onboarding IDs (may be hyphenated) to field names
+            enabled_fields: set[str] = set()
+            for mod_id in enabled_list:
+                field = self._ONBOARDING_ID_TO_FIELD.get(mod_id)
+                if field:
+                    enabled_fields.add(field)
+
+            kwargs = {f: f in enabled_fields for f in field_names}
+            migrated = ModuleSettings(**kwargs)
 
             # Persist to org.settings.modules so we never need the
             # fallback again — single source of truth going forward.
             if org is not None:
                 new_settings = dict(settings_dict)
                 new_settings["modules"] = {
-                    "training": migrated.training,
-                    "inventory": migrated.inventory,
-                    "scheduling": migrated.scheduling,
-                    "elections": migrated.elections,
-                    "minutes": migrated.minutes,
-                    "reports": migrated.reports,
-                    "notifications": migrated.notifications,
-                    "mobile": migrated.mobile,
-                    "forms": migrated.forms,
-                    "integrations": migrated.integrations,
-                    "facilities": migrated.facilities,
-                    "_user_configured": True,
+                    f: getattr(migrated, f) for f in field_names
                 }
+                new_settings["modules"]["_user_configured"] = True
                 org.settings = new_settings
                 flag_modified(org, "settings")
                 await self.db.flush()
@@ -302,21 +292,10 @@ class OrganizationService:
         resolved = await self._resolve_module_settings(current_settings, org=org)
         # Re-read settings after potential migration flush
         current_settings = org.settings or {}
+        field_names = list(ModuleSettings.model_fields.keys())
         current_modules = current_settings.get(
             "modules",
-            {
-                "training": resolved.training,
-                "inventory": resolved.inventory,
-                "scheduling": resolved.scheduling,
-                "elections": resolved.elections,
-                "minutes": resolved.minutes,
-                "reports": resolved.reports,
-                "notifications": resolved.notifications,
-                "mobile": resolved.mobile,
-                "forms": resolved.forms,
-                "integrations": resolved.integrations,
-                "facilities": resolved.facilities,
-            },
+            {f: getattr(resolved, f) for f in field_names},
         )
 
         # Merge the incoming toggles and mark as explicitly configured

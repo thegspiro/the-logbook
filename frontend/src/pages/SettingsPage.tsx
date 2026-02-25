@@ -36,6 +36,12 @@ import {
   Users,
   Hash,
   AlertTriangle,
+  Truck,
+  MessageSquare,
+  Briefcase,
+  DollarSign,
+  UserPlus,
+  Globe,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { HelpLink } from '../components/HelpLink';
@@ -68,6 +74,8 @@ const CONFIGURABLE_MODULES: ConfigurableModule[] = [
   { key: 'training', name: 'Training & Certification', description: 'Course management, certification tracking, and compliance monitoring', icon: <GraduationCap className="w-5 h-5" /> },
   { key: 'inventory', name: 'Inventory Management', description: 'Equipment tracking, supply levels, and procurement', icon: <Package className="w-5 h-5" /> },
   { key: 'scheduling', name: 'Scheduling', description: 'Duty rosters, shift scheduling, and calendar management', icon: <Calendar className="w-5 h-5" /> },
+  { key: 'apparatus', name: 'Apparatus Management', description: 'Vehicle tracking, maintenance schedules, and equipment inventory', icon: <Truck className="w-5 h-5" /> },
+  { key: 'communications', name: 'Communications', description: 'Internal messaging, announcements, and notifications', icon: <MessageSquare className="w-5 h-5" /> },
   { key: 'elections', name: 'Elections & Voting', description: 'Ballot creation, voting management, and election results', icon: <Vote className="w-5 h-5" /> },
   { key: 'minutes', name: 'Meeting Minutes', description: 'Meeting documentation, attendance tracking, and action items', icon: <FileText className="w-5 h-5" /> },
   { key: 'reports', name: 'Reports & Analytics', description: 'Custom reports, data export, and analytics dashboards', icon: <BarChart3 className="w-5 h-5" /> },
@@ -76,6 +84,11 @@ const CONFIGURABLE_MODULES: ConfigurableModule[] = [
   { key: 'forms', name: 'Custom Forms', description: 'Form builder for inspections, surveys, and data collection', icon: <ClipboardList className="w-5 h-5" /> },
   { key: 'integrations', name: 'External Integrations', description: 'Third-party service connections and API access', icon: <Plug className="w-5 h-5" /> },
   { key: 'facilities', name: 'Facilities Management', description: 'Building management, maintenance scheduling, and inspections', icon: <Building2 className="w-5 h-5" /> },
+  { key: 'incidents', name: 'Incidents & Reports', description: 'Incident logging, run reports, and analytics', icon: <FileText className="w-5 h-5" /> },
+  { key: 'hr_payroll', name: 'HR & Payroll', description: 'Time tracking, compensation, and benefits management', icon: <Briefcase className="w-5 h-5" /> },
+  { key: 'grants', name: 'Grants & Fundraising', description: 'Grant tracking, fundraising campaigns, and budget management', icon: <DollarSign className="w-5 h-5" /> },
+  { key: 'prospective_members', name: 'Prospective Members', description: 'Applicant-to-member pipeline with configurable stages', icon: <UserPlus className="w-5 h-5" /> },
+  { key: 'public_info', name: 'Public Information', description: 'Public-facing pages, community outreach, and fire safety education', icon: <Globe className="w-5 h-5" /> },
 ];
 
 // ── Timezone helper ──
