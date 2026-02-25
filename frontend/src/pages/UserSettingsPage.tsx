@@ -22,9 +22,8 @@ import { useRanks } from '../hooks/useRanks';
 type TabType = 'account' | 'password' | 'appearance' | 'notifications';
 
 export const UserSettingsPage: React.FC = () => {
-  const { user, loadUser, checkPermission } = useAuthStore();
+  const { user, loadUser } = useAuthStore();
   const { rankOptions } = useRanks();
-  const canManageMembers = checkPermission('members.manage');
   const { theme, setTheme } = useTheme();
   const location = useLocation();
   const forcePasswordChange = (location.state as { forcePasswordChange?: boolean } | null)?.forcePasswordChange
@@ -111,7 +110,9 @@ export const UserSettingsPage: React.FC = () => {
     if (!user?.id) return;
     setSavingProfile(true);
     try {
-      const updated = await userService.updateUserProfile(user.id, profileForm);
+      // Strip fields that are only editable by Membership Coordinators via Members admin
+      const { membership_number: _mn, rank: _r, station: _s, ...editableFields } = profileForm;
+      const updated = await userService.updateUserProfile(user.id, editableFields);
       setProfile(updated);
       toast.success('Profile updated successfully!');
     } catch (err: unknown) {
@@ -343,6 +344,9 @@ export const UserSettingsPage: React.FC = () => {
                 {/* Department Information */}
                 <div>
                   <h3 className="text-sm font-medium text-theme-text-secondary mb-3 uppercase tracking-wider">Department Information</h3>
+                  <p className="text-xs text-theme-text-muted mb-3">
+                    These fields can only be changed by a Membership Coordinator from the Members admin page.
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label htmlFor="membershipNumber" className="block text-sm font-medium text-theme-text-secondary mb-1">Membership Number</label>
@@ -350,25 +354,21 @@ export const UserSettingsPage: React.FC = () => {
                         id="membershipNumber"
                         type="text"
                         value={profileForm.membership_number || ''}
-                        onChange={(e) => handleProfileChange('membership_number', e.target.value)}
-                        className={`block w-full px-3 py-2 border border-theme-input-border rounded-md ${canManageMembers ? 'bg-theme-input-bg' : 'bg-theme-surface-secondary opacity-60 cursor-not-allowed'} text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm`}
-                        disabled={savingProfile || !canManageMembers}
+                        readOnly
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-surface-secondary opacity-60 cursor-not-allowed text-theme-text-primary placeholder-theme-text-muted sm:text-sm"
+                        disabled
                       />
                     </div>
                     <div>
                       <label htmlFor="rank" className="block text-sm font-medium text-theme-text-secondary mb-1">Rank</label>
-                      <select
+                      <input
                         id="rank"
-                        value={profileForm.rank || ''}
-                        onChange={(e) => handleProfileChange('rank', e.target.value)}
-                        className={`block w-full px-3 py-2 border border-theme-input-border rounded-md ${canManageMembers ? 'bg-theme-input-bg' : 'bg-theme-surface-secondary opacity-60 cursor-not-allowed'} text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm`}
-                        disabled={savingProfile || !canManageMembers}
-                      >
-                        <option value="">Select Rank</option>
-                        {rankOptions.map((r) => (
-                          <option key={r.value} value={r.value}>{r.label}</option>
-                        ))}
-                      </select>
+                        type="text"
+                        value={rankOptions.find((r) => r.value === profileForm.rank)?.label || profileForm.rank || '—'}
+                        readOnly
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-surface-secondary opacity-60 cursor-not-allowed text-theme-text-primary sm:text-sm"
+                        disabled
+                      />
                     </div>
                     <div>
                       <label htmlFor="station" className="block text-sm font-medium text-theme-text-secondary mb-1">Station</label>
@@ -376,9 +376,9 @@ export const UserSettingsPage: React.FC = () => {
                         id="station"
                         type="text"
                         value={profileForm.station || ''}
-                        onChange={(e) => handleProfileChange('station', e.target.value)}
-                        className={`block w-full px-3 py-2 border border-theme-input-border rounded-md ${canManageMembers ? 'bg-theme-input-bg' : 'bg-theme-surface-secondary opacity-60 cursor-not-allowed'} text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm`}
-                        disabled={savingProfile || !canManageMembers}
+                        readOnly
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-surface-secondary opacity-60 cursor-not-allowed text-theme-text-primary placeholder-theme-text-muted sm:text-sm"
+                        disabled
                       />
                     </div>
                   </div>

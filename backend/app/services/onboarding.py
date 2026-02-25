@@ -856,21 +856,12 @@ class OnboardingService:
             )  # Step 10: final step
 
         # ── Also persist to Organization.settings.modules (canonical store) ──
-        # Configurable module keys that the Settings page manages
-        configurable_keys = [
-            "training",
-            "inventory",
-            "scheduling",
-            "elections",
-            "minutes",
-            "reports",
-            "notifications",
-            "mobile",
-            "forms",
-            "integrations",
-            "facilities",
-        ]
-        modules_dict = {k: k in final_modules for k in configurable_keys}
+        from app.schemas.organization import ModuleSettings
+
+        configurable_keys = list(ModuleSettings.model_fields.keys())
+        # Normalize hyphenated IDs (e.g. "hr-payroll") to snake_case
+        normalized = {mid.replace("-", "_") for mid in final_modules}
+        modules_dict = {k: k in normalized for k in configurable_keys}
 
         result = await self.db.execute(select(Organization).limit(1))
         org = result.scalar_one_or_none()

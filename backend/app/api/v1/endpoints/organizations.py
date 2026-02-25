@@ -252,6 +252,8 @@ async def update_module_settings(
     - training: Training & Certifications
     - inventory: Equipment & Inventory
     - scheduling: Scheduling & Shifts
+    - apparatus: Apparatus Management
+    - communications: Communications
     - elections: Elections & Voting
     - minutes: Meeting Minutes
     - reports: Reports & Analytics
@@ -259,6 +261,12 @@ async def update_module_settings(
     - mobile: Mobile App Access
     - forms: Custom Forms
     - integrations: External Integrations
+    - facilities: Facilities Management
+    - incidents: Incidents & Reports
+    - hr_payroll: HR & Payroll
+    - grants: Grants & Fundraising
+    - prospective_members: Prospective Members Pipeline
+    - public_info: Public Information
 
     **Authentication and admin permission required**
     """
@@ -345,6 +353,7 @@ async def get_setup_checklist(
     **Authentication required**
     """
     from app.models.forms import Form
+    from app.models.inventory import InventoryCategory
     from app.models.location import Location
     from app.models.membership_pipeline import MembershipPipeline
     from app.models.training import BasicApparatus, ShiftTemplate, TrainingCourse, TrainingRequirement
@@ -408,6 +417,17 @@ async def get_setup_checklist(
             select(func.count())
             .select_from(TrainingRequirement)
             .where(TrainingRequirement.organization_id == org_id)
+        )
+    ).scalar() or 0
+
+    inventory_category_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(InventoryCategory)
+            .where(
+                InventoryCategory.organization_id == org_id,
+                InventoryCategory.active == True,
+            )  # noqa: E712
         )
     ).scalar() or 0
 
@@ -500,6 +520,16 @@ async def get_setup_checklist(
             count=0,
             required=True,
         ),
+        SetupChecklistItem(
+            key="modules",
+            title="Review Enabled Modules",
+            description="Enable the modules your department needs: training, scheduling, inventory, forms, and more.",
+            path="/settings?tab=modules",
+            category="essential",
+            is_complete=len(enabled_modules) > 5,
+            count=len(enabled_modules) - 5,
+            required=True,
+        ),
     ]
 
     # Module-specific items (only shown if module is enabled)
@@ -539,6 +569,20 @@ async def get_setup_checklist(
                 category="training",
                 is_complete=requirement_count > 0,
                 count=requirement_count,
+                required=False,
+            )
+        )
+
+    if "inventory" in enabled_modules:
+        items.append(
+            SetupChecklistItem(
+                key="inventory",
+                title="Set Up Inventory Categories",
+                description="Create equipment categories (PPE, tools, uniforms, etc.) so items can be tracked and assigned to members.",
+                path="/inventory/admin",
+                category="inventory",
+                is_complete=inventory_category_count > 0,
+                count=inventory_category_count,
                 required=False,
             )
         )

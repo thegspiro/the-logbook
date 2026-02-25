@@ -611,24 +611,16 @@ async def _persist_session_data_to_org(
     # Persist module selections
     modules_data = session_data.get("modules")
     if modules_data and modules_data.get("enabled"):
+        from app.schemas.organization import ModuleSettings
+
         enabled_list = modules_data["enabled"]
-        # Map the enabled list to the configurable module keys used by the
-        # Settings page (ModuleSettings schema).  Core modules like members,
-        # events, documents are always on and not tracked here.
-        configurable_keys = [
-            "training",
-            "inventory",
-            "scheduling",
-            "elections",
-            "minutes",
-            "reports",
-            "notifications",
-            "mobile",
-            "forms",
-            "integrations",
-            "facilities",
-        ]
-        org_settings["modules"] = {k: k in enabled_list for k in configurable_keys}
+        # Normalize hyphenated IDs to snake_case so they match the
+        # ModuleSettings field names (e.g. "hr-payroll" -> "hr_payroll").
+        normalized = {mid.replace("-", "_") for mid in enabled_list}
+        # Map the enabled list to every configurable module key defined in
+        # ModuleSettings so the Settings page always has the full picture.
+        configurable_keys = list(ModuleSettings.model_fields.keys())
+        org_settings["modules"] = {k: k in normalized for k in configurable_keys}
 
     organization.settings = org_settings
     await db.flush()
@@ -1374,7 +1366,8 @@ async def save_session_modules(
     # Validate session
     session = await validate_session(request, db)
 
-    # Validate modules - must match module IDs from frontend moduleRegistry.ts
+    # Validate modules - must match module IDs from frontend AVAILABLE_MODULES
+    # (types/modules.ts) or their snake_case equivalents.
     available_modules = [
         # Core modules (always enabled)
         "members",
@@ -1387,6 +1380,7 @@ async def save_session_modules(
         "scheduling",
         "apparatus",
         "facilities",
+        "communications",
         # Governance modules
         "elections",
         "minutes",
@@ -1398,11 +1392,20 @@ async def save_session_modules(
         "integrations",
         # Membership
         "prospective_members",
+        "prospective-members",
+        # HR & Finance
+        "hr_payroll",
+        "hr-payroll",
+        "grants",
+        # Public
+        "public_info",
+        "public-info",
+        # Incidents
+        "incidents",
         # Legacy/additional modules (for backwards compatibility)
         "compliance",
         "meetings",
         "fundraising",
-        "incidents",
         "equipment",
         "vehicles",
         "budget",

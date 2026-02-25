@@ -477,6 +477,8 @@ export interface ModuleSettingsData {
   training: boolean;
   inventory: boolean;
   scheduling: boolean;
+  apparatus: boolean;
+  communications: boolean;
   elections: boolean;
   minutes: boolean;
   reports: boolean;
@@ -485,6 +487,11 @@ export interface ModuleSettingsData {
   forms: boolean;
   integrations: boolean;
   facilities: boolean;
+  incidents: boolean;
+  hr_payroll: boolean;
+  grants: boolean;
+  prospective_members: boolean;
+  public_info: boolean;
 }
 
 export interface OrganizationProfile {
