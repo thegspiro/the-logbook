@@ -27,6 +27,7 @@ class InventoryCategoryBase(BaseModel):
     requires_serial_number: bool = False
     requires_maintenance: bool = False
     low_stock_threshold: Optional[int] = Field(None, ge=0)
+    nfpa_tracking_enabled: bool = False
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -45,6 +46,7 @@ class InventoryCategoryUpdate(BaseModel):
     requires_serial_number: Optional[bool] = None
     requires_maintenance: Optional[bool] = None
     low_stock_threshold: Optional[int] = Field(None, ge=0)
+    nfpa_tracking_enabled: Optional[bool] = None
     metadata: Optional[Dict[str, Any]] = None
     active: Optional[bool] = None
 
@@ -332,6 +334,36 @@ class CheckOutRecordResponse(CheckOutRecordBase):
 # ============================================
 
 
+class NFPAInspectionDetailCreate(BaseModel):
+    """NFPA inspection detail fields — included when creating a maintenance record for NFPA items"""
+
+    inspection_level: str  # "routine", "advanced", "independent"
+    thermal_damage: Optional[bool] = None
+    moisture_barrier: Optional[bool] = None
+    seam_integrity: Optional[bool] = None
+    reflective_trim: Optional[bool] = None
+    closure_systems: Optional[bool] = None
+    liner_integrity: Optional[bool] = None
+    contamination_level: Optional[str] = None
+    facepiece_seal: Optional[bool] = None
+    regulator_function: Optional[bool] = None
+    cylinder_pressure: Optional[float] = None
+    low_air_alarm: Optional[bool] = None
+    recommendation: Optional[str] = None
+
+
+class NFPAInspectionDetailResponse(NFPAInspectionDetailCreate):
+    """NFPA inspection detail response"""
+
+    id: UUID
+    maintenance_record_id: UUID
+    organization_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class MaintenanceRecordBase(BaseModel):
     """Base maintenance record schema"""
 
@@ -353,6 +385,8 @@ class MaintenanceRecordBase(BaseModel):
     issues_found: Optional[List[str]] = None
     attachments: Optional[List[str]] = None
     is_completed: bool = False
+    # Optional NFPA inspection details (included when creating for NFPA-tracked items)
+    nfpa_inspection: Optional[NFPAInspectionDetailCreate] = None
 
 
 class MaintenanceRecordCreate(MaintenanceRecordBase):
@@ -905,3 +939,117 @@ class WriteOffRequestResponse(BaseModel):
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# NFPA 1851/1852 Compliance Schemas
+# ============================================
+
+
+class NFPAComplianceCreate(BaseModel):
+    """Schema for creating an NFPA compliance record"""
+
+    manufacture_date: Optional[date] = None
+    first_in_service_date: Optional[date] = None
+    expected_retirement_date: Optional[date] = None
+    retirement_reason: Optional[str] = Field(None, max_length=255)
+    ensemble_id: Optional[str] = Field(None, max_length=36)
+    ensemble_role: Optional[str] = Field(None, max_length=50)
+    # SCBA fields
+    cylinder_manufacture_date: Optional[date] = None
+    cylinder_expiration_date: Optional[date] = None
+    hydrostatic_test_date: Optional[date] = None
+    hydrostatic_test_due: Optional[date] = None
+    flow_test_date: Optional[date] = None
+    flow_test_due: Optional[date] = None
+    contamination_level: Optional[str] = None
+
+
+class NFPAComplianceUpdate(BaseModel):
+    """Schema for updating an NFPA compliance record"""
+
+    manufacture_date: Optional[date] = None
+    first_in_service_date: Optional[date] = None
+    expected_retirement_date: Optional[date] = None
+    retirement_reason: Optional[str] = Field(None, max_length=255)
+    is_retired_by_age: Optional[bool] = None
+    ensemble_id: Optional[str] = Field(None, max_length=36)
+    ensemble_role: Optional[str] = Field(None, max_length=50)
+    cylinder_manufacture_date: Optional[date] = None
+    cylinder_expiration_date: Optional[date] = None
+    hydrostatic_test_date: Optional[date] = None
+    hydrostatic_test_due: Optional[date] = None
+    flow_test_date: Optional[date] = None
+    flow_test_due: Optional[date] = None
+    contamination_level: Optional[str] = None
+
+
+class NFPAComplianceResponse(BaseModel):
+    """Schema for NFPA compliance record response"""
+
+    id: UUID
+    item_id: UUID
+    organization_id: UUID
+    manufacture_date: Optional[date] = None
+    first_in_service_date: Optional[date] = None
+    expected_retirement_date: Optional[date] = None
+    retirement_reason: Optional[str] = None
+    is_retired_by_age: bool = False
+    ensemble_id: Optional[str] = None
+    ensemble_role: Optional[str] = None
+    cylinder_manufacture_date: Optional[date] = None
+    cylinder_expiration_date: Optional[date] = None
+    hydrostatic_test_date: Optional[date] = None
+    hydrostatic_test_due: Optional[date] = None
+    flow_test_date: Optional[date] = None
+    flow_test_due: Optional[date] = None
+    contamination_level: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NFPAExposureRecordCreate(BaseModel):
+    """Schema for logging an NFPA exposure event"""
+
+    exposure_type: str
+    exposure_date: date
+    incident_number: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = None
+    decon_required: bool = False
+    decon_completed: bool = False
+    decon_completed_date: Optional[date] = None
+    decon_method: Optional[str] = Field(None, max_length=255)
+    user_id: Optional[UUID] = None
+
+
+class NFPAExposureRecordResponse(BaseModel):
+    """Schema for NFPA exposure record response"""
+
+    id: UUID
+    item_id: UUID
+    organization_id: UUID
+    exposure_type: str
+    exposure_date: date
+    incident_number: Optional[str] = None
+    description: Optional[str] = None
+    decon_required: bool
+    decon_completed: bool
+    decon_completed_date: Optional[date] = None
+    decon_method: Optional[str] = None
+    user_id: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NFPASummaryResponse(BaseModel):
+    """Dashboard summary for NFPA compliance"""
+
+    total_nfpa_items: int = 0
+    nearing_retirement: int = 0
+    overdue_inspection: int = 0
+    pending_decon: int = 0
+    ensembles_count: int = 0

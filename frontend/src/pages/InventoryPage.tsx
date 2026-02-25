@@ -47,6 +47,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
 import { useInventoryWebSocket } from '../hooks/useInventoryWebSocket';
 import { useRanks } from '../hooks/useRanks';
+import ItemDetailModal from './inventory/ItemDetailModal';
 import toast from 'react-hot-toast';
 
 const ITEM_TYPES = [
@@ -166,6 +167,7 @@ const InventoryPage: React.FC = () => {
     requires_serial_number: false,
     requires_maintenance: false,
     requires_assignment: false,
+    nfpa_tracking_enabled: false,
   });
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -174,6 +176,7 @@ const InventoryPage: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [editForm, setEditForm] = useState<Partial<InventoryItemCreate>>({});
   const [showEditModal, setShowEditModal] = useState(false);
+  const [detailItem, setDetailItem] = useState<InventoryItem | null>(null);
   const [showRetireConfirm, setShowRetireConfirm] = useState<InventoryItem | null>(null);
   const [retireNotes, setRetireNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -416,6 +419,7 @@ const InventoryPage: React.FC = () => {
       setCategoryForm({
         name: '', description: '', item_type: 'equipment',
         requires_serial_number: false, requires_maintenance: false, requires_assignment: false,
+        nfpa_tracking_enabled: false,
       });
       loadData();
       toast.success('Category created successfully');
@@ -612,6 +616,7 @@ const InventoryPage: React.FC = () => {
       requires_maintenance: cat.requires_maintenance,
       requires_assignment: cat.requires_assignment,
       low_stock_threshold: cat.low_stock_threshold ?? undefined,
+      nfpa_tracking_enabled: cat.nfpa_tracking_enabled,
     });
     setFormError(null);
   };
@@ -1300,10 +1305,10 @@ const InventoryPage: React.FC = () => {
                         <tr
                           key={item.id}
                           className="hover:bg-theme-surface-secondary transition-colors cursor-pointer"
-                          onClick={() => canManage && openEditModal(item)}
-                          role={canManage ? 'button' : undefined}
-                          tabIndex={canManage ? 0 : undefined}
-                          onKeyDown={(e) => { if (canManage && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openEditModal(item); } }}
+                          onClick={() => setDetailItem(item)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailItem(item); } }}
                         >
                           {canManage && (
                             <td className="w-10 px-3 py-4" onClick={(e) => e.stopPropagation()}>
@@ -2159,6 +2164,14 @@ const InventoryPage: React.FC = () => {
                           />
                           <span className="text-sm text-theme-text-secondary">Requires member assignment</span>
                         </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox" checked={categoryForm.nfpa_tracking_enabled || false}
+                            onChange={(e) => setCategoryForm({ ...categoryForm, nfpa_tracking_enabled: e.target.checked })}
+                            className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-sm text-theme-text-secondary">NFPA 1851/1852 compliance tracking</span>
+                        </label>
                       </div>
                       <div>
                         <label htmlFor="category-low-stock" className="block text-sm font-medium text-theme-text-secondary mb-1">Low Stock Threshold</label>
@@ -2191,6 +2204,19 @@ const InventoryPage: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+        {/* Item Detail Modal */}
+        {detailItem && (
+          <ItemDetailModal
+            item={detailItem}
+            category={categories.find((c) => c.id === detailItem.category_id)}
+            onClose={() => setDetailItem(null)}
+            onEdit={(item) => {
+              setDetailItem(null);
+              openEditModal(item);
+            }}
+            canManage={canManage}
+          />
         )}
         {/* Edit Item Modal */}
         {showEditModal && editingItem && (
@@ -2578,6 +2604,10 @@ const InventoryPage: React.FC = () => {
                         <label className="flex items-center space-x-2">
                           <input type="checkbox" checked={editCategoryForm.requires_assignment || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_assignment: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
                           <span className="text-sm text-theme-text-secondary">Requires member assignment</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input type="checkbox" checked={editCategoryForm.nfpa_tracking_enabled || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, nfpa_tracking_enabled: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
+                          <span className="text-sm text-theme-text-secondary">NFPA 1851/1852 compliance tracking</span>
                         </label>
                       </div>
                       <div>

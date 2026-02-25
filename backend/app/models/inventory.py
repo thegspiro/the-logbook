@@ -77,6 +77,43 @@ class MaintenanceType(str, enum.Enum):
     CALIBRATION = "calibration"
     REPLACEMENT = "replacement"
     PREVENTIVE = "preventive"
+    # NFPA 1851 inspection levels
+    ROUTINE_INSPECTION = "routine_inspection"
+    ADVANCED_INSPECTION = "advanced_inspection"
+    INDEPENDENT_INSPECTION = "independent_inspection"
+    ADVANCED_CLEANING = "advanced_cleaning"
+    DECONTAMINATION = "decontamination"
+
+
+class NFPAInspectionLevel(str, enum.Enum):
+    """NFPA 1851 inspection classification"""
+
+    ROUTINE = "routine"  # After each use / regular visual
+    ADVANCED = "advanced"  # Annual per NFPA 1851 Ch. 7
+    INDEPENDENT = "independent"  # ISP organization per NFPA 1851 Ch. 8
+
+
+class ContaminationLevel(str, enum.Enum):
+    """Contamination classification per NFPA 1851"""
+
+    NONE = "none"
+    LIGHT = "light"  # Routine cleaning sufficient
+    MODERATE = "moderate"  # Advanced cleaning required
+    HEAVY = "heavy"  # Decontamination / may require retirement
+    GROSS = "gross"  # Immediate retirement
+
+
+class ExposureType(str, enum.Enum):
+    """Types of hazardous exposure events"""
+
+    STRUCTURE_FIRE = "structure_fire"
+    VEHICLE_FIRE = "vehicle_fire"
+    WILDLAND_FIRE = "wildland_fire"
+    HAZMAT = "hazmat"
+    BLOODBORNE_PATHOGEN = "bloodborne_pathogen"
+    CHEMICAL = "chemical"
+    SMOKE = "smoke"
+    OTHER = "other"
 
 
 class AssignmentType(str, enum.Enum):
@@ -129,6 +166,9 @@ class InventoryCategory(Base):
     requires_serial_number = Column(Boolean, default=False)
     requires_maintenance = Column(Boolean, default=False)
     low_stock_threshold = Column(Integer)  # Alert when quantity falls below this
+    nfpa_tracking_enabled = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )  # Enable NFPA 1851/1852 lifecycle tracking for this category
 
     # Extra data
     extra_data = Column(JSON)  # Additional category-specific data
@@ -1161,4 +1201,218 @@ class WriteOffRequest(Base):
     __table_args__ = (
         Index("idx_write_off_org_status", "organization_id", "status"),
         Index("idx_write_off_item", "item_id"),
+    )
+
+
+# ============================================
+# NFPA 1851/1852 Compliance Models
+# ============================================
+
+
+class NFPAItemCompliance(Base):
+    """
+    NFPA 1851/1852 compliance record for PPE and SCBA items.
+
+    Stores lifecycle dates, ensemble grouping, and SCBA-specific fields
+    required by NFPA standards.  One-to-one with InventoryItem; only
+    created when the item's category has nfpa_tracking_enabled = True.
+    """
+
+    __tablename__ = "nfpa_item_compliance"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # NFPA 1851 §10.1.2 — Lifecycle Dates
+    manufacture_date = Column(Date, nullable=True)
+    first_in_service_date = Column(Date, nullable=True)
+    expected_retirement_date = Column(Date, nullable=True)
+    retirement_reason = Column(String(255), nullable=True)
+    is_retired_by_age = Column(Boolean, default=False)
+
+    # Ensemble tracking — group coat + pants + helmet + gloves + boots
+    ensemble_id = Column(String(36), nullable=True, index=True)
+    ensemble_role = Column(
+        String(50), nullable=True
+    )  # "coat", "pants", "helmet", "gloves", "boots", "hood"
+
+    # SCBA-specific (NFPA 1852)
+    cylinder_manufacture_date = Column(Date, nullable=True)
+    cylinder_expiration_date = Column(Date, nullable=True)
+    hydrostatic_test_date = Column(Date, nullable=True)
+    hydrostatic_test_due = Column(Date, nullable=True)
+    flow_test_date = Column(Date, nullable=True)
+    flow_test_due = Column(Date, nullable=True)
+
+    # Last known contamination level
+    contamination_level = Column(
+        Enum(ContaminationLevel, values_callable=lambda x: [e.value for e in x]),
+        default=ContaminationLevel.NONE,
+    )
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+
+    __table_args__ = (
+        Index("idx_nfpa_compliance_org", "organization_id"),
+        Index("idx_nfpa_compliance_ensemble", "organization_id", "ensemble_id"),
+        Index(
+            "idx_nfpa_compliance_retirement",
+            "organization_id",
+            "expected_retirement_date",
+        ),
+    )
+
+
+class NFPAInspectionDetail(Base):
+    """
+    NFPA-specific inspection fields extending a MaintenanceRecord.
+
+    When a maintenance record is created for an NFPA-tracked item with
+    maintenance_type in (inspection, routine_inspection, advanced_inspection,
+    independent_inspection), this record stores the structured pass/fail
+    results required by NFPA 1851 Chapters 6-8.
+    """
+
+    __tablename__ = "nfpa_inspection_details"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    maintenance_record_id = Column(
+        String(36),
+        ForeignKey("maintenance_records.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # NFPA 1851 inspection level
+    inspection_level = Column(
+        Enum(NFPAInspectionLevel, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+
+    # Structured pass/fail assessments (NFPA 1851 Ch. 6-8)
+    thermal_damage = Column(Boolean, nullable=True)  # True = passed
+    moisture_barrier = Column(Boolean, nullable=True)
+    seam_integrity = Column(Boolean, nullable=True)
+    reflective_trim = Column(Boolean, nullable=True)
+    closure_systems = Column(Boolean, nullable=True)  # Zippers, hooks, snaps
+    liner_integrity = Column(Boolean, nullable=True)
+
+    # Contamination assessment
+    contamination_level = Column(
+        Enum(ContaminationLevel, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
+
+    # SCBA-specific inspection fields
+    facepiece_seal = Column(Boolean, nullable=True)
+    regulator_function = Column(Boolean, nullable=True)
+    cylinder_pressure = Column(Float, nullable=True)  # psi at inspection
+    low_air_alarm = Column(Boolean, nullable=True)
+
+    # Overall recommendation
+    recommendation = Column(
+        String(50), nullable=True
+    )  # "pass", "repair", "advanced_cleaning", "retire"
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    maintenance_record = relationship("MaintenanceRecord", foreign_keys=[maintenance_record_id])
+
+    __table_args__ = (
+        Index(
+            "idx_nfpa_inspection_org_level", "organization_id", "inspection_level"
+        ),
+    )
+
+
+class NFPAExposureRecord(Base):
+    """
+    Tracks hazardous exposure events for NFPA-tracked PPE items.
+
+    NFPA 1851 §6.2 requires recording exposure events (fire, hazmat,
+    bloodborne pathogen) so that appropriate cleaning and inspection
+    can be performed.
+    """
+
+    __tablename__ = "nfpa_exposure_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Exposure details
+    exposure_type = Column(
+        Enum(ExposureType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    exposure_date = Column(Date, nullable=False)
+    incident_number = Column(String(100), nullable=True)  # CAD / incident reference
+    description = Column(Text, nullable=True)
+
+    # Decontamination status
+    decon_required = Column(Boolean, default=False)
+    decon_completed = Column(Boolean, default=False)
+    decon_completed_date = Column(Date, nullable=True)
+    decon_method = Column(String(255), nullable=True)
+
+    # Who was using the item during exposure
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        Index("idx_nfpa_exposure_org_item", "organization_id", "item_id"),
+        Index("idx_nfpa_exposure_org_date", "organization_id", "exposure_date"),
     )

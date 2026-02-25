@@ -192,6 +192,19 @@ GET    /api/v1/inventory/write-offs                      # List write-off reques
 PUT    /api/v1/inventory/write-offs/{id}/review           # Approve/deny write-off
 ```
 
+### NFPA 1851/1852 Compliance
+
+```
+GET    /api/v1/inventory/items/{id}/nfpa-compliance      # Get NFPA compliance record
+POST   /api/v1/inventory/items/{id}/nfpa-compliance      # Create NFPA compliance record
+PATCH  /api/v1/inventory/items/{id}/nfpa-compliance      # Update NFPA compliance record
+DELETE /api/v1/inventory/items/{id}/nfpa-compliance      # Remove NFPA compliance record
+GET    /api/v1/inventory/items/{id}/exposures            # List exposure records
+POST   /api/v1/inventory/items/{id}/exposures            # Log exposure event
+GET    /api/v1/inventory/nfpa/summary                    # NFPA compliance dashboard
+GET    /api/v1/inventory/nfpa/retirement-due             # Items nearing 10-year retirement
+```
+
 ---
 
 ## Real-Time Updates (WebSocket)

@@ -353,6 +353,59 @@ When an item is lost, stolen, damaged beyond repair, or obsolete, a write-off re
 
 ---
 
+## NFPA 1851/1852 Compliance Tracking
+
+Categories can be configured with **NFPA compliance tracking** enabled (e.g., PPE, SCBA). When enabled, items in that category gain lifecycle tracking, ensemble grouping, inspection assessments, and exposure logging as required by NFPA 1851 and 1852.
+
+### Enabling NFPA Tracking
+
+**Required Permission:** `inventory.manage`
+
+1. Navigate to **Inventory > Categories**.
+2. Edit the category (e.g., "PPE" or "SCBA").
+3. Check **NFPA 1851/1852 compliance tracking**.
+4. Save the category.
+
+### Item Detail — NFPA Tabs
+
+When you click on an item in an NFPA-enabled category, the detail modal shows additional tabs:
+
+| Tab | Purpose |
+|-----|---------|
+| **General** | Standard item info (name, serial, condition, etc.) |
+| **NFPA Compliance** | Manufacture date, first in-service date, expected retirement date, ensemble assignment, SCBA cylinder/test dates |
+| **Inspections** | Maintenance and inspection history with pass/fail results |
+| **Exposures** | Hazardous exposure log (fire, hazmat, bloodborne pathogen) with decontamination tracking |
+
+### Lifecycle Dates (NFPA 1851 §10.1.2)
+
+NFPA 1851 requires tracking:
+- **Manufacture date** — the 10-year retirement clock starts here
+- **First in-service date** — when the item was placed in active use
+- **Expected retirement date** — automatically flags items approaching the 10-year limit
+
+Items within 180 days of retirement display a warning banner in the detail view.
+
+### Ensemble Tracking
+
+PPE components (coat, pants, helmet, gloves, boots, hood) can be grouped into ensembles using a shared **Ensemble ID** and **Role**. This allows tracking the complete protective ensemble per NFPA 1851.
+
+### Exposure Logging (NFPA 1851 §6.2)
+
+After a fire, hazmat, or bloodborne pathogen event, log the exposure against affected PPE items. The system tracks:
+- Exposure type and date
+- Incident number
+- Whether decontamination is required and completed
+
+### SCBA Fields (NFPA 1852)
+
+For SCBA items, additional fields track:
+- Cylinder manufacture and expiration dates
+- Hydrostatic test dates and due dates
+- Flow test dates and due dates
+
+---
+
 ## Members Inventory View (Admin)
 
 **Required Permission:** `inventory.manage`
