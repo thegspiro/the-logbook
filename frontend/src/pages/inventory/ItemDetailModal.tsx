@@ -1006,22 +1006,22 @@ function HistoryTab({ item }: { item: InventoryItem }) {
                 {event.summary}
               </p>
               {/* Extra details */}
-              {event.details.reason && (
+              {!!event.details.reason && (
                 <p className="text-xs text-theme-text-muted mt-0.5">
                   Reason: {String(event.details.reason)}
                 </p>
               )}
-              {event.details.notes && (
+              {!!event.details.notes && (
                 <p className="text-xs text-theme-text-muted mt-0.5">
                   Notes: {String(event.details.notes)}
                 </p>
               )}
-              {event.details.return_notes && (
+              {!!event.details.return_notes && (
                 <p className="text-xs text-theme-text-muted mt-0.5">
                   Notes: {String(event.details.return_notes)}
                 </p>
               )}
-              {event.details.damage_notes && (
+              {!!event.details.damage_notes && (
                 <p className="text-xs text-theme-text-muted mt-0.5">
                   Damage: {String(event.details.damage_notes)}
                 </p>
