@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-24 (includes dependency updates for Python 3.13 compatibility and frontend peer dependency resolution; insider threat security hardening with 19 fixes across auth, CSRF, localStorage, WebSocket, mass assignment, SQL injection, and file upload; Docker Compose MinIO profile fix; 26 new UX components; inventory storage areas and maintenance tracking; training waiver enhancements with permanent waivers and multi-select; accessibility improvements including high-contrast theme, ARIA validation, print CSS, and Command Palette; migration reliability fixes for Unraid union filesystem; comprehensive TypeScript strict null check fixes across 56 files; plus all previous updates)
+**Last Updated**: 2026-02-25 (added Skills Testing module troubleshooting — template publishing, test scoring, critical criteria auto-fail, summary dashboard; plus all previous updates)
 
 ---
 
@@ -34,7 +34,8 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 20. [Centralized Constants & Enum Usage Issues](#centralized-constants--enum-usage-issues)
 21. [CSS Variable & Theming Issues](#css-variable--theming-issues)
 22. [Dependency Version Management](#dependency-version-management)
-23. [Getting Help](#getting-help)
+23. [Skills Testing Module Issues](#skills-testing-module-issues)
+24. [Getting Help](#getting-help)
 
 ---
 
@@ -2523,6 +2524,106 @@ vi.mocked(api.someMethod).mockRejectedValue(
   createMockApiError('Error message', 400)
 );
 ```
+
+---
+
+## Skills Testing Module Issues
+
+### Template Issues
+
+#### Cannot Publish Template — "Template must have sections with criteria"
+
+**Cause**: The template has no sections, or all sections are empty (no criteria defined).
+
+**Fix**:
+1. Navigate to the template editor.
+2. Add at least one section with at least one criterion.
+3. Save the template.
+4. Try publishing again.
+
+#### Cannot Edit Archived Template
+
+**Cause**: Archived templates are retired and read-only.
+
+**Fix**: If you need a modified version, duplicate the archived template (which creates a new draft copy), then edit the duplicate.
+
+#### Template Version Changed Unexpectedly
+
+**Cause**: When structural fields (sections, criteria, scoring configuration) of a published template are modified, the system auto-increments the version to preserve historical test integrity.
+
+**Note**: This is expected behavior. Historical test results always reference the template version they were administered under.
+
+### Test Issues
+
+#### Cannot Create Test — "Template not found or not published"
+
+**Causes**:
+1. The selected template is in `draft` status
+2. The template has been archived
+3. The template belongs to a different organization
+
+**Fix**:
+- Verify the template is published: navigate to **Skills Testing > Templates** and check the status column
+- If the template is in draft, publish it first
+- If archived, duplicate it and publish the copy
+
+#### Cannot Update a Completed or Cancelled Test
+
+**Cause**: Tests with `completed` or `cancelled` status are locked and cannot be modified.
+
+**Fix**: If the test was completed in error, create a new test session for the same candidate and template.
+
+#### Test Shows FAIL But Score Exceeds Passing Percentage
+
+**Cause**: The template has "Require All Critical" enabled, and at least one required (critical) criterion was not scored as passed.
+
+**How It Works**: When "Require All Critical" is on, the candidate must meet BOTH conditions:
+1. Score ≥ passing percentage
+2. All required criteria passed
+
+If any required criterion fails, the result is **FAIL** regardless of the score.
+
+**To Verify**: View the test details and check the section results for any required criteria marked as not passed.
+
+#### Candidate Not Appearing in Test Dropdown
+
+**Causes**:
+1. The member does not belong to your organization
+2. The member's account is deactivated or deleted
+
+**Fix**:
+- Check the member's organization and status in **Members > Directory**
+- Ensure the member has an active account
+
+#### Score Calculation Seems Wrong
+
+**How Scoring Works**: The score is calculated as:
+```
+percentage = (total criteria passed across all sections / total criteria across all sections) × 100
+```
+
+**Troubleshooting**:
+1. Check the template's section/criteria structure — ensure all criteria are defined correctly
+2. View the test detail to see the per-section breakdown
+3. Verify the template's passing percentage matches expectations
+
+### Summary Dashboard Issues
+
+#### Pass Rate Shows 0%
+
+**Cause**: The pass rate only includes tests with `completed` status. Tests that are `in_progress`, `not_started`, or `cancelled` are excluded.
+
+**Fix**: Ensure at least one test has been completed (not just started).
+
+#### Summary Shows No Data
+
+**Causes**:
+1. No templates or tests exist for your organization
+2. You don't have the `training.manage` permission
+
+**Fix**:
+- Create templates and administer tests first
+- Contact your administrator to verify your permissions
 
 ---
 

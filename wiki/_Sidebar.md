@@ -27,6 +27,7 @@
 
 ### 📦 Modules
 - [Training](Module-Training)
+- [Skills Testing](../docs/training/09-skills-testing.md)
 - [Training Compliance](../docs/training-compliance-calculations.md)
 - [Elections](Module-Elections)
 - [Events](Module-Events)

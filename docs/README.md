@@ -86,6 +86,13 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - Form retrieval and submission without authentication
     - Rate limiting, security notes, integration examples
 
+10. **[SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md)** (New 2026-02-25)
+    - Skills Testing feature requirements specification
+    - NREMT-style psychomotor evaluation system
+    - Skill sheet templates, sections, steps, critical criteria
+    - Test session workflow, timer, scoring, pass/fail
+    - Data model, integration points, API endpoints, implementation phases
+
 10. **[TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md)** (Updated 2026-02-14)
     - Complete Training module documentation
     - Pipeline programs, requirements, phases, enrollments, progress tracking
@@ -328,6 +335,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Bulk voter overrides | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-bulk-voter-overrides) |
 | Meeting quorum config | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-configuring-quorum) |
 | Peer skill eval sign-offs | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-configuring-peer-skill-evaluation-sign-offs) |
+| Skills testing / evaluations | [SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md) and [Skills Testing Guide](./training/09-skills-testing.md) |
 | Cert expiration alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-certification-expiration-alert-pipeline) |
 | Competency matrix dashboard | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-using-the-competency-matrix-dashboard) |
 | Training calendar / booking | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-calendar-integration--double-booking-prevention) |
@@ -420,7 +428,8 @@ docker-compose ps
 
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
-| TROUBLESHOOTING.md | 1.9 | 2026-02-16 | Current |
+| SKILLS_TESTING_FEATURE.md | 1.0 | 2026-02-25 | Current |
+| TROUBLESHOOTING.md | 2.0 | 2026-02-25 | Current |
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | SECURITY_IMAGE_UPLOADS.md | 1.0 | 2026-02-07 | Current |
@@ -463,6 +472,23 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-25 - Skills Testing Module
+
+**What Changed**:
+- **Skills Testing Feature**: Full digital psychomotor evaluation system — skill sheet templates, real-time test scoring, critical criteria auto-fail, pass/fail calculation, summary dashboard
+- **12 Backend API Endpoints**: Templates (list, create, get, update, archive, publish, duplicate), Tests (list, create, get, update, complete), Summary
+- **Frontend UI**: Tabbed interface with template builder, test administration, results view, and summary dashboard
+- **Database Models**: `SkillTemplate` and `SkillTest` tables with organization scoping and composite indexes
+
+**New Documentation**:
+- Created [SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md) — Complete feature requirements specification
+- Created [docs/training/09-skills-testing.md](./training/09-skills-testing.md) — Training guide with realistic NREMT Trauma Assessment walkthrough
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) v2.0 — Added Skills Testing troubleshooting section
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog
+- Updated [wiki/Module-Training.md](../wiki/Module-Training.md) — Skills testing section, API endpoints, and pages
+
+---
 
 ### 2026-02-16 - Documentation Update: Changelog, Troubleshooting & Startup Reliability
 

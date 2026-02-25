@@ -385,4 +385,21 @@ Navigate to **Training Admin > Import History** to import historical training re
 
 ---
 
+## Skills Testing
+
+The Training module includes a **Skills Testing** sub-module for conducting structured psychomotor evaluations — the digital equivalent of NREMT skill sheets.
+
+With Skills Testing, examiners can:
+- Select a published skill sheet template (e.g., "Patient Assessment — Trauma")
+- Score each step as the candidate performs the procedure
+- Track critical (required) criteria that trigger automatic failure
+- Automatically calculate pass/fail results based on scoring thresholds
+
+For a comprehensive guide with a realistic NREMT example walkthrough, see the dedicated **[Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)** training guide.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Skills Testing section within Training Admin, showing the template list with published templates and a "New Test" button]_
+
+---
+
 **Previous:** [Membership Management](./01-membership.md) | **Next:** [Shifts & Scheduling](./03-scheduling.md)
