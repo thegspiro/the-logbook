@@ -347,7 +347,7 @@ async def get_setup_checklist(
     from app.models.forms import Form
     from app.models.location import Location
     from app.models.membership_pipeline import MembershipPipeline
-    from app.models.training import BasicApparatus, ShiftTemplate, TrainingCourse
+    from app.models.training import BasicApparatus, ShiftTemplate, TrainingCourse, TrainingRequirement
 
     org_id = str(current_user.organization_id)
 
@@ -400,6 +400,14 @@ async def get_setup_checklist(
             select(func.count())
             .select_from(TrainingCourse)
             .where(TrainingCourse.organization_id == org_id)
+        )
+    ).scalar() or 0
+
+    requirement_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(TrainingRequirement)
+            .where(TrainingRequirement.organization_id == org_id)
         )
     ).scalar() or 0
 
@@ -519,6 +527,18 @@ async def get_setup_checklist(
                 category="training",
                 is_complete=course_count > 0,
                 count=course_count,
+                required=False,
+            )
+        )
+        items.append(
+            SetupChecklistItem(
+                key="training_requirements",
+                title="Add Training Requirements",
+                description="Define mandatory training requirements such as state certifications, NFPA standards, and department-specific courses.",
+                path="/training/admin?page=setup&tab=requirements",
+                category="training",
+                is_complete=requirement_count > 0,
+                count=requirement_count,
                 required=False,
             )
         )
