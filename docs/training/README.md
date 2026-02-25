@@ -17,6 +17,7 @@ Welcome to the training documentation for The Logbook. These guides are designed
 | 6 | [Apparatus & Facilities](./06-apparatus-facilities.md) | Vehicles, maintenance, fuel, NFPA compliance, stations, inspections, utilities |
 | 7 | [Documents, Forms & Communications](./07-documents-forms.md) | File storage, form builder, notifications, messages, integrations |
 | 8 | [Administration & Reports](./08-admin-reports.md) | Settings, roles, modules, reports, analytics, public portal, security |
+| 9 | [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | Skill sheet templates, NREMT-style evaluations, scoring, critical criteria, pass/fail, realistic example |
 
 ---
 
@@ -33,6 +34,7 @@ Welcome to the training documentation for The Logbook. These guides are designed
 ### Officers and Line Officers
 All of the above, plus:
 - [Training & Certification](./02-training.md) - Sections 5-12 (officer dashboard, reviews, compliance, integrations)
+- [Skills Testing](./09-skills-testing.md) - Template creation, test administration, scoring, results
 - [Shifts & Scheduling](./03-scheduling.md) - All sections including templates, patterns, and reports
 - [Events & Meetings](./04-events-meetings.md) - Sections 3-6 (QR setup, creating events, templates, minutes)
 - [Inventory Management](./05-inventory.md) - All sections

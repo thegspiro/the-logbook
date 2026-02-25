@@ -108,6 +108,7 @@ POST   /api/v1/inventory/items/{id}/assign               # Assign to member
 POST   /api/v1/inventory/items/{id}/unassign              # Unassign from member
 POST   /api/v1/inventory/items/{id}/issue                 # Issue from pool
 POST   /api/v1/inventory/issuances/{id}/return            # Return to pool
+GET    /api/v1/inventory/items/{id}/issuances             # Item's issuance records
 GET    /api/v1/inventory/users/{id}/assignments           # User's assignments
 GET    /api/v1/inventory/users/{id}/issuances             # User's issuances
 ```
@@ -117,6 +118,7 @@ GET    /api/v1/inventory/users/{id}/issuances             # User's issuances
 ```
 POST   /api/v1/inventory/checkout                        # Check out item
 POST   /api/v1/inventory/checkout/{id}/checkin            # Check in item
+PATCH  /api/v1/inventory/checkout/{id}/extend             # Extend return date
 GET    /api/v1/inventory/checkout/active                  # Active checkouts
 GET    /api/v1/inventory/checkout/overdue                 # Overdue checkouts
 ```
@@ -173,12 +175,34 @@ GET    /api/v1/inventory/requests                        # List requests
 PUT    /api/v1/inventory/requests/{id}/review             # Approve/deny request
 ```
 
+### Storage Areas
+
+```
+GET    /api/v1/inventory/storage-areas                   # List storage areas (tree or flat)
+POST   /api/v1/inventory/storage-areas                   # Create storage area
+PUT    /api/v1/inventory/storage-areas/{id}              # Update storage area
+DELETE /api/v1/inventory/storage-areas/{id}              # Delete (deactivate) storage area
+```
+
 ### Write-Off Requests
 
 ```
 POST   /api/v1/inventory/write-offs                      # Create write-off request
 GET    /api/v1/inventory/write-offs                      # List write-off requests
 PUT    /api/v1/inventory/write-offs/{id}/review           # Approve/deny write-off
+```
+
+### NFPA 1851/1852 Compliance
+
+```
+GET    /api/v1/inventory/items/{id}/nfpa-compliance      # Get NFPA compliance record
+POST   /api/v1/inventory/items/{id}/nfpa-compliance      # Create NFPA compliance record
+PATCH  /api/v1/inventory/items/{id}/nfpa-compliance      # Update NFPA compliance record
+DELETE /api/v1/inventory/items/{id}/nfpa-compliance      # Remove NFPA compliance record
+GET    /api/v1/inventory/items/{id}/exposures            # List exposure records
+POST   /api/v1/inventory/items/{id}/exposures            # Log exposure event
+GET    /api/v1/inventory/nfpa/summary                    # NFPA compliance dashboard
+GET    /api/v1/inventory/nfpa/retirement-due             # Items nearing 10-year retirement
 ```
 
 ---
@@ -194,7 +218,7 @@ Browser  ←  WebSocket  ←  FastAPI endpoint  ←  Redis pub/sub  ←  API mut
 ```
 
 - **Backend**: `ConnectionManager` in `app/core/websocket_manager.py` manages per-org WebSocket connections and a Redis pub/sub listener
-- **Endpoint**: `WS /api/v1/inventory/ws?token=<jwt>` — authenticates via JWT query parameter, subscribes to org-scoped events
+- **Endpoint**: `WS /api/v1/inventory/ws` — authenticates via httpOnly `access_token` cookie (preferred for browsers) or `?token=<jwt>` query parameter (fallback for non-browser clients), subscribes to org-scoped events
 - **Publishing**: Each mutation endpoint (create, update, assign, checkout, batch, write-off review, etc.) publishes an event after the audit log entry
 - **Frontend**: `useInventoryWebSocket` hook auto-connects with exponential-backoff reconnect
 

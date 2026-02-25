@@ -1979,6 +1979,7 @@ export interface InventoryCategory {
   requires_serial_number: boolean;
   requires_maintenance: boolean;
   low_stock_threshold?: number;
+  nfpa_tracking_enabled: boolean;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -2210,6 +2211,14 @@ export interface InventoryItemsListResponse {
   limit: number;
 }
 
+export interface ItemHistoryEvent {
+  type: 'assignment' | 'return' | 'checkout' | 'checkin' | 'issuance' | 'issuance_return' | 'maintenance';
+  id: string;
+  date: string;
+  summary: string;
+  details: Record<string, unknown>;
+}
+
 export interface InventorySummary {
   total_items: number;
   items_by_status: Record<string, number>;
@@ -2228,6 +2237,7 @@ export interface InventoryCategoryCreate {
   requires_serial_number?: boolean;
   requires_maintenance?: boolean;
   low_stock_threshold?: number;
+  nfpa_tracking_enabled?: boolean;
 }
 
 // Scan / Quick-Action Types
@@ -2329,6 +2339,65 @@ export interface LabelFormat {
   height?: number;
 }
 
+// NFPA 1851/1852 Compliance Types
+
+export interface NFPACompliance {
+  id: string;
+  item_id: string;
+  organization_id: string;
+  manufacture_date?: string;
+  first_in_service_date?: string;
+  expected_retirement_date?: string;
+  retirement_reason?: string;
+  is_retired_by_age: boolean;
+  ensemble_id?: string;
+  ensemble_role?: string;
+  cylinder_manufacture_date?: string;
+  cylinder_expiration_date?: string;
+  hydrostatic_test_date?: string;
+  hydrostatic_test_due?: string;
+  flow_test_date?: string;
+  flow_test_due?: string;
+  contamination_level?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NFPAExposureRecord {
+  id: string;
+  item_id: string;
+  organization_id: string;
+  exposure_type: string;
+  exposure_date: string;
+  incident_number?: string;
+  description?: string;
+  decon_required: boolean;
+  decon_completed: boolean;
+  decon_completed_date?: string;
+  decon_method?: string;
+  user_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NFPASummary {
+  total_nfpa_items: number;
+  nearing_retirement: number;
+  overdue_inspection: number;
+  pending_decon: number;
+  ensembles_count: number;
+}
+
+export interface NFPARetirementDueItem {
+  item_id: string;
+  item_name: string;
+  serial_number?: string;
+  manufacture_date?: string;
+  expected_retirement_date?: string;
+  days_remaining?: number;
+  ensemble_id?: string;
+}
+
 export const inventoryService = {
   async getMembersSummary(search?: string): Promise<MembersInventoryListResponse> {
     const response = await api.get<MembersInventoryListResponse>('/inventory/members-summary', {
@@ -2362,9 +2431,13 @@ export const inventoryService = {
   async getItems(params?: {
     category_id?: string;
     status?: string;
+    condition?: string;
+    item_type?: string;
     storage_area_id?: string;
     search?: string;
     active_only?: boolean;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
     skip?: number;
     limit?: number;
   }): Promise<InventoryItemsListResponse> {
@@ -2374,6 +2447,11 @@ export const inventoryService = {
 
   async getItem(itemId: string): Promise<InventoryItem> {
     const response = await api.get<InventoryItem>(`/inventory/items/${itemId}`);
+    return response.data;
+  },
+
+  async getItemHistory(itemId: string): Promise<{ events: ItemHistoryEvent[] }> {
+    const response = await api.get<{ events: ItemHistoryEvent[] }>(`/inventory/items/${itemId}/history`);
     return response.data;
   },
 
@@ -2590,6 +2668,47 @@ export const inventoryService = {
 
   async reviewWriteOff(writeOffId: string, data: { status: string; review_notes?: string }): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put(`/inventory/write-offs/${writeOffId}/review`, data);
+    return response.data;
+  },
+
+  // --- NFPA Compliance ---
+
+  async getNFPACompliance(itemId: string): Promise<NFPACompliance> {
+    const response = await api.get(`/inventory/items/${itemId}/nfpa-compliance`);
+    return response.data;
+  },
+
+  async createNFPACompliance(itemId: string, data: Partial<NFPACompliance>): Promise<NFPACompliance> {
+    const response = await api.post(`/inventory/items/${itemId}/nfpa-compliance`, data);
+    return response.data;
+  },
+
+  async updateNFPACompliance(itemId: string, data: Partial<NFPACompliance>): Promise<NFPACompliance> {
+    const response = await api.patch(`/inventory/items/${itemId}/nfpa-compliance`, data);
+    return response.data;
+  },
+
+  async deleteNFPACompliance(itemId: string): Promise<void> {
+    await api.delete(`/inventory/items/${itemId}/nfpa-compliance`);
+  },
+
+  async getExposureRecords(itemId: string): Promise<NFPAExposureRecord[]> {
+    const response = await api.get(`/inventory/items/${itemId}/exposures`);
+    return response.data;
+  },
+
+  async createExposureRecord(itemId: string, data: Omit<NFPAExposureRecord, 'id' | 'item_id' | 'organization_id' | 'created_at' | 'updated_at'>): Promise<NFPAExposureRecord> {
+    const response = await api.post(`/inventory/items/${itemId}/exposures`, data);
+    return response.data;
+  },
+
+  async getNFPASummary(): Promise<NFPASummary> {
+    const response = await api.get('/inventory/nfpa/summary');
+    return response.data;
+  },
+
+  async getNFPARetirementDue(daysAhead = 180): Promise<{ items: NFPARetirementDueItem[]; total: number }> {
+    const response = await api.get('/inventory/nfpa/retirement-due', { params: { days_ahead: daysAhead } });
     return response.data;
   },
 };

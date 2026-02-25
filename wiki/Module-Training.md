@@ -76,8 +76,51 @@ POST   /api/v1/training/waivers              # Create training waiver
 
 ---
 
+## Skills Testing
+
+The Training module includes a **Skills Testing** sub-module for conducting structured psychomotor evaluations (NREMT-style skill sheets).
+
+### Key Capabilities
+
+- **Skill Sheet Templates** — Reusable evaluation definitions with sections, criteria, scoring configuration, versioning, and lifecycle (draft → published → archived)
+- **Critical Criteria** — Required criteria that trigger automatic failure, mirroring NREMT auto-fail rules
+- **Test Administration** — Examiner selects template + candidate, scores criteria in real time, system calculates pass/fail
+- **Scoring Engine** — Automatic section scores, overall percentage, critical criteria compliance, elapsed time
+- **Summary Dashboard** — Department-wide statistics (pass rate, average score, tests this month)
+
+### Skills Testing API Endpoints
+
+```
+GET    /api/v1/training/skills-testing/templates              # List templates
+POST   /api/v1/training/skills-testing/templates              # Create template
+GET    /api/v1/training/skills-testing/templates/{id}         # Get template detail
+PUT    /api/v1/training/skills-testing/templates/{id}         # Update template
+DELETE /api/v1/training/skills-testing/templates/{id}         # Archive template
+POST   /api/v1/training/skills-testing/templates/{id}/publish # Publish template
+POST   /api/v1/training/skills-testing/templates/{id}/duplicate # Duplicate template
+GET    /api/v1/training/skills-testing/tests                  # List tests
+POST   /api/v1/training/skills-testing/tests                  # Create test
+GET    /api/v1/training/skills-testing/tests/{id}             # Get test detail
+PUT    /api/v1/training/skills-testing/tests/{id}             # Update test (save progress)
+POST   /api/v1/training/skills-testing/tests/{id}/complete    # Complete test & calculate results
+GET    /api/v1/training/skills-testing/summary                # Department-wide statistics
+```
+
+### Skills Testing Pages
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/training/skills-testing` | Skills Testing Hub | `training.manage` |
+| `/training/skills-testing/templates` | Template Management | `training.manage` |
+| `/training/skills-testing/tests` | Test Sessions | Authenticated |
+| `/training/skills-testing/summary` | Summary Dashboard | `training.manage` |
+
+---
+
 ## Related Documentation
 
+- **[Skills Testing Training Guide](../docs/training/09-skills-testing.md)** — Skills testing user guide with realistic NREMT example
+- **[Skills Testing Feature Spec](../docs/SKILLS_TESTING_FEATURE.md)** — Full requirements and data model
 - **[Training User Guide](../docs/training/02-training.md)** — End-user training guide
 - **[Training Compliance Calculations](../docs/training-compliance-calculations.md)** — Formula details and edge cases
 - **[Training Waivers & LOA](../backend/app/docs/TRAINING_WAIVERS.md)** — Waiver system documentation

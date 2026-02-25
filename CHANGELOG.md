@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Skills Testing Module (2026-02-25)
+
+#### New Feature: Digital Psychomotor Skills Evaluations
+- **Skill Sheet Templates**: Reusable evaluation templates with sections, criteria, scoring configuration (passing percentage, critical criteria enforcement, time limits), versioning (draft → published → archived), and duplication
+- **Skills Test Sessions**: Full test administration workflow — create test, select template + candidate, score criteria in real time, complete with automatic pass/fail calculation
+- **Critical Criteria (Auto-Fail)**: Required criteria that trigger automatic failure regardless of score, mirroring NREMT psychomotor evaluation rules
+- **Scoring Engine**: Automatic calculation of section scores, overall percentage, critical criteria compliance, elapsed time, and pass/fail determination
+- **Template Versioning**: Auto-incrementing version numbers on structural changes; historical tests reference the version they were administered under
+- **Summary Dashboard**: Department-wide statistics — total templates, published count, total tests, tests this month, pass rate, and average score
+- **12 API Endpoints** under `/api/v1/training/skills-testing/`:
+  - Templates: list, create, get, update, delete (archive), publish, duplicate
+  - Tests: list, create, get, update (save progress), complete
+  - Summary: department-wide statistics
+- **Database Models**: `SkillTemplate` and `SkillTest` with composite indexes on `(organization_id, status)` and `(organization_id, category)` / `(template_id, candidate_id)`
+- **Pydantic Schemas**: Full CRUD schemas with nested section/criteria structures, denormalized response fields (template name, candidate/examiner names), and computed counts
+- **Audit Logging**: All template and test operations logged via `log_audit_event`
+- **Organization Scoping**: All queries scoped to current user's organization
+- **Permissions**: Template management requires `training.manage`; test creation open to all authenticated users
+
+#### Frontend (Skills Testing UI)
+- **Skills Testing Page**: Tabbed interface (Templates / Tests / Summary) with responsive layout
+- **Template Management**: Full CRUD with section/criteria builder, inline editing, drag-and-drop ordering
+- **Test Administration**: Real-time scoring interface with section-by-section criteria checkboxes, running score display, timer, and critical criteria tracking
+- **Results View**: Score breakdown by section, missed steps highlighted, pass/fail determination with critical criteria details
+- **Summary Dashboard**: Six stat cards showing department-wide testing metrics
+- **TypeScript Types**: Complete type definitions for all skills testing entities
+- **API Integration**: Axios service layer with all 12 endpoints
+- **Zustand Store**: State management for templates, tests, filters, and UI state
+- **Routing**: Three routes under `/training/skills-testing` (templates, tests, summary)
+
+#### Documentation
+- **Feature Specification**: `docs/SKILLS_TESTING_FEATURE.md` — Full requirements document with data models, UI/UX screens, API endpoints, and implementation phases
+- **Training Guide**: `docs/training/09-skills-testing.md` — End-user training document with realistic NREMT Trauma Assessment walkthrough example
+- **Troubleshooting**: Added Skills Testing section to `docs/TROUBLESHOOTING.md`
+- **Changelog**: This entry
+- **Wiki**: Updated Module-Training wiki page with skills testing section and API endpoints
+- **Documentation Index**: Updated `docs/README.md` and `docs/training/README.md`
+
 ### Dependency Updates, Security Hardening & UX Improvements (2026-02-24)
 
 #### Backend Dependency Updates (Python 3.13 Compatibility)

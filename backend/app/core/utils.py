@@ -63,6 +63,26 @@ def safe_error_detail(
     return fallback
 
 
+def sanitize_error_message(
+    msg: str,
+    fallback: str = _GENERIC_ERROR,
+) -> str:
+    """Return a user-safe version of an error message string.
+
+    Used for service-layer error strings (not exceptions) that may
+    contain raw database/ORM details when an unexpected failure occurs.
+    """
+    if not msg:
+        return fallback
+    for pattern in _UNSAFE_PATTERNS:
+        if pattern.search(msg):
+            logger.warning("Suppressed unsafe error message: %s", msg)
+            return fallback
+    if len(msg) > 300:
+        return fallback
+    return msg
+
+
 def generate_uuid() -> str:
     """Generate a UUID string for MySQL compatibility"""
     return str(uuid.uuid4())
