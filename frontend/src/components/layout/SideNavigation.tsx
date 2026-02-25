@@ -38,6 +38,7 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { organizationService } from '../../services/api';
+import { prefetchRoute } from '../../utils/routePrefetch';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -433,6 +434,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                   <li key={itemKey}>
                     <button
                       onClick={() => handleNavigation(item.path, hasSubItems, item.label)}
+                      onMouseEnter={() => {
+                        if (item.path !== '#') prefetchRoute(item.path);
+                        // Also prefetch sub-item routes on parent hover
+                        visibleSubItems?.forEach(sub => prefetchRoute(sub.path));
+                      }}
+                      onFocus={() => {
+                        if (item.path !== '#') prefetchRoute(item.path);
+                      }}
                       aria-current={parentActive && !hasSubItems ? 'page' : undefined}
                       aria-expanded={hasSubItems ? isExpanded : undefined}
                       aria-controls={hasSubItems ? `submenu-${item.label}` : undefined}
@@ -474,6 +483,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                             <li key={subItem.path}>
                               <button
                                 onClick={() => handleNavigation(subItem.path)}
+                                onMouseEnter={() => prefetchRoute(subItem.path)}
+                                onFocus={() => prefetchRoute(subItem.path)}
                                 aria-current={subActive ? 'page' : undefined}
                                 className={`w-full flex items-center px-4 py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
                                   subActive
