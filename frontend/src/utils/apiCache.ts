@@ -6,9 +6,9 @@
  * pages, making repeated page visits feel instant.
  *
  * - FRESH window (0-30s): return cached data, skip network request entirely.
- * - STALE window (30s-5min): return cached data immediately, trigger a
+ * - STALE window (30s-90s): return cached data immediately, trigger a
  *   background revalidation so the next caller gets fresh data.
- * - EXPIRED (>5min): cache miss, make a normal network request.
+ * - EXPIRED (>90s): cache miss, make a normal network request.
  *
  * Mutations (POST/PUT/PATCH/DELETE) automatically invalidate related cache
  * entries by URL prefix to ensure data consistency.
@@ -18,7 +18,26 @@
 const FRESH_TTL_MS = 30_000; // 30 seconds
 
 /** How long a cached response can be served while revalidating in background. */
-const STALE_TTL_MS = 300_000; // 5 minutes
+const STALE_TTL_MS = 90_000; // 90 seconds (kept short to limit authorization-revocation gap)
+
+/**
+ * URL prefixes for endpoints that must NEVER be cached.
+ * These carry PII, PHI, credentials, or security-sensitive data
+ * and caching them — even in-memory — conflicts with HIPAA §164.312.
+ */
+const UNCACHEABLE_PREFIXES = [
+  '/auth/',           // credentials, session tokens, password ops
+  '/users/',          // profiles, contact info, emergency contacts, audit history
+  '/security/',       // alerts, audit log integrity, monitoring
+  '/roles/my/',       // current user's permissions (security-sensitive)
+  '/notifications/my/', // user-specific notification state
+  '/training/waivers',  // medical/health waivers (PHI)
+  '/training/submissions/', // user-specific training submissions
+  '/training/shift-reports/', // attendance/location data
+  '/training/stats/user/',    // individual compliance stats
+  '/training/reports/user/',  // individual training reports
+  '/facilities/emergency-contacts', // emergency contact PII
+] as const;
 
 interface CacheEntry {
   data: unknown;
@@ -121,7 +140,15 @@ export function getResourcePrefix(url: string): string {
 }
 
 /**
- * Clear the entire cache. Useful on logout.
+ * Check whether a URL is eligible for caching.
+ * Returns false for endpoints carrying sensitive/PII/PHI data.
+ */
+export function isCacheable(url: string): boolean {
+  return !UNCACHEABLE_PREFIXES.some((prefix) => url.startsWith(prefix));
+}
+
+/**
+ * Clear the entire cache. Useful on logout or session idle.
  */
 export function clearCache(): void {
   cache.clear();

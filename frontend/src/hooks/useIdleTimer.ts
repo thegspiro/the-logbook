@@ -10,6 +10,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
+import { clearCache } from '../utils/apiCache';
 import axios from 'axios';
 
 const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'scroll', 'touchstart'] as const;
@@ -55,6 +56,8 @@ export function useIdleTimer() {
 
     warningRef.current = setTimeout(() => {
       warningShownRef.current = true;
+      // Clear cached API data while the user is idle to reduce PII exposure window
+      clearCache();
       toast(
         'Your session will expire in 60 seconds due to inactivity. Move the mouse or press a key to stay logged in.',
         {
