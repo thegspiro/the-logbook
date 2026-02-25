@@ -39,6 +39,7 @@ from app.api.v1.endpoints import (
     scheduling,
     security_monitoring,
     shift_completion,
+    skills_testing,
     training,
     training_module_config,
     training_programs,
@@ -121,6 +122,9 @@ api_router.include_router(
 )
 api_router.include_router(
     training_waivers.router, prefix="/training/waivers", tags=["training-waivers"]
+)
+api_router.include_router(
+    skills_testing.router, prefix="/training/skills-testing", tags=["skills-testing"]
 )
 api_router.include_router(member_leaves.router, prefix="/users", tags=["member-leaves"])
 api_router.include_router(
