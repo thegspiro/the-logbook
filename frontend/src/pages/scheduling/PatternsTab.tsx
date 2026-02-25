@@ -14,6 +14,7 @@ import {
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 interface Pattern {
   id: string;
@@ -79,6 +80,9 @@ export const PatternsTab: React.FC = () => {
   const [generateForm, setGenerateForm] = useState({ start_date: '', end_date: '' });
   const [generating, setGenerating] = useState(false);
 
+  // Inline delete confirmation
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+
   // Expanded pattern detail
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -91,14 +95,23 @@ export const PatternsTab: React.FC = () => {
       ]);
       setPatterns(patternsData as unknown as Pattern[]);
       setTemplates(templatesData as unknown as Template[]);
-    } catch {
-      toast.error('Failed to load patterns');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to load patterns'));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Escape key closes inline confirmations
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && confirmingDelete) setConfirmingDelete(null);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [confirmingDelete]);
 
   const handleCreate = async () => {
     if (!createForm.name || !createForm.start_date) {
@@ -131,8 +144,8 @@ export const PatternsTab: React.FC = () => {
         weekdays: [1, 2, 3, 4, 5],
       });
       loadData();
-    } catch {
-      toast.error('Failed to create pattern');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to create pattern'));
     } finally {
       setCreating(false);
     }
@@ -151,24 +164,24 @@ export const PatternsTab: React.FC = () => {
         end_date: generateForm.end_date,
       });
       const count = Number(result.shifts_created ?? 0);
-      toast.success(`Generated ${count} shifts`);
+      toast.success(`Generated ${count} shift${count !== 1 ? 's' : ''}`);
       setGeneratingFor(null);
       setGenerateForm({ start_date: '', end_date: '' });
-    } catch {
-      toast.error('Failed to generate shifts');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to generate shifts'));
     } finally {
       setGenerating(false);
     }
   };
 
   const handleDelete = async (patternId: string) => {
-    if (!window.confirm('Delete this pattern? Existing generated shifts will not be removed.')) return;
     try {
       await schedulingService.deletePattern(patternId);
       toast.success('Pattern deleted');
+      setConfirmingDelete(null);
       loadData();
-    } catch {
-      toast.error('Failed to delete pattern');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to delete pattern'));
     }
   };
 
@@ -198,7 +211,7 @@ export const PatternsTab: React.FC = () => {
           <p className="text-sm text-theme-text-muted">Create recurring patterns and generate shifts in bulk.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={loadData} className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg transition-colors" title="Refresh">
+          <button onClick={loadData} className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg transition-colors" aria-label="Refresh patterns">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button onClick={() => setShowCreate(!showCreate)}
@@ -282,28 +295,36 @@ export const PatternsTab: React.FC = () => {
 
           {/* Platoon-specific: rotation config */}
           {createForm.pattern_type === 'platoon' && (
-            <div className="form-grid-3">
-              <div>
-                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Days On</label>
-                <input type="number" min="1" value={createForm.days_on}
-                  onChange={e => setCreateForm(p => ({...p, days_on: parseInt(e.target.value) || 1}))}
-                  className={inputCls}
-                />
+            <div>
+              <div className="form-grid-3">
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Days On</label>
+                  <input type="number" min="1" value={createForm.days_on}
+                    onChange={e => setCreateForm(p => ({...p, days_on: parseInt(e.target.value) || 1}))}
+                    className={inputCls}
+                  />
+                  <p className="text-[11px] text-theme-text-muted mt-1">Consecutive on-duty days</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Days Off</label>
+                  <input type="number" min="1" value={createForm.days_off}
+                    onChange={e => setCreateForm(p => ({...p, days_off: parseInt(e.target.value) || 1}))}
+                    className={inputCls}
+                  />
+                  <p className="text-[11px] text-theme-text-muted mt-1">Consecutive off-duty days</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Rotation Cycle</label>
+                  <input type="number" min="1" value={createForm.rotation_days}
+                    onChange={e => setCreateForm(p => ({...p, rotation_days: parseInt(e.target.value) || 1}))}
+                    className={inputCls}
+                  />
+                  <p className="text-[11px] text-theme-text-muted mt-1">Total days before cycle repeats</p>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Days Off</label>
-                <input type="number" min="1" value={createForm.days_off}
-                  onChange={e => setCreateForm(p => ({...p, days_off: parseInt(e.target.value) || 1}))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Rotation Cycle</label>
-                <input type="number" min="1" value={createForm.rotation_days}
-                  onChange={e => setCreateForm(p => ({...p, rotation_days: parseInt(e.target.value) || 1}))}
-                  className={inputCls}
-                />
-              </div>
+              <p className="text-xs text-theme-text-muted mt-2">
+                Example: A common 24/48 schedule uses 1 day on, 2 days off, with a 3-day rotation cycle.
+              </p>
             </div>
           )}
 
@@ -459,11 +480,23 @@ export const PatternsTab: React.FC = () => {
                           <Play className="w-3.5 h-3.5" /> Generate Shifts
                         </button>
                         <div className="flex-1" />
-                        <button onClick={() => handleDelete(pattern.id)}
-                          className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Delete
-                        </button>
+                        {confirmingDelete === pattern.id ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-red-500">Delete pattern? Existing shifts will not be removed.</span>
+                            <button onClick={() => handleDelete(pattern.id)}
+                              className="px-2.5 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm delete"
+                            >Yes, delete</button>
+                            <button onClick={() => setConfirmingDelete(null)}
+                              className="px-2.5 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel delete"
+                            >Cancel</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setConfirmingDelete(pattern.id)}
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

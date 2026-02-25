@@ -16,6 +16,7 @@ import type { ShiftRecord } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS } from '../../constants/enums';
 
 interface OpenShiftsTabProps {
@@ -54,8 +55,8 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         });
         setShifts(data.shifts);
       }
-    } catch {
-      toast.error('Failed to load shifts');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to load shifts'));
     } finally {
       setLoading(false);
     }
@@ -67,7 +68,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
     setSigningUp(true);
     try {
       await schedulingService.signupForShift(shiftId, { position: signupPosition });
-      toast.success('Successfully signed up for shift');
+      toast.success('Signed up for shift — a manager will confirm your assignment');
       setSignupShiftId(null);
       loadShifts();
     } catch {
@@ -77,11 +78,11 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
           user_id: user?.id,
           position: signupPosition,
         });
-        toast.success('Successfully signed up for shift');
+        toast.success('Signed up for shift — a manager will confirm your assignment');
         setSignupShiftId(null);
         loadShifts();
-      } catch {
-        toast.error('Failed to sign up for shift');
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'Failed to sign up for shift'));
       }
     } finally {
       setSigningUp(false);
@@ -192,12 +193,14 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <button onClick={() => setSignupShiftId(shift.id)}
                               className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors"
+                              aria-label="Sign up for this shift"
                             >
                               <UserPlus className="w-4 h-4" /> <span className="hidden sm:inline">Sign Up</span><span className="sm:hidden">Join</span>
                             </button>
                             {onViewShift && (
                               <button onClick={() => onViewShift(shift)}
                                 className="hidden sm:block px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+                                aria-label="View shift details"
                               >
                                 Details
                               </button>

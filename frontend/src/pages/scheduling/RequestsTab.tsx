@@ -5,17 +5,18 @@
  * Members see their own requests; admins see all with approve/deny actions.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowLeftRight, CalendarOff, Check, X,
   Loader2, Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
-import type { SwapRequest, TimeOffRequest } from '../../types/scheduling';
+import type { ShiftRecord, SwapRequest, TimeOffRequest } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
 import { REQUEST_STATUS_COLORS } from '../../constants/enums';
 
 export const RequestsTab: React.FC = () => {
@@ -33,6 +34,12 @@ export const RequestsTab: React.FC = () => {
   const [reviewing, setReviewing] = useState<{ type: 'swap' | 'timeoff'; id: string } | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Inline cancel confirmation
+  const [confirmingCancel, setConfirmingCancel] = useState<{ type: 'swap' | 'timeoff'; id: string } | null>(null);
+
+  // Modal ref for focus management
+  const reviewModalRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -76,6 +83,23 @@ export const RequestsTab: React.FC = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Escape key closes modals and inline confirmations
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (reviewing) setReviewing(null);
+        else if (confirmingCancel) setConfirmingCancel(null);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [reviewing, confirmingCancel]);
+
+  // Focus management: auto-focus textarea when review modal opens
+  useEffect(() => {
+    if (reviewing) reviewModalRef.current?.querySelector<HTMLElement>('textarea')?.focus();
+  }, [reviewing]);
+
   const handleReview = async (action: 'approved' | 'denied') => {
     if (!reviewing) return;
     setSubmittingReview(true);
@@ -95,15 +119,14 @@ export const RequestsTab: React.FC = () => {
       setReviewing(null);
       setReviewNotes('');
       loadData();
-    } catch {
-      toast.error('Failed to process request');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to process request'));
     } finally {
       setSubmittingReview(false);
     }
   };
 
   const handleCancel = async (type: 'swap' | 'timeoff', id: string) => {
-    if (!window.confirm('Cancel this request?')) return;
     try {
       if (type === 'swap') {
         await schedulingService.cancelSwapRequest(id);
@@ -111,9 +134,10 @@ export const RequestsTab: React.FC = () => {
         await schedulingService.cancelTimeOff(id);
       }
       toast.success('Request cancelled');
+      setConfirmingCancel(null);
       loadData();
-    } catch {
-      toast.error('Failed to cancel request');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to cancel request'));
     }
   };
 
@@ -157,8 +181,10 @@ export const RequestsTab: React.FC = () => {
           <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
             <ArrowLeftRight className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
             <h3 className="text-lg font-medium text-theme-text-primary mb-1">No swap requests</h3>
-            <p className="text-theme-text-muted text-sm">
-              Swap requests from your shifts will appear here.
+            <p className="text-theme-text-muted text-sm max-w-sm mx-auto">
+              {canManage
+                ? 'No swap requests to review. Pending requests from members will appear here.'
+                : 'Your swap requests will appear here. Go to My Shifts to request a swap for an upcoming shift.'}
             </p>
           </div>
         ) : (
@@ -207,17 +233,28 @@ export const RequestsTab: React.FC = () => {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {canManage && req.status === 'pending' && (
                         <button onClick={() => { setReviewing({ type: 'swap', id: req.id }); setReviewNotes(''); }}
-                          className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Review"
+                          className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Review swap request"
                         >
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && req.user_id === currentUser?.id && (
-                        <button onClick={() => handleCancel('swap', req.id)}
-                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Cancel"
+                      {req.status === 'pending' && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
+                        <button onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
+                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel swap request"
                         >
                           <X className="w-4 h-4" />
                         </button>
+                      )}
+                      {confirmingCancel?.id === req.id && confirmingCancel.type === 'swap' && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-red-500">Cancel?</span>
+                          <button onClick={() => handleCancel('swap', req.id)}
+                            className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm cancellation"
+                          >Yes</button>
+                          <button onClick={() => setConfirmingCancel(null)}
+                            className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Keep request"
+                          >No</button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -232,8 +269,10 @@ export const RequestsTab: React.FC = () => {
           <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
             <CalendarOff className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
             <h3 className="text-lg font-medium text-theme-text-primary mb-1">No time-off requests</h3>
-            <p className="text-theme-text-muted text-sm">
-              Your time-off requests will appear here.
+            <p className="text-theme-text-muted text-sm max-w-sm mx-auto">
+              {canManage
+                ? 'No time-off requests to review. Pending requests from members will appear here.'
+                : 'Your time-off requests will appear here. Use the My Shifts tab to request time off.'}
             </p>
           </div>
         ) : (
@@ -266,17 +305,28 @@ export const RequestsTab: React.FC = () => {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {canManage && req.status === 'pending' && (
                         <button onClick={() => { setReviewing({ type: 'timeoff', id: req.id }); setReviewNotes(''); }}
-                          className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Review"
+                          className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Review time-off request"
                         >
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && req.user_id === currentUser?.id && (
-                        <button onClick={() => handleCancel('timeoff', req.id)}
-                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Cancel"
+                      {req.status === 'pending' && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
+                        <button onClick={() => setConfirmingCancel({ type: 'timeoff', id: req.id })}
+                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel time-off request"
                         >
                           <X className="w-4 h-4" />
                         </button>
+                      )}
+                      {confirmingCancel?.id === req.id && confirmingCancel.type === 'timeoff' && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-red-500">Cancel?</span>
+                          <button onClick={() => handleCancel('timeoff', req.id)}
+                            className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm cancellation"
+                          >Yes</button>
+                          <button onClick={() => setConfirmingCancel(null)}
+                            className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Keep request"
+                          >No</button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -289,8 +339,8 @@ export const RequestsTab: React.FC = () => {
 
       {/* Review Modal */}
       {reviewing && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Review request">
+          <div ref={reviewModalRef} className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-bold text-theme-text-primary">Review Request</h2>
             </div>
