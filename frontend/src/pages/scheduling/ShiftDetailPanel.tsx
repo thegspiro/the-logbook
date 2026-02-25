@@ -444,7 +444,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 <label className="block text-xs font-medium text-theme-text-secondary mb-1">Notes</label>
                 <textarea value={editForm.notes}
                   onChange={e => setEditForm(p => ({...p, notes: e.target.value}))}
-                  rows={2} placeholder="Shift notes..." className={inputCls + ' resize-none'}
+                  rows={2} placeholder="Shift notes" className={inputCls + ' resize-none'}
                 />
               </div>
               <div className="flex items-center gap-2 justify-end">
@@ -665,6 +665,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 <div className="text-center py-6 border border-dashed border-theme-surface-border rounded-lg">
                   <Users className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
                   <p className="text-sm text-theme-text-muted">No crew assigned yet</p>
+                  <p className="text-xs text-theme-text-muted mt-1">
+                    {canManage ? 'Use the Assign button above to add members.' : 'Sign up below to join this shift.'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -776,7 +779,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             </button>
             {showCalls && (
               calls.length === 0 ? (
-                <p className="text-sm text-theme-text-muted py-3">No calls recorded for this shift</p>
+                <p className="text-sm text-theme-text-muted py-3">
+                  {isPast ? 'No calls were recorded for this shift.' : 'Calls will appear here once the shift is underway.'}
+                </p>
               ) : (
                 <div className="space-y-2 mt-2">
                   {calls.map((call, i) => (

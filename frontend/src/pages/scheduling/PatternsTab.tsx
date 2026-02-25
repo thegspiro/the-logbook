@@ -444,7 +444,7 @@ export const PatternsTab: React.FC = () => {
                           <Play className="w-3.5 h-3.5 text-emerald-500" /> Generate Shifts
                         </h4>
                         <p className="text-xs text-theme-text-muted">
-                          This will create individual shift records for each matching day in the date range.
+                          Creates a shift for each matching day in the selected range. Duplicates are skipped automatically.
                         </p>
                         <div className="form-grid-2">
                           <div>

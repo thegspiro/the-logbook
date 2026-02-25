@@ -201,7 +201,9 @@ export const RequestsTab: React.FC = () => {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-semibold text-theme-text-primary">
-                            {req.user_name || 'Member'} requests swap
+                            {(req.user_id ?? req.requesting_user_id) === currentUser?.id
+                              ? 'Your swap request'
+                              : `${req.user_name || 'Member'} requests swap`}
                           </p>
                           <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border capitalize ${statusColor}`}>
                             {req.status}
@@ -214,15 +216,17 @@ export const RequestsTab: React.FC = () => {
                               {' '}{formatTime(req.offering_shift.start_time, tz)}
                             </>
                           ) : (
-                            <>Shift: {req.offering_shift_id?.slice(0, 8)}...</>
+                            <>Offering shift (details unavailable)</>
                           )}
                           {req.requesting_shift ? (
                             <> {' \u2192 '} {new Date(req.requesting_shift.shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
                               {' '}{formatTime(req.requesting_shift.start_time, tz)}
                             </>
                           ) : req.requesting_shift_id ? (
-                            <> for {req.requesting_shift_id.slice(0, 8)}...</>
-                          ) : null}
+                            <> {' \u2192 '} Requested shift (details unavailable)</>
+                          ) : (
+                            <> {' \u2192 '} Open swap</>
+                          )}
                         </p>
                         {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
                         <p className="text-xs text-theme-text-muted mt-1">
@@ -288,8 +292,10 @@ export const RequestsTab: React.FC = () => {
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-theme-text-primary">
-                            {req.user_name || 'Member'} — Time Off
+                        <p className="text-sm font-semibold text-theme-text-primary">
+                            {req.user_id === currentUser?.id
+                              ? 'Your time-off request'
+                              : `${req.user_name || 'Member'} — Time Off`}
                           </p>
                           <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border capitalize ${statusColor}`}>
                             {req.status}
@@ -347,7 +353,7 @@ export const RequestsTab: React.FC = () => {
             <div className="p-6">
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Reviewer Notes (optional)</label>
               <textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)}
-                rows={3} placeholder="Add any notes..."
+                rows={3} placeholder="Add reviewer notes"
                 className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
               />
             </div>
