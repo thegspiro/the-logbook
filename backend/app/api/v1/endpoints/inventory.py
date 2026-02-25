@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import safe_error_detail, sanitize_error_message
 from app.core.websocket_manager import ws_manager
 from app.models.inventory import (
     AssignmentType,
@@ -168,7 +168,7 @@ async def create_category(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -210,7 +210,7 @@ async def update_category(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -337,7 +337,7 @@ async def create_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -514,7 +514,7 @@ async def update_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -562,7 +562,7 @@ async def retire_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -629,7 +629,7 @@ async def assign_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -697,7 +697,7 @@ async def unassign_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -782,7 +782,7 @@ async def issue_from_pool(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -848,7 +848,7 @@ async def return_to_pool(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -952,7 +952,7 @@ async def checkout_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1015,7 +1015,7 @@ async def checkin_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1242,7 +1242,7 @@ async def create_maintenance_record(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1289,7 +1289,7 @@ async def update_maintenance_record(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1710,7 +1710,7 @@ async def initiate_departure_clearance(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1869,7 +1869,7 @@ async def resolve_clearance_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1925,7 +1925,7 @@ async def complete_departure_clearance(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -2506,7 +2506,7 @@ async def create_write_off_request(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=sanitize_error_message(error))
 
     await log_audit_event(
         db=db,
@@ -2572,7 +2572,7 @@ async def review_write_off_request(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=sanitize_error_message(error))
 
     await log_audit_event(
         db=db,

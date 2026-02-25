@@ -6,10 +6,80 @@ Request and response schemas for inventory-related endpoints.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# ============================================
+# Enum Literal Types
+# Mirrors the SQLAlchemy enums in app.models.inventory so that
+# Pydantic rejects invalid values at request-parsing time.
+# ============================================
+
+ItemTypeLiteral = Literal[
+    "uniform", "ppe", "tool", "equipment", "vehicle", "electronics", "consumable", "other"
+]
+
+ItemConditionLiteral = Literal[
+    "excellent", "good", "fair", "poor", "damaged", "out_of_service", "retired"
+]
+
+# Subset used in return/check-in flows (no "out_of_service" or "retired")
+ReturnConditionLiteral = Literal["excellent", "good", "fair", "poor", "damaged"]
+
+ItemStatusLiteral = Literal[
+    "available", "assigned", "checked_out", "in_maintenance", "lost", "stolen", "retired"
+]
+
+MaintenanceTypeLiteral = Literal[
+    "inspection", "repair", "cleaning", "testing", "calibration",
+    "replacement", "preventive",
+    "routine_inspection", "advanced_inspection", "independent_inspection",
+    "advanced_cleaning", "decontamination",
+]
+
+AssignmentTypeLiteral = Literal["permanent", "temporary"]
+
+TrackingTypeLiteral = Literal["individual", "pool"]
+
+ClearanceStatusLiteral = Literal[
+    "initiated", "in_progress", "completed", "closed_incomplete"
+]
+
+ClearanceDispositionLiteral = Literal[
+    "pending", "returned", "returned_damaged", "written_off", "waived"
+]
+
+# Subset used in resolve-clearance-item (no "pending")
+ResolveDispositionLiteral = Literal[
+    "returned", "returned_damaged", "written_off", "waived"
+]
+
+RequestTypeLiteral = Literal["checkout", "issuance", "purchase"]
+RequestStatusLiteral = Literal["pending", "approved", "denied", "fulfilled"]
+RequestPriorityLiteral = Literal["low", "normal", "high"]
+ReviewStatusLiteral = Literal["approved", "denied"]
+
+StorageTypeLiteral = Literal[
+    "rack", "shelf", "box", "cabinet", "drawer", "bin", "other"
+]
+
+WriteOffReasonLiteral = Literal[
+    "lost", "damaged_beyond_repair", "obsolete", "stolen", "other"
+]
+WriteOffStatusLiteral = Literal["pending", "approved", "denied"]
+
+NFPAInspectionLevelLiteral = Literal["routine", "advanced", "independent"]
+ContaminationLevelLiteral = Literal["none", "light", "moderate", "heavy", "gross"]
+ExposureTypeLiteral = Literal[
+    "structure_fire", "vehicle_fire", "wildland_fire",
+    "hazmat", "bloodborne_pathogen", "chemical", "smoke", "other",
+]
+EnsembleRoleLiteral = Literal["coat", "pants", "helmet", "gloves", "boots", "hood"]
+NFPARecommendationLiteral = Literal["pass", "repair", "advanced_cleaning", "retire"]
+
+ClearanceSourceTypeLiteral = Literal["assignment", "checkout", "issuance"]
 
 # ============================================
 # Category Schemas
@@ -21,7 +91,7 @@ class InventoryCategoryBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    item_type: str
+    item_type: ItemTypeLiteral
     parent_category_id: Optional[UUID] = None
     requires_assignment: bool = False
     requires_serial_number: bool = False
@@ -40,7 +110,7 @@ class InventoryCategoryUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
-    item_type: Optional[str] = None
+    item_type: Optional[ItemTypeLiteral] = None
     parent_category_id: Optional[UUID] = None
     requires_assignment: Optional[bool] = None
     requires_serial_number: Optional[bool] = None
@@ -96,10 +166,10 @@ class InventoryItemBase(BaseModel):
     storage_location: Optional[str] = Field(None, max_length=255)
     storage_area_id: Optional[UUID] = None
     station: Optional[str] = Field(None, max_length=100)
-    condition: str = "good"
-    status: str = "available"
+    condition: ItemConditionLiteral = "good"
+    status: ItemStatusLiteral = "available"
     status_notes: Optional[str] = None
-    tracking_type: str = "individual"  # "individual" or "pool"
+    tracking_type: TrackingTypeLiteral = "individual"
     quantity: int = Field(default=1, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     inspection_interval_days: Optional[int] = Field(None, ge=0)
@@ -138,10 +208,10 @@ class InventoryItemUpdate(BaseModel):
     storage_location: Optional[str] = Field(None, max_length=255)
     storage_area_id: Optional[UUID] = None
     station: Optional[str] = Field(None, max_length=100)
-    condition: Optional[str] = None
-    status: Optional[str] = None
+    condition: Optional[ItemConditionLiteral] = None
+    status: Optional[ItemStatusLiteral] = None
     status_notes: Optional[str] = None
-    tracking_type: Optional[str] = None
+    tracking_type: Optional[TrackingTypeLiteral] = None
     quantity: Optional[int] = Field(None, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     last_inspection_date: Optional[date] = None
@@ -191,7 +261,7 @@ class InventoryItemDetailResponse(InventoryItemResponse):
 class ItemAssignmentBase(BaseModel):
     """Base assignment schema"""
 
-    assignment_type: str = "permanent"
+    assignment_type: AssignmentTypeLiteral = "permanent"
     assignment_reason: Optional[str] = None
     expected_return_date: Optional[datetime] = None
 
@@ -214,7 +284,7 @@ class ItemAssignmentResponse(ItemAssignmentBase):
     returned_date: Optional[datetime] = None
     assigned_by: Optional[UUID] = None
     returned_by: Optional[UUID] = None
-    return_condition: Optional[str] = None
+    return_condition: Optional[ItemConditionLiteral] = None
     return_notes: Optional[str] = None
     is_active: bool
     created_at: datetime
@@ -226,7 +296,7 @@ class ItemAssignmentResponse(ItemAssignmentBase):
 class UnassignItemRequest(BaseModel):
     """Schema for unassigning an item"""
 
-    return_condition: Optional[str] = None
+    return_condition: Optional[ReturnConditionLiteral] = None
     return_notes: Optional[str] = None
 
 
@@ -246,7 +316,7 @@ class ItemIssuanceCreate(BaseModel):
 class ItemIssuanceReturnRequest(BaseModel):
     """Schema for returning issued units back to the pool"""
 
-    return_condition: Optional[str] = None
+    return_condition: Optional[ReturnConditionLiteral] = None
     return_notes: Optional[str] = None
     quantity_returned: Optional[int] = Field(
         None, ge=1, description="Partial return; defaults to full issuance quantity"
@@ -266,7 +336,7 @@ class ItemIssuanceResponse(BaseModel):
     issued_by: Optional[UUID] = None
     returned_by: Optional[UUID] = None
     issue_reason: Optional[str] = None
-    return_condition: Optional[str] = None
+    return_condition: Optional[ItemConditionLiteral] = None
     return_notes: Optional[str] = None
     is_returned: bool
     created_at: datetime
@@ -297,7 +367,7 @@ class CheckOutCreate(CheckOutRecordBase):
 class CheckInRequest(BaseModel):
     """Schema for checking in an item"""
 
-    return_condition: str
+    return_condition: ReturnConditionLiteral
     damage_notes: Optional[str] = None
 
 
@@ -318,8 +388,8 @@ class CheckOutRecordResponse(CheckOutRecordBase):
     checked_in_at: Optional[datetime] = None
     checked_out_by: Optional[UUID] = None
     checked_in_by: Optional[UUID] = None
-    checkout_condition: Optional[str] = None
-    return_condition: Optional[str] = None
+    checkout_condition: Optional[ItemConditionLiteral] = None
+    return_condition: Optional[ItemConditionLiteral] = None
     damage_notes: Optional[str] = None
     is_returned: bool
     is_overdue: bool
@@ -337,19 +407,19 @@ class CheckOutRecordResponse(CheckOutRecordBase):
 class NFPAInspectionDetailCreate(BaseModel):
     """NFPA inspection detail fields — included when creating a maintenance record for NFPA items"""
 
-    inspection_level: str  # "routine", "advanced", "independent"
+    inspection_level: NFPAInspectionLevelLiteral
     thermal_damage: Optional[bool] = None
     moisture_barrier: Optional[bool] = None
     seam_integrity: Optional[bool] = None
     reflective_trim: Optional[bool] = None
     closure_systems: Optional[bool] = None
     liner_integrity: Optional[bool] = None
-    contamination_level: Optional[str] = None
+    contamination_level: Optional[ContaminationLevelLiteral] = None
     facepiece_seal: Optional[bool] = None
     regulator_function: Optional[bool] = None
     cylinder_pressure: Optional[float] = None
     low_air_alarm: Optional[bool] = None
-    recommendation: Optional[str] = None
+    recommendation: Optional[NFPARecommendationLiteral] = None
 
 
 class NFPAInspectionDetailResponse(NFPAInspectionDetailCreate):
@@ -367,15 +437,15 @@ class NFPAInspectionDetailResponse(NFPAInspectionDetailCreate):
 class MaintenanceRecordBase(BaseModel):
     """Base maintenance record schema"""
 
-    maintenance_type: str
+    maintenance_type: MaintenanceTypeLiteral
     scheduled_date: Optional[date] = None
     completed_date: Optional[date] = None
     next_due_date: Optional[date] = None
     performed_by: Optional[UUID] = None
     vendor_name: Optional[str] = Field(None, max_length=255)
     cost: Optional[Decimal] = Field(None, ge=0)
-    condition_before: Optional[str] = None
-    condition_after: Optional[str] = None
+    condition_before: Optional[ItemConditionLiteral] = None
+    condition_after: Optional[ItemConditionLiteral] = None
     description: Optional[str] = None
     parts_replaced: Optional[List[str]] = None
     parts_cost: Optional[Decimal] = Field(None, ge=0)
@@ -398,15 +468,15 @@ class MaintenanceRecordCreate(MaintenanceRecordBase):
 class MaintenanceRecordUpdate(BaseModel):
     """Schema for updating a maintenance record"""
 
-    maintenance_type: Optional[str] = None
+    maintenance_type: Optional[MaintenanceTypeLiteral] = None
     scheduled_date: Optional[date] = None
     completed_date: Optional[date] = None
     next_due_date: Optional[date] = None
     performed_by: Optional[UUID] = None
     vendor_name: Optional[str] = Field(None, max_length=255)
     cost: Optional[Decimal] = Field(None, ge=0)
-    condition_before: Optional[str] = None
-    condition_after: Optional[str] = None
+    condition_before: Optional[ItemConditionLiteral] = None
+    condition_after: Optional[ItemConditionLiteral] = None
     description: Optional[str] = None
     parts_replaced: Optional[List[str]] = None
     parts_cost: Optional[Decimal] = Field(None, ge=0)
@@ -448,7 +518,7 @@ class LowStockItem(BaseModel):
 
     category_id: UUID
     category_name: str
-    item_type: str
+    item_type: ItemTypeLiteral
     current_stock: int
     threshold: int
     items: List[LowStockItemDetail] = []
@@ -474,7 +544,7 @@ class UserInventoryItem(BaseModel):
     item_name: str
     serial_number: Optional[str] = None
     asset_tag: Optional[str] = None
-    condition: str
+    condition: ItemConditionLiteral
     assigned_date: datetime
     category_name: Optional[str] = None
     quantity: int = 1
@@ -559,8 +629,8 @@ class MaintenanceDueItem(BaseModel):
     category_name: Optional[str] = None
     next_inspection_due: date
     days_until_due: int
-    condition: str
-    status: str
+    condition: ItemConditionLiteral
+    status: ItemStatusLiteral
 
 
 # ============================================
@@ -584,7 +654,7 @@ class ClearanceLineItemResponse(BaseModel):
 
     id: UUID
     clearance_id: UUID
-    source_type: str  # "assignment", "checkout", "issuance"
+    source_type: ClearanceSourceTypeLiteral
     source_id: UUID
     item_id: Optional[UUID] = None
     item_name: str
@@ -592,10 +662,8 @@ class ClearanceLineItemResponse(BaseModel):
     item_asset_tag: Optional[str] = None
     item_value: Optional[float] = None
     quantity: int
-    disposition: (
-        str  # "pending", "returned", "returned_damaged", "written_off", "waived"
-    )
-    return_condition: Optional[str] = None
+    disposition: ClearanceDispositionLiteral
+    return_condition: Optional[ItemConditionLiteral] = None
     resolved_at: Optional[datetime] = None
     resolved_by: Optional[UUID] = None
     resolution_notes: Optional[str] = None
@@ -610,7 +678,7 @@ class DepartureClearanceResponse(BaseModel):
     id: UUID
     organization_id: UUID
     user_id: UUID
-    status: str  # "initiated", "in_progress", "completed", "closed_incomplete"
+    status: ClearanceStatusLiteral
     total_items: int
     items_cleared: int
     items_outstanding: int
@@ -636,7 +704,7 @@ class DepartureClearanceSummaryResponse(BaseModel):
     id: UUID
     user_id: UUID
     member_name: Optional[str] = None
-    status: str
+    status: ClearanceStatusLiteral
     total_items: int
     items_cleared: int
     items_outstanding: int
@@ -651,10 +719,10 @@ class DepartureClearanceSummaryResponse(BaseModel):
 class ResolveClearanceItemRequest(BaseModel):
     """Schema for resolving (returning/writing off) a clearance line item"""
 
-    disposition: str = Field(
+    disposition: ResolveDispositionLiteral = Field(
         ..., description="One of: returned, returned_damaged, written_off, waived"
     )
-    return_condition: Optional[str] = None
+    return_condition: Optional[ReturnConditionLiteral] = None
     resolution_notes: Optional[str] = None
 
 
@@ -736,7 +804,7 @@ class BatchReturnItem(BaseModel):
     item_id: Optional[UUID] = Field(
         default=None, description="Item ID for direct lookup (bypasses code search)"
     )
-    return_condition: str = Field(default="good", description="Condition at return")
+    return_condition: ReturnConditionLiteral = Field(default="good", description="Condition at return")
     damage_notes: Optional[str] = None
     quantity: int = Field(
         default=1, ge=1, description="Quantity returned (for pool items)"
@@ -802,15 +870,15 @@ class EquipmentRequestCreate(BaseModel):
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     quantity: int = Field(default=1, ge=1)
-    request_type: str = Field(default="checkout")
-    priority: str = Field(default="normal")
+    request_type: RequestTypeLiteral = Field(default="checkout")
+    priority: RequestPriorityLiteral = Field(default="normal")
     reason: Optional[str] = None
 
 
 class EquipmentRequestReview(BaseModel):
     """Schema for reviewing an equipment request"""
 
-    status: str = Field(..., description="approved or denied")
+    status: ReviewStatusLiteral = Field(..., description="approved or denied")
     review_notes: Optional[str] = None
 
 
@@ -825,10 +893,10 @@ class EquipmentRequestResponse(BaseModel):
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     quantity: int
-    request_type: str
-    priority: str
+    request_type: RequestTypeLiteral
+    priority: RequestPriorityLiteral
     reason: Optional[str] = None
-    status: str
+    status: RequestStatusLiteral
     reviewed_by: Optional[UUID] = None
     reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
@@ -850,7 +918,7 @@ class StorageAreaCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     label: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
-    storage_type: str  # "rack", "shelf", "box", "cabinet", "drawer", "bin", "other"
+    storage_type: StorageTypeLiteral
     parent_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
     barcode: Optional[str] = Field(None, max_length=255)
@@ -863,7 +931,7 @@ class StorageAreaUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     label: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
-    storage_type: Optional[str] = None
+    storage_type: Optional[StorageTypeLiteral] = None
     parent_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
     barcode: Optional[str] = Field(None, max_length=255)
@@ -879,7 +947,7 @@ class StorageAreaResponse(BaseModel):
     name: str
     label: Optional[str] = None
     description: Optional[str] = None
-    storage_type: str
+    storage_type: StorageTypeLiteral
     parent_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
     barcode: Optional[str] = None
@@ -906,14 +974,14 @@ class WriteOffRequestCreate(BaseModel):
     """Create a write-off request"""
 
     item_id: UUID
-    reason: str  # lost, damaged_beyond_repair, obsolete, stolen, other
+    reason: WriteOffReasonLiteral
     description: str
 
 
 class WriteOffReview(BaseModel):
     """Approve or deny a write-off request"""
 
-    status: str  # approved, denied
+    status: ReviewStatusLiteral
     review_notes: Optional[str] = None
 
 
@@ -926,9 +994,9 @@ class WriteOffRequestResponse(BaseModel):
     item_serial_number: Optional[str] = None
     item_asset_tag: Optional[str] = None
     item_value: Optional[float] = None
-    reason: str
+    reason: WriteOffReasonLiteral
     description: str
-    status: str
+    status: WriteOffStatusLiteral
     requested_by: Optional[str] = None
     requester_name: Optional[str] = None
     reviewed_by: Optional[str] = None
@@ -954,7 +1022,7 @@ class NFPAComplianceCreate(BaseModel):
     expected_retirement_date: Optional[date] = None
     retirement_reason: Optional[str] = Field(None, max_length=255)
     ensemble_id: Optional[str] = Field(None, max_length=36)
-    ensemble_role: Optional[str] = Field(None, max_length=50)
+    ensemble_role: Optional[EnsembleRoleLiteral] = None
     # SCBA fields
     cylinder_manufacture_date: Optional[date] = None
     cylinder_expiration_date: Optional[date] = None
@@ -962,7 +1030,7 @@ class NFPAComplianceCreate(BaseModel):
     hydrostatic_test_due: Optional[date] = None
     flow_test_date: Optional[date] = None
     flow_test_due: Optional[date] = None
-    contamination_level: Optional[str] = None
+    contamination_level: Optional[ContaminationLevelLiteral] = None
 
 
 class NFPAComplianceUpdate(BaseModel):
@@ -974,14 +1042,14 @@ class NFPAComplianceUpdate(BaseModel):
     retirement_reason: Optional[str] = Field(None, max_length=255)
     is_retired_by_age: Optional[bool] = None
     ensemble_id: Optional[str] = Field(None, max_length=36)
-    ensemble_role: Optional[str] = Field(None, max_length=50)
+    ensemble_role: Optional[EnsembleRoleLiteral] = None
     cylinder_manufacture_date: Optional[date] = None
     cylinder_expiration_date: Optional[date] = None
     hydrostatic_test_date: Optional[date] = None
     hydrostatic_test_due: Optional[date] = None
     flow_test_date: Optional[date] = None
     flow_test_due: Optional[date] = None
-    contamination_level: Optional[str] = None
+    contamination_level: Optional[ContaminationLevelLiteral] = None
 
 
 class NFPAComplianceResponse(BaseModel):
@@ -996,14 +1064,14 @@ class NFPAComplianceResponse(BaseModel):
     retirement_reason: Optional[str] = None
     is_retired_by_age: bool = False
     ensemble_id: Optional[str] = None
-    ensemble_role: Optional[str] = None
+    ensemble_role: Optional[EnsembleRoleLiteral] = None
     cylinder_manufacture_date: Optional[date] = None
     cylinder_expiration_date: Optional[date] = None
     hydrostatic_test_date: Optional[date] = None
     hydrostatic_test_due: Optional[date] = None
     flow_test_date: Optional[date] = None
     flow_test_due: Optional[date] = None
-    contamination_level: Optional[str] = None
+    contamination_level: Optional[ContaminationLevelLiteral] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1013,7 +1081,7 @@ class NFPAComplianceResponse(BaseModel):
 class NFPAExposureRecordCreate(BaseModel):
     """Schema for logging an NFPA exposure event"""
 
-    exposure_type: str
+    exposure_type: ExposureTypeLiteral
     exposure_date: date
     incident_number: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
@@ -1030,7 +1098,7 @@ class NFPAExposureRecordResponse(BaseModel):
     id: UUID
     item_id: UUID
     organization_id: UUID
-    exposure_type: str
+    exposure_type: ExposureTypeLiteral
     exposure_date: date
     incident_number: Optional[str] = None
     description: Optional[str] = None

@@ -1303,6 +1303,58 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+# Custom validation error handler — returns user-friendly messages
+# without leaking internal schema/field details.
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse as _JSONResponse
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_handler(request: Request, exc: RequestValidationError):
+    """
+    Replace Pydantic's default verbose validation errors with concise,
+    user-friendly messages that enumerate only the field name and the
+    human-readable constraint that was violated.
+    """
+    errors: list[dict[str, str]] = []
+    for err in exc.errors():
+        loc_parts = [str(p) for p in err.get("loc", []) if p != "body"]
+        field = ".".join(loc_parts) if loc_parts else "request"
+        err_type = err.get("type", "")
+
+        # Build a short, safe message
+        if "literal_error" in err_type:
+            ctx = err.get("ctx", {})
+            expected = ctx.get("expected", "")
+            msg = f"Invalid value. Expected one of: {expected}" if expected else "Invalid value."
+        elif "missing" in err_type:
+            msg = "This field is required."
+        elif "string_too_short" in err_type:
+            msg = "Value is too short."
+        elif "string_too_long" in err_type:
+            msg = "Value is too long."
+        elif "greater_than_equal" in err_type or "less_than_equal" in err_type:
+            msg = "Value is out of the allowed range."
+        elif "uuid" in err_type:
+            msg = "Invalid ID format."
+        elif "date" in err_type or "datetime" in err_type:
+            msg = "Invalid date format."
+        elif "int" in err_type or "float" in err_type or "decimal" in err_type:
+            msg = "Expected a number."
+        elif "bool" in err_type:
+            msg = "Expected true or false."
+        else:
+            msg = "Invalid value."
+
+        errors.append({"field": field, "message": msg})
+
+    return _JSONResponse(
+        status_code=422,
+        content={"detail": errors},
+    )
+
+
 # ============================================
 # Middleware
 # ============================================
