@@ -355,6 +355,8 @@ export interface EventDocumentFolder {
 export interface EventModuleSettings {
   // Which event types are enabled for this organization
   enabled_event_types: EventType[];
+  // Which event types are shown as primary filter tabs (rest grouped under "Other")
+  visible_event_types: EventType[];
   // Custom labels for event types (overrides defaults)
   event_type_labels: Partial<Record<EventType, string>>;
   // Defaults applied when creating a new event

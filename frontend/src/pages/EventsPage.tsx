@@ -17,11 +17,22 @@ import { formatShortDateTime } from '../utils/dateFormatting';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState } from '../components/ux';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
 
+const ALL_EVENT_TYPES: EventType[] = [
+  'business_meeting',
+  'public_education',
+  'training',
+  'social',
+  'fundraiser',
+  'ceremony',
+  'other',
+];
+
 export const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [visibleTypes, setVisibleTypes] = useState<EventType[]>(ALL_EVENT_TYPES);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
@@ -29,13 +40,36 @@ export const EventsPage: React.FC = () => {
 
   useEffect(() => {
     fetchEvents();
+    eventService.getVisibleEventTypes()
+      .then(setVisibleTypes)
+      .catch(() => { /* fall back to showing all types */ });
   }, []);
+
+  // Types not marked visible are grouped under the "Other" tab
+  const hiddenTypes = useMemo(
+    () => ALL_EVENT_TYPES.filter((t) => !visibleTypes.includes(t)),
+    [visibleTypes]
+  );
+
+  // Build filter tab keys: "all" + visible types (ensuring "other" always present)
+  const filterTabs = useMemo(() => {
+    const tabs: string[] = ['all', ...visibleTypes.filter((t) => t !== 'other')];
+    // Always include "other" at the end
+    tabs.push('other');
+    return tabs;
+  }, [visibleTypes]);
 
   // #77: Memoize filtered events instead of storing in separate state
   const filteredEvents = useMemo(() => {
     if (typeFilter === 'all') return events;
+    if (typeFilter === 'other') {
+      // "Other" tab shows events typed "other" plus any hidden event types
+      return events.filter(
+        (e) => e.event_type === 'other' || hiddenTypes.includes(e.event_type)
+      );
+    }
     return events.filter(e => e.event_type === typeFilter);
-  }, [events, typeFilter]);
+  }, [events, typeFilter, hiddenTypes]);
 
   // #48: CSV export for events
   const handleExportCSV = useCallback(() => {
@@ -153,7 +187,7 @@ export const EventsPage: React.FC = () => {
       {/* Filter Tabs */}
       <div className="border-b border-theme-surface-border mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
         <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-thin pb-px" aria-label="Tabs">
-          {['all', 'business_meeting', 'public_education', 'training', 'social', 'fundraiser', 'ceremony', 'other'].map((filter) => (
+          {filterTabs.map((filter) => (
             <button
               key={filter}
               onClick={() => setTypeFilter(filter)}

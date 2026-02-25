@@ -1671,6 +1671,12 @@ EVENT_SETTINGS_DEFAULTS = {
         "ceremony",
         "other",
     ],
+    "visible_event_types": [
+        "business_meeting",
+        "public_education",
+        "training",
+        "other",
+    ],
     "event_type_labels": {},
     "defaults": {
         "event_type": "other",
@@ -1775,6 +1781,32 @@ async def update_event_settings(
                 merged[key] = current_events[key]
 
     return merged
+
+
+@router.get("/visible-event-types")
+async def get_visible_event_types(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the list of event types visible as primary filter categories.
+
+    Types not in this list are grouped under the "Other" tab.
+    Available to all authenticated users.
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    settings = (org.settings or {}).get("events", {})
+    visible = settings.get(
+        "visible_event_types",
+        EVENT_SETTINGS_DEFAULTS["visible_event_types"],
+    )
+    return {"visible_event_types": visible}
 
 
 # ============================================

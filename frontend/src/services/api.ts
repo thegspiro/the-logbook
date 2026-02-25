@@ -1900,6 +1900,10 @@ export const eventService = {
     const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
     return response.data;
   },
+  async getVisibleEventTypes(): Promise<import('../types/event').EventType[]> {
+    const response = await api.get<{ visible_event_types: import('../types/event').EventType[] }>('/events/visible-event-types');
+    return response.data.visible_event_types;
+  },
 
   async getEventFolder(eventId: string): Promise<DocumentFolder> {
     const response = await api.get<DocumentFolder>(`/events/${eventId}/folder`);
