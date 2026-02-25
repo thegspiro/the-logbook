@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Building2,
   GraduationCap,
@@ -120,8 +121,14 @@ const Toggle: React.FC<{
 
 // ── Main component ──
 
+const SECTION_KEYS = new Set<string>(SECTIONS.map(s => s.key));
+
 export const SettingsPage: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<SectionKey>('general');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab');
+  const [activeSection, setActiveSection] = useState<SectionKey>(
+    initialTab && SECTION_KEYS.has(initialTab) ? (initialTab as SectionKey) : 'general',
+  );
   const [loading, setLoading] = useState(true);
 
   // General / profile state
@@ -157,6 +164,11 @@ export const SettingsPage: React.FC = () => {
 
   // Rank validation state
   const [rankValidationIssues, setRankValidationIssues] = useState<RankValidationIssue[]>([]);
+
+  const switchSection = useCallback((key: SectionKey) => {
+    setActiveSection(key);
+    setSearchParams(key === 'general' ? {} : { tab: key }, { replace: true });
+  }, [setSearchParams]);
 
   // ── Data loading ──
 
@@ -936,7 +948,7 @@ export const SettingsPage: React.FC = () => {
                 return (
                   <button
                     key={key}
-                    onClick={() => setActiveSection(key)}
+                    onClick={() => switchSection(key)}
                     className={`w-full flex items-start gap-3 px-3 py-3 rounded-lg text-left transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       isActive
                         ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
