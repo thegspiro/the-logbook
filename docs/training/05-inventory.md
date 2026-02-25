@@ -25,12 +25,13 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 
 ## Inventory Overview
 
-Navigate to **Inventory** in the sidebar. The inventory page has two tabs:
+Navigate to **Inventory** in the sidebar. The inventory page has three tabs:
 
 | Tab | Description |
 |-----|-------------|
 | **Items** | Browse and manage all equipment and supplies |
 | **Categories** | View and manage inventory categories |
+| **Maintenance** | View items due for maintenance and manage maintenance records |
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Inventory page showing the Items tab active, with a search bar, category filter dropdown, status filter, and a grid/list of inventory items showing item name, category, condition, and status badges]_
@@ -42,19 +43,18 @@ Navigate to **Inventory** in the sidebar. The inventory page has two tabs:
 The **Items** tab lists all inventory items. You can:
 
 - **Search** by item name, serial number, or asset tag
-- **Filter** by category, status (available, assigned, checked out, maintenance, retired)
-- **Sort** by name, category, or date added
+- **Filter** by category, status (available, assigned, checked out, in maintenance, lost, stolen, retired)
 
-Click on any item to view its details including:
+Click on any item to open its edit form, where you can view and modify:
 - Full description
 - Serial number and asset tag
-- Current condition
-- Assignment history
-- Maintenance records
-- Photos (if uploaded)
+- Current condition and status
+- Storage location
+- Purchase and warranty information
+- Notes
 
 > **Screenshot placeholder:**
-> _[Screenshot of an item detail view showing the item name, photo, description, serial number, asset tag, condition, current assignment (member name), and tabs for history and maintenance records]_
+> _[Screenshot of the item edit modal showing form fields for name, description, category, serial number, asset tag, condition, status, and other item properties]_
 
 ---
 
@@ -300,6 +300,56 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 > **Hint:** Departure clearances integrate with the Member Status workflow. When a member is dropped, a property return report is automatically generated. See [Membership > Property Return Process](./01-membership.md#member-status-management).
 
 > **Hint:** When an item is resolved, any pending notification for that item is automatically cancelled (notification netting). This prevents duplicate or stale notifications from being sent.
+
+---
+
+## Equipment Requests
+
+Members can request equipment checkouts, pool issuances, or new purchases through the equipment request workflow.
+
+### Submitting a Request
+
+1. Navigate to **Inventory**.
+2. Click **Request Equipment**.
+3. Fill in the request form:
+   - **Item Name** — the item you need
+   - **Request Type** — checkout, issuance, or purchase
+   - **Priority** — low, normal, high, or urgent
+   - **Reason** — why you need the item
+4. Submit the request.
+
+### Reviewing Requests (Admin)
+
+**Required Permission:** `inventory.manage`
+
+1. Navigate to **Inventory** and open the **Pending Requests** panel.
+2. Review the request details including the requester's name, item, and reason.
+3. Click **Approve** or **Deny** and optionally add review notes.
+
+> **Hint:** Items with a minimum rank restriction will prevent lower-ranked members from submitting requests for those items.
+
+---
+
+## Write-Off Requests
+
+When an item is lost, stolen, damaged beyond repair, or obsolete, a write-off request can be submitted for supervisor approval before the item is removed from active inventory.
+
+### Submitting a Write-Off Request
+
+1. Navigate to the item in **Inventory**.
+2. Click **Request Write-Off**.
+3. Select a reason: lost, damaged beyond repair, obsolete, stolen, or other.
+4. Add a description explaining the circumstances.
+5. Submit the request.
+
+### Reviewing Write-Off Requests (Admin)
+
+**Required Permission:** `inventory.manage`
+
+1. Navigate to **Inventory** and open the **Write-Off Requests** panel.
+2. Review the request details including the item, reason, and description.
+3. Click **Approve** or **Deny** and optionally add review notes.
+4. On approval, the item is automatically marked as lost/stolen or retired depending on the reason.
 
 ---
 

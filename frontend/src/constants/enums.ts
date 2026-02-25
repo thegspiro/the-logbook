@@ -243,7 +243,7 @@ export const REQUEST_STATUS_COLORS: Record<string, string> = {
 // Inventory — Item Condition
 // ============================================
 
-/** All condition options for admin/edit forms (includes out_of_service). */
+/** All condition options for admin/edit forms (includes out_of_service and retired). */
 export const ITEM_CONDITION_OPTIONS = [
   { value: 'excellent', label: 'Excellent' },
   { value: 'good', label: 'Good' },
@@ -251,6 +251,7 @@ export const ITEM_CONDITION_OPTIONS = [
   { value: 'poor', label: 'Poor' },
   { value: 'damaged', label: 'Damaged' },
   { value: 'out_of_service', label: 'Out of Service' },
+  { value: 'retired', label: 'Retired' },
 ] as const;
 
 /** Condition options for return workflows (no out_of_service). */

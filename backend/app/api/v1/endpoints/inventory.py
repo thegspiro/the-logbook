@@ -160,6 +160,19 @@ async def create_category(
             detail=error,
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="inventory_category_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "category_id": str(new_category.id),
+            "category_name": new_category.name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return new_category
 
 
@@ -188,6 +201,19 @@ async def update_category(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_category_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "category_id": str(category_id),
+            "fields_updated": list(update_data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return updated_category
 
@@ -1932,7 +1958,8 @@ async def create_equipment_request(
     if request_data.item_id:
         item_result = await db.execute(
             select(InventoryItem.min_rank_order).where(
-                InventoryItem.id == str(request_data.item_id)
+                InventoryItem.id == str(request_data.item_id),
+                InventoryItem.organization_id == str(current_user.organization_id),
             )
         )
         min_rank = item_result.scalar_one_or_none()
@@ -1965,6 +1992,20 @@ async def create_equipment_request(
     db.add(req)
     await db.commit()
     await db.refresh(req)
+
+    await log_audit_event(
+        db=db,
+        event_type="equipment_request_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "request_id": str(req.id),
+            "item_name": req.item_name,
+            "request_type": request_data.request_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return {
         "id": req.id,
@@ -2099,6 +2140,20 @@ async def review_equipment_request(
     req.review_notes = review_data.review_notes
 
     await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="equipment_request_reviewed",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "request_id": str(request_id),
+            "decision": review_data.status,
+            "review_notes": review_data.review_notes,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return {
         "id": req.id,
@@ -2254,6 +2309,20 @@ async def create_storage_area(
     await db.commit()
     await db.refresh(area)
 
+    await log_audit_event(
+        db=db,
+        event_type="storage_area_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "storage_area_id": str(area.id),
+            "name": area.name,
+            "storage_type": data.storage_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return {
         "id": area.id,
         "organization_id": area.organization_id,
@@ -2321,6 +2390,19 @@ async def update_storage_area(
     await db.commit()
     await db.refresh(area)
 
+    await log_audit_event(
+        db=db,
+        event_type="storage_area_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "storage_area_id": str(area_id),
+            "fields_updated": list(data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return {
         "id": area.id,
         "organization_id": area.organization_id,
@@ -2367,6 +2449,19 @@ async def delete_storage_area(
 
     area.is_active = False
     await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="storage_area_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "storage_area_id": str(area_id),
+            "name": area.name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ============================================

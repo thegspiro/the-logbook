@@ -66,6 +66,7 @@ const STATUS_OPTIONS = [
   { value: 'checked_out', label: 'Checked Out', color: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' },
   { value: 'in_maintenance', label: 'In Maintenance', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30' },
   { value: 'lost', label: 'Lost', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
+  { value: 'stolen', label: 'Stolen', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
   { value: 'retired', label: 'Retired', color: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border' },
 ];
 
@@ -176,9 +177,6 @@ const InventoryPage: React.FC = () => {
   const [showRetireConfirm, setShowRetireConfirm] = useState<InventoryItem | null>(null);
   const [retireNotes, setRetireNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  // Confirmation dialog for batch submit in scan modal
-  const [_showBatchConfirm, _setShowBatchConfirm] = useState(false);
 
   // Bulk operations
   const [showBulkMenu, setShowBulkMenu] = useState(false);
