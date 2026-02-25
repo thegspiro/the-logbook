@@ -26,7 +26,6 @@ interface MyShiftsTabProps {
 export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const tz = useTimezone();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [_upcomingShifts, setUpcomingShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'upcoming' | 'past'>('upcoming');
 
@@ -55,12 +54,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [assignData, shiftsData] = await Promise.all([
-        schedulingService.getMyAssignments(),
-        schedulingService.getMyShifts({ limit: 20 }),
-      ]);
+      const assignData = await schedulingService.getMyAssignments();
       setAssignments(assignData as unknown as Assignment[]);
-      setUpcomingShifts(shiftsData.shifts);
     } catch {
       toast.error('Failed to load your shifts');
     } finally {
@@ -318,7 +313,9 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             <div className="p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-bold text-theme-text-primary">Request Shift Swap</h2>
               <p className="text-sm text-theme-text-secondary mt-1">
-                Submit a swap request for your shift on {swapAssignment?.shift?.shift_date}
+                {swapAssignment?.shift?.shift_date
+                  ? `Submit a swap request for your shift on ${new Date(swapAssignment.shift.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz })}`
+                  : 'Submit a swap request for your shift'}
               </p>
             </div>
             <div className="p-6 space-y-4">
@@ -347,7 +344,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
                 <textarea value={swapForm.reason}
                   onChange={e => setSwapForm(p => ({...p, reason: e.target.value}))}
-                  rows={3} placeholder="Why do you need to swap this shift?" className={inputCls + ' resize-none'}
+                  rows={3} placeholder="Reason for swap request" className={inputCls + ' resize-none'}
                 />
               </div>
             </div>
@@ -389,7 +386,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
                 <textarea value={timeOffForm.reason}
                   onChange={e => setTimeOffForm(p => ({...p, reason: e.target.value}))}
-                  rows={3} placeholder="Reason for time off..." className={inputCls + ' resize-none'}
+                  rows={3} placeholder="Reason for time off" className={inputCls + ' resize-none'}
                 />
               </div>
             </div>

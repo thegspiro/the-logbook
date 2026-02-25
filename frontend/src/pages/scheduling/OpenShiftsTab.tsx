@@ -121,7 +121,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       <div className="flex items-start gap-3 p-4 bg-violet-500/5 border border-violet-500/20 rounded-xl">
         <UserPlus className="w-5 h-5 text-violet-600 dark:text-violet-400 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-theme-text-secondary">
-          <p>Browse available shifts and sign up for open positions. Your signup will be reviewed and confirmed by a scheduling manager. Click on a shift to view full details.</p>
+          <p>Browse available shifts and sign up for open positions. A scheduling manager will review and confirm your signup.</p>
         </div>
       </div>
 
