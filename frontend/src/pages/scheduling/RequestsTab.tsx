@@ -12,8 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
-import type { ShiftRecord } from '../../services/api';
-import type { SwapRequest, TimeOffRequest } from '../../types/scheduling';
+import type { ShiftRecord, SwapRequest, TimeOffRequest } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
