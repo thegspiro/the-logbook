@@ -12,40 +12,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
-import type { ShiftRecord } from '../../services/api';
+import type { SwapRequest, TimeOffRequest } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
 import { REQUEST_STATUS_COLORS } from '../../constants/enums';
-
-interface SwapRequest {
-  id: string;
-  user_id?: string;
-  user_name?: string;
-  offering_shift_id: string;
-  requesting_shift_id?: string;
-  target_user_id?: string;
-  target_user_name?: string;
-  reason?: string;
-  status: string;
-  reviewer_notes?: string;
-  created_at: string;
-  // Enriched shift info
-  offering_shift?: ShiftRecord;
-  requesting_shift?: ShiftRecord;
-}
-
-interface TimeOffRequest {
-  id: string;
-  user_id?: string;
-  user_name?: string;
-  start_date: string;
-  end_date: string;
-  reason?: string;
-  status: string;
-  reviewer_notes?: string;
-  created_at: string;
-}
 
 export const RequestsTab: React.FC = () => {
   const { checkPermission, user: currentUser } = useAuthStore();

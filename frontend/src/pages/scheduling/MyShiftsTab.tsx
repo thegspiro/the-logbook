@@ -13,19 +13,10 @@ import {
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
+import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
 import { ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
-
-interface Assignment {
-  id: string;
-  user_id: string;
-  shift_id: string;
-  position: string;
-  status: string;
-  assignment_status?: string;
-  shift?: ShiftRecord;
-}
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;

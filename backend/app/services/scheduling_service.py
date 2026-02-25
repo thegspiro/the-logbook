@@ -630,9 +630,12 @@ class SchedulingService:
             if not template:
                 return [], "Shift template not found for pattern"
 
-            # Parse template times
-            start_hour, start_minute = map(int, template.start_time_of_day.split(":"))
-            end_hour, end_minute = map(int, template.end_time_of_day.split(":"))
+            # Parse template times safely
+            try:
+                start_hour, start_minute = map(int, template.start_time_of_day.split(":"))
+                end_hour, end_minute = map(int, template.end_time_of_day.split(":"))
+            except (ValueError, AttributeError):
+                return [], "Invalid time format in template. Expected HH:MM."
 
             config = pattern.schedule_config or {}
 
@@ -668,6 +671,16 @@ class SchedulingService:
                     shift_dates.append(current)
 
                 current += timedelta(days=1)
+
+            # Duplicate guard: check which dates already have shifts for this org
+            if shift_dates:
+                existing_result = await self.db.execute(
+                    select(Shift.shift_date)
+                    .where(Shift.organization_id == str(organization_id))
+                    .where(Shift.shift_date.in_(shift_dates))
+                )
+                existing_dates = {row[0] for row in existing_result.all()}
+                shift_dates = [d for d in shift_dates if d not in existing_dates]
 
             # Create shifts for each date
             created_shifts = []
@@ -1223,28 +1236,59 @@ class SchedulingService:
         self, organization_id: UUID, start_date: date, end_date: date
     ) -> List[Dict]:
         """Get shift coverage report for each date in range"""
+        # Fetch all shifts in the range in one query
+        shift_result = await self.db.execute(
+            select(Shift)
+            .where(Shift.organization_id == str(organization_id))
+            .where(Shift.shift_date >= start_date)
+            .where(Shift.shift_date <= end_date)
+            .order_by(Shift.shift_date.asc())
+        )
+        all_shifts = shift_result.scalars().all()
+
+        # Collect all shift IDs for a single assignment query
+        shift_ids = [s.id for s in all_shifts]
+
+        # Fetch all assignments for these shifts in one query
+        assignments_by_shift: Dict[str, list] = {}
+        if shift_ids:
+            assign_result = await self.db.execute(
+                select(ShiftAssignment)
+                .where(ShiftAssignment.shift_id.in_(shift_ids))
+                .where(ShiftAssignment.organization_id == str(organization_id))
+            )
+            for a in assign_result.scalars().all():
+                assignments_by_shift.setdefault(a.shift_id, []).append(a)
+
+        # Build apparatus min_staffing lookup for shifts that have an apparatus_id
+        apparatus_ids = list({s.apparatus_id for s in all_shifts if s.apparatus_id})
+        apparatus_min_staffing: Dict[str, int] = {}
+        if apparatus_ids:
+            app_result = await self.db.execute(
+                select(BasicApparatus.id, BasicApparatus.min_staffing)
+                .where(BasicApparatus.id.in_(apparatus_ids))
+                .where(BasicApparatus.organization_id == str(organization_id))
+            )
+            for row in app_result.all():
+                if row[1] is not None:
+                    apparatus_min_staffing[row[0]] = row[1]
+
+        # Group shifts by date
+        shifts_by_date: Dict[date, list] = {}
+        for s in all_shifts:
+            shifts_by_date.setdefault(s.shift_date, []).append(s)
+
         report = []
         current = start_date
         while current <= end_date:
-            # Get shifts for this date
-            shift_result = await self.db.execute(
-                select(Shift)
-                .where(Shift.organization_id == str(organization_id))
-                .where(Shift.shift_date == current)
-            )
-            shifts = shift_result.scalars().all()
+            day_shifts = shifts_by_date.get(current, [])
 
             total_assigned = 0
             total_confirmed = 0
             understaffed_shifts = 0
 
-            for shift in shifts:
-                assign_result = await self.db.execute(
-                    select(ShiftAssignment)
-                    .where(ShiftAssignment.shift_id == shift.id)
-                    .where(ShiftAssignment.organization_id == str(organization_id))
-                )
-                assignments = assign_result.scalars().all()
+            for shift in day_shifts:
+                assignments = assignments_by_shift.get(shift.id, [])
                 assigned_count = len(assignments)
                 confirmed_count = sum(
                     1
@@ -1254,15 +1298,15 @@ class SchedulingService:
                 total_assigned += assigned_count
                 total_confirmed += confirmed_count
 
-                # Check against template min_staffing if available
-                # Use a default min_staffing of 1 if not set
-                if assigned_count < 1:
+                # Use apparatus min_staffing if available, else default to 1
+                min_staff = apparatus_min_staffing.get(shift.apparatus_id, 1) if shift.apparatus_id else 1
+                if assigned_count < min_staff:
                     understaffed_shifts += 1
 
             report.append(
                 {
                     "date": current.isoformat(),
-                    "total_shifts": len(shifts),
+                    "total_shifts": len(day_shifts),
                     "total_assigned": total_assigned,
                     "total_confirmed": total_confirmed,
                     "understaffed_shifts": understaffed_shifts,
@@ -1281,26 +1325,17 @@ class SchedulingService:
         group_by: str = "day",
     ) -> List[Dict]:
         """Get call volume grouped by period with type breakdown and avg response time"""
-        # Get all calls in range
+        # Get all calls with their shift dates in a single joined query
         result = await self.db.execute(
-            select(ShiftCall)
+            select(ShiftCall, Shift.shift_date)
             .join(Shift, ShiftCall.shift_id == Shift.id)
             .where(ShiftCall.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
             .order_by(Shift.shift_date.asc())
         )
-        calls = result.scalars().all()
 
-        # Load the shift dates for grouping
-        call_data = []
-        for call in calls:
-            shift_result = await self.db.execute(
-                select(Shift.shift_date).where(Shift.id == call.shift_id)
-            )
-            shift_date_val = shift_result.scalar_one_or_none()
-            if shift_date_val:
-                call_data.append((shift_date_val, call))
+        call_data = [(row[1], row[0]) for row in result.all()]
 
         # Group by period
         groups: Dict[str, list] = {}
@@ -1400,24 +1435,32 @@ class SchedulingService:
         result = await self.db.execute(query)
         shifts = result.scalars().all()
 
+        # Batch-load user-specific assignments and attendance for all shifts
+        shift_id_list = [s.id for s in shifts]
+        user_assignments: Dict[str, Any] = {}
+        user_attendances: Dict[str, Any] = {}
+        if shift_id_list:
+            assign_result = await self.db.execute(
+                select(ShiftAssignment)
+                .where(ShiftAssignment.shift_id.in_(shift_id_list))
+                .where(ShiftAssignment.user_id == str(user_id))
+            )
+            for a in assign_result.scalars().all():
+                user_assignments[a.shift_id] = a
+
+            att_result = await self.db.execute(
+                select(ShiftAttendance)
+                .where(ShiftAttendance.shift_id.in_(shift_id_list))
+                .where(ShiftAttendance.user_id == str(user_id))
+            )
+            for a in att_result.scalars().all():
+                user_attendances[a.shift_id] = a
+
         # Enrich with user-specific data
         shift_list = []
         for shift in shifts:
-            # Get user's assignment for this shift
-            assign_result = await self.db.execute(
-                select(ShiftAssignment)
-                .where(ShiftAssignment.shift_id == shift.id)
-                .where(ShiftAssignment.user_id == str(user_id))
-            )
-            assignment = assign_result.scalar_one_or_none()
-
-            # Get user's attendance for this shift
-            att_result = await self.db.execute(
-                select(ShiftAttendance)
-                .where(ShiftAttendance.shift_id == shift.id)
-                .where(ShiftAttendance.user_id == str(user_id))
-            )
-            attendance = att_result.scalar_one_or_none()
+            assignment = user_assignments.get(shift.id)
+            attendance = user_attendances.get(shift.id)
 
             shift_dict = {
                 "id": shift.id,
