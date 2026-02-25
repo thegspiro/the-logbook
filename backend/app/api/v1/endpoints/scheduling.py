@@ -1056,6 +1056,29 @@ async def get_my_assignments(
 # Report Endpoints
 # ============================================
 
+MAX_REPORT_DAYS = 366  # Maximum date range for report endpoints (1 year)
+
+
+def _parse_and_validate_report_dates(start_date: str, end_date: str):
+    """Parse and validate report date range. Raises HTTPException on failure."""
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
+        )
+    if end < start:
+        raise HTTPException(
+            status_code=400, detail="end_date must not be before start_date."
+        )
+    if (end - start).days > MAX_REPORT_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Date range must not exceed {MAX_REPORT_DAYS} days.",
+        )
+    return start, end
+
 
 @router.get("/reports/member-hours")
 async def get_member_hours_report(
@@ -1065,14 +1088,8 @@ async def get_member_hours_report(
     current_user: User = Depends(require_permission("scheduling.report")),
 ):
     """Get member hours report for a date range"""
+    start, end = _parse_and_validate_report_dates(start_date, end_date)
     service = SchedulingService(db)
-    try:
-        start = date.fromisoformat(start_date)
-        end = date.fromisoformat(end_date)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
-        )
     report = await service.get_member_hours_report(
         current_user.organization_id, start, end
     )
@@ -1087,14 +1104,8 @@ async def get_coverage_report(
     current_user: User = Depends(require_permission("scheduling.report")),
 ):
     """Get shift coverage report for a date range"""
+    start, end = _parse_and_validate_report_dates(start_date, end_date)
     service = SchedulingService(db)
-    try:
-        start = date.fromisoformat(start_date)
-        end = date.fromisoformat(end_date)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
-        )
     report = await service.get_shift_coverage_report(
         current_user.organization_id, start, end
     )
@@ -1110,14 +1121,8 @@ async def get_call_volume_report(
     current_user: User = Depends(require_permission("scheduling.report")),
 ):
     """Get call volume report for a date range"""
+    start, end = _parse_and_validate_report_dates(start_date, end_date)
     service = SchedulingService(db)
-    try:
-        start = date.fromisoformat(start_date)
-        end = date.fromisoformat(end_date)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
-        )
     report = await service.get_call_volume_report(
         current_user.organization_id, start, end, group_by=group_by
     )

@@ -20,6 +20,7 @@ import {
 import toast from 'react-hot-toast';
 import { schedulingService, userService } from '../../services/api';
 import type { ShiftRecord } from '../../services/api';
+import type { Assignment } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime } from '../../utils/dateFormatting';
@@ -29,15 +30,6 @@ interface ShiftDetailPanelProps {
   shift: ShiftRecord;
   onClose: () => void;
   onRefresh?: () => void;
-}
-
-interface Assignment {
-  id: string;
-  user_id: string;
-  user_name?: string;
-  position: string;
-  status: string;
-  assignment_status?: string;
 }
 
 interface MemberOption {
