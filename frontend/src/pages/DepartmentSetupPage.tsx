@@ -19,6 +19,8 @@ import {
   Calendar,
   GraduationCap,
   ClipboardList,
+  ListChecks,
+  Package,
   Mail,
   UserPlus,
   Plug,
@@ -38,6 +40,7 @@ const CATEGORY_STYLES: Record<string, { bgClass: string; textClass: string }> = 
   forms: { bgClass: 'bg-emerald-500/10', textClass: 'text-emerald-500' },
   notifications: { bgClass: 'bg-amber-500/10', textClass: 'text-amber-500' },
   prospective_members: { bgClass: 'bg-purple-500/10', textClass: 'text-purple-500' },
+  inventory: { bgClass: 'bg-orange-500/10', textClass: 'text-orange-500' },
   integrations: { bgClass: 'bg-cyan-500/10', textClass: 'text-cyan-500' },
 };
 
@@ -47,8 +50,11 @@ const ITEM_ICONS: Record<string, React.ReactNode> = {
   apparatus: <Truck className="w-5 h-5" />,
   locations: <MapPin className="w-5 h-5" />,
   org_settings: <Settings className="w-5 h-5" />,
+  modules: <Package className="w-5 h-5" />,
   scheduling: <Calendar className="w-5 h-5" />,
   training: <GraduationCap className="w-5 h-5" />,
+  training_requirements: <ListChecks className="w-5 h-5" />,
+  inventory: <Package className="w-5 h-5" />,
   forms: <ClipboardList className="w-5 h-5" />,
   email: <Mail className="w-5 h-5" />,
   pipeline: <UserPlus className="w-5 h-5" />,

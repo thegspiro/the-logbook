@@ -33,6 +33,7 @@ import { Link } from 'react-router-dom';
 import {
   inventoryService,
   locationsService,
+  roleService,
   type InventoryItem,
   type InventoryCategory,
   type EquipmentRequestItem,
@@ -46,6 +47,7 @@ import {
   type MaintenanceRecordCreate,
   type StorageAreaResponse,
 } from '../services/api';
+import type { Role } from '../types/role';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
@@ -104,6 +106,7 @@ const InventoryPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('items');
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [positions, setPositions] = useState<Role[]>([]);
   const [summary, setSummary] = useState<InventorySummary | null>(null);
   const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -286,6 +289,8 @@ const InventoryPage: React.FC = () => {
       setLabelFormats(formatsData.formats);
       // Rooms are locations that have a room_number or a building (parent station) set
       setRooms(locationsData.filter(l => l.room_number || l.building));
+      // Positions for restriction dropdown (non-critical)
+      roleService.getRoles().then(setPositions).catch(() => { /* non-critical */ });
       // Low stock alerts (non-critical)
       inventoryService.getLowStockItems().then(setLowStockAlerts).catch(() => { /* non-critical */ });
       // Load members for pool issuance and pending requests (non-critical)
@@ -474,6 +479,7 @@ const InventoryPage: React.FC = () => {
       warranty_expiration: item.warranty_expiration || '',
       inspection_interval_days: item.inspection_interval_days,
       min_rank_order: item.min_rank_order ?? null,
+      restricted_to_positions: item.restricted_to_positions ?? null,
       notes: item.notes || '',
     });
     setFormError(null);
@@ -2537,6 +2543,35 @@ const InventoryPage: React.FC = () => {
                           {ranks.map(r => <option key={r.id} value={r.sort_order}>{r.display_name} and above</option>)}
                         </select>
                         <p className="text-xs text-theme-text-muted mt-1">Only members at or above this rank can request this item.</p>
+                      </div>
+
+                      {/* Position Restriction */}
+                      <div>
+                        <span className="block text-sm font-medium text-theme-text-secondary mb-1">Restrict to Positions</span>
+                        {positions.filter(p => !p.is_system || p.slug === 'it_manager').length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {positions.filter(p => !p.is_system || p.slug === 'it_manager').map(pos => {
+                              const selected = editForm.restricted_to_positions?.includes(pos.slug) ?? false;
+                              return (
+                                <button
+                                  key={pos.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const current = editForm.restricted_to_positions ?? [];
+                                    const next = selected ? current.filter(s => s !== pos.slug) : [...current, pos.slug];
+                                    setEditForm({ ...editForm, restricted_to_positions: next.length > 0 ? next : null });
+                                  }}
+                                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${selected ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/40' : 'bg-theme-input-bg text-theme-text-muted border-theme-input-border hover:border-theme-text-muted'}`}
+                                >
+                                  {pos.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-theme-text-muted">No positions configured</p>
+                        )}
+                        <p className="text-xs text-theme-text-muted mt-1">Members holding any selected position can request this item. Leave empty for no restriction.</p>
                       </div>
 
                       {/* Notes */}

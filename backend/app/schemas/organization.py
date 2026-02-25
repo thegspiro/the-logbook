@@ -296,6 +296,10 @@ class ModuleSettings(BaseModel):
     )
     inventory: bool = Field(default=False, description="Equipment & Inventory module")
     scheduling: bool = Field(default=False, description="Scheduling & Shifts module")
+    apparatus: bool = Field(default=False, description="Apparatus Management module")
+    communications: bool = Field(
+        default=False, description="Communications module (announcements, messaging)"
+    )
     elections: bool = Field(default=False, description="Elections & Voting module")
     minutes: bool = Field(default=False, description="Meeting Minutes module")
     reports: bool = Field(default=False, description="Reports & Analytics module")
@@ -309,6 +313,21 @@ class ModuleSettings(BaseModel):
         default=False,
         description="Facilities Management module (maintenance, inspections, systems)",
     )
+    incidents: bool = Field(
+        default=False, description="Incidents & Reports module"
+    )
+    hr_payroll: bool = Field(
+        default=False, description="HR & Payroll module"
+    )
+    grants: bool = Field(
+        default=False, description="Grants & Fundraising module"
+    )
+    prospective_members: bool = Field(
+        default=False, description="Prospective Members Pipeline module"
+    )
+    public_info: bool = Field(
+        default=False, description="Public Information module"
+    )
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
@@ -316,28 +335,9 @@ class ModuleSettings(BaseModel):
         enabled = ["members", "events", "documents", "roles", "settings"]
 
         # Add configurable modules that are enabled
-        if self.training:
-            enabled.append("training")
-        if self.inventory:
-            enabled.append("inventory")
-        if self.scheduling:
-            enabled.append("scheduling")
-        if self.elections:
-            enabled.append("elections")
-        if self.minutes:
-            enabled.append("minutes")
-        if self.reports:
-            enabled.append("reports")
-        if self.notifications:
-            enabled.append("notifications")
-        if self.mobile:
-            enabled.append("mobile")
-        if self.forms:
-            enabled.append("forms")
-        if self.integrations:
-            enabled.append("integrations")
-        if self.facilities:
-            enabled.append("facilities")
+        for field_name in self.model_fields:
+            if getattr(self, field_name):
+                enabled.append(field_name)
 
         return enabled
 
@@ -352,6 +352,8 @@ class ModuleSettingsUpdate(BaseModel):
     training: Optional[bool] = None
     inventory: Optional[bool] = None
     scheduling: Optional[bool] = None
+    apparatus: Optional[bool] = None
+    communications: Optional[bool] = None
     elections: Optional[bool] = None
     minutes: Optional[bool] = None
     reports: Optional[bool] = None
@@ -360,6 +362,11 @@ class ModuleSettingsUpdate(BaseModel):
     forms: Optional[bool] = None
     integrations: Optional[bool] = None
     facilities: Optional[bool] = None
+    incidents: Optional[bool] = None
+    hr_payroll: Optional[bool] = None
+    grants: Optional[bool] = None
+    prospective_members: Optional[bool] = None
+    public_info: Optional[bool] = None
 
 
 class OrganizationSettings(BaseModel):

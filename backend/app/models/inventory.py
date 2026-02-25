@@ -304,6 +304,10 @@ class InventoryItem(Base):
     # can request this item.  NULL means no restriction (available to all).
     min_rank_order = Column(Integer, nullable=True)
 
+    # Position restriction — only members holding one of these corporate
+    # positions (by slug) can request this item.  NULL / empty = no restriction.
+    restricted_to_positions = Column(JSON, nullable=True)  # e.g. ["president", "safety_officer"]
+
     # Additional Data
     notes = Column(Text)
     custom_fields = Column(JSON)  # Organization-specific fields
