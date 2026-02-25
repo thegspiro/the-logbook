@@ -38,6 +38,8 @@ interface ScannedItem {
   trackingType: string;
   quantity: number;
   returnCondition: string;
+  size?: string;
+  color?: string;
 }
 
 type ResultItem = {
@@ -269,6 +271,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         trackingType: match.item.tracking_type,
         quantity: 1,
         returnCondition: 'good',
+        size: match.item.size,
+        color: match.item.color,
       },
     ]);
     setManualCode('');
@@ -559,9 +563,21 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                               }`}
                             >
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-theme-text-primary truncate">
-                                  {result.item.name}
-                                </p>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-sm font-medium text-theme-text-primary truncate">
+                                    {result.item.name}
+                                  </p>
+                                  {result.item.size && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 shrink-0">
+                                      {result.item.size}
+                                    </span>
+                                  )}
+                                  {result.item.color && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 shrink-0">
+                                      {result.item.color}
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-xs text-theme-text-muted truncate">
                                   {result.matched_field.replace(/_/g, ' ')}: {result.matched_value}
                                   {result.item.tracking_type === 'pool' ? ' (pool)' : ''}
@@ -653,9 +669,21 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                       className="flex items-center justify-between p-3 rounded-lg border border-theme-border bg-theme-surface"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-theme-text-primary truncate">
-                          {si.itemName}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium text-theme-text-primary truncate">
+                            {si.itemName}
+                          </p>
+                          {si.size && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 shrink-0">
+                              {si.size}
+                            </span>
+                          )}
+                          {si.color && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 shrink-0">
+                              {si.color}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-theme-text-muted">
                           {si.matchedField.replace(/_/g, ' ')}: {si.code}
                           {si.trackingType === 'pool' && ' (pool)'}

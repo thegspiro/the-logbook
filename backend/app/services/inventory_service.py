@@ -1740,12 +1740,14 @@ class InventoryService:
         results: List[Tuple[InventoryItem, str, str]] = []
         seen_ids: set = set()
 
-        # Search barcode, serial_number, asset_tag, then name in order of priority
+        # Search barcode, serial_number, asset_tag, name, size, then color in order of priority
         fields = [
             ("barcode", InventoryItem.barcode),
             ("serial_number", InventoryItem.serial_number),
             ("asset_tag", InventoryItem.asset_tag),
             ("name", InventoryItem.name),
+            ("size", InventoryItem.size),
+            ("color", InventoryItem.color),
         ]
 
         for field_name, field_col in fields:
