@@ -243,7 +243,7 @@ export const REQUEST_STATUS_COLORS: Record<string, string> = {
 // Inventory — Item Condition
 // ============================================
 
-/** All condition options for admin/edit forms (includes out_of_service). */
+/** All condition options for admin/edit forms (includes out_of_service and retired). */
 export const ITEM_CONDITION_OPTIONS = [
   { value: 'excellent', label: 'Excellent' },
   { value: 'good', label: 'Good' },
@@ -251,6 +251,7 @@ export const ITEM_CONDITION_OPTIONS = [
   { value: 'poor', label: 'Poor' },
   { value: 'damaged', label: 'Damaged' },
   { value: 'out_of_service', label: 'Out of Service' },
+  { value: 'retired', label: 'Retired' },
 ] as const;
 
 /** Condition options for return workflows (no out_of_service). */
@@ -260,4 +261,42 @@ export const RETURN_CONDITION_OPTIONS = [
   { value: 'fair', label: 'Fair' },
   { value: 'poor', label: 'Poor' },
   { value: 'damaged', label: 'Damaged' },
+] as const;
+
+// ============================================
+// NFPA 1851/1852 Compliance
+// ============================================
+
+export const NFPA_INSPECTION_LEVEL_OPTIONS = [
+  { value: 'routine', label: 'Routine (Visual)' },
+  { value: 'advanced', label: 'Advanced (Liner/Seam/Barrier)' },
+  { value: 'independent', label: 'Independent (Third-Party Lab)' },
+] as const;
+
+export const NFPA_CONTAMINATION_LEVEL_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'light', label: 'Light' },
+  { value: 'moderate', label: 'Moderate' },
+  { value: 'heavy', label: 'Heavy' },
+  { value: 'gross', label: 'Gross' },
+] as const;
+
+export const NFPA_EXPOSURE_TYPE_OPTIONS = [
+  { value: 'structure_fire', label: 'Structure Fire' },
+  { value: 'vehicle_fire', label: 'Vehicle Fire' },
+  { value: 'wildland_fire', label: 'Wildland Fire' },
+  { value: 'hazmat', label: 'Hazmat' },
+  { value: 'bloodborne_pathogen', label: 'Bloodborne Pathogen' },
+  { value: 'chemical', label: 'Chemical' },
+  { value: 'smoke', label: 'Smoke' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+export const NFPA_ENSEMBLE_ROLE_OPTIONS = [
+  { value: 'coat', label: 'Coat' },
+  { value: 'pants', label: 'Pants' },
+  { value: 'helmet', label: 'Helmet' },
+  { value: 'gloves', label: 'Gloves' },
+  { value: 'boots', label: 'Boots' },
+  { value: 'hood', label: 'Hood' },
 ] as const;

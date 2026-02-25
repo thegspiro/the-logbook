@@ -292,19 +292,34 @@ class InventoryService:
             await self.db.rollback()
             return None, str(e)
 
+    # Columns allowed for sort_by parameter
+    _SORTABLE_COLUMNS = {
+        "name": InventoryItem.name,
+        "condition": InventoryItem.condition,
+        "status": InventoryItem.status,
+        "quantity": InventoryItem.quantity,
+        "purchase_price": InventoryItem.purchase_price,
+        "created_at": InventoryItem.created_at,
+        "updated_at": InventoryItem.updated_at,
+    }
+
     async def get_items(
         self,
         organization_id: UUID,
         category_id: Optional[UUID] = None,
         status: Optional[ItemStatus] = None,
+        condition: Optional[ItemCondition] = None,
+        item_type: Optional[ItemType] = None,
         assigned_to: Optional[UUID] = None,
         storage_area_id: Optional[UUID] = None,
         search: Optional[str] = None,
         active_only: bool = True,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[InventoryItem], int]:
-        """Get items with filtering and pagination"""
+        """Get items with filtering, sorting, and pagination"""
         query = (
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
@@ -319,6 +334,21 @@ class InventoryService:
 
         if status:
             query = query.where(InventoryItem.status == status)
+
+        if condition:
+            query = query.where(InventoryItem.condition == condition)
+
+        if item_type:
+            # Filter by item_type via the category relationship
+            cat_subq = (
+                select(InventoryCategory.id)
+                .where(
+                    InventoryCategory.organization_id == str(organization_id),
+                    InventoryCategory.item_type == item_type,
+                )
+                .subquery()
+            )
+            query = query.where(InventoryItem.category_id.in_(select(cat_subq)))
 
         if assigned_to:
             query = query.where(InventoryItem.assigned_to_user_id == assigned_to)
@@ -353,8 +383,14 @@ class InventoryService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
 
-        # Get paginated results
-        query = query.order_by(InventoryItem.name).offset(skip).limit(limit)
+        # Apply sorting
+        col = self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
+        if sort_order == "desc":
+            query = query.order_by(col.desc())
+        else:
+            query = query.order_by(col.asc())
+
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         items = result.scalars().all()
 
@@ -1740,12 +1776,14 @@ class InventoryService:
         results: List[Tuple[InventoryItem, str, str]] = []
         seen_ids: set = set()
 
-        # Search barcode, serial_number, asset_tag, then name in order of priority
+        # Search barcode, serial_number, asset_tag, name, size, then color in order of priority
         fields = [
             ("barcode", InventoryItem.barcode),
             ("serial_number", InventoryItem.serial_number),
             ("asset_tag", InventoryItem.asset_tag),
             ("name", InventoryItem.name),
+            ("size", InventoryItem.size),
+            ("color", InventoryItem.color),
         ]
 
         for field_name, field_col in fields:
@@ -2705,3 +2743,170 @@ class InventoryService:
             await self.db.rollback()
             logger.error(f"Failed to review write-off: {e}")
             return None, str(e)
+
+    async def get_item_history(
+        self,
+        item_id: UUID,
+        organization_id: UUID,
+    ) -> List[Dict[str, Any]]:
+        """Get unified history/activity timeline for an item.
+
+        Merges assignment history, checkout records, pool issuances, and
+        maintenance records into a single chronologically sorted list.
+        """
+        events: List[Dict[str, Any]] = []
+
+        # --- Assignments ---
+        asgn_result = await self.db.execute(
+            select(ItemAssignment)
+            .options(selectinload(ItemAssignment.user))
+            .where(
+                ItemAssignment.item_id == str(item_id),
+                ItemAssignment.organization_id == str(organization_id),
+            )
+            .order_by(ItemAssignment.assigned_at.desc())
+        )
+        for a in asgn_result.scalars().all():
+            user_name = ""
+            if a.user:
+                user_name = f"{a.user.first_name or ''} {a.user.last_name or ''}".strip() or a.user.username or ""
+            events.append({
+                "type": "assignment",
+                "id": a.id,
+                "date": a.assigned_at.isoformat() if a.assigned_at else a.created_at.isoformat(),
+                "summary": f"Assigned to {user_name}" if a.is_active else f"Returned by {user_name}",
+                "details": {
+                    "user_name": user_name,
+                    "assignment_type": a.assignment_type.value if hasattr(a.assignment_type, "value") else a.assignment_type,
+                    "reason": a.reason,
+                    "is_active": a.is_active,
+                    "returned_at": a.returned_at.isoformat() if a.returned_at else None,
+                    "return_condition": a.return_condition.value if a.return_condition and hasattr(a.return_condition, "value") else a.return_condition,
+                    "return_notes": a.return_notes,
+                },
+            })
+            # If returned, add a separate return event
+            if a.returned_at:
+                events.append({
+                    "type": "return",
+                    "id": f"{a.id}_return",
+                    "date": a.returned_at.isoformat(),
+                    "summary": f"Returned by {user_name}",
+                    "details": {
+                        "user_name": user_name,
+                        "return_condition": a.return_condition.value if a.return_condition and hasattr(a.return_condition, "value") else a.return_condition,
+                        "return_notes": a.return_notes,
+                    },
+                })
+
+        # --- Checkouts ---
+        co_result = await self.db.execute(
+            select(CheckOutRecord)
+            .options(selectinload(CheckOutRecord.user))
+            .where(
+                CheckOutRecord.item_id == str(item_id),
+                CheckOutRecord.organization_id == str(organization_id),
+            )
+            .order_by(CheckOutRecord.checked_out_at.desc())
+        )
+        for c in co_result.scalars().all():
+            user_name = ""
+            if c.user:
+                user_name = f"{c.user.first_name or ''} {c.user.last_name or ''}".strip() or c.user.username or ""
+            events.append({
+                "type": "checkout",
+                "id": c.id,
+                "date": c.checked_out_at.isoformat() if c.checked_out_at else c.created_at.isoformat(),
+                "summary": f"Checked out by {user_name}",
+                "details": {
+                    "user_name": user_name,
+                    "reason": c.checkout_reason,
+                    "expected_return": c.expected_return_at.isoformat() if c.expected_return_at else None,
+                    "is_returned": c.is_returned,
+                    "is_overdue": c.is_overdue,
+                },
+            })
+            if c.checked_in_at:
+                events.append({
+                    "type": "checkin",
+                    "id": f"{c.id}_checkin",
+                    "date": c.checked_in_at.isoformat(),
+                    "summary": f"Checked in by {user_name}",
+                    "details": {
+                        "user_name": user_name,
+                        "return_condition": c.return_condition.value if c.return_condition and hasattr(c.return_condition, "value") else c.return_condition,
+                        "damage_notes": c.damage_notes,
+                    },
+                })
+
+        # --- Pool issuances ---
+        iss_result = await self.db.execute(
+            select(ItemIssuance)
+            .options(selectinload(ItemIssuance.user))
+            .where(
+                ItemIssuance.item_id == str(item_id),
+                ItemIssuance.organization_id == str(organization_id),
+            )
+            .order_by(ItemIssuance.issued_at.desc())
+        )
+        for i in iss_result.scalars().all():
+            user_name = ""
+            if i.user:
+                user_name = f"{i.user.first_name or ''} {i.user.last_name or ''}".strip() or i.user.username or ""
+            events.append({
+                "type": "issuance",
+                "id": i.id,
+                "date": i.issued_at.isoformat() if i.issued_at else i.created_at.isoformat(),
+                "summary": f"Issued {i.quantity} to {user_name}",
+                "details": {
+                    "user_name": user_name,
+                    "quantity": i.quantity,
+                    "reason": i.reason,
+                    "is_returned": i.is_returned,
+                },
+            })
+            if i.returned_at:
+                events.append({
+                    "type": "issuance_return",
+                    "id": f"{i.id}_return",
+                    "date": i.returned_at.isoformat(),
+                    "summary": f"{user_name} returned {i.quantity}",
+                    "details": {
+                        "user_name": user_name,
+                        "quantity": i.quantity,
+                        "return_condition": i.return_condition.value if i.return_condition and hasattr(i.return_condition, "value") else i.return_condition,
+                        "return_notes": i.return_notes,
+                    },
+                })
+
+        # --- Maintenance records ---
+        maint_result = await self.db.execute(
+            select(MaintenanceRecord)
+            .where(
+                MaintenanceRecord.item_id == str(item_id),
+                MaintenanceRecord.organization_id == str(organization_id),
+            )
+            .order_by(MaintenanceRecord.created_at.desc())
+        )
+        for m in maint_result.scalars().all():
+            mtype = m.maintenance_type.value if hasattr(m.maintenance_type, "value") else m.maintenance_type
+            events.append({
+                "type": "maintenance",
+                "id": m.id,
+                "date": (m.completed_date or m.scheduled_date or m.created_at).isoformat()
+                if (m.completed_date or m.scheduled_date)
+                else m.created_at.isoformat(),
+                "summary": f"{mtype.replace('_', ' ').title()}{' — completed' if m.is_completed else ' — scheduled'}",
+                "details": {
+                    "maintenance_type": mtype,
+                    "description": m.description,
+                    "is_completed": m.is_completed,
+                    "passed": m.passed,
+                    "condition_after": m.condition_after.value if m.condition_after and hasattr(m.condition_after, "value") else m.condition_after,
+                    "notes": m.notes,
+                },
+            })
+
+        # Sort all events by date descending
+        events.sort(key=lambda e: e["date"], reverse=True)
+        return events

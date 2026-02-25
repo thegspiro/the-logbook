@@ -24,6 +24,10 @@ import {
   CheckCircle2,
   Clock,
   FileX,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Copy,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -49,6 +53,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
 import { useInventoryWebSocket } from '../hooks/useInventoryWebSocket';
 import { useRanks } from '../hooks/useRanks';
+import ItemDetailModal from './inventory/ItemDetailModal';
 import toast from 'react-hot-toast';
 
 const ITEM_TYPES = [
@@ -68,6 +73,7 @@ const STATUS_OPTIONS = [
   { value: 'checked_out', label: 'Checked Out', color: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' },
   { value: 'in_maintenance', label: 'In Maintenance', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30' },
   { value: 'lost', label: 'Lost', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
+  { value: 'stolen', label: 'Stolen', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
   { value: 'retired', label: 'Retired', color: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border' },
 ];
 
@@ -118,6 +124,12 @@ const InventoryPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [conditionFilter, setConditionFilter] = useState<string>('');
+  const [itemTypeFilter, setItemTypeFilter] = useState<string>('');
+
+  // Sorting
+  const [sortBy, setSortBy] = useState<string>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Modals
   const [showAddItem, setShowAddItem] = useState(false);
@@ -168,6 +180,7 @@ const InventoryPage: React.FC = () => {
     requires_serial_number: false,
     requires_maintenance: false,
     requires_assignment: false,
+    nfpa_tracking_enabled: false,
   });
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -176,12 +189,10 @@ const InventoryPage: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [editForm, setEditForm] = useState<Partial<InventoryItemCreate>>({});
   const [showEditModal, setShowEditModal] = useState(false);
+  const [detailItem, setDetailItem] = useState<InventoryItem | null>(null);
   const [showRetireConfirm, setShowRetireConfirm] = useState<InventoryItem | null>(null);
   const [retireNotes, setRetireNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  // Confirmation dialog for batch submit in scan modal
-  const [_showBatchConfirm, _setShowBatchConfirm] = useState(false);
 
   // Bulk operations
   const [showBulkMenu, setShowBulkMenu] = useState(false);
@@ -239,7 +250,7 @@ const InventoryPage: React.FC = () => {
     if (!loading) {
       loadItems();
     }
-  }, [searchQuery, statusFilter, categoryFilter]);
+  }, [searchQuery, statusFilter, categoryFilter, conditionFilter, itemTypeFilter, sortBy, sortOrder]);
 
   // Close label format menu on outside click
   useEffect(() => {
@@ -255,7 +266,7 @@ const InventoryPage: React.FC = () => {
       // Refresh item list and summary when another user makes a change
       loadItems();
       inventoryService.getSummary().then(setSummary).catch(() => { /* non-critical refresh */ });
-    }, [searchQuery, statusFilter, categoryFilter]),
+    }, [searchQuery, statusFilter, categoryFilter, conditionFilter, itemTypeFilter, sortBy, sortOrder]),
   });
 
   const loadData = async () => {
@@ -308,6 +319,10 @@ const InventoryPage: React.FC = () => {
         search: searchQuery || undefined,
         status: statusFilter || undefined,
         category_id: categoryFilter || undefined,
+        condition: conditionFilter || undefined,
+        item_type: itemTypeFilter || undefined,
+        sort_by: sortBy || undefined,
+        sort_order: sortOrder,
         limit: 50,
       });
       setItems(data.items);
@@ -381,6 +396,10 @@ const InventoryPage: React.FC = () => {
         search: searchQuery || undefined,
         status: statusFilter || undefined,
         category_id: categoryFilter || undefined,
+        condition: conditionFilter || undefined,
+        item_type: itemTypeFilter || undefined,
+        sort_by: sortBy || undefined,
+        sort_order: sortOrder,
         skip: items.length,
         limit: 50,
       });
@@ -423,6 +442,7 @@ const InventoryPage: React.FC = () => {
       setCategoryForm({
         name: '', description: '', item_type: 'equipment',
         requires_serial_number: false, requires_maintenance: false, requires_assignment: false,
+        nfpa_tracking_enabled: false,
       });
       loadData();
       toast.success('Category created successfully');
@@ -464,6 +484,44 @@ const InventoryPage: React.FC = () => {
     });
     setFormError(null);
     setShowEditModal(true);
+  };
+
+  const handleDuplicateItem = (item: InventoryItem) => {
+    setItemForm({
+      ...defaultItemForm,
+      name: `${item.name} (Copy)`,
+      description: item.description || '',
+      category_id: item.category_id || '',
+      tracking_type: item.tracking_type,
+      manufacturer: item.manufacturer || '',
+      model_number: item.model_number || '',
+      location_id: item.location_id || '',
+      storage_location: item.storage_location || '',
+      storage_area_id: item.storage_area_id || '',
+      station: item.station || '',
+      condition: 'good',
+      status: 'available',
+      quantity: item.tracking_type === 'pool' ? item.quantity : 1,
+      size: item.size || '',
+      color: item.color || '',
+      unit_of_measure: item.unit_of_measure || '',
+      purchase_price: item.purchase_price,
+      vendor: item.vendor || '',
+      inspection_interval_days: item.inspection_interval_days,
+      notes: '',
+      // Intentionally omit: serial_number, asset_tag, barcode (unique per item)
+    });
+    setFormError(null);
+    setShowAddItem(true);
+  };
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
   };
 
   const handleUpdateItem = async (e: React.FormEvent) => {
@@ -620,6 +678,7 @@ const InventoryPage: React.FC = () => {
       requires_maintenance: cat.requires_maintenance,
       requires_assignment: cat.requires_assignment,
       low_stock_threshold: cat.low_stock_threshold ?? undefined,
+      nfpa_tracking_enabled: cat.nfpa_tracking_enabled,
     });
     setFormError(null);
   };
@@ -1218,6 +1277,30 @@ const InventoryPage: React.FC = () => {
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
+                  <label htmlFor="inventory-type-filter" className="sr-only">Filter by item type</label>
+                  <select
+                    id="inventory-type-filter"
+                    value={itemTypeFilter}
+                    onChange={(e) => setItemTypeFilter(e.target.value)}
+                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">All Types</option>
+                    {ITEM_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                  <label htmlFor="inventory-condition-filter" className="sr-only">Filter by condition</label>
+                  <select
+                    id="inventory-condition-filter"
+                    value={conditionFilter}
+                    onChange={(e) => setConditionFilter(e.target.value)}
+                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">All Conditions</option>
+                    {CONDITION_OPTIONS.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
                 </div>
                 {canManage && (
                   <div className="flex items-center gap-2 ml-auto">
@@ -1263,11 +1346,11 @@ const InventoryPage: React.FC = () => {
                 <Package className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Items Found</h3>
                 <p className="text-theme-text-secondary mb-6">
-                  {searchQuery || statusFilter || categoryFilter
+                  {searchQuery || statusFilter || categoryFilter || conditionFilter || itemTypeFilter
                     ? 'Try adjusting your search or filters.'
                     : 'Get started by adding your first inventory item.'}
                 </p>
-                {canManage && !searchQuery && !statusFilter && !categoryFilter && (
+                {canManage && !searchQuery && !statusFilter && !categoryFilter && !conditionFilter && !itemTypeFilter && (
                   <button
                     onClick={() => setShowAddItem(true)}
                     className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
@@ -1293,13 +1376,33 @@ const InventoryPage: React.FC = () => {
                             />
                           </th>
                         )}
-                        <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Item</th>
+                        <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                          <button type="button" onClick={() => handleSort('name')} className="inline-flex items-center gap-1 hover:text-theme-text-primary transition-colors">
+                            Item
+                            {sortBy === 'name' ? (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-40" />}
+                          </button>
+                        </th>
                         <th scope="col" className="hidden sm:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Category</th>
                         <th scope="col" className="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Serial #</th>
                         <th scope="col" className="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Location</th>
-                        <th scope="col" className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Condition</th>
-                        <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Status</th>
-                        <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Qty</th>
+                        <th scope="col" className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                          <button type="button" onClick={() => handleSort('condition')} className="inline-flex items-center gap-1 hover:text-theme-text-primary transition-colors">
+                            Condition
+                            {sortBy === 'condition' ? (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-40" />}
+                          </button>
+                        </th>
+                        <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                          <button type="button" onClick={() => handleSort('status')} className="inline-flex items-center gap-1 hover:text-theme-text-primary transition-colors">
+                            Status
+                            {sortBy === 'status' ? (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-40" />}
+                          </button>
+                        </th>
+                        <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                          <button type="button" onClick={() => handleSort('quantity')} className="inline-flex items-center gap-1 hover:text-theme-text-primary transition-colors">
+                            Qty
+                            {sortBy === 'quantity' ? (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-40" />}
+                          </button>
+                        </th>
                         {canManage && <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Actions</th>}
                       </tr>
                     </thead>
@@ -1308,10 +1411,10 @@ const InventoryPage: React.FC = () => {
                         <tr
                           key={item.id}
                           className="hover:bg-theme-surface-secondary transition-colors cursor-pointer"
-                          onClick={() => canManage && openEditModal(item)}
-                          role={canManage ? 'button' : undefined}
-                          tabIndex={canManage ? 0 : undefined}
-                          onKeyDown={(e) => { if (canManage && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openEditModal(item); } }}
+                          onClick={() => setDetailItem(item)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailItem(item); } }}
                         >
                           {canManage && (
                             <td className="w-10 px-3 py-4" onClick={(e) => e.stopPropagation()}>
@@ -1379,6 +1482,9 @@ const InventoryPage: React.FC = () => {
                               <div className="flex items-center gap-1">
                                 <button onClick={() => openEditModal(item)} className="p-1.5 text-theme-text-muted hover:text-emerald-500 rounded" title="Edit item" aria-label={`Edit ${item.name}`}>
                                   <Pencil className="w-4 h-4" aria-hidden="true" />
+                                </button>
+                                <button onClick={() => handleDuplicateItem(item)} className="p-1.5 text-theme-text-muted hover:text-blue-500 rounded" title="Duplicate item" aria-label={`Duplicate ${item.name}`}>
+                                  <Copy className="w-4 h-4" aria-hidden="true" />
                                 </button>
                                 {item.tracking_type === 'pool' && item.status !== 'retired' && (
                                   <button onClick={() => openPoolIssueModal(item)} className="p-1.5 text-theme-text-muted hover:text-purple-500 rounded" title="Issue from pool" aria-label={`Issue ${item.name}`}>
@@ -2167,6 +2273,14 @@ const InventoryPage: React.FC = () => {
                           />
                           <span className="text-sm text-theme-text-secondary">Requires member assignment</span>
                         </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox" checked={categoryForm.nfpa_tracking_enabled || false}
+                            onChange={(e) => setCategoryForm({ ...categoryForm, nfpa_tracking_enabled: e.target.checked })}
+                            className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-sm text-theme-text-secondary">NFPA 1851/1852 compliance tracking</span>
+                        </label>
                       </div>
                       <div>
                         <label htmlFor="category-low-stock" className="block text-sm font-medium text-theme-text-secondary mb-1">Low Stock Threshold</label>
@@ -2199,6 +2313,19 @@ const InventoryPage: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+        {/* Item Detail Modal */}
+        {detailItem && (
+          <ItemDetailModal
+            item={detailItem}
+            category={categories.find((c) => c.id === detailItem.category_id)}
+            onClose={() => setDetailItem(null)}
+            onEdit={(item) => {
+              setDetailItem(null);
+              openEditModal(item);
+            }}
+            canManage={canManage}
+          />
         )}
         {/* Edit Item Modal */}
         {showEditModal && editingItem && (
@@ -2615,6 +2742,10 @@ const InventoryPage: React.FC = () => {
                         <label className="flex items-center space-x-2">
                           <input type="checkbox" checked={editCategoryForm.requires_assignment || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_assignment: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
                           <span className="text-sm text-theme-text-secondary">Requires member assignment</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input type="checkbox" checked={editCategoryForm.nfpa_tracking_enabled || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, nfpa_tracking_enabled: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
+                          <span className="text-sm text-theme-text-secondary">NFPA 1851/1852 compliance tracking</span>
                         </label>
                       </div>
                       <div>

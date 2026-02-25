@@ -5,6 +5,7 @@
  */
 
 import { create } from 'zustand';
+import { decodeJwt } from 'jose';
 import { authService } from '../services/api';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
@@ -36,10 +37,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      await authService.login(credentials);
+      const tokenResponse = await authService.login(credentials);
 
-      // Tokens are stored in httpOnly cookies by the backend.
-      // Load user data using the cookie-authenticated session.
+      // Persist tokens so ProtectedRoute can restore the session on refresh.
+      localStorage.setItem('access_token', tokenResponse.access_token);
+      localStorage.setItem('refresh_token', tokenResponse.refresh_token);
+
       await get().loadUser();
 
       set({ isLoading: false });
@@ -57,10 +60,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      await authService.register(data);
+      const tokenResponse = await authService.register(data);
 
-      // Tokens are stored in httpOnly cookies by the backend.
-      // Load user data using the cookie-authenticated session.
+      localStorage.setItem('access_token', tokenResponse.access_token);
+      localStorage.setItem('refresh_token', tokenResponse.refresh_token);
+
       await get().loadUser();
 
       set({ isLoading: false });
@@ -80,7 +84,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // Logout errors are non-critical; cookies are cleared by the backend
     } finally {
-      // Clear legacy localStorage tokens (migration cleanup)
+      // Clear localStorage tokens
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       set({
@@ -92,8 +96,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loadUser: async () => {
-    // Authentication is handled via httpOnly cookies sent automatically.
-    // Just try to fetch the current user — a 401 means not authenticated.
+    const token = localStorage.getItem('access_token');
+
+    // No stored token — nothing to restore.
+    if (!token) {
+      set({ user: null, isAuthenticated: false, isLoading: false });
+      return;
+    }
+
+    // Quick client-side expiry check to avoid a needless API round-trip.
+    try {
+      const { exp } = decodeJwt(token);
+      if (typeof exp === 'number' && exp < Math.floor(Date.now() / 1000)) {
+        // Token expired — clear stored tokens and bail out.
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        return;
+      }
+    } catch {
+      // Token is opaque or malformed — let the API decide.
+    }
+
     set({ isLoading: true });
 
     try {
@@ -112,7 +136,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     } catch {
-      // Not authenticated or session expired
+      // Not authenticated or session expired — clear stored tokens.
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       set({
         user: null,
         isAuthenticated: false,

@@ -24,14 +24,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import safe_error_detail, sanitize_error_message
 from app.core.websocket_manager import ws_manager
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
     EquipmentRequest,
     InventoryItem,
+    ItemCondition,
     ItemStatus,
+    ItemType,
+    NFPAExposureRecord,
+    NFPAInspectionDetail,
+    NFPAItemCompliance,
     StorageArea,
 )
 from app.models.operational_rank import OperationalRank
@@ -82,6 +87,14 @@ from app.schemas.inventory import (  # Category schemas; Item schemas; Assignmen
     WriteOffRequestCreate,
     WriteOffRequestResponse,
     WriteOffReview,
+    NFPAComplianceCreate,
+    NFPAComplianceResponse,
+    NFPAComplianceUpdate,
+    NFPAExposureRecordCreate,
+    NFPAExposureRecordResponse,
+    NFPAInspectionDetailCreate,
+    NFPAInspectionDetailResponse,
+    NFPASummaryResponse,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
@@ -157,8 +170,21 @@ async def create_category(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_category_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "category_id": str(new_category.id),
+            "category_name": new_category.name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return new_category
 
@@ -186,8 +212,21 @@ async def update_category(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_category_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "category_id": str(category_id),
+            "fields_updated": list(update_data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return updated_category
 
@@ -228,17 +267,21 @@ async def get_category(
 async def list_items(
     category_id: Optional[UUID] = None,
     status: Optional[str] = None,
+    condition: Optional[str] = None,
+    item_type: Optional[str] = None,
     assigned_to: Optional[UUID] = None,
     storage_area_id: Optional[UUID] = None,
     search: Optional[str] = None,
     active_only: bool = True,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = Query(None, regex="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
-    List inventory items with filtering and pagination
+    List inventory items with filtering, sorting, and pagination
 
     **Authentication required**
     **Requires permission: inventory.view**
@@ -252,18 +295,44 @@ async def list_items(
             status_enum = ItemStatus(status)
         except ValueError:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail=f"Invalid status: {status}",
+            )
+
+    # Convert condition string to enum if provided
+    condition_enum = None
+    if condition:
+        try:
+            condition_enum = ItemCondition(condition)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid condition: {condition}",
+            )
+
+    # Convert item_type string to enum if provided
+    item_type_enum = None
+    if item_type:
+        try:
+            item_type_enum = ItemType(item_type)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid item_type: {item_type}",
             )
 
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
         category_id=category_id,
         status=status_enum,
+        condition=condition_enum,
+        item_type=item_type_enum,
         assigned_to=assigned_to,
         storage_area_id=storage_area_id,
         search=search,
         active_only=active_only,
+        sort_by=sort_by,
+        sort_order=sort_order,
         skip=skip,
         limit=limit,
     )
@@ -300,7 +369,7 @@ async def create_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -454,6 +523,41 @@ async def get_item(
     return item
 
 
+@router.get("/items/{item_id}/history")
+async def get_item_history(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get unified activity history for an item.
+
+    Returns a chronologically sorted list of all assignments, checkouts,
+    pool issuances, and maintenance events.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+
+    # Verify item exists and belongs to user's org
+    item = await service.get_item_by_id(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+    )
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found",
+        )
+
+    events = await service.get_item_history(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+    )
+    return {"events": events}
+
+
 @router.patch("/items/{item_id}", response_model=InventoryItemResponse)
 async def update_item(
     item_id: UUID,
@@ -477,7 +581,7 @@ async def update_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -525,7 +629,7 @@ async def retire_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -592,7 +696,7 @@ async def assign_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -660,7 +764,7 @@ async def unassign_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -745,7 +849,7 @@ async def issue_from_pool(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -811,7 +915,7 @@ async def return_to_pool(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -915,7 +1019,7 @@ async def checkout_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -978,7 +1082,7 @@ async def checkin_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1205,7 +1309,7 @@ async def create_maintenance_record(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1252,7 +1356,7 @@ async def update_maintenance_record(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1673,7 +1777,7 @@ async def initiate_departure_clearance(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1832,7 +1936,7 @@ async def resolve_clearance_item(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1888,7 +1992,7 @@ async def complete_departure_clearance(
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
 
     await log_audit_event(
@@ -1997,6 +2101,20 @@ async def create_equipment_request(
     db.add(req)
     await db.commit()
     await db.refresh(req)
+
+    await log_audit_event(
+        db=db,
+        event_type="equipment_request_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "request_id": str(req.id),
+            "item_name": req.item_name,
+            "request_type": request_data.request_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return {
         "id": req.id,
@@ -2131,6 +2249,20 @@ async def review_equipment_request(
     req.review_notes = review_data.review_notes
 
     await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="equipment_request_reviewed",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "request_id": str(request_id),
+            "decision": review_data.status,
+            "review_notes": review_data.review_notes,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return {
         "id": req.id,
@@ -2286,6 +2418,20 @@ async def create_storage_area(
     await db.commit()
     await db.refresh(area)
 
+    await log_audit_event(
+        db=db,
+        event_type="storage_area_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "storage_area_id": str(area.id),
+            "name": area.name,
+            "storage_type": data.storage_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return {
         "id": area.id,
         "organization_id": area.organization_id,
@@ -2353,6 +2499,19 @@ async def update_storage_area(
     await db.commit()
     await db.refresh(area)
 
+    await log_audit_event(
+        db=db,
+        event_type="storage_area_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "storage_area_id": str(area_id),
+            "fields_updated": list(data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return {
         "id": area.id,
         "organization_id": area.organization_id,
@@ -2400,6 +2559,19 @@ async def delete_storage_area(
     area.is_active = False
     await db.commit()
 
+    await log_audit_event(
+        db=db,
+        event_type="storage_area_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "storage_area_id": str(area_id),
+            "name": area.name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
 
 # ============================================
 # Write-Off Endpoints
@@ -2432,7 +2604,7 @@ async def create_write_off_request(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=sanitize_error_message(error))
 
     await log_audit_event(
         db=db,
@@ -2498,7 +2670,7 @@ async def review_write_off_request(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=sanitize_error_message(error))
 
     await log_audit_event(
         db=db,
@@ -2521,6 +2693,380 @@ async def review_write_off_request(
     )
 
     return result
+
+
+# ============================================
+# NFPA 1851/1852 Compliance Endpoints
+# ============================================
+
+
+@router.get("/items/{item_id}/nfpa-compliance", response_model=NFPAComplianceResponse)
+async def get_nfpa_compliance(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """Get NFPA compliance record for an item."""
+    result = await db.execute(
+        select(NFPAItemCompliance).where(
+            NFPAItemCompliance.item_id == str(item_id),
+            NFPAItemCompliance.organization_id == str(current_user.organization_id),
+        )
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="No NFPA compliance record found for this item")
+    return record
+
+
+@router.post(
+    "/items/{item_id}/nfpa-compliance",
+    response_model=NFPAComplianceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_nfpa_compliance(
+    item_id: UUID,
+    data: NFPAComplianceCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Create NFPA compliance record for an item. Requires NFPA tracking on the item's category."""
+    from app.core.utils import generate_uuid
+    from app.models.inventory import InventoryCategory
+
+    # Verify item exists and belongs to this org
+    item_result = await db.execute(
+        select(InventoryItem).where(
+            InventoryItem.id == str(item_id),
+            InventoryItem.organization_id == str(current_user.organization_id),
+        )
+    )
+    item = item_result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # Verify category has NFPA tracking enabled
+    if item.category_id:
+        cat_result = await db.execute(
+            select(InventoryCategory.nfpa_tracking_enabled).where(
+                InventoryCategory.id == str(item.category_id)
+            )
+        )
+        nfpa_enabled = cat_result.scalar_one_or_none()
+        if not nfpa_enabled:
+            raise HTTPException(
+                status_code=400,
+                detail="NFPA tracking is not enabled for this item's category",
+            )
+
+    # Check for existing record
+    existing = await db.execute(
+        select(NFPAItemCompliance.id).where(
+            NFPAItemCompliance.item_id == str(item_id)
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="NFPA compliance record already exists for this item")
+
+    record = NFPAItemCompliance(
+        id=generate_uuid(),
+        item_id=str(item_id),
+        organization_id=str(current_user.organization_id),
+        created_by=str(current_user.id),
+        **data.model_dump(exclude_unset=True),
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+
+    await log_audit_event(
+        db=db,
+        event_type="nfpa_compliance_created",
+        event_category="inventory",
+        severity="info",
+        event_data={"item_id": str(item_id), "item_name": item.name},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return record
+
+
+@router.patch("/items/{item_id}/nfpa-compliance", response_model=NFPAComplianceResponse)
+async def update_nfpa_compliance(
+    item_id: UUID,
+    data: NFPAComplianceUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Update NFPA compliance record for an item."""
+    result = await db.execute(
+        select(NFPAItemCompliance).where(
+            NFPAItemCompliance.item_id == str(item_id),
+            NFPAItemCompliance.organization_id == str(current_user.organization_id),
+        )
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="No NFPA compliance record found for this item")
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(record, field, value)
+
+    await db.commit()
+    await db.refresh(record)
+
+    await log_audit_event(
+        db=db,
+        event_type="nfpa_compliance_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "fields_updated": list(update_data.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return record
+
+
+@router.delete("/items/{item_id}/nfpa-compliance", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_nfpa_compliance(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Remove NFPA compliance record from an item."""
+    result = await db.execute(
+        select(NFPAItemCompliance).where(
+            NFPAItemCompliance.item_id == str(item_id),
+            NFPAItemCompliance.organization_id == str(current_user.organization_id),
+        )
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="No NFPA compliance record found for this item")
+
+    await db.delete(record)
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="nfpa_compliance_deleted",
+        event_category="inventory",
+        severity="warning",
+        event_data={"item_id": str(item_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
+# --- Exposure Records ---
+
+
+@router.get("/items/{item_id}/exposures", response_model=List[NFPAExposureRecordResponse])
+async def list_exposure_records(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """List exposure records for an NFPA-tracked item."""
+    result = await db.execute(
+        select(NFPAExposureRecord)
+        .where(
+            NFPAExposureRecord.item_id == str(item_id),
+            NFPAExposureRecord.organization_id == str(current_user.organization_id),
+        )
+        .order_by(NFPAExposureRecord.exposure_date.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post(
+    "/items/{item_id}/exposures",
+    response_model=NFPAExposureRecordResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_exposure_record(
+    item_id: UUID,
+    data: NFPAExposureRecordCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Log a hazardous exposure event for an NFPA-tracked item."""
+    from app.core.utils import generate_uuid
+
+    # Verify item exists and belongs to this org
+    item_result = await db.execute(
+        select(InventoryItem).where(
+            InventoryItem.id == str(item_id),
+            InventoryItem.organization_id == str(current_user.organization_id),
+        )
+    )
+    item = item_result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    record = NFPAExposureRecord(
+        id=generate_uuid(),
+        item_id=str(item_id),
+        organization_id=str(current_user.organization_id),
+        created_by=str(current_user.id),
+        exposure_type=data.exposure_type,
+        exposure_date=data.exposure_date,
+        incident_number=data.incident_number,
+        description=data.description,
+        decon_required=data.decon_required,
+        decon_completed=data.decon_completed,
+        decon_completed_date=data.decon_completed_date,
+        decon_method=data.decon_method,
+        user_id=str(data.user_id) if data.user_id else None,
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+
+    await log_audit_event(
+        db=db,
+        event_type="nfpa_exposure_recorded",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "item_name": item.name,
+            "exposure_type": data.exposure_type,
+            "exposure_date": str(data.exposure_date),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return record
+
+
+# --- NFPA Dashboard ---
+
+
+@router.get("/nfpa/summary", response_model=NFPASummaryResponse)
+async def get_nfpa_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """Get NFPA compliance dashboard summary."""
+    from sqlalchemy import func as sa_func, and_
+
+    org_id = str(current_user.organization_id)
+    today = datetime.utcnow().date()
+    from datetime import timedelta
+
+    retirement_warning_date = today + timedelta(days=180)
+
+    # Total NFPA items
+    total_result = await db.execute(
+        select(sa_func.count(NFPAItemCompliance.id)).where(
+            NFPAItemCompliance.organization_id == org_id
+        )
+    )
+    total_nfpa = total_result.scalar() or 0
+
+    # Nearing retirement (within 180 days)
+    nearing_result = await db.execute(
+        select(sa_func.count(NFPAItemCompliance.id)).where(
+            NFPAItemCompliance.organization_id == org_id,
+            NFPAItemCompliance.expected_retirement_date != None,  # noqa: E711
+            NFPAItemCompliance.expected_retirement_date <= retirement_warning_date,
+            NFPAItemCompliance.is_retired_by_age == False,  # noqa: E712
+        )
+    )
+    nearing_retirement = nearing_result.scalar() or 0
+
+    # Overdue inspection (items with next_inspection_due in the past)
+    overdue_result = await db.execute(
+        select(sa_func.count(InventoryItem.id)).where(
+            InventoryItem.organization_id == org_id,
+            InventoryItem.next_inspection_due != None,  # noqa: E711
+            InventoryItem.next_inspection_due < today,
+            InventoryItem.active == True,  # noqa: E712
+            InventoryItem.id.in_(
+                select(NFPAItemCompliance.item_id).where(
+                    NFPAItemCompliance.organization_id == org_id
+                )
+            ),
+        )
+    )
+    overdue_inspection = overdue_result.scalar() or 0
+
+    # Pending decontamination
+    pending_decon_result = await db.execute(
+        select(sa_func.count(NFPAExposureRecord.id)).where(
+            NFPAExposureRecord.organization_id == org_id,
+            NFPAExposureRecord.decon_required == True,  # noqa: E712
+            NFPAExposureRecord.decon_completed == False,  # noqa: E712
+        )
+    )
+    pending_decon = pending_decon_result.scalar() or 0
+
+    # Unique ensembles
+    ensemble_result = await db.execute(
+        select(sa_func.count(sa_func.distinct(NFPAItemCompliance.ensemble_id))).where(
+            NFPAItemCompliance.organization_id == org_id,
+            NFPAItemCompliance.ensemble_id != None,  # noqa: E711
+        )
+    )
+    ensembles_count = ensemble_result.scalar() or 0
+
+    return {
+        "total_nfpa_items": total_nfpa,
+        "nearing_retirement": nearing_retirement,
+        "overdue_inspection": overdue_inspection,
+        "pending_decon": pending_decon,
+        "ensembles_count": ensembles_count,
+    }
+
+
+@router.get("/nfpa/retirement-due")
+async def get_nfpa_retirement_due(
+    days_ahead: int = Query(180, ge=1, le=730),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """List items approaching NFPA 10-year retirement deadline."""
+    from datetime import timedelta
+
+    org_id = str(current_user.organization_id)
+    cutoff = datetime.utcnow().date() + timedelta(days=days_ahead)
+
+    result = await db.execute(
+        select(NFPAItemCompliance, InventoryItem)
+        .join(InventoryItem, NFPAItemCompliance.item_id == InventoryItem.id)
+        .where(
+            NFPAItemCompliance.organization_id == org_id,
+            NFPAItemCompliance.expected_retirement_date != None,  # noqa: E711
+            NFPAItemCompliance.expected_retirement_date <= cutoff,
+            NFPAItemCompliance.is_retired_by_age == False,  # noqa: E712
+            InventoryItem.active == True,  # noqa: E712
+        )
+        .order_by(NFPAItemCompliance.expected_retirement_date)
+    )
+
+    items = []
+    for compliance, item in result.all():
+        items.append(
+            {
+                "item_id": item.id,
+                "item_name": item.name,
+                "serial_number": item.serial_number,
+                "manufacture_date": compliance.manufacture_date.isoformat() if compliance.manufacture_date else None,
+                "expected_retirement_date": compliance.expected_retirement_date.isoformat() if compliance.expected_retirement_date else None,
+                "days_remaining": (compliance.expected_retirement_date - datetime.utcnow().date()).days if compliance.expected_retirement_date else None,
+                "ensemble_id": compliance.ensemble_id,
+            }
+        )
+
+    return {"items": items, "total": len(items)}
 
 
 # ============================================
