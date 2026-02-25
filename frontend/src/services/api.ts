@@ -13,6 +13,7 @@ import {
   setCache,
   invalidateByPrefix,
   getResourcePrefix,
+  isCacheable,
   isRevalidating,
   markRevalidating,
   clearRevalidating,
@@ -139,8 +140,9 @@ api.interceptors.request.use(
 
     // --- GET response cache ---
     // Skip cache for requests explicitly marked (e.g. background revalidation)
+    // and for endpoints carrying sensitive/PII data (HIPAA compliance).
     const skipCache = (config as unknown as Record<string, unknown>)._skipCache === true;
-    if (method === 'GET' && !skipCache && config.url) {
+    if (method === 'GET' && !skipCache && config.url && isCacheable(config.url)) {
       const key = getCacheKey(config.url, config.params as Record<string, unknown> | undefined);
       const cached = getCached(key);
 
@@ -200,8 +202,8 @@ api.interceptors.response.use(
   (response) => {
     const method = (response.config.method || '').toUpperCase();
 
-    // Cache successful GET responses (skip if this was already a cache hit)
-    if (method === 'GET' && response.config.url && !(response.config as unknown as Record<string, unknown>)._fromCache) {
+    // Cache successful GET responses (skip cache hits and sensitive endpoints)
+    if (method === 'GET' && response.config.url && isCacheable(response.config.url) && !(response.config as unknown as Record<string, unknown>)._fromCache) {
       const key = getCacheKey(
         response.config.url,
         response.config.params as Record<string, unknown> | undefined,
