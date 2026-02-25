@@ -24,6 +24,7 @@ import type { Assignment } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
 
 interface ShiftDetailPanelProps {
@@ -68,6 +69,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [signupPosition, setSignupPosition] = useState('');
   const [signingUp, setSigningUp] = useState(false);
 
+  // Inline confirmation for decline/remove
+  const [confirmingDecline, setConfirmingDecline] = useState<string | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
+
   // Assign state (admin) — with member search
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignForm, setAssignForm] = useState({ user_id: '', position: '' });
@@ -109,8 +114,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         ]);
         setAssignments(assignData as unknown as Assignment[]);
         setCalls(callData);
-      } catch {
-        toast.error('Failed to load shift details');
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'Failed to load shift details'));
       } finally {
         setLoading(false);
       }
@@ -158,8 +163,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       toast.success('Signed up for shift');
       await refreshAssignments();
       onRefresh?.();
-    } catch {
-      toast.error('Failed to sign up for shift');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to sign up for shift'));
     } finally {
       setSigningUp(false);
     }
@@ -170,31 +175,31 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       await schedulingService.confirmAssignment(assignmentId);
       toast.success('Assignment confirmed');
       await refreshAssignments();
-    } catch {
-      toast.error('Failed to confirm assignment');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to confirm assignment'));
     }
   };
 
   const handleDecline = async (assignmentId: string) => {
-    if (!window.confirm('Decline this shift assignment?')) return;
     try {
       await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
       toast.success('Assignment declined');
+      setConfirmingDecline(null);
       await refreshAssignments();
-    } catch {
-      toast.error('Failed to decline assignment');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to decline assignment'));
     }
   };
 
   const handleRemove = async (assignmentId: string) => {
-    if (!window.confirm('Remove this assignment?')) return;
     try {
       await schedulingService.deleteAssignment(assignmentId);
       toast.success('Assignment removed');
+      setConfirmingRemove(null);
       await refreshAssignments();
       onRefresh?.();
-    } catch {
-      toast.error('Failed to remove assignment');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to remove assignment'));
     }
   };
 
@@ -212,8 +217,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       setMemberSearch('');
       await refreshAssignments();
       onRefresh?.();
-    } catch {
-      toast.error('Failed to assign member');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to assign member'));
     } finally {
       setAssigning(false);
     }
@@ -231,8 +236,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       setIsEditing(false);
       toast.success('Shift updated');
       onRefresh?.();
-    } catch {
-      toast.error('Failed to update shift');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to update shift'));
     } finally {
       setSaving(false);
     }
@@ -246,8 +251,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       toast.success('Shift deleted');
       onClose();
       onRefresh?.();
-    } catch {
-      toast.error('Failed to delete shift');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to delete shift'));
     } finally {
       setDeleting(false);
     }
@@ -255,11 +260,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (confirmingDecline) setConfirmingDecline(null);
+        else if (confirmingRemove) setConfirmingRemove(null);
+        else onClose();
+      }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, confirmingDecline, confirmingRemove]);
 
   const isUserAssigned = assignments.some(a => a.user_id === user?.id);
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
@@ -313,26 +322,48 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${statusColor}`}>
             {effectiveStatus}
           </span>
-          {isCurrentUser && isAssigned && (
+          {isCurrentUser && isAssigned && confirmingDecline !== assignment.id && (
             <>
               <button onClick={() => handleConfirm(assignment.id)}
-                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Confirm"
+                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"
               >
                 <Check className="w-4 h-4" />
               </button>
-              <button onClick={() => handleDecline(assignment.id)}
-                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Decline"
+              <button onClick={() => setConfirmingDecline(assignment.id)}
+                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Decline assignment"
               >
                 <XCircle className="w-4 h-4" />
               </button>
             </>
           )}
-          {canManage && !isCurrentUser && (
-            <button onClick={() => handleRemove(assignment.id)}
-              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Remove"
+          {confirmingDecline === assignment.id && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-red-500">Decline?</span>
+              <button onClick={() => handleDecline(assignment.id)}
+                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm decline"
+              >Yes</button>
+              <button onClick={() => setConfirmingDecline(null)}
+                className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
+              >No</button>
+            </div>
+          )}
+          {canManage && !isCurrentUser && confirmingRemove !== assignment.id && (
+            <button onClick={() => setConfirmingRemove(assignment.id)}
+              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
             >
               <XCircle className="w-4 h-4" />
             </button>
+          )}
+          {confirmingRemove === assignment.id && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-red-500">Remove?</span>
+              <button onClick={() => handleRemove(assignment.id)}
+                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm removal"
+              >Yes</button>
+              <button onClick={() => setConfirmingRemove(null)}
+                className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel removal"
+              >No</button>
+            </div>
           )}
         </div>
       </div>
@@ -359,18 +390,18 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               {canManage && !isPast && (
                 <>
                   <button onClick={() => { setEditForm({ shift_date: shift.shift_date, notes: shift.notes || '' }); setIsEditing(!isEditing); }}
-                    className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" title="Edit shift"
+                    className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button onClick={() => setShowDeleteConfirm(true)}
-                    className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" title="Delete shift"
+                    className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Delete shift"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </>
               )}
-              <button onClick={onClose} className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center">
+              <button onClick={onClose} className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Close panel">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -537,26 +568,48 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || assignment.assignment_status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
                             {assignment.status || assignment.assignment_status || 'assigned'}
                           </span>
-                          {assignment.user_id === user?.id && (assignment.status === 'assigned' || assignment.assignment_status === 'assigned') && (
+                          {assignment.user_id === user?.id && (assignment.status === 'assigned' || assignment.assignment_status === 'assigned') && confirmingDecline !== assignment.id && (
                             <>
                               <button onClick={() => handleConfirm(assignment.id)}
-                                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Confirm"
+                                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"
                               >
                                 <Check className="w-4 h-4" />
                               </button>
-                              <button onClick={() => handleDecline(assignment.id)}
-                                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Decline"
+                              <button onClick={() => setConfirmingDecline(assignment.id)}
+                                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Decline assignment"
                               >
                                 <XCircle className="w-4 h-4" />
                               </button>
                             </>
                           )}
-                          {canManage && assignment.user_id !== user?.id && (
-                            <button onClick={() => handleRemove(assignment.id)}
-                              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="Remove"
+                          {confirmingDecline === assignment.id && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-red-500">Decline?</span>
+                              <button onClick={() => handleDecline(assignment.id)}
+                                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm decline"
+                              >Yes</button>
+                              <button onClick={() => setConfirmingDecline(null)}
+                                className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
+                              >No</button>
+                            </div>
+                          )}
+                          {canManage && assignment.user_id !== user?.id && confirmingRemove !== assignment.id && (
+                            <button onClick={() => setConfirmingRemove(assignment.id)}
+                              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
                             >
                               <XCircle className="w-4 h-4" />
                             </button>
+                          )}
+                          {confirmingRemove === assignment.id && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-red-500">Remove?</span>
+                              <button onClick={() => handleRemove(assignment.id)}
+                                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm removal"
+                              >Yes</button>
+                              <button onClick={() => setConfirmingRemove(null)}
+                                className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel removal"
+                              >No</button>
+                            </div>
                           )}
                         </>
                       ) : (

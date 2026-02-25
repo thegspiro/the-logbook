@@ -5,7 +5,7 @@
  * Allows confirming/declining assignments, requesting swaps, and requesting time off.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Clock, Check, XCircle, ArrowLeftRight, CalendarOff,
   Loader2, ChevronDown,
@@ -16,6 +16,7 @@ import type { ShiftRecord } from '../../services/api';
 import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
 import { ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
 
 interface MyShiftsTabProps {
@@ -41,6 +42,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const [timeOffForm, setTimeOffForm] = useState({ start_date: '', end_date: '', reason: '' });
   const [submittingTimeOff, setSubmittingTimeOff] = useState(false);
 
+  // Inline confirmation for decline
+  const [confirmingDecline, setConfirmingDecline] = useState<string | null>(null);
+
+  // Per-button loading states
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  // Refs for modal focus management
+  const swapModalRef = useRef<HTMLDivElement>(null);
+  const timeOffModalRef = useRef<HTMLDivElement>(null);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -60,25 +71,49 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleConfirm = async (assignmentId: string) => {
+    setConfirmingId(assignmentId);
     try {
       await schedulingService.confirmAssignment(assignmentId);
       toast.success('Shift confirmed');
       loadData();
-    } catch {
-      toast.error('Failed to confirm shift');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to confirm shift'));
+    } finally {
+      setConfirmingId(null);
     }
   };
 
   const handleDecline = async (assignmentId: string) => {
-    if (!window.confirm('Decline this shift assignment?')) return;
     try {
       await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
       toast.success('Shift declined');
+      setConfirmingDecline(null);
       loadData();
-    } catch {
-      toast.error('Failed to decline shift');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to decline shift'));
     }
   };
+
+  // Escape key closes modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showSwapModal) setShowSwapModal(false);
+        else if (showTimeOffModal) setShowTimeOffModal(false);
+        else if (confirmingDecline) setConfirmingDecline(null);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showSwapModal, showTimeOffModal, confirmingDecline]);
+
+  // Focus management: auto-focus first interactive element when modal opens
+  useEffect(() => {
+    if (showSwapModal) swapModalRef.current?.querySelector<HTMLElement>('select, input, textarea')?.focus();
+  }, [showSwapModal]);
+  useEffect(() => {
+    if (showTimeOffModal) timeOffModalRef.current?.querySelector<HTMLElement>('input')?.focus();
+  }, [showTimeOffModal]);
 
   const openSwapRequest = async (assignment: Assignment) => {
     setSwapAssignment(assignment);
@@ -104,11 +139,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         requesting_shift_id: swapForm.target_shift_id || undefined,
         reason: swapForm.reason,
       });
-      toast.success('Swap request submitted');
+      toast.success('Swap request submitted — check Requests tab for status');
       setShowSwapModal(false);
       loadData();
-    } catch {
-      toast.error('Failed to submit swap request');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to submit swap request'));
     } finally {
       setSubmittingSwap(false);
     }
@@ -123,11 +158,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         end_date: timeOffForm.end_date || timeOffForm.start_date,
         reason: timeOffForm.reason,
       });
-      toast.success('Time off request submitted');
+      toast.success('Time off request submitted — check Requests tab for status');
       setShowTimeOffModal(false);
       setTimeOffForm({ start_date: '', end_date: '', reason: '' });
-    } catch {
-      toast.error('Failed to submit time off request');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to submit time off request'));
     } finally {
       setSubmittingTimeOff(false);
     }
@@ -183,10 +218,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
           <Clock className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
           <h3 className="text-lg font-medium text-theme-text-primary mb-1">
-            {view === 'upcoming' ? 'No upcoming shifts' : 'No past shifts'}
+            {view === 'upcoming' ? 'No upcoming shifts' : 'No past shifts found'}
           </h3>
-          <p className="text-theme-text-muted text-sm">
-            {view === 'upcoming' ? 'Check the Open Shifts tab to sign up for available shifts.' : 'Your past shift history will appear here.'}
+          <p className="text-theme-text-muted text-sm max-w-sm mx-auto">
+            {view === 'upcoming'
+              ? 'You have no scheduled shifts coming up. Check the Open Shifts tab to browse and sign up for available shifts.'
+              : 'Your completed shift history will appear here once you have past assignments.'}
           </p>
         </div>
       ) : (
@@ -226,30 +263,42 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     <span className={`hidden sm:inline-block px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColor}`}>
                       {assignment.status}
                     </span>
-                    {view === 'upcoming' && assignment.status === 'assigned' && (
+                    {view === 'upcoming' && assignment.status === 'assigned' && confirmingDecline !== assignment.id && (
                       <>
                         <button onClick={() => handleConfirm(assignment.id)}
-                          className="p-2 text-green-600 hover:bg-green-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Confirm shift"
+                          disabled={confirmingId === assignment.id}
+                          className="p-2 text-green-600 hover:bg-green-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Confirm shift" aria-label="Confirm shift assignment"
                         >
-                          <Check className="w-5 h-5" />
+                          {confirmingId === assignment.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
                         </button>
-                        <button onClick={() => handleDecline(assignment.id)}
-                          className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Decline shift"
+                        <button onClick={() => setConfirmingDecline(assignment.id)}
+                          className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Decline shift" aria-label="Decline shift assignment"
                         >
                           <XCircle className="w-5 h-5" />
                         </button>
                       </>
                     )}
+                    {confirmingDecline === assignment.id && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-red-500">Decline?</span>
+                        <button onClick={() => handleDecline(assignment.id)}
+                          className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm decline"
+                        >Yes</button>
+                        <button onClick={() => setConfirmingDecline(null)}
+                          className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
+                        >No</button>
+                      </div>
+                    )}
                     {view === 'upcoming' && (
                       <button onClick={() => openSwapRequest(assignment)}
-                        className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Request swap"
+                        className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Request swap" aria-label="Request shift swap"
                       >
                         <ArrowLeftRight className="w-5 h-5" />
                       </button>
                     )}
                     {shift && onViewShift && (
                       <button onClick={() => onViewShift(shift)}
-                        className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="View details"
+                        className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="View details" aria-label="View shift details"
                       >
                         <ChevronDown className="w-5 h-5" />
                       </button>
@@ -264,8 +313,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
       {/* Swap Request Modal */}
       {showSwapModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Request shift swap">
+          <div ref={swapModalRef} className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-bold text-theme-text-primary">Request Shift Swap</h2>
               <p className="text-sm text-theme-text-secondary mt-1">
@@ -316,8 +365,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
       {/* Time Off Modal */}
       {showTimeOffModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Request time off">
+          <div ref={timeOffModalRef} className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-bold text-theme-text-primary">Request Time Off</h2>
             </div>
