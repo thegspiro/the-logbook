@@ -112,6 +112,9 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const FormsPage = lazy(() => import('./pages/FormsPage'));
 const PublicFormPage = lazy(() => import('./pages/PublicFormPage'));
 
+// Public Event Request Status
+const EventRequestStatusPage = lazy(() => import('./pages/EventRequestStatusPage'));
+
 // Integrations Module
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
 
@@ -271,6 +274,9 @@ function App() {
 
             {/* Public Form Page (no auth required) */}
             <Route path="/f/:slug" element={<PublicFormPage />} />
+
+            {/* Public Event Request Status (token-based, no auth required) */}
+            <Route path="/event-request/status/:token" element={<EventRequestStatusPage />} />
 
             {/* Public Ballot Voting Page (token-based, no auth required) */}
             <Route path="/ballot" element={<BallotVotingPage />} />

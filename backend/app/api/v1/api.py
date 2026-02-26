@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     elections,
     email_templates,
     error_logs,
+    event_requests,
     events,
     external_training,
     facilities,
@@ -55,6 +56,7 @@ api_router = APIRouter(dependencies=[Depends(verify_csrf_token)])
 # Include route modules
 api_router.include_router(onboarding.router)
 api_router.include_router(events.router, prefix="/events", tags=["events"])
+api_router.include_router(event_requests.router, tags=["event-requests"])
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])

@@ -1900,6 +1900,10 @@ export const eventService = {
     const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
     return response.data;
   },
+  async getVisibleEventTypes(): Promise<import('../types/event').EventType[]> {
+    const response = await api.get<{ visible_event_types: import('../types/event').EventType[] }>('/events/visible-event-types');
+    return response.data.visible_event_types;
+  },
 
   async getEventFolder(eventId: string): Promise<DocumentFolder> {
     const response = await api.get<DocumentFolder>(`/events/${eventId}/folder`);
@@ -1925,6 +1929,82 @@ export const eventService = {
   },
   async removeExternalAttendee(eventId: string, attendeeId: string): Promise<void> {
     await api.delete(`/events/${eventId}/external-attendees/${attendeeId}`);
+  },
+};
+
+// ============================================
+// Event Request Pipeline Service
+// ============================================
+
+export const eventRequestService = {
+  async listRequests(params?: { status?: string; outreach_type?: string }): Promise<import('../types/event').EventRequestListItem[]> {
+    const response = await api.get<import('../types/event').EventRequestListItem[]>('/event-requests', { params });
+    return response.data;
+  },
+  async getRequest(requestId: string): Promise<import('../types/event').EventRequest> {
+    const response = await api.get<import('../types/event').EventRequest>(`/event-requests/${requestId}`);
+    return response.data;
+  },
+  async updateRequestStatus(requestId: string, data: { status: string; notes?: string; decline_reason?: string; assigned_to?: string; event_id?: string }): Promise<{ message: string; status: string }> {
+    const response = await api.patch<{ message: string; status: string }>(`/event-requests/${requestId}/status`, data);
+    return response.data;
+  },
+  async checkPublicStatus(token: string): Promise<import('../types/event').EventRequestPublicStatus> {
+    const response = await api.get<import('../types/event').EventRequestPublicStatus>(`/event-requests/status/${token}`);
+    return response.data;
+  },
+  async getOutreachTypeLabels(organizationId?: string): Promise<Record<string, string>> {
+    const params = organizationId ? { organization_id: organizationId } : {};
+    const response = await api.get<Record<string, string>>('/event-requests/types/labels', { params });
+    return response.data;
+  },
+  async updateTaskCompletion(requestId: string, data: { task_id: string; completed: boolean; notes?: string }): Promise<{ message: string; task_completions: Record<string, unknown>; status: string }> {
+    const response = await api.patch<{ message: string; task_completions: Record<string, unknown>; status: string }>(`/event-requests/${requestId}/tasks`, data);
+    return response.data;
+  },
+  async assignRequest(requestId: string, data: { assigned_to: string; notes?: string }): Promise<{ message: string; assigned_to: string; assignee_name: string }> {
+    const response = await api.patch<{ message: string; assigned_to: string; assignee_name: string }>(`/event-requests/${requestId}/assign`, data);
+    return response.data;
+  },
+  async addComment(requestId: string, data: { message: string }): Promise<import('../types/event').EventRequestActivity> {
+    const response = await api.post<import('../types/event').EventRequestActivity>(`/event-requests/${requestId}/comments`, data);
+    return response.data;
+  },
+  async scheduleRequest(requestId: string, data: { event_date: string; event_end_date?: string; location_id?: string; notes?: string; create_calendar_event?: boolean }): Promise<{ message: string; status: string; event_date: string; event_id?: string }> {
+    const response = await api.patch<{ message: string; status: string; event_date: string; event_id?: string }>(`/event-requests/${requestId}/schedule`, data);
+    return response.data;
+  },
+  async postponeRequest(requestId: string, data: { reason?: string; new_event_date?: string; new_event_end_date?: string }): Promise<{ message: string; status: string }> {
+    const response = await api.patch<{ message: string; status: string }>(`/event-requests/${requestId}/postpone`, data);
+    return response.data;
+  },
+  async publicCancelRequest(token: string, data: { reason?: string }): Promise<{ message: string; status: string }> {
+    const response = await api.post<{ message: string; status: string }>(`/event-requests/status/${token}/cancel`, data);
+    return response.data;
+  },
+  async sendTemplateEmail(requestId: string, data: { template_id: string; additional_context?: Record<string, string> }): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/event-requests/${requestId}/send-email`, data);
+    return response.data;
+  },
+  async listEmailTemplates(): Promise<import('../types/event').EmailTemplate[]> {
+    const response = await api.get<import('../types/event').EmailTemplate[]>('/event-requests/email-templates');
+    return response.data;
+  },
+  async createEmailTemplate(data: { name: string; subject: string; body_html: string; body_text?: string; trigger?: string; trigger_days_before?: number }): Promise<import('../types/event').EmailTemplate> {
+    const response = await api.post<import('../types/event').EmailTemplate>('/event-requests/email-templates', data);
+    return response.data;
+  },
+  async updateEmailTemplate(templateId: string, data: Partial<{ name: string; subject: string; body_html: string; body_text: string; trigger: string; trigger_days_before: number; is_active: number }>): Promise<import('../types/event').EmailTemplate> {
+    const response = await api.patch<import('../types/event').EmailTemplate>(`/event-requests/email-templates/${templateId}`, data);
+    return response.data;
+  },
+  async deleteEmailTemplate(templateId: string): Promise<{ message: string }> {
+    const response = await api.delete<{ message: string }>(`/event-requests/email-templates/${templateId}`);
+    return response.data;
+  },
+  async generateForm(): Promise<{ message: string; form_id: string; public_slug: string; public_url: string }> {
+    const response = await api.post<{ message: string; form_id: string; public_slug: string; public_url: string }>('/event-requests/generate-form');
+    return response.data;
   },
 };
 

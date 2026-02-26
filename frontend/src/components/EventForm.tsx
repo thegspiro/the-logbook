@@ -17,7 +17,7 @@ import {
   Bell,
 } from 'lucide-react';
 import type { EventCreate, EventType, RSVPStatus } from '../types/event';
-import { locationsService } from '../services/api';
+import { eventService, locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
@@ -112,9 +112,13 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [locationMode, setLocationMode] = useState<'select' | 'other'>(
     initialData?.location ? 'other' : 'select'
   );
+  const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
 
   useEffect(() => {
     loadLocations();
+    eventService.getVisibleEventTypes()
+      .then(setVisibleTypes)
+      .catch(() => { /* fall back to showing all types */ });
   }, []);
 
   const loadLocations = async () => {
@@ -314,11 +318,20 @@ export const EventForm: React.FC<EventFormProps> = ({
             onChange={(e) => update({ event_type: e.target.value as EventType })}
             className={selectClass}
           >
-            {EVENT_TYPES.map((type) => (
+            {EVENT_TYPES.filter((t) => visibleTypes.includes(t)).map((type) => (
               <option key={type} value={type}>
                 {getEventTypeLabel(type)}
               </option>
             ))}
+            {EVENT_TYPES.some((t) => !visibleTypes.includes(t)) && (
+              <optgroup label="Other">
+                {EVENT_TYPES.filter((t) => !visibleTypes.includes(t)).map((type) => (
+                  <option key={type} value={type}>
+                    {getEventTypeLabel(type)}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           {formData.event_type === EventTypeEnum.TRAINING && (
             <div className="mt-2 bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">

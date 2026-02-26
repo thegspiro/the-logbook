@@ -1671,7 +1671,43 @@ EVENT_SETTINGS_DEFAULTS = {
         "ceremony",
         "other",
     ],
+    "visible_event_types": [
+        "business_meeting",
+        "public_education",
+        "training",
+        "other",
+    ],
     "event_type_labels": {},
+    "outreach_event_types": [
+        {"value": "fire_safety_demo", "label": "Fire Safety Demo"},
+        {"value": "station_tour", "label": "Station Tour"},
+        {"value": "cpr_first_aid", "label": "CPR / First Aid Class"},
+        {"value": "career_talk", "label": "Career Talk"},
+        {"value": "other", "label": "Other"},
+    ],
+    "request_pipeline": {
+        "min_lead_time_days": 21,
+        "default_assignee_id": None,
+        "public_progress_visible": False,
+        "tasks": [
+            {"id": "review_request", "label": "Review Request", "description": "Review the incoming request details"},
+            {"id": "assign_coordinator", "label": "Assign Coordinator", "description": "Assign a team member to coordinate this event"},
+            {"id": "confirm_date", "label": "Confirm Date", "description": "Confirm the event date with the requester"},
+            {"id": "plan_content", "label": "Plan Content", "description": "Prepare lesson plan or presentation content"},
+            {"id": "arrange_volunteers", "label": "Arrange Volunteers", "description": "Recruit and assign volunteers"},
+            {"id": "prepare_equipment", "label": "Prepare Equipment", "description": "Gather and prepare necessary equipment"},
+        ],
+        "email_triggers": {
+            "on_submitted": {"enabled": True, "notify_assignee": True, "notify_requester": True},
+            "on_in_progress": {"enabled": True, "notify_requester": True},
+            "on_scheduled": {"enabled": True, "notify_requester": True},
+            "on_postponed": {"enabled": True, "notify_requester": True},
+            "on_completed": {"enabled": True, "notify_requester": True},
+            "on_declined": {"enabled": True, "notify_requester": True},
+            "on_cancelled": {"enabled": True, "notify_requester": True},
+            "days_before_event": {"enabled": True, "days": [7, 1]},
+        },
+    },
     "defaults": {
         "event_type": "other",
         "check_in_window_type": "flexible",
@@ -1775,6 +1811,32 @@ async def update_event_settings(
                 merged[key] = current_events[key]
 
     return merged
+
+
+@router.get("/visible-event-types")
+async def get_visible_event_types(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the list of event types visible as primary filter categories.
+
+    Types not in this list are grouped under the "Other" tab.
+    Available to all authenticated users.
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    settings = (org.settings or {}).get("events", {})
+    visible = settings.get(
+        "visible_event_types",
+        EVENT_SETTINGS_DEFAULTS["visible_event_types"],
+    )
+    return {"visible_event_types": visible}
 
 
 # ============================================

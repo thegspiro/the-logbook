@@ -780,6 +780,11 @@ class FormsService:
                         submission, integration
                     )
                     results["event_registration"] = result
+                elif integration.integration_type == IntegrationType.EVENT_REQUEST:
+                    result = await self._process_event_request(
+                        submission, integration
+                    )
+                    results["event_request"] = result
             except Exception as e:
                 results[integration.integration_type] = {
                     "success": False,
@@ -968,6 +973,76 @@ class FormsService:
                 "mapped_data": mapped_data,
                 "message": "Event registration recorded for admin review",
             }
+
+    async def _process_event_request(
+        self, submission: FormSubmission, integration: FormIntegration
+    ) -> Dict[str, Any]:
+        """
+        Process an event request form submission.
+        Creates an EventRequest record for coordinator review.
+        """
+        from app.models.event_request import (
+            EventRequest,
+            EventRequestActivity,
+            EventRequestStatus,
+        )
+
+        mappings = integration.field_mappings or {}
+        mapped_data: Dict[str, Any] = {}
+
+        for field_id, target_field in mappings.items():
+            if field_id in submission.data:
+                mapped_data[target_field] = submission.data[field_id]
+
+        contact_name = mapped_data.get("contact_name", "")
+        contact_email = mapped_data.get("contact_email", "")
+        if not contact_name or not contact_email:
+            return {
+                "success": False,
+                "error": "contact_name and contact_email mappings are required",
+            }
+
+        try:
+            event_request = EventRequest(
+                organization_id=submission.organization_id,
+                contact_name=contact_name,
+                contact_email=contact_email,
+                contact_phone=mapped_data.get("contact_phone"),
+                organization_name=mapped_data.get("organization_name"),
+                outreach_type=mapped_data.get("outreach_type", "other"),
+                description=mapped_data.get("description", "Submitted via form"),
+                date_flexibility=mapped_data.get("date_flexibility", "flexible"),
+                preferred_timeframe=mapped_data.get("preferred_timeframe"),
+                preferred_time_of_day=mapped_data.get("preferred_time_of_day", "flexible"),
+                audience_size=int(mapped_data["audience_size"]) if mapped_data.get("audience_size") else None,
+                age_group=mapped_data.get("age_group"),
+                venue_preference=mapped_data.get("venue_preference", "their_location"),
+                venue_address=mapped_data.get("venue_address"),
+                special_requests=mapped_data.get("special_requests"),
+                status=EventRequestStatus.SUBMITTED,
+                form_submission_id=str(submission.id),
+                ip_address=submission.ip_address,
+            )
+            self.db.add(event_request)
+            await self.db.flush()
+
+            activity = EventRequestActivity(
+                request_id=event_request.id,
+                action="submitted",
+                new_status=EventRequestStatus.SUBMITTED.value,
+                notes="Request submitted via public form",
+            )
+            self.db.add(activity)
+            await self.db.flush()
+
+            return {
+                "success": True,
+                "event_request_id": event_request.id,
+                "status_token": event_request.status_token,
+                "message": "Event request created for coordinator review",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     # ============================================
     # Member Lookup

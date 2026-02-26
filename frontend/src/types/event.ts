@@ -355,6 +355,8 @@ export interface EventDocumentFolder {
 export interface EventModuleSettings {
   // Which event types are enabled for this organization
   enabled_event_types: EventType[];
+  // Which event types are shown as primary filter tabs (rest grouped under "Other")
+  visible_event_types: EventType[];
   // Custom labels for event types (overrides defaults)
   event_type_labels: Partial<Record<EventType, string>>;
   // Defaults applied when creating a new event
@@ -384,4 +386,156 @@ export interface EventModuleSettings {
     require_reason: boolean;
     notify_attendees: boolean;
   };
+  // Configurable outreach event types for the public request pipeline
+  outreach_event_types: OutreachEventTypeConfig[];
+  // Configurable pipeline settings for event requests
+  request_pipeline: RequestPipelineSettings;
+}
+
+// Event Request Pipeline
+
+export interface OutreachEventTypeConfig {
+  value: string;
+  label: string;
+}
+
+export interface PipelineTaskConfig {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export interface EmailTriggerConfig {
+  enabled: boolean;
+  notify_assignee?: boolean;
+  notify_requester?: boolean;
+  days?: number[];
+}
+
+export interface RequestPipelineSettings {
+  min_lead_time_days: number;
+  default_assignee_id: string | null;
+  public_progress_visible: boolean;
+  tasks: PipelineTaskConfig[];
+  email_triggers: Record<string, EmailTriggerConfig>;
+}
+
+export type EventRequestStatus =
+  | 'submitted'
+  | 'in_progress'
+  | 'scheduled'
+  | 'postponed'
+  | 'completed'
+  | 'declined'
+  | 'cancelled';
+
+export type DateFlexibility = 'specific_dates' | 'general_timeframe' | 'flexible';
+export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'flexible';
+
+export interface TaskCompletion {
+  completed: boolean;
+  completed_by: string;
+  completed_at: string;
+  notes?: string;
+}
+
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body_html: string;
+  body_text?: string;
+  trigger?: string;
+  trigger_days_before?: number;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskProgressPublic {
+  total: number;
+  completed: number;
+  tasks: { label: string; completed: boolean }[];
+}
+
+export interface EventRequestActivity {
+  id: string;
+  action: string;
+  old_status?: string;
+  new_status?: string;
+  notes?: string;
+  details?: Record<string, unknown>;
+  performed_by?: string;
+  performer_name?: string;
+  created_at: string;
+}
+
+export interface EventRequest {
+  id: string;
+  organization_id: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string;
+  organization_name?: string;
+  outreach_type: string;
+  description: string;
+  date_flexibility: DateFlexibility;
+  preferred_date_start?: string;
+  preferred_date_end?: string;
+  preferred_timeframe?: string;
+  preferred_time_of_day?: TimeOfDay;
+  audience_size?: number;
+  age_group?: string;
+  venue_preference: string;
+  venue_address?: string;
+  special_requests?: string;
+  status: EventRequestStatus;
+  assigned_to?: string;
+  assignee_name?: string;
+  reviewer_notes?: string;
+  decline_reason?: string;
+  task_completions?: Record<string, TaskCompletion>;
+  event_id?: string;
+  event_date?: string;
+  event_end_date?: string;
+  event_location_id?: string;
+  event_location_name?: string;
+  status_token?: string;
+  created_at: string;
+  updated_at: string;
+  activity_log: EventRequestActivity[];
+}
+
+export interface EventRequestListItem {
+  id: string;
+  contact_name: string;
+  contact_email: string;
+  organization_name?: string;
+  outreach_type: string;
+  status: EventRequestStatus;
+  date_flexibility: DateFlexibility;
+  preferred_date_start?: string;
+  preferred_timeframe?: string;
+  audience_size?: number;
+  assigned_to?: string;
+  assignee_name?: string;
+  task_completions?: Record<string, TaskCompletion>;
+  event_date?: string;
+  created_at: string;
+}
+
+export interface EventRequestPublicStatus {
+  contact_name: string;
+  outreach_type: string;
+  status: EventRequestStatus;
+  date_flexibility: DateFlexibility;
+  preferred_date_start?: string;
+  preferred_date_end?: string;
+  preferred_timeframe?: string;
+  created_at: string;
+  updated_at: string;
+  event_date?: string;
+  decline_reason?: string;
+  task_progress?: TaskProgressPublic;
+  can_cancel: boolean;
 }
