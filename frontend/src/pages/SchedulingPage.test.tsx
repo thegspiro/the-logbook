@@ -22,6 +22,9 @@ vi.mock('../services/api', () => ({
   notificationsService: {
     getNotificationRules: vi.fn().mockResolvedValue([]),
   },
+  userService: {
+    getUsers: vi.fn().mockResolvedValue([]),
+  },
 }));
 
 // Mock auth store
