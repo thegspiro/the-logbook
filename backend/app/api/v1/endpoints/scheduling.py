@@ -136,8 +136,8 @@ async def create_shift(
     result, error = await service.create_shift(
         current_user.organization_id, shift_data, current_user.id
     )
-    if error:
-        raise HTTPException(status_code=400, detail=f"Unable to create shift. {error}")
+    if error or result is None:
+        raise HTTPException(status_code=400, detail=f"Unable to create shift. {error or 'Unknown error'}")
     enriched = await _enrich_shifts(service, current_user.organization_id, [result])
     return enriched[0]
 
@@ -179,12 +179,12 @@ async def update_shift(
 ):
     """Update a shift"""
     service = SchedulingService(db)
-    update_data = shift.model_dump(exclude_none=True)
+    update_data = shift.model_dump(exclude_unset=True)
     result, error = await service.update_shift(
         shift_id, current_user.organization_id, update_data
     )
-    if error:
-        raise HTTPException(status_code=400, detail=f"Unable to update shift. {error}")
+    if error or result is None:
+        raise HTTPException(status_code=400, detail=f"Unable to update shift. {error or 'Unknown error'}")
     enriched = await _enrich_shifts(service, current_user.organization_id, [result])
     return enriched[0]
 
@@ -258,7 +258,7 @@ async def update_attendance(
     result, error = await service.update_attendance(
         attendance_id,
         current_user.organization_id,
-        attendance.model_dump(exclude_none=True),
+        attendance.model_dump(exclude_unset=True),
     )
     if error:
         raise HTTPException(
@@ -405,7 +405,7 @@ async def update_call(
 ):
     """Update a call record"""
     service = SchedulingService(db)
-    update_data = call.model_dump(exclude_none=True)
+    update_data = call.model_dump(exclude_unset=True)
     result, error = await service.update_shift_call(
         call_id, current_user.organization_id, update_data
     )
@@ -496,7 +496,7 @@ async def update_template(
 ):
     """Update a shift template"""
     service = SchedulingService(db)
-    update_data = template.model_dump(exclude_none=True)
+    update_data = template.model_dump(exclude_unset=True)
     result, error = await service.update_template(
         template_id, current_user.organization_id, update_data
     )
@@ -589,7 +589,7 @@ async def update_pattern(
 ):
     """Update a shift pattern"""
     service = SchedulingService(db)
-    update_data = pattern.model_dump(exclude_none=True)
+    update_data = pattern.model_dump(exclude_unset=True)
     result, error = await service.update_pattern(
         pattern_id, current_user.organization_id, update_data
     )
@@ -694,7 +694,7 @@ async def update_assignment(
 ):
     """Update a shift assignment"""
     service = SchedulingService(db)
-    update_data = assignment.model_dump(exclude_none=True)
+    update_data = assignment.model_dump(exclude_unset=True)
     result, error = await service.update_assignment(
         assignment_id, current_user.organization_id, update_data
     )
@@ -1328,7 +1328,7 @@ async def update_basic_apparatus(
     existing = result.scalar_one_or_none()
     if not existing:
         raise HTTPException(status_code=404, detail="Apparatus not found")
-    update_data = apparatus.model_dump(exclude_none=True)
+    update_data = apparatus.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(existing, key, value)
     await db.commit()

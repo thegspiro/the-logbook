@@ -23,7 +23,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatTime } from '../utils/dateFormatting';
 import { schedulingService, notificationsService } from '../services/api';
-import type { ShiftRecord, SchedulingSummary, NotificationRuleRecord } from '../services/api';
+import type { ShiftRecord, SchedulingSummary, NotificationRuleRecord, ShiftTemplateRecord, BasicApparatusRecord } from '../services/api';
 
 // Lazy-loaded tab components
 const MyShiftsTab = lazy(() => import('./scheduling/MyShiftsTab'));
@@ -38,23 +38,8 @@ const ShiftReportsTab = lazy(() => import('./scheduling/ShiftReportsTab'));
 type TabId = 'schedule' | 'my-shifts' | 'open-shifts' | 'requests' | 'templates' | 'patterns' | 'shift-reports' | 'reports' | 'settings';
 type ViewMode = 'week' | 'month';
 
-interface BackendTemplate {
-  id: string;
-  name: string;
-  start_time_of_day: string;
-  end_time_of_day: string;
-  duration_hours: number;
-  color?: string;
-  positions?: string[];
-  min_staffing: number;
-  category?: string;
-  apparatus_type?: string;
-  is_default: boolean;
-  is_active: boolean;
-}
-
 // Fallback templates when no backend templates are configured
-const FALLBACK_TEMPLATES: BackendTemplate[] = [
+const FALLBACK_TEMPLATES: ShiftTemplateRecord[] = [
   { id: '_day', name: 'Day Shift', start_time_of_day: '07:00', end_time_of_day: '19:00', duration_hours: 12, min_staffing: 4, is_default: true, is_active: true },
   { id: '_night', name: 'Night Shift', start_time_of_day: '19:00', end_time_of_day: '07:00', duration_hours: 12, min_staffing: 4, is_default: false, is_active: true },
   { id: '_24hr', name: '24 Hour', start_time_of_day: '07:00', end_time_of_day: '07:00', duration_hours: 24, min_staffing: 4, is_default: false, is_active: true },
@@ -70,7 +55,7 @@ const formatDateISO = (date: Date): string => {
 };
 
 /** Compute the end date for a shift given its start date and template times. */
-const computeEndDate = (startDate: string, template: BackendTemplate | undefined): string => {
+const computeEndDate = (startDate: string, template: ShiftTemplateRecord | undefined): string => {
   if (!startDate || !template) return '';
   const [startHour = 0] = template.start_time_of_day.split(':').map(Number);
   const [endHour = 0] = template.end_time_of_day.split(':').map(Number);
@@ -133,10 +118,10 @@ const SchedulingPage: React.FC = () => {
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
 
   // Apparatus list for shift creation
-  const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>>([]);
+  const [apparatusList, setApparatusList] = useState<BasicApparatusRecord[]>([]);
 
   // Backend shift templates
-  const [backendTemplates, setBackendTemplates] = useState<BackendTemplate[]>([]);
+  const [backendTemplates, setShiftTemplateRecords] = useState<ShiftTemplateRecord[]>([]);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
 
   // Effective templates: backend if available, otherwise fallbacks
@@ -152,11 +137,9 @@ const SchedulingPage: React.FC = () => {
   }, [effectiveTemplates]);
 
   const [shiftForm, setShiftForm] = useState({
-    name: '',
     shiftTemplate: '',
     startDate: '',
     endDate: '',
-    minStaffing: 4,
     notes: '',
     apparatus_id: '',
   });
@@ -169,10 +152,10 @@ const SchedulingPage: React.FC = () => {
           schedulingService.getBasicApparatus(),
           schedulingService.getTemplates({ active_only: true }),
         ]);
-        setApparatusList(apparatusData as Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>);
-        setBackendTemplates(templateData as unknown as BackendTemplate[]);
-      } catch {
-        // Not critical — may not be set up yet
+        setApparatusList(apparatusData);
+        setShiftTemplateRecords(templateData);
+      } catch (err) {
+        console.warn('Failed to load apparatus/templates:', err);
       } finally {
         setTemplatesLoaded(true);
       }
@@ -236,8 +219,8 @@ const SchedulingPage: React.FC = () => {
     if (viewMode === 'month') {
       return currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: tz });
     }
-    const start = weekDates[0]!;
-    const end = weekDates[6]!;
+    const start = weekDates[0] ?? currentDate;
+    const end = weekDates[6] ?? currentDate;
     const startMonth = start.toLocaleString('en-US', { month: 'short', timeZone: tz });
     const endMonth = end.toLocaleString('en-US', { month: 'short', timeZone: tz });
     if (startMonth === endMonth) {
@@ -264,7 +247,7 @@ const SchedulingPage: React.FC = () => {
           currentDate.getMonth() + 1
         );
       } else {
-        const weekStartStr = formatDateISO(weekDates[0]!);
+        const weekStartStr = formatDateISO(weekDates[0] ?? currentDate);
         fetchedShifts = await schedulingService.getWeekCalendar(weekStartStr);
       }
       setShifts(fetchedShifts);
@@ -287,8 +270,8 @@ const SchedulingPage: React.FC = () => {
       try {
         const summaryData = await schedulingService.getSummary();
         setSummary(summaryData);
-      } catch {
-        // Summary is non-critical
+      } catch (err) {
+        console.warn('Failed to load scheduling summary:', err);
       }
     };
     fetchSummary();
@@ -335,14 +318,12 @@ const SchedulingPage: React.FC = () => {
       try {
         const summaryData = await schedulingService.getSummary();
         setSummary(summaryData);
-      } catch { /* non-critical */ }
+      } catch (err) { console.warn('Failed to refresh summary:', err); }
 
       setShiftForm({
-        name: '',
         shiftTemplate: defaultTemplate?.id || '',
         startDate: '',
         endDate: '',
-        minStaffing: defaultTemplate?.min_staffing || 4,
         notes: '',
         apparatus_id: '',
       });
@@ -893,7 +874,6 @@ const SchedulingPage: React.FC = () => {
                           setShiftForm(prev => ({
                             ...prev,
                             shiftTemplate: e.target.value,
-                            minStaffing: tmpl?.min_staffing || prev.minStaffing,
                             endDate: computeEndDate(prev.startDate, tmpl),
                           }));
                         }}
@@ -1243,8 +1223,8 @@ const SchedulingNotificationsPanel: React.FC = () => {
       try {
         const { rules: data } = await notificationsService.getRules({ category: 'scheduling' });
         setRules(data);
-      } catch {
-        // Notifications module may not be enabled
+      } catch (err) {
+        console.warn('Failed to load notification rules:', err);
       } finally {
         setLoadingRules(false);
       }
@@ -1266,8 +1246,8 @@ const SchedulingNotificationsPanel: React.FC = () => {
       try {
         const updated = await notificationsService.toggleRule(existing.id, !existing.enabled);
         setRules(prev => prev.map(r => r.id === existing.id ? updated : r));
-      } catch {
-        // Silently fail
+      } catch (err) {
+        console.warn('Failed to toggle notification rule:', err);
       }
     } else {
       setCreating(preset.name);
@@ -1282,8 +1262,8 @@ const SchedulingNotificationsPanel: React.FC = () => {
           config: preset.config,
         });
         setRules(prev => [...prev, newRule]);
-      } catch {
-        // Silently fail
+      } catch (err) {
+        console.warn('Failed to create notification rule:', err);
       } finally {
         setCreating(null);
       }
@@ -1337,7 +1317,7 @@ const SchedulingNotificationsPanel: React.FC = () => {
 };
 
 interface ShiftSettingsPanelProps {
-  templates: BackendTemplate[];
+  templates: ShiftTemplateRecord[];
   apparatusList: Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>;
   onNavigateToTemplates: () => void;
 }
