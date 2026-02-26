@@ -83,6 +83,8 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
   const [required, setRequired] = useState(field?.required ?? false);
   const [minLength, setMinLength] = useState<number | undefined>(field?.min_length || undefined);
   const [maxLength, setMaxLength] = useState<number | undefined>(field?.max_length || undefined);
+  const [minValue, setMinValue] = useState<number | undefined>(field?.min_value ?? undefined);
+  const [maxValue, setMaxValue] = useState<number | undefined>(field?.max_value ?? undefined);
   const [options, setOptions] = useState<FormFieldOption[]>(field?.options || [{ value: '', label: '' }]);
   const [width, setWidth] = useState(field?.width || 'full');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -103,6 +105,8 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
       setRequired(field.required ?? false);
       setMinLength(field.min_length || undefined);
       setMaxLength(field.max_length || undefined);
+      setMinValue(field.min_value ?? undefined);
+      setMaxValue(field.max_value ?? undefined);
       setOptions(field.options || [{ value: '', label: '' }]);
       setWidth(field.width || 'full');
       setConditionFieldId(field.condition_field_id || '');
@@ -179,6 +183,11 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
       if (isTextLike) {
         if (minLength) fieldData.min_length = minLength;
         if (maxLength) fieldData.max_length = maxLength;
+      }
+
+      if (isNumeric) {
+        if (minValue !== undefined) fieldData.min_value = minValue;
+        if (maxValue !== undefined) fieldData.max_value = maxValue;
       }
 
       if (needsOptions) {
@@ -371,8 +380,8 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                     <input
                       id="field-min-value"
                       type="number"
-                      value={defaultValue}
-                      onChange={(e) => setDefaultValue(e.target.value)}
+                      value={minValue ?? ''}
+                      onChange={(e) => setMinValue(e.target.value ? Number(e.target.value) : undefined)}
                       className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                       placeholder="No minimum"
                     />
@@ -382,6 +391,8 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                     <input
                       id="field-max-value"
                       type="number"
+                      value={maxValue ?? ''}
+                      onChange={(e) => setMaxValue(e.target.value ? Number(e.target.value) : undefined)}
                       className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                       placeholder="No maximum"
                     />

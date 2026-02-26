@@ -8,7 +8,7 @@
  * frontend components don't need to know about backend field names.
  */
 
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import type {
   Pipeline,
   PipelineCreate,
@@ -41,15 +41,32 @@ import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS } from '../types';
 
 const api = axios.create({
   baseURL: '/api/v1',
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach auth token to requests
+// Helper to read a cookie value by name
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+// Attach auth token and CSRF header to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Double-submit CSRF token for state-changing requests
+  const method = (config.method || '').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCookie('csrf_token');
+    if (csrf) {
+      config.headers['X-CSRF-Token'] = csrf;
+    }
+  }
+
   return config;
 });
 
@@ -59,9 +76,9 @@ let refreshPromise: Promise<string> | null = null;
 // Handle 401 responses with race-safe token refresh
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  async (error: AxiosError) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
       const refreshToken = localStorage.getItem('refresh_token');
       if (!refreshToken) return Promise.reject(error instanceof Error ? error : new Error(String(error)));
@@ -69,12 +86,12 @@ api.interceptors.response.use(
       try {
         if (!refreshPromise) {
           refreshPromise = axios
-            .post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+            .post<{ access_token: string; refresh_token?: string }>('/api/v1/auth/refresh', { refresh_token: refreshToken }, { withCredentials: true })
             .then((response) => {
-              const { access_token, refresh_token: new_refresh_token } = response.data;
+              const { access_token, refresh_token: newRefreshToken } = response.data;
               localStorage.setItem('access_token', access_token);
-              if (new_refresh_token) {
-                localStorage.setItem('refresh_token', new_refresh_token);
+              if (newRefreshToken) {
+                localStorage.setItem('refresh_token', newRefreshToken);
               }
               return access_token;
             })
@@ -142,7 +159,7 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
   }
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 
 /** Map a backend pipeline step response to a frontend PipelineStage */
 function mapStepToStage(step: any): PipelineStage {
@@ -306,8 +323,6 @@ function mapElectionPackageResponse(data: any): ElectionPackage {
     submitted_by: config.submitted_by,
   };
 }
-
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // =============================================================================
 // Pipeline Service
@@ -705,17 +720,17 @@ export const applicantService = {
     const response = await api.get(
       `/prospective-members/prospects/${applicantId}/documents`
     );
-    return (response.data || []).map((d: any) => ({
-      id: d.id,
-      applicant_id: d.prospect_id,
-      stage_id: d.step_id,
-      document_type: d.document_type,
-      file_name: d.file_name,
-      file_url: `/api/v1/prospective-members/prospects/${applicantId}/documents/${d.id}/download`,
-      file_size: d.file_size,
-      mime_type: d.mime_type,
-      uploaded_by: d.uploaded_by,
-      uploaded_at: d.created_at,
+    return (response.data || []).map((d: Record<string, unknown>) => ({
+      id: d.id as string,
+      applicant_id: d.prospect_id as string,
+      stage_id: d.step_id as string,
+      document_type: d.document_type as string,
+      file_name: d.file_name as string,
+      file_url: `/api/v1/prospective-members/prospects/${applicantId}/documents/${d.id as string}/download`,
+      file_size: d.file_size as number,
+      mime_type: d.mime_type as string,
+      uploaded_by: d.uploaded_by as string,
+      uploaded_at: d.created_at as string,
     }));
   },
 
@@ -780,8 +795,8 @@ export const applicantService = {
         `/prospective-members/prospects/${applicantId}/election-package`
       );
       return mapElectionPackageResponse(response.data);
-    } catch (err: any) {
-      if (err.response?.status === 404) return null;
+    } catch (err: unknown) {
+      if (err instanceof AxiosError && err.response?.status === 404) return null;
       throw err;
     }
   },

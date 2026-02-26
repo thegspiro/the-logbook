@@ -10,7 +10,8 @@ describe('Inventory condition constants', () => {
     expect(values).toContain('fair');
     expect(values).toContain('poor');
     expect(values).toContain('damaged');
-    expect(values).toHaveLength(6);
+    expect(values).toContain('retired');
+    expect(values).toHaveLength(7);
   });
 
   it('RETURN_CONDITION_OPTIONS excludes out_of_service', () => {

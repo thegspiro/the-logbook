@@ -12,7 +12,7 @@
  */
 
 // Export routes
-export { getProspectiveMembersRoutes } from './routes';
+export { getProspectiveMembersRoutes, getProspectiveMembersPublicRoutes } from './routes';
 
 // Export pages
 export * from './pages';

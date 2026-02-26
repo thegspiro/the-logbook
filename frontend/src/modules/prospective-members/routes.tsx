@@ -23,7 +23,17 @@ export const getProspectiveMembersRoutes = () => {
 
       {/* Pipeline Settings */}
       <Route path="/prospective-members/settings" element={<ProtectedRoute requiredPermission="prospective_members.manage"><PipelineSettingsPage /></ProtectedRoute>} />
+    </React.Fragment>
+  );
+};
 
+/**
+ * Public routes for the prospective members module (no auth required).
+ * These must be rendered OUTSIDE the ProtectedRoute/AppLayout wrapper.
+ */
+export const getProspectiveMembersPublicRoutes = () => {
+  return (
+    <React.Fragment>
       {/* Public Application Status (no auth required) */}
       <Route path="/application-status/:token" element={<ApplicationStatusPage />} />
     </React.Fragment>

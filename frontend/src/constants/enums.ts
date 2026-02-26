@@ -14,6 +14,7 @@ export const UserStatus = {
   SUSPENDED: 'suspended',
   PROBATIONARY: 'probationary',
   LEAVE: 'leave',
+  ON_LEAVE: 'on_leave',
   RETIRED: 'retired',
   DROPPED_VOLUNTARY: 'dropped_voluntary',
   DROPPED_INVOLUNTARY: 'dropped_involuntary',
@@ -144,7 +145,10 @@ export type MembershipType = (typeof MembershipType)[keyof typeof MembershipType
 // Pipeline / Applicant Stage Types
 // ============================================
 export const StageType = {
+  FORM_SUBMISSION: 'form_submission',
+  DOCUMENT_UPLOAD: 'document_upload',
   ELECTION_VOTE: 'election_vote',
+  MANUAL_APPROVAL: 'manual_approval',
 } as const;
 export type StageType = (typeof StageType)[keyof typeof StageType];
 
@@ -153,8 +157,11 @@ export type StageType = (typeof StageType)[keyof typeof StageType];
 // ============================================
 export const ApplicantStatus = {
   ACTIVE: 'active',
-  INACTIVE: 'inactive',
+  ON_HOLD: 'on_hold',
   WITHDRAWN: 'withdrawn',
+  CONVERTED: 'converted',
+  REJECTED: 'rejected',
+  INACTIVE: 'inactive',
 } as const;
 export type ApplicantStatus = (typeof ApplicantStatus)[keyof typeof ApplicantStatus];
 
