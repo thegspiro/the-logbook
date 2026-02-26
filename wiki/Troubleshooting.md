@@ -24,6 +24,7 @@ This guide covers common issues and their solutions for The Logbook deployment.
 18. [Training & Compliance Issues](#training--compliance-issues)
 19. [Migration Issues on Unraid](#migration-issues-on-unraid)
 20. [Membership Admin Issues](#membership-admin-issues)
+21. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
 
 ---
 
@@ -1511,3 +1512,51 @@ docker-compose up -d
 **Root Cause:** Cached `index.html` references old asset filenames with different Vite content hashes.
 
 **Solution:** Fixed with `Cache-Control: no-cache` on `index.html`. Pull latest and rebuild frontend. Users can also hard-refresh (Ctrl+Shift+R).
+
+---
+
+## Public Outreach Request Pipeline Issues
+
+### Problem: Public event request form not appearing
+
+**Symptoms:** Public form URL returns 404 or blank page.
+
+**Fix:**
+1. Go to **Forms > [Your Form]** and ensure **Public Access** is toggled on with a `public_slug` set
+2. Verify the form has an `EVENT_REQUEST` integration under **Forms > Integrations**
+3. Check that outreach types are configured in **Events > Settings > Outreach Types**
+
+### Problem: Submitted requests not visible to coordinator
+
+**Fix:** The coordinator needs the `events.manage` permission. Check **Administration > Roles & Permissions**. Also check the status filter — new requests arrive as `submitted`.
+
+### Problem: Default coordinator not auto-assigned
+
+**Fix:** Go to **Events > Settings > Request Pipeline** and select a **Default Coordinator**. Ensure the selected member is still an active user.
+
+### Problem: Room double-booking error when scheduling
+
+**Fix:** Another event is already booked at that location and time. View the room's calendar to find the conflict, then choose a different time slot or room. If the location dropdown is empty, add rooms in **Administration > Locations**.
+
+### Problem: Email notifications not sending
+
+**Fix:**
+1. Verify SMTP is configured in **Administration > Email Settings**
+2. Check **Events > Settings > Email Triggers** — each status change trigger must be toggled on
+3. Verify `notify_requester` and/or `notify_assignee` sub-toggles are enabled for the relevant trigger
+
+### Problem: Template variables showing as literal text
+
+**Fix:** Use double curly braces with no spaces: `{{contact_name}}`, not `{ { contact_name } }`. Supported variables: `{{contact_name}}`, `{{organization_name}}`, `{{outreach_type}}`, `{{event_date}}`, `{{status}}`, `{{status_link}}`.
+
+### Problem: Public status page shows "Request Not Found"
+
+**Fix:** Check that the status link includes the full token. Use the **Copy Status Link** button in the admin tab. If the request was hard-deleted from the database, the token lookup will fail.
+
+### Problem: Pipeline tasks not visible on public status page
+
+**Fix:** Public progress visibility is **off by default**. Go to **Events > Settings > Request Pipeline** and toggle **Public Progress Visibility** on. This is intentional — many departments prefer to keep planning details internal.
+
+### Problem: Cannot cancel or postpone a request
+
+**Fix:** Only requests in active states (`submitted`, `in_progress`, `scheduled`, `postponed`) can be modified. Terminal states (`declined`, `cancelled`, `completed`) cannot be changed. Postponed requests can be resumed via "Resume Work" which transitions back to `in_progress`.

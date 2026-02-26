@@ -14,7 +14,8 @@ The Events module handles department events, attendance tracking with QR code ch
 6. [Meeting Minutes](#meeting-minutes)
 7. [Action Items](#action-items)
 8. [Elections and Voting](#elections-and-voting)
-9. [Troubleshooting](#troubleshooting)
+9. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -294,6 +295,104 @@ Elections can provide a public ballot URL that uses unique tokens, allowing memb
 
 ---
 
+## Public Outreach Request Pipeline
+
+The Events module includes a **Public Outreach Request Pipeline** that lets community members submit event requests to your department — fire safety demos, station tours, school visits, CPR classes, and more. Your department controls the workflow, assignment, scheduling, and communication.
+
+### How It Works
+
+1. **Community member submits a request** via a public form on your website (no login needed).
+2. **A coordinator is auto-assigned** (configurable in Settings) and notified by email.
+3. **The coordinator manages the request** — moving it through configurable pipeline tasks, adding comments, and communicating with the requester.
+4. **When ready, the coordinator schedules the event** — setting a confirmed date, booking a room, and creating a calendar event.
+5. **The requester tracks status** via a unique status link — and can cancel if plans change.
+6. **After the event, the coordinator marks it complete**.
+
+### Setting Up the Pipeline
+
+**Required Permission:** `events.manage`
+
+1. Navigate to **Events Admin > Settings**.
+2. Under **Outreach Types**, add the program types your department offers:
+   - Click **Add Type**, enter a key (e.g., `fire_safety_demo`) and label (e.g., "Fire Safety Demonstration")
+   - These appear as options on the public request form
+3. Under **Request Pipeline**, configure:
+   - **Default Coordinator** — Select a member who will be auto-assigned all new requests
+   - **Pipeline Tasks** — Add custom checklist steps (e.g., "Chief Approval", "Email Volunteer Signup", "Prep Equipment"). Use the up/down arrows to reorder.
+   - **Public Progress Visibility** — Toggle whether the requester can see task progress on their status page (off by default)
+4. Under **Email Triggers**, configure which status changes send notifications:
+   - Toggle each trigger on/off (e.g., "On Submitted", "On Scheduled", "On Postponed")
+   - Each trigger can notify the requester, the assigned coordinator, or both
+5. Under **Email Templates**, create reusable email messages:
+   - Example: "How to Find Our Building" email with directions and parking info
+   - Templates support variables: `{{contact_name}}`, `{{event_date}}`, `{{organization_name}}`, etc.
+   - Optionally set a trigger (e.g., "7 days before event") for automatic sending
+
+### Managing Requests
+
+Once requests start coming in, manage them from the **Event Requests** tab:
+
+1. **View the request** — Click to expand details including contact info, date preferences, and description.
+2. **Assign/reassign** — Change the assigned coordinator using the dropdown.
+3. **Add comments** — Use the comment thread for internal notes and coordination (not visible to the requester).
+4. **Complete pipeline tasks** — Check off tasks as they're done. The first task completion auto-moves the status from "Submitted" to "In Progress".
+5. **Schedule the event** — Click **Schedule Event** to:
+   - Set the confirmed date and time
+   - Select a room/location (the system prevents double-booking)
+   - Optionally create a calendar event with QR check-in
+6. **Postpone** — If the event needs to be pushed back, click **Postpone**. You can set a new date or leave it open.
+7. **Send emails** — Use the template dropdown to send a pre-written email to the requester (e.g., directions, parking, what to expect).
+8. **Copy status link** — Click the link icon to copy the requester's status page URL to share.
+
+### Public Request Form
+
+The public form is created through the **Forms module** with an `EVENT_REQUEST` integration:
+
+1. Go to **Forms** and create a new form or edit an existing one.
+2. Enable **Public Access** and set a **public slug** (e.g., `request-event`).
+3. Under **Integrations**, add an `EVENT_REQUEST` integration to connect the form to the pipeline.
+4. Share the form URL (`/f/request-event`) on your website, social media, or print materials.
+
+The form collects:
+- Contact information (name, email, phone, organization)
+- Outreach type (from your configured types)
+- Event description
+- Date preferences (specific dates, general timeframe, or flexible)
+- Preferred time of day (morning, afternoon, evening, or flexible)
+- Audience size and age group
+- Venue preference (their location, your station, or either)
+- Special requests
+
+### Public Status Page
+
+Each request has a unique, token-based status page accessible without login:
+
+- **URL format**: `/request-status/:token`
+- Shows: current status (as a progress stepper), submitted date, date preferences, scheduled date
+- Optionally shows: pipeline task progress (if department enables it)
+- Allows: self-service cancellation with an optional reason
+- Shows postponed state with new date (if set) or "awaiting reschedule" message
+
+### Common Public Programs
+
+Here are examples of outreach programs departments commonly configure:
+
+| Program | Key | Typical Duration | Audience |
+|---------|-----|-----------------|----------|
+| Fire Safety Demonstration | `fire_safety_demo` | 45-60 min | Offices, senior living, school staff |
+| Station Tour | `station_tour` | 30-45 min | Scouts, daycares, school trips |
+| School Visit / Classroom | `school_visit` | 30 min per session | Elementary schools (K-5) |
+| CPR / First Aid Class | `cpr_first_aid` | 2-3 hours | Community groups, corporate teams |
+| Smoke Detector Installation | `smoke_detector_install` | 15-30 min per home | Seniors, low-income residents |
+| Community Open House | `open_house` | 2-4 hours | General public, potential recruits |
+
+For detailed program descriptions, pipeline task suggestions, and sample email templates for each, see [Public Programs How-To](../../wiki/Public-Programs.md).
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Event Requests tab showing a list of requests with status badges, assigned coordinator, and expand arrow. Below: expanded request detail showing contact info, comment thread, pipeline task checklist, and action buttons (Schedule, Postpone, Cancel)]_
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -305,6 +404,12 @@ Elections can provide a public ballot URL that uses unique tokens, allowing memb
 | Minutes not showing attendees | If creating minutes from an event, attendees are imported from check-in records, not RSVPs. Ensure members checked in. |
 | "Already voted" error | Each member can only vote once per election. This is by design. |
 | Election results not visible | The election creator controls when results are visible. Results may be hidden until the voting period ends. |
+| Event request form not showing outreach types | Add outreach types in **Events > Settings > Outreach Types**. At least one type must be configured. |
+| Submitted request not appearing for coordinator | Coordinator needs `events.manage` permission. Check role permissions in Administration. |
+| Room double-booking error when scheduling | Another event is already booked at that location and time. Choose a different room or time slot. |
+| Email template variables showing as `{{variable}}` | Use double curly braces with no spaces: `{{contact_name}}`. Check supported variable names in email template docs. |
+| Cannot cancel from public status page | Only requests in active states (submitted, in_progress, scheduled) can be cancelled. Terminal states cannot be changed. |
+| Pipeline tasks not visible to requester | Public progress visibility is off by default. Enable it in **Events > Settings > Request Pipeline > Public Progress Visibility**. |
 
 ---
 
