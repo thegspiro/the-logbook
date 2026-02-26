@@ -4,8 +4,12 @@
  * Token-based public page for community members to check
  * the status of their event request. No authentication required.
  *
- * Outreach type labels are fetched from the backend (which reads
- * from department settings) rather than hardcoded.
+ * Features:
+ * - Progress stepper with status visualization
+ * - Flexible date preference display
+ * - Optional pipeline progress (if department enables it)
+ * - Self-service cancellation
+ * - Postponed state display
  */
 
 import React, { useEffect, useState } from 'react';
@@ -17,6 +21,7 @@ import {
   XCircle,
   Calendar,
   Loader2,
+  Pause,
 } from 'lucide-react';
 import { eventRequestService } from '../services/api';
 import type { EventRequestPublicStatus, EventRequestStatus } from '../types/event';
@@ -56,6 +61,9 @@ const EventRequestStatusPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [outreachLabels, setOutreachLabels] = useState<Record<string, string>>({});
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -93,6 +101,25 @@ const EventRequestStatusPage: React.FC = () => {
     return outreachLabels[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
+  const handleCancel = async () => {
+    if (!token) return;
+    setCancelling(true);
+    try {
+      await eventRequestService.publicCancelRequest(token, {
+        reason: cancelReason || undefined,
+      });
+      // Refresh status
+      const result = await eventRequestService.checkPublicStatus(token);
+      setData(result);
+      setShowCancelConfirm(false);
+      setCancelReason('');
+    } catch {
+      setError('Failed to cancel request. Please try again.');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -118,6 +145,7 @@ const EventRequestStatusPage: React.FC = () => {
   }
 
   const isTerminal = data.status === 'declined' || data.status === 'cancelled';
+  const isPostponed = data.status === 'postponed';
   const currentStep = STATUS_ORDER[data.status] ?? -1;
 
   return (
@@ -152,6 +180,21 @@ const EventRequestStatusPage: React.FC = () => {
                   {data.decline_reason}
                 </p>
               )}
+            </div>
+          ) : isPostponed ? (
+            <div className="p-6 bg-orange-50 dark:bg-orange-500/10">
+              <div className="flex items-center gap-3 mb-3">
+                <Pause className="w-6 h-6 text-orange-500" />
+                <h2 className="text-lg font-semibold text-orange-700 dark:text-orange-400">
+                  Request Postponed
+                </h2>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                This event has been postponed. {data.event_date
+                  ? `A tentative new date has been set for ${formatDate(data.event_date)}.`
+                  : 'A new date has not been set yet. We will notify you when it is rescheduled.'
+                }
+              </p>
             </div>
           ) : (
             /* Progress stepper */
@@ -204,6 +247,35 @@ const EventRequestStatusPage: React.FC = () => {
             </div>
           )}
 
+          {/* Task progress (if department enables public visibility) */}
+          {data.task_progress && !isTerminal && (
+            <div className="border-t border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                Planning Progress ({data.task_progress.completed}/{data.task_progress.total})
+              </h3>
+              <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2 mb-3">
+                <div
+                  className="bg-green-500 h-2 rounded-full transition-all"
+                  style={{ width: `${data.task_progress.total > 0 ? (data.task_progress.completed / data.task_progress.total) * 100 : 0}%` }}
+                />
+              </div>
+              <div className="space-y-1">
+                {data.task_progress.tasks.map((task, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-sm">
+                    {task.completed ? (
+                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-gray-500 flex-shrink-0" />
+                    )}
+                    <span className={task.completed ? 'text-green-700 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}>
+                      {task.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Details */}
           <div className="border-t border-gray-200 dark:border-gray-700 p-6 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
@@ -244,7 +316,7 @@ const EventRequestStatusPage: React.FC = () => {
                   </span>
                 </div>
               )}
-              {data.event_date && (
+              {data.event_date && !isPostponed && (
                 <div>
                   <span className="block text-gray-500 dark:text-gray-400 mb-0.5">Scheduled Date</span>
                   <span className="text-green-700 dark:text-green-400 font-semibold">
@@ -254,6 +326,54 @@ const EventRequestStatusPage: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Cancel action */}
+          {data.can_cancel && !isTerminal && (
+            <div className="border-t border-gray-200 dark:border-gray-700 p-6">
+              {!showCancelConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowCancelConfirm(true)}
+                  className="text-sm text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
+                >
+                  Need to cancel this request?
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                    Are you sure you want to cancel this request?
+                  </p>
+                  <input
+                    type="text"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Reason for cancelling (optional)"
+                    className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCancel()}
+                      disabled={cancelling}
+                      className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors"
+                    >
+                      {cancelling ? 'Cancelling...' : 'Yes, Cancel Request'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCancelConfirm(false);
+                        setCancelReason('');
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                    >
+                      Never mind
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

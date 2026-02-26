@@ -48,6 +48,7 @@ class EventRequestStatus(str, enum.Enum):
     SUBMITTED = "submitted"
     IN_PROGRESS = "in_progress"
     SCHEDULED = "scheduled"
+    POSTPONED = "postponed"
     COMPLETED = "completed"
     DECLINED = "declined"
     CANCELLED = "cancelled"
@@ -119,6 +120,13 @@ class EventRequest(Base):
     )
     reviewer_notes = Column(Text, nullable=True)
     decline_reason = Column(Text, nullable=True)
+
+    # Confirmed event date (set by coordinator when scheduling)
+    event_date = Column(DateTime(timezone=True), nullable=True)
+    event_end_date = Column(DateTime(timezone=True), nullable=True)
+    event_location_id = Column(
+        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Configurable pipeline task completions (JSON)
     # Schema: { "task_id": { "completed": true, "completed_by": "user-uuid",
@@ -206,3 +214,47 @@ class EventRequestActivity(Base):
 
     def __repr__(self):
         return f"<EventRequestActivity(request={self.request_id}, action={self.action})>"
+
+
+class EventRequestEmailTemplate(Base):
+    """
+    Reusable email templates for the event request pipeline.
+
+    Departments can store common messages (e.g., directions to the station,
+    volunteer signup instructions) and attach them to email triggers or
+    send them manually.
+    """
+
+    __tablename__ = "event_request_email_templates"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    name = Column(String(200), nullable=False)
+    subject = Column(String(500), nullable=False)
+    body_html = Column(Text, nullable=False)
+    body_text = Column(Text, nullable=True)
+
+    # When to auto-send: trigger key (e.g., "on_scheduled", "days_before_event")
+    # NULL means manual-only
+    trigger = Column(String(100), nullable=True)
+    # For "days_before_event" trigger: how many days before
+    trigger_days_before = Column(Integer, nullable=True)
+
+    is_active = Column(Integer, nullable=False, default=1)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_email_tpl_org", "organization_id"),
+    )

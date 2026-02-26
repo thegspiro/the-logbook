@@ -4,17 +4,41 @@
  * Allows event administrators to configure event module settings:
  * - Event type visibility (primary tabs vs. grouped under "Other")
  * - Outreach event types (configurable per department)
- * - Request pipeline settings (lead time, configurable tasks)
+ * - Request pipeline settings (lead time, default assignee, task reorder, visibility)
+ * - Email trigger configuration
+ * - Email template management
  * - Public event request form generation
  *
  * Shown within the Events Admin Hub.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Settings, Eye, EyeOff, Loader2, Plus, Trash2, FileText, ExternalLink, ClipboardList, Calendar } from 'lucide-react';
+import {
+  Settings,
+  Eye,
+  EyeOff,
+  Loader2,
+  Plus,
+  Trash2,
+  FileText,
+  ExternalLink,
+  ClipboardList,
+  Calendar,
+  ChevronUp,
+  ChevronDown,
+  Mail,
+  UserCheck,
+  Globe,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { eventService, eventRequestService } from '../services/api';
-import type { EventModuleSettings, EventType, OutreachEventTypeConfig, PipelineTaskConfig } from '../types/event';
+import { eventService, eventRequestService, userService } from '../services/api';
+import type {
+  EventModuleSettings,
+  EventType,
+  OutreachEventTypeConfig,
+  PipelineTaskConfig,
+  EmailTemplate,
+} from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
 
 const ALL_EVENT_TYPES: EventType[] = [
@@ -27,11 +51,21 @@ const ALL_EVENT_TYPES: EventType[] = [
   'other',
 ];
 
+interface OrgMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  rank?: string;
+}
+
 const EventsSettingsTab: React.FC = () => {
   const [settings, setSettings] = useState<EventModuleSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Org members for default assignee picker
+  const [members, setMembers] = useState<OrgMember[]>([]);
 
   // Outreach type editing
   const [newTypeValue, setNewTypeValue] = useState('');
@@ -41,6 +75,14 @@ const EventsSettingsTab: React.FC = () => {
   const [newTaskLabel, setNewTaskLabel] = useState('');
   const [newTaskDesc, setNewTaskDesc] = useState('');
 
+  // Email templates
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
+  const [showTemplateForm, setShowTemplateForm] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [newTemplateSubject, setNewTemplateSubject] = useState('');
+  const [newTemplateBody, setNewTemplateBody] = useState('');
+  const [newTemplateTrigger, setNewTemplateTrigger] = useState('');
+
   // Form generation
   const [generatingForm, setGeneratingForm] = useState(false);
 
@@ -48,8 +90,12 @@ const EventsSettingsTab: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await eventService.getModuleSettings();
+      const [data, memberList] = await Promise.all([
+        eventService.getModuleSettings(),
+        userService.getUsers() as Promise<OrgMember[]>,
+      ]);
       setSettings(data);
+      setMembers(memberList);
     } catch {
       setError('Failed to load event settings.');
     } finally {
@@ -60,6 +106,19 @@ const EventsSettingsTab: React.FC = () => {
   useEffect(() => {
     void fetchSettings();
   }, [fetchSettings]);
+
+  // Fetch email templates
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const templates = await eventRequestService.listEmailTemplates();
+        setEmailTemplates(templates);
+      } catch {
+        // Silently fail
+      }
+    };
+    void fetchTemplates();
+  }, []);
 
   const toggleVisibility = async (eventType: EventType) => {
     if (!settings) return;
@@ -168,6 +227,47 @@ const EventsSettingsTab: React.FC = () => {
     }
   };
 
+  const updateDefaultAssignee = async (userId: string | null) => {
+    if (!settings) return;
+
+    try {
+      setSaving(true);
+      const result = await eventService.updateModuleSettings({
+        request_pipeline: { ...settings.request_pipeline, default_assignee_id: userId },
+      });
+      setSettings(result);
+      toast.success(userId ? 'Default assignee updated.' : 'Default assignee cleared.');
+    } catch {
+      toast.error('Failed to update default assignee.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const togglePublicVisibility = async () => {
+    if (!settings) return;
+
+    try {
+      setSaving(true);
+      const result = await eventService.updateModuleSettings({
+        request_pipeline: {
+          ...settings.request_pipeline,
+          public_progress_visible: !settings.request_pipeline.public_progress_visible,
+        },
+      });
+      setSettings(result);
+      toast.success(
+        result.request_pipeline.public_progress_visible
+          ? 'Pipeline progress is now visible to requesters.'
+          : 'Pipeline progress is now hidden from requesters.'
+      );
+    } catch {
+      toast.error('Failed to update visibility.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const addPipelineTask = async () => {
     if (!settings) return;
     const label = newTaskLabel.trim();
@@ -221,6 +321,88 @@ const EventsSettingsTab: React.FC = () => {
     }
   };
 
+  const reorderTask = async (index: number, direction: 'up' | 'down') => {
+    if (!settings) return;
+    const tasks = [...settings.request_pipeline.tasks];
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= tasks.length) return;
+
+    const temp = tasks[index];
+    const swapItem = tasks[swapIndex];
+    if (!temp || !swapItem) return;
+    tasks[index] = swapItem;
+    tasks[swapIndex] = temp;
+
+    try {
+      setSaving(true);
+      const result = await eventService.updateModuleSettings({
+        request_pipeline: { ...settings.request_pipeline, tasks },
+      });
+      setSettings(result);
+    } catch {
+      toast.error('Failed to reorder tasks.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleEmailTrigger = async (triggerKey: string) => {
+    if (!settings) return;
+    const triggers = { ...settings.request_pipeline.email_triggers };
+    const current = triggers[triggerKey] || { enabled: false };
+    triggers[triggerKey] = { ...current, enabled: !current.enabled };
+
+    try {
+      setSaving(true);
+      const result = await eventService.updateModuleSettings({
+        request_pipeline: { ...settings.request_pipeline, email_triggers: triggers },
+      });
+      setSettings(result);
+    } catch {
+      toast.error('Failed to update email trigger.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateTemplate = async () => {
+    if (!newTemplateName.trim() || !newTemplateSubject.trim() || !newTemplateBody.trim()) {
+      toast.error('Name, subject, and body are required.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const template = await eventRequestService.createEmailTemplate({
+        name: newTemplateName.trim(),
+        subject: newTemplateSubject.trim(),
+        body_html: newTemplateBody.trim(),
+        trigger: newTemplateTrigger || undefined,
+      });
+      setEmailTemplates((prev) => [...prev, template]);
+      setNewTemplateName('');
+      setNewTemplateSubject('');
+      setNewTemplateBody('');
+      setNewTemplateTrigger('');
+      setShowTemplateForm(false);
+      toast.success('Email template created.');
+    } catch {
+      toast.error('Failed to create template.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    try {
+      await eventRequestService.deleteEmailTemplate(templateId);
+      setEmailTemplates((prev) => prev.filter((t) => t.id !== templateId));
+      toast.success('Template deleted.');
+    } catch {
+      toast.error('Failed to delete template.');
+    }
+  };
+
   const handleGenerateForm = async () => {
     try {
       setGeneratingForm(true);
@@ -269,6 +451,17 @@ const EventsSettingsTab: React.FC = () => {
   const hiddenTypes = ALL_EVENT_TYPES.filter(
     (t) => !settings.visible_event_types.includes(t)
   );
+
+  const TRIGGER_LABELS: Record<string, string> = {
+    on_submitted: 'New request submitted',
+    on_in_progress: 'Request work started',
+    on_scheduled: 'Request scheduled',
+    on_postponed: 'Request postponed',
+    on_completed: 'Event completed',
+    on_declined: 'Request declined',
+    on_cancelled: 'Request cancelled',
+    days_before_event: 'Days before event reminder',
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -450,6 +643,64 @@ const EventsSettingsTab: React.FC = () => {
             however they like.
           </p>
 
+          {/* Default assignee */}
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-2">
+              <UserCheck className="w-4 h-4 text-theme-text-muted" />
+              <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">
+                Default Coordinator
+              </h3>
+            </div>
+            <p className="text-xs text-theme-text-muted mb-3">
+              All new requests will be auto-assigned to this person. They will receive an email notification.
+              The coordinator can reassign requests to others.
+            </p>
+            <select
+              value={settings.request_pipeline.default_assignee_id || ''}
+              onChange={(e) => void updateDefaultAssignee(e.target.value || null)}
+              disabled={saving}
+              className="w-full max-w-md px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+            >
+              <option value="">No default (manually assign)</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.first_name} {m.last_name}{m.rank ? ` — ${m.rank}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Public progress visibility */}
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Globe className="w-4 h-4 text-theme-text-muted" />
+              <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">
+                Public Progress Visibility
+              </h3>
+            </div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <button
+                type="button"
+                onClick={() => void togglePublicVisibility()}
+                disabled={saving}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  settings.request_pipeline.public_progress_visible
+                    ? 'bg-green-500'
+                    : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    settings.request_pipeline.public_progress_visible ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className="text-sm text-theme-text-primary">
+                Show pipeline task progress on the public status page
+              </span>
+            </label>
+          </div>
+
           {/* Lead time */}
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-2">
@@ -481,26 +732,46 @@ const EventsSettingsTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Pipeline tasks */}
+          {/* Pipeline tasks with reorder */}
           <div>
             <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3">
               Pipeline Tasks
             </h3>
             <p className="text-xs text-theme-text-muted mb-3">
               Define the checklist items your team uses when processing requests.
-              Tasks can be completed in any order — different events may need different workflows.
+              Tasks can be completed in any order. Use the arrows to set the default display order.
             </p>
             <div className="space-y-2 mb-4">
-              {settings.request_pipeline.tasks.map((task: PipelineTaskConfig) => (
+              {settings.request_pipeline.tasks.map((task: PipelineTaskConfig, idx: number) => (
                 <div
                   key={task.id}
                   className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
                 >
-                  <div>
-                    <span className="text-sm font-medium text-theme-text-primary">{task.label}</span>
-                    {task.description && task.description !== task.label && (
-                      <p className="text-xs text-theme-text-muted mt-0.5">{task.description}</p>
-                    )}
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col">
+                      <button
+                        type="button"
+                        onClick={() => void reorderTask(idx, 'up')}
+                        disabled={saving || idx === 0}
+                        className="text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void reorderTask(idx, 'down')}
+                        disabled={saving || idx === settings.request_pipeline.tasks.length - 1}
+                        className="text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-theme-text-primary">{task.label}</span>
+                      {task.description && task.description !== task.label && (
+                        <p className="text-xs text-theme-text-muted mt-0.5">{task.description}</p>
+                      )}
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -530,7 +801,7 @@ const EventsSettingsTab: React.FC = () => {
                   type="text"
                   value={newTaskLabel}
                   onChange={(e) => setNewTaskLabel(e.target.value)}
-                  placeholder="e.g., Confirm Volunteers"
+                  placeholder="e.g., Chief Approval"
                   className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
@@ -557,6 +828,162 @@ const EventsSettingsTab: React.FC = () => {
                 Add
               </button>
             </div>
+          </div>
+        </section>
+
+        {/* Email Triggers */}
+        <section>
+          <div className="flex items-center gap-3 mb-2">
+            <Mail className="w-5 h-5 text-red-700" />
+            <h2 className="text-lg font-bold text-theme-text-primary">
+              Email Notifications
+            </h2>
+          </div>
+          <p className="text-sm text-theme-text-muted mb-6">
+            Configure which pipeline events trigger email notifications.
+            Each department can customize their notification workflow.
+          </p>
+
+          <div className="space-y-2">
+            {Object.entries(TRIGGER_LABELS).map(([key, label]) => {
+              const config = settings.request_pipeline.email_triggers[key] || { enabled: false };
+              return (
+                <div
+                  key={key}
+                  className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
+                >
+                  <div>
+                    <span className="text-sm font-medium text-theme-text-primary">{label}</span>
+                    <span className="text-xs text-theme-text-muted ml-2 font-mono">{key}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void toggleEmailTrigger(key)}
+                    disabled={saving}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      config.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        config.enabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Email Templates */}
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <FileText className="w-5 h-5 text-red-700" />
+              <h2 className="text-lg font-bold text-theme-text-primary">
+                Email Templates
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowTemplateForm(!showTemplateForm)}
+              className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              New Template
+            </button>
+          </div>
+          <p className="text-sm text-theme-text-muted mb-6">
+            Create reusable email messages that coordinators can send to requesters.
+            Use {'{{contact_name}}'}, {'{{outreach_type}}'}, {'{{event_date}}'} as template variables.
+          </p>
+
+          {showTemplateForm && (
+            <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-4 mb-4 space-y-3">
+              <input
+                type="text"
+                value={newTemplateName}
+                onChange={(e) => setNewTemplateName(e.target.value)}
+                placeholder="Template name (e.g., How to Find Our Building)"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <input
+                type="text"
+                value={newTemplateSubject}
+                onChange={(e) => setNewTemplateSubject(e.target.value)}
+                placeholder="Email subject"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <textarea
+                rows={4}
+                value={newTemplateBody}
+                onChange={(e) => setNewTemplateBody(e.target.value)}
+                placeholder="Email body (HTML supported)"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <div className="flex items-center gap-3">
+                <select
+                  value={newTemplateTrigger}
+                  onChange={(e) => setNewTemplateTrigger(e.target.value)}
+                  className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <option value="">Manual send only</option>
+                  {Object.entries(TRIGGER_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void handleCreateTemplate()}
+                  disabled={saving}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  Save Template
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateForm(false)}
+                  className="px-4 py-2 text-sm font-medium text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {emailTemplates.map((tpl) => (
+              <div
+                key={tpl.id}
+                className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
+              >
+                <div>
+                  <span className="text-sm font-medium text-theme-text-primary">{tpl.name}</span>
+                  <p className="text-xs text-theme-text-muted mt-0.5">
+                    Subject: {tpl.subject}
+                    {tpl.trigger && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                        Auto: {TRIGGER_LABELS[tpl.trigger] || tpl.trigger}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteTemplate(tpl.id)}
+                  className="text-sm text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                  title="Delete template"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            {emailTemplates.length === 0 && !showTemplateForm && (
+              <p className="text-sm text-theme-text-muted italic py-4 text-center">
+                No email templates yet. Create one to send standardized messages to requesters.
+              </p>
+            )}
           </div>
         </section>
 

@@ -405,15 +405,26 @@ export interface PipelineTaskConfig {
   description: string;
 }
 
+export interface EmailTriggerConfig {
+  enabled: boolean;
+  notify_assignee?: boolean;
+  notify_requester?: boolean;
+  days?: number[];
+}
+
 export interface RequestPipelineSettings {
   min_lead_time_days: number;
+  default_assignee_id: string | null;
+  public_progress_visible: boolean;
   tasks: PipelineTaskConfig[];
+  email_triggers: Record<string, EmailTriggerConfig>;
 }
 
 export type EventRequestStatus =
   | 'submitted'
   | 'in_progress'
   | 'scheduled'
+  | 'postponed'
   | 'completed'
   | 'declined'
   | 'cancelled';
@@ -426,6 +437,25 @@ export interface TaskCompletion {
   completed_by: string;
   completed_at: string;
   notes?: string;
+}
+
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body_html: string;
+  body_text?: string;
+  trigger?: string;
+  trigger_days_before?: number;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskProgressPublic {
+  total: number;
+  completed: number;
+  tasks: { label: string; completed: boolean }[];
 }
 
 export interface EventRequestActivity {
@@ -466,6 +496,10 @@ export interface EventRequest {
   decline_reason?: string;
   task_completions?: Record<string, TaskCompletion>;
   event_id?: string;
+  event_date?: string;
+  event_end_date?: string;
+  event_location_id?: string;
+  event_location_name?: string;
   status_token?: string;
   created_at: string;
   updated_at: string;
@@ -486,6 +520,7 @@ export interface EventRequestListItem {
   assigned_to?: string;
   assignee_name?: string;
   task_completions?: Record<string, TaskCompletion>;
+  event_date?: string;
   created_at: string;
 }
 
@@ -501,4 +536,6 @@ export interface EventRequestPublicStatus {
   updated_at: string;
   event_date?: string;
   decline_reason?: string;
+  task_progress?: TaskProgressPublic;
+  can_cancel: boolean;
 }

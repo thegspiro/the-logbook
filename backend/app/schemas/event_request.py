@@ -2,7 +2,8 @@
 Event Request Pydantic Schemas
 
 Request and response schemas for the public outreach event request pipeline.
-Supports flexible date preferences and configurable pipeline tasks.
+Supports flexible date preferences, configurable pipeline tasks, comments,
+assignment, scheduling with room booking, and postponement.
 """
 
 from datetime import datetime
@@ -57,12 +58,52 @@ class EventRequestStatusUpdate(BaseModel):
 
     status: str = Field(
         ...,
-        description="New status: in_progress, scheduled, completed, declined, cancelled",
+        description="New status: in_progress, scheduled, postponed, completed, declined, cancelled",
     )
     notes: Optional[str] = Field(None, max_length=2000)
     decline_reason: Optional[str] = Field(None, max_length=2000)
     assigned_to: Optional[str] = None
     event_id: Optional[str] = None
+
+
+class EventRequestAssign(BaseModel):
+    """Schema for assigning/reassigning a coordinator."""
+
+    assigned_to: str = Field(..., description="User ID to assign this request to")
+    notes: Optional[str] = Field(None, max_length=500)
+
+
+class EventRequestSchedule(BaseModel):
+    """Schema for scheduling a confirmed date, optionally with a room."""
+
+    event_date: datetime = Field(..., description="Confirmed event start date/time")
+    event_end_date: Optional[datetime] = Field(None, description="Confirmed event end date/time")
+    location_id: Optional[str] = Field(None, description="Location/room ID for booking")
+    notes: Optional[str] = Field(None, max_length=500)
+    create_calendar_event: bool = Field(
+        default=True,
+        description="Whether to create a calendar Event record",
+    )
+
+
+class EventRequestPostpone(BaseModel):
+    """Schema for postponing a request (with or without a new date)."""
+
+    reason: Optional[str] = Field(None, max_length=2000)
+    new_event_date: Optional[datetime] = Field(None, description="Optional new date")
+    new_event_end_date: Optional[datetime] = None
+
+
+class EventRequestComment(BaseModel):
+    """Schema for adding a comment to the request thread."""
+
+    message: str = Field(..., min_length=1, max_length=5000)
+
+
+class EventRequestPublicCancel(BaseModel):
+    """Schema for a requester cancelling their own request."""
+
+    reason: Optional[str] = Field(None, max_length=2000)
 
 
 class TaskCompletionUpdate(BaseModel):
@@ -71,6 +112,58 @@ class TaskCompletionUpdate(BaseModel):
     task_id: str = Field(..., description="The pipeline task ID to toggle")
     completed: bool = Field(..., description="Whether the task is completed")
     notes: Optional[str] = Field(None, max_length=500)
+
+
+class EmailTemplateCreate(BaseModel):
+    """Schema for creating an email template."""
+
+    name: str = Field(..., min_length=1, max_length=200)
+    subject: str = Field(..., min_length=1, max_length=500)
+    body_html: str = Field(..., min_length=1)
+    body_text: Optional[str] = None
+    trigger: Optional[str] = Field(
+        None,
+        description="Auto-send trigger: on_submitted, on_scheduled, on_postponed, days_before_event, etc.",
+    )
+    trigger_days_before: Optional[int] = Field(None, ge=1, le=90)
+
+
+class EmailTemplateUpdate(BaseModel):
+    """Schema for updating an email template."""
+
+    name: Optional[str] = Field(None, max_length=200)
+    subject: Optional[str] = Field(None, max_length=500)
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    trigger: Optional[str] = None
+    trigger_days_before: Optional[int] = Field(None, ge=1, le=90)
+    is_active: Optional[int] = None
+
+
+class EmailTemplateResponse(BaseModel):
+    """Response schema for an email template."""
+
+    id: str
+    name: str
+    subject: str
+    body_html: str
+    body_text: Optional[str] = None
+    trigger: Optional[str] = None
+    trigger_days_before: Optional[int] = None
+    is_active: int = 1
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SendTemplateEmail(BaseModel):
+    """Schema for manually sending a template email to the requester."""
+
+    template_id: str = Field(..., description="Email template ID to send")
+    additional_context: Optional[Dict[str, str]] = Field(
+        None, description="Extra template variables"
+    )
 
 
 class EventRequestActivityResponse(BaseModel):
@@ -121,6 +214,10 @@ class EventRequestResponse(BaseModel):
     decline_reason: Optional[str] = None
     task_completions: Optional[Dict[str, Any]] = None
     event_id: Optional[str] = None
+    event_date: Optional[datetime] = None
+    event_end_date: Optional[datetime] = None
+    event_location_id: Optional[str] = None
+    event_location_name: Optional[str] = None
     status_token: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -145,6 +242,7 @@ class EventRequestListItem(BaseModel):
     assigned_to: Optional[str] = None
     assignee_name: Optional[str] = None
     task_completions: Optional[Dict[str, Any]] = None
+    event_date: Optional[datetime] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -164,3 +262,6 @@ class EventRequestPublicStatus(BaseModel):
     updated_at: datetime
     event_date: Optional[datetime] = None
     decline_reason: Optional[str] = None
+    # Optionally visible pipeline progress (configurable per department)
+    task_progress: Optional[Dict[str, Any]] = None
+    can_cancel: bool = True

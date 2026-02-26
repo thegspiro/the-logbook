@@ -1687,6 +1687,8 @@ EVENT_SETTINGS_DEFAULTS = {
     ],
     "request_pipeline": {
         "min_lead_time_days": 21,
+        "default_assignee_id": None,
+        "public_progress_visible": False,
         "tasks": [
             {"id": "review_request", "label": "Review Request", "description": "Review the incoming request details"},
             {"id": "assign_coordinator", "label": "Assign Coordinator", "description": "Assign a team member to coordinate this event"},
@@ -1695,6 +1697,16 @@ EVENT_SETTINGS_DEFAULTS = {
             {"id": "arrange_volunteers", "label": "Arrange Volunteers", "description": "Recruit and assign volunteers"},
             {"id": "prepare_equipment", "label": "Prepare Equipment", "description": "Gather and prepare necessary equipment"},
         ],
+        "email_triggers": {
+            "on_submitted": {"enabled": True, "notify_assignee": True, "notify_requester": True},
+            "on_in_progress": {"enabled": True, "notify_requester": True},
+            "on_scheduled": {"enabled": True, "notify_requester": True},
+            "on_postponed": {"enabled": True, "notify_requester": True},
+            "on_completed": {"enabled": True, "notify_requester": True},
+            "on_declined": {"enabled": True, "notify_requester": True},
+            "on_cancelled": {"enabled": True, "notify_requester": True},
+            "days_before_event": {"enabled": True, "days": [7, 1]},
+        },
     },
     "defaults": {
         "event_type": "other",
