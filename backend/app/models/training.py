@@ -2449,6 +2449,7 @@ class ShiftAssignment(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("shift_id", "user_id", name="uq_shift_assignment_shift_user"),
         Index("idx_shift_assign_shift", "shift_id"),
         Index("idx_shift_assign_user", "user_id"),
         Index("idx_shift_assign_org", "organization_id"),
