@@ -21,7 +21,10 @@ The Documents module provides centralized file storage for SOPs, policies, and s
 8. [Notifications](#notifications)
 9. [Department Messages](#department-messages)
 10. [External Integrations](#external-integrations)
-11. [Troubleshooting](#troubleshooting)
+
+### Worked Examples
+11. [Realistic Example: Building a Vehicle Pre-Trip Inspection Form](#realistic-example-building-a-vehicle-pre-trip-inspection-form)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -282,6 +285,153 @@ Navigate to **Integrations** in the sidebar to configure connections with extern
 > _[Screenshot of the Integrations page showing available integrations as cards with logos, connection status (Connected in green, Not Connected in gray), and a Configure button]_
 
 > **Hint:** Calendar integrations use iCal feeds. After connecting, events from The Logbook will appear in your personal calendar app automatically.
+
+---
+
+## Realistic Example: Building a Vehicle Pre-Trip Inspection Form
+
+This walkthrough demonstrates building a custom form from scratch using the form builder — from creating the form through publishing it and reviewing the first submission.
+
+### Background
+
+**Safety Officer Capt. Linda Zhao** at **Brookfield Fire Department** wants to digitize their daily apparatus pre-trip inspection checklist. Currently, drivers fill out a paper form clipped to a clipboard in each bay. She wants to replace it with a form members can complete on their phone or tablet.
+
+The paper form has:
+- Date and apparatus selection
+- Driver name
+- Checkbox list for each inspection point (lights, tires, fluids, etc.)
+- Mileage reading
+- Overall condition assessment
+- Notes field for deficiencies
+- Driver signature
+
+---
+
+### Step 1: Creating the Form
+
+Capt. Zhao navigates to **Administration > Forms** and clicks **Create Form**.
+
+| Field | Value |
+|-------|-------|
+| **Title** | Daily Apparatus Pre-Trip Inspection |
+| **Description** | Complete this form before taking any apparatus out of quarters. Report all deficiencies to the on-duty officer. |
+| **Category** | Operations |
+
+---
+
+### Step 2: Adding Fields
+
+She uses the form builder to add fields by clicking **Add Field** for each one. Here is the form layout she builds:
+
+**Section 1 — Header fields:**
+
+| # | Field Type | Label | Required | Configuration |
+|---|-----------|-------|----------|---------------|
+| 1 | **Section Header** | Inspection Details | — | Heading text for the top of the form |
+| 2 | **Date** | Inspection Date | Yes | Default: today's date |
+| 3 | **Select** | Apparatus | Yes | Options: Engine 1, Engine 2, Ladder 1, Rescue 1, Squad 3, Chief 1, Utility 1 |
+| 4 | **Hidden** | Inspector | — | Auto-filled with logged-in user's name |
+
+**Section 2 — Exterior checks:**
+
+| # | Field Type | Label | Required | Configuration |
+|---|-----------|-------|----------|---------------|
+| 5 | **Section Header** | Exterior Inspection | — | — |
+| 6 | **Checkbox** | Headlights / taillights / turn signals functional | Yes | — |
+| 7 | **Checkbox** | Emergency lights and siren tested | Yes | — |
+| 8 | **Checkbox** | Tires — adequate tread, proper inflation, no damage | Yes | — |
+| 9 | **Checkbox** | Body — no visible damage, compartment doors secure | Yes | — |
+| 10 | **Checkbox** | Mirrors clean and properly adjusted | Yes | — |
+| 11 | **Checkbox** | Fuel level above 3/4 tank | Yes | — |
+
+**Section 3 — Engine and fluids:**
+
+| # | Field Type | Label | Required | Configuration |
+|---|-----------|-------|----------|---------------|
+| 12 | **Section Header** | Engine & Fluids | — | — |
+| 13 | **Checkbox** | Engine oil level normal | Yes | — |
+| 14 | **Checkbox** | Coolant level normal | Yes | — |
+| 15 | **Checkbox** | Transmission fluid level normal | Yes | — |
+| 16 | **Checkbox** | Power steering fluid level normal | Yes | — |
+| 17 | **Checkbox** | Battery connections clean and tight | Yes | — |
+| 18 | **Number** | Current Mileage | Yes | Validation: min 0 |
+
+**Section 4 — Equipment checks:**
+
+| # | Field Type | Label | Required | Configuration |
+|---|-----------|-------|----------|---------------|
+| 19 | **Section Header** | Equipment & Cab | — | — |
+| 20 | **Checkbox** | SCBA bottles — full and secured | Yes | — |
+| 21 | **Checkbox** | Portable radio — charged and functional | Yes | — |
+| 22 | **Checkbox** | First aid kit — stocked | Yes | — |
+| 23 | **Checkbox** | Hand tools — present and secured | Yes | — |
+| 24 | **Checkbox** | Cab — clean, no loose items | Yes | — |
+
+**Section 5 — Summary:**
+
+| # | Field Type | Label | Required | Configuration |
+|---|-----------|-------|----------|---------------|
+| 25 | **Section Header** | Overall Assessment | — | — |
+| 26 | **Radio** | Overall Condition | Yes | Options: Ready for Service, Minor Issues (note below), Out of Service (notify officer immediately) |
+| 27 | **Textarea** | Deficiencies / Notes | No | Help text: "Describe any issues found during inspection. Include location and severity." Conditional visibility: shown when Overall Condition is NOT "Ready for Service" |
+| 28 | **Signature** | Driver Signature | Yes | — |
+
+> **Hint:** The **conditional visibility** on the Deficiencies field (item 27) is a key usability feature. By setting it to show only when the condition is NOT "Ready for Service," the form stays clean for routine inspections where everything passes. Drivers only see the notes field when they actually need it.
+
+---
+
+### Step 3: Configuring and Publishing
+
+Capt. Zhao configures the form settings:
+
+| Setting | Value |
+|---------|-------|
+| **Status** | Active |
+| **Public Access** | Off (internal only — requires login) |
+| **Allow Multiple Submissions** | Yes (one per day per apparatus) |
+| **Submission Notification** | On — notify Safety Officer when a submission includes "Minor Issues" or "Out of Service" |
+
+She clicks **Save**. The form is now live and accessible to all logged-in members.
+
+---
+
+### Step 4: First Submission
+
+The next morning, **D/O Mike Torres** opens The Logbook on the station tablet, navigates to **Forms**, and opens the pre-trip inspection form.
+
+He fills it out for Engine 1:
+- Checks off all exterior items
+- Checks off all engine/fluids items
+- Mileage: 28,523
+- Checks off all equipment items
+- Overall Condition: **Minor Issues**
+- The deficiency notes field appears. He types: *"Rear passenger-side turn signal bulb is out. Replacement bulb needed — have one in station supply. Will replace after shift."*
+- Signs with his finger on the tablet
+- Clicks **Submit**
+
+Capt. Zhao receives a notification because the submission included "Minor Issues." She opens the submission, sees the turn signal note, and adds a comment for follow-up.
+
+---
+
+### Step 5: Reviewing Submissions Over Time
+
+After two weeks of use, Capt. Zhao navigates to **Forms > Daily Apparatus Pre-Trip Inspection > View Submissions**.
+
+The submissions table shows:
+
+| Date | Apparatus | Inspector | Condition | Deficiencies |
+|------|-----------|-----------|-----------|-------------|
+| Mar 14 | Engine 1 | Torres | Ready for Service | — |
+| Mar 14 | Ladder 1 | Chen | Ready for Service | — |
+| Mar 14 | Rescue 1 | Brooks | Minor Issues | Low windshield washer fluid |
+| Mar 13 | Engine 1 | Garcia | Ready for Service | — |
+| Mar 13 | Engine 2 | Torres | Ready for Service | — |
+| Mar 13 | Ladder 1 | Walsh | Minor Issues | Bay door sensor slow to respond |
+| ... | ... | ... | ... | ... |
+
+She clicks **Export CSV** to download the data for the monthly operations report. The CSV includes all field values from every submission — ready for spreadsheet analysis.
+
+> **Hint:** Over time, the inspection data reveals patterns. If Engine 2 has recurring "Minor Issues" submissions, that signals a maintenance trend worth investigating. Export the data quarterly and review by apparatus to spot chronic problems.
 
 ---
 

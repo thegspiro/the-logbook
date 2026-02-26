@@ -16,8 +16,11 @@ The Scheduling module manages duty rosters, shift assignments, attendance tracki
 8. [Time-Off Requests](#time-off-requests)
 9. [Shift Swap Requests](#shift-swap-requests)
 10. [Shift Templates and Patterns](#shift-templates-and-patterns)
-11. [Shift Reports and Compliance](#shift-reports-and-compliance)
-12. [Troubleshooting](#troubleshooting)
+11. [Minimum Staffing and Coverage Rules](#minimum-staffing-and-coverage-rules)
+12. [Shift Reports and Compliance](#shift-reports-and-compliance)
+13. [How Shift Hours Feed Training Compliance](#how-shift-hours-feed-training-compliance)
+14. [Realistic Example: Setting Up a 24/48 Platoon Rotation](#realistic-example-setting-up-a-2448-platoon-rotation)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -218,12 +221,12 @@ Shift templates define reusable shift configurations (name, times, positions, ap
 
 Shift patterns automate shift creation over a date range based on a template:
 
-| Pattern Type | Description |
-|-------------|-------------|
-| **Daily** | Creates a shift every day |
-| **Weekly** | Creates shifts on selected weekdays |
-| **Platoon** | Rotates on/off days (e.g., 24 on / 48 off) |
-| **Custom** | Specific dates |
+| Pattern Type | Description | Common Use |
+|-------------|-------------|------------|
+| **Daily** | Creates a shift every day | Staffed stations with daily coverage |
+| **Weekly** | Creates shifts on selected weekdays | Volunteer departments with set drill nights (e.g., every Tuesday) |
+| **Platoon** | Rotates on/off days in a fixed cycle | Career departments running 24/48, 48/96, or Kelly schedules |
+| **Custom** | Specific dates you choose manually | One-off details, special events, holiday coverage |
 
 To generate shifts from a pattern:
 
@@ -234,6 +237,59 @@ To generate shifts from a pattern:
 
 > **Screenshot placeholder:**
 > _[Screenshot of the pattern creation form showing the pattern type selector (Daily, Weekly, Platoon, Custom), the linked template dropdown, start/end date pickers, and for Platoon type: days on / days off fields]_
+
+### Understanding Platoon Rotations
+
+Platoon patterns are the most complex pattern type. They work by cycling through a fixed on/off rotation:
+
+| Schedule | Days On | Days Off | Cycle Length | Avg Hours/Week |
+|----------|---------|----------|-------------|----------------|
+| **24/48** | 1 day (24 hrs) | 2 days off | 3 days | ~56 hrs |
+| **48/96** | 2 days (48 hrs) | 4 days off | 6 days | ~56 hrs |
+| **Kelly** | 1 on, 1 off, 1 on, 1 off, 1 on, 4 off | (built into cycle) | 9 days | ~49 hrs |
+
+**How the cycle works:**
+
+For a 24/48 rotation with 3 platoons (A, B, C):
+
+```
+Day:     Mon   Tue   Wed   Thu   Fri   Sat   Sun   Mon   Tue
+A:        ON   off   off    ON   off   off    ON   off   off
+B:       off    ON   off   off    ON   off   off    ON   off
+C:       off   off    ON   off   off    ON   off   off    ON
+```
+
+Each platoon works every third day. The system generates the full rotation from a **start date** and **platoon label** — you set which platoon starts on day 1, and the system fills in the rest.
+
+**At pattern boundaries:** When a generated pattern reaches its end date, the last shift ends cleanly on that date. To extend, generate a new pattern starting from the day after the previous one ended. The system does not automatically roll over into a new month — you generate explicitly.
+
+> **Hint:** For departments using a Kelly schedule, set up the pattern as Platoon with a 9-day cycle: 1 on, 1 off, 1 on, 1 off, 1 on, 4 off. The system handles the irregular spacing within the cycle.
+
+---
+
+## Minimum Staffing and Coverage Rules
+
+**Required Permission:** `scheduling.manage`
+
+Minimum staffing rules ensure each shift meets your department's coverage requirements.
+
+### Configuring Minimum Staffing
+
+Navigate to **Shift Scheduling > Settings** to set staffing rules:
+
+- **Minimum members per shift** — The system warns when a shift falls below this threshold
+- **Required positions** — Certain positions (e.g., Officer, Driver/Operator) must be filled
+- **Apparatus minimums** — Each apparatus can have a minimum crew size
+
+### How Understaffing Is Handled
+
+When a shift is below minimum staffing:
+- The calendar highlights the shift with a **warning indicator** (yellow border)
+- The shift detail panel shows a staffing alert: "2/4 positions filled — below minimum"
+- The **Coverage** report flags understaffed shifts for the selected date range
+- Open shifts are automatically created for unfilled positions (if configured)
+
+> **Hint:** The system does not prevent an understaffed shift from occurring — it alerts so officers can take action. Automatic open shift creation can be enabled in Scheduling Settings.
 
 ---
 
@@ -265,6 +321,185 @@ For each requirement, the report shows:
 
 ---
 
+## How Shift Hours Feed Training Compliance
+
+Shift attendance data flows directly into the Training module's compliance calculations. Understanding this connection helps both members and officers see why accurate attendance records matter.
+
+### The Data Flow
+
+```
+Shift Attendance (check-in/out recorded)
+    ↓
+Hours calculated automatically
+    ↓
+Training Requirements (type: HOURS or SHIFTS) pick up the data
+    ↓
+Compliance Matrix / Member Training Dashboard updated
+    ↓
+Shift Completion Reports (filed by officer) credit program requirements
+```
+
+### What Counts
+
+| Requirement Type | What the system counts | Source |
+|-----------------|----------------------|--------|
+| **HOURS** | Total attendance hours (check-out minus check-in) | Attendance records |
+| **SHIFTS** | Number of shifts with recorded attendance | Attendance records |
+| **CALLS** | Number of calls logged during attended shifts | Call log entries |
+
+### Requirements for Data to Flow
+
+1. **Attendance must be recorded** — a shift with no check-in/out contributes nothing
+2. **Both check-in and check-out** must exist for hours to calculate
+3. **The requirement must be active** and cover the current period
+4. **Shift completion reports** (filed by the shift officer) are needed for training program auto-progression — raw attendance alone updates hours/shift counts, but program phase requirements need the officer's report
+
+### Leave of Absence Adjustments
+
+When a member has an active leave, shift-based requirements are pro-rated just like training hours:
+
+```
+adjusted_required_shifts = base_required × (active_months / total_months)
+```
+
+For example, a requirement of 8 shifts per quarter for a member with 1 month of leave becomes `8 × (2/3) = 5.3`, rounded to **6 shifts required**.
+
+> For full details on leave adjustments, see [Membership > Leave of Absence](./01-membership.md#leave-of-absence) and [Training > Compliance Matrix](./02-training.md#compliance-matrix).
+
+---
+
+## Realistic Example: Setting Up a 24/48 Platoon Rotation
+
+This walkthrough demonstrates a complete scheduling setup — from template creation through a full month of generated shifts — using a realistic fire department scenario.
+
+### Background
+
+**Oakville Fire Department** is transitioning from a paper schedule to The Logbook. Captain **Mike Reilly** (Scheduling Officer) needs to set up a 3-platoon, 24/48 rotation for **Station 1** starting April 1. The station runs one engine (Engine 1) with a minimum crew of 4 per shift.
+
+The three platoons are:
+- **A Platoon** — Lt. Davis, FF Carter, FF Nguyen, FF Patel
+- **B Platoon** — Lt. Morrison, FF Brooks, FF Kim, FF Walsh
+- **C Platoon** — Lt. Hernandez, FF Cooper, FF Yamada, FF Schmidt
+
+---
+
+### Part 1: Creating the Shift Template
+
+Capt. Reilly navigates to **Shift Scheduling > Shift Templates** and clicks **Create Template**.
+
+**Template settings:**
+
+| Field | Value |
+|-------|-------|
+| **Name** | Station 1 — 24-Hour Shift |
+| **Start Time** | 07:00 |
+| **End Time** | 07:00 (next day) |
+| **Duration** | 24 hours |
+| **Apparatus** | Engine 1 |
+| **Minimum Staffing** | 4 |
+| **Required Positions** | 1 Officer, 1 Driver/Operator, 2 Firefighter |
+
+He saves the template. It now appears in the templates list and can be reused for any 24-hour shift at Station 1.
+
+---
+
+### Part 2: Generating the April Schedule
+
+Next, Capt. Reilly navigates to **Shift Scheduling > Shift Templates** and clicks **Create Pattern**.
+
+**Pattern settings:**
+
+| Field | Value |
+|-------|-------|
+| **Pattern Type** | Platoon |
+| **Template** | Station 1 — 24-Hour Shift |
+| **Start Date** | April 1 |
+| **End Date** | April 30 |
+| **Days On** | 1 |
+| **Days Off** | 2 |
+| **Starting Platoon** | A Platoon |
+
+He clicks **Generate Shifts**. The system creates 30 shifts (one per day) and presents a preview:
+
+```
+April Schedule Preview — Station 1
+
+  Sun   Mon   Tue   Wed   Thu   Fri   Sat
+              1(A)  2(B)  3(C)  4(A)  5(B)
+  6(C)  7(A)  8(B)  9(C)  10(A) 11(B) 12(C)
+  13(A) 14(B) 15(C) 16(A) 17(B) 18(C) 19(A)
+  20(B) 21(C) 22(A) 23(B) 24(C) 25(A) 26(B)
+  27(C) 28(A) 29(B) 30(C)
+```
+
+Each platoon works every third day — A Platoon works April 1, 4, 7, 10, 13, 16, 19, 22, 25, 28 (10 shifts). B and C each also work 10 shifts.
+
+Capt. Reilly reviews the preview to confirm the rotation looks correct, then clicks **Confirm** to create all 30 shifts on the calendar.
+
+---
+
+### Part 3: Assigning Members to Platoons
+
+With shifts generated, Capt. Reilly assigns members. He opens the first A Platoon shift (April 1) from the calendar:
+
+1. Clicks **Add Assignment** — assigns **Lt. Davis** as Officer
+2. Clicks **Add Assignment** — assigns **FF Carter** as Driver/Operator
+3. Clicks **Add Assignment** — assigns **FF Nguyen** as Firefighter
+4. Clicks **Add Assignment** — assigns **FF Patel** as Firefighter
+
+The staffing indicator changes from "0/4 — Below Minimum" (red) to "4/4 — Fully Staffed" (green).
+
+Because these members work all A Platoon shifts, Capt. Reilly can use bulk assignment to apply the same crew to all A Platoon dates in one action, then repeat for B and C Platoons.
+
+Each assigned member receives a notification and sees the shift on their **My Shifts** tab.
+
+---
+
+### Part 4: Handling a Swap Request
+
+On April 8, FF Brooks (B Platoon) needs to swap with FF Nguyen (A Platoon) for April 10:
+
+1. FF Brooks navigates to **Requests > Request Swap**
+2. Selects his shift (April 8, B Platoon) and the target shift (April 10, A Platoon)
+3. Submits the swap request
+
+FF Nguyen receives a notification and clicks **Accept**. Capt. Reilly reviews and clicks **Approve**. The system automatically updates the assignments:
+- April 8: FF Nguyen now works (instead of FF Brooks)
+- April 10: FF Brooks now works (instead of FF Nguyen)
+
+Both members see the updated schedule on their My Shifts tab.
+
+---
+
+### Part 5: End-of-Month Compliance Check
+
+At the end of April, Capt. Reilly navigates to **Shift Scheduling > Reports > Compliance**.
+
+The department has an active training requirement: **"Minimum 8 shifts per month"** (type: SHIFTS, frequency: Monthly).
+
+The compliance report for April shows:
+
+| Member | Required Shifts | Completed | Compliance | Status |
+|--------|----------------|-----------|------------|--------|
+| Lt. Davis | 8 | 10 | 125% | Compliant |
+| FF Carter | 8 | 10 | 125% | Compliant |
+| FF Nguyen | 8 | 10 | 125% | Compliant |
+| FF Patel | 8 | 10 | 125% | Compliant |
+| Lt. Morrison | 8 | 10 | 125% | Compliant |
+| FF Brooks | 8 | 10 | 125% | Compliant |
+| FF Kim | 8 | 10 | 125% | Compliant |
+| FF Walsh | 8 | 10 | 125% | Compliant |
+| Lt. Hernandez | 8 | 10 | 125% | Compliant |
+| FF Cooper | 8 | 10 | 125% | Compliant |
+| FF Yamada | 8 | 10 | 125% | Compliant |
+| FF Schmidt | **4** (LOA) | 5 | 125% | Compliant |
+
+FF Schmidt was on a 2-week Leave of Absence (April 1-14), so his requirement was pro-rated from 8 to 4 shifts. He completed 5 shifts in his active period and is marked Compliant.
+
+> **Hint:** The compliance data automatically feeds into the Training module's Compliance Matrix. Members and training officers see the same numbers in both places — there is no need to manually enter shift data into training records.
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -275,6 +510,9 @@ For each requirement, the report shows:
 | Generated shifts not appearing on calendar | Check the date range filter on the calendar. Generated shifts appear for the pattern's date range. |
 | Swap request stuck in pending | Both the other member and an officer must act. Check with the other member first, then the reviewing officer. |
 | Compliance report shows incorrect hours | Verify that attendance records have accurate check-in/out times. Only shifts with recorded attendance count. |
+| Platoon rotation seems off by a day | Check the "Starting Platoon" setting when generating the pattern. If the wrong platoon is set for day 1, the entire rotation shifts. |
+| Minimum staffing warning on a fully staffed shift | Verify all assigned members have confirmed their assignment. Pending assignments may not count toward the staffing total depending on your department's settings. |
+| Shift hours not appearing in Training compliance | Attendance must be recorded (check-in and check-out). Shifts without attendance data contribute zero hours to training requirements. |
 
 ---
 

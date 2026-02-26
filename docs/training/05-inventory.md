@@ -19,7 +19,9 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 11. [Low Stock Alerts](#low-stock-alerts)
 12. [Departure Clearance](#departure-clearance)
 13. [Members Inventory View (Admin)](#members-inventory-view-admin)
-14. [Troubleshooting](#troubleshooting)
+14. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
+15. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -436,6 +438,228 @@ This view shows:
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Members inventory tab showing a list of members with their assigned item counts, expandable to show individual items with assignment dates and conditions]_
+
+---
+
+## Realistic Example: Departure Clearance for a Retiring Member
+
+This walkthrough follows the departure clearance process from start to finish when a member retires and must return all assigned equipment.
+
+### Background
+
+**FF Tom Garcia** is retiring from **Hillside Fire Department** after 25 years of service. Quartermaster **Lt. Rachel Park** needs to account for all equipment assigned to him before his departure is finalized.
+
+FF Garcia currently has the following items assigned:
+
+| Item | Type | Serial / Asset Tag | Condition |
+|------|------|-------------------|-----------|
+| Turnout Coat | Individual | PPE-2019-042 | Good |
+| Turnout Pants | Individual | PPE-2019-043 | Good |
+| Portable Radio | Individual | RAD-0187 | Good |
+| Leather Helmet | Individual | HLM-0092 | Fair |
+| Pager | Individual | PGR-0341 | Good |
+| Station Boots | Individual | — (no tag) | Poor |
+| Work Gloves (3 pairs) | Pool | — | — |
+
+---
+
+### Step 1: Initiating the Clearance
+
+When FF Garcia's status is changed to **Retired** by the membership officer, the system automatically generates a property return report. Lt. Park also manually creates the departure clearance:
+
+1. Navigates to **Inventory Admin**
+2. Clicks **Create Departure Clearance**
+3. Selects **Tom Garcia** from the member dropdown
+4. The system populates the clearance with all 7 items/issuances currently held by FF Garcia
+
+The clearance status is set to **Initiated**.
+
+---
+
+### Step 2: Processing Returns
+
+FF Garcia comes to the station with his gear. Lt. Park opens the clearance and resolves each item:
+
+**Item 1 — Turnout Coat (PPE-2019-042):**
+- FF Garcia hands over the coat
+- Lt. Park selects disposition: **Returned**
+- Condition on return: **Fair** (25 years of use)
+- The item is unassigned from FF Garcia and returned to inventory
+
+**Item 2 — Turnout Pants (PPE-2019-043):**
+- FF Garcia hands over the pants
+- Lt. Park selects disposition: **Returned**
+- Condition on return: **Fair**
+
+**Item 3 — Portable Radio (RAD-0187):**
+- FF Garcia returns the radio
+- Lt. Park selects disposition: **Returned**
+- Condition on return: **Good** — ready to reassign
+
+**Item 4 — Leather Helmet (HLM-0092):**
+- FF Garcia returns the helmet
+- Lt. Park selects disposition: **Returned Damaged** — the face shield is cracked
+- She adds a note: "Face shield cracked, suspension worn. Needs inspection before reissue."
+- The item is returned to inventory with condition set to **Damaged**
+
+**Item 5 — Pager (PGR-0341):**
+- FF Garcia says the pager was lost during a wildland deployment 6 months ago
+- Lt. Park selects disposition: **Written Off**
+- Reason: Lost
+- She adds a note: "Lost during Willow Creek deployment, August 2025. Incident report #WC-2025-087."
+- The pager is marked as **Lost** in inventory
+
+**Item 6 — Station Boots:**
+- The boots are heavily worn after 5+ years
+- Lt. Park selects disposition: **Written Off**
+- Reason: Obsolete / worn beyond use
+- She adds a note: "Worn out, scheduled for disposal."
+
+**Item 7 — Work Gloves (3 pairs, pool item):**
+- FF Garcia returns 2 pairs; 1 pair was used up
+- Lt. Park resolves: **Returned** for 2 pairs (pool quantity increases by 2)
+- The remaining 1 pair is resolved as **Written Off** (consumed)
+
+The clearance status automatically moves to **In Progress** as items are resolved.
+
+---
+
+### Step 3: Completing the Clearance
+
+All 7 line items are now resolved. Lt. Park reviews the summary:
+
+| Item | Disposition | Notes |
+|------|------------|-------|
+| Turnout Coat | Returned (Fair) | |
+| Turnout Pants | Returned (Fair) | |
+| Portable Radio | Returned (Good) | |
+| Leather Helmet | Returned Damaged | Face shield cracked |
+| Pager | Written Off (Lost) | Lost during Willow Creek deployment |
+| Station Boots | Written Off (Worn) | Scheduled for disposal |
+| Work Gloves (2 of 3) | Returned | |
+| Work Gloves (1 of 3) | Written Off (Consumed) | |
+
+Lt. Park clicks **Complete Clearance**. The clearance status changes to **Completed**.
+
+The system automatically:
+- Cancels any pending property return reminder notifications for FF Garcia
+- Updates the Member Lifecycle page — FF Garcia's "Overdue Returns" count drops to zero
+- Logs the clearance completion in the audit trail
+
+> **Hint:** If Lt. Park needed to close the clearance with outstanding items (e.g., FF Garcia is unreachable and has items that will never be returned), she could use **Close Incomplete** instead. This requires administrator permission and logs which items were left unresolved.
+
+---
+
+## Realistic Example: NFPA 1851 PPE Lifecycle Tracking
+
+This walkthrough demonstrates how to track a set of turnout gear through its lifecycle using NFPA 1851 compliance features — from receipt through inspection, exposure logging, and eventual retirement.
+
+### Background
+
+**Westbrook Fire District** has enabled NFPA 1851/1852 compliance tracking on their "PPE" and "SCBA" inventory categories. Safety Officer **Capt. Elena Torres** manages the compliance program.
+
+A new set of turnout gear arrives for **FF David Park**:
+- Globe ATHLETIX turnout coat (manufactured January 2026)
+- Globe ATHLETIX turnout pants (manufactured January 2026)
+
+---
+
+### Step 1: Adding Items with NFPA Data
+
+Capt. Torres navigates to **Inventory > Items** and clicks **Add Item** for each piece.
+
+**Turnout Coat:**
+
+| Field | Value |
+|-------|-------|
+| **Name** | Turnout Coat — Globe ATHLETIX |
+| **Category** | PPE (NFPA tracking enabled) |
+| **Serial Number** | GA-2026-00451 |
+| **Asset Tag** | PPE-2026-101 |
+| **Condition** | Excellent |
+
+On the **NFPA Compliance** tab:
+
+| Field | Value |
+|-------|-------|
+| **Manufacture Date** | January 15, 2026 |
+| **First In-Service Date** | March 1, 2026 |
+| **Expected Retirement Date** | January 15, 2036 (auto-calculated: manufacture + 10 years) |
+| **Ensemble ID** | ENS-PARK-001 |
+| **Ensemble Role** | Coat |
+
+She repeats for the pants with the same ensemble ID but role set to **Pants**.
+
+---
+
+### Step 2: Routine Inspection (Year 1)
+
+Six months later, Capt. Torres conducts a routine advanced cleaning and inspection per NFPA 1851 §6.3.
+
+She navigates to the coat's detail page, opens the **Inspections** tab, and clicks **Add Inspection**:
+
+| Field | Value |
+|-------|-------|
+| **Inspection Type** | Advanced Cleaning & Inspection |
+| **Date** | September 15, 2026 |
+| **Result** | Pass |
+| **Inspector** | Capt. Elena Torres |
+| **Findings** | All seams intact. Moisture barrier tested — no leaks. Reflective trim in good condition. Thermal liner shows no damage. |
+
+The inspection is recorded in the item's history. The next inspection due date is calculated based on department policy (typically annual).
+
+---
+
+### Step 3: Logging a Fire Exposure
+
+On November 3, FF Park responds to a structure fire. Afterward, his turnout gear must be documented for exposure per NFPA 1851 §6.2.
+
+Capt. Torres navigates to the coat's **Exposures** tab and clicks **Add Exposure**:
+
+| Field | Value |
+|-------|-------|
+| **Exposure Type** | Fire (structural) |
+| **Date** | November 3, 2026 |
+| **Incident Number** | INC-2026-0892 |
+| **Decontamination Required** | Yes |
+| **Decontamination Completed** | No (pending) |
+
+She does the same for the pants. Both items now show a warning: "Decontamination pending."
+
+After the gear is professionally cleaned, she updates each exposure record:
+
+| Field | Value |
+|-------|-------|
+| **Decontamination Completed** | Yes |
+| **Decontamination Date** | November 8, 2026 |
+| **Decontamination Method** | Professional ISP cleaning |
+
+The warning clears.
+
+---
+
+### Step 4: Approaching Retirement (Year 9)
+
+In July 2035, the coat is within 180 days of its expected retirement date (January 15, 2036). The system automatically:
+
+- Displays a **warning banner** on the item detail page: "This item is approaching its 10-year retirement date (January 15, 2036). Plan for replacement."
+- Flags the item in the **Inventory Summary** under "Items Approaching Retirement"
+- Notifies Capt. Torres via her configured notification preferences
+
+### Lifecycle Summary
+
+Over the coat's 10-year life, the system tracked:
+
+| Data Point | Count |
+|-----------|-------|
+| Routine inspections | 10 (annual) |
+| Fire exposures | 14 |
+| Hazmat exposures | 2 |
+| Decontamination events | 16 |
+| Repairs | 3 (reflective trim replacement, zipper repair, patch) |
+| Condition changes | Excellent → Good (Year 3) → Fair (Year 7) |
+
+This complete history is available for audit, insurance claims, and NFPA compliance reporting — all in one place, replacing the paper logbook taped inside the locker.
 
 ---
 
