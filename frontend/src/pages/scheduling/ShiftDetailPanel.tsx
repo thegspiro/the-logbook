@@ -58,6 +58,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [editForm, setEditForm] = useState({
     shift_date: shift.shift_date,
     notes: shift.notes || '',
+    shift_officer_id: shift.shift_officer_id || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -134,9 +135,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     return () => { cancelled = true; };
   }, [shift.id]);
 
-  // Load members for the assign dropdown
+  // Load members for the assign dropdown and shift officer edit
   useEffect(() => {
-    if (!showAssignForm) return;
+    if (!showAssignForm && !isEditing) return;
     const loadMembers = async () => {
       setLoadingMembers(true);
       try {
@@ -153,7 +154,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       }
     };
     loadMembers();
-  }, [showAssignForm]);
+  }, [showAssignForm, isEditing]);
 
   const filteredMembers = useMemo(() => {
     if (!memberSearch) return memberOptions;
@@ -250,6 +251,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       const updated = await schedulingService.updateShift(shift.id, {
         shift_date: editForm.shift_date,
         notes: editForm.notes || null,
+        shift_officer_id: editForm.shift_officer_id || null,
       });
       setShift(updated);
       setIsEditing(false);
@@ -408,7 +410,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="flex items-center gap-1 flex-shrink-0">
               {canManage && !isPast && (
                 <>
-                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, notes: shift.notes || '' }); setIsEditing(!isEditing); }}
+                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '' }); setIsEditing(!isEditing); }}
                     className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
                   >
                     <Pencil className="w-4 h-4" />
@@ -465,6 +467,22 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   onChange={e => setEditForm(p => ({...p, notes: e.target.value}))}
                   rows={2} placeholder="Shift notes" className={inputCls + ' resize-none'}
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Shift Officer</label>
+                <select
+                  value={editForm.shift_officer_id}
+                  onChange={e => setEditForm(p => ({...p, shift_officer_id: e.target.value}))}
+                  className={inputCls}
+                >
+                  <option value="">No shift officer</option>
+                  {memberOptions.map(m => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+                {memberOptions.length === 0 && !loadingMembers && (
+                  <p className="text-xs text-theme-text-muted mt-1">Loading members...</p>
+                )}
               </div>
               <div className="flex items-center gap-2 justify-end">
                 <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>

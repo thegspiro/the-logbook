@@ -2104,6 +2104,9 @@ class Shift(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Display
+    color = Column(String(7))  # Hex color from shift template, e.g. "#4f46e5"
+
     # Notes
     notes = Column(Text)
     activities = Column(JSON)  # Training, station duties, etc.

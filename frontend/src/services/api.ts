@@ -3467,9 +3467,11 @@ export interface ShiftRecord {
   apparatus_name?: string;
   apparatus_unit_number?: string;
   apparatus_positions?: string[] | null;
+  min_staffing?: number | null;
   station_id?: string;
   shift_officer_id?: string;
   shift_officer_name?: string;
+  color?: string | null;
   notes?: string;
   activities?: unknown;
   attendee_count: number;
