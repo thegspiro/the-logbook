@@ -1685,6 +1685,17 @@ EVENT_SETTINGS_DEFAULTS = {
         {"value": "career_talk", "label": "Career Talk"},
         {"value": "other", "label": "Other"},
     ],
+    "request_pipeline": {
+        "min_lead_time_days": 21,
+        "tasks": [
+            {"id": "review_request", "label": "Review Request", "description": "Review the incoming request details"},
+            {"id": "assign_coordinator", "label": "Assign Coordinator", "description": "Assign a team member to coordinate this event"},
+            {"id": "confirm_date", "label": "Confirm Date", "description": "Confirm the event date with the requester"},
+            {"id": "plan_content", "label": "Plan Content", "description": "Prepare lesson plan or presentation content"},
+            {"id": "arrange_volunteers", "label": "Arrange Volunteers", "description": "Recruit and assign volunteers"},
+            {"id": "prepare_equipment", "label": "Prepare Equipment", "description": "Gather and prepare necessary equipment"},
+        ],
+    },
     "defaults": {
         "event_type": "other",
         "check_in_window_type": "flexible",

@@ -23,18 +23,22 @@ import type { EventRequestPublicStatus, EventRequestStatus } from '../types/even
 
 const STATUS_STEPS: { key: EventRequestStatus; label: string; icon: React.ElementType }[] = [
   { key: 'submitted', label: 'Submitted', icon: ClipboardList },
-  { key: 'under_review', label: 'Under Review', icon: Clock },
-  { key: 'approved', label: 'Approved', icon: CheckCircle },
+  { key: 'in_progress', label: 'In Progress', icon: Clock },
   { key: 'scheduled', label: 'Scheduled', icon: Calendar },
   { key: 'completed', label: 'Completed', icon: CheckCircle },
 ];
 
 const STATUS_ORDER: Record<string, number> = {
   submitted: 0,
-  under_review: 1,
-  approved: 2,
-  scheduled: 3,
-  completed: 4,
+  in_progress: 1,
+  scheduled: 2,
+  completed: 3,
+};
+
+const DATE_FLEXIBILITY_LABELS: Record<string, string> = {
+  specific_dates: 'Specific Dates',
+  general_timeframe: 'General Timeframe',
+  flexible: 'Flexible',
 };
 
 function formatDate(dateStr: string): string {
@@ -215,12 +219,28 @@ const EventRequestStatusPage: React.FC = () => {
                   {formatDate(data.updated_at)}
                 </span>
               </div>
+              {data.date_flexibility && (
+                <div>
+                  <span className="block text-gray-500 dark:text-gray-400 mb-0.5">Date Preference</span>
+                  <span className="text-gray-900 dark:text-white font-medium">
+                    {DATE_FLEXIBILITY_LABELS[data.date_flexibility] || data.date_flexibility}
+                  </span>
+                </div>
+              )}
               {data.preferred_date_start && (
                 <div>
                   <span className="block text-gray-500 dark:text-gray-400 mb-0.5">Preferred Date</span>
                   <span className="text-gray-900 dark:text-white font-medium">
                     {formatDate(data.preferred_date_start)}
                     {data.preferred_date_end && ` — ${formatDate(data.preferred_date_end)}`}
+                  </span>
+                </div>
+              )}
+              {data.preferred_timeframe && (
+                <div>
+                  <span className="block text-gray-500 dark:text-gray-400 mb-0.5">Timeframe</span>
+                  <span className="text-gray-900 dark:text-white font-medium">
+                    {data.preferred_timeframe}
                   </span>
                 </div>
               )}

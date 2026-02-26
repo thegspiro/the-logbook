@@ -3,9 +3,14 @@ Event Request API Endpoints
 
 Endpoints for the public outreach event request pipeline.
 Includes public submission, admin review, status transitions,
-public status checking, and form template generation.
+pipeline task completion, public status checking, and form template generation.
+
+The pipeline is intentionally fluid — departments configure their own
+checklist tasks via settings and work them in whatever order suits
+their workflow.
 """
 
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -27,6 +32,7 @@ from app.schemas.event_request import (
     EventRequestPublicStatus,
     EventRequestResponse,
     EventRequestStatusUpdate,
+    TaskCompletionUpdate,
 )
 
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
@@ -39,20 +45,27 @@ def _get_outreach_types_from_settings(org: Organization) -> List[Dict[str, str]]
     settings = (org.settings or {}).get("events", {})
     return settings.get("outreach_event_types", EVENT_SETTINGS_DEFAULTS["outreach_event_types"])
 
-# Valid status transitions
+
+def _get_pipeline_settings(org: Organization) -> dict:
+    """Read pipeline settings from organization, falling back to defaults."""
+    from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
+
+    settings = (org.settings or {}).get("events", {})
+    defaults = EVENT_SETTINGS_DEFAULTS["request_pipeline"]
+    stored = settings.get("request_pipeline", {})
+    return {**defaults, **stored}
+
+
+# Valid status transitions — kept simple; the real workflow detail is in tasks
 VALID_TRANSITIONS = {
     EventRequestStatus.SUBMITTED: [
-        EventRequestStatus.UNDER_REVIEW,
+        EventRequestStatus.IN_PROGRESS,
         EventRequestStatus.DECLINED,
         EventRequestStatus.CANCELLED,
     ],
-    EventRequestStatus.UNDER_REVIEW: [
-        EventRequestStatus.APPROVED,
-        EventRequestStatus.DECLINED,
-        EventRequestStatus.CANCELLED,
-    ],
-    EventRequestStatus.APPROVED: [
+    EventRequestStatus.IN_PROGRESS: [
         EventRequestStatus.SCHEDULED,
+        EventRequestStatus.DECLINED,
         EventRequestStatus.CANCELLED,
     ],
     EventRequestStatus.SCHEDULED: [
@@ -83,8 +96,6 @@ async def submit_public_event_request(
     No authentication required. Creates an event request that enters
     the review pipeline for the specified organization.
     """
-    from app.models.user import Organization
-
     result = await db.execute(
         select(Organization).where(
             Organization.id == organization_id, Organization.active.is_(True)
@@ -102,8 +113,11 @@ async def submit_public_event_request(
         organization_name=data.organization_name,
         outreach_type=data.outreach_type,
         description=data.description,
+        date_flexibility=data.date_flexibility,
         preferred_date_start=data.preferred_date_start,
         preferred_date_end=data.preferred_date_end,
+        preferred_timeframe=data.preferred_timeframe,
+        preferred_time_of_day=data.preferred_time_of_day,
         audience_size=data.audience_size,
         age_group=data.age_group,
         venue_preference=data.venue_preference,
@@ -164,8 +178,10 @@ async def check_request_status(
         contact_name=event_request.contact_name,
         outreach_type=event_request.outreach_type,
         status=event_request.status.value,
+        date_flexibility=event_request.date_flexibility,
         preferred_date_start=event_request.preferred_date_start,
         preferred_date_end=event_request.preferred_date_end,
+        preferred_timeframe=event_request.preferred_timeframe,
         created_at=event_request.created_at,
         updated_at=event_request.updated_at,
         event_date=event_date,
@@ -223,10 +239,13 @@ async def list_event_requests(
                 organization_name=req.organization_name,
                 outreach_type=req.outreach_type,
                 status=req.status.value,
+                date_flexibility=req.date_flexibility,
                 preferred_date_start=req.preferred_date_start,
+                preferred_timeframe=req.preferred_timeframe,
                 audience_size=req.audience_size,
                 assigned_to=req.assigned_to,
                 assignee_name=assignee_name,
+                task_completions=req.task_completions,
                 created_at=req.created_at,
             )
         )
@@ -301,8 +320,11 @@ async def get_event_request(
         organization_name=event_request.organization_name,
         outreach_type=event_request.outreach_type,
         description=event_request.description,
+        date_flexibility=event_request.date_flexibility,
         preferred_date_start=event_request.preferred_date_start,
         preferred_date_end=event_request.preferred_date_end,
+        preferred_timeframe=event_request.preferred_timeframe,
+        preferred_time_of_day=event_request.preferred_time_of_day,
         audience_size=event_request.audience_size,
         age_group=event_request.age_group,
         venue_preference=event_request.venue_preference,
@@ -313,6 +335,7 @@ async def get_event_request(
         assignee_name=assignee_name,
         reviewer_notes=event_request.reviewer_notes,
         decline_reason=event_request.decline_reason,
+        task_completions=event_request.task_completions,
         event_id=event_request.event_id,
         status_token=event_request.status_token,
         created_at=event_request.created_at,
@@ -329,7 +352,11 @@ async def update_event_request_status(
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """
-    Update the status of an event request (approve, decline, schedule, etc.).
+    Update the status of an event request.
+
+    Status transitions are intentionally broad (submitted → in_progress →
+    scheduled → completed) so departments can organize their workflow
+    through configurable pipeline tasks instead.
 
     **Authentication required**
     **Requires permission: events.manage**
@@ -384,6 +411,86 @@ async def update_event_request_status(
     return {"message": f"Request status updated to {new_status.value}", "status": new_status.value}
 
 
+@router.patch("/{request_id}/tasks")
+async def update_task_completion(
+    request_id: str,
+    update: TaskCompletionUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Toggle a pipeline task on an event request.
+
+    Tasks are configurable per department and can be completed in any order.
+    Completing the first task auto-transitions the request to in_progress
+    if it's still in submitted status.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    result = await db.execute(
+        select(EventRequest).where(
+            EventRequest.id == request_id,
+            EventRequest.organization_id == current_user.organization_id,
+        )
+    )
+    event_request = result.scalar_one_or_none()
+    if not event_request:
+        raise HTTPException(status_code=404, detail="Event request not found")
+
+    if event_request.status in (
+        EventRequestStatus.DECLINED,
+        EventRequestStatus.CANCELLED,
+        EventRequestStatus.COMPLETED,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot update tasks on a {event_request.status.value} request",
+        )
+
+    # Update task completions
+    completions = dict(event_request.task_completions or {})
+
+    if update.completed:
+        completions[update.task_id] = {
+            "completed": True,
+            "completed_by": current_user.id,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "notes": update.notes,
+        }
+    else:
+        completions.pop(update.task_id, None)
+
+    event_request.task_completions = completions
+
+    # Auto-transition to in_progress if first task completed while still submitted
+    auto_transitioned = False
+    if event_request.status == EventRequestStatus.SUBMITTED and update.completed:
+        event_request.status = EventRequestStatus.IN_PROGRESS
+        auto_transitioned = True
+
+    # Log activity
+    action = f"task_{'completed' if update.completed else 'uncompleted'}:{update.task_id}"
+    activity = EventRequestActivity(
+        request_id=event_request.id,
+        action=action,
+        notes=update.notes,
+        details={"task_id": update.task_id, "completed": update.completed},
+        performed_by=current_user.id,
+    )
+    if auto_transitioned:
+        activity.old_status = EventRequestStatus.SUBMITTED.value
+        activity.new_status = EventRequestStatus.IN_PROGRESS.value
+    db.add(activity)
+    await db.commit()
+
+    return {
+        "message": f"Task '{update.task_id}' {'completed' if update.completed else 'uncompleted'}",
+        "task_completions": completions,
+        "status": event_request.status.value,
+    }
+
+
 @router.get("/types/labels")
 async def get_outreach_type_labels(
     organization_id: Optional[str] = Query(None, description="Organization ID to get types for"),
@@ -419,8 +526,8 @@ async def generate_event_request_form(
     Generate a public event request form in the Forms module.
 
     Creates a pre-configured form with all the fields needed for public
-    event requests, sets it as public, and adds an EVENT_REQUEST integration
-    with proper field mappings.
+    event requests — including flexible date preference fields — sets it
+    as public, and adds an EVENT_REQUEST integration with proper field mappings.
 
     **Authentication required**
     **Requires permission: events.manage**
@@ -451,6 +558,17 @@ async def generate_event_request_form(
         {"value": "our_station", "label": "Your Station"},
         {"value": "either", "label": "Either"},
     ]
+    date_flexibility_options = [
+        {"value": "specific_dates", "label": "I have specific dates in mind"},
+        {"value": "general_timeframe", "label": "I have a general timeframe"},
+        {"value": "flexible", "label": "I'm flexible — you pick the date"},
+    ]
+    time_of_day_options = [
+        {"value": "morning", "label": "Morning"},
+        {"value": "afternoon", "label": "Afternoon"},
+        {"value": "evening", "label": "Evening"},
+        {"value": "flexible", "label": "Flexible"},
+    ]
 
     # Create the form
     form = Form(
@@ -478,10 +596,14 @@ async def generate_event_request_form(
         {"label": "Event Details", "field_type": FieldType.SECTION_HEADER, "required": False},
         {"label": "Type of Event", "field_type": FieldType.SELECT, "required": True, "mapping": "outreach_type", "options": outreach_options},
         {"label": "Description", "field_type": FieldType.TEXTAREA, "required": True, "mapping": "description", "placeholder": "Describe what you're looking for...", "min_length": 10, "max_length": 2000},
-        {"label": "Preferred Start Date", "field_type": FieldType.DATE, "required": False, "mapping": "preferred_date_start"},
-        {"label": "Preferred End Date", "field_type": FieldType.DATE, "required": False, "mapping": "preferred_date_end"},
         {"label": "Expected Audience Size", "field_type": FieldType.TEXT, "required": False, "mapping": "audience_size", "placeholder": "Approximate number of attendees"},
         {"label": "Age Group", "field_type": FieldType.TEXT, "required": False, "mapping": "age_group", "placeholder": "e.g., Elementary school, Adults, All ages"},
+        {"label": "Scheduling Preference", "field_type": FieldType.SECTION_HEADER, "required": False},
+        {"label": "Date Flexibility", "field_type": FieldType.SELECT, "required": True, "mapping": "date_flexibility", "options": date_flexibility_options, "help_text": "How flexible are you on the date? We'll work with you to find the best time."},
+        {"label": "Preferred Timeframe", "field_type": FieldType.TEXT, "required": False, "mapping": "preferred_timeframe", "placeholder": "e.g., A Saturday morning in March, Any weekday after spring break", "help_text": "Describe your ideal timing in your own words."},
+        {"label": "Earliest Date", "field_type": FieldType.DATE, "required": False, "mapping": "preferred_date_start", "help_text": "If you have specific dates, what's the earliest?"},
+        {"label": "Latest Date", "field_type": FieldType.DATE, "required": False, "mapping": "preferred_date_end", "help_text": "If you have specific dates, what's the latest?"},
+        {"label": "Preferred Time of Day", "field_type": FieldType.SELECT, "required": False, "mapping": "preferred_time_of_day", "options": time_of_day_options},
         {"label": "Venue & Logistics", "field_type": FieldType.SECTION_HEADER, "required": False},
         {"label": "Venue Preference", "field_type": FieldType.SELECT, "required": True, "mapping": "venue_preference", "options": venue_options},
         {"label": "Venue Address", "field_type": FieldType.TEXTAREA, "required": False, "mapping": "venue_address", "placeholder": "Address if event is at your location"},
@@ -492,6 +614,7 @@ async def generate_event_request_form(
     for i, field_def in enumerate(field_defs):
         mapping = field_def.pop("mapping", None)
         options = field_def.pop("options", None)
+        help_text = field_def.pop("help_text", None)
 
         field = FormField(
             form_id=form.id,
@@ -500,6 +623,7 @@ async def generate_event_request_form(
             required=field_def["required"],
             sort_order=i,
             placeholder=field_def.get("placeholder"),
+            help_text=help_text,
             min_length=field_def.get("min_length"),
             max_length=field_def.get("max_length"),
             options=options,

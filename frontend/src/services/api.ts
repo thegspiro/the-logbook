@@ -1958,6 +1958,10 @@ export const eventRequestService = {
     const response = await api.get<Record<string, string>>('/event-requests/types/labels', { params });
     return response.data;
   },
+  async updateTaskCompletion(requestId: string, data: { task_id: string; completed: boolean; notes?: string }): Promise<{ message: string; task_completions: Record<string, unknown>; status: string }> {
+    const response = await api.patch<{ message: string; task_completions: Record<string, unknown>; status: string }>(`/event-requests/${requestId}/tasks`, data);
+    return response.data;
+  },
   async generateForm(): Promise<{ message: string; form_id: string; public_slug: string; public_url: string }> {
     const response = await api.post<{ message: string; form_id: string; public_slug: string; public_url: string }>('/event-requests/generate-form');
     return response.data;

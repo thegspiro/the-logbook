@@ -388,6 +388,8 @@ export interface EventModuleSettings {
   };
   // Configurable outreach event types for the public request pipeline
   outreach_event_types: OutreachEventTypeConfig[];
+  // Configurable pipeline settings for event requests
+  request_pipeline: RequestPipelineSettings;
 }
 
 // Event Request Pipeline
@@ -397,14 +399,34 @@ export interface OutreachEventTypeConfig {
   label: string;
 }
 
+export interface PipelineTaskConfig {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export interface RequestPipelineSettings {
+  min_lead_time_days: number;
+  tasks: PipelineTaskConfig[];
+}
+
 export type EventRequestStatus =
   | 'submitted'
-  | 'under_review'
-  | 'approved'
+  | 'in_progress'
   | 'scheduled'
+  | 'completed'
   | 'declined'
-  | 'cancelled'
-  | 'completed';
+  | 'cancelled';
+
+export type DateFlexibility = 'specific_dates' | 'general_timeframe' | 'flexible';
+export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'flexible';
+
+export interface TaskCompletion {
+  completed: boolean;
+  completed_by: string;
+  completed_at: string;
+  notes?: string;
+}
 
 export interface EventRequestActivity {
   id: string;
@@ -427,8 +449,11 @@ export interface EventRequest {
   organization_name?: string;
   outreach_type: string;
   description: string;
+  date_flexibility: DateFlexibility;
   preferred_date_start?: string;
   preferred_date_end?: string;
+  preferred_timeframe?: string;
+  preferred_time_of_day?: TimeOfDay;
   audience_size?: number;
   age_group?: string;
   venue_preference: string;
@@ -439,6 +464,7 @@ export interface EventRequest {
   assignee_name?: string;
   reviewer_notes?: string;
   decline_reason?: string;
+  task_completions?: Record<string, TaskCompletion>;
   event_id?: string;
   status_token?: string;
   created_at: string;
@@ -453,10 +479,13 @@ export interface EventRequestListItem {
   organization_name?: string;
   outreach_type: string;
   status: EventRequestStatus;
+  date_flexibility: DateFlexibility;
   preferred_date_start?: string;
+  preferred_timeframe?: string;
   audience_size?: number;
   assigned_to?: string;
   assignee_name?: string;
+  task_completions?: Record<string, TaskCompletion>;
   created_at: string;
 }
 
@@ -464,8 +493,10 @@ export interface EventRequestPublicStatus {
   contact_name: string;
   outreach_type: string;
   status: EventRequestStatus;
+  date_flexibility: DateFlexibility;
   preferred_date_start?: string;
   preferred_date_end?: string;
+  preferred_timeframe?: string;
   created_at: string;
   updated_at: string;
   event_date?: string;

@@ -5,6 +5,10 @@ Database models for the public outreach event request pipeline.
 Community members can request events (fire safety demos, station tours, etc.)
 via a public form. Requests flow through a review pipeline before becoming
 scheduled events.
+
+The pipeline is intentionally fluid — departments can configure their own
+checklist tasks and work them in any order. Date selection is flexible:
+requesters express preferences rather than committing to exact dates.
 """
 
 import enum
@@ -34,15 +38,19 @@ def generate_status_token() -> str:
 
 
 class EventRequestStatus(str, enum.Enum):
-    """Status of an event request in the pipeline."""
+    """
+    Broad status of an event request.
+
+    Kept intentionally simple — the real workflow detail lives in
+    configurable pipeline tasks (task_completions JSON).
+    """
 
     SUBMITTED = "submitted"
-    UNDER_REVIEW = "under_review"
-    APPROVED = "approved"
+    IN_PROGRESS = "in_progress"
     SCHEDULED = "scheduled"
+    COMPLETED = "completed"
     DECLINED = "declined"
     CANCELLED = "cancelled"
-    COMPLETED = "completed"
 
 
 class EventRequest(Base):
@@ -77,8 +85,20 @@ class EventRequest(Base):
         default="other",
     )
     description = Column(Text, nullable=False)
+
+    # Flexible date preferences — requesters express preferences, not commitments.
+    # date_flexibility: "specific_dates" (they have exact dates), "general_timeframe"
+    # (e.g., "a Saturday in March"), or "flexible" (department picks).
+    date_flexibility = Column(String(30), nullable=False, default="flexible")
     preferred_date_start = Column(DateTime(timezone=True), nullable=True)
     preferred_date_end = Column(DateTime(timezone=True), nullable=True)
+    # Free-text for fuzzy preferences like "Saturday morning next month"
+    preferred_timeframe = Column(String(500), nullable=True)
+    # General time-of-day preference
+    preferred_time_of_day = Column(
+        String(20), nullable=True, default="flexible"
+    )  # "morning", "afternoon", "evening", "flexible"
+
     audience_size = Column(Integer, nullable=True)
     age_group = Column(String(100), nullable=True)
     venue_preference = Column(
@@ -87,7 +107,7 @@ class EventRequest(Base):
     venue_address = Column(Text, nullable=True)
     special_requests = Column(Text, nullable=True)
 
-    # Pipeline tracking
+    # Pipeline tracking — broad status plus flexible per-task completions
     status = Column(
         Enum(EventRequestStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
@@ -99,6 +119,11 @@ class EventRequest(Base):
     )
     reviewer_notes = Column(Text, nullable=True)
     decline_reason = Column(Text, nullable=True)
+
+    # Configurable pipeline task completions (JSON)
+    # Schema: { "task_id": { "completed": true, "completed_by": "user-uuid",
+    #           "completed_at": "iso-datetime", "notes": "..." } }
+    task_completions = Column(JSON, nullable=True, default=dict)
 
     # Link to created Event (when SCHEDULED)
     event_id = Column(
@@ -147,7 +172,7 @@ class EventRequestActivity(Base):
     """
     Audit trail for event request pipeline actions.
 
-    Records every status change, note, and action taken on a request.
+    Records every status change, task completion, note, and action taken on a request.
     """
 
     __tablename__ = "event_request_activity"
