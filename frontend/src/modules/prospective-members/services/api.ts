@@ -8,7 +8,7 @@
  * frontend components don't need to know about backend field names.
  */
 
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import type {
   Pipeline,
   PipelineCreate,
@@ -48,7 +48,7 @@ const api = axios.create({
 // Helper to read a cookie value by name
 function getCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]!) : null;
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 // Attach auth token and CSRF header to requests
@@ -76,9 +76,9 @@ let refreshPromise: Promise<string> | null = null;
 // Handle 401 responses with race-safe token refresh
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  async (error: AxiosError) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
       const refreshToken = localStorage.getItem('refresh_token');
       if (!refreshToken) return Promise.reject(error instanceof Error ? error : new Error(String(error)));
@@ -86,12 +86,12 @@ api.interceptors.response.use(
       try {
         if (!refreshPromise) {
           refreshPromise = axios
-            .post('/api/v1/auth/refresh', { refresh_token: refreshToken }, { withCredentials: true })
+            .post<{ access_token: string; refresh_token?: string }>('/api/v1/auth/refresh', { refresh_token: refreshToken }, { withCredentials: true })
             .then((response) => {
-              const { access_token, refresh_token: new_refresh_token } = response.data;
+              const { access_token, refresh_token: newRefreshToken } = response.data;
               localStorage.setItem('access_token', access_token);
-              if (new_refresh_token) {
-                localStorage.setItem('refresh_token', new_refresh_token);
+              if (newRefreshToken) {
+                localStorage.setItem('refresh_token', newRefreshToken);
               }
               return access_token;
             })

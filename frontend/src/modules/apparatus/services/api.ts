@@ -61,7 +61,7 @@ const api = axios.create({
 // Helper to read a cookie value by name
 function getCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]!) : null;
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 // Request interceptor to add auth token and CSRF header
@@ -106,12 +106,12 @@ api.interceptors.response.use(
 
         if (!refreshPromise) {
           refreshPromise = axios
-            .post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { withCredentials: true })
+            .post<{ access_token: string; refresh_token?: string }>(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { withCredentials: true })
             .then((response) => {
-              const { access_token, refresh_token: new_refresh_token } = response.data;
+              const { access_token, refresh_token: newRefreshToken } = response.data;
               localStorage.setItem('access_token', access_token);
-              if (new_refresh_token) {
-                localStorage.setItem('refresh_token', new_refresh_token);
+              if (newRefreshToken) {
+                localStorage.setItem('refresh_token', newRefreshToken);
               }
               return access_token;
             })
