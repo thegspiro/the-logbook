@@ -106,21 +106,21 @@ api.interceptors.response.use(
 // ============================================================================
 
 export const getConfig = async (): Promise<PublicPortalConfig> => {
-  const response = await api.get('/config');
+  const response = await api.get<PublicPortalConfig>('/config');
   return response.data;
 };
 
 export const createConfig = async (
   config: UpdateConfigRequest
 ): Promise<PublicPortalConfig> => {
-  const response = await api.post('/config', config);
+  const response = await api.post<PublicPortalConfig>('/config', config);
   return response.data;
 };
 
 export const updateConfig = async (
   config: UpdateConfigRequest
 ): Promise<PublicPortalConfig> => {
-  const response = await api.patch('/config', config);
+  const response = await api.patch<PublicPortalConfig>('/config', config);
   return response.data;
 };
 
@@ -131,7 +131,7 @@ export const updateConfig = async (
 export const listAPIKeys = async (
   includeInactive = false
 ): Promise<PublicPortalAPIKey[]> => {
-  const response = await api.get('/api-keys', {
+  const response = await api.get<PublicPortalAPIKey[]>('/api-keys', {
     params: { include_inactive: includeInactive },
   });
   return response.data;
@@ -140,7 +140,7 @@ export const listAPIKeys = async (
 export const createAPIKey = async (
   data: CreateAPIKeyRequest
 ): Promise<PublicPortalAPIKeyCreated> => {
-  const response = await api.post('/api-keys', data);
+  const response = await api.post<PublicPortalAPIKeyCreated>('/api-keys', data);
   return response.data;
 };
 
@@ -148,14 +148,14 @@ export const updateAPIKey = async (
   keyId: string,
   data: UpdateAPIKeyRequest
 ): Promise<PublicPortalAPIKey> => {
-  const response = await api.patch(`/api-keys/${keyId}`, data);
+  const response = await api.patch<PublicPortalAPIKey>(`/api-keys/${keyId}`, data);
   return response.data;
 };
 
 export const revokeAPIKey = async (
   keyId: string
 ): Promise<{ message: string; key_prefix: string }> => {
-  const response = await api.delete(`/api-keys/${keyId}`);
+  const response = await api.delete<{ message: string; key_prefix: string }>(`/api-keys/${keyId}`);
   return response.data;
 };
 
@@ -166,14 +166,14 @@ export const revokeAPIKey = async (
 export const getAccessLogs = async (
   filters: AccessLogFilters = {}
 ): Promise<PublicPortalAccessLog[]> => {
-  const response = await api.get('/access-logs', {
+  const response = await api.get<PublicPortalAccessLog[]>('/access-logs', {
     params: filters,
   });
   return response.data;
 };
 
 export const getUsageStats = async (): Promise<PublicPortalUsageStats> => {
-  const response = await api.get('/usage-stats');
+  const response = await api.get<PublicPortalUsageStats>('/usage-stats');
   return response.data;
 };
 
@@ -184,7 +184,7 @@ export const getUsageStats = async (): Promise<PublicPortalUsageStats> => {
 export const getWhitelist = async (
   category?: string
 ): Promise<PublicPortalDataWhitelist[]> => {
-  const response = await api.get('/whitelist', {
+  const response = await api.get<PublicPortalDataWhitelist[]>('/whitelist', {
     params: category ? { category } : {},
   });
   return response.data;
@@ -195,7 +195,7 @@ export const createWhitelistEntry = async (data: {
   field_name: string;
   is_enabled: boolean;
 }): Promise<PublicPortalDataWhitelist> => {
-  const response = await api.post('/whitelist', data);
+  const response = await api.post<PublicPortalDataWhitelist>('/whitelist', data);
   return response.data;
 };
 
@@ -203,7 +203,7 @@ export const updateWhitelistEntry = async (
   entryId: string,
   isEnabled: boolean
 ): Promise<PublicPortalDataWhitelist> => {
-  const response = await api.patch(`/whitelist/${entryId}`, {
+  const response = await api.patch<PublicPortalDataWhitelist>(`/whitelist/${entryId}`, {
     is_enabled: isEnabled,
   });
   return response.data;
@@ -212,7 +212,7 @@ export const updateWhitelistEntry = async (
 export const bulkUpdateWhitelist = async (
   updates: Array<{ category: string; field: string; enabled: boolean }>
 ): Promise<{ message: string; updated_count: number }> => {
-  const response = await api.post('/whitelist/bulk-update', {
+  const response = await api.post<{ message: string; updated_count: number }>('/whitelist/bulk-update', {
     updates,
   });
   return response.data;

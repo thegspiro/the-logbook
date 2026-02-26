@@ -159,7 +159,7 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
   }
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 
 /** Map a backend pipeline step response to a frontend PipelineStage */
 function mapStepToStage(step: any): PipelineStage {
@@ -323,8 +323,6 @@ function mapElectionPackageResponse(data: any): ElectionPackage {
     submitted_by: config.submitted_by,
   };
 }
-
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // =============================================================================
 // Pipeline Service
@@ -722,17 +720,17 @@ export const applicantService = {
     const response = await api.get(
       `/prospective-members/prospects/${applicantId}/documents`
     );
-    return (response.data || []).map((d: any) => ({
-      id: d.id,
-      applicant_id: d.prospect_id,
-      stage_id: d.step_id,
-      document_type: d.document_type,
-      file_name: d.file_name,
-      file_url: `/api/v1/prospective-members/prospects/${applicantId}/documents/${d.id}/download`,
-      file_size: d.file_size,
-      mime_type: d.mime_type,
-      uploaded_by: d.uploaded_by,
-      uploaded_at: d.created_at,
+    return (response.data || []).map((d: Record<string, unknown>) => ({
+      id: d.id as string,
+      applicant_id: d.prospect_id as string,
+      stage_id: d.step_id as string,
+      document_type: d.document_type as string,
+      file_name: d.file_name as string,
+      file_url: `/api/v1/prospective-members/prospects/${applicantId}/documents/${d.id as string}/download`,
+      file_size: d.file_size as number,
+      mime_type: d.mime_type as string,
+      uploaded_by: d.uploaded_by as string,
+      uploaded_at: d.created_at as string,
     }));
   },
 
@@ -797,8 +795,8 @@ export const applicantService = {
         `/prospective-members/prospects/${applicantId}/election-package`
       );
       return mapElectionPackageResponse(response.data);
-    } catch (err: any) {
-      if (err.response?.status === 404) return null;
+    } catch (err: unknown) {
+      if (err instanceof AxiosError && err.response?.status === 404) return null;
       throw err;
     }
   },
