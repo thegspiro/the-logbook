@@ -41,15 +41,32 @@ import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS } from '../types';
 
 const api = axios.create({
   baseURL: '/api/v1',
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach auth token to requests
+// Helper to read a cookie value by name
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]!) : null;
+}
+
+// Attach auth token and CSRF header to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Double-submit CSRF token for state-changing requests
+  const method = (config.method || '').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCookie('csrf_token');
+    if (csrf) {
+      config.headers['X-CSRF-Token'] = csrf;
+    }
+  }
+
   return config;
 });
 
@@ -69,7 +86,7 @@ api.interceptors.response.use(
       try {
         if (!refreshPromise) {
           refreshPromise = axios
-            .post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+            .post('/api/v1/auth/refresh', { refresh_token: refreshToken }, { withCredentials: true })
             .then((response) => {
               const { access_token, refresh_token: new_refresh_token } = response.data;
               localStorage.setItem('access_token', access_token);

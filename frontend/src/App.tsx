@@ -19,7 +19,7 @@ import { AppLayout } from './components/layout';
 import { getOnboardingRoutes } from './modules/onboarding';
 import { getApparatusRoutes } from './modules/apparatus';
 import { getMembershipRoutes } from './modules/membership';
-import { getProspectiveMembersRoutes } from './modules/prospective-members';
+import { getProspectiveMembersRoutes, getProspectiveMembersPublicRoutes } from './modules/prospective-members';
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -249,10 +249,10 @@ function App() {
               <Route path="/notifications" element={<NotificationsPage />} />
 
               {/* Forms Module */}
-              <Route path="/forms" element={<FormsPage />} />
+              <Route path="/forms" element={<ProtectedRoute requiredPermission="settings.manage"><FormsPage /></ProtectedRoute>} />
 
               {/* Integrations Module */}
-              <Route path="/integrations" element={<IntegrationsPage />} />
+              <Route path="/integrations" element={<ProtectedRoute requiredPermission="settings.manage"><IntegrationsPage /></ProtectedRoute>} />
 
               {/* Admin/Monitoring Routes */}
               <Route path="/admin/errors" element={<ProtectedRoute requiredPermission="settings.manage"><ErrorMonitoringPage /></ProtectedRoute>} />
@@ -271,6 +271,9 @@ function App() {
               {/* Reports */}
               <Route path="/reports" element={<ReportsPage />} />
             </Route>
+
+            {/* Public Application Status (no auth required) */}
+            {getProspectiveMembersPublicRoutes()}
 
             {/* Public Form Page (no auth required) */}
             <Route path="/f/:slug" element={<PublicFormPage />} />

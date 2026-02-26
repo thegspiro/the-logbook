@@ -24,14 +24,7 @@ import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { Breadcrumbs, SkeletonPage, EmptyState, Pagination } from '../components/ux';
 import { SortableHeader, sortItems } from '../components/ux/SortableHeader';
 import type { SortDirection } from '../components/ux/SortableHeader';
-
-interface MemberStats {
-  total: number;
-  active: number;
-  inactive: number;
-  onLeave: number;
-  retired: number;
-}
+import type { MemberStats } from '../types/member';
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
@@ -44,6 +37,7 @@ const Members: React.FC = () => {
     inactive: 0,
     onLeave: 0,
     retired: 0,
+    expiringCertifications: 0,
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -87,6 +81,7 @@ const Members: React.FC = () => {
         inactive: users.filter(u => u.status === 'inactive').length,
         onLeave: users.filter(u => u.status === 'leave' || u.status === 'on_leave').length,
         retired: users.filter(u => u.status === 'retired').length,
+        expiringCertifications: 0,
       };
       setStats(calculatedStats);
     } catch (err: unknown) {

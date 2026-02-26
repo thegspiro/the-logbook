@@ -5,6 +5,7 @@
  */
 
 import axios, { AxiosError } from 'axios';
+import { API_TIMEOUT_MS } from '../../../constants/config';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -50,24 +51,45 @@ const API_BASE_URL = '/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT_MS,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// Helper to read a cookie value by name
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]!) : null;
+}
+
+// Request interceptor to add auth token and CSRF header
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Double-submit CSRF token for state-changing requests
+    const method = (config.method || '').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const csrf = getCookie('csrf_token');
+      if (csrf) {
+        config.headers['X-CSRF-Token'] = csrf;
+      }
+    }
+
     return config;
   },
-  (error: Error) => {
-    return Promise.reject(error);
+  (error: unknown) => {
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
 );
+
+// Shared refresh promise to prevent concurrent refresh attempts
+let refreshPromise: Promise<string> | null = null;
 
 // Response interceptor to handle token expiration
 api.interceptors.response.use(
@@ -80,26 +102,33 @@ api.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
+        if (!refreshToken) return Promise.reject(error instanceof Error ? error : new Error(String(error)));
 
-          const { access_token } = response.data;
-          localStorage.setItem('access_token', access_token);
-
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          return api(originalRequest);
+        if (!refreshPromise) {
+          refreshPromise = axios
+            .post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { withCredentials: true })
+            .then((response) => {
+              const { access_token, refresh_token: new_refresh_token } = response.data;
+              localStorage.setItem('access_token', access_token);
+              if (new_refresh_token) {
+                localStorage.setItem('refresh_token', new_refresh_token);
+              }
+              return access_token;
+            })
+            .finally(() => { refreshPromise = null; });
         }
+
+        const newAccessToken = await refreshPromise;
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return api(originalRequest);
       } catch {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         window.location.href = '/login';
-        return Promise.reject(error);
       }
     }
 
-    return Promise.reject(error);
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
 );
 

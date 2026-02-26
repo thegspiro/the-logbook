@@ -18,7 +18,6 @@ import type {
   SkillTestListItem,
   SkillTestingSummary,
   CriterionResult,
-  SectionResult,
 } from '../types/skillsTesting';
 import { getErrorMessage } from '../utils/errorHandling';
 

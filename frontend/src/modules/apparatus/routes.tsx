@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { Route } from 'react-router-dom';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
 import {
   ApparatusListPage,
   ApparatusDetailPage,
@@ -21,13 +22,13 @@ export const getApparatusRoutes = () => {
       <Route path="/apparatus" element={<ApparatusListPage />} />
 
       {/* Add New Apparatus */}
-      <Route path="/apparatus/new" element={<ApparatusFormPage />} />
+      <Route path="/apparatus/new" element={<ProtectedRoute requiredPermission="apparatus.manage"><ApparatusFormPage /></ProtectedRoute>} />
 
       {/* Apparatus Detail */}
       <Route path="/apparatus/:id" element={<ApparatusDetailPage />} />
 
       {/* Edit Apparatus */}
-      <Route path="/apparatus/:id/edit" element={<ApparatusFormPage />} />
+      <Route path="/apparatus/:id/edit" element={<ProtectedRoute requiredPermission="apparatus.manage"><ApparatusFormPage /></ProtectedRoute>} />
     </React.Fragment>
   );
 };

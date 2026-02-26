@@ -350,15 +350,15 @@ export const userService = {
   },
 
   /**
-   * Create a new member (admin/secretary only)
-   */
-  /**
    * Delete (soft-delete) a member
    */
   async deleteUser(userId: string): Promise<void> {
     await api.delete(`/users/${userId}`);
   },
 
+  /**
+   * Create a new member (admin/secretary only)
+   */
   async createMember(memberData: {
     username: string;
     email: string;
@@ -2835,6 +2835,8 @@ export interface FormFieldCreate {
   required?: boolean;
   min_length?: number;
   max_length?: number;
+  min_value?: number;
+  max_value?: number;
   options?: FormFieldOption[];
   condition_field_id?: string;
   condition_operator?: string;
