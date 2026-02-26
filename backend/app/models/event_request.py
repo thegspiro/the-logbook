@@ -12,7 +12,6 @@ import secrets
 
 from sqlalchemy import (
     JSON,
-    Boolean,
     Column,
     DateTime,
     Enum,
@@ -46,16 +45,6 @@ class EventRequestStatus(str, enum.Enum):
     COMPLETED = "completed"
 
 
-class OutreachEventType(str, enum.Enum):
-    """Subtypes of public outreach events that can be requested."""
-
-    FIRE_SAFETY_DEMO = "fire_safety_demo"
-    STATION_TOUR = "station_tour"
-    CPR_FIRST_AID = "cpr_first_aid"
-    CAREER_TALK = "career_talk"
-    OTHER = "other"
-
-
 class EventRequest(Base):
     """
     Public outreach event request.
@@ -81,11 +70,11 @@ class EventRequest(Base):
     contact_phone = Column(String(50), nullable=True)
     organization_name = Column(String(255), nullable=True)
 
-    # Event details
+    # Event details (outreach_type is a plain string — types are configurable per department)
     outreach_type = Column(
-        Enum(OutreachEventType, values_callable=lambda x: [e.value for e in x]),
+        String(100),
         nullable=False,
-        default=OutreachEventType.OTHER,
+        default="other",
     )
     description = Column(Text, nullable=False)
     preferred_date_start = Column(DateTime(timezone=True), nullable=True)

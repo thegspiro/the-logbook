@@ -20,7 +20,7 @@ class EventRequestCreate(BaseModel):
 
     outreach_type: str = Field(
         ...,
-        description="Type of outreach event: fire_safety_demo, station_tour, cpr_first_aid, career_talk, other",
+        description="Type of outreach event (configurable per department, e.g., fire_safety_demo, station_tour)",
     )
     description: str = Field(..., min_length=10, max_length=2000)
     preferred_date_start: Optional[datetime] = None

@@ -1678,6 +1678,13 @@ EVENT_SETTINGS_DEFAULTS = {
         "other",
     ],
     "event_type_labels": {},
+    "outreach_event_types": [
+        {"value": "fire_safety_demo", "label": "Fire Safety Demo"},
+        {"value": "station_tour", "label": "Station Tour"},
+        {"value": "cpr_first_aid", "label": "CPR / First Aid Class"},
+        {"value": "career_talk", "label": "Career Talk"},
+        {"value": "other", "label": "Other"},
+    ],
     "defaults": {
         "event_type": "other",
         "check_in_window_type": "flexible",

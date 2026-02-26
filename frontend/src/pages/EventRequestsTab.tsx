@@ -5,6 +5,9 @@
  * Allows event managers to review, approve, decline, and schedule
  * community-submitted event requests.
  *
+ * Outreach type labels are fetched from organization settings (configurable
+ * per department) rather than hardcoded.
+ *
  * Shown within the Events Admin Hub.
  */
 
@@ -28,18 +31,9 @@ import type {
   EventRequestListItem,
   EventRequest,
   EventRequestStatus,
-  OutreachEventType,
 } from '../types/event';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
-
-const OUTREACH_LABELS: Record<OutreachEventType, string> = {
-  fire_safety_demo: 'Fire Safety Demo',
-  station_tour: 'Station Tour',
-  cpr_first_aid: 'CPR / First Aid Class',
-  career_talk: 'Career Talk',
-  other: 'Other',
-};
 
 const STATUS_CONFIG: Record<
   EventRequestStatus,
@@ -103,6 +97,7 @@ const EventRequestsTab: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const [reviewNotes, setReviewNotes] = useState('');
+  const [outreachLabels, setOutreachLabels] = useState<Record<string, string>>({});
   const tz = useTimezone();
 
   const fetchRequests = useCallback(async () => {
@@ -123,6 +118,23 @@ const EventRequestsTab: React.FC = () => {
   useEffect(() => {
     void fetchRequests();
   }, [fetchRequests]);
+
+  // Fetch outreach type labels from settings
+  useEffect(() => {
+    const fetchLabels = async () => {
+      try {
+        const labels = await eventRequestService.getOutreachTypeLabels();
+        setOutreachLabels(labels);
+      } catch {
+        // Silently fail — we'll fall back to the raw value
+      }
+    };
+    void fetchLabels();
+  }, []);
+
+  const getOutreachLabel = (value: string): string => {
+    return outreachLabels[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
   const toggleExpand = async (id: string) => {
     if (expandedId === id) {
@@ -306,7 +318,7 @@ const EventRequestsTab: React.FC = () => {
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusCfg.color}`}>
                             {statusCfg.label}
                           </span>
-                          <span>{OUTREACH_LABELS[req.outreach_type] || req.outreach_type}</span>
+                          <span>{getOutreachLabel(req.outreach_type)}</span>
                           {req.preferred_date_start && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -376,7 +388,7 @@ const EventRequestsTab: React.FC = () => {
                                 <div className="flex gap-2">
                                   <dt className="text-theme-text-muted w-24 flex-shrink-0">Type:</dt>
                                   <dd className="text-theme-text-primary">
-                                    {OUTREACH_LABELS[expandedDetail.outreach_type] || expandedDetail.outreach_type}
+                                    {getOutreachLabel(expandedDetail.outreach_type)}
                                   </dd>
                                 </div>
                                 {expandedDetail.audience_size && (

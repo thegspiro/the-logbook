@@ -1953,8 +1953,13 @@ export const eventRequestService = {
     const response = await api.get<import('../types/event').EventRequestPublicStatus>(`/event-requests/status/${token}`);
     return response.data;
   },
-  async getOutreachTypeLabels(): Promise<Record<string, string>> {
-    const response = await api.get<Record<string, string>>('/event-requests/types/labels');
+  async getOutreachTypeLabels(organizationId?: string): Promise<Record<string, string>> {
+    const params = organizationId ? { organization_id: organizationId } : {};
+    const response = await api.get<Record<string, string>>('/event-requests/types/labels', { params });
+    return response.data;
+  },
+  async generateForm(): Promise<{ message: string; form_id: string; public_slug: string; public_url: string }> {
+    const response = await api.post<{ message: string; form_id: string; public_slug: string; public_url: string }>('/event-requests/generate-form');
     return response.data;
   },
 };

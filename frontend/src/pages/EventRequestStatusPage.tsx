@@ -3,6 +3,9 @@
  *
  * Token-based public page for community members to check
  * the status of their event request. No authentication required.
+ *
+ * Outreach type labels are fetched from the backend (which reads
+ * from department settings) rather than hardcoded.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -16,15 +19,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { eventRequestService } from '../services/api';
-import type { EventRequestPublicStatus, EventRequestStatus, OutreachEventType } from '../types/event';
-
-const OUTREACH_LABELS: Record<OutreachEventType, string> = {
-  fire_safety_demo: 'Fire Safety Demo',
-  station_tour: 'Station Tour',
-  cpr_first_aid: 'CPR / First Aid Class',
-  career_talk: 'Career Talk',
-  other: 'Other',
-};
+import type { EventRequestPublicStatus, EventRequestStatus } from '../types/event';
 
 const STATUS_STEPS: { key: EventRequestStatus; label: string; icon: React.ElementType }[] = [
   { key: 'submitted', label: 'Submitted', icon: ClipboardList },
@@ -56,6 +51,7 @@ const EventRequestStatusPage: React.FC = () => {
   const [data, setData] = useState<EventRequestPublicStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [outreachLabels, setOutreachLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!token) return;
@@ -75,6 +71,23 @@ const EventRequestStatusPage: React.FC = () => {
 
     void fetchStatus();
   }, [token]);
+
+  // Fetch outreach type labels
+  useEffect(() => {
+    const fetchLabels = async () => {
+      try {
+        const labels = await eventRequestService.getOutreachTypeLabels();
+        setOutreachLabels(labels);
+      } catch {
+        // Silently fail — we'll fall back to the raw value
+      }
+    };
+    void fetchLabels();
+  }, []);
+
+  const getOutreachLabel = (value: string): string => {
+    return outreachLabels[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
   if (loading) {
     return (
@@ -115,7 +128,7 @@ const EventRequestStatusPage: React.FC = () => {
             Event Request Status
           </h1>
           <p className="mt-1 text-gray-600 dark:text-gray-400">
-            {OUTREACH_LABELS[data.outreach_type] || data.outreach_type} — requested by {data.contact_name}
+            {getOutreachLabel(data.outreach_type)} — requested by {data.contact_name}
           </p>
         </div>
 

@@ -386,9 +386,17 @@ export interface EventModuleSettings {
     require_reason: boolean;
     notify_attendees: boolean;
   };
+  // Configurable outreach event types for the public request pipeline
+  outreach_event_types: OutreachEventTypeConfig[];
 }
 
 // Event Request Pipeline
+
+export interface OutreachEventTypeConfig {
+  value: string;
+  label: string;
+}
+
 export type EventRequestStatus =
   | 'submitted'
   | 'under_review'
@@ -397,13 +405,6 @@ export type EventRequestStatus =
   | 'declined'
   | 'cancelled'
   | 'completed';
-
-export type OutreachEventType =
-  | 'fire_safety_demo'
-  | 'station_tour'
-  | 'cpr_first_aid'
-  | 'career_talk'
-  | 'other';
 
 export interface EventRequestActivity {
   id: string;
@@ -424,7 +425,7 @@ export interface EventRequest {
   contact_email: string;
   contact_phone?: string;
   organization_name?: string;
-  outreach_type: OutreachEventType;
+  outreach_type: string;
   description: string;
   preferred_date_start?: string;
   preferred_date_end?: string;
@@ -450,7 +451,7 @@ export interface EventRequestListItem {
   contact_name: string;
   contact_email: string;
   organization_name?: string;
-  outreach_type: OutreachEventType;
+  outreach_type: string;
   status: EventRequestStatus;
   preferred_date_start?: string;
   audience_size?: number;
@@ -461,7 +462,7 @@ export interface EventRequestListItem {
 
 export interface EventRequestPublicStatus {
   contact_name: string;
-  outreach_type: OutreachEventType;
+  outreach_type: string;
   status: EventRequestStatus;
   preferred_date_start?: string;
   preferred_date_end?: string;

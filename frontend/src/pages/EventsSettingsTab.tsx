@@ -3,16 +3,17 @@
  *
  * Allows event administrators to configure event module settings,
  * including which event types are visible as primary filter tabs
- * versus grouped under "Other".
+ * versus grouped under "Other", configurable outreach event types,
+ * and generating public event request forms.
  *
  * Shown within the Events Admin Hub.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Settings, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Settings, Eye, EyeOff, Loader2, Plus, Trash2, FileText, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { eventService } from '../services/api';
-import type { EventModuleSettings, EventType } from '../types/event';
+import { eventService, eventRequestService } from '../services/api';
+import type { EventModuleSettings, EventType, OutreachEventTypeConfig } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
 
 const ALL_EVENT_TYPES: EventType[] = [
@@ -30,6 +31,13 @@ const EventsSettingsTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Outreach type editing
+  const [newTypeValue, setNewTypeValue] = useState('');
+  const [newTypeLabel, setNewTypeLabel] = useState('');
+
+  // Form generation
+  const [generatingForm, setGeneratingForm] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -79,6 +87,80 @@ const EventsSettingsTab: React.FC = () => {
       toast.error('Failed to update setting.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const addOutreachType = async () => {
+    if (!settings) return;
+    const value = newTypeValue.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const label = newTypeLabel.trim();
+
+    if (!value || !label) {
+      toast.error('Both ID and label are required.');
+      return;
+    }
+
+    if (settings.outreach_event_types.some((t) => t.value === value)) {
+      toast.error('An outreach type with that ID already exists.');
+      return;
+    }
+
+    const updated = [...settings.outreach_event_types, { value, label }];
+
+    try {
+      setSaving(true);
+      const result = await eventService.updateModuleSettings({
+        outreach_event_types: updated,
+      });
+      setSettings(result);
+      setNewTypeValue('');
+      setNewTypeLabel('');
+      toast.success(`Added "${label}" outreach type.`);
+    } catch {
+      toast.error('Failed to add outreach type.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeOutreachType = async (typeValue: string) => {
+    if (!settings) return;
+
+    if (typeValue === 'other') {
+      toast.error('"Other" cannot be removed.');
+      return;
+    }
+
+    const updated = settings.outreach_event_types.filter((t) => t.value !== typeValue);
+
+    try {
+      setSaving(true);
+      const result = await eventService.updateModuleSettings({
+        outreach_event_types: updated,
+      });
+      setSettings(result);
+      toast.success('Outreach type removed.');
+    } catch {
+      toast.error('Failed to remove outreach type.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleGenerateForm = async () => {
+    try {
+      setGeneratingForm(true);
+      const result = await eventRequestService.generateForm();
+      toast.success('Event request form created! You can find it in the Forms module.');
+      // Open the form in a new context with the public URL hint
+      toast(
+        `Public URL: ${window.location.origin}${result.public_url}`,
+        { duration: 8000, icon: '🔗' }
+      );
+    } catch {
+      toast.error('Failed to generate form. It may already exist.');
+    } finally {
+      setGeneratingForm(false);
     }
   };
 
@@ -200,6 +282,127 @@ const EventsSettingsTab: React.FC = () => {
               </div>
             </div>
           )}
+        </section>
+
+        {/* Outreach Event Types */}
+        <section>
+          <div className="flex items-center gap-3 mb-2">
+            <FileText className="w-5 h-5 text-red-700" />
+            <h2 className="text-lg font-bold text-theme-text-primary">
+              Outreach Event Types
+            </h2>
+          </div>
+          <p className="text-sm text-theme-text-muted mb-6">
+            Configure the types of public outreach events your department offers.
+            These appear as options on the public event request form.
+          </p>
+
+          {/* Current outreach types */}
+          <div className="space-y-2 mb-4">
+            {settings.outreach_event_types.map((ot: OutreachEventTypeConfig) => (
+              <div
+                key={ot.value}
+                className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-theme-text-primary">{ot.label}</span>
+                  <span className="text-xs text-theme-text-muted font-mono">{ot.value}</span>
+                </div>
+                {ot.value !== 'other' && (
+                  <button
+                    type="button"
+                    onClick={() => void removeOutreachType(ot.value)}
+                    disabled={saving}
+                    className="text-sm text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
+                    title={`Remove "${ot.label}"`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Add new type */}
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <label htmlFor="new-outreach-label" className="block text-xs font-medium text-theme-text-muted mb-1">
+                Label
+              </label>
+              <input
+                id="new-outreach-label"
+                type="text"
+                value={newTypeLabel}
+                onChange={(e) => {
+                  setNewTypeLabel(e.target.value);
+                  // Auto-generate value from label
+                  const auto = e.target.value.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                  setNewTypeValue(auto);
+                }}
+                placeholder="e.g., School Visit"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+            <div className="w-40">
+              <label htmlFor="new-outreach-value" className="block text-xs font-medium text-theme-text-muted mb-1">
+                ID (auto)
+              </label>
+              <input
+                id="new-outreach-value"
+                type="text"
+                value={newTypeValue}
+                onChange={(e) => setNewTypeValue(e.target.value.replace(/[^a-z0-9_]/g, ''))}
+                placeholder="school_visit"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void addOutreachType()}
+              disabled={saving || !newTypeLabel.trim() || !newTypeValue.trim()}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              Add
+            </button>
+          </div>
+        </section>
+
+        {/* Public Event Request Form */}
+        <section>
+          <div className="flex items-center gap-3 mb-2">
+            <ExternalLink className="w-5 h-5 text-red-700" />
+            <h2 className="text-lg font-bold text-theme-text-primary">
+              Public Event Request Form
+            </h2>
+          </div>
+          <p className="text-sm text-theme-text-muted mb-4">
+            Generate a public form that community members can use to request outreach events.
+            The form is created in the Forms module with all fields pre-configured and an
+            integration that automatically creates event requests for your review.
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleGenerateForm()}
+            disabled={generatingForm}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors flex items-center gap-2"
+          >
+            {generatingForm ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <FileText className="w-4 h-4" />
+                Generate Event Request Form
+              </>
+            )}
+          </button>
+          <p className="text-xs text-theme-text-muted mt-2">
+            The form will be created in Draft status. Publish it from the Forms module when ready.
+            You can customize fields and styling before publishing.
+          </p>
         </section>
       </div>
     </div>
