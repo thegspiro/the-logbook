@@ -58,6 +58,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [editForm, setEditForm] = useState({
     shift_date: shift.shift_date,
     notes: shift.notes || '',
+    shift_officer_id: shift.shift_officer_id || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -72,6 +73,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Inline confirmation for decline/remove
   const [confirmingDecline, setConfirmingDecline] = useState<string | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
+  const [declining, setDeclining] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   // Assign state (admin) — with member search
   const [showAssignForm, setShowAssignForm] = useState(false);
@@ -106,6 +109,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   }, [positionOptions.length]);
 
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
@@ -113,20 +117,27 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           schedulingService.getShiftAssignments(shift.id),
           schedulingService.getShiftCalls(shift.id),
         ]);
-        setAssignments(assignData as unknown as Assignment[]);
-        setCalls(callData);
+        if (!cancelled) {
+          setAssignments(assignData as unknown as Assignment[]);
+          setCalls(callData);
+        }
       } catch (err) {
-        toast.error(getErrorMessage(err, 'Failed to load shift details'));
+        if (!cancelled) {
+          toast.error(getErrorMessage(err, 'Failed to load shift details'));
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     load();
+    return () => { cancelled = true; };
   }, [shift.id]);
 
-  // Load members for the assign dropdown
+  // Load members for the assign dropdown and shift officer edit
   useEffect(() => {
-    if (!showAssignForm) return;
+    if (!showAssignForm && !isEditing) return;
     const loadMembers = async () => {
       setLoadingMembers(true);
       try {
@@ -143,7 +154,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       }
     };
     loadMembers();
-  }, [showAssignForm]);
+  }, [showAssignForm, isEditing]);
 
   const filteredMembers = useMemo(() => {
     if (!memberSearch) return memberOptions;
@@ -182,6 +193,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   };
 
   const handleDecline = async (assignmentId: string) => {
+    if (declining) return;
+    setDeclining(true);
     try {
       await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
       toast.success('Assignment declined');
@@ -189,10 +202,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       await refreshAssignments();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to decline assignment'));
+    } finally {
+      setDeclining(false);
     }
   };
 
   const handleRemove = async (assignmentId: string) => {
+    if (removing) return;
+    setRemoving(true);
     try {
       await schedulingService.deleteAssignment(assignmentId);
       toast.success('Assignment removed');
@@ -201,6 +218,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       onRefresh?.();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to remove assignment'));
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -232,6 +251,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       const updated = await schedulingService.updateShift(shift.id, {
         shift_date: editForm.shift_date,
         notes: editForm.notes || null,
+        shift_officer_id: editForm.shift_officer_id || null,
       });
       setShift(updated);
       setIsEditing(false);
@@ -340,9 +360,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {confirmingDecline === assignment.id && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-red-500">Decline?</span>
-              <button onClick={() => handleDecline(assignment.id)}
-                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm decline"
-              >Yes</button>
+              <button onClick={() => handleDecline(assignment.id)} disabled={declining}
+                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50" aria-label="Confirm decline"
+              >{declining ? '...' : 'Yes'}</button>
               <button onClick={() => setConfirmingDecline(null)}
                 className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
               >No</button>
@@ -358,9 +378,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {confirmingRemove === assignment.id && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-red-500">Remove?</span>
-              <button onClick={() => handleRemove(assignment.id)}
-                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm removal"
-              >Yes</button>
+              <button onClick={() => handleRemove(assignment.id)} disabled={removing}
+                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50" aria-label="Confirm removal"
+              >{removing ? '...' : 'Yes'}</button>
               <button onClick={() => setConfirmingRemove(null)}
                 className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel removal"
               >No</button>
@@ -390,7 +410,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="flex items-center gap-1 flex-shrink-0">
               {canManage && !isPast && (
                 <>
-                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, notes: shift.notes || '' }); setIsEditing(!isEditing); }}
+                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '' }); setIsEditing(!isEditing); }}
                     className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
                   >
                     <Pencil className="w-4 h-4" />
@@ -447,6 +467,22 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   onChange={e => setEditForm(p => ({...p, notes: e.target.value}))}
                   rows={2} placeholder="Shift notes" className={inputCls + ' resize-none'}
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Shift Officer</label>
+                <select
+                  value={editForm.shift_officer_id}
+                  onChange={e => setEditForm(p => ({...p, shift_officer_id: e.target.value}))}
+                  className={inputCls}
+                >
+                  <option value="">No shift officer</option>
+                  {memberOptions.map(m => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+                {memberOptions.length === 0 && !loadingMembers && (
+                  <p className="text-xs text-theme-text-muted mt-1">Loading members...</p>
+                )}
               </div>
               <div className="flex items-center gap-2 justify-end">
                 <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>

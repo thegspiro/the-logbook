@@ -77,7 +77,7 @@ const CreateTrainingSessionPage: React.FC = () => {
     trainingService.getCourses().then(setAvailableCourses).catch(() => { /* non-critical */ });
     userService.getUsers().then(setMembers).catch(() => { /* non-critical */ });
     schedulingService.getBasicApparatus({ is_active: true }).then((data) => {
-      setApparatusList(data.map((a: Record<string, unknown>) => ({ id: a.id as string, name: (a.name || a.unit_number || 'Unknown') as string })));
+      setApparatusList(data.map((a) => ({ id: a.id, name: a.name || a.unit_number || 'Unknown' })));
     }).catch(() => { /* non-critical */ });
     locationsService.getLocations({ is_active: true }).then((data) => {
       setLocations(data);

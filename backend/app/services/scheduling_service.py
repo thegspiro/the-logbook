@@ -71,17 +71,19 @@ class SchedulingService:
     def _enrich_shift_dict(
         self, shift_dict: Dict[str, Any], apparatus_map: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Add apparatus_name, apparatus_unit_number, apparatus_positions to a shift dict."""
+        """Add apparatus details and min_staffing to a shift dict."""
         aid = shift_dict.get("apparatus_id")
         if aid and aid in apparatus_map:
             a = apparatus_map[aid]
             shift_dict["apparatus_name"] = a.name
             shift_dict["apparatus_unit_number"] = a.unit_number
             shift_dict["apparatus_positions"] = a.positions or []
+            shift_dict["min_staffing"] = a.min_staffing
         else:
             shift_dict["apparatus_name"] = None
             shift_dict["apparatus_unit_number"] = None
             shift_dict["apparatus_positions"] = []
+            shift_dict["min_staffing"] = None
         return shift_dict
 
     # ============================================
@@ -756,8 +758,48 @@ class SchedulingService:
             if not shift:
                 return None, "Shift not found"
 
-            # Check if the member is on leave of absence for the shift date
             user_id = assignment_data.get("user_id")
+
+            # Prevent duplicate assignment to the same shift
+            if user_id:
+                dup_result = await self.db.execute(
+                    select(ShiftAssignment.id)
+                    .where(ShiftAssignment.shift_id == str(shift_id))
+                    .where(ShiftAssignment.user_id == str(user_id))
+                    .where(ShiftAssignment.assignment_status != AssignmentStatus.DECLINED)
+                )
+                if dup_result.scalar_one_or_none():
+                    return None, "Member is already assigned to this shift"
+
+            # Check for overlapping shift assignments
+            if user_id and shift.start_time:
+                overlap_query = (
+                    select(Shift.shift_date, Shift.start_time)
+                    .join(ShiftAssignment, ShiftAssignment.shift_id == Shift.id)
+                    .where(ShiftAssignment.user_id == str(user_id))
+                    .where(ShiftAssignment.assignment_status != AssignmentStatus.DECLINED)
+                    .where(Shift.id != str(shift_id))
+                    .where(Shift.organization_id == str(organization_id))
+                )
+                # Check time overlap: other shift starts before this one ends
+                # AND other shift ends after this one starts
+                if shift.end_time:
+                    overlap_query = overlap_query.where(
+                        Shift.start_time < shift.end_time,
+                        or_(Shift.end_time.is_(None), Shift.end_time > shift.start_time),
+                    )
+                else:
+                    # No end time on this shift — check same-day overlap
+                    overlap_query = overlap_query.where(
+                        Shift.shift_date == shift.shift_date,
+                    )
+                overlap_result = await self.db.execute(overlap_query)
+                conflicting = overlap_result.first()
+                if conflicting:
+                    conflict_date = conflicting[0]
+                    return None, f"Member has a conflicting shift on {conflict_date}"
+
+            # Check if the member is on leave of absence for the shift date
             if user_id and shift.shift_date:
                 leave_svc = MemberLeaveService(self.db)
                 leaves = await leave_svc.get_active_leaves_for_user(

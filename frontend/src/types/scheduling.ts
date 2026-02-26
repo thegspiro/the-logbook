@@ -6,10 +6,10 @@
  * scheduling pages and components.
  */
 
-import type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary } from '../services/api';
+import type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord } from '../services/api';
 
 // Re-export the API-level types so consumers can import from one place
-export type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary };
+export type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord };
 
 /** A member's assignment to a specific shift. */
 export interface Assignment {

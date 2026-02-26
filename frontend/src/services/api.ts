@@ -3467,9 +3467,11 @@ export interface ShiftRecord {
   apparatus_name?: string;
   apparatus_unit_number?: string;
   apparatus_positions?: string[] | null;
+  min_staffing?: number | null;
   station_id?: string;
   shift_officer_id?: string;
   shift_officer_name?: string;
+  color?: string | null;
   notes?: string;
   activities?: unknown;
   attendee_count: number;
@@ -3495,6 +3497,31 @@ export interface SchedulingSummary {
   shifts_this_week: number;
   shifts_this_month: number;
   total_hours_this_month: number;
+}
+
+export interface ShiftTemplateRecord {
+  id: string;
+  name: string;
+  start_time_of_day: string;
+  end_time_of_day: string;
+  duration_hours: number;
+  color?: string;
+  positions?: string[];
+  min_staffing: number;
+  category?: string;
+  apparatus_type?: string;
+  is_default: boolean;
+  is_active: boolean;
+}
+
+export interface BasicApparatusRecord {
+  id: string;
+  unit_number: string;
+  name: string;
+  apparatus_type: string;
+  min_staffing?: number;
+  positions?: string[];
+  is_active: boolean;
 }
 
 export interface MemberComplianceRecord {
@@ -3694,20 +3721,20 @@ export const schedulingService = {
   },
 
   // Templates
-  async getTemplates(params?: { active_only?: boolean }): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/templates', { params });
+  async getTemplates(params?: { active_only?: boolean }): Promise<ShiftTemplateRecord[]> {
+    const response = await api.get<ShiftTemplateRecord[]>('/scheduling/templates', { params });
     return response.data;
   },
-  async getTemplate(templateId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/scheduling/templates/${templateId}`);
+  async getTemplate(templateId: string): Promise<ShiftTemplateRecord> {
+    const response = await api.get<ShiftTemplateRecord>(`/scheduling/templates/${templateId}`);
     return response.data;
   },
-  async createTemplate(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduling/templates', data);
+  async createTemplate(data: Record<string, unknown>): Promise<ShiftTemplateRecord> {
+    const response = await api.post<ShiftTemplateRecord>('/scheduling/templates', data);
     return response.data;
   },
-  async updateTemplate(templateId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/scheduling/templates/${templateId}`, data);
+  async updateTemplate(templateId: string, data: Record<string, unknown>): Promise<ShiftTemplateRecord> {
+    const response = await api.patch<ShiftTemplateRecord>(`/scheduling/templates/${templateId}`, data);
     return response.data;
   },
   async deleteTemplate(templateId: string): Promise<void> {
@@ -3758,9 +3785,8 @@ export const schedulingService = {
   },
 
   // --- Basic Apparatus (lightweight, for departments without full Apparatus module) ---
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getBasicApparatus(params?: { is_active?: boolean }): Promise<any[]> {
-    const response = await api.get('/scheduling/apparatus', { params });
+  async getBasicApparatus(params?: { is_active?: boolean }): Promise<BasicApparatusRecord[]> {
+    const response = await api.get<BasicApparatusRecord[]>('/scheduling/apparatus', { params });
     return response.data;
   },
   async createBasicApparatus(data: Record<string, unknown>): Promise<Record<string, unknown>> {

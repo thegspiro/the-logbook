@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  AlertTriangle,
   X,
   Loader2,
   Users,
@@ -22,8 +23,8 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatTime } from '../utils/dateFormatting';
-import { schedulingService, notificationsService } from '../services/api';
-import type { ShiftRecord, SchedulingSummary, NotificationRuleRecord } from '../services/api';
+import { schedulingService, notificationsService, userService } from '../services/api';
+import type { ShiftRecord, SchedulingSummary, NotificationRuleRecord, ShiftTemplateRecord, BasicApparatusRecord } from '../services/api';
 
 // Lazy-loaded tab components
 const MyShiftsTab = lazy(() => import('./scheduling/MyShiftsTab'));
@@ -38,23 +39,8 @@ const ShiftReportsTab = lazy(() => import('./scheduling/ShiftReportsTab'));
 type TabId = 'schedule' | 'my-shifts' | 'open-shifts' | 'requests' | 'templates' | 'patterns' | 'shift-reports' | 'reports' | 'settings';
 type ViewMode = 'week' | 'month';
 
-interface BackendTemplate {
-  id: string;
-  name: string;
-  start_time_of_day: string;
-  end_time_of_day: string;
-  duration_hours: number;
-  color?: string;
-  positions?: string[];
-  min_staffing: number;
-  category?: string;
-  apparatus_type?: string;
-  is_default: boolean;
-  is_active: boolean;
-}
-
 // Fallback templates when no backend templates are configured
-const FALLBACK_TEMPLATES: BackendTemplate[] = [
+const FALLBACK_TEMPLATES: ShiftTemplateRecord[] = [
   { id: '_day', name: 'Day Shift', start_time_of_day: '07:00', end_time_of_day: '19:00', duration_hours: 12, min_staffing: 4, is_default: true, is_active: true },
   { id: '_night', name: 'Night Shift', start_time_of_day: '19:00', end_time_of_day: '07:00', duration_hours: 12, min_staffing: 4, is_default: false, is_active: true },
   { id: '_24hr', name: '24 Hour', start_time_of_day: '07:00', end_time_of_day: '07:00', duration_hours: 24, min_staffing: 4, is_default: false, is_active: true },
@@ -70,7 +56,7 @@ const formatDateISO = (date: Date): string => {
 };
 
 /** Compute the end date for a shift given its start date and template times. */
-const computeEndDate = (startDate: string, template: BackendTemplate | undefined): string => {
+const computeEndDate = (startDate: string, template: ShiftTemplateRecord | undefined): string => {
   if (!startDate || !template) return '';
   const [startHour = 0] = template.start_time_of_day.split(':').map(Number);
   const [endHour = 0] = template.end_time_of_day.split(':').map(Number);
@@ -84,12 +70,27 @@ const computeEndDate = (startDate: string, template: BackendTemplate | undefined
   return formatDateISO(nextDay);
 };
 
-const getShiftTemplateColor = (shift: ShiftRecord): string => {
+/** Map a hex color to Tailwind-compatible inline styles for shift cards. */
+const hexColorStyle = (hex: string): React.CSSProperties => ({
+  backgroundColor: `${hex}18`,
+  borderColor: `${hex}4D`,
+  color: hex,
+});
+
+const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
+  // If the shift carries a template color, use inline styles instead (via getShiftStyle)
+  if (shift.color) return undefined;
   const startHour = new Date(shift.start_time).getHours();
   if (startHour >= 5 && startHour < 10) return 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30';
   if (startHour >= 10 && startHour < 17) return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
   return 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30';
 };
+
+const getShiftStyle = (shift: ShiftRecord): React.CSSProperties | undefined =>
+  shift.color ? hexColorStyle(shift.color) : undefined;
+
+const isUnderstaffed = (shift: ShiftRecord): boolean =>
+  shift.min_staffing != null && shift.min_staffing > 0 && shift.attendee_count < shift.min_staffing;
 
 const TAB_CONFIG: { id: TabId; label: string; icon: React.ElementType; adminOnly?: boolean }[] = [
   { id: 'schedule', label: 'Schedule', icon: CalendarDays },
@@ -133,10 +134,10 @@ const SchedulingPage: React.FC = () => {
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
 
   // Apparatus list for shift creation
-  const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>>([]);
+  const [apparatusList, setApparatusList] = useState<BasicApparatusRecord[]>([]);
 
   // Backend shift templates
-  const [backendTemplates, setBackendTemplates] = useState<BackendTemplate[]>([]);
+  const [backendTemplates, setShiftTemplateRecords] = useState<ShiftTemplateRecord[]>([]);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
 
   // Effective templates: backend if available, otherwise fallbacks
@@ -151,17 +152,19 @@ const SchedulingPage: React.FC = () => {
     return effectiveTemplates.find(t => t.is_default) || effectiveTemplates[0];
   }, [effectiveTemplates]);
 
+  // Members list for shift officer dropdown
+  const [membersList, setMembersList] = useState<Array<{ id: string; label: string }>>([]);
+
   const [shiftForm, setShiftForm] = useState({
-    name: '',
     shiftTemplate: '',
     startDate: '',
     endDate: '',
-    minStaffing: 4,
     notes: '',
     apparatus_id: '',
+    shift_officer_id: '',
   });
 
-  // Load apparatus list and templates for the create modal
+  // Load apparatus list, templates, and members for the create modal
   useEffect(() => {
     const loadCreateData = async () => {
       try {
@@ -169,15 +172,26 @@ const SchedulingPage: React.FC = () => {
           schedulingService.getBasicApparatus(),
           schedulingService.getTemplates({ active_only: true }),
         ]);
-        setApparatusList(apparatusData as Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>);
-        setBackendTemplates(templateData as unknown as BackendTemplate[]);
-      } catch {
-        // Not critical — may not be set up yet
+        setApparatusList(apparatusData);
+        setShiftTemplateRecords(templateData);
+      } catch (err) {
+        console.warn('Failed to load apparatus/templates:', err);
       } finally {
         setTemplatesLoaded(true);
       }
     };
     loadCreateData();
+    // Load members for shift officer dropdown (non-blocking)
+    userService.getUsers().then((users) => {
+      setMembersList(
+        users
+          .filter((m) => m.status === 'active')
+          .map((m) => ({
+            id: String(m.id),
+            label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || String(m.email || m.id),
+          }))
+      );
+    }).catch((err) => console.warn('Failed to load members:', err));
   }, []);
 
   const weekDates = useMemo(() => {
@@ -236,8 +250,8 @@ const SchedulingPage: React.FC = () => {
     if (viewMode === 'month') {
       return currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: tz });
     }
-    const start = weekDates[0]!;
-    const end = weekDates[6]!;
+    const start = weekDates[0] ?? currentDate;
+    const end = weekDates[6] ?? currentDate;
     const startMonth = start.toLocaleString('en-US', { month: 'short', timeZone: tz });
     const endMonth = end.toLocaleString('en-US', { month: 'short', timeZone: tz });
     if (startMonth === endMonth) {
@@ -264,7 +278,7 @@ const SchedulingPage: React.FC = () => {
           currentDate.getMonth() + 1
         );
       } else {
-        const weekStartStr = formatDateISO(weekDates[0]!);
+        const weekStartStr = formatDateISO(weekDates[0] ?? currentDate);
         fetchedShifts = await schedulingService.getWeekCalendar(weekStartStr);
       }
       setShifts(fetchedShifts);
@@ -287,8 +301,8 @@ const SchedulingPage: React.FC = () => {
       try {
         const summaryData = await schedulingService.getSummary();
         setSummary(summaryData);
-      } catch {
-        // Summary is non-critical
+      } catch (err) {
+        console.warn('Failed to load scheduling summary:', err);
       }
     };
     fetchSummary();
@@ -328,6 +342,8 @@ const SchedulingPage: React.FC = () => {
         end_time: endDateTime,
         notes: shiftForm.notes || undefined,
         apparatus_id: shiftForm.apparatus_id || undefined,
+        shift_officer_id: shiftForm.shift_officer_id || undefined,
+        color: template.color || undefined,
       });
 
       // Refresh
@@ -335,16 +351,15 @@ const SchedulingPage: React.FC = () => {
       try {
         const summaryData = await schedulingService.getSummary();
         setSummary(summaryData);
-      } catch { /* non-critical */ }
+      } catch (err) { console.warn('Failed to refresh summary:', err); }
 
       setShiftForm({
-        name: '',
         shiftTemplate: defaultTemplate?.id || '',
         startDate: '',
         endDate: '',
-        minStaffing: defaultTemplate?.min_staffing || 4,
         notes: '',
         apparatus_id: '',
+        shift_officer_id: '',
       });
       setShowCreateShift(false);
     } catch (err: unknown) {
@@ -543,7 +558,8 @@ const SchedulingPage: React.FC = () => {
                             <button
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
-                              className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
+                              className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ''}`}
+                              style={getShiftStyle(shift)}
                             >
                               <p className="font-medium truncate">
                                 {formatTime(shift.start_time, tz)}
@@ -553,11 +569,14 @@ const SchedulingPage: React.FC = () => {
                                 <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
                               )}
                               <div className="flex items-center gap-2 mt-1">
-                                {shift.attendee_count > 0 && (
-                                  <span className="opacity-70 flex items-center gap-0.5">
-                                    <Users className="w-3 h-3" /> {shift.attendee_count}
+                                {isUnderstaffed(shift) && (
+                                  <span className="text-amber-600 dark:text-amber-400 flex items-center gap-0.5" title={`Needs ${shift.min_staffing} staff`}>
+                                    <AlertTriangle className="w-3 h-3" />
                                   </span>
                                 )}
+                                <span className="opacity-70 flex items-center gap-0.5">
+                                  <Users className="w-3 h-3" /> {shift.attendee_count}
+                                </span>
                                 {shift.apparatus_unit_number && (
                                   <span className="opacity-70 flex items-center gap-0.5">
                                     <Truck className="w-3 h-3" /> {shift.apparatus_unit_number}
@@ -604,7 +623,8 @@ const SchedulingPage: React.FC = () => {
                                 <button
                                   key={shift.id}
                                   onClick={() => handleShiftClick(shift)}
-                                  className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
+                                  className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ''}`}
+                                  style={getShiftStyle(shift)}
                                 >
                                   <p className="font-medium">
                                     {formatTime(shift.start_time, tz)}
@@ -614,11 +634,14 @@ const SchedulingPage: React.FC = () => {
                                     <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
                                   )}
                                   <div className="flex items-center gap-3 mt-1.5">
-                                    {shift.attendee_count > 0 && (
-                                      <span className="opacity-70 flex items-center gap-1 text-xs">
-                                        <Users className="w-3.5 h-3.5" /> {shift.attendee_count} staff
+                                    {isUnderstaffed(shift) && (
+                                      <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs" title={`Needs ${shift.min_staffing} staff`}>
+                                        <AlertTriangle className="w-3.5 h-3.5" />
                                       </span>
                                     )}
+                                    <span className="opacity-70 flex items-center gap-1 text-xs">
+                                      <Users className="w-3.5 h-3.5" /> {shift.attendee_count} staff
+                                    </span>
                                     {shift.apparatus_unit_number && (
                                       <span className="opacity-70 flex items-center gap-1 text-xs">
                                         <Truck className="w-3.5 h-3.5" /> {shift.apparatus_unit_number}
@@ -669,12 +692,14 @@ const SchedulingPage: React.FC = () => {
                             <button
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
-                              className={`mb-1 px-1.5 py-1 rounded border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
+                              className={`mb-1 px-1.5 py-1 rounded border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ''}`}
+                              style={getShiftStyle(shift)}
                             >
                               <p className="font-medium truncate">
+                                {isUnderstaffed(shift) && <AlertTriangle className="w-3 h-3 inline text-amber-600 dark:text-amber-400 mr-0.5" />}
                                 {formatTime(shift.start_time)}
                                 {shift.apparatus_unit_number && <span className="ml-1 opacity-70">{shift.apparatus_unit_number}</span>}
-                                {shift.attendee_count > 0 && <span className="ml-1 opacity-70">({shift.attendee_count})</span>}
+                                <span className="ml-1 opacity-70">({shift.attendee_count})</span>
                               </p>
                             </button>
                           ))}
@@ -771,7 +796,8 @@ const SchedulingPage: React.FC = () => {
                                   <button
                                     key={shift.id}
                                     onClick={() => handleShiftClick(shift)}
-                                    className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift)}`}
+                                    className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ''}`}
+                                    style={getShiftStyle(shift)}
                                   >
                                     <p className="font-medium">
                                       {formatTime(shift.start_time, tz)}
@@ -781,11 +807,14 @@ const SchedulingPage: React.FC = () => {
                                       <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
                                     )}
                                     <div className="flex items-center gap-3 mt-1.5">
-                                      {shift.attendee_count > 0 && (
-                                        <span className="opacity-70 flex items-center gap-1 text-xs">
-                                          <Users className="w-3.5 h-3.5" /> {shift.attendee_count} staff
+                                      {isUnderstaffed(shift) && (
+                                        <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs" title={`Needs ${shift.min_staffing} staff`}>
+                                          <AlertTriangle className="w-3.5 h-3.5" />
                                         </span>
                                       )}
+                                      <span className="opacity-70 flex items-center gap-1 text-xs">
+                                        <Users className="w-3.5 h-3.5" /> {shift.attendee_count} staff
+                                      </span>
                                       {shift.apparatus_unit_number && (
                                         <span className="opacity-70 flex items-center gap-1 text-xs">
                                           <Truck className="w-3.5 h-3.5" /> {shift.apparatus_unit_number}
@@ -893,7 +922,6 @@ const SchedulingPage: React.FC = () => {
                           setShiftForm(prev => ({
                             ...prev,
                             shiftTemplate: e.target.value,
-                            minStaffing: tmpl?.min_staffing || prev.minStaffing,
                             endDate: computeEndDate(prev.startDate, tmpl),
                           }));
                         }}
@@ -1035,6 +1063,25 @@ const SchedulingPage: React.FC = () => {
                             </p>
                           );
                         })()}
+                      </div>
+                    )}
+
+                    {/* Shift Officer Selection */}
+                    {membersList.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                          <span className="flex items-center gap-1.5"><Users className="w-4 h-4" /> Shift Officer (optional)</span>
+                        </label>
+                        <select
+                          value={shiftForm.shift_officer_id}
+                          onChange={(e) => setShiftForm({ ...shiftForm, shift_officer_id: e.target.value })}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        >
+                          <option value="">No shift officer</option>
+                          {membersList.map(m => (
+                            <option key={m.id} value={m.id}>{m.label}</option>
+                          ))}
+                        </select>
                       </div>
                     )}
 
@@ -1243,8 +1290,8 @@ const SchedulingNotificationsPanel: React.FC = () => {
       try {
         const { rules: data } = await notificationsService.getRules({ category: 'scheduling' });
         setRules(data);
-      } catch {
-        // Notifications module may not be enabled
+      } catch (err) {
+        console.warn('Failed to load notification rules:', err);
       } finally {
         setLoadingRules(false);
       }
@@ -1266,8 +1313,8 @@ const SchedulingNotificationsPanel: React.FC = () => {
       try {
         const updated = await notificationsService.toggleRule(existing.id, !existing.enabled);
         setRules(prev => prev.map(r => r.id === existing.id ? updated : r));
-      } catch {
-        // Silently fail
+      } catch (err) {
+        console.warn('Failed to toggle notification rule:', err);
       }
     } else {
       setCreating(preset.name);
@@ -1282,8 +1329,8 @@ const SchedulingNotificationsPanel: React.FC = () => {
           config: preset.config,
         });
         setRules(prev => [...prev, newRule]);
-      } catch {
-        // Silently fail
+      } catch (err) {
+        console.warn('Failed to create notification rule:', err);
       } finally {
         setCreating(null);
       }
@@ -1337,7 +1384,7 @@ const SchedulingNotificationsPanel: React.FC = () => {
 };
 
 interface ShiftSettingsPanelProps {
-  templates: BackendTemplate[];
+  templates: ShiftTemplateRecord[];
   apparatusList: Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>;
   onNavigateToTemplates: () => void;
 }
