@@ -81,7 +81,7 @@ class SchedulingService:
         else:
             shift_dict["apparatus_name"] = None
             shift_dict["apparatus_unit_number"] = None
-            shift_dict["apparatus_positions"] = None
+            shift_dict["apparatus_positions"] = []
         return shift_dict
 
     # ============================================
