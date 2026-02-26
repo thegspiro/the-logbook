@@ -174,7 +174,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - API endpoints: 8 endpoints for rule CRUD, toggle, logs, mark-read, summary
     - Permissions: `notifications.view`, `notifications.manage`
 
-15. **Events Module** (Enhanced 2026-02-14)
+15. **Events Module** (Enhanced 2026-02-26)
     - Event creation with dedicated `EventCreatePage` and reusable `EventForm` component
     - Event edit/delete with `EventEditPage`, cancel notifications
     - Event duplication from detail page
@@ -187,7 +187,19 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - Organization timezone support in date formatting
     - QR code check-in, self-check-in pages, analytics
     - Comprehensive test coverage (5 test files, 1,865+ lines)
-    - API endpoints: events CRUD, RSVP, attachments, templates, recurrence, duplication
+    - **Public Outreach Request Pipeline** (New 2026-02-26):
+      - Public event request form via Forms module integration
+      - Configurable outreach types per department
+      - Default coordinator auto-assignment with email notification
+      - Flexible date preferences (specific dates, general timeframe, flexible)
+      - Configurable pipeline tasks with reorderable checklist
+      - Scheduling with room booking and double-booking prevention
+      - Comment thread for internal coordinator discussion
+      - Cancel/postpone by requester or department (postpone with/without new date)
+      - Configurable email triggers per status change
+      - Reusable email templates with template variables
+      - Public token-based status page with optional task progress visibility
+    - API endpoints: events CRUD, RSVP, attachments, templates, recurrence, duplication, event requests (18 endpoints)
     - Permissions: `events.view`, `events.manage`
 
 ---
@@ -351,6 +363,8 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
 | Election security | [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) |
 | Events / recurring events / RSVP | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#events-module-issues) |
+| Public outreach requests | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#public-outreach-request-pipeline-issues) |
+| Public programs how-to | [wiki/Public-Programs.md](../wiki/Public-Programs.md) |
 | TypeScript build errors | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#typescript-build-issues) |
 | TypeScript safeguards / `as any` | [TYPESCRIPT_SAFEGUARDS.md](./TYPESCRIPT_SAFEGUARDS.md) |
 | Async SQLAlchemy issues | [ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md) |
@@ -429,7 +443,7 @@ docker-compose ps
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
 | SKILLS_TESTING_FEATURE.md | 1.0 | 2026-02-25 | Current |
-| TROUBLESHOOTING.md | 2.0 | 2026-02-25 | Current |
+| TROUBLESHOOTING.md | 2.1 | 2026-02-26 | Current |
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | SECURITY_IMAGE_UPLOADS.md | 1.0 | 2026-02-07 | Current |
@@ -472,6 +486,25 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-26 - Public Outreach Request Pipeline
+
+**What Changed**:
+- **Public Event Request Pipeline**: Complete system for community members to request events (fire safety demos, station tours, school visits, CPR classes, etc.) via public forms
+- **18 Backend API Endpoints**: Public submission, status check, self-cancel, admin CRUD, assignment, comments, scheduling with room booking, postpone, email templates
+- **Frontend UI**: Event Requests admin tab with assignment, comment thread, schedule/postpone dialogs, copy status link, send email templates; Settings tab with coordinator picker, pipeline task reorder, email trigger toggles, template CRUD
+- **Public Status Page**: Token-based page with progress stepper, optional task progress visibility, self-service cancellation
+- **Database Models**: Extended `EventRequest` with scheduling fields, new `EventRequestEmailTemplate` table
+
+**New Documentation**:
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) v2.1 — Public Outreach Request Pipeline troubleshooting (12 problems) with sample public education programs (6 programs with pipeline tasks and email templates)
+- Created [wiki/Public-Programs.md](../wiki/Public-Programs.md) — Complete how-to guide with setup instructions, 6 sample programs, email template library, tips & best practices
+- Updated [wiki/Module-Events.md](../wiki/Module-Events.md) — Pipeline features, status flow, pages table, 18 API endpoints
+- Updated [docs/training/04-events-meetings.md](./training/04-events-meetings.md) — Full public outreach section with setup guide, managing requests, public form, status page, common programs table
+- Updated [wiki/_Sidebar.md](../wiki/_Sidebar.md) — Added Public Programs link under Modules
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog
+
+---
 
 ### 2026-02-25 - Skills Testing Module
 

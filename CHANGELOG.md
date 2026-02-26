@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Public Outreach Event Request Pipeline (2026-02-26)
+
+#### New Feature: Community Event Request System
+A complete pipeline for community members to request public outreach events (fire safety demos, station tours, CPR classes, career talks). Requests flow through a flexible, department-configurable workflow before becoming scheduled calendar events.
+
+##### Event Request Pipeline Core
+- **Public Request Form**: Generated via the Forms module with EVENT_REQUEST integration; includes contact info, event type, description, audience details, venue preference, and flexible date preferences
+- **Flexible Date Selection**: Requesters express preferences ("a Saturday morning in March") rather than committing to exact dates; three modes — specific dates, general timeframe, or fully flexible
+- **Configurable Outreach Types**: Departments define their own outreach event types (e.g., Fire Safety Demo, Station Tour, CPR/First Aid Class) via Settings — not hardcoded
+- **Simplified Status Flow**: `submitted → in_progress → scheduled → completed` with `postponed`, `declined`, and `cancelled` branches
+- **Configurable Pipeline Tasks**: Department-defined checklist items (review request, assign coordinator, confirm date, plan content, arrange volunteers, prepare equipment) that can be completed in any order
+- **Task Reorder**: Up/down arrows in Settings to control default task display order; departments can add custom steps like Chief approval or volunteer signup emails
+- **Auto-Transition**: Completing the first pipeline task automatically moves the request from `submitted` to `in_progress`
+
+##### Coordinator Assignment & Workflow
+- **Default Coordinator**: Departments configure a default assignee (e.g., Public Outreach Officer) who auto-receives all new requests with email notification
+- **Reassignment**: Coordinators can reassign requests to other org members from the request detail view
+- **Comment Thread**: Replaces single-note field with a threaded comment system; multiple team members leave notes over time, displayed alongside status changes in a unified activity feed
+
+##### Scheduling with Room Booking
+- **Schedule Dialog**: Coordinators set a confirmed date/time and optionally select a room/location when transitioning to "Scheduled"
+- **Calendar Event Creation**: Scheduling automatically creates an Event record linked to the request, appearing on the department calendar
+- **Double-Booking Prevention**: Room selection validates against `LocationService.check_overlapping_events()` — prevents scheduling conflicts
+- **Confirmed Date Display**: Requesters see the confirmed date on the public status page once scheduled
+
+##### Postpone & Cancel
+- **Postpone Status**: New `POSTPONED` status with optional rescheduled date or open-ended TBD
+- **Department Cancel**: Coordinators can cancel requests at any active stage
+- **Requester Self-Cancel**: Community members cancel their own request from the public status page via their status token
+- **Resume Work**: Postponed requests can be moved back to `in_progress` to resume planning
+
+##### Email Notifications & Templates
+- **Configurable Email Triggers**: Per-status-change toggles (on_submitted, on_scheduled, on_postponed, on_completed, on_declined, on_cancelled, days_before_event)
+- **Auto-Notify**: Assignee notified on new request; requester notified on status changes (when enabled)
+- **Email Template CRUD**: Departments create reusable email messages (e.g., "How to Find Our Building", "Volunteer Signup Instructions") with template variables (`{{contact_name}}`, `{{outreach_type}}`, `{{event_date}}`)
+- **Manual Send**: Coordinators send any template to the requester from the request detail view
+- **Auto-Trigger Support**: Templates can be linked to pipeline triggers (e.g., auto-send directions 7 days before event)
+
+##### Public Status Page
+- **Token-Based Access**: Each request gets a unique status URL for the requester — no login required
+- **Progress Stepper**: Visual 4-step stepper (Submitted → In Progress → Scheduled → Completed)
+- **Postponed Display**: Shows postponed state with tentative reschedule date or "TBD" messaging
+- **Optional Pipeline Progress**: Department-configurable toggle to show/hide pipeline task progress on public page (progress bar + task checklist)
+- **Self-Service Cancel**: Requester can cancel with an optional reason from the status page
+
+##### Admin Settings (Events Settings Tab)
+- **Event Type Visibility**: Toggle which event types show as primary filter tabs vs. grouped under "Other"
+- **Outreach Types Configuration**: Add/remove custom outreach event types
+- **Default Coordinator Picker**: Dropdown of all org members for auto-assignment
+- **Public Progress Visibility Toggle**: Show/hide planning progress on public status page
+- **Minimum Lead Time**: Configurable days-in-advance requirement (default 21 days / 3 weeks)
+- **Pipeline Task Management**: Add, remove, and reorder checklist tasks
+- **Email Trigger Toggles**: Enable/disable notifications per status change
+- **Email Template Management**: Create, edit, delete reusable email templates
+- **Form Generation**: One-click public form creation in the Forms module
+
+##### Admin Request Queue (Event Requests Tab)
+- **Status Filter Chips**: Filter by status with count badges
+- **Request List**: Summary rows with contact, type, date preference, audience size, assignee, and task progress
+- **Expandable Detail**: Full request info with contact, event details, date preferences, description, special requests
+- **Task Checklist**: Interactive pipeline task toggles in the detail view
+- **Assignment UI**: Assign/reassign coordinator dropdown
+- **Schedule Dialog**: Date/time picker + room selector with double-booking check
+- **Postpone Dialog**: Reason field + optional tentative date
+- **Comment Thread**: Inline comment input with enter-to-submit
+- **Copy Status Link**: One-click clipboard copy of the requester's status URL
+- **Send Email**: Template picker with send button from the request detail
+- **Activity Log**: Unified timeline of status changes, task completions, assignments, comments, and emails sent
+
+##### API Endpoints (14 endpoints under `/api/v1/event-requests/`)
+- `POST   /public` — Submit public request (no auth)
+- `GET    /status/{token}` — Check status by token (no auth)
+- `POST   /status/{token}/cancel` — Requester self-cancel (no auth)
+- `GET    /` — List requests (auth, `events.manage`)
+- `GET    /{id}` — Get request detail (auth)
+- `PATCH  /{id}/status` — Update status (auth)
+- `PATCH  /{id}/assign` — Assign coordinator (auth)
+- `POST   /{id}/comments` — Add comment (auth)
+- `PATCH  /{id}/schedule` — Schedule with date + room (auth)
+- `PATCH  /{id}/postpone` — Postpone request (auth)
+- `PATCH  /{id}/tasks` — Toggle pipeline task (auth)
+- `POST   /{id}/send-email` — Send template email (auth)
+- `GET    /email-templates` — List templates (auth)
+- `POST   /email-templates` — Create template (auth)
+- `PATCH  /email-templates/{id}` — Update template (auth)
+- `DELETE /email-templates/{id}` — Delete template (auth)
+- `GET    /types/labels` — Get outreach type labels (no auth)
+- `POST   /generate-form` — Generate public form (auth)
+
+##### Database Models
+- **EventRequest**: Core request model with flexible date fields (`date_flexibility`, `preferred_timeframe`, `preferred_time_of_day`), `task_completions` JSON, confirmed event fields (`event_date`, `event_end_date`, `event_location_id`), composite indexes on `(organization_id, status)` and `(organization_id, outreach_type)`
+- **EventRequestActivity**: Audit trail for all actions — status changes, task completions, comments, assignments, email sends
+- **EventRequestEmailTemplate**: Per-org reusable email templates with trigger configuration and days-before scheduling
+
+##### Frontend Components
+- **EventsSettingsTab** (`frontend/src/pages/EventsSettingsTab.tsx`) — Full settings interface with outreach types, pipeline tasks, default assignee, email triggers, templates, form generation
+- **EventRequestsTab** (`frontend/src/pages/EventRequestsTab.tsx`) — Admin queue with expandable detail, task checklist, assignment, comments, scheduling, postpone, email send
+- **EventRequestStatusPage** (`frontend/src/pages/EventRequestStatusPage.tsx`) — Public token-based status page with stepper, progress bar, cancel
+
+##### Documentation
+- **Changelog**: This entry
+- **Troubleshooting**: Added Public Outreach Request Pipeline section to `docs/TROUBLESHOOTING.md` with common issues and sample public education materials
+- **Wiki**: Updated `wiki/Module-Events.md` with outreach request pipeline reference; added `wiki/Public-Programs.md` how-to guide with sample programs
+- **Training Guide**: Updated `docs/training/04-events-meetings.md` with public outreach section
+- **Wiki Sidebar**: Added Public Programs link to sidebar navigation
+- **Docs Index**: Updated `docs/README.md` with new documentation entries
+
 ### Skills Testing Module (2026-02-25)
 
 #### New Feature: Digital Psychomotor Skills Evaluations

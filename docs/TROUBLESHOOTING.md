@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-25 (added Skills Testing module troubleshooting — template publishing, test scoring, critical criteria auto-fail, summary dashboard; plus all previous updates)
+**Last Updated**: 2026-02-26 (added Public Outreach Request Pipeline troubleshooting — coordinator assignment, scheduling with room booking, comment threads, email templates, cancel/postpone, public status page, sample public education programs; plus all previous updates)
 
 ---
 
@@ -35,7 +35,8 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 21. [CSS Variable & Theming Issues](#css-variable--theming-issues)
 22. [Dependency Version Management](#dependency-version-management)
 23. [Skills Testing Module Issues](#skills-testing-module-issues)
-24. [Getting Help](#getting-help)
+24. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
+25. [Getting Help](#getting-help)
 
 ---
 
@@ -2624,6 +2625,390 @@ percentage = (total criteria passed across all sections / total criteria across 
 **Fix**:
 - Create templates and administer tests first
 - Contact your administrator to verify your permissions
+
+---
+
+## Public Outreach Request Pipeline Issues
+
+The Public Outreach Request Pipeline allows community members to submit event requests (fire safety demos, station tours, school visits, etc.) through a public form. Department coordinators manage requests through a configurable workflow with assignment, scheduling, comments, and email notifications.
+
+---
+
+### Problem: Event Request Form Not Appearing on Public Page
+
+**Symptoms**:
+- Public form URL (`/f/:slug`) returns 404 or blank page
+- Form exists in admin but isn't accessible publicly
+
+**Possible Causes & Solutions**:
+
+1. **Form not marked as public**
+   - Go to **Forms > [Your Form]** and ensure **Public Access** is toggled on
+   - The form must have `is_public: true` and a `public_slug` set
+
+2. **Form integration not configured**
+   - The form needs an `EVENT_REQUEST` integration type to feed into the pipeline
+   - Check **Forms > Integrations** and verify the form is linked to the Event Request system
+
+3. **Outreach types not configured**
+   - If the form dropdown shows no outreach types, go to **Events > Settings > Outreach Types** and add at least one type (e.g., "Fire Safety Demo", "Station Tour")
+   - Each type needs a `key` (lowercase_snake_case) and a display `label`
+
+---
+
+### Problem: Submitted Request Not Appearing in Admin Tab
+
+**Symptoms**:
+- Community member submitted a request but coordinator doesn't see it
+- Event Requests tab shows empty or outdated list
+
+**Possible Causes & Solutions**:
+
+1. **Missing permission**
+   - The coordinator needs the `events.manage` permission to see the Event Requests tab
+   - Check **Administration > Roles & Permissions** and ensure the user's role includes `events.manage`
+
+2. **Status filter hiding request**
+   - The admin tab may be filtering by status — check that "All" or "Submitted" is selected in the status filter
+   - New requests arrive with status `submitted`
+
+3. **Request went to a different organization**
+   - Multi-tenant setups: the form's `organization_id` must match the coordinator's organization
+   - Verify the form is scoped to the correct department
+
+---
+
+### Problem: Default Coordinator Not Being Auto-Assigned
+
+**Symptoms**:
+- New requests arrive with no assignee
+- Coordinator field is blank on submitted requests
+
+**Possible Causes & Solutions**:
+
+1. **Default assignee not configured**
+   - Go to **Events > Settings > Request Pipeline** and select a **Default Coordinator** from the member dropdown
+   - This sets `request_pipeline.default_assignee_id` in organization settings
+
+2. **Assigned member no longer active**
+   - If the default coordinator was deactivated or removed, assignments silently fail
+   - Update the default coordinator to an active member
+
+3. **Email notification not received**
+   - Even if assigned, the coordinator may not receive the email if email triggers are disabled
+   - Check **Events > Settings > Email Triggers** and ensure "On Submitted" has `notify_assignee: true`
+   - Verify SMTP is configured correctly (**Administration > Email Settings**)
+
+---
+
+### Problem: Cannot Schedule Event — Room Double-Booking Error
+
+**Symptoms**:
+- "This location has a conflicting event at the selected time" error when scheduling
+- Schedule button is disabled or returns an error
+
+**Possible Causes & Solutions**:
+
+1. **Room is already booked**
+   - The system checks for overlapping events at the same location using `LocationService.check_overlapping_events()`
+   - View the room's calendar to find the conflict and choose a different time or room
+   - Use the room/location selector in the Schedule dialog to see availability
+
+2. **No locations configured**
+   - If the location dropdown is empty, go to **Administration > Locations** and add rooms/spaces
+   - Each location needs a name and capacity; the system uses `location_id` for booking checks
+
+3. **Calendar event not created**
+   - When scheduling, the "Create Calendar Event" option is on by default
+   - If unticked, the confirmed date is recorded but no Event record is created on the main calendar
+   - The Event record is what enables QR code check-in, RSVP, and attendance tracking
+
+---
+
+### Problem: Comment Thread Not Showing or Comments Lost
+
+**Symptoms**:
+- Comments added but not visible when reopening the request
+- Activity log shows status changes but no comments
+
+**Possible Causes & Solutions**:
+
+1. **Comments are stored as activity entries**
+   - Comments use the `EventRequestActivity` model with `action="comment"`
+   - They appear in the activity log alongside status changes — look for entries marked with a message icon
+   - Comments are distinct from `reviewer_notes` (a single field) — the thread is the activity log
+
+2. **Empty comment submitted**
+   - The comment input requires at least 1 character (validated by `EventRequestComment` schema, `min_length=1`)
+   - Whitespace-only comments may be trimmed and rejected
+
+---
+
+### Problem: Email Templates Not Sending or Template Variables Not Replaced
+
+**Symptoms**:
+- Scheduled email not delivered to requester
+- Email body shows `{{contact_name}}` literally instead of the person's name
+
+**Possible Causes & Solutions**:
+
+1. **SMTP not configured**
+   - Email sending requires a working SMTP configuration
+   - Check **Administration > Email Settings** for SMTP host, port, credentials
+   - Test with a manual email send first
+
+2. **Email trigger disabled for this status change**
+   - Each status transition has an independent toggle in **Events > Settings > Email Triggers**
+   - For example, `on_scheduled.enabled` must be `true` for the "Scheduled" notification to fire
+   - Check both `notify_requester` and `notify_assignee` sub-toggles
+
+3. **Template variables not recognized**
+   - Supported variables include: `{{contact_name}}`, `{{organization_name}}`, `{{outreach_type}}`, `{{event_date}}`, `{{status}}`, `{{status_link}}`
+   - Variables use double curly braces — single braces or spaces inside braces won't match
+   - Custom variables can be passed via the `additional_context` field when manually sending
+
+4. **Template not active**
+   - Templates have an `is_active` flag — deactivated templates won't auto-send
+   - Check the template list in **Events > Settings > Email Templates** and ensure the template is enabled
+
+---
+
+### Problem: Cannot Cancel or Postpone a Request
+
+**Symptoms**:
+- Cancel/postpone buttons not visible
+- Error when trying to cancel from the public status page
+
+**Possible Causes & Solutions**:
+
+1. **Request already in terminal state**
+   - Requests with status `declined`, `cancelled`, or `completed` cannot be cancelled or postponed
+   - Only active statuses (`submitted`, `in_progress`, `scheduled`) support cancel/postpone
+
+2. **Public cancellation disabled**
+   - The public status page shows a "Need to cancel?" link only if `can_cancel: true`
+   - This is set by the backend based on the current status — terminal states disable it
+
+3. **Postpone without a new date**
+   - Postponing is valid with or without a new date — the system supports both
+   - If no new date is given, the request shows "A new date has not been set yet" on the public status page
+   - To resume a postponed request, use "Resume Work" which transitions it back to `in_progress`
+
+---
+
+### Problem: Public Status Page Shows "Request Not Found"
+
+**Symptoms**:
+- Community member clicks their status link but sees the error page
+- Token-based URL returns 404
+
+**Possible Causes & Solutions**:
+
+1. **Invalid or expired token**
+   - Each request gets a unique `status_token` — the URL is `/request-status/:token`
+   - If the token was regenerated or the request was deleted, the old link is invalid
+
+2. **Incorrect URL**
+   - The status link must include the full token — partial tokens won't match
+   - Use the "Copy Status Link" button in the admin tab to get the correct URL
+
+3. **Request was hard-deleted**
+   - Soft-deleted or cancelled requests should still be viewable on the status page
+   - If the database record was manually deleted, the token lookup will fail
+
+---
+
+### Problem: Pipeline Tasks Not Visible on Public Status Page
+
+**Symptoms**:
+- Coordinator has completed several pipeline tasks but the public page doesn't show progress
+- Task progress bar and checklist are missing
+
+**Possible Causes & Solutions**:
+
+1. **Public progress visibility is off (this is the default)**
+   - Go to **Events > Settings > Request Pipeline** and toggle **Public Progress Visibility** on
+   - This setting controls whether the `task_progress` data is included in the public status response
+   - Many departments prefer to keep planning details internal — this is intentional
+
+2. **No tasks configured**
+   - If the pipeline has no tasks defined, there's nothing to show
+   - Add tasks in **Events > Settings > Request Pipeline > Tasks** (e.g., "Chief Approval", "Volunteer Signup", "Equipment Prep")
+
+---
+
+### Problem: Pipeline Task Order Not Saving
+
+**Symptoms**:
+- Reordered tasks in Settings but they revert on page reload
+- Up/down arrows don't persist the new order
+
+**Possible Causes & Solutions**:
+
+1. **Settings save failed silently**
+   - After reordering, the settings page should auto-save — check for network errors in the browser console
+   - Manually click Save if auto-save isn't configured
+
+2. **Conflicting settings update**
+   - Another admin may have saved settings simultaneously, overwriting the reorder
+   - The settings use a deep-merge approach — task array order comes from the latest save
+
+---
+
+### Sample Public Education Programs
+
+The following examples can be used as templates when setting up public outreach programs in the Event Request pipeline. These are common program types offered by fire departments and emergency services organizations.
+
+#### Fire Safety Demonstration
+
+**Outreach Type Key**: `fire_safety_demo`
+**Description**: Live fire extinguisher training and kitchen fire safety demonstration for community groups. Typically 45-60 minutes.
+**Typical Audience**: Corporate offices, senior living communities, school staff
+**Suggested Pipeline Tasks**:
+1. Review request and confirm date availability
+2. Chief/President approval
+3. Email volunteer signup to department
+4. Confirm minimum 2 volunteers
+5. Prep equipment checklist (extinguishers, burn pan, PPE, handouts)
+6. Send "How to Find Us" / directions email (if at station)
+7. Day-before reminder to volunteers and requester
+
+**Sample Email Template — Confirmation**:
+> Subject: Your Fire Safety Demo is Confirmed — {{event_date}}
+>
+> Dear {{contact_name}},
+>
+> Your fire safety demonstration has been scheduled for {{event_date}}. Here's what to expect:
+>
+> - **Duration**: Approximately 60 minutes
+> - **What We Cover**: Fire extinguisher use (hands-on), kitchen fire prevention, smoke alarm placement, escape planning
+> - **What to Provide**: An open outdoor area (parking lot) approximately 20×20 feet, access to a power outlet
+> - **Participants**: We recommend groups of 10-30 for hands-on training
+>
+> Please have participants wear closed-toe shoes. We'll bring all equipment.
+>
+> Questions? Reply to this email or call us at [department phone].
+
+---
+
+#### Station Tour
+
+**Outreach Type Key**: `station_tour`
+**Description**: Guided tour of the fire station including apparatus bay, equipment overview, and meet-the-crew. 30-45 minutes.
+**Typical Audience**: Scout troops, daycare/preschool groups, birthday parties, school field trips
+**Suggested Pipeline Tasks**:
+1. Review request and confirm station availability
+2. Assign tour guide (on-duty crew or volunteer)
+3. Confirm audience size and age group
+4. Prep station (clean bay, stage kid-friendly equipment)
+5. Send directions and parking information email
+6. Day-before reminder
+
+**Sample Email Template — Directions**:
+> Subject: Directions to {{organization_name}} — Your Station Tour on {{event_date}}
+>
+> Dear {{contact_name}},
+>
+> We're looking forward to your group's visit! Here are the details:
+>
+> - **Address**: [Station Address]
+> - **Parking**: Free parking is available in [lot location]. Please do not block the apparatus bay doors.
+> - **Entrance**: Enter through the [front/side] door. A crew member will meet your group.
+> - **Duration**: Approximately 30-45 minutes
+> - **Tips for Kids**: Wear comfortable shoes. The bay floor can be slippery. Children must be accompanied by an adult at all times.
+>
+> **Important**: If we receive an emergency call during your tour, crew members will need to respond immediately. A backup guide will continue the tour, or we can reschedule the remaining portion.
+
+---
+
+#### School Visit / Classroom Presentation
+
+**Outreach Type Key**: `school_visit`
+**Description**: Age-appropriate fire safety education at the school. Includes stop-drop-roll, escape planning, 911 education, and optional apparatus display.
+**Typical Audience**: Elementary schools (K-5), after-school programs
+**Suggested Pipeline Tasks**:
+1. Review request — confirm school, grade level, number of students
+2. Chief/President approval
+3. Coordinate with school administration (point of contact, schedule, access)
+4. Assign presenter(s) and optional apparatus driver
+5. Email volunteer signup to department
+6. Prepare age-appropriate materials (coloring books for K-2, worksheets for 3-5)
+7. Confirm apparatus availability if bringing engine/truck
+8. Send confirmation to school contact with arrival time and setup needs
+
+**Sample Email Template — School Confirmation**:
+> Subject: Fire Safety Visit Confirmed — {{event_date}}
+>
+> Dear {{contact_name}},
+>
+> We're excited to visit your school! Here's our plan:
+>
+> - **Date**: {{event_date}}
+> - **Arrival Time**: We'll arrive 15 minutes early for setup
+> - **Presentation**: ~30 minutes per group (adjust for age level)
+> - **Apparatus Display**: [Yes/No] — If yes, we'll need a flat area to park the engine where students can safely walk around it
+> - **Materials**: We'll bring age-appropriate handouts and take-home materials for every student
+>
+> **What we need from you**:
+> - A gym, cafeteria, or outdoor area for the presentation
+> - Access to a power outlet (for our projector, if indoors)
+> - Student count per session
+> - A school staff member present during the presentation
+>
+> Please share any specific topics you'd like us to cover or any student needs we should be aware of (sensory sensitivities to sirens, mobility considerations, etc.).
+
+---
+
+#### CPR / First Aid Class
+
+**Outreach Type Key**: `cpr_first_aid`
+**Description**: Hands-on CPR and basic first aid class for community members. Usually 2-3 hours. May include AED training.
+**Typical Audience**: Community groups, youth organizations, corporate teams, parent groups
+**Suggested Pipeline Tasks**:
+1. Review request — confirm group size (max 12 per instructor)
+2. Verify instructor certifications are current
+3. Chief/President approval
+4. Assign certified instructor(s)
+5. Calculate equipment needs (1 manikin per 3 participants)
+6. Email volunteer signup for assistant instructors
+7. Order certification cards if offering official certification
+8. Send pre-class information email (what to wear, what to bring)
+9. Day-before confirmation to requester and instructors
+
+---
+
+#### Smoke Detector Installation Program
+
+**Outreach Type Key**: `smoke_detector_install`
+**Description**: Free smoke detector installation and battery replacement for residents, especially seniors and low-income households. 15-30 minutes per home.
+**Typical Audience**: Individual homeowners, neighborhood associations, senior communities, housing authorities
+**Suggested Pipeline Tasks**:
+1. Review request — confirm address and number of homes
+2. Verify smoke detector inventory (request from supply if needed)
+3. Assign installation team (minimum 2 members)
+4. Schedule route if multiple homes
+5. Confirm with homeowner(s) — day/time and access needs
+6. Complete installation and record serial numbers
+7. Send follow-up email with maintenance reminders
+
+---
+
+#### Community Open House / Recruitment Event
+
+**Outreach Type Key**: `open_house`
+**Description**: Department open house with apparatus display, equipment demonstrations, recruitment information, and family-friendly activities. 2-4 hours.
+**Typical Audience**: General public, potential recruits, families
+**Suggested Pipeline Tasks**:
+1. Select date and obtain Chief/President approval
+2. Form planning committee (assign committee lead)
+3. Email department — request volunteers and activity ideas
+4. Book apparatus for static display
+5. Coordinate food/refreshments (donations or budget approval)
+6. Prepare recruitment materials and applications
+7. Create promotional flyer and social media posts
+8. Send press release to local media
+9. Set up and assign volunteer stations day-of
+10. Post-event follow-up: collect contact info from interested recruits
 
 ---
 

@@ -31,6 +31,7 @@
 - [Training Compliance](../docs/training-compliance-calculations.md)
 - [Elections](Module-Elections)
 - [Events](Module-Events)
+- [Public Programs](Public-Programs)
 - [Scheduling](Module-Scheduling)
 - [Apparatus](Module-Apparatus)
 - [Inventory](Module-Inventory)
