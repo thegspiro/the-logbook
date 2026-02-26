@@ -475,4 +475,4 @@ Skills tests integrate with the broader training compliance system:
 
 ---
 
-**Previous:** [Administration & Reports](./08-admin-reports.md) | **Next:** Return to [Training Guide Index](./README.md)
+**Previous:** [Administration & Reports](./08-admin-reports.md) | **Next:** [Mobile & PWA Usage](./10-mobile-pwa.md)

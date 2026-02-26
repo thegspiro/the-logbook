@@ -15,7 +15,8 @@ The Events module handles department events, attendance tracking with QR code ch
 7. [Action Items](#action-items)
 8. [Elections and Voting](#elections-and-voting)
 9. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
-10. [Troubleshooting](#troubleshooting)
+10. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -390,6 +391,181 @@ For detailed program descriptions, pipeline task suggestions, and sample email t
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Event Requests tab showing a list of requests with status badges, assigned coordinator, and expand arrow. Below: expanded request detail showing contact info, comment thread, pipeline task checklist, and action buttons (Schedule, Postpone, Cancel)]_
+
+---
+
+## Realistic Example: Outreach Request from Submission to Completion
+
+This walkthrough follows a community event request through the entire pipeline — from the moment a community member submits the form through the event itself and completion — showing both what the **requester** sees and what the **department coordinator** sees.
+
+### Background
+
+**Riverside Fire-Rescue** has set up the Public Outreach Request Pipeline. Their configuration:
+
+- **Outreach Types:** Fire Safety Demonstration, Station Tour, School Visit, CPR/First Aid Class
+- **Default Coordinator:** Lt. Sarah Chen (Community Outreach Officer)
+- **Pipeline Tasks:** Chief Approval → Confirm Volunteers → Prep Equipment → Pre-Event Email
+- **Email Triggers:** On Submitted (notify coordinator), On Scheduled (notify requester), On Completed (notify requester)
+- **Email Templates:** "Directions & Parking" template, "What to Expect" template
+
+---
+
+### Step 1: Community Member Submits a Request
+
+**Maria Rodriguez**, PTA president at Lincoln Elementary School, visits the department's website and clicks "Request a Visit." She is taken to the public form at `/f/request-event`.
+
+She fills out the form:
+
+| Field | Value |
+|-------|-------|
+| **Contact Name** | Maria Rodriguez |
+| **Email** | maria.rodriguez@email.com |
+| **Phone** | (555) 234-5678 |
+| **Organization** | Lincoln Elementary School PTA |
+| **Outreach Type** | Fire Safety Demonstration |
+| **Description** | We'd like a fire safety presentation for our K-2 students during Fire Prevention Week. Topics: stop-drop-roll, smoke alarms, escape plans. Kids love seeing the fire truck! |
+| **Date Preference** | Specific dates: October 7 or October 8 |
+| **Preferred Time** | Morning (school starts at 8:15, assembly at 9:00) |
+| **Audience Size** | 120 students + 8 teachers |
+| **Age Group** | 5-8 years old |
+| **Venue** | Their location (school gymnasium) |
+| **Special Requests** | We have a student in a wheelchair — please ensure any activities are accessible. Parking available in the staff lot. |
+
+She clicks **Submit**. The form confirms: *"Thank you! Your request has been submitted. You will receive an email with a link to track your request's status."*
+
+**What Maria sees:** An email arrives with a link to her status page (`/request-status/abc123token`). The status page shows:
+
+```
+Request Status: ● Submitted
+
+Progress:  [●]─────[○]─────[○]─────[○]
+         Submitted  In Progress  Scheduled  Completed
+
+Submitted: October 1
+Request Type: Fire Safety Demonstration
+Date Preference: October 7 or October 8
+
+[Cancel Request]
+```
+
+---
+
+### Step 2: Coordinator Receives and Reviews the Request
+
+Lt. Chen receives an email notification: *"New outreach request from Lincoln Elementary School PTA — Fire Safety Demonstration."*
+
+She navigates to **Events Admin > Event Requests** and clicks on the new request. The detail view shows Maria's full submission, the pipeline task checklist, and action buttons.
+
+Lt. Chen adds an internal comment (not visible to Maria): *"Perfect timing for Fire Prevention Week. We should bring Engine 3 and the smoke house trailer. Need 3 volunteers minimum."*
+
+---
+
+### Step 3: Working Through Pipeline Tasks
+
+**Task 1 — Chief Approval:**
+Lt. Chen walks the request by Chief Williams, who approves. She checks off "Chief Approval" in the pipeline.
+
+The first task completion automatically moves the status from **Submitted** to **In Progress**.
+
+**Task 2 — Confirm Volunteers:**
+Lt. Chen posts a sign-up in the station and confirms three volunteers: FF Martinez, FF Okafor, and FF Lee. She checks off "Confirm Volunteers" and adds a comment: *"Martinez, Okafor, Lee confirmed. Martinez will drive Engine 3."*
+
+**Task 3 — Prep Equipment:**
+She reserves the smoke house trailer and gathers fire safety handouts for K-2 age group. Checks off "Prep Equipment."
+
+---
+
+### Step 4: Scheduling the Event
+
+Lt. Chen clicks **Schedule Event** and fills in:
+
+| Field | Value |
+|-------|-------|
+| **Confirmed Date** | October 7 |
+| **Start Time** | 9:00 AM |
+| **End Time** | 10:30 AM |
+| **Location** | Lincoln Elementary School — Gymnasium |
+| **Create Calendar Event** | Yes |
+| **Enable QR Check-In** | Yes |
+
+She clicks **Confirm**. The system:
+1. Changes the request status to **Scheduled**
+2. Creates a department calendar event (type: Community) for October 7
+3. Sends Maria the "On Scheduled" email: *"Your fire safety demonstration has been confirmed for October 7 at 9:00 AM."*
+
+**What Maria now sees on her status page:**
+
+```
+Request Status: ● Scheduled
+
+Progress:  [●]─────[●]─────[●]─────[○]
+         Submitted  In Progress  Scheduled  Completed
+
+Submitted: October 1
+Scheduled: October 7, 9:00 AM – 10:30 AM
+Location: Lincoln Elementary School — Gymnasium
+```
+
+---
+
+### Step 5: Pre-Event Communication
+
+**Task 4 — Pre-Event Email:**
+One week before the event, Lt. Chen uses the email template dropdown to send the "What to Expect" template to Maria. The template auto-fills the variables:
+
+> Dear Maria,
+>
+> We're looking forward to the fire safety demonstration at Lincoln Elementary School on October 7 at 9:00 AM.
+>
+> **What to expect:**
+> - 3 firefighters will arrive with Engine 3 at approximately 8:45 AM
+> - The presentation lasts about 60-90 minutes
+> - We'll cover stop-drop-roll, home escape plans, and smoke alarm awareness
+> - Students will have the opportunity to see the fire truck up close
+>
+> Please let us know if anything changes.
+>
+> — Lt. Sarah Chen, Riverside Fire-Rescue
+
+She checks off the final pipeline task. All 4 tasks are now complete.
+
+---
+
+### Step 6: Day of the Event
+
+The event appears on the department calendar. FF Martinez, FF Okafor, and FF Lee see it on their schedules. The QR check-in code is available for attendance tracking.
+
+After the presentation, Lt. Chen navigates to the event request and clicks **Complete**. The status changes to **Completed** and the system sends Maria a completion email.
+
+**What Maria now sees on her status page:**
+
+```
+Request Status: ● Completed
+
+Progress:  [●]─────[●]─────[●]─────[●]
+         Submitted  In Progress  Scheduled  Completed
+
+Submitted: October 1
+Scheduled: October 7, 9:00 AM – 10:30 AM
+Completed: October 7
+
+Thank you for working with Riverside Fire-Rescue!
+```
+
+---
+
+### What This Looked Like for Each Person
+
+| Step | Maria (Requester) | Lt. Chen (Coordinator) |
+|------|-------------------|----------------------|
+| Submit | Fills out public form, receives status link | Receives email notification, sees request in queue |
+| Review | Sees "Submitted" on status page | Reviews details, adds internal comments |
+| Pipeline | No visibility (public progress off) | Checks off Chief Approval, Volunteers, Equipment, Email |
+| Schedule | Receives "Scheduled" email, status page updates | Sets confirmed date, creates calendar event |
+| Pre-Event | Receives "What to Expect" email | Sends template email from request detail |
+| Complete | Receives completion email, status page shows done | Clicks Complete, request moves to terminal state |
+
+> **Hint:** If the department enables **Public Progress Visibility** in Settings, Maria would also see the pipeline tasks on her status page — helpful for transparency, but some departments prefer to keep internal workflow steps private.
 
 ---
 
