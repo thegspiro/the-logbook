@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
@@ -710,18 +711,24 @@ class SchedulingService:
                     shift_date=shift_date_val,
                     start_time=shift_start,
                     end_time=shift_end,
+                    color=template.color,
                     created_by=created_by,
                 )
                 self.db.add(shift)
                 await self.db.flush()  # Get the shift ID without committing
 
-                # Auto-create assignments for assigned members
+                # Auto-create assignments for assigned members (skip duplicates)
                 assigned_members = pattern.assigned_members or []
+                seen_users: set[str] = set()
                 for member in assigned_members:
+                    member_user_id = member.get("user_id")
+                    if not member_user_id or member_user_id in seen_users:
+                        continue
+                    seen_users.add(member_user_id)
                     assignment = ShiftAssignment(
                         organization_id=organization_id,
                         shift_id=shift.id,
-                        user_id=member.get("user_id"),
+                        user_id=member_user_id,
                         position=member.get("position", "firefighter"),
                         assignment_status=AssignmentStatus.ASSIGNED,
                         assigned_by=created_by,
@@ -773,6 +780,10 @@ class SchedulingService:
 
             # Check for overlapping shift assignments
             if user_id and shift.start_time:
+                # Scope to nearby dates (±1 day) to avoid scanning the whole table
+                # and to avoid false positives from ancient unclosed shifts
+                date_lo = shift.shift_date - timedelta(days=1)
+                date_hi = shift.shift_date + timedelta(days=1)
                 overlap_query = (
                     select(Shift.shift_date, Shift.start_time)
                     .join(ShiftAssignment, ShiftAssignment.shift_id == Shift.id)
@@ -780,6 +791,7 @@ class SchedulingService:
                     .where(ShiftAssignment.assignment_status != AssignmentStatus.DECLINED)
                     .where(Shift.id != str(shift_id))
                     .where(Shift.organization_id == str(organization_id))
+                    .where(Shift.shift_date.between(date_lo, date_hi))
                 )
                 # Check time overlap: other shift starts before this one ends
                 # AND other shift ends after this one starts
@@ -821,6 +833,9 @@ class SchedulingService:
             await self.db.commit()
             await self.db.refresh(assignment)
             return assignment, None
+        except IntegrityError:
+            await self.db.rollback()
+            return None, "Member is already assigned to this shift"
         except Exception as e:
             await self.db.rollback()
             return None, str(e)

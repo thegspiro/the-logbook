@@ -637,7 +637,8 @@ async def generate_shifts_from_pattern(
         raise HTTPException(
             status_code=400, detail=f"Unable to generate shifts. {error}"
         )
-    return {"shifts_created": len(result), "shifts": result}
+    enriched = await _enrich_shifts(service, current_user.organization_id, result)
+    return {"shifts_created": len(result), "shifts": enriched}
 
 
 # ============================================

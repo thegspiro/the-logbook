@@ -480,7 +480,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <option key={m.id} value={m.id}>{m.label}</option>
                   ))}
                 </select>
-                {memberOptions.length === 0 && !loadingMembers && (
+                {memberOptions.length === 0 && loadingMembers && (
                   <p className="text-xs text-theme-text-muted mt-1">Loading members...</p>
                 )}
               </div>
