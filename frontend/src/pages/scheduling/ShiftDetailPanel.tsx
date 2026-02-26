@@ -81,14 +81,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  const hasApparatusPositions = shift.apparatus_positions && shift.apparatus_positions.length > 0;
+  const apparatusPositions = shift.apparatus_positions ?? [];
+  const hasApparatusPositions = apparatusPositions.length > 0;
 
   // Determine available position options based on apparatus
   const positionOptions: [string, string][] = useMemo(() =>
     hasApparatusPositions
-      ? shift.apparatus_positions!.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)])
+      ? apparatusPositions.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)])
       : Object.entries(POSITION_LABELS),
-    [hasApparatusPositions, shift.apparatus_positions]
+    [hasApparatusPositions, apparatusPositions]
   );
 
   // Set default signup position
@@ -277,22 +278,22 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Build crew board data: for each apparatus position, find the assignment(s) filling it
   const crewBoard = useMemo(() => {
     if (!hasApparatusPositions) return null;
-    return shift.apparatus_positions!.map(position => {
+    return apparatusPositions.map(position => {
       const filled = assignments.find(a => a.position.toLowerCase() === position.toLowerCase());
       return { position, assignment: filled || null };
     });
-  }, [hasApparatusPositions, shift.apparatus_positions, assignments]);
+  }, [hasApparatusPositions, apparatusPositions, assignments]);
 
   // Assignments not matching any apparatus position (extra crew)
   const extraAssignments = useMemo(() => {
     if (!hasApparatusPositions) return assignments;
     const boardFilledIds = new Set<string>();
-    for (const pos of shift.apparatus_positions!) {
+    for (const pos of apparatusPositions) {
       const match = assignments.find(a => a.position.toLowerCase() === pos.toLowerCase() && !boardFilledIds.has(a.id));
       if (match) boardFilledIds.add(match.id);
     }
     return assignments.filter(a => !boardFilledIds.has(a.id));
-  }, [hasApparatusPositions, shift.apparatus_positions, assignments]);
+  }, [hasApparatusPositions, apparatusPositions, assignments]);
 
   const openPositions = crewBoard?.filter(s => !s.assignment).map(s => s.position) || [];
 
@@ -478,7 +479,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 <p className="text-sm font-medium text-theme-text-primary">
                   {assignments.length} assigned
                   {hasApparatusPositions && (
-                    <span className="text-theme-text-muted"> / {shift.apparatus_positions!.length} positions</span>
+                    <span className="text-theme-text-muted"> / {apparatusPositions.length} positions</span>
                   )}
                 </p>
               </div>
