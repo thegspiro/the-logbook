@@ -1,5 +1,9 @@
 # CLAUDE.md — Project Context for Claude Code
 
+## IMPORTANT: Fix All Errors
+
+**Always fix errors you encounter, even if they are pre-existing or unrelated to your current task.** Do not leave broken code, failing tests, linting violations, or type errors for later. If you discover an issue while working on something else, fix it immediately in the same PR. We never leave known errors behind.
+
 ## Project Overview
 
 The Logbook is an open-source modular intranet platform for fire departments and emergency services. It is a monorepo with an npm workspaces structure containing a React frontend and a Python backend.
