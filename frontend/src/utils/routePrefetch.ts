@@ -64,6 +64,7 @@ const routeImportMap: Record<string, () => Promise<unknown>> = {
 
   // Admin
   '/admin/analytics': () => import('../pages/AnalyticsDashboardPage'),
+  '/admin/platform-analytics': () => import('../pages/PlatformAnalyticsPage'),
   '/admin/errors': () => import('../pages/ErrorMonitoringPage'),
 };
 

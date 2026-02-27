@@ -67,6 +67,7 @@ const ActiveSkillTestPage = lazy(() => import('./pages/ActiveSkillTestPage'));
 // Admin/Monitoring
 const ErrorMonitoringPage = lazy(() => import('./pages/ErrorMonitoringPage'));
 const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'));
+const PlatformAnalyticsPage = lazy(() => import('./pages/PlatformAnalyticsPage'));
 const PublicPortalAdmin = lazy(() => import('./modules/public-portal/pages/PublicPortalAdmin'));
 
 // Documents Module
@@ -262,6 +263,7 @@ function App() {
               <Route path="/admin/errors" element={<ProtectedRoute requiredPermission="settings.manage"><ErrorMonitoringPage /></ProtectedRoute>} />
               <Route path="/admin/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><AnalyticsDashboardPage /></ProtectedRoute>} />
               <Route path="/admin/public-portal" element={<ProtectedRoute requiredPermission="settings.manage"><PublicPortalAdmin /></ProtectedRoute>} />
+              <Route path="/admin/platform-analytics" element={<ProtectedRoute requiredPermission="settings.manage"><PlatformAnalyticsPage /></ProtectedRoute>} />
 
               {/* Settings Module */}
               <Route path="/settings" element={<ProtectedRoute requiredPermission="settings.manage"><SettingsPage /></ProtectedRoute>} />
