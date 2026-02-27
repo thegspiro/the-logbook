@@ -220,7 +220,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           { label: 'Organization', path: '/settings', icon: Building2 },
           { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'positions.manage_permissions' },
           { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'settings.manage' },
-          { label: 'Analytics', path: '/admin/analytics', icon: BarChart3, permission: 'analytics.view' },
+          { label: 'QR Code Analytics', path: '/admin/analytics', icon: BarChart3, permission: 'analytics.view' },
           { label: 'Error Monitor', path: '/admin/errors', icon: AlertTriangle, permission: 'settings.manage' },
         ],
       } as NavItem,
