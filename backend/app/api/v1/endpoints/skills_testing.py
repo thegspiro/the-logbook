@@ -856,6 +856,64 @@ async def complete_test(
     return _build_test_response(test, template, candidate, examiner)
 
 
+@router.delete("/tests/{test_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_test(
+    test_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Delete a skill test record.
+
+    Permanently removes the test and all associated results. This action
+    cannot be undone.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == current_user.organization_id)
+    )
+    test = result.scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    # Capture info for audit log before deleting
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    await db.delete(test)
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="skill_test_deleted",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "test_id": str(test_id),
+            "template_name": template.name if template else None,
+            "candidate_name": _format_user_name(candidate) if candidate else None,
+            "test_status": test.status,
+            "test_result": test.result,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 # ============================================
 # Summary / Stats
 # ============================================

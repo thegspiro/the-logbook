@@ -61,6 +61,7 @@ interface SkillsTestingState {
   createTest: (data: SkillTestCreate) => Promise<SkillTest>;
   updateTest: (id: string, data: SkillTestUpdate) => Promise<SkillTest>;
   completeTest: (id: string) => Promise<SkillTest>;
+  deleteTest: (id: string) => Promise<void>;
 
   // Active test session actions
   setActiveSectionIndex: (index: number) => void;
@@ -250,6 +251,20 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to complete test');
       set({ error: msg });
+      throw err;
+    }
+  },
+
+  deleteTest: async (id) => {
+    set({ error: null });
+    try {
+      await skillsTestingService.deleteTest(id);
+      set((state) => ({
+        tests: state.tests.filter((t) => t.id !== id),
+        currentTest: state.currentTest?.id === id ? null : state.currentTest,
+      }));
+    } catch (err: unknown) {
+      set({ error: getErrorMessage(err, 'Failed to delete test') });
       throw err;
     }
   },
