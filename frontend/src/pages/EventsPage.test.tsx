@@ -65,6 +65,7 @@ describe('EventsPage', () => {
     vi.clearAllMocks();
     vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
       checkPermission: vi.fn().mockReturnValue(false),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   });
 
@@ -291,7 +292,8 @@ describe('EventsPage', () => {
     it('should show Create Event button for managers', async () => {
       vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
         checkPermission: vi.fn().mockReturnValue(true),
-      } as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
       vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
 
       renderWithRouter(<EventsPage />);

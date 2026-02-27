@@ -76,7 +76,7 @@ vi.mock('../stores/skillsTestingStore', () => ({
       duplicateTemplate: mockDuplicateTemplate,
     };
     if (typeof selector === 'function') {
-      return selector(state);
+      return (selector as (s: typeof state) => unknown)(state);
     }
     return state;
   }),

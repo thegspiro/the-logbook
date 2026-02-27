@@ -6,10 +6,13 @@ import { EventDetailPage } from './EventDetailPage';
 import * as apiModule from '../services/api';
 import * as authStoreModule from '../stores/authStore';
 import type { Event, EventStats, RSVP } from '../types/event';
+import type { CurrentUser } from '../types/auth';
 
 /** Create a mock API error object (not a Promise) */
 function makeApiError(message: string, status = 400) {
-  const error: any = new Error(message);
+  const error = new Error(message) as Error & {
+    response: { data: { detail: string }; status: number };
+  };
   error.response = { data: { detail: message }, status };
   return error;
 }
@@ -125,7 +128,7 @@ describe('EventDetailPage', () => {
     vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
       checkPermission: mockCheckPermission,
       user: null,
-    } as any);
+    } as ReturnType<typeof authStoreModule.useAuthStore>);
   });
 
   describe('Loading State', () => {
@@ -281,7 +284,7 @@ describe('EventDetailPage', () => {
 
     it('should open RSVP modal and submit successfully', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
-      vi.mocked(eventService.createOrUpdateRSVP).mockResolvedValue({} as any);
+      vi.mocked(eventService.createOrUpdateRSVP).mockResolvedValue({} as unknown as RSVP);
 
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
@@ -326,8 +329,8 @@ describe('EventDetailPage', () => {
       mockCheckPermission.mockReturnValue(true);
       vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
         checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] },
-      } as any);
+        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
+      } as ReturnType<typeof authStoreModule.useAuthStore>);
     });
 
     it('should show management buttons for managers', async () => {
@@ -424,15 +427,15 @@ describe('EventDetailPage', () => {
       mockCheckPermission.mockReturnValue(true);
       vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
         checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] },
-      } as any);
+        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
+      } as ReturnType<typeof authStoreModule.useAuthStore>);
     });
 
     it('should open and submit cancel modal', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
-      vi.mocked(eventService.cancelEvent).mockResolvedValue({} as any);
+      vi.mocked(eventService.cancelEvent).mockResolvedValue({} as unknown as Event);
 
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
@@ -458,8 +461,8 @@ describe('EventDetailPage', () => {
       // Submit via the modal's submit button (type="submit")
       const submitButtons = screen.getAllByRole('button', { name: /cancel event/i });
       const modalSubmitButton = submitButtons.find(btn => btn.getAttribute('type') === 'submit');
-      expect(modalSubmitButton).toBeDefined();
-      await user.click(modalSubmitButton!);
+      if (!modalSubmitButton) throw new Error('Expected modal submit button to exist');
+      await user.click(modalSubmitButton);
 
       await waitFor(() => {
         expect(eventService.cancelEvent).toHaveBeenCalledWith('evt-1', expect.objectContaining({
@@ -473,7 +476,7 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
-      vi.mocked(eventService.cancelEvent).mockResolvedValue({} as any);
+      vi.mocked(eventService.cancelEvent).mockResolvedValue({} as unknown as Event);
 
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
@@ -496,7 +499,8 @@ describe('EventDetailPage', () => {
 
       const submitButtons = screen.getAllByRole('button', { name: /cancel event/i });
       const modalSubmitButton = submitButtons.find(btn => btn.getAttribute('type') === 'submit');
-      await user.click(modalSubmitButton!);
+      if (!modalSubmitButton) throw new Error('Expected modal submit button to exist');
+      await user.click(modalSubmitButton);
 
       await waitFor(() => {
         expect(eventService.cancelEvent).toHaveBeenCalledWith('evt-1', expect.objectContaining({
@@ -511,8 +515,8 @@ describe('EventDetailPage', () => {
       mockCheckPermission.mockReturnValue(true);
       vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
         checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] },
-      } as any);
+        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
+      } as ReturnType<typeof authStoreModule.useAuthStore>);
     });
 
     it('should open delete confirmation modal', async () => {
@@ -540,7 +544,7 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
-      vi.mocked(eventService.deleteEvent).mockResolvedValue(undefined as any);
+      vi.mocked(eventService.deleteEvent).mockResolvedValue(undefined as unknown as void);
 
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
@@ -598,8 +602,8 @@ describe('EventDetailPage', () => {
       mockCheckPermission.mockReturnValue(true);
       vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
         checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] },
-      } as any);
+        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
+      } as ReturnType<typeof authStoreModule.useAuthStore>);
     });
 
     it('should duplicate event and navigate to edit page', async () => {
@@ -658,7 +662,7 @@ describe('EventDetailPage', () => {
       vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
         checkPermission: mockCheckPermission,
         user: null,
-      } as any);
+      } as ReturnType<typeof authStoreModule.useAuthStore>);
 
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
 
@@ -748,8 +752,8 @@ describe('EventDetailPage', () => {
       mockCheckPermission.mockReturnValue(true);
       vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
         checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] },
-      } as any);
+        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
+      } as ReturnType<typeof authStoreModule.useAuthStore>);
 
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);

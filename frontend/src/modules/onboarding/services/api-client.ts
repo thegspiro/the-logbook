@@ -236,11 +236,11 @@ class SecureApiClient {
           }
         }
 
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as Record<string, unknown>;
         return this.handleHttpError(response.status, errorData);
       }
 
-      const data = await response.json();
+      const data: unknown = await response.json();
       return {
         data: data as T,
         statusCode: response.status,
@@ -266,7 +266,7 @@ class SecureApiClient {
   /**
    * Get onboarding status
    */
-  async getStatus(): Promise<ApiResponse<any>> {
+  async getStatus(): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('GET', '/onboarding/status');
   }
 
@@ -293,7 +293,7 @@ class SecureApiClient {
         };
       }
 
-      const data = await response.json();
+      const data: unknown = await response.json();
       return {
         data: data as HealthStatus,
         statusCode: response.status,
@@ -314,7 +314,7 @@ class SecureApiClient {
     name: string;
     logo?: string;
     navigation_layout: 'top' | 'left';
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/department', data, true);
   }
 
@@ -324,8 +324,8 @@ class SecureApiClient {
    */
   async saveEmailConfig(data: {
     platform: string;
-    config: Record<string, any>;
-  }): Promise<ApiResponse<any>> {
+    config: Record<string, unknown>;
+  }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/email', data, true);
   }
 
@@ -336,7 +336,7 @@ class SecureApiClient {
    */
   async testEmailConnection(data: {
     platform: string;
-    config: Record<string, any>;
+    config: Record<string, unknown>;
   }): Promise<ApiResponse<{ success: boolean; message?: string }>> {
     return this.request('POST', '/onboarding/test/email', data, true);
   }
@@ -347,15 +347,15 @@ class SecureApiClient {
    */
   async saveFileStorageConfig(data: {
     platform: string;
-    config: Record<string, any>;
-  }): Promise<ApiResponse<any>> {
+    config: Record<string, unknown>;
+  }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/file-storage', data, true);
   }
 
   /**
    * Save authentication platform
    */
-  async saveAuthPlatform(platform: string): Promise<ApiResponse<any>> {
+  async saveAuthPlatform(platform: string): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/auth', { platform }, true);
   }
 
@@ -374,7 +374,7 @@ class SecureApiClient {
       phone: string;
       secondary_admin_email?: string;
     };
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/it-team', data, true);
   }
 
@@ -382,7 +382,7 @@ class SecureApiClient {
    * Save module configuration
    * Stores which modules are enabled for the department
    */
-  async saveModuleConfig(data: { modules: string[] }): Promise<ApiResponse<any>> {
+  async saveModuleConfig(data: { modules: string[] }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/modules', data, true);
   }
 
@@ -439,7 +439,7 @@ class SecureApiClient {
     organization_type?: string;
     description?: string;
     timezone?: string;
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/organization', {
       name: data.name,
       slug: data.slug,
@@ -550,8 +550,8 @@ class SecureApiClient {
    * Complete onboarding and finalize setup
    * Clears onboarding session and prepares for main app access
    */
-  async completeOnboarding(): Promise<ApiResponse<any>> {
-    const response = await this.request('POST', '/onboarding/complete', {}, true);
+  async completeOnboarding(): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.request<Record<string, unknown>>('POST', '/onboarding/complete', {}, true);
 
     // Clear onboarding session after completion
     if (response.statusCode === 200 || response.statusCode === 201) {
@@ -580,8 +580,8 @@ class SecureApiClient {
    * Reset onboarding - clears all database records and resets to initial state
    * WARNING: This is destructive and cannot be undone
    */
-  async resetOnboarding(): Promise<ApiResponse<any>> {
-    const response = await this.request('POST', '/onboarding/reset', {}, true);
+  async resetOnboarding(): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.request<Record<string, unknown>>('POST', '/onboarding/reset', {}, true);
 
     if (response.statusCode === 200 || response.statusCode === 201) {
       this.clearSession();

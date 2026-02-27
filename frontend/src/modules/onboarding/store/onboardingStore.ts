@@ -185,12 +185,11 @@ const initialState: OnboardingState = {
 const logErrorToConsole = (error: OnboardingError) => {
   if (import.meta.env.DEV) {
     // Development: show full details for debugging
-    console.group(`ONBOARDING ERROR - ${error.step}`);
+    console.error(`ONBOARDING ERROR - ${error.step}`);
     console.error('Action:', error.action);
     console.error('Message:', error.errorMessage);
     if (error.errorDetails) console.error('Details:', error.errorDetails);
-    if (error.userContext) console.info('User Context:', error.userContext);
-    console.groupEnd();
+    if (error.userContext) console.warn('User Context:', error.userContext);
   } else {
     // Production: log only non-sensitive fields
     console.error(`Onboarding error at step "${error.step}": ${error.errorMessage}`);

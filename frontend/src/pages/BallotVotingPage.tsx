@@ -56,6 +56,7 @@ export const BallotVotingPage: React.FC = () => {
       setError('No voting token provided. Please use the link from your ballot email.');
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const loadBallot = async () => {

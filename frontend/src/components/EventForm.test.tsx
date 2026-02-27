@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { EventForm } from './EventForm';
 import * as apiModule from '../services/api';
+import type { Location } from '../services/api';
+import type { Role } from '../types/role';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -32,8 +34,8 @@ describe('EventForm', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue(mockLocations as any);
-    vi.mocked(apiModule.roleService.getRoles).mockResolvedValue(mockRoles as any);
+    vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue(mockLocations as unknown as Location[]);
+    vi.mocked(apiModule.roleService.getRoles).mockResolvedValue(mockRoles as unknown as Role[]);
   });
 
   describe('Rendering', () => {

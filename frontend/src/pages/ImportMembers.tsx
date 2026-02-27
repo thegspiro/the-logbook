@@ -15,7 +15,7 @@ import { getErrorMessage } from '@/utils/errorHandling';
 interface ImportResult {
   success: number;
   failed: number;
-  errors: Array<{ row: number; error: string; data: any }>;
+  errors: Array<{ row: number; error: string; data: unknown }>;
 }
 
 const ImportMembers: React.FC = () => {
@@ -190,7 +190,8 @@ const ImportMembers: React.FC = () => {
 
         try {
           // Generate username from email
-          const username = rowData.email.split('@')[0]!.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+          const emailPrefix = rowData.email.split('@')[0] ?? '';
+          const username = emailPrefix.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
           // Build emergency contacts array
           const emergencyContacts: Array<{

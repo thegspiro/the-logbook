@@ -100,6 +100,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       }
       return prev;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const cycleTheme = () => {
@@ -258,7 +259,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
   const handleNavigation = (path: string, hasSubItems?: boolean, label?: string) => {
     if (hasSubItems && !collapsed) {
-      toggleMenu(label!);
+      if (label) toggleMenu(label);
       return;
     }
     if (path !== '#') {

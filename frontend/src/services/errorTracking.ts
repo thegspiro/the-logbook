@@ -16,7 +16,7 @@ export interface ErrorLog {
   errorMessage: string;
   userMessage: string;
   troubleshootingSteps: string[];
-  context: Record<string, any>;
+  context: Record<string, unknown>;
   userId?: string;
   eventId?: string;
 }
@@ -126,7 +126,7 @@ class ErrorTrackingService {
       errorType?: string;
       eventId?: string;
       userId?: string;
-      additionalContext?: Record<string, any>;
+      additionalContext?: Record<string, unknown>;
     } = {}
   ): ErrorLog {
     const errorMessage = typeof error === 'string' ? error : error.message;

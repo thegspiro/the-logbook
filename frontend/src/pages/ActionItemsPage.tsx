@@ -46,6 +46,7 @@ const ActionItemsPage: React.FC = () => {
 
   useEffect(() => {
     void fetchItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, assignedToMe]);
 
   const fetchItems = async () => {

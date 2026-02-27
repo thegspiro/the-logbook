@@ -9,7 +9,7 @@ export interface PublicPortalConfig {
   allowed_origins: string[];
   default_rate_limit: number;
   cache_ttl_seconds: number;
-  settings: Record<string, any>;
+  settings: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -107,7 +107,7 @@ export interface UpdateConfigRequest {
   allowed_origins?: string[];
   default_rate_limit?: number;
   cache_ttl_seconds?: number;
-  settings?: Record<string, any>;
+  settings?: Record<string, unknown>;
 }
 
 export interface AccessLogFilters {

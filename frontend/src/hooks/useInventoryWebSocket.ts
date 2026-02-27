@@ -53,7 +53,7 @@ export function useInventoryWebSocket({ onEvent, enabled = true }: UseInventoryW
 
       ws.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data) as InventoryEvent;
+          const data = JSON.parse(event.data as string) as InventoryEvent;
           if (data.type === 'inventory_changed') {
             onEventRef.current(data);
           }
@@ -75,6 +75,7 @@ export function useInventoryWebSocket({ onEvent, enabled = true }: UseInventoryW
     } catch {
       scheduleReconnect();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const scheduleReconnect = useCallback(() => {

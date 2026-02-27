@@ -417,10 +417,12 @@ export const getModulesByPriority = () => ({
 export const getModulesByCategory = () => {
   const categories: Record<string, ModuleDefinition[]> = {};
   MODULE_REGISTRY.forEach((module) => {
-    if (!categories[module.category]) {
-      categories[module.category] = [];
+    const existing = categories[module.category];
+    if (existing) {
+      existing.push(module);
+    } else {
+      categories[module.category] = [module];
     }
-    categories[module.category]!.push(module);
   });
   return categories;
 };

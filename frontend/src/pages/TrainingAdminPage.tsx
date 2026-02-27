@@ -112,7 +112,11 @@ const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-const getPage = (id: PageId): PageDef => pages.find(p => p.id === id)!;
+const getPage = (id: PageId): PageDef => {
+  const found = pages.find(p => p.id === id);
+  if (!found) throw new Error(`Unknown page: ${id}`);
+  return found;
+};
 
 const isValidPage = (id: string): id is PageId =>
   pages.some(p => p.id === id);
@@ -174,7 +178,7 @@ export const TrainingAdminPage: React.FC = () => {
 
     // Legacy format: ?tab=submissions (old flat tab IDs)
     if (tabParam && tabParam in legacyTabMap) {
-      return legacyTabMap[tabParam]!;
+      return legacyTabMap[tabParam] ?? { page: 'dashboard', tab: 'overview' };
     }
 
     return { page: 'dashboard', tab: 'overview' };

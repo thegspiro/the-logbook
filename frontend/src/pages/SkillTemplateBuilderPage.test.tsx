@@ -24,7 +24,7 @@ vi.mock('../stores/skillsTestingStore', () => ({
       error: null,
     };
     if (typeof selector === 'function') {
-      return selector(state);
+      return (selector as (s: typeof state) => unknown)(state);
     }
     return state;
   }),

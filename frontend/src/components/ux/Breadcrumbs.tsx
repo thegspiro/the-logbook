@@ -65,13 +65,14 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
     currentPath += '/' + segment;
 
     // Skip UUID-like segments for display but keep them in the path
-    const isId = /^[0-9a-f]{8}-|^\d+$/.test(segment!);
+    if (!segment) continue;
+    const isId = /^[0-9a-f]{8}-|^\d+$/.test(segment);
     if (isId) {
       // Add an "ID" breadcrumb or skip it
       continue;
     }
 
-    const label = PATH_LABELS[segment!] || segment!.charAt(0).toUpperCase() + segment!.slice(1).replace(/-/g, ' ');
+    const label = PATH_LABELS[segment] || segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
     const isLast = i === segments.length - 1;
 
     crumbs.push({

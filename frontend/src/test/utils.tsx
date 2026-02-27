@@ -96,7 +96,7 @@ export function createMockApiResponse<T>(data: T, delay = 0) {
  * Create a mock API error
  */
 export function createMockApiError(message: string, status = 400) {
-  const error: any = new Error(message);
+  const error = new Error(message) as Error & { response: { data: { detail: string }; status: number } };
   error.response = {
     data: { detail: message },
     status,

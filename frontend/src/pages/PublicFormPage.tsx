@@ -28,13 +28,15 @@ const PublicFormPage = () => {
     if (slug) {
       void loadForm();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   const loadForm = async () => {
+    if (!slug) return;
     try {
       setLoading(true);
       setError(null);
-      const data = await publicFormsService.getForm(slug!);
+      const data = await publicFormsService.getForm(slug);
       setForm(data);
       // Initialize form data with defaults
       const defaults: Record<string, string> = {};
@@ -68,7 +70,7 @@ const PublicFormPage = () => {
       setSubmitting(true);
       setError(null);
       const result = await publicFormsService.submitForm(
-        slug!,
+        slug ?? '',
         formData,
         submitterName || undefined,
         submitterEmail || undefined,

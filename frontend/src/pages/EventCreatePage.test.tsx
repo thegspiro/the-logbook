@@ -4,10 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import EventCreatePage from './EventCreatePage';
 import * as apiModule from '../services/api';
+import type { Event } from '../types/event';
 
 /** Create a mock API error object (not a Promise) */
 function makeApiError(message: string, status = 400) {
-  const error: any = new Error(message);
+  const error = new Error(message) as Error & {
+    response: { data: { detail: string }; status: number };
+  };
   error.response = { data: { detail: message }, status };
   return error;
 }
@@ -69,7 +72,7 @@ describe('EventCreatePage', () => {
       vi.mocked(eventService.createEvent).mockResolvedValue({
         id: 'new-event-1',
         title: 'New Event',
-      } as any);
+      } as unknown as Event);
 
       const user = userEvent.setup();
       renderWithRouter(<EventCreatePage />);

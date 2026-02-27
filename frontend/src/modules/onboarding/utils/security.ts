@@ -95,8 +95,8 @@ export const isValidUsernameSecure = (username: string): boolean => {
  * instead of using a hardcoded default. This prevents all instances sharing the same key.
  */
 const getObfuscationKey = (): string => {
-  const envKey = import.meta.env.VITE_SESSION_KEY;
-  if (envKey) return envKey;
+  const envKey: unknown = import.meta.env.VITE_SESSION_KEY;
+  if (typeof envKey === 'string' && envKey) return envKey;
 
   // Generate a per-session random key if no env key is set
   const storageKey = 'obfuscation_session_key';
@@ -184,6 +184,8 @@ export const checkCSP = (): void => {
 export const preventClickjacking = (): void => {
   if (window.top !== window.self && !import.meta.env.DEV) {
     console.error('SECURITY: Possible clickjacking attempt detected');
-    window.top!.location.href = window.self.location.href;
+    if (window.top) {
+      window.top.location.href = window.self.location.href;
+    }
   }
 };

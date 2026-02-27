@@ -4,7 +4,7 @@
  * Handles all API calls to the backend.
  */
 
-import axios from 'axios';
+import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import type { AxiosResponse } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
 import {
@@ -230,7 +230,7 @@ api.interceptors.response.use(
 
     return response;
   },
-  async (error) => {
+  async (error: AxiosError & { config: AxiosRequestConfig & { _retry?: boolean } }) => {
     const originalRequest = error.config;
 
     // If 401 and we haven't retried yet, try to refresh via httpOnly cookie
@@ -432,7 +432,7 @@ export const userService = {
    * Get deletion impact assessment for a member
    */
   async getDeletionImpact(userId: string): Promise<import('../types/user').DeletionImpact> {
-    const response = await api.get(`/users/${userId}/deletion-impact`);
+    const response = await api.get<import('../types/user').DeletionImpact>(`/users/${userId}/deletion-impact`);
     return response.data;
   },
 
@@ -449,7 +449,7 @@ export const userService = {
   async uploadPhoto(userId: string, file: File): Promise<{ message: string; photo_url: string }> {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post(`/users/${userId}/photo`, formData, {
+    const response = await api.post<{ message: string; photo_url: string }>(`/users/${userId}/photo`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
@@ -466,7 +466,7 @@ export const userService = {
    * Change a member's membership type
    */
   async changeMembershipType(userId: string, membershipType: string, reason?: string): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/users/${userId}/membership-type`, {
+    const response = await api.patch<Record<string, unknown>>(`/users/${userId}/membership-type`, {
       membership_type: membershipType,
       reason,
     });
@@ -477,7 +477,7 @@ export const userService = {
    * Get audit history for a member
    */
   async getMemberAuditHistory(userId: string, page: number = 1, eventType?: string): Promise<import('../types/user').MemberAuditLogEntry[]> {
-    const response = await api.get(`/users/${userId}/audit-history`, {
+    const response = await api.get<import('../types/user').MemberAuditLogEntry[]>(`/users/${userId}/audit-history`, {
       params: { page, page_size: 50, event_type: eventType || undefined },
     });
     return response.data;
@@ -533,7 +533,7 @@ export const organizationService = {
    * Get organization settings
    */
   async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings; membership_id?: import('../types/user').MembershipIdSettings }> {
-    const response = await api.get('/organization/settings');
+    const response = await api.get<{ contact_info_visibility: ContactInfoSettings; membership_id?: import('../types/user').MembershipIdSettings }>('/organization/settings');
     return response.data;
   },
 
@@ -541,7 +541,7 @@ export const organizationService = {
    * Update contact information settings (secretary only)
    */
   async updateContactInfoSettings(settings: ContactInfoSettings): Promise<ContactInfoSettings> {
-    const response = await api.patch('/organization/settings/contact-info', settings);
+    const response = await api.patch<ContactInfoSettings>('/organization/settings/contact-info', settings);
     return response.data;
   },
 
@@ -549,7 +549,7 @@ export const organizationService = {
    * Update membership ID settings
    */
   async updateMembershipIdSettings(settings: import('../types/user').MembershipIdSettings): Promise<import('../types/user').MembershipIdSettings> {
-    const response = await api.patch('/organization/settings/membership-id', settings);
+    const response = await api.patch<import('../types/user').MembershipIdSettings>('/organization/settings/membership-id', settings);
     return response.data;
   },
 
@@ -588,7 +588,7 @@ export const organizationService = {
   },
 
   async updateSettings(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch('/organization/settings', updates);
+    const response = await api.patch<Record<string, unknown>>('/organization/settings', updates);
     return response.data;
   },
 
@@ -882,7 +882,7 @@ export const trainingService = {
   async importCSV(file: File): Promise<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }> {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/training/records/import-csv', formData, {
+    const response = await api.post<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }>('/training/records/import-csv', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
@@ -1533,7 +1533,7 @@ export const electionService = {
    * Rollback an election to previous status
    */
   async rollbackElection(electionId: string, reason: string): Promise<{ success: boolean; election: import('../types/election').Election; message: string; notifications_sent: number }> {
-    const response = await api.post(`/elections/${electionId}/rollback`, { reason });
+    const response = await api.post<{ success: boolean; election: import('../types/election').Election; message: string; notifications_sent: number }>(`/elections/${electionId}/rollback`, { reason });
     return response.data;
   },
 
@@ -1894,7 +1894,7 @@ export const eventService = {
    * Get real-time check-in monitoring statistics
    */
   async getCheckInMonitoring(eventId: string): Promise<CheckInMonitoringStats> {
-    const response = await api.get(`/events/${eventId}/check-in-monitoring`);
+    const response = await api.get<CheckInMonitoringStats>(`/events/${eventId}/check-in-monitoring`);
     return response.data;
   },
 
@@ -1974,19 +1974,19 @@ export const eventService = {
 
   // External Attendees
   async getExternalAttendees(eventId: string): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get(`/events/${eventId}/external-attendees`);
+    const response = await api.get<Array<Record<string, unknown>>>(`/events/${eventId}/external-attendees`);
     return response.data;
   },
   async addExternalAttendee(eventId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/events/${eventId}/external-attendees`, data);
+    const response = await api.post<Record<string, unknown>>(`/events/${eventId}/external-attendees`, data);
     return response.data;
   },
   async updateExternalAttendee(eventId: string, attendeeId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/events/${eventId}/external-attendees/${attendeeId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/events/${eventId}/external-attendees/${attendeeId}`, data);
     return response.data;
   },
   async checkInExternalAttendee(eventId: string, attendeeId: string): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/events/${eventId}/external-attendees/${attendeeId}/check-in`);
+    const response = await api.patch<Record<string, unknown>>(`/events/${eventId}/external-attendees/${attendeeId}/check-in`);
     return response.data;
   },
   async removeExternalAttendee(eventId: string, attendeeId: string): Promise<void> {
@@ -2612,7 +2612,7 @@ export const inventoryService = {
   },
 
   async assignItem(itemId: string, userId: string, options?: { assignment_type?: string; assignment_reason?: string }): Promise<{ id: string; item_id: string; user_id: string; is_active: boolean }> {
-    const response = await api.post(`/inventory/items/${itemId}/assign`, {
+    const response = await api.post<{ id: string; item_id: string; user_id: string; is_active: boolean }>(`/inventory/items/${itemId}/assign`, {
       item_id: itemId,
       user_id: userId,
       assignment_type: options?.assignment_type ?? 'permanent',
@@ -2622,7 +2622,7 @@ export const inventoryService = {
   },
 
   async unassignItem(itemId: string, options?: { return_condition?: string; return_notes?: string }): Promise<{ message: string }> {
-    const response = await api.post(`/inventory/items/${itemId}/unassign`, {
+    const response = await api.post<{ message: string }>(`/inventory/items/${itemId}/unassign`, {
       return_condition: options?.return_condition,
       return_notes: options?.return_notes,
     });
@@ -2709,7 +2709,7 @@ export const inventoryService = {
   },
 
   async returnToPool(issuanceId: string, options?: { return_condition?: string; return_notes?: string; quantity_returned?: number }): Promise<{ message: string }> {
-    const response = await api.post(`/inventory/issuances/${issuanceId}/return`, {
+    const response = await api.post<{ message: string }>(`/inventory/issuances/${issuanceId}/return`, {
       return_condition: options?.return_condition,
       return_notes: options?.return_notes,
       quantity_returned: options?.quantity_returned,
@@ -2760,7 +2760,7 @@ export const inventoryService = {
     customWidth?: number,
     customHeight?: number,
   ): Promise<Blob> {
-    const response = await api.post('/inventory/labels/generate', {
+    const response = await api.post<Blob>('/inventory/labels/generate', {
       item_ids: itemIds,
       label_format: labelFormat,
       custom_width: customWidth,
@@ -2777,56 +2777,56 @@ export const inventoryService = {
   },
 
   async exportItemsCsv(params?: { category_id?: string; status?: string; search?: string }): Promise<Blob> {
-    const response = await api.get('/inventory/items/export', { params, responseType: 'blob' });
+    const response = await api.get<Blob>('/inventory/items/export', { params, responseType: 'blob' });
     return response.data;
   },
 
   // Equipment requests
   async createEquipmentRequest(data: { item_name: string; item_id?: string; category_id?: string; quantity?: number; request_type?: string; priority?: string; reason?: string }): Promise<{ id: string; item_name: string; status: string; message: string }> {
-    const response = await api.post('/inventory/requests', data);
+    const response = await api.post<{ id: string; item_name: string; status: string; message: string }>('/inventory/requests', data);
     return response.data;
   },
 
   async getEquipmentRequests(params?: { status?: string; mine_only?: boolean }): Promise<{ requests: EquipmentRequestItem[]; total: number }> {
-    const response = await api.get('/inventory/requests', { params });
+    const response = await api.get<{ requests: EquipmentRequestItem[]; total: number }>('/inventory/requests', { params });
     return response.data;
   },
 
   async reviewEquipmentRequest(requestId: string, data: { status: string; review_notes?: string }): Promise<{ id: string; status: string; message: string }> {
-    const response = await api.put(`/inventory/requests/${requestId}/review`, data);
+    const response = await api.put<{ id: string; status: string; message: string }>(`/inventory/requests/${requestId}/review`, data);
     return response.data;
   },
 
   // Write-off requests
   async getWriteOffRequests(params?: { status?: string }): Promise<WriteOffRequestItem[]> {
-    const response = await api.get('/inventory/write-offs', { params });
+    const response = await api.get<WriteOffRequestItem[]>('/inventory/write-offs', { params });
     return response.data;
   },
 
   async createWriteOffRequest(data: { item_id: string; reason: string; description: string }): Promise<WriteOffRequestItem> {
-    const response = await api.post('/inventory/write-offs', data);
+    const response = await api.post<WriteOffRequestItem>('/inventory/write-offs', data);
     return response.data;
   },
 
   async reviewWriteOff(writeOffId: string, data: { status: string; review_notes?: string }): Promise<{ id: string; status: string; message: string }> {
-    const response = await api.put(`/inventory/write-offs/${writeOffId}/review`, data);
+    const response = await api.put<{ id: string; status: string; message: string }>(`/inventory/write-offs/${writeOffId}/review`, data);
     return response.data;
   },
 
   // --- NFPA Compliance ---
 
   async getNFPACompliance(itemId: string): Promise<NFPACompliance> {
-    const response = await api.get(`/inventory/items/${itemId}/nfpa-compliance`);
+    const response = await api.get<NFPACompliance>(`/inventory/items/${itemId}/nfpa-compliance`);
     return response.data;
   },
 
   async createNFPACompliance(itemId: string, data: Partial<NFPACompliance>): Promise<NFPACompliance> {
-    const response = await api.post(`/inventory/items/${itemId}/nfpa-compliance`, data);
+    const response = await api.post<NFPACompliance>(`/inventory/items/${itemId}/nfpa-compliance`, data);
     return response.data;
   },
 
   async updateNFPACompliance(itemId: string, data: Partial<NFPACompliance>): Promise<NFPACompliance> {
-    const response = await api.patch(`/inventory/items/${itemId}/nfpa-compliance`, data);
+    const response = await api.patch<NFPACompliance>(`/inventory/items/${itemId}/nfpa-compliance`, data);
     return response.data;
   },
 
@@ -2835,22 +2835,22 @@ export const inventoryService = {
   },
 
   async getExposureRecords(itemId: string): Promise<NFPAExposureRecord[]> {
-    const response = await api.get(`/inventory/items/${itemId}/exposures`);
+    const response = await api.get<NFPAExposureRecord[]>(`/inventory/items/${itemId}/exposures`);
     return response.data;
   },
 
   async createExposureRecord(itemId: string, data: Omit<NFPAExposureRecord, 'id' | 'item_id' | 'organization_id' | 'created_at' | 'updated_at'>): Promise<NFPAExposureRecord> {
-    const response = await api.post(`/inventory/items/${itemId}/exposures`, data);
+    const response = await api.post<NFPAExposureRecord>(`/inventory/items/${itemId}/exposures`, data);
     return response.data;
   },
 
   async getNFPASummary(): Promise<NFPASummary> {
-    const response = await api.get('/inventory/nfpa/summary');
+    const response = await api.get<NFPASummary>('/inventory/nfpa/summary');
     return response.data;
   },
 
   async getNFPARetirementDue(daysAhead = 180): Promise<{ items: NFPARetirementDueItem[]; total: number }> {
-    const response = await api.get('/inventory/nfpa/retirement-due', { params: { days_ahead: daysAhead } });
+    const response = await api.get<{ items: NFPARetirementDueItem[]; total: number }>('/inventory/nfpa/retirement-due', { params: { days_ahead: daysAhead } });
     return response.data;
   },
 };
@@ -3250,7 +3250,7 @@ export const documentsService = {
   async getFolders(parentId?: string): Promise<{ folders: DocumentFolder[]; total: number }> {
     const params: Record<string, string> = {};
     if (parentId) params.parent_id = parentId;
-    const response = await api.get('/documents/folders', { params });
+    const response = await api.get<{ folders: DocumentFolder[]; total: number }>('/documents/folders', { params });
     return response.data;
   },
 
@@ -3269,7 +3269,7 @@ export const documentsService = {
   },
 
   async getDocuments(params?: { folder_id?: string; search?: string; skip?: number; limit?: number }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/documents', { params });
+    const response = await api.get<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }>('/documents', { params });
     return response.data;
   },
 
@@ -3370,7 +3370,7 @@ export interface MeetingsSummary {
 
 export const meetingsService = {
   async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/meetings', { params });
+    const response = await api.get<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }>('/meetings', { params });
     return response.data;
   },
 
@@ -3432,17 +3432,17 @@ export const meetingsService = {
   },
 
   async getAttendanceDashboard(params?: { period_months?: number; meeting_type?: string }): Promise<Record<string, unknown>> {
-    const response = await api.get('/meetings/attendance/dashboard', { params });
+    const response = await api.get<Record<string, unknown>>('/meetings/attendance/dashboard', { params });
     return response.data;
   },
 
   async grantAttendanceWaiver(meetingId: string, data: { user_id: string; reason: string }): Promise<Record<string, unknown>> {
-    const response = await api.post(`/meetings/${meetingId}/attendance-waiver`, data);
+    const response = await api.post<Record<string, unknown>>(`/meetings/${meetingId}/attendance-waiver`, data);
     return response.data;
   },
 
   async getAttendanceWaivers(meetingId: string): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get(`/meetings/${meetingId}/attendance-waivers`);
+    const response = await api.get<Array<Record<string, unknown>>>(`/meetings/${meetingId}/attendance-waivers`);
     return response.data;
   },
 
@@ -3624,7 +3624,7 @@ export interface ShiftComplianceResponse {
 
 export const schedulingService = {
   async getShifts(params?: { start_date?: string; end_date?: string; skip?: number; limit?: number }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/scheduling/shifts', { params });
+    const response = await api.get<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }>('/scheduling/shifts', { params });
     return response.data;
   },
 
@@ -3673,35 +3673,35 @@ export const schedulingService = {
   },
 
   async getMyShifts(params?: { start_date?: string; end_date?: string; skip?: number; limit?: number }): Promise<{ shifts: ShiftRecord[]; total: number }> {
-    const response = await api.get('/scheduling/my-shifts', { params });
+    const response = await api.get<{ shifts: ShiftRecord[]; total: number }>('/scheduling/my-shifts', { params });
     return response.data;
   },
 
   async getMyAssignments(): Promise<Array<{ id: string; user_id: string; shift_id: string; position: string; status: string; assignment_status: string; shift?: ShiftRecord }>> {
-    const response = await api.get('/scheduling/my-assignments');
+    type AssignmentRecord = { id: string; user_id: string; shift_id: string; position: string; status: string; assignment_status: string; shift?: ShiftRecord };
+    const response = await api.get<AssignmentRecord[]>('/scheduling/my-assignments');
     // Backend returns assignment_status; provide status alias for convenience
-    return (response.data || []).map((a: Record<string, unknown>) => ({
+    return (response.data ?? []).map((a) => ({
       ...a,
       status: a.assignment_status ?? a.status,
     }));
   },
 
   // Shift Calls
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getShiftCalls(shiftId: string): Promise<any[]> {
-    const response = await api.get(`/scheduling/shifts/${shiftId}/calls`);
+  async getShiftCalls(shiftId: string): Promise<Record<string, unknown>[]> {
+    const response = await api.get<Record<string, unknown>[]>(`/scheduling/shifts/${shiftId}/calls`);
     return response.data;
   },
   async getCall(callId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/scheduling/calls/${callId}`);
+    const response = await api.get<Record<string, unknown>>(`/scheduling/calls/${callId}`);
     return response.data;
   },
   async createCall(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/shifts/${shiftId}/calls`, data);
+    const response = await api.post<Record<string, unknown>>(`/scheduling/shifts/${shiftId}/calls`, data);
     return response.data;
   },
   async updateCall(callId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/scheduling/calls/${callId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/scheduling/calls/${callId}`, data);
     return response.data;
   },
   async deleteCall(callId: string): Promise<void> {
@@ -3710,40 +3710,40 @@ export const schedulingService = {
 
   // Shift Assignments
   async getShiftAssignments(shiftId: string): Promise<Record<string, unknown>[]> {
-    const response = await api.get(`/scheduling/shifts/${shiftId}/assignments`);
+    const response = await api.get<Record<string, unknown>[]>(`/scheduling/shifts/${shiftId}/assignments`);
     return response.data;
   },
   async createAssignment(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/shifts/${shiftId}/assignments`, data);
+    const response = await api.post<Record<string, unknown>>(`/scheduling/shifts/${shiftId}/assignments`, data);
     return response.data;
   },
   async updateAssignment(assignmentId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/scheduling/assignments/${assignmentId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/scheduling/assignments/${assignmentId}`, data);
     return response.data;
   },
   async deleteAssignment(assignmentId: string): Promise<void> {
     await api.delete(`/scheduling/assignments/${assignmentId}`);
   },
   async confirmAssignment(assignmentId: string): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/assignments/${assignmentId}/confirm`);
+    const response = await api.post<Record<string, unknown>>(`/scheduling/assignments/${assignmentId}/confirm`);
     return response.data;
   },
 
   // Swap Requests
   async getSwapRequests(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/swap-requests', { params });
+    const response = await api.get<Record<string, unknown>[]>('/scheduling/swap-requests', { params });
     return response.data;
   },
   async getSwapRequest(requestId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/scheduling/swap-requests/${requestId}`);
+    const response = await api.get<Record<string, unknown>>(`/scheduling/swap-requests/${requestId}`);
     return response.data;
   },
   async createSwapRequest(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduling/swap-requests', data);
+    const response = await api.post<Record<string, unknown>>('/scheduling/swap-requests', data);
     return response.data;
   },
   async reviewSwapRequest(requestId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/swap-requests/${requestId}/review`, data);
+    const response = await api.post<Record<string, unknown>>(`/scheduling/swap-requests/${requestId}/review`, data);
     return response.data;
   },
   async cancelSwapRequest(requestId: string): Promise<void> {
@@ -3752,19 +3752,19 @@ export const schedulingService = {
 
   // Time Off
   async getTimeOffRequests(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/time-off', { params });
+    const response = await api.get<Record<string, unknown>[]>('/scheduling/time-off', { params });
     return response.data;
   },
   async getTimeOff(requestId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/scheduling/time-off/${requestId}`);
+    const response = await api.get<Record<string, unknown>>(`/scheduling/time-off/${requestId}`);
     return response.data;
   },
   async createTimeOff(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduling/time-off', data);
+    const response = await api.post<Record<string, unknown>>('/scheduling/time-off', data);
     return response.data;
   },
   async reviewTimeOff(requestId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/time-off/${requestId}/review`, data);
+    const response = await api.post<Record<string, unknown>>(`/scheduling/time-off/${requestId}/review`, data);
     return response.data;
   },
   async cancelTimeOff(requestId: string): Promise<void> {
@@ -3807,44 +3807,44 @@ export const schedulingService = {
 
   // Patterns
   async getPatterns(params?: { active_only?: boolean }): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/patterns', { params });
+    const response = await api.get<Record<string, unknown>[]>('/scheduling/patterns', { params });
     return response.data;
   },
   async getPattern(patternId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/scheduling/patterns/${patternId}`);
+    const response = await api.get<Record<string, unknown>>(`/scheduling/patterns/${patternId}`);
     return response.data;
   },
   async createPattern(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduling/patterns', data);
+    const response = await api.post<Record<string, unknown>>('/scheduling/patterns', data);
     return response.data;
   },
   async updatePattern(patternId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/scheduling/patterns/${patternId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/scheduling/patterns/${patternId}`, data);
     return response.data;
   },
   async deletePattern(patternId: string): Promise<void> {
     await api.delete(`/scheduling/patterns/${patternId}`);
   },
   async generateShiftsFromPattern(patternId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/patterns/${patternId}/generate`, data);
+    const response = await api.post<Record<string, unknown>>(`/scheduling/patterns/${patternId}/generate`, data);
     return response.data;
   },
 
   // Reports
   async getMemberHoursReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
-    const response = await api.get('/scheduling/reports/member-hours', { params });
+    const response = await api.get<Record<string, unknown>>('/scheduling/reports/member-hours', { params });
     return response.data;
   },
   async getCoverageReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
-    const response = await api.get('/scheduling/reports/coverage', { params });
+    const response = await api.get<Record<string, unknown>>('/scheduling/reports/coverage', { params });
     return response.data;
   },
   async getCallVolumeReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
-    const response = await api.get('/scheduling/reports/call-volume', { params });
+    const response = await api.get<Record<string, unknown>>('/scheduling/reports/call-volume', { params });
     return response.data;
   },
   async getAvailability(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/availability', { params });
+    const response = await api.get<Record<string, unknown>[]>('/scheduling/availability', { params });
     return response.data;
   },
 
@@ -3854,11 +3854,11 @@ export const schedulingService = {
     return response.data;
   },
   async createBasicApparatus(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduling/apparatus', data);
+    const response = await api.post<Record<string, unknown>>('/scheduling/apparatus', data);
     return response.data;
   },
   async updateBasicApparatus(apparatusId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/scheduling/apparatus/${apparatusId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/scheduling/apparatus/${apparatusId}`, data);
     return response.data;
   },
   async deleteBasicApparatus(apparatusId: string): Promise<void> {
@@ -3867,7 +3867,7 @@ export const schedulingService = {
 
   // --- Shift Signup (member self-service) ---
   async signupForShift(shiftId: string, data: { position: string }): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/shifts/${shiftId}/signup`, data);
+    const response = await api.post<Record<string, unknown>>(`/scheduling/shifts/${shiftId}/signup`, data);
     return response.data;
   },
   async withdrawSignup(shiftId: string): Promise<void> {
@@ -3876,7 +3876,7 @@ export const schedulingService = {
 
   // --- Open Shifts ---
   async getOpenShifts(params?: { start_date?: string; end_date?: string; apparatus_id?: string }): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/shifts/open', { params });
+    const response = await api.get<Record<string, unknown>[]>('/scheduling/shifts/open', { params });
     return response.data;
   },
 
@@ -3893,12 +3893,12 @@ export const schedulingService = {
 
 export const reportsService = {
   async getAvailableReports(): Promise<{ available_reports: Array<{ id: string; title: string; description: string; category: string; available: boolean }> }> {
-    const response = await api.get('/reports/available');
+    const response = await api.get<{ available_reports: Array<{ id: string; title: string; description: string; category: string; available: boolean }> }>('/reports/available');
     return response.data;
   },
 
   async generateReport(data: { report_type: string; start_date?: string; end_date?: string; filters?: Record<string, unknown> }): Promise<Record<string, unknown>> {
-    const response = await api.post('/reports/generate', data);
+    const response = await api.post<Record<string, unknown>>('/reports/generate', data);
     return response.data;
   },
 };
@@ -3953,7 +3953,7 @@ export interface NotificationsSummary {
 
 export const notificationsService = {
   async getRules(params?: { category?: string; enabled?: boolean; search?: string }): Promise<{ rules: NotificationRuleRecord[]; total: number }> {
-    const response = await api.get('/notifications/rules', { params });
+    const response = await api.get<{ rules: NotificationRuleRecord[]; total: number }>('/notifications/rules', { params });
     return response.data;
   },
 
@@ -3982,7 +3982,7 @@ export const notificationsService = {
   },
 
   async getLogs(params?: { channel?: string; skip?: number; limit?: number }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/notifications/logs', { params });
+    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>('/notifications/logs', { params });
     return response.data;
   },
 
@@ -3998,7 +3998,7 @@ export const notificationsService = {
 
   // User-facing notification inbox
   async getMyNotifications(params?: { include_expired?: boolean; include_read?: boolean; skip?: number; limit?: number }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/notifications/my', { params });
+    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>('/notifications/my', { params });
     return response.data;
   },
 
@@ -4470,12 +4470,12 @@ export const trainingSessionService = {
   },
 
   async getApprovalData(token: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/training/sessions/approve/${token}`);
+    const response = await api.get<Record<string, unknown>>(`/training/sessions/approve/${token}`);
     return response.data;
   },
 
   async submitApproval(token: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/training/sessions/approve/${token}`, data);
+    const response = await api.post<Record<string, unknown>>(`/training/sessions/approve/${token}`, data);
     return response.data;
   },
 };
@@ -4560,57 +4560,57 @@ export const trainingSubmissionService = {
 
 export const shiftCompletionService = {
   async createReport(data: import('../types/training').ShiftCompletionReportCreate): Promise<import('../types/training').ShiftCompletionReport> {
-    const response = await api.post('/training/shift-reports', data);
+    const response = await api.post<import('../types/training').ShiftCompletionReport>('/training/shift-reports', data);
     return response.data;
   },
 
   async getMyReports(params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get('/training/shift-reports/my-reports', { params });
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/my-reports', { params });
     return response.data;
   },
 
   async getMyStats(params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').TraineeShiftStats> {
-    const response = await api.get('/training/shift-reports/my-stats', { params });
+    const response = await api.get<import('../types/training').TraineeShiftStats>('/training/shift-reports/my-stats', { params });
     return response.data;
   },
 
   async getReportsByOfficer(): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get('/training/shift-reports/by-officer');
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/by-officer');
     return response.data;
   },
 
   async getReportsForTrainee(traineeId: string, params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get(`/training/shift-reports/trainee/${traineeId}`, { params });
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>(`/training/shift-reports/trainee/${traineeId}`, { params });
     return response.data;
   },
 
   async getTraineeStats(traineeId: string, params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').TraineeShiftStats> {
-    const response = await api.get(`/training/shift-reports/trainee/${traineeId}/stats`, { params });
+    const response = await api.get<import('../types/training').TraineeShiftStats>(`/training/shift-reports/trainee/${traineeId}/stats`, { params });
     return response.data;
   },
 
   async getAllReports(params?: { trainee_id?: string; officer_id?: string; start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get('/training/shift-reports/all', { params });
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/all', { params });
     return response.data;
   },
 
   async getReport(reportId: string): Promise<import('../types/training').ShiftCompletionReport> {
-    const response = await api.get(`/training/shift-reports/${reportId}`);
+    const response = await api.get<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}`);
     return response.data;
   },
 
   async acknowledgeReport(reportId: string, comments?: string): Promise<import('../types/training').ShiftCompletionReport> {
-    const response = await api.post(`/training/shift-reports/${reportId}/acknowledge`, { trainee_comments: comments });
+    const response = await api.post<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}/acknowledge`, { trainee_comments: comments });
     return response.data;
   },
 
   async getPendingReviewReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get('/training/shift-reports/pending-review');
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/pending-review');
     return response.data;
   },
 
   async reviewReport(reportId: string, data: { review_status: string; reviewer_notes?: string; redact_fields?: string[] }): Promise<import('../types/training').ShiftCompletionReport> {
-    const response = await api.post(`/training/shift-reports/${reportId}/review`, data);
+    const response = await api.post<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}/review`, data);
     return response.data;
   },
 };
@@ -4621,22 +4621,22 @@ export const shiftCompletionService = {
 
 export const trainingModuleConfigService = {
   async getConfig(): Promise<import('../types/training').TrainingModuleConfig> {
-    const response = await api.get('/training/module-config/config');
+    const response = await api.get<import('../types/training').TrainingModuleConfig>('/training/module-config/config');
     return response.data;
   },
 
   async updateConfig(updates: Partial<import('../types/training').TrainingModuleConfig>): Promise<import('../types/training').TrainingModuleConfig> {
-    const response = await api.put('/training/module-config/config', updates);
+    const response = await api.put<import('../types/training').TrainingModuleConfig>('/training/module-config/config', updates);
     return response.data;
   },
 
   async getVisibility(): Promise<import('../types/training').MemberVisibility> {
-    const response = await api.get('/training/module-config/visibility');
+    const response = await api.get<import('../types/training').MemberVisibility>('/training/module-config/visibility');
     return response.data;
   },
 
   async getMyTraining(): Promise<import('../types/training').MyTrainingSummary> {
-    const response = await api.get('/training/module-config/my-training');
+    const response = await api.get<import('../types/training').MyTrainingSummary>('/training/module-config/my-training');
     return response.data;
   },
 };
@@ -4791,15 +4791,15 @@ export const errorLogsService = {
 export const facilitiesService = {
   // Facility Types
   async getTypes(): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/types');
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/types');
     return response.data;
   },
   async createType(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/types', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/types', data);
     return response.data;
   },
   async updateType(typeId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/types/${typeId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/types/${typeId}`, data);
     return response.data;
   },
   async deleteType(typeId: string): Promise<void> {
@@ -4808,15 +4808,15 @@ export const facilitiesService = {
 
   // Facility Statuses
   async getStatuses(): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/statuses');
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/statuses');
     return response.data;
   },
   async createStatus(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/statuses', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/statuses', data);
     return response.data;
   },
   async updateStatus(statusId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/statuses/${statusId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/statuses/${statusId}`, data);
     return response.data;
   },
   async deleteStatus(statusId: string): Promise<void> {
@@ -4825,45 +4825,45 @@ export const facilitiesService = {
 
   // Facilities CRUD
   async getFacilities(params?: { facility_type_id?: string; status_id?: string; is_archived?: boolean; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities', { params });
     return response.data;
   },
   async getFacility(facilityId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/${facilityId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/${facilityId}`);
     return response.data;
   },
   async createFacility(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities', data);
+    const response = await api.post<Record<string, unknown>>('/facilities', data);
     return response.data;
   },
   async updateFacility(facilityId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/${facilityId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/${facilityId}`, data);
     return response.data;
   },
   async archiveFacility(facilityId: string): Promise<Record<string, unknown>> {
-    const response = await api.post(`/facilities/${facilityId}/archive`);
+    const response = await api.post<Record<string, unknown>>(`/facilities/${facilityId}/archive`);
     return response.data;
   },
   async restoreFacility(facilityId: string): Promise<Record<string, unknown>> {
-    const response = await api.post(`/facilities/${facilityId}/restore`);
+    const response = await api.post<Record<string, unknown>>(`/facilities/${facilityId}/restore`);
     return response.data;
   },
 
   // Maintenance
   async getMaintenanceRecords(params?: { facility_id?: string; status?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/maintenance', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/maintenance', { params });
     return response.data;
   },
   async getMaintenanceRecord(recordId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/maintenance/${recordId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/maintenance/${recordId}`);
     return response.data;
   },
   async createMaintenanceRecord(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/maintenance', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/maintenance', data);
     return response.data;
   },
   async updateMaintenanceRecord(recordId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/maintenance/${recordId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/maintenance/${recordId}`, data);
     return response.data;
   },
   async deleteMaintenanceRecord(recordId: string): Promise<void> {
@@ -4872,19 +4872,19 @@ export const facilitiesService = {
 
   // Inspections
   async getInspections(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/inspections', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/inspections', { params });
     return response.data;
   },
   async getInspection(inspectionId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/inspections/${inspectionId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/inspections/${inspectionId}`);
     return response.data;
   },
   async createInspection(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/inspections', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/inspections', data);
     return response.data;
   },
   async updateInspection(inspectionId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/inspections/${inspectionId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/inspections/${inspectionId}`, data);
     return response.data;
   },
   async deleteInspection(inspectionId: string): Promise<void> {
@@ -4893,19 +4893,19 @@ export const facilitiesService = {
 
   // Rooms
   async getRooms(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/rooms', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/rooms', { params });
     return response.data;
   },
   async getRoom(roomId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/rooms/${roomId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/rooms/${roomId}`);
     return response.data;
   },
   async createRoom(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/rooms', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/rooms', data);
     return response.data;
   },
   async updateRoom(roomId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/rooms/${roomId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/rooms/${roomId}`, data);
     return response.data;
   },
   async deleteRoom(roomId: string): Promise<void> {
@@ -4914,15 +4914,15 @@ export const facilitiesService = {
 
   // Maintenance Types
   async getMaintenanceTypes(params?: { skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/maintenance-types', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/maintenance-types', { params });
     return response.data;
   },
   async createMaintenanceType(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/maintenance-types', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/maintenance-types', data);
     return response.data;
   },
   async updateMaintenanceType(typeId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/maintenance-types/${typeId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/maintenance-types/${typeId}`, data);
     return response.data;
   },
   async deleteMaintenanceType(typeId: string): Promise<void> {
@@ -4931,19 +4931,19 @@ export const facilitiesService = {
 
   // Building Systems
   async getSystems(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/systems', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/systems', { params });
     return response.data;
   },
   async getSystem(systemId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/systems/${systemId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/systems/${systemId}`);
     return response.data;
   },
   async createSystem(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/systems', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/systems', data);
     return response.data;
   },
   async updateSystem(systemId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/systems/${systemId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/systems/${systemId}`, data);
     return response.data;
   },
   async deleteSystem(systemId: string): Promise<void> {
@@ -4952,15 +4952,15 @@ export const facilitiesService = {
 
   // Emergency Contacts
   async getEmergencyContacts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/emergency-contacts', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/emergency-contacts', { params });
     return response.data;
   },
   async createEmergencyContact(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/emergency-contacts', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/emergency-contacts', data);
     return response.data;
   },
   async updateEmergencyContact(contactId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/emergency-contacts/${contactId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/emergency-contacts/${contactId}`, data);
     return response.data;
   },
   async deleteEmergencyContact(contactId: string): Promise<void> {
@@ -4969,15 +4969,15 @@ export const facilitiesService = {
 
   // Shutoff Locations
   async getShutoffLocations(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/shutoff-locations', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/shutoff-locations', { params });
     return response.data;
   },
   async createShutoffLocation(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/shutoff-locations', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/shutoff-locations', data);
     return response.data;
   },
   async updateShutoffLocation(locationId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/shutoff-locations/${locationId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/shutoff-locations/${locationId}`, data);
     return response.data;
   },
   async deleteShutoffLocation(locationId: string): Promise<void> {
@@ -4986,19 +4986,19 @@ export const facilitiesService = {
 
   // Capital Projects
   async getCapitalProjects(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/capital-projects', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/capital-projects', { params });
     return response.data;
   },
   async getCapitalProject(projectId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/capital-projects/${projectId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/capital-projects/${projectId}`);
     return response.data;
   },
   async createCapitalProject(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/capital-projects', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/capital-projects', data);
     return response.data;
   },
   async updateCapitalProject(projectId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/capital-projects/${projectId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/capital-projects/${projectId}`, data);
     return response.data;
   },
   async deleteCapitalProject(projectId: string): Promise<void> {
@@ -5007,19 +5007,19 @@ export const facilitiesService = {
 
   // Insurance Policies
   async getInsurancePolicies(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/insurance-policies', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/insurance-policies', { params });
     return response.data;
   },
   async getInsurancePolicy(policyId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/insurance-policies/${policyId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/insurance-policies/${policyId}`);
     return response.data;
   },
   async createInsurancePolicy(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/insurance-policies', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/insurance-policies', data);
     return response.data;
   },
   async updateInsurancePolicy(policyId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/insurance-policies/${policyId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/insurance-policies/${policyId}`, data);
     return response.data;
   },
   async deleteInsurancePolicy(policyId: string): Promise<void> {
@@ -5028,19 +5028,19 @@ export const facilitiesService = {
 
   // Occupants
   async getOccupants(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/occupants', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/occupants', { params });
     return response.data;
   },
   async getOccupant(occupantId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/occupants/${occupantId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/occupants/${occupantId}`);
     return response.data;
   },
   async createOccupant(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/occupants', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/occupants', data);
     return response.data;
   },
   async updateOccupant(occupantId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/occupants/${occupantId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/occupants/${occupantId}`, data);
     return response.data;
   },
   async deleteOccupant(occupantId: string): Promise<void> {
@@ -5049,19 +5049,19 @@ export const facilitiesService = {
 
   // Utility Accounts
   async getUtilityAccounts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/utility-accounts', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/utility-accounts', { params });
     return response.data;
   },
   async getUtilityAccount(accountId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/utility-accounts/${accountId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/utility-accounts/${accountId}`);
     return response.data;
   },
   async createUtilityAccount(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/utility-accounts', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/utility-accounts', data);
     return response.data;
   },
   async updateUtilityAccount(accountId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/utility-accounts/${accountId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/utility-accounts/${accountId}`, data);
     return response.data;
   },
   async deleteUtilityAccount(accountId: string): Promise<void> {
@@ -5070,15 +5070,15 @@ export const facilitiesService = {
 
   // Photos
   async getPhotos(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/photos', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/photos', { params });
     return response.data;
   },
   async createPhoto(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/photos', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/photos', data);
     return response.data;
   },
   async updatePhoto(photoId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/photos/${photoId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/photos/${photoId}`, data);
     return response.data;
   },
   async deletePhoto(photoId: string): Promise<void> {
@@ -5087,15 +5087,15 @@ export const facilitiesService = {
 
   // Documents
   async getFacilityDocuments(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/documents', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/documents', { params });
     return response.data;
   },
   async createFacilityDocument(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/documents', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/documents', data);
     return response.data;
   },
   async updateFacilityDocument(documentId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/documents/${documentId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/documents/${documentId}`, data);
     return response.data;
   },
   async deleteFacilityDocument(documentId: string): Promise<void> {
@@ -5104,15 +5104,15 @@ export const facilitiesService = {
 
   // Utility Readings
   async getUtilityReadings(accountId: string, params?: { skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get(`/facilities/utility-accounts/${accountId}/readings`, { params });
+    const response = await api.get<Array<Record<string, unknown>>>(`/facilities/utility-accounts/${accountId}/readings`, { params });
     return response.data;
   },
   async createUtilityReading(accountId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/facilities/utility-accounts/${accountId}/readings`, data);
+    const response = await api.post<Record<string, unknown>>(`/facilities/utility-accounts/${accountId}/readings`, data);
     return response.data;
   },
   async updateUtilityReading(readingId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/utility-readings/${readingId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/utility-readings/${readingId}`, data);
     return response.data;
   },
   async deleteUtilityReading(readingId: string): Promise<void> {
@@ -5121,19 +5121,19 @@ export const facilitiesService = {
 
   // Access Keys
   async getAccessKeys(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/access-keys', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/access-keys', { params });
     return response.data;
   },
   async getAccessKey(keyId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/access-keys/${keyId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/access-keys/${keyId}`);
     return response.data;
   },
   async createAccessKey(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/access-keys', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/access-keys', data);
     return response.data;
   },
   async updateAccessKey(keyId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/access-keys/${keyId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/access-keys/${keyId}`, data);
     return response.data;
   },
   async deleteAccessKey(keyId: string): Promise<void> {
@@ -5142,19 +5142,19 @@ export const facilitiesService = {
 
   // Compliance Checklists
   async getComplianceChecklists(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get('/facilities/compliance-checklists', { params });
+    const response = await api.get<Array<Record<string, unknown>>>('/facilities/compliance-checklists', { params });
     return response.data;
   },
   async getComplianceChecklist(checklistId: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/facilities/compliance-checklists/${checklistId}`);
+    const response = await api.get<Record<string, unknown>>(`/facilities/compliance-checklists/${checklistId}`);
     return response.data;
   },
   async createComplianceChecklist(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/facilities/compliance-checklists', data);
+    const response = await api.post<Record<string, unknown>>('/facilities/compliance-checklists', data);
     return response.data;
   },
   async updateComplianceChecklist(checklistId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/compliance-checklists/${checklistId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/compliance-checklists/${checklistId}`, data);
     return response.data;
   },
   async deleteComplianceChecklist(checklistId: string): Promise<void> {
@@ -5163,15 +5163,15 @@ export const facilitiesService = {
 
   // Compliance Items
   async getComplianceItems(checklistId: string): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get(`/facilities/compliance-checklists/${checklistId}/items`);
+    const response = await api.get<Array<Record<string, unknown>>>(`/facilities/compliance-checklists/${checklistId}/items`);
     return response.data;
   },
   async createComplianceItem(checklistId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/facilities/compliance-checklists/${checklistId}/items`, data);
+    const response = await api.post<Record<string, unknown>>(`/facilities/compliance-checklists/${checklistId}/items`, data);
     return response.data;
   },
   async updateComplianceItem(itemId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/facilities/compliance-items/${itemId}`, data);
+    const response = await api.patch<Record<string, unknown>>(`/facilities/compliance-items/${itemId}`, data);
     return response.data;
   },
   async deleteComplianceItem(itemId: string): Promise<void> {
@@ -5218,58 +5218,58 @@ export interface TrainingWaiverResponse {
 
 export const memberStatusService = {
   async getArchivedMembers(): Promise<{ members: import('../types/user').ArchivedMember[] }> {
-    const response = await api.get('/users/archived');
+    const response = await api.get<{ members: import('../types/user').ArchivedMember[] }>('/users/archived');
     return response.data;
   },
 
   async reactivateMember(userId: string, data: { reason: string }): Promise<Record<string, unknown>> {
-    const response = await api.post(`/users/${userId}/reactivate`, data);
+    const response = await api.post<Record<string, unknown>>(`/users/${userId}/reactivate`, data);
     return response.data;
   },
 
   async getOverduePropertyReturns(): Promise<{ members: import('../types/user').OverdueMember[] }> {
-    const response = await api.get('/users/property-return-reminders/overdue');
+    const response = await api.get<{ members: import('../types/user').OverdueMember[] }>('/users/property-return-reminders/overdue');
     return response.data;
   },
 
   async processPropertyReturnReminders(): Promise<Record<string, unknown>> {
-    const response = await api.post('/users/property-return-reminders/process');
+    const response = await api.post<Record<string, unknown>>('/users/property-return-reminders/process');
     return response.data;
   },
 
   async getPropertyReturnPreview(userId: string): Promise<import('../types/user').PropertyReturnReport> {
-    const response = await api.get(`/users/${userId}/property-return-report`);
+    const response = await api.get<import('../types/user').PropertyReturnReport>(`/users/${userId}/property-return-report`);
     return response.data;
   },
 
   async getTierConfig(): Promise<import('../types/user').MembershipTierConfig> {
-    const response = await api.get('/users/membership-tiers/config');
+    const response = await api.get<import('../types/user').MembershipTierConfig>('/users/membership-tiers/config');
     return response.data;
   },
 
   async updateTierConfig(config: import('../types/user').MembershipTierConfig): Promise<import('../types/user').MembershipTierConfig> {
-    const response = await api.put('/users/membership-tiers/config', config);
+    const response = await api.put<import('../types/user').MembershipTierConfig>('/users/membership-tiers/config', config);
     return response.data;
   },
 
   async advanceMembershipTiers(): Promise<Record<string, unknown>> {
-    const response = await api.post('/users/advance-membership-tiers');
+    const response = await api.post<Record<string, unknown>>('/users/advance-membership-tiers');
     return response.data;
   },
 
   // Leave of Absence
   async listLeavesOfAbsence(params?: { user_id?: string; active_only?: boolean }): Promise<LeaveOfAbsenceResponse[]> {
-    const response = await api.get('/users/leaves-of-absence', { params });
+    const response = await api.get<LeaveOfAbsenceResponse[]>('/users/leaves-of-absence', { params });
     return response.data;
   },
 
   async getMemberLeaves(userId: string, activeOnly = true): Promise<LeaveOfAbsenceResponse[]> {
-    const response = await api.get(`/users/${userId}/leaves-of-absence`, { params: { active_only: activeOnly } });
+    const response = await api.get<LeaveOfAbsenceResponse[]>(`/users/${userId}/leaves-of-absence`, { params: { active_only: activeOnly } });
     return response.data;
   },
 
   async getMyLeaves(): Promise<LeaveOfAbsenceResponse[]> {
-    const response = await api.get('/users/leaves-of-absence/me');
+    const response = await api.get<LeaveOfAbsenceResponse[]>('/users/leaves-of-absence/me');
     return response.data;
   },
 
@@ -5281,7 +5281,7 @@ export const memberStatusService = {
     end_date?: string;
     exempt_from_training_waiver?: boolean;
   }): Promise<LeaveOfAbsenceResponse> {
-    const response = await api.post('/users/leaves-of-absence', data);
+    const response = await api.post<LeaveOfAbsenceResponse>('/users/leaves-of-absence', data);
     return response.data;
   },
 
@@ -5293,7 +5293,7 @@ export const memberStatusService = {
     active?: boolean;
     exempt_from_training_waiver?: boolean;
   }): Promise<LeaveOfAbsenceResponse> {
-    const response = await api.patch(`/users/leaves-of-absence/${leaveId}`, data);
+    const response = await api.patch<LeaveOfAbsenceResponse>(`/users/leaves-of-absence/${leaveId}`, data);
     return response.data;
   },
 
@@ -5303,7 +5303,7 @@ export const memberStatusService = {
 
   // Training Waivers
   async listTrainingWaivers(params?: { user_id?: string; active_only?: boolean }): Promise<TrainingWaiverResponse[]> {
-    const response = await api.get('/training/waivers', { params });
+    const response = await api.get<TrainingWaiverResponse[]>('/training/waivers', { params });
     return response.data;
   },
 
@@ -5315,7 +5315,7 @@ export const memberStatusService = {
     end_date?: string;
     requirement_ids?: string[];
   }): Promise<TrainingWaiverResponse> {
-    const response = await api.post('/training/waivers', data);
+    const response = await api.post<TrainingWaiverResponse>('/training/waivers', data);
     return response.data;
   },
 
@@ -5327,7 +5327,7 @@ export const memberStatusService = {
     requirement_ids?: string[];
     active?: boolean;
   }): Promise<TrainingWaiverResponse> {
-    const response = await api.patch(`/training/waivers/${waiverId}`, data);
+    const response = await api.patch<TrainingWaiverResponse>(`/training/waivers/${waiverId}`, data);
     return response.data;
   },
 
@@ -5391,7 +5391,7 @@ export interface RoleOption {
 export const messagesService = {
   // Admin CRUD
   async getMessages(params?: { include_inactive?: boolean; skip?: number; limit?: number }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
-    const response = await api.get('/messages', { params });
+    const response = await api.get<{ messages: DepartmentMessageRecord[]; total: number }>('/messages', { params });
     return response.data;
   },
   async createMessage(data: {

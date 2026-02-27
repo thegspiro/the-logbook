@@ -117,8 +117,8 @@ describe('errorHandling', () => {
 
       expect(result.message).toBe('Something broke');
       expect(result.details).toBeDefined();
-      expect(result.details!.name).toBe('Error');
-      expect(result.details!.stack).toBeDefined();
+      expect(result.details?.name).toBe('Error');
+      expect(result.details?.stack).toBeDefined();
     });
 
     it('handles TypeError objects', () => {
@@ -126,7 +126,7 @@ describe('errorHandling', () => {
       const result = toAppError(error);
 
       expect(result.message).toBe('Cannot read property');
-      expect(result.details!.name).toBe('TypeError');
+      expect(result.details?.name).toBe('TypeError');
     });
 
     it('handles string errors', () => {
@@ -168,8 +168,10 @@ describe('errorHandling', () => {
 
     it('Axios-like error takes precedence over Error instance check', () => {
       // An object that is both an Error and has a response property
-      const hybridError = new Error('Network Error');
-      (hybridError as any).response = {
+      const hybridError = new Error('Network Error') as Error & {
+        response: { data: { detail: string }; status: number };
+      };
+      hybridError.response = {
         data: { detail: 'Server unavailable' },
         status: 503,
       };

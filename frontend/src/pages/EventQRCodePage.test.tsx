@@ -5,6 +5,7 @@ import { renderWithRouter, mockQRCheckInData, createMockApiError } from '../test
 import EventQRCodePage from './EventQRCodePage';
 import type { QRCheckInData } from '../types/event';
 import * as apiModule from '../services/api';
+import * as reactRouterDom from 'react-router-dom';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -343,8 +344,8 @@ describe('EventQRCodePage', () => {
 
   describe('Edge Cases', () => {
     it('should handle missing event ID gracefully', async () => {
-      const originalUseParams = vi.mocked(require('react-router-dom').useParams);
-      vi.mocked(require('react-router-dom').useParams).mockReturnValue({ id: undefined });
+      const originalUseParams = vi.mocked(reactRouterDom.useParams);
+      vi.mocked(reactRouterDom.useParams).mockReturnValue({ id: undefined });
 
       renderWithRouter(<EventQRCodePage />);
 
@@ -352,7 +353,7 @@ describe('EventQRCodePage', () => {
       expect(eventService.getQRCheckInData).not.toHaveBeenCalled();
 
       // Restore original mock
-      vi.mocked(require('react-router-dom').useParams).mockImplementation(originalUseParams);
+      vi.mocked(reactRouterDom.useParams).mockImplementation(originalUseParams);
     });
 
     it('should handle null QR data', async () => {
