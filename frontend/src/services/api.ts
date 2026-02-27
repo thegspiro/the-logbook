@@ -37,6 +37,12 @@ import type {
   PasswordResetConfirm,
 } from '../types/auth';
 import type {
+  Assignment,
+  SwapRequest as SchedulingSwapRequest,
+  TimeOffRequest as SchedulingTimeOffRequest,
+  ShiftPattern as SchedulingShiftPattern,
+} from '../types/scheduling';
+import type {
   TrainingCourse,
   TrainingCourseCreate,
   TrainingCourseUpdate,
@@ -3713,9 +3719,8 @@ export const schedulingService = {
     return response.data;
   },
 
-  async getMyAssignments(): Promise<Array<{ id: string; user_id: string; shift_id: string; position: string; status: string; assignment_status: string; shift?: ShiftRecord }>> {
-    type AssignmentRecord = { id: string; user_id: string; shift_id: string; position: string; status: string; assignment_status: string; shift?: ShiftRecord };
-    const response = await api.get<AssignmentRecord[]>('/scheduling/my-assignments');
+  async getMyAssignments(): Promise<Assignment[]> {
+    const response = await api.get<Assignment[]>('/scheduling/my-assignments');
     // Backend returns assignment_status; provide status alias for convenience
     return (response.data ?? []).map((a) => ({
       ...a,
@@ -3745,8 +3750,8 @@ export const schedulingService = {
   },
 
   // Shift Assignments
-  async getShiftAssignments(shiftId: string): Promise<Record<string, unknown>[]> {
-    const response = await api.get<Record<string, unknown>[]>(`/scheduling/shifts/${shiftId}/assignments`);
+  async getShiftAssignments(shiftId: string): Promise<Assignment[]> {
+    const response = await api.get<Assignment[]>(`/scheduling/shifts/${shiftId}/assignments`);
     return response.data;
   },
   async createAssignment(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -3766,8 +3771,8 @@ export const schedulingService = {
   },
 
   // Swap Requests
-  async getSwapRequests(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
-    const response = await api.get<Record<string, unknown>[]>('/scheduling/swap-requests', { params });
+  async getSwapRequests(params?: Record<string, string>): Promise<SchedulingSwapRequest[]> {
+    const response = await api.get<SchedulingSwapRequest[]>('/scheduling/swap-requests', { params });
     return response.data;
   },
   async getSwapRequest(requestId: string): Promise<Record<string, unknown>> {
@@ -3787,8 +3792,8 @@ export const schedulingService = {
   },
 
   // Time Off
-  async getTimeOffRequests(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
-    const response = await api.get<Record<string, unknown>[]>('/scheduling/time-off', { params });
+  async getTimeOffRequests(params?: Record<string, string>): Promise<SchedulingTimeOffRequest[]> {
+    const response = await api.get<SchedulingTimeOffRequest[]>('/scheduling/time-off', { params });
     return response.data;
   },
   async getTimeOff(requestId: string): Promise<Record<string, unknown>> {
@@ -3842,8 +3847,8 @@ export const schedulingService = {
   },
 
   // Patterns
-  async getPatterns(params?: { active_only?: boolean }): Promise<Record<string, unknown>[]> {
-    const response = await api.get<Record<string, unknown>[]>('/scheduling/patterns', { params });
+  async getPatterns(params?: { active_only?: boolean }): Promise<SchedulingShiftPattern[]> {
+    const response = await api.get<SchedulingShiftPattern[]>('/scheduling/patterns', { params });
     return response.data;
   },
   async getPattern(patternId: string): Promise<Record<string, unknown>> {
@@ -3911,8 +3916,8 @@ export const schedulingService = {
   },
 
   // --- Open Shifts ---
-  async getOpenShifts(params?: { start_date?: string; end_date?: string; apparatus_id?: string }): Promise<Record<string, unknown>[]> {
-    const response = await api.get<Record<string, unknown>[]>('/scheduling/shifts/open', { params });
+  async getOpenShifts(params?: { start_date?: string; end_date?: string; apparatus_id?: string }): Promise<ShiftRecord[]> {
+    const response = await api.get<ShiftRecord[]>('/scheduling/shifts/open', { params });
     return response.data;
   },
 

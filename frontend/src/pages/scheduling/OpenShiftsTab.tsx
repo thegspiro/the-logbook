@@ -42,7 +42,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         const data = await schedulingService.getOpenShifts({
           start_date: dateFilter || undefined,
         });
-        setShifts(data as unknown as ShiftRecord[]);
+        setShifts(data);
       } catch {
         // Fallback: get upcoming shifts
         const today = getTodayLocalDate(tz);

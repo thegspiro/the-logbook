@@ -29,6 +29,12 @@ class ShiftCreate(BaseModel):
     notes: Optional[str] = None
     activities: Optional[Any] = None
 
+    @model_validator(mode="after")
+    def validate_shift_times(self) -> "ShiftCreate":
+        if self.end_time is not None and self.end_time <= self.start_time:
+            raise ValueError("end_time must be after start_time")
+        return self
+
 
 class ShiftUpdate(BaseModel):
     """Schema for updating a shift"""
@@ -42,6 +48,12 @@ class ShiftUpdate(BaseModel):
     color: Optional[str] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
+
+    @model_validator(mode="after")
+    def validate_shift_times(self) -> "ShiftUpdate":
+        if self.start_time is not None and self.end_time is not None and self.end_time <= self.start_time:
+            raise ValueError("end_time must be after start_time")
+        return self
 
 
 class ShiftResponse(BaseModel):
