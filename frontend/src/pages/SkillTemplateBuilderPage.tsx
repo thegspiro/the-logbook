@@ -124,24 +124,24 @@ const CriterionEditor: React.FC<{
           {criterion.type === 'score' && (
             <>
               <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-theme-text-muted mb-1">Max Score</label>
+                <label className="block text-xs font-medium text-theme-text-muted mb-1">Max Points</label>
                 <input
                   type="number"
                   min="1"
                   value={criterion.max_score ?? ''}
                   onChange={(e) => onChange({ ...criterion, max_score: e.target.value ? Number(e.target.value) : undefined })}
-                  placeholder="100"
+                  placeholder="3"
                   className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
                 />
               </div>
               <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-theme-text-muted mb-1">Passing Score</label>
+                <label className="block text-xs font-medium text-theme-text-muted mb-1">Passing Points</label>
                 <input
                   type="number"
                   min="0"
                   value={criterion.passing_score ?? ''}
                   onChange={(e) => onChange({ ...criterion, passing_score: e.target.value ? Number(e.target.value) : undefined })}
-                  placeholder="70"
+                  placeholder="2"
                   className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
                 />
               </div>
@@ -350,6 +350,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
+  const [visibility, setVisibility] = useState<string>('all_members');
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | undefined>();
   const [passingPercentage, setPassingPercentage] = useState<number | undefined>();
   const [requireAllCritical, setRequireAllCritical] = useState(true);
@@ -372,6 +373,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       setName(currentTemplate.name);
       setDescription(currentTemplate.description ?? '');
       setCategory(currentTemplate.category ?? '');
+      setVisibility(currentTemplate.visibility ?? 'all_members');
       setTimeLimitMinutes(currentTemplate.time_limit_seconds != null ? currentTemplate.time_limit_seconds / 60 : undefined);
       setPassingPercentage(currentTemplate.passing_percentage ?? undefined);
       setRequireAllCritical(currentTemplate.require_all_critical);
@@ -432,6 +434,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       name: name.trim(),
       description: description.trim() || undefined,
       category: category.trim() || undefined,
+      visibility: visibility as 'all_members' | 'officers_only' | 'assigned_only',
       time_limit_seconds: timeLimitMinutes != null ? Math.round(timeLimitMinutes * 60) : undefined,
       passing_percentage: passingPercentage,
       require_all_critical: requireAllCritical,
@@ -454,7 +457,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         })),
       })),
     };
-  }, [name, description, category, timeLimitMinutes, passingPercentage, requireAllCritical, tags, sections]);
+  }, [name, description, category, visibility, timeLimitMinutes, passingPercentage, requireAllCritical, tags, sections]);
 
   const handleSave = async () => {
     const errors = validate();
@@ -616,6 +619,21 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 placeholder="e.g., Fire Operations, EMS, Hazmat"
                 className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
               />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-theme-text-muted mb-1">Visibility</label>
+              <select
+                value={visibility}
+                onChange={(e) => setVisibility(e.target.value)}
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
+              >
+                <option value="all_members">All Members</option>
+                <option value="officers_only">Officers Only</option>
+                <option value="assigned_only">Assigned Members Only</option>
+              </select>
+              <p className="text-xs text-theme-text-muted mt-1">
+                Controls who can see this test. Officers always have full access.
+              </p>
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-theme-text-muted mb-1">Description</label>

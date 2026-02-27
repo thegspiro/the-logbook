@@ -24,6 +24,7 @@ const mockCompletedTest = {
   examiner_name: 'Captain Jones',
   status: 'completed' as const,
   result: 'pass' as const,
+  is_practice: false,
   section_results: [],
   overall_score: 95,
   elapsed_seconds: 180,

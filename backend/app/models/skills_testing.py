@@ -33,6 +33,14 @@ class SkillTemplateStatus(str, enum.Enum):
     ARCHIVED = "archived"
 
 
+class SkillTemplateVisibility(str, enum.Enum):
+    """Controls who can see a published skill template"""
+
+    ALL_MEMBERS = "all_members"
+    OFFICERS_ONLY = "officers_only"
+    ASSIGNED_ONLY = "assigned_only"
+
+
 class SkillTestStatus(str, enum.Enum):
     """Status of a skill test session"""
 
@@ -76,6 +84,7 @@ class SkillTemplate(Base):
     category = Column(String(100), nullable=True)
     version = Column(Integer, default=1)
     status = Column(String(20), default="draft")
+    visibility = Column(String(20), default="all_members")
 
     # Template Structure — JSON array of SkillTemplateSection[]
     # Each section contains: name, description, sort_order, criteria[]
@@ -146,6 +155,7 @@ class SkillTest(Base):
     # Test State
     status = Column(String(20), default="draft")
     result = Column(String(20), default="incomplete")
+    is_practice = Column(Boolean, default=False)
 
     # Results — JSON array of SectionResult[] with nested CriterionResult[]
     section_results = Column(JSON, nullable=True)
