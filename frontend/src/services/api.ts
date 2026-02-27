@@ -1698,8 +1698,8 @@ export const electionService = {
    * Get voter overrides for an election
    */
   async getVoterOverrides(electionId: string): Promise<import('../types/election').VoterOverride[]> {
-    const response = await api.get<import('../types/election').VoterOverride[]>(`/elections/${electionId}/voter-overrides`);
-    return response.data;
+    const response = await api.get<{ overrides: import('../types/election').VoterOverride[] }>(`/elections/${electionId}/voter-overrides`);
+    return response.data.overrides;
   },
 
   /**
