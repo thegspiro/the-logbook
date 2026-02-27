@@ -20,7 +20,7 @@ The Logbook is an open-source modular intranet platform for fire departments and
 - **Forms:** react-hook-form 7.71 + Zod 3.24 validation
 - **Styling:** Tailwind CSS 3.4 (with `tailwind-merge`, dark mode via `class` strategy)
 - **HTTP client:** Axios 1.7
-- **Auth (client):** jose (JWT decoding)
+- **Auth (client):** httpOnly cookies (managed by backend); no client-side JWT handling
 - **Icons:** lucide-react
 - **PWA:** vite-plugin-pwa
 
@@ -75,17 +75,51 @@ All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps 
 - **Test data:** Faker
 - **Run:** `npm run test:backend` or `cd backend && pytest`
 - Test files live in `backend/tests/`
+- **Config:** `asyncio_mode = auto` in `pytest.ini` — no need for `@pytest.mark.asyncio` on individual tests. Markers: `integration`, `unit`, `slow`, `docker`
+- **Fixtures:** `conftest.py` provides `db_session` (auto-rolled-back transaction per test), `sample_org_data`, `sample_admin_data`, `sample_roles_data`, `sample_stations_data`
+
+### Frontend Test Patterns
+
+The test setup (`src/test/setup.ts`) automatically mocks `window.matchMedia`, `IntersectionObserver`, `ResizeObserver`, and `window.print`. Test utilities (`src/test/utils.tsx`) provide:
+
+- **`renderWithRouter(ui)`** — wraps component in `BrowserRouter`
+- **Mock data** — `mockEvent`, `mockUser`, `mockRSVP`, `mockQRCheckInData`
+- **Mock factories** — `createMockApiResponse(data)`, `createMockApiError(msg, status)`, `createMockEventService()`
+- **Navigation mocks** — `mockNavigate`, `mockUseParams`
+
+**Component test pattern:**
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+```
+
+**Store test pattern** (mock dependencies *before* importing the store):
+```typescript
+const mockLogin = vi.fn();
+vi.mock('../services/api', () => ({
+  authService: { login: (...args: unknown[]) => mockLogin(...args) as unknown },
+}));
+// Import store AFTER mocks are in place
+import { useMyStore } from './myStore';
+
+// Access state via getState(), reset in beforeEach:
+beforeEach(() => {
+  useMyStore.setState({ /* initial state */ });
+  vi.clearAllMocks();
+});
+```
 
 ## Linting & Formatting
 
 ### Frontend
 
-- ESLint 8 with @typescript-eslint (max-warnings 0)
+- ESLint 8 with @typescript-eslint (max-warnings 1500 — existing warning debt)
 - Prettier 3.4 with prettier-plugin-tailwindcss
 
 ### Backend
 
-- Black (line length 120)
+- Black (line length 88, the default)
 - flake8
 - isort
 - mypy
@@ -178,20 +212,40 @@ backend/app/
 
 ### Frontend Patterns
 
-- **Components:** Functional React components, props defined as `interface`, typed with `React.FC<Props>`
-- **Routing:** Critical pages imported directly; others use `lazy()` for code splitting. Module routes exported as `get{Module}Routes()` functions called in `App.tsx`
+- **Components:** Functional React components, props defined as `interface`, typed with `React.FC<Props>`. Route-level permission gating via `<ProtectedRoute requiredPermission="resource.action">` or `requiredRole="admin"`
+- **Routing:** Critical pages (Dashboard, Login) imported directly; others use `lazyWithRetry()` (`utils/lazyWithRetry.ts`) instead of bare `React.lazy()` — this retries chunk loads after deployments. Module routes exported as `get{Module}Routes()` functions called in `App.tsx`
 - **State:** Zustand stores define state interface + actions in one `create()` call. Async actions use `set({ isLoading: true })` / `try/catch` / `set({ isLoading: false })`
-- **API calls:** Each module has a `services/api.ts` with its own axios instance (`baseURL: '/api/v1'`). Services are plain objects with async methods returning typed promises
-- **Auth tokens:** Stored in `localStorage` (`access_token`, `refresh_token`). Axios request interceptor attaches `Authorization: Bearer`. Response interceptor auto-refreshes on 401
-- **Styling:** Tailwind CSS with `theme-*` CSS variable classes. Dark mode via `class` strategy. Size variants as objects (`{ sm: 'max-w-md', md: 'max-w-lg' }`)
-- **Types:** Defined as `interface` (not `type`) for domain objects. One file per domain in `types/`. Enums use `as const` objects with extracted types
+- **API calls:** The global `services/api.ts` creates a shared axios instance (`baseURL: '/api/v1'`, `withCredentials: true`) with request/response interceptors for caching, CSRF, and auth refresh. Each module also has a `services/api.ts` with its own axios instance. Services are plain objects with async methods returning typed promises
+- **API response caching:** The global axios instance includes an in-memory stale-while-revalidate cache (`utils/apiCache.ts`). GET responses are cached with a 30s fresh / 90s stale window. Mutations (POST/PUT/PATCH/DELETE) auto-invalidate related cache entries by URL prefix. HIPAA-sensitive endpoints (`/auth/`, `/users/`, `/security/`, etc.) are excluded from caching via `UNCACHEABLE_PREFIXES`. When adding new sensitive endpoints, add them to this list
+- **Auth (httpOnly cookies):** Auth tokens are stored exclusively in **httpOnly cookies** set by the backend — never in `localStorage`. The global axios instance uses `withCredentials: true` so cookies are sent automatically. A lightweight `has_session` flag in `localStorage` tells `loadUser()` whether to attempt an API call on page refresh. **Never store tokens in localStorage or send `Authorization` headers.** CSRF protection: state-changing requests (POST/PUT/PATCH/DELETE) read a `csrf_token` cookie and attach it as an `X-CSRF-Token` header (double-submit pattern). Response interceptor catches 401 → attempts cookie-based refresh via `POST /auth/refresh` → retries original request. A shared `refreshPromise` prevents concurrent refresh races (token rotation).
+- **Toast notifications:** `react-hot-toast` — use `toast.success()`, `toast.error()` for user feedback. `<Toaster>` is mounted in `App.tsx`
+- **Styling:** Tailwind CSS with `theme-*` CSS variable classes defined in `styles/index.css` (e.g., `bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`). Dark mode via `class` strategy. High-contrast mode also supported (`ThemeContext` handles `'light' | 'dark' | 'system' | 'high-contrast'`). Size variants as objects (`{ sm: 'max-w-md', md: 'max-w-lg' }`)
+- **UX component library:** Reusable components in `components/ux/` — use these before building custom UI: `Skeleton`/`SkeletonCard`/`SkeletonPage` (loading states), `Pagination`, `EmptyState`, `ConfirmDialog`, `Tooltip`, `CommandPalette`, `SortableHeader`, `Breadcrumbs`, `ProgressSteps`, `Collapsible`, `DateRangePicker`, `FileDropzone`, `InlineEdit`, `PageTransition`
+- **Form input classes:** Forms define shared Tailwind class constants (`inputClass`, `selectClass`, `labelClass`, `checkboxClass`) for consistency. Reuse these patterns in new forms
+- **Types:** Defined as `interface` (not `type`) for domain objects. One file per domain in `types/`. Enums use `as const` objects with an extracted type of the same name (value union pattern):
+  ```typescript
+  export const EventType = {
+    BUSINESS_MEETING: 'business_meeting',
+    TRAINING: 'training',
+  } as const;
+  export type EventType = (typeof EventType)[keyof typeof EventType];
+  ```
+  All enums live in `constants/enums.ts` — use these constants instead of string literals. Status badge color mappings are also defined here as `Record<string, string>` with Tailwind classes
+- **Floating promises:** Use `void` prefix for intentionally unhandled promises to satisfy `@typescript-eslint/no-floating-promises`: `void fetchData()`, `void handleSubmit()`
+- **Date/time handling:** All dates and times are stored as **UTC** in the database and API layer. They must always be displayed to the user in their **local timezone** (or the organization's configured timezone). Use `utils/dateFormatting.ts` utilities (which use `Intl.DateTimeFormat` internally, not date-fns) — all formatters accept an optional `timezone` parameter for IANA timezone support. Never display raw UTC values in the UI
+- **Constants:** Magic numbers and config values are centralized in `constants/config.ts` (`API_TIMEOUT_MS`, `DEFAULT_PAGE_SIZE`, `PAGE_SIZE_OPTIONS`, `AUTO_SAVE_INTERVAL_MS`, etc.). Use these instead of inline values
 
 ### Backend Patterns
 
-- **Endpoint layer** (`api/v1/endpoints/`): `APIRouter()` per file, registered in `api.py` with prefix/tags. Async handlers. Permission checks via `Depends(require_permission("resource.action"))`. Instantiate service class per request: `service = FooService(db)`
+- **Endpoint layer** (`api/v1/endpoints/`): `APIRouter()` per file, registered in `api.py` with prefix/tags. Async handlers. Permission checks via `Depends(require_permission("resource.action"))`. Instantiate service class per request: `service = FooService(db)`. Audit-sensitive operations should call `log_audit_event()` from `core/audit.py`
 - **Service layer** (`services/`): Class initialized with `AsyncSession`. Public methods are async. Private helpers prefixed with `_`. Raises `ValueError` for validation errors, `HTTPException` for HTTP-specific errors
-- **Models** (`models/`): Inherit from `Base`. String UUIDs as primary keys (`default=generate_uuid`). `DateTime(timezone=True)` for timestamps. `ForeignKey` with `ondelete="CASCADE"`. Relationships with `back_populates`
-- **Schemas** (`schemas/`): Separate classes: `{Resource}Create`, `{Resource}Update`, `{Resource}Response`. Response schemas use `ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)` for camelCase serialization. `Field()` for validation
+- **Models** (`models/`): Inherit from `Base`. String UUIDs as primary keys (`default=generate_uuid`). `DateTime(timezone=True)` for timestamps — all datetimes are stored as **UTC**; conversion to the user's local timezone happens only in the frontend. `ForeignKey` with `ondelete="CASCADE"`. Relationships with `back_populates`. **Enums** inherit from `(str, Enum)` so they serialize cleanly:
+  ```python
+  class EventType(str, Enum):
+      BUSINESS_MEETING = "business_meeting"
+      TRAINING = "training"
+  ```
+- **Schemas** (`schemas/`): Separate classes: `{Resource}Base` (shared fields), `{Resource}Create`, `{Resource}Update`, `{Resource}Response`. Use `@model_validator(mode="after")` for cross-field validation. Response schemas use `ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)` for camelCase serialization. `Field()` for validation
 - **Permissions:** Dot-notation strings (`"apparatus.view"`, `"settings.manage"`). Wildcards supported: `"*"` (global), `"module.*"` (module-level). OR logic via `require_permission()`, AND logic via `require_all_permissions()`
 - **API URL convention:** All routes under `/api/v1/`. Resources as plural nouns (`/events`, `/users`). Sub-resources nested (`/training/programs`). Actions as verbs on resource (`/{id}/archive`)
 
@@ -202,12 +256,17 @@ backend/app/
 - **`ErrorBoundary`** (`components/ErrorBoundary.tsx`): Wraps entire app in `App.tsx`. Catches React render errors. Shows user-friendly page with retry/reload/go-home buttons. Logs to `errorTracker`. Dev mode shows stack trace
 - **`toAppError()` / `getErrorMessage()`** (`utils/errorHandling.ts`): Converts unknown catch values to a typed `AppError { message, code?, status?, details? }`. Type guards narrow axios errors, Error objects, strings. Use in stores and async operations:
   ```typescript
-  catch (error) {
-    set({ error: error instanceof Error ? error.message : 'Fallback message', isLoading: false });
+  catch (err: unknown) {
+    const appError = toAppError(err);
+    set({
+      isLoading: false,
+      error: getErrorMessage(err, 'Fallback message'),
+    });
+    throw Object.assign(new Error(appError.message), appError);
   }
   ```
 - **`errorTracker`** (`services/errorTracking.ts`): Singleton `ErrorTrackingService`. Maps error types to user-friendly messages + troubleshooting steps. Persists errors to backend API. Known types: `EVENT_NOT_FOUND`, `NETWORK_ERROR`, `AUTHENTICATION_REQUIRED`, etc.
-- **Axios interceptors:** Response interceptor catches 401 → attempts token refresh → retries original request. On refresh failure → clears tokens → redirects to `/login`
+- **Axios interceptors:** Response interceptor catches 401 → attempts cookie-based refresh via `POST /auth/refresh` → retries original request. Uses a shared `refreshPromise` to prevent concurrent refresh races. On refresh failure → clears `has_session` flag → redirects to `/login`
 
 ### Backend
 
@@ -223,6 +282,19 @@ backend/app/
       raise HTTPException(status_code=500, detail=safe_error_detail(e))
   ```
 - **Service-layer validation:** Raise `ValueError` with descriptive messages for business rule violations. These get passed through `safe_error_detail()` to the client
+- **Audit logging:** Use `log_audit_event()` from `core/audit.py` in endpoint handlers for security-sensitive operations (login, permission changes, data access). Import and call after the action succeeds
+
+## HIPAA Compliance & Security
+
+This application handles protected health information (PHI) and must maintain HIPAA compliance. These patterns are enforced across the stack:
+
+- **Auth tokens in httpOnly cookies only** — never in localStorage, sessionStorage, or JS-accessible state. See auth patterns above
+- **CSRF double-submit** — state-changing requests include `X-CSRF-Token` header read from a non-httpOnly `csrf_token` cookie
+- **API cache exclusions** — endpoints carrying PII/PHI are listed in `UNCACHEABLE_PREFIXES` in `utils/apiCache.ts` and must never be cached. When adding endpoints that return PII (user profiles, medical waivers, emergency contacts), add them to this list
+- **PWA service worker** — configured with `NetworkOnly` for all `/api/` routes to prevent caching sensitive API responses in the service worker cache (`vite.config.ts`)
+- **Source maps disabled in production** — `sourcemap: false` in vite build config to prevent source code exposure
+- **`safe_error_detail()`** — sanitizes exception messages server-side to prevent leaking SQL, file paths, or stack traces to clients
+- **Encryption at rest** — `ENCRYPTION_KEY` + `ENCRYPTION_SALT` env vars used for AES-256 encryption of sensitive fields
 
 ## Environment Variables
 
