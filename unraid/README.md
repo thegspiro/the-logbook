@@ -27,7 +27,7 @@ The Logbook is a comprehensive, modular intranet platform designed specifically 
 ✅ **Document Management** - Policies, procedures, and files
 ✅ **Reporting & Analytics** - Comprehensive dashboards
 ✅ **Mobile Responsive** - Works on any device
-✅ **HIPAA Compliant** - Secure PHI handling
+✅ **HIPAA-Oriented Security** - Built with HIPAA requirements in mind (external audit required for compliance)
 
 ---
 

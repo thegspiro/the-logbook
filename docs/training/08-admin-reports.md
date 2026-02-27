@@ -313,7 +313,7 @@ For each task you can see:
 
 ### Session Management
 
-The system enforces session timeouts for HIPAA compliance:
+The system enforces session timeouts in alignment with HIPAA session management requirements:
 - Sessions expire after a configurable period of inactivity
 - Members are automatically logged out when their session expires
 - Active sessions can be reviewed from the admin panel

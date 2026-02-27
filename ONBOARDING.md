@@ -84,7 +84,7 @@ After completing onboarding, a checklist is automatically created with critical 
 **Critical Priority:**
 - ✅ Set up TLS/HTTPS certificates
 - ✅ Configure automated backups
-- ✅ Review HIPAA compliance checklist
+- ✅ Review security checklist (HIPAA-aligned)
 - ✅ Configure firewall rules
 
 **High Priority:**
@@ -160,7 +160,7 @@ GET /api/v1/onboarding/system-info
     "password_hashing": "Argon2id"
   },
   "features": {
-    "hipaa_compliant": true,
+    "hipaa_security_features": true,
     "section_508_accessible": true,
     "tamper_proof_logging": true,
     "multi_factor_auth": true,

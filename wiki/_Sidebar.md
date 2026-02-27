@@ -43,7 +43,7 @@
 - [Authentication](Security-Authentication)
 - [Encryption](Security-Encryption)
 - [Audit Logging](Security-Audit-Logging)
-- [HIPAA](Security-HIPAA)
+- [HIPAA Security Features](Security-HIPAA)
 
 ### 🛠️ Troubleshooting
 - [Common Issues](Troubleshooting)

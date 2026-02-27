@@ -90,8 +90,8 @@ const OnboardingCheck: React.FC = () => {
     },
     {
       icon: '🔒',
-      title: 'HIPAA Compliance',
-      content: 'Built with security in mind - encrypted data, audit logs, and role-based access control.'
+      title: 'HIPAA-Oriented Security',
+      content: 'Built with HIPAA requirements in mind - encrypted data, audit logs, and role-based access control.'
     },
     {
       icon: '📊',

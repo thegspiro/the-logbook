@@ -1,6 +1,6 @@
 # Security Configuration
 
-Configure security settings for The Logbook, including authentication, encryption, session management, and HIPAA compliance.
+Configure security settings for The Logbook, including authentication, encryption, session management, and security features aligned with HIPAA requirements.
 
 ---
 

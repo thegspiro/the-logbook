@@ -1023,11 +1023,11 @@ class OnboardingService:
                 "sort_order": 3,
             },
             {
-                "title": "Review HIPAA compliance checklist",
-                "description": "Complete HIPAA compliance requirements",
+                "title": "Review security checklist (HIPAA-aligned)",
+                "description": "Review security settings aligned with HIPAA requirements",
                 "category": "security",
                 "priority": "critical",
-                "documentation_link": "SECURITY.md#hipaa-compliance-checklist",
+                "documentation_link": "SECURITY.md#security-checklist-aligned-with-hipaa-requirements",
                 "estimated_time_minutes": 120,
                 "sort_order": 4,
             },
@@ -1130,7 +1130,7 @@ class OnboardingService:
                 "password_hashing": "Argon2id",
             },
             "features": {
-                "hipaa_compliant": True,
+                "hipaa_security_features": True,
                 "section_508_accessible": True,
                 "tamper_proof_logging": True,
                 "multi_factor_auth": True,

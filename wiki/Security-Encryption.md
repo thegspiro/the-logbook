@@ -101,7 +101,7 @@ The audit logging system uses a blockchain-inspired SHA-256 hash chain to ensure
 1. Each audit log entry includes the hash of the previous entry
 2. Any modification to a past entry breaks the chain
 3. Periodic checkpoints verify chain integrity
-4. 7-year retention (2555 days) for HIPAA compliance
+4. 7-year retention (2555 days), exceeds HIPAA 6-year minimum
 
 ### Verifying Integrity
 

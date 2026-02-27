@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Logbook is designed with security as a core principle, implementing industry-standard security practices and compliance features for HIPAA, Section 508 accessibility, and general security best practices.
+The Logbook is designed with security as a core principle, implementing industry-standard security practices with features aligned to HIPAA requirements, Section 508 accessibility, and general security best practices. Note: HIPAA compliance requires external review and cannot be self-declared.
 
 ## Table of Contents
 
@@ -10,7 +10,7 @@ The Logbook is designed with security as a core principle, implementing industry
 2. [Security Monitoring](#security-monitoring)
 3. [Intrusion Detection](#intrusion-detection)
 4. [Data Exfiltration Prevention](#data-exfiltration-prevention)
-5. [HIPAA Compliance](#hipaa-compliance)
+5. [HIPAA Security Features](#hipaa-security-features)
 6. [Section 508 Accessibility](#section-508-accessibility)
 7. [Password Security](#password-security)
 8. [Data Encryption](#data-encryption)
@@ -187,11 +187,11 @@ When data exfiltration is detected:
 
 ---
 
-## HIPAA Compliance
+## HIPAA Security Features
 
 ### Overview
 
-The Logbook includes features designed to support HIPAA compliance for organizations handling Protected Health Information (PHI). However, **compliance is a shared responsibility** between the software and the implementing organization.
+The Logbook includes security features designed with HIPAA requirements in mind for organizations handling Protected Health Information (PHI). However, **HIPAA compliance cannot be self-declared** — it requires external audit and assessment. Compliance is a shared responsibility between the software, the implementing organization, and qualified external reviewers.
 
 ### HIPAA Security Rule - Technical Safeguards
 
@@ -269,7 +269,7 @@ If you use third-party services (cloud hosting, email, SMS), ensure you have BAA
 - Backup and storage services
 - Analytics services (if processing PHI)
 
-### HIPAA Compliance Checklist
+### Security Checklist (Aligned with HIPAA Requirements)
 
 #### Initial Setup
 
@@ -612,7 +612,7 @@ This makes it impossible to modify historical logs without detection.
 
 ### Log Retention
 
-- **Minimum**: 7 years (HIPAA requirement)
+- **Minimum**: 7 years (exceeds HIPAA 6-year minimum)
 - **Format**: Immutable, tamper-evident
 - **Storage**: Encrypted at rest
 - **Backup**: Included in disaster recovery
@@ -659,7 +659,7 @@ Automated monitoring for:
 - **Token Type**: JWT (JSON Web Tokens)
 - **Access Token Lifetime**: 8 hours (configurable)
 - **Refresh Token Lifetime**: 7 days (configurable)
-- **Automatic Logout**: 15 minutes inactivity (HIPAA default)
+- **Automatic Logout**: 15 minutes inactivity (configurable, aligned with HIPAA recommendation)
 - **Concurrent Sessions**: Configurable limit
 - **Session Revocation**: Manual logout or admin revoke
 

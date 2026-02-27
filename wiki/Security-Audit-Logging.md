@@ -1,6 +1,6 @@
 # Audit Logging
 
-The Logbook provides tamper-proof audit logging using a blockchain-inspired hash chain, designed for HIPAA compliance and forensic investigation.
+The Logbook provides tamper-proof audit logging using a blockchain-inspired hash chain, designed with HIPAA requirements in mind for forensic investigation and security monitoring.
 
 ---
 
@@ -74,7 +74,7 @@ curl http://YOUR-IP:3001/api/v1/security/audit-log/integrity
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Retention period | 2555 days (7 years) | HIPAA requires 6+ years |
+| Retention period | 2555 days (7 years) | Exceeds HIPAA 6-year minimum |
 | Checkpoint interval | Daily | Automatic integrity verification |
 | Export format | JSON | For compliance reporting |
 
@@ -110,4 +110,4 @@ In addition to the system-wide audit log, each member has a dedicated audit hist
 
 ---
 
-**See also:** [Security Overview](Security-Overview) | [Encryption](Security-Encryption) | [HIPAA Compliance](Security-HIPAA)
+**See also:** [Security Overview](Security-Overview) | [Encryption](Security-Encryption) | [HIPAA Security Features](Security-HIPAA)

@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/thegspiro/the-logbook/issues</Support>
   <Project>https://github.com/thegspiro/the-logbook</Project>
-  <Overview>The Logbook is a comprehensive, modular intranet platform designed for fire departments, EMS, and emergency services organizations. Features include member management, training tracking, equipment inventory, scheduling, elections, QR code check-ins, and more. Secure, HIPAA-compliant, and highly customizable.</Overview>
+  <Overview>The Logbook is a comprehensive, modular intranet platform designed for fire departments, EMS, and emergency services organizations. Features include member management, training tracking, equipment inventory, scheduling, elections, QR code check-ins, and more. Secure, built with HIPAA requirements in mind, and highly customizable.</Overview>
   <Category>Productivity: Status:Stable</Category>
   <WebUI>http://[IP]:[PORT:7880]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/the-logbook.xml</TemplateURL>

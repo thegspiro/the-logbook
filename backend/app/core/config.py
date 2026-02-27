@@ -104,7 +104,7 @@ class Settings(BaseSettings):
     PASSWORD_REQUIRE_NUMBERS: bool = True
     PASSWORD_REQUIRE_SPECIAL: bool = True
 
-    # HIPAA Compliance Settings (§164.312)
+    # HIPAA-Related Security Settings (§164.312)
     HIPAA_SESSION_TIMEOUT_MINUTES: int = (
         15  # Automatic logoff after inactivity (§164.312(a)(2)(iii))
     )
