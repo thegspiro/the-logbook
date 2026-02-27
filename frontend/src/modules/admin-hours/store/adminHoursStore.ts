@@ -20,7 +20,9 @@ interface AdminHoursState {
 
   // Entries
   myEntries: AdminHoursEntry[];
+  myEntriesTotal: number;
   allEntries: AdminHoursEntry[];
+  allEntriesTotal: number;
   entriesLoading: boolean;
 
   // Active session
@@ -29,6 +31,9 @@ interface AdminHoursState {
 
   // Summary
   summary: AdminHoursSummary | null;
+
+  // Pending count (for badge)
+  pendingCount: number;
 
   // General
   error: string | null;
@@ -46,10 +51,27 @@ interface AdminHoursState {
   fetchActiveSession: () => Promise<void>;
 
   // Entry actions
-  fetchMyEntries: (params?: { status?: string; categoryId?: string }) => Promise<void>;
-  fetchAllEntries: (params?: { status?: string; categoryId?: string; userId?: string }) => Promise<void>;
+  fetchMyEntries: (params?: {
+    status?: string;
+    categoryId?: string;
+    startDate?: string;
+    endDate?: string;
+    skip?: number;
+    limit?: number;
+  }) => Promise<void>;
+  fetchAllEntries: (params?: {
+    status?: string;
+    categoryId?: string;
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+    skip?: number;
+    limit?: number;
+  }) => Promise<void>;
   reviewEntry: (entryId: string, action: 'approve' | 'reject', reason?: string) => Promise<void>;
+  bulkApprove: (entryIds: string[]) => Promise<number>;
   fetchSummary: (params?: { userId?: string; startDate?: string; endDate?: string }) => Promise<void>;
+  fetchPendingCount: () => Promise<void>;
 
   clearError: () => void;
 }
@@ -58,11 +80,14 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
   categories: [],
   categoriesLoading: false,
   myEntries: [],
+  myEntriesTotal: 0,
   allEntries: [],
+  allEntriesTotal: 0,
   entriesLoading: false,
   activeSession: null,
   activeSessionLoading: false,
   summary: null,
+  pendingCount: 0,
   error: null,
 
   // =========================================================================
@@ -173,8 +198,8 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
   fetchMyEntries: async (params) => {
     set({ entriesLoading: true, error: null });
     try {
-      const entries = await adminHoursEntryService.listMy(params);
-      set({ myEntries: entries, entriesLoading: false });
+      const result = await adminHoursEntryService.listMy(params);
+      set({ myEntries: result.entries, myEntriesTotal: result.total, entriesLoading: false });
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to load entries',
@@ -186,8 +211,8 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
   fetchAllEntries: async (params) => {
     set({ entriesLoading: true, error: null });
     try {
-      const entries = await adminHoursEntryService.listAll(params);
-      set({ allEntries: entries, entriesLoading: false });
+      const result = await adminHoursEntryService.listAll(params);
+      set({ allEntries: result.entries, allEntriesTotal: result.total, entriesLoading: false });
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to load entries',
@@ -201,8 +226,22 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
     try {
       await adminHoursEntryService.review(entryId, action, reason);
       await get().fetchAllEntries({ status: 'pending' });
+      await get().fetchPendingCount();
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to review entry' });
+      throw error;
+    }
+  },
+
+  bulkApprove: async (entryIds) => {
+    set({ error: null });
+    try {
+      const result = await adminHoursEntryService.bulkApprove(entryIds);
+      await get().fetchAllEntries({ status: 'pending' });
+      await get().fetchPendingCount();
+      return result.approvedCount;
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to bulk approve' });
       throw error;
     }
   },
@@ -214,6 +253,15 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       set({ summary });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to load summary' });
+    }
+  },
+
+  fetchPendingCount: async () => {
+    try {
+      const count = await adminHoursEntryService.getPendingCount();
+      set({ pendingCount: count });
+    } catch {
+      // silently fail - badge count is non-critical
     }
   },
 

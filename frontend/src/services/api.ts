@@ -4067,6 +4067,8 @@ export interface AdminSummary {
   overdue_action_items: number;
   open_action_items: number;
   recent_training_hours: number;
+  recent_admin_hours: number;
+  pending_admin_hours_approvals: number;
 }
 
 export interface ActionItemSummary {

@@ -5,7 +5,7 @@ Request and response schemas for admin hours endpoints.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
@@ -132,6 +132,7 @@ class AdminHoursEntryResponse(BaseModel):
     category_name: Optional[str] = None
     category_color: Optional[str] = None
     user_name: Optional[str] = None
+    approver_name: Optional[str] = None
 
 
 class AdminHoursActiveSession(BaseModel):
@@ -145,6 +146,7 @@ class AdminHoursActiveSession(BaseModel):
     category_color: Optional[str] = None
     clock_in_at: datetime
     elapsed_minutes: int
+    max_session_minutes: Optional[int] = None
 
 
 class AdminHoursApprovalAction(BaseModel):
@@ -161,9 +163,38 @@ class AdminHoursSummary(BaseModel):
 
     total_hours: float
     total_entries: int
+    approved_hours: float = 0
+    approved_entries: int = 0
+    pending_hours: float = 0
+    pending_entries: int = 0
     by_category: list[dict]
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None
+
+
+class AdminHoursPaginatedEntries(BaseModel):
+    """Paginated list of entries"""
+
+    model_config = _RESPONSE_CONFIG
+
+    entries: List[AdminHoursEntryResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class AdminHoursBulkApproveRequest(BaseModel):
+    """Request to bulk approve multiple entries"""
+
+    entry_ids: List[str] = Field(..., min_length=1)
+
+
+class AdminHoursBulkApproveResponse(BaseModel):
+    """Response from bulk approval"""
+
+    model_config = _RESPONSE_CONFIG
+
+    approved_count: int
 
 
 class AdminHoursQRData(BaseModel):

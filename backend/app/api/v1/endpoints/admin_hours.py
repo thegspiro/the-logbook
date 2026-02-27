@@ -5,9 +5,11 @@ Handles admin hours categories, QR clock-in/clock-out, manual entry,
 and approval workflows.
 """
 
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -17,6 +19,8 @@ from app.models.user import User
 from app.schemas.admin_hours import (
     AdminHoursActiveSession,
     AdminHoursApprovalAction,
+    AdminHoursBulkApproveRequest,
+    AdminHoursBulkApproveResponse,
     AdminHoursCategoryCreate,
     AdminHoursCategoryResponse,
     AdminHoursCategoryUpdate,
@@ -24,6 +28,7 @@ from app.schemas.admin_hours import (
     AdminHoursClockOutResponse,
     AdminHoursEntryCreate,
     AdminHoursEntryResponse,
+    AdminHoursPaginatedEntries,
     AdminHoursQRData,
     AdminHoursSummary,
 )
@@ -341,49 +346,63 @@ async def create_manual_entry(
 # =============================================================================
 
 
-@router.get("/entries/my", response_model=List[AdminHoursEntryResponse])
+@router.get("/entries/my", response_model=AdminHoursPaginatedEntries)
 async def list_my_entries(
     status: Optional[str] = Query(None),
     category_id: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List the current user's admin hours entries."""
+    """List the current user's admin hours entries with pagination."""
+    parsed_start = datetime.fromisoformat(start_date) if start_date else None
+    parsed_end = datetime.fromisoformat(end_date) if end_date else None
+
     service = AdminHoursService(db)
-    entries = await service.list_my_entries(
+    entries, total = await service.list_my_entries(
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
         status_filter=status,
         category_id=category_id,
+        start_date=parsed_start,
+        end_date=parsed_end,
         skip=skip,
         limit=limit,
     )
-    return entries
+    return {"entries": entries, "total": total, "skip": skip, "limit": limit}
 
 
-@router.get("/entries", response_model=List[AdminHoursEntryResponse])
+@router.get("/entries", response_model=AdminHoursPaginatedEntries)
 async def list_all_entries(
     status: Optional[str] = Query(None),
     category_id: Optional[str] = Query(None),
     user_id: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("admin_hours.manage")),
 ):
     """List all admin hours entries for the organization (admin view)."""
+    parsed_start = datetime.fromisoformat(start_date) if start_date else None
+    parsed_end = datetime.fromisoformat(end_date) if end_date else None
+
     service = AdminHoursService(db)
-    entries = await service.list_all_entries(
+    entries, total = await service.list_all_entries(
         organization_id=str(current_user.organization_id),
         status_filter=status,
         category_id=category_id,
         user_id=user_id,
+        start_date=parsed_start,
+        end_date=parsed_end,
         skip=skip,
         limit=limit,
     )
-    return entries
+    return {"entries": entries, "total": total, "skip": skip, "limit": limit}
 
 
 # =============================================================================
@@ -414,6 +433,7 @@ async def review_entry(
         category = await service.get_category(
             entry.category_id, str(current_user.organization_id)
         )
+        approver_name = f"{current_user.first_name} {current_user.last_name}"
         return {
             "id": entry.id,
             "organization_id": entry.organization_id,
@@ -432,9 +452,116 @@ async def review_entry(
             "updated_at": entry.updated_at,
             "category_name": category.name if category else None,
             "category_color": category.color if category else None,
+            "approver_name": approver_name,
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# =============================================================================
+# Bulk Approval
+# =============================================================================
+
+
+@router.post(
+    "/entries/bulk-approve",
+    response_model=AdminHoursBulkApproveResponse,
+)
+async def bulk_approve_entries(
+    data: AdminHoursBulkApproveRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Approve multiple pending entries at once."""
+    service = AdminHoursService(db)
+    try:
+        count = await service.bulk_approve(
+            entry_ids=data.entry_ids,
+            organization_id=str(current_user.organization_id),
+            approver_id=str(current_user.id),
+        )
+        return {"approved_count": count}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# =============================================================================
+# Pending Count
+# =============================================================================
+
+
+@router.get("/pending-count")
+async def get_pending_count(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Get the count of entries pending review."""
+    service = AdminHoursService(db)
+    count = await service.get_pending_count(
+        str(current_user.organization_id)
+    )
+    return {"count": count}
+
+
+# =============================================================================
+# CSV Export
+# =============================================================================
+
+
+@router.get("/entries/export")
+async def export_entries(
+    status: Optional[str] = Query(None),
+    category_id: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Export admin hours entries as CSV."""
+    parsed_start = datetime.fromisoformat(start_date) if start_date else None
+    parsed_end = datetime.fromisoformat(end_date) if end_date else None
+
+    service = AdminHoursService(db)
+    try:
+        csv_content = await service.export_entries_csv(
+            organization_id=str(current_user.organization_id),
+            status_filter=status,
+            category_id=category_id,
+            user_id=user_id,
+            start_date=parsed_start,
+            end_date=parsed_end,
+        )
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=admin_hours_export.csv"
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# =============================================================================
+# Stale Sessions
+# =============================================================================
+
+
+@router.post("/close-stale-sessions")
+async def close_stale_sessions(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Manually trigger auto-close of stale sessions that exceeded max hours."""
+    service = AdminHoursService(db)
+    try:
+        count = await service.auto_close_stale_sessions()
+        return {"closed_count": count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
@@ -453,8 +580,6 @@ async def get_summary(
     current_user: User = Depends(get_current_user),
 ):
     """Get admin hours summary for reporting."""
-    from datetime import datetime
-
     service = AdminHoursService(db)
 
     parsed_start = None
