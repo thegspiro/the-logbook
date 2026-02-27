@@ -17,6 +17,7 @@ from app.schemas.organization import (
     ContactInfoSettings,
     EmailServiceSettings,
     EnabledModulesResponse,
+    FileStorageSettings,
     MembershipIdSettings,
     ModuleSettings,
     OrganizationSettings,
@@ -160,16 +161,25 @@ class OrganizationService:
 
         # Parse email service settings
         email_service = settings_dict.get("email_service", {})
-        email_settings = EmailServiceSettings(
-            enabled=email_service.get("enabled", False),
-            smtp_host=email_service.get("smtp_host"),
-            smtp_port=email_service.get("smtp_port", 587),
-            smtp_user=email_service.get("smtp_user"),
-            smtp_password=email_service.get("smtp_password"),
-            from_email=email_service.get("from_email"),
-            from_name=email_service.get("from_name"),
-            use_tls=email_service.get("use_tls", True),
-        )
+        email_settings = EmailServiceSettings(**{
+            k: email_service[k] for k in email_service
+            if k in EmailServiceSettings.model_fields
+        }) if email_service else EmailServiceSettings()
+
+        # Parse file storage settings
+        file_storage = settings_dict.get("file_storage", {})
+        file_storage_settings = FileStorageSettings(**{
+            k: file_storage[k] for k in file_storage
+            if k in FileStorageSettings.model_fields
+        }) if file_storage else FileStorageSettings()
+
+        # Parse auth settings
+        from app.schemas.organization import AuthSettings
+        auth = settings_dict.get("auth", {})
+        auth_settings = AuthSettings(**{
+            k: auth[k] for k in auth
+            if k in AuthSettings.model_fields
+        }) if auth else AuthSettings()
 
         # Parse module settings (auto-migrates from onboarding if needed)
         module_settings = await self._resolve_module_settings(settings_dict, org=org)
@@ -188,6 +198,7 @@ class OrganizationService:
         known_keys = {
             "contact_info_visibility",
             "email_service",
+            "file_storage",
             "auth",
             "modules",
             "it_team",
@@ -200,6 +211,8 @@ class OrganizationService:
         return OrganizationSettings(
             contact_info_visibility=contact_settings,
             email_service=email_settings,
+            file_storage=file_storage_settings,
+            auth=auth_settings,
             modules=module_settings,
             membership_id=membership_id_settings,
             **extra_settings,
