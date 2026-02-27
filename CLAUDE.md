@@ -232,14 +232,14 @@ backend/app/
   ```
   All enums live in `constants/enums.ts` — use these constants instead of string literals. Status badge color mappings are also defined here as `Record<string, string>` with Tailwind classes
 - **Floating promises:** Use `void` prefix for intentionally unhandled promises to satisfy `@typescript-eslint/no-floating-promises`: `void fetchData()`, `void handleSubmit()`
-- **Date formatting:** Use `utils/dateFormatting.ts` utilities (which use `Intl.DateTimeFormat` internally, not date-fns). All formatters accept an optional `timezone` parameter for IANA timezone support
+- **Date/time handling:** All dates and times are stored as **UTC** in the database and API layer. They must always be displayed to the user in their **local timezone** (or the organization's configured timezone). Use `utils/dateFormatting.ts` utilities (which use `Intl.DateTimeFormat` internally, not date-fns) — all formatters accept an optional `timezone` parameter for IANA timezone support. Never display raw UTC values in the UI
 - **Constants:** Magic numbers and config values are centralized in `constants/config.ts` (`API_TIMEOUT_MS`, `DEFAULT_PAGE_SIZE`, `PAGE_SIZE_OPTIONS`, `AUTO_SAVE_INTERVAL_MS`, etc.). Use these instead of inline values
 
 ### Backend Patterns
 
 - **Endpoint layer** (`api/v1/endpoints/`): `APIRouter()` per file, registered in `api.py` with prefix/tags. Async handlers. Permission checks via `Depends(require_permission("resource.action"))`. Instantiate service class per request: `service = FooService(db)`. Audit-sensitive operations should call `log_audit_event()` from `core/audit.py`
 - **Service layer** (`services/`): Class initialized with `AsyncSession`. Public methods are async. Private helpers prefixed with `_`. Raises `ValueError` for validation errors, `HTTPException` for HTTP-specific errors
-- **Models** (`models/`): Inherit from `Base`. String UUIDs as primary keys (`default=generate_uuid`). `DateTime(timezone=True)` for timestamps. `ForeignKey` with `ondelete="CASCADE"`. Relationships with `back_populates`. **Enums** inherit from `(str, Enum)` so they serialize cleanly:
+- **Models** (`models/`): Inherit from `Base`. String UUIDs as primary keys (`default=generate_uuid`). `DateTime(timezone=True)` for timestamps — all datetimes are stored as **UTC**; conversion to the user's local timezone happens only in the frontend. `ForeignKey` with `ondelete="CASCADE"`. Relationships with `back_populates`. **Enums** inherit from `(str, Enum)` so they serialize cleanly:
   ```python
   class EventType(str, Enum):
       BUSINESS_MEETING = "business_meeting"
