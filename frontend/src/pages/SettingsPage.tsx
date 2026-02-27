@@ -2,7 +2,7 @@
  * Settings Page
  *
  * Organization settings with a sidebar navigation and content panel.
- * Sections: General, Modules, Members, Ranks.
+ * Sections: General, Modules, Members, Ranks, Email, Storage, Authentication.
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -42,23 +42,35 @@ import {
   DollarSign,
   UserPlus,
   Globe,
+  HardDrive,
+  Key,
+  Lock,
+  Server,
+  Cloud,
+  Database,
+  Info,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { HelpLink } from '../components/HelpLink';
 import { organizationService, ranksService } from '../services/api';
 import type { ModuleSettingsData, OperationalRankResponse, OrganizationProfile, RankValidationIssue } from '../services/api';
-import type { ContactInfoSettings, MembershipIdSettings } from '../types/user';
+import type { ContactInfoSettings, MembershipIdSettings, EmailServiceSettings, FileStorageSettings, AuthSettings } from '../types/user';
 import { invalidateRanksCache } from '../hooks/useRanks';
 
 // ── Section definitions ──
 
-type SectionKey = 'general' | 'modules' | 'members' | 'ranks';
+type SectionKey = 'general' | 'modules' | 'members' | 'ranks' | 'email' | 'storage' | 'authentication';
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; description: string }[] = [
   { key: 'general', label: 'General', icon: Building2, description: 'Department name, logo, timezone, and contact info' },
   { key: 'modules', label: 'Modules', icon: Package, description: 'Enable or disable optional features' },
   { key: 'members', label: 'Members', icon: Users, description: 'Contact visibility and membership IDs' },
   { key: 'ranks', label: 'Ranks', icon: Shield, description: 'Operational rank configuration' },
+  { key: 'email', label: 'Email', icon: Mail, description: 'Email platform and notification settings' },
+  { key: 'storage', label: 'Storage', icon: HardDrive, description: 'File storage platform configuration' },
+  { key: 'authentication', label: 'Authentication', icon: Key, description: 'User sign-in and SSO provider' },
 ];
 
 // ── Module definitions ──
@@ -166,6 +178,23 @@ export const SettingsPage: React.FC = () => {
   });
   const [savingMembershipId, setSavingMembershipId] = useState(false);
 
+  // Email settings state
+  const [emailSettings, setEmailSettings] = useState<EmailServiceSettings>({
+    enabled: false, platform: 'other', smtp_port: 587, smtp_encryption: 'tls', use_tls: true,
+  });
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [emailPasswordVisible, setEmailPasswordVisible] = useState(false);
+
+  // File storage state
+  const [storageSettings, setStorageSettings] = useState<FileStorageSettings>({ platform: 'local' });
+  const [savingStorage, setSavingStorage] = useState(false);
+  const [storageSecretVisible, setStorageSecretVisible] = useState(false);
+
+  // Authentication state
+  const [authSettings, setAuthSettings] = useState<AuthSettings>({ provider: 'local' });
+  const [savingAuth, setSavingAuth] = useState(false);
+  const [authSecretVisible, setAuthSecretVisible] = useState(false);
+
   // Rank state
   const [ranks, setRanks] = useState<OperationalRankResponse[]>([]);
   const [ranksLoading, setRanksLoading] = useState(false);
@@ -219,6 +248,9 @@ export const SettingsPage: React.FC = () => {
         ]);
         setContactSettings(settingsData.contact_info_visibility);
         if (settingsData.membership_id) setMembershipId(settingsData.membership_id);
+        if (settingsData.email_service) setEmailSettings(settingsData.email_service);
+        if (settingsData.file_storage) setStorageSettings(settingsData.file_storage);
+        if (settingsData.auth) setAuthSettings(settingsData.auth);
         setModuleSettings(modulesData.module_settings);
         setProfile(profileData);
       } catch {
@@ -324,6 +356,48 @@ export const SettingsPage: React.FC = () => {
       const status = (err as { response?: { status?: number } })?.response?.status;
       toast.error(status === 403 ? 'Permission denied.' : 'Failed to save.');
     } finally { setSavingMembershipId(false); }
+  };
+
+  // ── Email settings handlers ──
+
+  const handleSaveEmail = async () => {
+    setSavingEmail(true);
+    try {
+      const updated = await organizationService.updateEmailSettings(emailSettings);
+      setEmailSettings(updated);
+      toast.success('Email settings saved');
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast.error(status === 403 ? 'Permission denied.' : 'Failed to save email settings.');
+    } finally { setSavingEmail(false); }
+  };
+
+  // ── File storage handlers ──
+
+  const handleSaveStorage = async () => {
+    setSavingStorage(true);
+    try {
+      const updated = await organizationService.updateFileStorageSettings(storageSettings);
+      setStorageSettings(updated);
+      toast.success('File storage settings saved');
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast.error(status === 403 ? 'Permission denied.' : 'Failed to save storage settings.');
+    } finally { setSavingStorage(false); }
+  };
+
+  // ── Authentication handlers ──
+
+  const handleSaveAuth = async () => {
+    setSavingAuth(true);
+    try {
+      const updated = await organizationService.updateAuthSettings(authSettings);
+      setAuthSettings(updated);
+      toast.success('Authentication settings saved');
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast.error(status === 403 ? 'Permission denied.' : 'Failed to save authentication settings.');
+    } finally { setSavingAuth(false); }
   };
 
   // ── Rank handlers ──
@@ -931,6 +1005,692 @@ export const SettingsPage: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      // ════════════════════════════════════════════
+      // EMAIL
+      // ════════════════════════════════════════════
+      case 'email':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold text-theme-text-primary">Email Configuration</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Configure your email platform for sending notifications and alerts to your team.
+              </p>
+            </div>
+
+            {/* Info banner */}
+            <div className="flex items-start gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
+              <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-theme-text-secondary">
+                These settings were initially configured during onboarding. Changes here will affect how the system sends email notifications, reminders, and alerts.
+              </p>
+            </div>
+
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between py-3 border-b border-theme-surface-border">
+              <div>
+                <p className="text-sm font-medium text-theme-text-primary">Enable Email Notifications</p>
+                <p className="text-xs text-theme-text-muted">Send email notifications, reminders, and alerts</p>
+              </div>
+              <Toggle checked={emailSettings.enabled} onChange={() => setEmailSettings(s => ({ ...s, enabled: !s.enabled }))} />
+            </div>
+
+            {/* Platform selection */}
+            <div>
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">Email Platform</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {([
+                  { id: 'gmail', label: 'Gmail', icon: <Mail className="w-4 h-4" /> },
+                  { id: 'microsoft', label: 'Microsoft 365', icon: <Mail className="w-4 h-4" /> },
+                  { id: 'selfhosted', label: 'Self-Hosted SMTP', icon: <Server className="w-4 h-4" /> },
+                  { id: 'other', label: 'Other / None', icon: <Mail className="w-4 h-4" /> },
+                ] as const).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setEmailSettings(s => ({ ...s, platform: p.id }))}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                      emailSettings.platform === p.id
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'
+                    }`}
+                  >
+                    {p.icon}
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Common fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-theme-text-muted mb-1">From Email Address</label>
+                <input
+                  type="email"
+                  value={emailSettings.from_email || ''}
+                  onChange={(e) => setEmailSettings(s => ({ ...s, from_email: e.target.value }))}
+                  placeholder="notifications@yourdomain.com"
+                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-theme-text-muted mb-1">From Name</label>
+                <input
+                  type="text"
+                  value={emailSettings.from_name || ''}
+                  onChange={(e) => setEmailSettings(s => ({ ...s, from_name: e.target.value }))}
+                  placeholder={profile?.name || 'Department Name'}
+                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Platform-specific fields */}
+            {emailSettings.platform === 'gmail' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">Gmail / Google Workspace</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Google Client ID</label>
+                    <input
+                      type="text"
+                      value={emailSettings.google_client_id || ''}
+                      onChange={(e) => setEmailSettings(s => ({ ...s, google_client_id: e.target.value }))}
+                      placeholder="123456789-abc.apps.googleusercontent.com"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Google Client Secret</label>
+                    <div className="relative">
+                      <input
+                        type={emailPasswordVisible ? 'text' : 'password'}
+                        value={emailSettings.google_client_secret || ''}
+                        onChange={(e) => setEmailSettings(s => ({ ...s, google_client_secret: e.target.value }))}
+                        placeholder="GOCSPX-xxxxxxxxxxxxx"
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button type="button" onClick={() => setEmailPasswordVisible(!emailPasswordVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                        {emailPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-theme-text-muted mb-1">App Password (alternative to OAuth)</label>
+                  <input
+                    type="password"
+                    value={emailSettings.google_app_password || ''}
+                    onChange={(e) => setEmailSettings(s => ({ ...s, google_app_password: e.target.value }))}
+                    placeholder="xxxx xxxx xxxx xxxx"
+                    className="w-full sm:w-1/2 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {emailSettings.platform === 'microsoft' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">Microsoft 365 / Azure AD</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Tenant ID</label>
+                    <input
+                      type="text"
+                      value={emailSettings.microsoft_tenant_id || ''}
+                      onChange={(e) => setEmailSettings(s => ({ ...s, microsoft_tenant_id: e.target.value }))}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client ID (Application ID)</label>
+                    <input
+                      type="text"
+                      value={emailSettings.microsoft_client_id || ''}
+                      onChange={(e) => setEmailSettings(s => ({ ...s, microsoft_client_id: e.target.value }))}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-theme-text-muted mb-1">Client Secret</label>
+                  <div className="relative sm:w-1/2">
+                    <input
+                      type={emailPasswordVisible ? 'text' : 'password'}
+                      value={emailSettings.microsoft_client_secret || ''}
+                      onChange={(e) => setEmailSettings(s => ({ ...s, microsoft_client_secret: e.target.value }))}
+                      placeholder="Client secret value"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button type="button" onClick={() => setEmailPasswordVisible(!emailPasswordVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                      {emailPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {emailSettings.platform === 'selfhosted' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">Self-Hosted SMTP</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">SMTP Host</label>
+                    <input
+                      type="text"
+                      value={emailSettings.smtp_host || ''}
+                      onChange={(e) => setEmailSettings(s => ({ ...s, smtp_host: e.target.value }))}
+                      placeholder="mail.yourdomain.com"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Port</label>
+                    <input
+                      type="number"
+                      value={emailSettings.smtp_port}
+                      onChange={(e) => setEmailSettings(s => ({ ...s, smtp_port: parseInt(e.target.value) || 587 }))}
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Encryption</label>
+                    <select
+                      value={emailSettings.smtp_encryption}
+                      onChange={(e) => setEmailSettings(s => ({ ...s, smtp_encryption: e.target.value }))}
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="tls">TLS (STARTTLS)</option>
+                      <option value="ssl">SSL</option>
+                      <option value="none">None</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Username</label>
+                    <input
+                      type="text"
+                      value={emailSettings.smtp_user || ''}
+                      onChange={(e) => setEmailSettings(s => ({ ...s, smtp_user: e.target.value }))}
+                      placeholder="notifications@yourdomain.com"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Password</label>
+                    <div className="relative">
+                      <input
+                        type={emailPasswordVisible ? 'text' : 'password'}
+                        value={emailSettings.smtp_password || ''}
+                        onChange={(e) => setEmailSettings(s => ({ ...s, smtp_password: e.target.value }))}
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button type="button" onClick={() => setEmailPasswordVisible(!emailPasswordVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                        {emailPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Save */}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => { void handleSaveEmail(); }}
+                disabled={savingEmail}
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                {savingEmail && <Loader2 className="w-4 h-4 animate-spin" />}
+                {savingEmail ? 'Saving...' : 'Save Email Settings'}
+              </button>
+            </div>
+          </div>
+        );
+
+      // ════════════════════════════════════════════
+      // STORAGE
+      // ════════════════════════════════════════════
+      case 'storage':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold text-theme-text-primary">File Storage</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Configure where department files, documents, and images are stored.
+              </p>
+            </div>
+
+            {/* Info banner */}
+            <div className="flex items-start gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
+              <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-theme-text-secondary">
+                These settings were initially configured during onboarding. Changing the storage platform may require migrating existing files.
+              </p>
+            </div>
+
+            {/* Platform selection */}
+            <div>
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">Storage Platform</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {([
+                  { id: 'googledrive', label: 'Google Drive', icon: <Cloud className="w-4 h-4" /> },
+                  { id: 'onedrive', label: 'OneDrive', icon: <Cloud className="w-4 h-4" /> },
+                  { id: 's3', label: 'Amazon S3', icon: <Database className="w-4 h-4" /> },
+                  { id: 'local', label: 'Local Storage', icon: <HardDrive className="w-4 h-4" /> },
+                  { id: 'other', label: 'Other', icon: <HardDrive className="w-4 h-4" /> },
+                ] as const).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setStorageSettings(s => ({ ...s, platform: p.id }))}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                      storageSettings.platform === p.id
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'
+                    }`}
+                  >
+                    {p.icon}
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Google Drive config */}
+            {storageSettings.platform === 'googledrive' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">Google Drive Configuration</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client ID</label>
+                    <input
+                      type="text"
+                      value={storageSettings.google_drive_client_id || ''}
+                      onChange={(e) => setStorageSettings(s => ({ ...s, google_drive_client_id: e.target.value }))}
+                      placeholder="123456789-abc.apps.googleusercontent.com"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client Secret</label>
+                    <div className="relative">
+                      <input
+                        type={storageSecretVisible ? 'text' : 'password'}
+                        value={storageSettings.google_drive_client_secret || ''}
+                        onChange={(e) => setStorageSettings(s => ({ ...s, google_drive_client_secret: e.target.value }))}
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button type="button" onClick={() => setStorageSecretVisible(!storageSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                        {storageSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-theme-text-muted mb-1">Folder ID (optional)</label>
+                  <input
+                    type="text"
+                    value={storageSettings.google_drive_folder_id || ''}
+                    onChange={(e) => setStorageSettings(s => ({ ...s, google_drive_folder_id: e.target.value }))}
+                    placeholder="Root folder ID for department files"
+                    className="w-full sm:w-1/2 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* OneDrive config */}
+            {storageSettings.platform === 'onedrive' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">OneDrive / SharePoint Configuration</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Tenant ID</label>
+                    <input
+                      type="text"
+                      value={storageSettings.onedrive_tenant_id || ''}
+                      onChange={(e) => setStorageSettings(s => ({ ...s, onedrive_tenant_id: e.target.value }))}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client ID</label>
+                    <input
+                      type="text"
+                      value={storageSettings.onedrive_client_id || ''}
+                      onChange={(e) => setStorageSettings(s => ({ ...s, onedrive_client_id: e.target.value }))}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client Secret</label>
+                    <div className="relative">
+                      <input
+                        type={storageSecretVisible ? 'text' : 'password'}
+                        value={storageSettings.onedrive_client_secret || ''}
+                        onChange={(e) => setStorageSettings(s => ({ ...s, onedrive_client_secret: e.target.value }))}
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button type="button" onClick={() => setStorageSecretVisible(!storageSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                        {storageSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">SharePoint Site URL (optional)</label>
+                    <input
+                      type="text"
+                      value={storageSettings.sharepoint_site_url || ''}
+                      onChange={(e) => setStorageSettings(s => ({ ...s, sharepoint_site_url: e.target.value }))}
+                      placeholder="https://your-org.sharepoint.com/sites/..."
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* S3 config */}
+            {storageSettings.platform === 's3' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">Amazon S3 / S3-Compatible Storage</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Access Key ID</label>
+                    <input
+                      type="text"
+                      value={storageSettings.s3_access_key_id || ''}
+                      onChange={(e) => setStorageSettings(s => ({ ...s, s3_access_key_id: e.target.value }))}
+                      placeholder="AKIAIOSFODNN7EXAMPLE"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Secret Access Key</label>
+                    <div className="relative">
+                      <input
+                        type={storageSecretVisible ? 'text' : 'password'}
+                        value={storageSettings.s3_secret_access_key || ''}
+                        onChange={(e) => setStorageSettings(s => ({ ...s, s3_secret_access_key: e.target.value }))}
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button type="button" onClick={() => setStorageSecretVisible(!storageSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                        {storageSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Bucket Name</label>
+                    <input
+                      type="text"
+                      value={storageSettings.s3_bucket_name || ''}
+                      onChange={(e) => setStorageSettings(s => ({ ...s, s3_bucket_name: e.target.value }))}
+                      placeholder="my-department-files"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Region</label>
+                    <input
+                      type="text"
+                      value={storageSettings.s3_region || ''}
+                      onChange={(e) => setStorageSettings(s => ({ ...s, s3_region: e.target.value }))}
+                      placeholder="us-east-1"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Endpoint URL (optional, for MinIO)</label>
+                    <input
+                      type="text"
+                      value={storageSettings.s3_endpoint_url || ''}
+                      onChange={(e) => setStorageSettings(s => ({ ...s, s3_endpoint_url: e.target.value }))}
+                      placeholder="https://minio.example.com"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Local storage config */}
+            {storageSettings.platform === 'local' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">Local Storage</p>
+                <div>
+                  <label className="block text-xs text-theme-text-muted mb-1">Storage Path (optional)</label>
+                  <input
+                    type="text"
+                    value={storageSettings.local_storage_path || ''}
+                    onChange={(e) => setStorageSettings(s => ({ ...s, local_storage_path: e.target.value }))}
+                    placeholder="/var/data/uploads (defaults to server upload directory)"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-theme-text-muted mt-1">Files are stored on the server. Ensure adequate disk space and a backup strategy.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Save */}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => { void handleSaveStorage(); }}
+                disabled={savingStorage}
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                {savingStorage && <Loader2 className="w-4 h-4 animate-spin" />}
+                {savingStorage ? 'Saving...' : 'Save Storage Settings'}
+              </button>
+            </div>
+          </div>
+        );
+
+      // ════════════════════════════════════════════
+      // AUTHENTICATION
+      // ════════════════════════════════════════════
+      case 'authentication':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold text-theme-text-primary">Authentication</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Configure how users sign in to the system.
+              </p>
+            </div>
+
+            {/* Info banner */}
+            <div className="flex items-start gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
+              <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-theme-text-secondary">
+                These settings were initially configured during onboarding. Changing the authentication provider will affect how all users sign in. Ensure the new provider is configured before switching.
+              </p>
+            </div>
+
+            {/* Provider selection */}
+            <div>
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">Authentication Provider</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {([
+                  { id: 'google', label: 'Google OAuth', icon: <Shield className="w-4 h-4" /> },
+                  { id: 'microsoft', label: 'Microsoft AD', icon: <Shield className="w-4 h-4" /> },
+                  { id: 'authentik', label: 'Authentik SSO', icon: <Key className="w-4 h-4" /> },
+                  { id: 'local', label: 'Local Passwords', icon: <Lock className="w-4 h-4" /> },
+                ] as const).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setAuthSettings(s => ({ ...s, provider: p.id }))}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                      authSettings.provider === p.id
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'
+                    }`}
+                  >
+                    {p.icon}
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Google OAuth config */}
+            {authSettings.provider === 'google' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">Google OAuth Configuration</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client ID</label>
+                    <input
+                      type="text"
+                      value={authSettings.google_client_id || ''}
+                      onChange={(e) => setAuthSettings(s => ({ ...s, google_client_id: e.target.value }))}
+                      placeholder="123456789-abc.apps.googleusercontent.com"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client Secret</label>
+                    <div className="relative">
+                      <input
+                        type={authSecretVisible ? 'text' : 'password'}
+                        value={authSettings.google_client_secret || ''}
+                        onChange={(e) => setAuthSettings(s => ({ ...s, google_client_secret: e.target.value }))}
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button type="button" onClick={() => setAuthSecretVisible(!authSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                        {authSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Microsoft Azure AD config */}
+            {authSettings.provider === 'microsoft' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">Microsoft Azure AD Configuration</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Tenant ID</label>
+                    <input
+                      type="text"
+                      value={authSettings.microsoft_tenant_id || ''}
+                      onChange={(e) => setAuthSettings(s => ({ ...s, microsoft_tenant_id: e.target.value }))}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client ID (Application ID)</label>
+                    <input
+                      type="text"
+                      value={authSettings.microsoft_client_id || ''}
+                      onChange={(e) => setAuthSettings(s => ({ ...s, microsoft_client_id: e.target.value }))}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-theme-text-muted mb-1">Client Secret</label>
+                  <div className="relative sm:w-1/2">
+                    <input
+                      type={authSecretVisible ? 'text' : 'password'}
+                      value={authSettings.microsoft_client_secret || ''}
+                      onChange={(e) => setAuthSettings(s => ({ ...s, microsoft_client_secret: e.target.value }))}
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button type="button" onClick={() => setAuthSecretVisible(!authSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                      {authSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Authentik SSO config */}
+            {authSettings.provider === 'authentik' && (
+              <div className="space-y-4 border-t border-theme-surface-border pt-4">
+                <p className="text-sm font-medium text-theme-text-primary">Authentik SSO Configuration</p>
+                <div>
+                  <label className="block text-xs text-theme-text-muted mb-1">Authentik Server URL</label>
+                  <input
+                    type="text"
+                    value={authSettings.authentik_url || ''}
+                    onChange={(e) => setAuthSettings(s => ({ ...s, authentik_url: e.target.value }))}
+                    placeholder="https://auth.yourdomain.com"
+                    className="w-full sm:w-1/2 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client ID</label>
+                    <input
+                      type="text"
+                      value={authSettings.authentik_client_id || ''}
+                      onChange={(e) => setAuthSettings(s => ({ ...s, authentik_client_id: e.target.value }))}
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Client Secret</label>
+                    <div className="relative">
+                      <input
+                        type={authSecretVisible ? 'text' : 'password'}
+                        value={authSettings.authentik_client_secret || ''}
+                        onChange={(e) => setAuthSettings(s => ({ ...s, authentik_client_secret: e.target.value }))}
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button type="button" onClick={() => setAuthSecretVisible(!authSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                        {authSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Local passwords info */}
+            {authSettings.provider === 'local' && (
+              <div className="border-t border-theme-surface-border pt-4">
+                <div className="flex items-start gap-3 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
+                  <Lock className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-theme-text-primary">Local Password Authentication</p>
+                    <p className="text-sm text-theme-text-secondary mt-1">
+                      Passwords are securely hashed with Argon2id and stored internally. No external authentication services are required. Admins manage user accounts directly in the system.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Save */}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => { void handleSaveAuth(); }}
+                disabled={savingAuth}
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                {savingAuth && <Loader2 className="w-4 h-4 animate-spin" />}
+                {savingAuth ? 'Saving...' : 'Save Authentication Settings'}
+              </button>
+            </div>
           </div>
         );
     }

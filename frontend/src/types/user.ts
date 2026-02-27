@@ -44,6 +44,65 @@ export interface MembershipIdSettings {
   next_number: number;
 }
 
+export interface EmailServiceSettings {
+  enabled: boolean;
+  platform: string;
+  // Gmail / Google Workspace
+  google_client_id?: string;
+  google_client_secret?: string;
+  google_app_password?: string;
+  // Microsoft 365
+  microsoft_tenant_id?: string;
+  microsoft_client_id?: string;
+  microsoft_client_secret?: string;
+  // Self-hosted SMTP
+  smtp_host?: string;
+  smtp_port: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_encryption: string;
+  // Common
+  from_email?: string;
+  from_name?: string;
+  use_tls: boolean;
+}
+
+export interface FileStorageSettings {
+  platform: string;
+  // Google Drive
+  google_drive_client_id?: string;
+  google_drive_client_secret?: string;
+  google_drive_folder_id?: string;
+  // OneDrive / SharePoint
+  onedrive_tenant_id?: string;
+  onedrive_client_id?: string;
+  onedrive_client_secret?: string;
+  sharepoint_site_url?: string;
+  // Amazon S3
+  s3_access_key_id?: string;
+  s3_secret_access_key?: string;
+  s3_bucket_name?: string;
+  s3_region?: string;
+  s3_endpoint_url?: string;
+  // Local
+  local_storage_path?: string;
+}
+
+export interface AuthSettings {
+  provider: string;
+  // Google OAuth
+  google_client_id?: string;
+  google_client_secret?: string;
+  // Microsoft Azure AD
+  microsoft_tenant_id?: string;
+  microsoft_client_id?: string;
+  microsoft_client_secret?: string;
+  // Authentik SSO
+  authentik_url?: string;
+  authentik_client_id?: string;
+  authentik_client_secret?: string;
+}
+
 export interface NotificationPreferences {
   email: boolean;
   sms: boolean;

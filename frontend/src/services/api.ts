@@ -19,7 +19,7 @@ import {
   clearRevalidating,
   clearCache,
 } from '../utils/apiCache';
-import type { User, ContactInfoSettings, ContactInfoUpdate, UserProfileUpdate } from '../types/user';
+import type { User, ContactInfoSettings, ContactInfoUpdate, UserProfileUpdate, EmailServiceSettings, FileStorageSettings, AuthSettings } from '../types/user';
 import type {
   Role,
   Permission,
@@ -532,8 +532,20 @@ export const organizationService = {
   /**
    * Get organization settings
    */
-  async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings; membership_id?: import('../types/user').MembershipIdSettings }> {
-    const response = await api.get<{ contact_info_visibility: ContactInfoSettings; membership_id?: import('../types/user').MembershipIdSettings }>('/organization/settings');
+  async getSettings(): Promise<{
+    contact_info_visibility: ContactInfoSettings;
+    email_service?: EmailServiceSettings;
+    file_storage?: FileStorageSettings;
+    auth?: AuthSettings;
+    membership_id?: import('../types/user').MembershipIdSettings;
+  }> {
+    const response = await api.get<{
+      contact_info_visibility: ContactInfoSettings;
+      email_service?: EmailServiceSettings;
+      file_storage?: FileStorageSettings;
+      auth?: AuthSettings;
+      membership_id?: import('../types/user').MembershipIdSettings;
+    }>('/organization/settings');
     return response.data;
   },
 
@@ -542,6 +554,30 @@ export const organizationService = {
    */
   async updateContactInfoSettings(settings: ContactInfoSettings): Promise<ContactInfoSettings> {
     const response = await api.patch<ContactInfoSettings>('/organization/settings/contact-info', settings);
+    return response.data;
+  },
+
+  /**
+   * Update email service settings
+   */
+  async updateEmailSettings(settings: EmailServiceSettings): Promise<EmailServiceSettings> {
+    const response = await api.patch<EmailServiceSettings>('/organization/settings/email', settings);
+    return response.data;
+  },
+
+  /**
+   * Update file storage settings
+   */
+  async updateFileStorageSettings(settings: FileStorageSettings): Promise<FileStorageSettings> {
+    const response = await api.patch<FileStorageSettings>('/organization/settings/file-storage', settings);
+    return response.data;
+  },
+
+  /**
+   * Update authentication settings
+   */
+  async updateAuthSettings(settings: AuthSettings): Promise<AuthSettings> {
+    const response = await api.patch<AuthSettings>('/organization/settings/auth', settings);
     return response.data;
   },
 
@@ -1698,8 +1734,8 @@ export const electionService = {
    * Get voter overrides for an election
    */
   async getVoterOverrides(electionId: string): Promise<import('../types/election').VoterOverride[]> {
-    const response = await api.get<import('../types/election').VoterOverride[]>(`/elections/${electionId}/voter-overrides`);
-    return response.data;
+    const response = await api.get<{ overrides: import('../types/election').VoterOverride[] }>(`/elections/${electionId}/voter-overrides`);
+    return response.data.overrides;
   },
 
   /**
