@@ -33,6 +33,11 @@ vi.mock("qrcode.react", () => ({
   ),
 }));
 
+// Mock JsBarcode
+vi.mock("jsbarcode", () => ({
+  default: vi.fn(),
+}));
+
 // Mock auth store
 const mockCurrentUser = {
   id: "user-123",
@@ -248,6 +253,30 @@ describe("MemberIdCardPage", () => {
       await waitFor(() => {
         expect(screen.getByText("J")).toBeInTheDocument();
       });
+    });
+
+    it("should render barcode container when membership number exists", async () => {
+      renderWithRouter(<MemberIdCardPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("barcode-container")).toBeInTheDocument();
+        expect(screen.getByTestId("barcode")).toBeInTheDocument();
+        expect(screen.getByText("Code 128")).toBeInTheDocument();
+      });
+    });
+
+    it("should not render barcode when membership number is absent", async () => {
+      const memberNoNumber = { ...mockMember, membership_number: undefined };
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue(
+        memberNoNumber as never,
+      );
+
+      renderWithRouter(<MemberIdCardPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId("barcode-container")).not.toBeInTheDocument();
     });
 
     it("should show photo when available", async () => {

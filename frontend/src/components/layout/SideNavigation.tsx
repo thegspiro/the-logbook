@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home,
   Users,
@@ -34,13 +34,15 @@ import {
   ShieldCheck,
   ClipboardCheck,
   Activity,
-} from 'lucide-react';
-import { Sun, Moon, Monitor, Contrast } from 'lucide-react';
-import { useFocusTrap } from '../../hooks/useFocusTrap';
-import { useTheme } from '../../contexts/ThemeContext';
-import { useAuthStore } from '../../stores/authStore';
-import { organizationService } from '../../services/api';
-import { prefetchRoute } from '../../utils/routePrefetch';
+  CreditCard,
+  ScanLine,
+} from "lucide-react";
+import { Sun, Moon, Monitor, Contrast } from "lucide-react";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useAuthStore } from "../../stores/authStore";
+import { organizationService } from "../../services/api";
+import { prefetchRoute } from "../../utils/routePrefetch";
 
 interface SideNavigationProps {
   departmentName: string;
@@ -73,207 +75,344 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
-  const { checkPermission } = useAuthStore();
+  const { user: currentUser, checkPermission } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(["Settings"]);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
   const [facilitiesModuleEnabled, setFacilitiesModuleEnabled] = useState(false);
   const [apparatusModuleEnabled, setApparatusModuleEnabled] = useState(false);
 
   // Check if the full Facilities and Apparatus modules are enabled for this organization
   useEffect(() => {
-    organizationService.getEnabledModules()
-      .then(res => {
-        setFacilitiesModuleEnabled(res.enabled_modules.includes('facilities'));
-        setApparatusModuleEnabled(res.enabled_modules.includes('apparatus'));
+    organizationService
+      .getEnabledModules()
+      .then((res) => {
+        setFacilitiesModuleEnabled(res.enabled_modules.includes("facilities"));
+        setApparatusModuleEnabled(res.enabled_modules.includes("apparatus"));
       })
-      .catch(() => { /* default to false */ });
+      .catch(() => {
+        /* default to false */
+      });
   }, []);
 
   // Auto-expand parent menu when navigating to a child route
   useEffect(() => {
-    setExpandedMenus(prev => {
-      const activeParent = navItems.find(item =>
-        item.subItems?.some(sub => location.pathname === sub.path || location.pathname.startsWith(sub.path + '/'))
+    setExpandedMenus((prev) => {
+      const activeParent = navItems.find((item) =>
+        item.subItems?.some(
+          (sub) =>
+            location.pathname === sub.path ||
+            location.pathname.startsWith(sub.path + "/"),
+        ),
       );
       if (activeParent && !prev.includes(activeParent.label)) {
         return [...prev, activeParent.label];
       }
       return prev;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const cycleTheme = () => {
-    const order = ['light', 'dark', 'system', 'high-contrast'] as const;
-    const currentIndex = order.indexOf(theme as typeof order[number]);
+    const order = ["light", "dark", "system", "high-contrast"] as const;
+    const currentIndex = order.indexOf(theme as (typeof order)[number]);
     const nextIndex = (currentIndex + 1) % order.length;
-    setTheme(order[nextIndex] ?? 'system');
+    setTheme(order[nextIndex] ?? "system");
   };
 
-  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
-  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
+  const ThemeIcon =
+    theme === "dark"
+      ? Moon
+      : theme === "light"
+        ? Sun
+        : theme === "high-contrast"
+          ? Contrast
+          : Monitor;
+  const themeLabel =
+    theme === "dark"
+      ? "Dark"
+      : theme === "light"
+        ? "Light"
+        : theme === "high-contrast"
+          ? "High Contrast"
+          : "System";
 
   // Determine if user has any admin permission (to show/hide Administration section)
   const hasAnyAdminPermission =
-    checkPermission('members.manage') ||
-    checkPermission('prospective_members.manage') ||
-    checkPermission('events.manage') ||
-    checkPermission('training.manage') ||
-    checkPermission('inventory.manage') ||
-    checkPermission('admin_hours.manage') ||
-    checkPermission('positions.manage_permissions') ||
-    checkPermission('settings.manage') ||
-    checkPermission('analytics.view');
+    checkPermission("members.manage") ||
+    checkPermission("prospective_members.manage") ||
+    checkPermission("events.manage") ||
+    checkPermission("training.manage") ||
+    checkPermission("inventory.manage") ||
+    checkPermission("admin_hours.manage") ||
+    checkPermission("positions.manage_permissions") ||
+    checkPermission("settings.manage") ||
+    checkPermission("analytics.view");
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
-    { label: 'Dashboard', path: '/dashboard', icon: Home },
-    { label: 'Members', path: '/members', icon: Users },
-    { label: 'Events', path: '/events', icon: Calendar },
-    { label: 'Documents', path: '/documents', icon: FileText },
+    { label: "Dashboard", path: "/dashboard", icon: Home },
+    { label: "Members", path: "/members", icon: Users },
+    { label: "Events", path: "/events", icon: Calendar },
+    { label: "Documents", path: "/documents", icon: FileText },
     {
-      label: 'Training',
-      path: '#',
+      label: "Training",
+      path: "#",
       icon: GraduationCap,
       subItems: [
-        { label: 'My Training', path: '/training/my-training', icon: GraduationCap },
-        { label: 'Submit Training', path: '/training/submit', icon: ClipboardList },
-        { label: 'Course Library', path: '/training/courses', icon: BookOpen },
-        { label: 'Programs', path: '/training/programs', icon: Layers },
-        { label: 'Skills Testing', path: '/training/skills-testing', icon: ClipboardCheck },
+        {
+          label: "My Training",
+          path: "/training/my-training",
+          icon: GraduationCap,
+        },
+        {
+          label: "Submit Training",
+          path: "/training/submit",
+          icon: ClipboardList,
+        },
+        { label: "Course Library", path: "/training/courses", icon: BookOpen },
+        { label: "Programs", path: "/training/programs", icon: Layers },
+        {
+          label: "Skills Testing",
+          path: "/training/skills-testing",
+          icon: ClipboardCheck,
+        },
       ],
     },
     {
-      label: 'Admin Hours',
-      path: '/admin-hours',
+      label: "Admin Hours",
+      path: "/admin-hours",
       icon: ClipboardCheck,
     },
     {
-      label: 'Shift Scheduling',
-      path: '/scheduling',
+      label: "Shift Scheduling",
+      path: "/scheduling",
       icon: Clock,
     },
     {
-      label: 'Operations',
-      path: '#',
+      label: "Operations",
+      path: "#",
       icon: Package,
       subItems: [
-        { label: 'My Equipment', path: '/inventory/my-equipment', icon: Package },
-        { label: 'Inventory', path: '/inventory', icon: Package },
+        {
+          label: "My Equipment",
+          path: "/inventory/my-equipment",
+          icon: Package,
+        },
+        { label: "Inventory", path: "/inventory", icon: Package },
         // Full apparatus module or lightweight version
         ...(apparatusModuleEnabled
-          ? [{ label: 'Apparatus', path: '/apparatus', icon: Truck }]
-          : [{ label: 'Apparatus', path: '/apparatus-basic', icon: Truck }]),
+          ? [{ label: "Apparatus", path: "/apparatus", icon: Truck }]
+          : [{ label: "Apparatus", path: "/apparatus-basic", icon: Truck }]),
         ...(facilitiesModuleEnabled
-          ? [{ label: 'Facilities', path: '/facilities', icon: Building2 }]
+          ? [{ label: "Facilities", path: "/facilities", icon: Building2 }]
           : []),
       ],
     },
     // When Facilities module is off, show a lightweight Locations page
-    ...(facilitiesModuleEnabled ? [] : [
-      { label: 'Locations', path: '/locations', icon: MapPin } as NavItem,
-    ]),
+    ...(facilitiesModuleEnabled
+      ? []
+      : [{ label: "Locations", path: "/locations", icon: MapPin } as NavItem]),
     {
-      label: 'Governance',
-      path: '#',
+      label: "Governance",
+      path: "#",
       icon: Vote,
       subItems: [
-        { label: 'Elections', path: '/elections', icon: Vote },
-        { label: 'Minutes', path: '/minutes', icon: ClipboardList },
-        { label: 'Action Items', path: '/action-items', icon: AlertTriangle },
+        { label: "Elections", path: "/elections", icon: Vote },
+        { label: "Minutes", path: "/minutes", icon: ClipboardList },
+        { label: "Action Items", path: "/action-items", icon: AlertTriangle },
       ],
     },
-    { label: 'Notifications', path: '/notifications', icon: Bell },
+    { label: "Notifications", path: "/notifications", icon: Bell },
 
     // ── Personal settings (always visible) ──
-    { label: 'My Account', path: '/account', icon: UserCog },
+    { label: "My Account", path: "/account", icon: UserCog },
+    ...(currentUser?.id
+      ? [
+          {
+            label: "My ID Card",
+            path: `/members/${currentUser.id}/id-card`,
+            icon: CreditCard,
+          } as NavItem,
+        ]
+      : []),
 
     // ── Administration section (only shown to users with admin perms) ──
-    ...(hasAnyAdminPermission ? [
-      { label: 'Administration', path: '#', icon: Shield, isSectionLabel: true } as NavItem,
-      { label: 'Department Setup', path: '/setup', icon: Rocket, permission: 'settings.manage' } as NavItem,
-      {
-        label: 'Members',
-        path: '#',
-        icon: Users,
-        permission: 'members.manage',
-        subItems: [
-          { label: 'Prospective', path: '/prospective-members', icon: UserPlus, permission: 'prospective_members.manage' },
-          { label: 'Pipeline Settings', path: '/prospective-members/settings', icon: Settings, permission: 'prospective_members.manage' },
-          { label: 'Member Management', path: '/members/admin', icon: UserCog, permission: 'members.manage' },
-          { label: 'Waivers', path: '/members/admin/waivers', icon: ShieldCheck, permission: 'members.manage' },
-        ],
-      } as NavItem,
-      { label: 'Events Admin', path: '/events/admin', icon: Calendar, permission: 'events.manage' } as NavItem,
-      { label: 'Training Admin', path: '/training/admin', icon: GraduationCap, permission: 'training.manage' } as NavItem,
-      { label: 'Inventory Admin', path: '/inventory/admin', icon: Package, permission: 'inventory.manage' } as NavItem,
-      { label: 'Admin Hours', path: '/admin-hours/manage', icon: ClipboardCheck, permission: 'admin_hours.manage' } as NavItem,
-      {
-        label: 'Forms & Comms',
-        path: '#',
-        icon: FormInput,
-        permission: 'settings.manage',
-        subItems: [
-          { label: 'Forms', path: '/forms', icon: FormInput },
-          { label: 'Integrations', path: '/integrations', icon: Plug },
-        ],
-      } as NavItem,
-      { label: 'Reports', path: '/reports', icon: BarChart3 } as NavItem,
-      {
-        label: 'Organization Settings',
-        path: '/settings',
-        icon: Settings,
-        permission: 'settings.manage',
-        subItems: [
-          { label: 'Organization', path: '/settings', icon: Building2 },
-          { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'positions.manage_permissions' },
-          { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'settings.manage' },
-          { label: 'Platform Analytics', path: '/admin/platform-analytics', icon: Activity, permission: 'settings.manage' },
-          { label: 'QR Code Analytics', path: '/admin/analytics', icon: BarChart3, permission: 'analytics.view' },
-          { label: 'Error Monitor', path: '/admin/errors', icon: AlertTriangle, permission: 'settings.manage' },
-        ],
-      } as NavItem,
-    ] : []),
+    ...(hasAnyAdminPermission
+      ? [
+          {
+            label: "Administration",
+            path: "#",
+            icon: Shield,
+            isSectionLabel: true,
+          } as NavItem,
+          {
+            label: "Department Setup",
+            path: "/setup",
+            icon: Rocket,
+            permission: "settings.manage",
+          } as NavItem,
+          {
+            label: "Members",
+            path: "#",
+            icon: Users,
+            permission: "members.manage",
+            subItems: [
+              {
+                label: "Prospective",
+                path: "/prospective-members",
+                icon: UserPlus,
+                permission: "prospective_members.manage",
+              },
+              {
+                label: "Pipeline Settings",
+                path: "/prospective-members/settings",
+                icon: Settings,
+                permission: "prospective_members.manage",
+              },
+              {
+                label: "Member Management",
+                path: "/members/admin",
+                icon: UserCog,
+                permission: "members.manage",
+              },
+              {
+                label: "Scan Member ID",
+                path: "/members/scan",
+                icon: ScanLine,
+                permission: "members.manage",
+              },
+              {
+                label: "Waivers",
+                path: "/members/admin/waivers",
+                icon: ShieldCheck,
+                permission: "members.manage",
+              },
+            ],
+          } as NavItem,
+          {
+            label: "Events Admin",
+            path: "/events/admin",
+            icon: Calendar,
+            permission: "events.manage",
+          } as NavItem,
+          {
+            label: "Training Admin",
+            path: "/training/admin",
+            icon: GraduationCap,
+            permission: "training.manage",
+          } as NavItem,
+          {
+            label: "Inventory Admin",
+            path: "/inventory/admin",
+            icon: Package,
+            permission: "inventory.manage",
+          } as NavItem,
+          {
+            label: "Admin Hours",
+            path: "/admin-hours/manage",
+            icon: ClipboardCheck,
+            permission: "admin_hours.manage",
+          } as NavItem,
+          {
+            label: "Forms & Comms",
+            path: "#",
+            icon: FormInput,
+            permission: "settings.manage",
+            subItems: [
+              { label: "Forms", path: "/forms", icon: FormInput },
+              { label: "Integrations", path: "/integrations", icon: Plug },
+            ],
+          } as NavItem,
+          { label: "Reports", path: "/reports", icon: BarChart3 } as NavItem,
+          {
+            label: "Organization Settings",
+            path: "/settings",
+            icon: Settings,
+            permission: "settings.manage",
+            subItems: [
+              { label: "Organization", path: "/settings", icon: Building2 },
+              {
+                label: "Role Management",
+                path: "/settings/roles",
+                icon: Shield,
+                permission: "positions.manage_permissions",
+              },
+              {
+                label: "Public Portal",
+                path: "/admin/public-portal",
+                icon: Globe,
+                permission: "settings.manage",
+              },
+              {
+                label: "Platform Analytics",
+                path: "/admin/platform-analytics",
+                icon: Activity,
+                permission: "settings.manage",
+              },
+              {
+                label: "QR Code Analytics",
+                path: "/admin/analytics",
+                icon: BarChart3,
+                permission: "analytics.view",
+              },
+              {
+                label: "Error Monitor",
+                path: "/admin/errors",
+                icon: AlertTriangle,
+                permission: "settings.manage",
+              },
+            ],
+          } as NavItem,
+        ]
+      : []),
   ];
 
   const isActive = (path: string) => {
-    if (path === '#') return false;
-    return location.pathname === path || location.pathname.startsWith(path + '/');
+    if (path === "#") return false;
+    return (
+      location.pathname === path || location.pathname.startsWith(path + "/")
+    );
   };
 
   const isSubItemActive = (path: string, siblings: { path: string }[]) => {
-    if (path === '#') return false;
+    if (path === "#") return false;
     if (location.pathname === path) return true;
-    if (!location.pathname.startsWith(path + '/')) return false;
+    if (!location.pathname.startsWith(path + "/")) return false;
     // Don't prefix-match if a sibling is a more specific match
-    return !siblings.some(s =>
-      s.path !== path &&
-      s.path.length > path.length &&
-      (location.pathname === s.path || location.pathname.startsWith(s.path + '/'))
+    return !siblings.some(
+      (s) =>
+        s.path !== path &&
+        s.path.length > path.length &&
+        (location.pathname === s.path ||
+          location.pathname.startsWith(s.path + "/")),
     );
   };
 
   const isParentActive = (item: NavItem) => {
     if (item.subItems) {
-      return item.subItems.some(sub => isActive(sub.path));
+      return item.subItems.some((sub) => isActive(sub.path));
     }
     return isActive(item.path);
   };
 
   const toggleMenu = (label: string) => {
-    setExpandedMenus(prev =>
-      prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label]
+    setExpandedMenus((prev) =>
+      prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label],
     );
   };
 
-  const handleNavigation = (path: string, hasSubItems?: boolean, label?: string) => {
+  const handleNavigation = (
+    path: string,
+    hasSubItems?: boolean,
+    label?: string,
+  ) => {
     if (hasSubItems && !collapsed) {
       if (label) toggleMenu(label);
       return;
     }
-    if (path !== '#') {
+    if (path !== "#") {
       navigate(path);
       setMobileMenuOpen(false);
     }
@@ -282,9 +421,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   return (
     <>
       {/* Mobile Header */}
-      <header className="md:hidden bg-theme-nav-bg border-b border-theme-surface-border fixed top-0 left-0 right-0 z-50" role="banner">
+      <header
+        className="md:hidden bg-theme-nav-bg border-b border-theme-surface-border fixed top-0 left-0 right-0 z-50"
+        role="banner"
+      >
         <div className="flex items-center justify-between h-16 px-4">
-          <a href="/dashboard" className="flex items-center focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
+          <a
+            href="/dashboard"
+            className="flex items-center focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg"
+          >
             {logoPreview ? (
               <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
@@ -294,12 +439,17 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 />
               </div>
             ) : (
-              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center" aria-hidden="true">
+              <div
+                className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center"
+                aria-hidden="true"
+              >
                 <Home className="w-6 h-6 text-white" />
               </div>
             )}
             <div className="ml-3 min-w-0 flex-1">
-              <span className="text-theme-text-primary text-lg font-semibold break-words leading-tight">{departmentName}</span>
+              <span className="text-theme-text-primary text-lg font-semibold break-words leading-tight">
+                {departmentName}
+              </span>
             </div>
           </a>
           <button
@@ -307,9 +457,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
             aria-expanded={mobileMenuOpen}
             aria-controls="side-navigation"
-            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-label={
+              mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"
+            }
           >
-            {mobileMenuOpen ? <X className="w-6 h-6" aria-hidden="true" /> : <Menu className="w-6 h-6" aria-hidden="true" />}
+            {mobileMenuOpen ? (
+              <X className="w-6 h-6" aria-hidden="true" />
+            ) : (
+              <Menu className="w-6 h-6" aria-hidden="true" />
+            )}
           </button>
         </div>
       </header>
@@ -330,9 +486,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         role="navigation"
         aria-label="Main navigation"
         className={`fixed top-0 left-0 h-full bg-theme-nav-bg border-r border-theme-surface-border transition-all duration-300 z-40 overscroll-contain ${
-          collapsed ? 'w-20' : 'w-64'
+          collapsed ? "w-20" : "w-64"
         } ${
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0`}
       >
         <div className="flex flex-col h-full">
@@ -341,7 +497,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             {collapsed ? (
               <>
                 <div className="flex items-center justify-center">
-                  <a href="/dashboard" className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
+                  <a
+                    href="/dashboard"
+                    className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg"
+                  >
                     {logoPreview ? (
                       <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                         <img
@@ -351,7 +510,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                         />
                       </div>
                     ) : (
-                      <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                      <div
+                        className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0"
+                        aria-hidden="true"
+                      >
                         <Home className="w-6 h-6 text-white" />
                       </div>
                     )}
@@ -362,12 +524,18 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                   className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
                   aria-label="Expand navigation"
                 >
-                  <ChevronRight className="w-5 h-5 mx-auto" aria-hidden="true" />
+                  <ChevronRight
+                    className="w-5 h-5 mx-auto"
+                    aria-hidden="true"
+                  />
                 </button>
               </>
             ) : (
               <div className="flex items-center justify-between">
-                <a href="/dashboard" className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
+                <a
+                  href="/dashboard"
+                  className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg"
+                >
                   {logoPreview ? (
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                       <img
@@ -377,7 +545,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       />
                     </div>
                   ) : (
-                    <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                    <div
+                      className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0"
+                      aria-hidden="true"
+                    >
                       <Home className="w-6 h-6 text-white" />
                     </div>
                   )}
@@ -393,14 +564,20 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                   className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                   aria-label="Collapse navigation"
                 >
-                  <ChevronRight className="w-5 h-5 rotate-180" aria-hidden="true" />
+                  <ChevronRight
+                    className="w-5 h-5 rotate-180"
+                    aria-hidden="true"
+                  />
                 </button>
               </div>
             )}
           </div>
 
           {/* Navigation Items */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto overscroll-contain -webkit-overflow-scrolling-touch" aria-label="Side navigation">
+          <nav
+            className="flex-1 p-4 space-y-1 overflow-y-auto overscroll-contain -webkit-overflow-scrolling-touch"
+            aria-label="Side navigation"
+          >
             <ul role="list" className="space-y-1">
               {navItems.map((item, idx) => {
                 // Render section label dividers
@@ -425,17 +602,24 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
                 // Filter sub-items by permission
                 const visibleSubItems = item.subItems?.filter(
-                  (sub) => !sub.permission || checkPermission(sub.permission)
+                  (sub) => !sub.permission || checkPermission(sub.permission),
                 );
 
                 // Skip top-level permission-gated items
-                if (item.permission && !checkPermission(item.permission)) return null;
+                if (item.permission && !checkPermission(item.permission))
+                  return null;
 
                 // Skip parent groups where all sub-items are hidden
-                if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;
+                if (
+                  item.subItems &&
+                  visibleSubItems &&
+                  visibleSubItems.length === 0
+                )
+                  return null;
 
                 const Icon = item.icon;
-                const hasSubItems = !!visibleSubItems && visibleSubItems.length > 0;
+                const hasSubItems =
+                  !!visibleSubItems && visibleSubItems.length > 0;
                 const isExpanded = expandedMenus.includes(item.label);
                 const parentActive = isParentActive(item);
 
@@ -445,38 +629,51 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 return (
                   <li key={itemKey}>
                     <button
-                      onClick={() => handleNavigation(item.path, hasSubItems, item.label)}
+                      onClick={() =>
+                        handleNavigation(item.path, hasSubItems, item.label)
+                      }
                       onMouseEnter={() => {
-                        if (item.path !== '#') prefetchRoute(item.path);
+                        if (item.path !== "#") prefetchRoute(item.path);
                         // Also prefetch sub-item routes on parent hover
-                        visibleSubItems?.forEach(sub => prefetchRoute(sub.path));
+                        visibleSubItems?.forEach((sub) =>
+                          prefetchRoute(sub.path),
+                        );
                       }}
                       onFocus={() => {
-                        if (item.path !== '#') prefetchRoute(item.path);
+                        if (item.path !== "#") prefetchRoute(item.path);
                       }}
-                      aria-current={parentActive && !hasSubItems ? 'page' : undefined}
+                      aria-current={
+                        parentActive && !hasSubItems ? "page" : undefined
+                      }
                       aria-expanded={hasSubItems ? isExpanded : undefined}
-                      aria-controls={hasSubItems ? `submenu-${item.label}` : undefined}
+                      aria-controls={
+                        hasSubItems ? `submenu-${item.label}` : undefined
+                      }
                       className={`w-full flex items-center rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                        collapsed ? 'justify-center p-3' : 'px-4 py-3'
+                        collapsed ? "justify-center p-3" : "px-4 py-3"
                       } ${
                         parentActive && !hasSubItems
-                          ? 'bg-red-600 text-white'
+                          ? "bg-red-600 text-white"
                           : parentActive && hasSubItems
-                          ? 'bg-theme-surface-secondary text-theme-text-primary'
-                          : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                            ? "bg-theme-surface-secondary text-theme-text-primary"
+                            : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
                       }`}
                       title={collapsed ? item.label : undefined}
                       aria-label={collapsed ? item.label : undefined}
                     >
-                      <Icon className={`w-5 h-5 flex-shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
+                      <Icon
+                        className={`w-5 h-5 flex-shrink-0 ${collapsed ? "" : "mr-3"}`}
+                        aria-hidden="true"
+                      />
                       {!collapsed && (
                         <>
-                          <span className="text-sm font-medium flex-1 text-left">{item.label}</span>
+                          <span className="text-sm font-medium flex-1 text-left">
+                            {item.label}
+                          </span>
                           {hasSubItems && (
                             <ChevronDown
                               className={`w-4 h-4 transition-transform ${
-                                isExpanded ? 'rotate-180' : ''
+                                isExpanded ? "rotate-180" : ""
                               }`}
                               aria-hidden="true"
                             />
@@ -487,24 +684,34 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
                     {/* Sub Items */}
                     {hasSubItems && isExpanded && !collapsed && (
-                      <ul id={`submenu-${item.label}`} className="mt-1 ml-4 space-y-1" role="list">
+                      <ul
+                        id={`submenu-${item.label}`}
+                        className="mt-1 ml-4 space-y-1"
+                        role="list"
+                      >
                         {visibleSubItems.map((subItem) => {
                           const SubIcon = subItem.icon;
-                          const subActive = isSubItemActive(subItem.path, item.subItems || []);
+                          const subActive = isSubItemActive(
+                            subItem.path,
+                            item.subItems || [],
+                          );
                           return (
                             <li key={subItem.path}>
                               <button
                                 onClick={() => handleNavigation(subItem.path)}
                                 onMouseEnter={() => prefetchRoute(subItem.path)}
                                 onFocus={() => prefetchRoute(subItem.path)}
-                                aria-current={subActive ? 'page' : undefined}
+                                aria-current={subActive ? "page" : undefined}
                                 className={`w-full flex items-center px-4 py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
                                   subActive
-                                    ? 'bg-red-600 text-white'
-                                    : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                                    ? "bg-red-600 text-white"
+                                    : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
                                 }`}
                               >
-                                <SubIcon className="w-4 h-4 mr-3 flex-shrink-0" aria-hidden="true" />
+                                <SubIcon
+                                  className="w-4 h-4 mr-3 flex-shrink-0"
+                                  aria-hidden="true"
+                                />
                                 <span className="text-sm">{subItem.label}</span>
                               </button>
                             </li>
@@ -523,24 +730,34 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             <button
               onClick={cycleTheme}
               className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                collapsed ? 'justify-center p-3' : 'px-4 py-3'
+                collapsed ? "justify-center p-3" : "px-4 py-3"
               }`}
               title={collapsed ? `Theme: ${themeLabel}` : undefined}
               aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
             >
-              <ThemeIcon className={`w-5 h-5 flex-shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
-              {!collapsed && <span className="text-sm font-medium">Theme: {themeLabel}</span>}
+              <ThemeIcon
+                className={`w-5 h-5 flex-shrink-0 ${collapsed ? "" : "mr-3"}`}
+                aria-hidden="true"
+              />
+              {!collapsed && (
+                <span className="text-sm font-medium">Theme: {themeLabel}</span>
+              )}
             </button>
             <button
               onClick={onLogout}
               className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                collapsed ? 'justify-center p-3' : 'px-4 py-3'
+                collapsed ? "justify-center p-3" : "px-4 py-3"
               }`}
-              title={collapsed ? 'Logout' : undefined}
-              aria-label={collapsed ? 'Logout' : undefined}
+              title={collapsed ? "Logout" : undefined}
+              aria-label={collapsed ? "Logout" : undefined}
             >
-              <LogOut className={`w-5 h-5 flex-shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
-              {!collapsed && <span className="text-sm font-medium">Logout</span>}
+              <LogOut
+                className={`w-5 h-5 flex-shrink-0 ${collapsed ? "" : "mr-3"}`}
+                aria-hidden="true"
+              />
+              {!collapsed && (
+                <span className="text-sm font-medium">Logout</span>
+              )}
             </button>
           </div>
         </div>

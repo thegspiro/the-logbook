@@ -6,6 +6,7 @@
  *
  * Member-facing routes:
  *   /members - Member directory
+ *   /members/scan - Scan a member ID (QR or barcode)
  *   /members/:userId - Member profile
  *   /members/:userId/training - Member training history
  *   /members/:userId/id-card - Digital member ID card with QR code
@@ -58,6 +59,11 @@ const MemberIdCardPage = lazyWithRetry(() =>
     default: m.MemberIdCardPage,
   })),
 );
+const MemberScanPage = lazyWithRetry(() =>
+  import("../../pages/MemberScanPage").then((m) => ({
+    default: m.MemberScanPage,
+  })),
+);
 const WaiverManagementPage = lazyWithRetry(() =>
   import("../../pages/WaiverManagementPage").then((m) => ({
     default: m.WaiverManagementPage,
@@ -69,6 +75,7 @@ export const getMembershipRoutes = () => {
     <React.Fragment>
       {/* Member-facing */}
       <Route path="/members" element={<Members />} />
+      <Route path="/members/scan" element={<MemberScanPage />} />
       <Route path="/members/:userId" element={<MemberProfilePage />} />
       <Route
         path="/members/:userId/training"
