@@ -690,13 +690,23 @@ async def update_test(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
         )
 
-    if test.status in ("completed", "cancelled"):
+    if test.status == "cancelled":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot update a {test.status} test",
+            detail="Cannot update a cancelled test",
         )
 
     update_data = test_update.model_dump(exclude_unset=True)
+
+    # Completed tests only allow notes updates (section_results for criterion notes, top-level notes)
+    if test.status == "completed":
+        allowed_fields = {"section_results", "notes"}
+        disallowed = set(update_data.keys()) - allowed_fields
+        if disallowed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot update {', '.join(sorted(disallowed))} on a completed test",
+            )
 
     # Convert section_results to JSON-serializable dicts if provided
     if "section_results" in update_data and update_data["section_results"] is not None:
