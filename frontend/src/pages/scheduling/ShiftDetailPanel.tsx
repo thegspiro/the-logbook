@@ -514,8 +514,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               <div>
                 <p className="text-xs text-theme-text-muted">Time</p>
                 <p className="text-sm font-medium text-theme-text-primary">
-                  {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
-                  {shift.end_time ? ` - ${formatTime(shift.shift_date + 'T' + shift.end_time, tz)}` : ''}
+                  {formatTime(shift.start_time, tz)}
+                  {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
                 </p>
               </div>
             </div>
