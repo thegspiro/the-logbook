@@ -50,7 +50,7 @@ export const RequestsTab: React.FC = () => {
         schedulingService.getSwapRequests(params),
         schedulingService.getTimeOffRequests(params),
       ]);
-      const rawSwaps = swaps as unknown as SwapRequest[];
+      const rawSwaps = swaps;
 
       // Enrich swap requests with shift details
       const shiftIds = new Set<string>();
@@ -74,7 +74,7 @@ export const RequestsTab: React.FC = () => {
       }));
 
       setSwapRequests(enrichedSwaps);
-      setTimeOffRequests(timeOff as unknown as TimeOffRequest[]);
+      setTimeOffRequests(timeOff);
     } catch {
       toast.error('Failed to load requests');
     } finally {
