@@ -8,6 +8,7 @@
  *   /members - Member directory
  *   /members/:userId - Member profile
  *   /members/:userId/training - Member training history
+ *   /members/:userId/id-card - Digital member ID card with QR code
  *
  * Admin hub:
  *   /members/admin - Tabbed admin hub (manage, add, import)
@@ -52,6 +53,11 @@ const MemberAuditHistoryPage = lazyWithRetry(() =>
     default: m.MemberAuditHistoryPage,
   })),
 );
+const MemberIdCardPage = lazyWithRetry(() =>
+  import("../../pages/MemberIdCardPage").then((m) => ({
+    default: m.MemberIdCardPage,
+  })),
+);
 const WaiverManagementPage = lazyWithRetry(() =>
   import("../../pages/WaiverManagementPage").then((m) => ({
     default: m.WaiverManagementPage,
@@ -68,6 +74,7 @@ export const getMembershipRoutes = () => {
         path="/members/:userId/training"
         element={<MemberTrainingHistoryPage />}
       />
+      <Route path="/members/:userId/id-card" element={<MemberIdCardPage />} />
 
       {/* Admin Hub */}
       <Route
