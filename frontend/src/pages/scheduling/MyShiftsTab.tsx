@@ -156,6 +156,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       toast.success('Time off request submitted — check Requests tab for status');
       setShowTimeOffModal(false);
       setTimeOffForm({ start_date: '', end_date: '', reason: '' });
+      void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to submit time off request'));
     } finally {

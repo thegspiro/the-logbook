@@ -867,7 +867,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Acknowledge Modal */}
       {ackReportId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Acknowledge Report">
           <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-md space-y-4">
             <h3 className="text-lg font-semibold text-theme-text-primary">Acknowledge Report</h3>
             <p className="text-sm text-theme-text-secondary">
@@ -900,7 +900,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Review Modal */}
       {reviewReportId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Review Report">
           <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-lg space-y-4">
             <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
               <ClipboardCheck className="w-5 h-5 text-violet-500" /> Review Report

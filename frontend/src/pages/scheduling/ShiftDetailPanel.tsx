@@ -73,6 +73,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Inline confirmation for decline/remove
   const [confirmingDecline, setConfirmingDecline] = useState<string | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [declining, setDeclining] = useState(false);
   const [removing, setRemoving] = useState(false);
 
@@ -185,12 +186,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   };
 
   const handleConfirm = async (assignmentId: string) => {
+    if (confirming) return;
+    setConfirming(true);
     try {
       await schedulingService.confirmAssignment(assignmentId);
       toast.success('Assignment confirmed');
       await refreshAssignments();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to confirm assignment'));
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -347,10 +352,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           </span>
           {isCurrentUser && isAssigned && confirmingDecline !== assignment.id && (
             <>
-              <button onClick={() => { void handleConfirm(assignment.id); }}
-                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"
+              <button onClick={() => { void handleConfirm(assignment.id); }} disabled={confirming}
+                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
               >
-                <Check className="w-4 h-4" />
+                {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
               <button onClick={() => setConfirmingDecline(assignment.id)}
                 className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Decline assignment"

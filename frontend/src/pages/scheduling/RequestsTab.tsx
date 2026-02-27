@@ -34,6 +34,7 @@ export const RequestsTab: React.FC = () => {
   const [reviewing, setReviewing] = useState<{ type: 'swap' | 'timeoff'; id: string } | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewAction, setReviewAction] = useState<'approved' | 'denied' | null>(null);
 
   // Inline cancel confirmation
   const [confirmingCancel, setConfirmingCancel] = useState<{ type: 'swap' | 'timeoff'; id: string } | null>(null);
@@ -103,6 +104,7 @@ export const RequestsTab: React.FC = () => {
   const handleReview = async (action: 'approved' | 'denied') => {
     if (!reviewing) return;
     setSubmittingReview(true);
+    setReviewAction(action);
     try {
       if (reviewing.type === 'swap') {
         await schedulingService.reviewSwapRequest(reviewing.id, {
@@ -123,6 +125,7 @@ export const RequestsTab: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to process request'));
     } finally {
       setSubmittingReview(false);
+      setReviewAction(null);
     }
   };
 
@@ -360,13 +363,15 @@ export const RequestsTab: React.FC = () => {
             <div className="flex justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setReviewing(null)} className="px-4 py-2 text-theme-text-secondary">Cancel</button>
               <button onClick={() => { void handleReview('denied'); }} disabled={submittingReview}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
               >
+                {reviewAction === 'denied' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                 Deny
               </button>
               <button onClick={() => { void handleReview('approved'); }} disabled={submittingReview}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50"
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
               >
+                {reviewAction === 'approved' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                 Approve
               </button>
             </div>
