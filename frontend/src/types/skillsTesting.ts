@@ -133,6 +133,8 @@ export interface SkillTemplateUpdate {
 /** Result for a single criterion during a test */
 export interface CriterionResult {
   criterion_id: string;
+  /** Sent to backend for name-based result matching */
+  criterion_label?: string;
   passed: boolean | null;
   score?: number;
   time_seconds?: number;
@@ -143,6 +145,8 @@ export interface CriterionResult {
 /** Results for a section during a test */
 export interface SectionResult {
   section_id: string;
+  /** Sent to backend for name-based result matching */
+  section_name?: string;
   criteria_results: CriterionResult[];
 }
 
@@ -168,6 +172,10 @@ export interface SkillTest {
   completed_at?: string;
   created_at: string;
   updated_at: string;
+  /** Template sections for active test rendering (from API response) */
+  template_sections?: SkillTemplateSection[];
+  /** Template global time limit in seconds */
+  template_time_limit_seconds?: number;
 }
 
 export interface SkillTestCreate {

@@ -23,7 +23,6 @@ import {
   Square,
   Check,
   X,
-  Clock,
   AlertTriangle,
   CheckCircle2,
   XCircle,
@@ -37,6 +36,41 @@ import type {
   SkillTemplateSection,
   CriterionResult,
 } from '../types/skillsTesting';
+
+// ==================== Helpers ====================
+
+/**
+ * Hydrate raw template section JSON (from the API) with stable generated IDs.
+ * The backend stores sections/criteria without IDs, so we generate
+ * deterministic IDs based on section/criterion indices.
+ */
+function hydrateTemplateSections(
+  raw: Record<string, unknown>[] | undefined | null
+): SkillTemplateSection[] {
+  if (!raw) return [];
+  return raw.map((section, si) => {
+    const criteria = (section.criteria as Record<string, unknown>[] | undefined) ?? [];
+    return {
+      id: `section-${si}`,
+      name: (section.name as string) ?? `Section ${si + 1}`,
+      description: section.description as string | undefined,
+      sort_order: (section.sort_order as number) ?? si,
+      criteria: criteria.map((c, ci) => ({
+        id: `criterion-${si}-${ci}`,
+        label: (c.label as string) ?? `Criterion ${ci + 1}`,
+        description: c.description as string | undefined,
+        type: (c.type as SkillCriterion['type']) ?? 'pass_fail',
+        required: (c.required as boolean) ?? false,
+        sort_order: (c.sort_order as number) ?? ci,
+        passing_score: c.passing_score as number | undefined,
+        max_score: c.max_score as number | undefined,
+        time_limit_seconds: c.time_limit_seconds as number | undefined,
+        checklist_items: c.checklist_items as string[] | undefined,
+        statement_text: c.statement_text as string | undefined,
+      })),
+    };
+  });
+}
 
 // ==================== Timer Component ====================
 
@@ -379,10 +413,9 @@ const StatementCriterion: React.FC<{
 // ==================== Notes Input ====================
 
 const CriterionNotes: React.FC<{
-  criterionId: string;
   notes: string;
   onChange: (notes: string) => void;
-}> = ({ criterionId: _criterionId, notes, onChange }) => {
+}> = ({ notes, onChange }) => {
   const [isOpen, setIsOpen] = useState(Boolean(notes));
 
   return (
@@ -414,7 +447,7 @@ const CriterionNotes: React.FC<{
 const SectionView: React.FC<{
   section: SkillTemplateSection;
   sectionResults: CriterionResult[];
-  onUpdateCriterion: (criterionId: string, result: Partial<CriterionResult>) => void;
+  onUpdateCriterion: (criterionId: string, result: Partial<CriterionResult>, criterionLabel?: string) => void;
 }> = ({ section, sectionResults, onUpdateCriterion }) => {
   const getResult = (criterionId: string) =>
     sectionResults.find((r) => r.criterion_id === criterionId);
@@ -446,24 +479,23 @@ const SectionView: React.FC<{
         return (
           <div key={criterion.id} className="pb-4 border-b border-theme-surface-border last:border-b-0">
             {criterion.type === 'pass_fail' && (
-              <PassFailCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r)} />
+              <PassFailCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
             )}
             {criterion.type === 'score' && (
-              <ScoreCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r)} />
+              <ScoreCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
             )}
             {criterion.type === 'time_limit' && (
-              <TimedCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r)} />
+              <TimedCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
             )}
             {criterion.type === 'checklist' && (
-              <ChecklistCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r)} />
+              <ChecklistCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
             )}
             {criterion.type === 'statement' && (
-              <StatementCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r)} />
+              <StatementCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
             )}
             <CriterionNotes
-              criterionId={criterion.id}
               notes={result?.notes ?? ''}
-              onChange={(notes) => onUpdateCriterion(criterion.id, { notes })}
+              onChange={(n) => onUpdateCriterion(criterion.id, { notes: n }, criterion.label)}
             />
           </div>
         );
@@ -517,6 +549,12 @@ export const ActiveSkillTestPage: React.FC = () => {
     };
   }, [activeTestRunning, setActiveTestTimer]);
 
+  // Hydrate template sections from the API response (must be before callbacks that reference it)
+  const templateSections = hydrateTemplateSections(
+    currentTest?.template_sections as Record<string, unknown>[] | undefined
+  );
+  const globalTimeLimit = currentTest?.template_time_limit_seconds;
+
   const toggleTimer = useCallback(() => {
     setActiveTestRunning(!activeTestRunning);
     if (!activeTestRunning && currentTest?.status === 'draft') {
@@ -540,7 +578,23 @@ export const ActiveSkillTestPage: React.FC = () => {
 
   const handleComplete = useCallback(async () => {
     if (!currentTest) return;
-    if (!window.confirm('Complete this test? Results will be finalized.')) return;
+
+    // Check for unevaluated criteria
+    const totalCriteria = templateSections.reduce(
+      (sum, s) => sum + s.criteria.filter((c) => c.type !== 'statement').length,
+      0
+    );
+    const evaluatedCriteria = (currentTest.section_results ?? []).reduce(
+      (sum, sr) => sum + sr.criteria_results.filter((cr) => cr.passed !== null && cr.passed !== undefined).length,
+      0
+    );
+    const unevaluated = totalCriteria - evaluatedCriteria;
+
+    const confirmMessage = unevaluated > 0
+      ? `${unevaluated} criterion${unevaluated === 1 ? '' : 'a'} ha${unevaluated === 1 ? 's' : 've'} not been evaluated. Complete this test anyway? Results will be finalized.`
+      : 'Complete this test? Results will be finalized.';
+
+    if (!window.confirm(confirmMessage)) return;
 
     try {
       // Save current state first
@@ -555,10 +609,16 @@ export const ActiveSkillTestPage: React.FC = () => {
     } catch {
       toast.error('Failed to complete test');
     }
-  }, [currentTest, activeTestTimer, updateTest, completeTest, navigate]);
+  }, [currentTest, activeTestTimer, updateTest, completeTest, navigate, templateSections]);
 
-  const handleUpdateCriterion = useCallback((sectionId: string, criterionId: string, result: Partial<CriterionResult>) => {
-    updateCriterionResult(sectionId, criterionId, result);
+  const handleUpdateCriterion = useCallback((
+    sectionId: string,
+    criterionId: string,
+    result: Partial<CriterionResult>,
+    sectionName?: string,
+    criterionLabel?: string,
+  ) => {
+    updateCriterionResult(sectionId, criterionId, result, sectionName, criterionLabel);
   }, [updateCriterionResult]);
 
   // Loading state
@@ -569,11 +629,6 @@ export const ActiveSkillTestPage: React.FC = () => {
       </div>
     );
   }
-
-  // Get template sections from the test data
-  // The test should include the template structure - we need a way to get sections
-  // For now, we'll show a message if no template is loaded
-  // In production, the test response would include the template sections
 
   // Completed test view
   if (currentTest.status === 'completed') {
@@ -622,88 +677,6 @@ export const ActiveSkillTestPage: React.FC = () => {
     );
   }
 
-  // For the active test, we need the template's sections.
-  // We'll display a placeholder if they're not available.
-  // In the full implementation, the SkillTest response would include the template detail.
-  const templateSections: SkillTemplateSection[] = [];
-  // The section_results on the test tell us what sections exist
-  // But we need the template structure. Let's render a start screen if no results yet.
-
-  if (templateSections.length === 0) {
-    // Active test screen with mock sections for demonstration
-    // In production, the API response includes template sections
-    return (
-      <div className="min-h-screen flex flex-col">
-        {/* Top Bar - Always visible */}
-        <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-sm border-b border-theme-surface-border px-4 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <button
-              onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
-              className="p-2 rounded-lg hover:bg-theme-surface-hover transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <div className="text-center">
-              <p className="font-bold text-theme-text-primary text-sm">{currentTest.template_name}</p>
-              <p className="text-xs text-theme-text-muted">{currentTest.candidate_name}</p>
-            </div>
-            <button
-              onClick={() => void handleSaveProgress()}
-              className="px-3 py-1.5 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors text-theme-text-primary"
-            >
-              Save
-            </button>
-          </div>
-          <TestTimer
-            seconds={activeTestTimer}
-            running={activeTestRunning}
-            timeLimit={undefined}
-            onToggle={toggleTimer}
-          />
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 px-4 py-6">
-          <div className="max-w-lg mx-auto text-center">
-            <Clock className="w-16 h-16 mx-auto text-theme-text-muted mb-4" />
-            <h2 className="text-xl font-bold text-theme-text-primary mb-2">
-              {currentTest.status === 'draft' ? 'Ready to Begin' : 'Test In Progress'}
-            </h2>
-            <p className="text-theme-text-muted mb-6">
-              {currentTest.status === 'draft'
-                ? 'Press the play button on the timer above to start the evaluation.'
-                : 'The test is underway. Use the template sections below to evaluate each criterion.'}
-            </p>
-            {currentTest.notes && (
-              <div className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border text-left mb-6">
-                <p className="text-sm text-theme-text-muted font-medium mb-1">Notes</p>
-                <p className="text-sm text-theme-text-primary">{currentTest.notes}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom Action Bar - Always visible, thumb-reachable */}
-        <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-sm border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
-          <div className="flex gap-3 max-w-lg mx-auto">
-            <button
-              onClick={() => void handleSaveProgress()}
-              className="flex-1 py-3 bg-theme-surface border border-theme-surface-border text-theme-text-primary rounded-xl font-medium transition-colors hover:bg-theme-surface-hover"
-            >
-              Save Progress
-            </button>
-            <button
-              onClick={() => void handleComplete()}
-              className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
-            >
-              Complete Test
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const currentSection = templateSections[activeSectionIndex];
   const currentSectionResults = currentTest.section_results?.find(
     (s) => currentSection && s.section_id === currentSection.id
@@ -739,7 +712,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         <TestTimer
           seconds={activeTestTimer}
           running={activeTestRunning}
-          timeLimit={undefined}
+          timeLimit={globalTimeLimit}
           onToggle={toggleTimer}
         />
 
@@ -766,8 +739,8 @@ export const ActiveSkillTestPage: React.FC = () => {
           <SectionView
             section={currentSection}
             sectionResults={currentSectionResults}
-            onUpdateCriterion={(criterionId, result) =>
-              handleUpdateCriterion(currentSection.id, criterionId, result)
+            onUpdateCriterion={(criterionId, result, criterionLabel) =>
+              handleUpdateCriterion(currentSection.id, criterionId, result, currentSection.name, criterionLabel)
             }
           />
         )}

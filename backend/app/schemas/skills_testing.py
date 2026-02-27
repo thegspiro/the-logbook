@@ -120,7 +120,8 @@ class SkillTemplateListResponse(BaseModel):
 class CriterionResultSchema(BaseModel):
     """Schema for a single criterion evaluation result"""
 
-    criterion_label: str
+    criterion_id: Optional[str] = None
+    criterion_label: Optional[str] = None
     passed: Optional[bool] = None
     score: Optional[float] = None
     time_seconds: Optional[int] = None
@@ -131,7 +132,8 @@ class CriterionResultSchema(BaseModel):
 class SectionResultSchema(BaseModel):
     """Schema for a section evaluation result"""
 
-    section_name: str
+    section_id: Optional[str] = None
+    section_name: Optional[str] = None
     criteria_results: List[CriterionResultSchema] = Field(default_factory=list)
     section_score: Optional[float] = None
     section_passed: Optional[bool] = None
@@ -185,6 +187,10 @@ class SkillTestResponse(BaseModel):
     template_name: Optional[str] = None
     candidate_name: Optional[str] = None
     examiner_name: Optional[str] = None
+
+    # Template structure for active test rendering
+    template_sections: Optional[list] = None
+    template_time_limit_seconds: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

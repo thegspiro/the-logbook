@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { useAuthStore } from '../stores/authStore';
+import { formatDate } from '../utils/dateFormatting';
 import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
 
 // ── Sub-components ─────────────────────────────────────────────
@@ -96,7 +97,7 @@ const TestHistoryCard: React.FC<{
         <p className="text-sm text-theme-text-muted">
           Examiner: {test.examiner_name}
           {test.completed_at && (
-            <> &middot; {new Date(test.completed_at).toLocaleDateString()}</>
+            <> &middot; {formatDate(test.completed_at)}</>
           )}
         </p>
       </div>
