@@ -6,85 +6,58 @@ It initializes the FastAPI application, sets up middleware,
 connects to the database, and configures routes.
 """
 
+import signal
+import traceback
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
-import traceback
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from loguru import logger
-import sys
-import signal
-
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
+from app.api.public.display import router as public_display_router
+from app.api.public.forms import router as public_forms_router
+from app.api.public.portal import router as public_portal_router
+from app.api.v1.api import api_router
+from app.core.cache import cache_manager
 from app.core.config import settings
 from app.core.database import database_manager
-from app.core.cache import cache_manager
-from app.api.v1.api import api_router
-from app.api.public.portal import router as public_portal_router
-from app.api.public.forms import router as public_forms_router
-from app.api.public.display import router as public_display_router
 
 # Create rate limiter instance (uses Redis if available, falls back to in-memory)
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=[settings.RATE_LIMIT_DEFAULT],
-    storage_uri=f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/1"
-    if settings.REDIS_HOST
-    else "memory://",
+    storage_uri=(
+        f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/1"
+        if settings.REDIS_HOST
+        else "memory://"
+    ),
 )
 
 
-# Configure logging (#19: structured JSON logging option)
-logger.remove()
-
-if settings.LOG_FORMAT == "json":
-    # Structured JSON logging for production monitoring (ELK, Datadog, CloudWatch)
-    import json as _json
-
-    def _json_sink(message):
-        record = message.record
-        log_entry = {
-            "timestamp": record["time"].isoformat(),
-            "level": record["level"].name,
-            "message": record["message"],
-            "module": record["name"],
-            "function": record["function"],
-            "line": record["line"],
-        }
-        if record["exception"]:
-            log_entry["exception"] = str(record["exception"])
-        print(_json.dumps(log_entry), flush=True)
-
-    logger.add(
-        _json_sink,
-        level=settings.LOG_LEVEL if settings.ENVIRONMENT == "production" else "DEBUG",
-    )
-else:
-    logger.add(
-        sys.stdout,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-        level=settings.LOG_LEVEL if settings.ENVIRONMENT == "production" else "DEBUG",
-    )
-
-# Add file logging with directory creation
 import os
-_logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-try:
-    os.makedirs(_logs_dir, exist_ok=True)
-    logger.add(
-        os.path.join(_logs_dir, "app.log"),
-        rotation="500 MB",
-        retention="10 days",
-        level="INFO",
+
+# Configure logging (centralized in app.core.logging)
+from app.core.logging import setup_logging, setup_sentry
+
+setup_logging(
+    log_level=settings.LOG_LEVEL,
+    log_format=settings.LOG_FORMAT,
+    environment=settings.ENVIRONMENT,
+)
+
+# Initialize Sentry SDK when enabled
+if settings.SENTRY_ENABLED and settings.SENTRY_DSN:
+    setup_sentry(
+        sentry_dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        version=settings.VERSION,
     )
-except OSError as _log_err:
-    # File logging is optional - stdout is sufficient for development
-    logger.debug("Could not set up file logging", exc_info=True)
 
 
 # ============================================
@@ -92,6 +65,7 @@ except OSError as _log_err:
 # ============================================
 class StartupStatus:
     """Tracks startup progress for the health endpoint"""
+
     def __init__(self):
         self.phase = "initializing"
         self.message = "Starting up..."
@@ -141,13 +115,16 @@ class StartupStatus:
                 "total": self.migrations_total,
                 "completed": self.migrations_completed,
                 "current": self.current_migration,
-                "progress_percent": int((self.migrations_completed / self.migrations_total) * 100) if self.migrations_total > 0 else 0
+                "progress_percent": (
+                    int((self.migrations_completed / self.migrations_total) * 100) if self.migrations_total > 0 else 0
+                ),
             }
 
         if self.errors:
             result["errors"] = self.errors
 
         return result
+
 
 # Global startup status instance
 startup_status = StartupStatus()
@@ -165,6 +142,7 @@ def timeout_context(seconds: int, operation_name: str = "Operation"):
     Raises:
         TimeoutError: If operation exceeds timeout
     """
+
     def timeout_handler(signum, frame):
         raise TimeoutError(
             f"{operation_name} timed out after {seconds} seconds. "
@@ -218,9 +196,7 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
         # 2. Check migration-only tables exist
         missing_migration = set(MIGRATION_ONLY_TABLES) - existing_tables
         if missing_migration:
-            errors.append(
-                f"Missing migration-only table(s): {', '.join(sorted(missing_migration))}"
-            )
+            errors.append(f"Missing migration-only table(s): {', '.join(sorted(missing_migration))}")
 
         # 3. Spot-check columns on critical tables (catches schema drift)
         critical_columns = {
@@ -236,9 +212,7 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
             columns = {col["name"] for col in inspector.get_columns(table_name)}
             missing_cols = [col for col in required_columns if col not in columns]
             if missing_cols:
-                errors.append(
-                    f"Table '{table_name}' missing columns: {', '.join(missing_cols)}"
-                )
+                errors.append(f"Table '{table_name}' missing columns: {', '.join(missing_cols)}")
     except Exception as e:
         errors.append(f"Schema validation error: {e}")
 
@@ -256,12 +230,9 @@ def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, lis
     Returns (is_valid, errors) from the post-repair validation.
     """
     from sqlalchemy import text
-    from sqlalchemy.exc import OperationalError, DatabaseError
+    from sqlalchemy.exc import DatabaseError, OperationalError
 
-    logger.warning(
-        f"Schema validation found {len(original_errors)} issue(s). "
-        "Attempting automatic repair..."
-    )
+    logger.warning(f"Schema validation found {len(original_errors)} issue(s). " "Attempting automatic repair...")
     for err in original_errors:
         logger.warning(f"  Issue: {err}")
 
@@ -303,9 +274,7 @@ def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, lis
         if schema_valid:
             logger.info("Schema repair successful - all issues resolved")
         else:
-            logger.error(
-                f"Schema repair incomplete - {len(schema_errors)} issue(s) remain"
-            )
+            logger.error(f"Schema repair incomplete - {len(schema_errors)} issue(s) remain")
         return (schema_valid, schema_errors)
 
     except Exception as repair_err:
@@ -324,7 +293,7 @@ def _add_missing_model_columns(engine):
     snapshot, columns added in later model updates will be absent.  This
     function fills that gap with ALTER TABLE … ADD COLUMN.
     """
-    from sqlalchemy import inspect, text
+    from sqlalchemy import inspect
     from sqlalchemy.exc import OperationalError
 
     _import_all_models()
@@ -350,11 +319,10 @@ def _add_missing_model_columns(engine):
                 # from SQLAlchemy metadata (trusted), not user input, but we
                 # still avoid bare f-string interpolation for defence-in-depth.
                 from sqlalchemy import DDL
+
                 stmt = DDL(
                     "ALTER TABLE `%s` ADD COLUMN `%s` %s NULL"
-                    % (table_name.replace("`", "``"),
-                       col.name.replace("`", "``"),
-                       col_type)
+                    % (table_name.replace("`", "``"), col.name.replace("`", "``"), col_type)
                 )
                 try:
                     conn.execute(stmt)
@@ -362,21 +330,16 @@ def _add_missing_model_columns(engine):
                     logger.info(f"Added missing column: {table_name}.{col.name}")
                 except OperationalError as e:
                     if "duplicate column" not in str(e).lower():
-                        logger.warning(
-                            f"Could not add column {table_name}.{col.name}: {e}"
-                        )
+                        logger.warning(f"Could not add column {table_name}.{col.name}: {e}")
 
     if added:
-        logger.info(
-            f"Schema column repair: added {len(added)} missing column(s): "
-            + ", ".join(added)
-        )
+        logger.info(f"Schema column repair: added {len(added)} missing column(s): " + ", ".join(added))
 
     return added
 
 
 # The revision stamped by the initial SQL schema (001_initial_schema.sql)
-INITIAL_SQL_REVISION = '20260118_0001'
+INITIAL_SQL_REVISION = "20260118_0001"
 
 # The init SQL now only creates alembic_version (no application tables).
 # The fast-path drops all non-alembic tables and creates everything fresh.
@@ -385,21 +348,28 @@ INITIAL_SQL_REVISION = '20260118_0001'
 # These must be run explicitly during fast-path initialization since
 # Base.metadata.create_all() won't know about them.
 MIGRATION_ONLY_FILES = [
-    '20260201_0016_create_compliance_tables.py',
-    '20260201_0017_create_fundraising_tables.py',
+    "20260201_0016_create_compliance_tables.py",
+    "20260201_0017_create_fundraising_tables.py",
 ]
 
 # Tables created by migration-only files (used by validate_schema to check completeness).
 MIGRATION_ONLY_TABLES = [
     # compliance module (20260201_0016)
-    'compliance_policies', 'policy_acknowledgments', 'compliance_checklists',
-    'checklist_submissions', 'compliance_incidents',
+    "compliance_policies",
+    "policy_acknowledgments",
+    "compliance_checklists",
+    "checklist_submissions",
+    "compliance_incidents",
     # fundraising module (20260201_0017)
-    'fundraising_campaigns', 'donors', 'donations', 'pledges', 'fundraising_events',
+    "fundraising_campaigns",
+    "donors",
+    "donations",
+    "pledges",
+    "fundraising_events",
 ]
 
 # Migration file that seeds initial apparatus system data
-SEED_DATA_FILE = '20260203_0023_seed_apparatus_data.py'
+SEED_DATA_FILE = "20260203_0023_seed_apparatus_data.py"
 
 
 def _cleanup_duplicate_revisions(versions_dir):
@@ -432,18 +402,16 @@ def _cleanup_duplicate_revisions(versions_dir):
             logger.debug(f"Could not remove versions __pycache__: {e}")
 
     revision_re = re.compile(r"^revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
-    down_revision_re = re.compile(
-        r"^down_revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE
-    )
+    down_revision_re = re.compile(r"^down_revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
 
     # Map revision ID -> list of (filepath, down_revision)
     rev_to_files = {}
     for filename in os.listdir(versions_dir):
-        if not filename.endswith('.py') or filename.startswith('__'):
+        if not filename.endswith(".py") or filename.startswith("__"):
             continue
         filepath = os.path.join(versions_dir, filename)
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath, "r") as f:
                 content = f.read(2048)  # revision is always near the top
             rev_match = revision_re.search(content)
             if not rev_match:
@@ -451,9 +419,7 @@ def _cleanup_duplicate_revisions(versions_dir):
             rev_id = rev_match.group(1)
             down_match = down_revision_re.search(content)
             down_rev = down_match.group(1) if down_match else None
-            rev_to_files.setdefault(rev_id, []).append(
-                (filepath, filename, down_rev)
-            )
+            rev_to_files.setdefault(rev_id, []).append((filepath, filename, down_rev))
         except (OSError, ValueError):
             logger.debug(f"Could not parse migration file: {filename}", exc_info=True)
             continue
@@ -472,10 +438,7 @@ def _cleanup_duplicate_revisions(versions_dir):
         if len(files) <= 1:
             continue
 
-        logger.warning(
-            f"Duplicate revision '{rev_id}' found in {len(files)} files: "
-            f"{[f[1] for f in files]}"
-        )
+        logger.warning(f"Duplicate revision '{rev_id}' found in {len(files)} files: " f"{[f[1] for f in files]}")
 
         # Determine which file to keep: the one whose revision is in the
         # referenced set (depended on by another migration).
@@ -490,10 +453,8 @@ def _cleanup_duplicate_revisions(versions_dir):
 
         for fp, fn, dr in files:
             if fp != keep[0]:
-                stale_path = fp + '.stale'
-                logger.warning(
-                    f"Renaming stale duplicate migration: {fn} -> {fn}.stale"
-                )
+                stale_path = fp + ".stale"
+                logger.warning(f"Renaming stale duplicate migration: {fn} -> {fn}.stale")
                 try:
                     os.rename(fp, stale_path)
                 except FileNotFoundError:
@@ -521,7 +482,9 @@ def _run_migration_file(engine_or_conn, migration_path):
         migration_path: Path to the Alembic migration .py file.
     """
     import importlib.util
+
     from sqlalchemy.engine import Connection
+
     from alembic.operations import Operations
     from alembic.runtime.migration import MigrationContext
 
@@ -553,7 +516,8 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
     This reduces first-boot database setup from ~20 minutes to seconds.
     """
     from sqlalchemy import text
-    from sqlalchemy.exc import OperationalError, DatabaseError
+    from sqlalchemy.exc import DatabaseError, OperationalError
+
     from alembic import command
     from alembic.script import ScriptDirectory
 
@@ -561,7 +525,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
         "migrations",
         "Fast-path: Initializing database schema...",
         "Creating all database tables from model definitions. "
-        "This is much faster than running individual migrations."
+        "This is much faster than running individual migrations.",
     )
     logger.info("Fresh database detected - using fast-path initialization")
 
@@ -582,9 +546,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
             #    We keep alembic_version since command.stamp() manages it.
             logger.info("Dropping all existing tables for clean recreation...")
             result = conn.execute(text("SHOW TABLES"))
-            tables_to_drop = [
-                row[0] for row in result if row[0] != "alembic_version"
-            ]
+            tables_to_drop = [row[0] for row in result if row[0] != "alembic_version"]
             if tables_to_drop:
                 # Drop tables individually to avoid SQL injection via
                 # malicious table names containing backtick escapes.
@@ -638,21 +600,17 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
         # If the revision graph is broken (missing migration file), stamp
         # directly with the manually-resolved head revision ID.
         logger.warning(
-            f"command.stamp('head') failed ({stamp_err}). "
-            "Falling back to manual head resolution for stamp."
+            f"command.stamp('head') failed ({stamp_err}). " "Falling back to manual head resolution for stamp."
         )
         import re as _stamp_re
-        _rev_pat = _stamp_re.compile(
-            r"^revision\s*[:=]\s*['\"](.+?)['\"]", _stamp_re.MULTILINE
-        )
-        _down_pat = _stamp_re.compile(
-            r"^down_revision\s*[:=]\s*['\"](.+?)['\"]", _stamp_re.MULTILINE
-        )
+
+        _rev_pat = _stamp_re.compile(r"^revision\s*[:=]\s*['\"](.+?)['\"]", _stamp_re.MULTILINE)
+        _down_pat = _stamp_re.compile(r"^down_revision\s*[:=]\s*['\"](.+?)['\"]", _stamp_re.MULTILINE)
         _versions_dir = os.path.join(base_dir, "alembic", "versions")
         _all_revs = {}
         _all_down = set()
         for _fn in os.listdir(_versions_dir):
-            if not _fn.endswith('.py') or _fn.startswith('_'):
+            if not _fn.endswith(".py") or _fn.startswith("_"):
                 continue
             try:
                 with open(os.path.join(_versions_dir, _fn)) as _mf:
@@ -697,13 +655,15 @@ def run_migrations():
       Reduces first-boot setup from ~20 minutes to seconds.
     - Normal path: For existing installs, runs only pending Alembic migrations.
     """
-    from alembic.config import Config
-    from alembic import command
-    from alembic.script import ScriptDirectory
-    from sqlalchemy import create_engine, text
-    from sqlalchemy.exc import OperationalError, DatabaseError, ProgrammingError
-    from sqlalchemy.pool import NullPool
     import os
+
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.exc import DatabaseError, OperationalError, ProgrammingError
+    from sqlalchemy.pool import NullPool
+
+    from alembic import command
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
 
     startup_status.set_phase("migrations", "Preparing database migrations...")
 
@@ -721,6 +681,7 @@ def run_migrations():
     # (e.g. Unraid shfs) recently-created migration files may not be
     # immediately visible to Docker bind mounts.
     import time as _time_mod
+
     _walk_ok = False
     _walk_err = None
     for _attempt in range(1, 4):  # up to 3 attempts
@@ -734,22 +695,15 @@ def run_migrations():
             _walk_err = walk_err
             if _attempt < 3:
                 logger.warning(
-                    f"Revision graph walk failed (attempt {_attempt}/3): "
-                    f"{walk_err}. Retrying in {_attempt}s..."
+                    f"Revision graph walk failed (attempt {_attempt}/3): " f"{walk_err}. Retrying in {_attempt}s..."
                 )
                 _time_mod.sleep(_attempt)  # 1s, 2s backoff
             else:
-                logger.warning(
-                    f"Could not walk revision graph after 3 attempts: "
-                    f"{walk_err}"
-                )
+                logger.warning(f"Could not walk revision graph after 3 attempts: " f"{walk_err}")
 
     if not _walk_ok:
         missing_rev = str(_walk_err).strip("'\"")
-        py_files = sorted(
-            f for f in os.listdir(versions_dir)
-            if f.endswith('.py') and not f.startswith('_')
-        )
+        py_files = sorted(f for f in os.listdir(versions_dir) if f.endswith(".py") and not f.startswith("_"))
         # Check if the referenced migration file physically exists
         found = any(missing_rev in f for f in py_files)
         logger.warning(
@@ -775,22 +729,16 @@ def run_migrations():
         # Build revision -> down_revision map, then find the revision
         # that no other revision depends on.
         import re as _re2
-        _rev_pat = _re2.compile(
-            r"^revision\s*[:=]\s*['\"](.+?)['\"]", _re2.MULTILINE
-        )
-        _down_pat = _re2.compile(
-            r"^down_revision\s*[:=]\s*['\"](.+?)['\"]", _re2.MULTILINE
-        )
+
+        _rev_pat = _re2.compile(r"^revision\s*[:=]\s*['\"](.+?)['\"]", _re2.MULTILINE)
+        _down_pat = _re2.compile(r"^down_revision\s*[:=]\s*['\"](.+?)['\"]", _re2.MULTILINE)
         _all_revs = {}  # revision -> down_revision
         _all_down = set()
-        _migration_files = [
-            f for f in os.listdir(versions_dir)
-            if f.endswith('.py') and not f.startswith('_')
-        ]
+        _migration_files = [f for f in os.listdir(versions_dir) if f.endswith(".py") and not f.startswith("_")]
         for _fname in _migration_files:
             _fpath = os.path.join(versions_dir, _fname)
             try:
-                with open(_fpath, 'r') as _mf:
+                with open(_fpath, "r") as _mf:
                     _content = _mf.read(2048)
                 _rm = _rev_pat.search(_content)
                 _dm = _down_pat.search(_content)
@@ -810,13 +758,10 @@ def run_migrations():
         elif _heads:
             # Multiple heads — pick the latest by sorting revision IDs
             head_revision = sorted(_heads)[-1]
-            logger.warning(
-                f"Multiple heads found: {_heads}. Using latest: {head_revision}"
-            )
+            logger.warning(f"Multiple heads found: {_heads}. Using latest: {head_revision}")
         else:
             logger.error(
-                "Could not determine any head revision from migration files. "
-                "Database migrations will be skipped."
+                "Could not determine any head revision from migration files. " "Database migrations will be skipped."
             )
             return
     # NullPool avoids connection pool overhead during DDL-heavy initialization.
@@ -827,9 +772,7 @@ def run_migrations():
     current_rev = None
     try:
         with engine.connect() as conn:
-            result = conn.execute(text(
-                "SELECT version_num FROM alembic_version LIMIT 1"
-            ))
+            result = conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
             row = result.fetchone()
             if row:
                 current_rev = row[0]
@@ -858,6 +801,7 @@ def run_migrations():
     # migrations. Use a MySQL advisory lock so only ONE worker performs
     # DDL; the others wait then re-check and skip.
     import time as _time
+
     MIGRATION_LOCK_NAME = "the_logbook_migrations"
     MIGRATION_LOCK_TIMEOUT = 300  # seconds to wait for the lock
 
@@ -865,8 +809,7 @@ def run_migrations():
     try:
         startup_status.set_phase("migrations", "Acquiring migration lock...")
         result = lock_conn.execute(
-            text("SELECT GET_LOCK(:name, :timeout)"),
-            {"name": MIGRATION_LOCK_NAME, "timeout": MIGRATION_LOCK_TIMEOUT}
+            text("SELECT GET_LOCK(:name, :timeout)"), {"name": MIGRATION_LOCK_NAME, "timeout": MIGRATION_LOCK_TIMEOUT}
         )
         got_lock = result.scalar()
         if not got_lock:
@@ -881,9 +824,7 @@ def run_migrations():
         current_rev = None
         try:
             with engine.connect() as check_conn:
-                result = check_conn.execute(text(
-                    "SELECT version_num FROM alembic_version LIMIT 1"
-                ))
+                result = check_conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
                 row = result.fetchone()
                 if row:
                     current_rev = row[0]
@@ -893,10 +834,7 @@ def run_migrations():
         if current_rev == head_revision:
             startup_status.migrations_completed = total_migrations
             startup_status.set_phase("migrations", "Database schema is up to date")
-            logger.info(
-                "Database already at head after acquiring lock "
-                "(another worker completed migrations)"
-            )
+            logger.info("Database already at head after acquiring lock " "(another worker completed migrations)")
             return
 
         # Check for revision mismatch (renamed migration files)
@@ -906,10 +844,7 @@ def run_migrations():
             except Exception as rev_err:
                 logger.debug(f"Revision lookup failed for '{current_rev}': {rev_err}", exc_info=True)
                 startup_status.set_phase("migrations", "Fixing migration version mismatch...")
-                logger.warning(
-                    f"Migration revision '{current_rev}' not found. "
-                    "Clearing invalid version..."
-                )
+                logger.warning(f"Migration revision '{current_rev}' not found. " "Clearing invalid version...")
                 with engine.connect() as conn:
                     conn.execute(text("DELETE FROM alembic_version"))
                     conn.commit()
@@ -940,7 +875,7 @@ def run_migrations():
                         startup_status.set_phase(
                             "migrations",
                             "Retrying database initialization...",
-                            "First attempt failed. Retrying with a clean slate."
+                            "First attempt failed. Retrying with a clean slate.",
                         )
                         _time.sleep(2)
                     else:
@@ -956,9 +891,7 @@ def run_migrations():
             # before giving up. This handles edge cases like partial create_all()
             # where most tables were created but a few failed.
             if not schema_valid:
-                schema_valid, schema_errors = _attempt_schema_repair(
-                    engine, base_dir, schema_errors
-                )
+                schema_valid, schema_errors = _attempt_schema_repair(engine, base_dir, schema_errors)
 
             if not schema_valid:
                 error_msg = (
@@ -1005,15 +938,14 @@ def run_migrations():
             _is_dup = "already exists" in error_str or "duplicate" in error_str
             _is_graph = not _walk_ok  # revision graph was already broken
             if _is_dup or _is_graph:
-                logger.warning(
-                    f"Migration failed ({upgrade_error}). Stamping to head..."
-                )
+                logger.warning(f"Migration failed ({upgrade_error}). Stamping to head...")
                 if _is_graph:
                     # Ensure all model-defined tables exist since individual
                     # migrations couldn't run.
                     try:
                         _import_all_models()
                         from app.core.database import Base as _Base
+
                         _Base.metadata.create_all(engine, checkfirst=True)
                     except Exception as create_err:
                         logger.warning(f"create_all fallback failed: {create_err}")
@@ -1043,9 +975,7 @@ def run_migrations():
 
         # Self-healing: attempt repair before crashing
         if not schema_valid:
-            schema_valid, schema_errors = _attempt_schema_repair(
-                engine, base_dir, schema_errors
-            )
+            schema_valid, schema_errors = _attempt_schema_repair(engine, base_dir, schema_errors)
 
         if not schema_valid:
             error_msg = (
@@ -1069,10 +999,7 @@ def run_migrations():
     finally:
         # Always release the advisory lock, even on error
         try:
-            lock_conn.execute(
-                text("SELECT RELEASE_LOCK(:name)"),
-                {"name": MIGRATION_LOCK_NAME}
-            )
+            lock_conn.execute(text("SELECT RELEASE_LOCK(:name)"), {"name": MIGRATION_LOCK_NAME})
         except (OperationalError, DatabaseError):
             logger.debug("Could not release migration advisory lock", exc_info=True)
         try:
@@ -1127,7 +1054,7 @@ async def lifespan(app: FastAPI):
     startup_status.set_phase(
         "security",
         "Validating security configuration...",
-        "Checking encryption keys, secrets, and security settings to ensure safe operation."
+        "Checking encryption keys, secrets, and security settings to ensure safe operation.",
     )
     validate_security_configuration()
 
@@ -1135,7 +1062,7 @@ async def lifespan(app: FastAPI):
     startup_status.set_phase(
         "database",
         "Connecting to database...",
-        "Establishing connection to MySQL database. This may take up to 2 minutes if MySQL is still initializing."
+        "Establishing connection to MySQL database. This may take up to 2 minutes if MySQL is still initializing.",
     )
     logger.info("Connecting to database...")
     await database_manager.connect()
@@ -1145,7 +1072,7 @@ async def lifespan(app: FastAPI):
     startup_status.set_phase(
         "preflight",
         "Running preflight checks...",
-        "Verifying environment configuration and system requirements before database setup."
+        "Verifying environment configuration and system requirements before database setup.",
     )
     logger.info("Running preflight environment checks...")
 
@@ -1166,7 +1093,7 @@ async def lifespan(app: FastAPI):
     startup_status.set_phase(
         "migrations",
         "Setting up database tables...",
-        "Preparing to run database migrations. This ensures your database schema is up to date."
+        "Preparing to run database migrations. This ensures your database schema is up to date.",
     )
     run_migrations()
 
@@ -1174,7 +1101,7 @@ async def lifespan(app: FastAPI):
     startup_status.set_phase(
         "services",
         "Initializing services...",
-        "Connecting to Redis, initializing GeoIP, and validating database in parallel."
+        "Connecting to Redis, initializing GeoIP, and validating database in parallel.",
     )
     logger.info("Starting parallel service initialization...")
 
@@ -1197,8 +1124,9 @@ async def lifespan(app: FastAPI):
         try:
             if settings.GEOIP_ENABLED:
                 from app.core.geoip import init_geoip_service
+
                 blocked_countries = settings.get_blocked_countries_set()
-                geoip = init_geoip_service(
+                init_geoip_service(
                     geoip_db_path=settings.GEOIP_DATABASE_PATH,
                     blocked_countries=blocked_countries,
                     enabled=True,
@@ -1213,8 +1141,8 @@ async def lifespan(app: FastAPI):
         """Validate database schema and enums"""
         try:
             logger.info("Validating database enum consistency...")
-            from app.utils.startup_validators import run_startup_validations
             from app.core.database import async_session_factory
+            from app.utils.startup_validators import run_startup_validations
 
             async with async_session_factory() as db:
                 # Run validations in non-strict mode (log warnings but don't block startup)
@@ -1225,27 +1153,24 @@ async def lifespan(app: FastAPI):
             startup_status.add_error(f"Startup validation error: {str(e)}")
 
     # Run Redis, GeoIP, and validations in parallel
-    await asyncio.gather(
-        connect_redis(),
-        initialize_geoip(),
-        validate_database(),
-        return_exceptions=True
-    )
+    await asyncio.gather(connect_redis(), initialize_geoip(), validate_database(), return_exceptions=True)
 
     logger.info("✓ Parallel service initialization complete")
 
     # Start WebSocket pub/sub listener (after Redis is connected)
     from app.core.websocket_manager import ws_manager
+
     await ws_manager.start_listener()
 
     # Defer audit log verification to background (only in production, don't block startup)
     if settings.ENVIRONMENT == "production":
+
         async def verify_audit_logs_background():
             """Verify audit log integrity in background, rehash if needed"""
             try:
                 await asyncio.sleep(5)  # Give server time to fully start
                 logger.info("Starting background audit log verification...")
-                from app.core.audit import verify_audit_log_integrity, audit_logger
+                from app.core.audit import audit_logger, verify_audit_log_integrity
                 from app.core.database import async_session_factory
 
                 async with async_session_factory() as db:
@@ -1253,7 +1178,7 @@ async def lifespan(app: FastAPI):
                     if integrity_result["verified"]:
                         logger.info(f"✓ Audit log integrity verified ({integrity_result['total_checked']} entries)")
                     else:
-                        error_count = len(integrity_result.get('errors', []))
+                        error_count = len(integrity_result.get("errors", []))
                         logger.warning(
                             f"Audit log hash mismatches detected ({error_count} entries) — rehashing chain..."
                         )
@@ -1361,11 +1286,12 @@ async def _validation_error_handler(request: Request, exc: RequestValidationErro
 
 # Security Headers Middleware (add first so it wraps all responses)
 from app.core.security_middleware import (
-    SecurityHeadersMiddleware,
     IPBlockingMiddleware,
     IPLoggingMiddleware,
+    SecurityHeadersMiddleware,
     SecurityMonitoringMiddleware,
 )
+
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Security Monitoring Middleware (intrusion detection, session hijacking, data exfiltration)
@@ -1406,6 +1332,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Global Exception Handler
 # ============================================
 
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     """
@@ -1422,6 +1349,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     org_id = None
     try:
         from app.core.security import decode_token
+
         auth_header = request.headers.get("authorization", "")
         if auth_header.lower().startswith("bearer "):
             token = auth_header.split(" ", 1)[1]
@@ -1436,6 +1364,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         try:
             from app.core.database import database_manager
             from app.models.error_log import ErrorLog
+
             async for session in database_manager.get_session():
                 error_log = ErrorLog(
                     organization_id=org_id,
@@ -1505,7 +1434,7 @@ async def health_check():
         "version": settings.VERSION,
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "checks": {}
+        "checks": {},
     }
 
     # Check if startup had schema validation errors
@@ -1513,13 +1442,13 @@ async def health_check():
         health_status["status"] = "unhealthy"
         health_status["checks"]["schema"] = "invalid"
         health_status["schema_error"] = (
-            "Database schema is inconsistent. "
-            "Run 'docker compose down -v' then 'docker compose up --build' to fix."
+            "Database schema is inconsistent. " "Run 'docker compose down -v' then 'docker compose up --build' to fix."
         )
 
     # Check database
     try:
         from app.core.database import database_manager
+
         if database_manager.is_connected:
             health_status["checks"]["database"] = "connected"
         else:
@@ -1534,6 +1463,7 @@ async def health_check():
     # Check Redis
     try:
         from app.core.cache import cache_manager
+
         if cache_manager.is_connected:
             await cache_manager.redis.ping()
             health_status["checks"]["redis"] = "connected"
@@ -1591,7 +1521,7 @@ async def health_check_detailed():
         "system": {
             "cpu_percent": psutil.cpu_percent(interval=1),
             "memory_percent": psutil.virtual_memory().percent,
-            "disk_percent": psutil.disk_usage('/').percent,
+            "disk_percent": psutil.disk_usage("/").percent,
         },
         "configuration": {
             "debug": settings.DEBUG,
@@ -1603,8 +1533,8 @@ async def health_check_detailed():
                 "compliance": settings.MODULE_COMPLIANCE_ENABLED,
                 "scheduling": settings.MODULE_SCHEDULING_ENABLED,
                 "elections": settings.MODULE_ELECTIONS_ENABLED,
-            }
-        }
+            },
+        },
     }
 
 
@@ -1620,7 +1550,7 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
