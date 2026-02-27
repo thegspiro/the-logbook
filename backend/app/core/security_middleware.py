@@ -909,8 +909,11 @@ async def run_periodic_security_checks() -> Dict[str, Any]:
             }
 
             # 3. Create periodic checkpoint if enough logs
+            # SEC: Use text() wrapper for raw SQL to prevent injection risks
+            from sqlalchemy import text
+
             log_status = await db.execute(
-                "SELECT MIN(id), MAX(id), COUNT(*) FROM audit_logs WHERE created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)"
+                text("SELECT MIN(id), MAX(id), COUNT(*) FROM audit_logs WHERE created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)")
             )
             row = log_status.fetchone()
             if row and row[2] > 100:  # At least 100 logs

@@ -63,6 +63,13 @@ class ContactInfoSettings(BaseModel):
     show_mobile: bool = Field(default=True, description="Show mobile phone numbers")
 
 
+def _redact(value: Optional[str]) -> Optional[str]:
+    """Redact a secret value for safe API responses. Returns None if unset, '••••••••' if set."""
+    if not value:
+        return None
+    return "••••••••"
+
+
 class EmailServiceSettings(BaseModel):
     """Settings for organization email service configuration"""
 
@@ -93,6 +100,15 @@ class EmailServiceSettings(BaseModel):
     from_name: Optional[str] = Field(None, description="From name")
     use_tls: bool = Field(default=True, description="Use TLS encryption")
 
+    def redacted(self) -> "EmailServiceSettings":
+        """Return a copy with secret fields replaced by redaction markers."""
+        return self.model_copy(update={
+            "google_client_secret": _redact(self.google_client_secret),
+            "google_app_password": _redact(self.google_app_password),
+            "microsoft_client_secret": _redact(self.microsoft_client_secret),
+            "smtp_password": _redact(self.smtp_password),
+        })
+
 
 class FileStorageSettings(BaseModel):
     """Settings for organization file storage configuration"""
@@ -118,6 +134,14 @@ class FileStorageSettings(BaseModel):
     s3_endpoint_url: Optional[str] = Field(None, description="Custom S3 endpoint (for MinIO)")
     # Local storage
     local_storage_path: Optional[str] = Field(None, description="Local file storage path")
+
+    def redacted(self) -> "FileStorageSettings":
+        """Return a copy with secret fields replaced by redaction markers."""
+        return self.model_copy(update={
+            "google_drive_client_secret": _redact(self.google_drive_client_secret),
+            "onedrive_client_secret": _redact(self.onedrive_client_secret),
+            "s3_secret_access_key": _redact(self.s3_secret_access_key),
+        })
 
 
 class MemberDropNotificationSettings(BaseModel):
@@ -533,6 +557,13 @@ class OrganizationSettingsResponse(BaseModel):
     membership_id: MembershipIdSettings = Field(default_factory=MembershipIdSettings)
 
     model_config = ConfigDict(from_attributes=True, extra="allow")
+
+    def redacted(self) -> "OrganizationSettingsResponse":
+        """Return a copy with secret fields in nested settings replaced by redaction markers."""
+        return self.model_copy(update={
+            "email_service": self.email_service.redacted(),
+            "file_storage": self.file_storage.redacted(),
+        })
 
 
 class EnabledModulesResponse(BaseModel):

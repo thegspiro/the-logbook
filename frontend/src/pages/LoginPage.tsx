@@ -47,7 +47,13 @@ export const LoginPage: React.FC = () => {
     const loadBranding = async () => {
       try {
         const response = await axios.get<OrgBranding>('/api/v1/auth/branding');
-        setBranding(response.data);
+        // SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS
+        const logo = response.data.logo;
+        const safeLogo = (typeof logo === 'string' &&
+          (logo.startsWith('http://') || logo.startsWith('https://') || logo.startsWith('/') || logo.startsWith('data:image/')))
+          ? logo
+          : null;
+        setBranding({ ...response.data, logo: safeLogo });
       } catch (_err) {
         // Branding is optional - login page works fine without it
       }
@@ -95,7 +101,12 @@ export const LoginPage: React.FC = () => {
       });
       // Redirect to the page the user was trying to access (saved by
       // ProtectedRoute), or default to /dashboard.
-      const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+      // SEC: Validate redirect target is a relative path starting with '/'
+      // to prevent open redirect attacks via crafted location state.
+      const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+      const from = (typeof rawFrom === 'string' && rawFrom.startsWith('/') && !rawFrom.startsWith('//'))
+        ? rawFrom
+        : '/dashboard';
       navigate(from, { replace: true });
     } catch (_err) {
       // Error is handled by the store and displayed via error state
