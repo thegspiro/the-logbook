@@ -677,12 +677,15 @@ async def close_election(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    election = await service.close_election(election_id, current_user.organization_id)
+    election, error = await service.close_election(election_id, current_user.organization_id)
 
-    if not election:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
         )
+        raise HTTPException(status_code=status_code, detail=error)
 
     return election
 

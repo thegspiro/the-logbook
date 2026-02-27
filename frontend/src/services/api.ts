@@ -1693,6 +1693,68 @@ export const electionService = {
   async softDeleteVote(electionId: string, voteId: string, reason: string): Promise<void> {
     await api.delete(`/elections/${electionId}/votes/${voteId}`, { params: { reason } });
   },
+
+  /**
+   * Get voter overrides for an election
+   */
+  async getVoterOverrides(electionId: string): Promise<import('../types/election').VoterOverride[]> {
+    const response = await api.get<import('../types/election').VoterOverride[]>(`/elections/${electionId}/voter-overrides`);
+    return response.data;
+  },
+
+  /**
+   * Add a voter override
+   */
+  async addVoterOverride(electionId: string, data: import('../types/election').VoterOverrideCreate): Promise<import('../types/election').VoterOverride> {
+    const response = await api.post<import('../types/election').VoterOverride>(`/elections/${electionId}/voter-overrides`, data);
+    return response.data;
+  },
+
+  /**
+   * Remove a voter override
+   */
+  async removeVoterOverride(electionId: string, userId: string): Promise<void> {
+    await api.delete(`/elections/${electionId}/voter-overrides/${userId}`);
+  },
+
+  /**
+   * Bulk add voter overrides
+   */
+  async bulkAddVoterOverrides(electionId: string, data: import('../types/election').BulkVoterOverrideCreate): Promise<{ added: number; skipped: number }> {
+    const response = await api.post<{ added: number; skipped: number }>(`/elections/${electionId}/voter-overrides/bulk`, data);
+    return response.data;
+  },
+
+  /**
+   * Get proxy authorizations for an election
+   */
+  async getProxyAuthorizations(electionId: string): Promise<{ authorizations: import('../types/election').ProxyAuthorization[]; proxy_voting_enabled: boolean }> {
+    const response = await api.get<{ authorizations: import('../types/election').ProxyAuthorization[]; proxy_voting_enabled: boolean }>(`/elections/${electionId}/proxy-authorizations`);
+    return response.data;
+  },
+
+  /**
+   * Add a proxy authorization
+   */
+  async addProxyAuthorization(electionId: string, data: import('../types/election').ProxyAuthorizationCreate): Promise<import('../types/election').ProxyAuthorization> {
+    const response = await api.post<import('../types/election').ProxyAuthorization>(`/elections/${electionId}/proxy-authorizations`, data);
+    return response.data;
+  },
+
+  /**
+   * Revoke a proxy authorization
+   */
+  async revokeProxyAuthorization(electionId: string, authorizationId: string): Promise<void> {
+    await api.delete(`/elections/${electionId}/proxy-authorizations/${authorizationId}`);
+  },
+
+  /**
+   * Cast a proxy vote
+   */
+  async castProxyVote(electionId: string, data: import('../types/election').ProxyVoteCreate): Promise<import('../types/election').Vote> {
+    const response = await api.post<import('../types/election').Vote>(`/elections/${electionId}/proxy-vote`, data);
+    return response.data;
+  },
 };
 
 export const eventService = {

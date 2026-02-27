@@ -34,6 +34,7 @@ export interface Election {
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
   meeting_date?: string;
+  meeting_id?: string;
   attendees?: Attendee[];
   start_date: string;
   end_date: string;
@@ -83,6 +84,7 @@ export interface ElectionCreate {
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
   meeting_date?: string;
+  meeting_id?: string;
   start_date: string;
   end_date: string;
   anonymous_voting?: boolean;
@@ -107,6 +109,7 @@ export interface ElectionUpdate {
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
   meeting_date?: string;
+  meeting_id?: string;
   start_date?: string;
   end_date?: string;
   // NOTE: status is intentionally excluded — use /open, /close, /rollback endpoints
@@ -354,4 +357,56 @@ export interface BallotSubmissionResponse {
   votes_cast: number;
   abstentions: number;
   message: string;
+}
+
+// Voter override types
+
+export interface VoterOverride {
+  user_id: string;
+  user_name?: string;
+  reason: string;
+  overridden_by: string;
+  overridden_by_name?: string;
+  overridden_at: string;
+}
+
+export interface VoterOverrideCreate {
+  user_id: string;
+  reason: string;
+}
+
+export interface BulkVoterOverrideCreate {
+  user_ids: string[];
+  reason: string;
+}
+
+// Proxy voting types
+
+export interface ProxyAuthorization {
+  id: string;
+  delegating_user_id: string;
+  delegating_user_name?: string;
+  proxy_user_id: string;
+  proxy_user_name?: string;
+  proxy_type: 'single_election' | 'regular';
+  reason: string;
+  authorized_by: string;
+  authorized_by_name?: string;
+  authorized_at: string;
+  revoked_at?: string;
+}
+
+export interface ProxyAuthorizationCreate {
+  delegating_user_id: string;
+  proxy_user_id: string;
+  proxy_type: 'single_election' | 'regular';
+  reason: string;
+}
+
+export interface ProxyVoteCreate {
+  election_id: string;
+  candidate_id: string;
+  proxy_authorization_id: string;
+  position?: string;
+  vote_rank?: number;
 }
