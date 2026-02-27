@@ -1,11 +1,12 @@
 /**
  * Start Skill Test Page
  *
- * Mobile-friendly page where an examiner selects a published template
- * and a candidate, then starts a new skill evaluation session.
+ * Mobile-friendly page where an examiner selects a published template,
+ * chooses between an official evaluation or practice run, then picks
+ * a candidate via search to start a new skill evaluation session.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -14,6 +15,8 @@ import {
   User,
   FileText,
   Play,
+  Award,
+  BookOpen,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
@@ -25,6 +28,9 @@ interface MemberOption {
   name: string;
   email: string;
 }
+
+const MIN_SEARCH_CHARS = 2;
+const MAX_SEARCH_RESULTS = 10;
 
 export const StartSkillTestPage: React.FC = () => {
   const navigate = useNavigate();
@@ -67,10 +73,16 @@ export const StartSkillTestPage: React.FC = () => {
     (t.category ?? '').toLowerCase().includes(templateSearch.toLowerCase())
   );
 
-  const filteredMembers = members.filter((m) =>
-    m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-    m.email.toLowerCase().includes(memberSearch.toLowerCase())
-  );
+  const filteredMembers = useMemo(() => {
+    if (memberSearch.length < MIN_SEARCH_CHARS) return [];
+    return members
+      .filter(
+        (m) =>
+          m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
+          m.email.toLowerCase().includes(memberSearch.toLowerCase())
+      )
+      .slice(0, MAX_SEARCH_RESULTS);
+  }, [members, memberSearch]);
 
   const handleStart = async () => {
     if (!selectedTemplateId) {
@@ -90,7 +102,7 @@ export const StartSkillTestPage: React.FC = () => {
         notes: notes.trim() || undefined,
         is_practice: isPractice,
       });
-      toast.success('Test session started');
+      toast.success(isPractice ? 'Practice session started' : 'Test session started');
       navigate(`/training/skills-testing/test/${test.id}/active`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to start test'));
@@ -181,11 +193,58 @@ export const StartSkillTestPage: React.FC = () => {
           )}
         </div>
 
-        {/* Step 2: Select Candidate */}
+        {/* Step 2: Test Mode */}
+        <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-4">
+          <h2 className="text-lg font-semibold text-theme-text-primary mb-3">
+            2. Test Mode
+          </h2>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setIsPractice(false)}
+              className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                !isPractice
+                  ? 'border-red-600 bg-red-50 dark:bg-red-900/20 shadow-md'
+                  : 'border-theme-surface-border hover:border-theme-text-muted'
+              }`}
+            >
+              <Award className={`w-8 h-8 ${!isPractice ? 'text-red-600' : 'text-theme-text-muted'}`} />
+              <span className={`font-bold text-sm ${!isPractice ? 'text-red-700 dark:text-red-300' : 'text-theme-text-primary'}`}>
+                Official Evaluation
+              </span>
+              <span className="text-xs text-theme-text-muted text-center leading-tight">
+                Results are recorded and count toward certifications
+              </span>
+              {!isPractice && (
+                <div className="absolute top-2 right-2 w-3 h-3 rounded-full bg-red-600" />
+              )}
+            </button>
+            <button
+              onClick={() => setIsPractice(true)}
+              className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                isPractice
+                  ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 shadow-md'
+                  : 'border-theme-surface-border hover:border-theme-text-muted'
+              }`}
+            >
+              <BookOpen className={`w-8 h-8 ${isPractice ? 'text-blue-600' : 'text-theme-text-muted'}`} />
+              <span className={`font-bold text-sm ${isPractice ? 'text-blue-700 dark:text-blue-300' : 'text-theme-text-primary'}`}>
+                Practice Run
+              </span>
+              <span className="text-xs text-theme-text-muted text-center leading-tight">
+                Not recorded — review results or discard when done
+              </span>
+              {isPractice && (
+                <div className="absolute top-2 right-2 w-3 h-3 rounded-full bg-blue-600" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Step 3: Select Candidate (search-only) */}
         <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-4">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
             <User className="w-5 h-5 text-red-600" />
-            2. Select Candidate
+            3. Select Candidate
           </h2>
 
           {selectedCandidate ? (
@@ -207,7 +266,7 @@ export const StartSkillTestPage: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
                 <input
                   type="text"
-                  placeholder="Search members..."
+                  placeholder="Type a name to search..."
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50"
@@ -217,12 +276,19 @@ export const StartSkillTestPage: React.FC = () => {
                 <div className="flex justify-center py-4">
                   <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-red-500" />
                 </div>
+              ) : memberSearch.length < MIN_SEARCH_CHARS ? (
+                <p className="text-center text-theme-text-muted py-4 text-sm">
+                  Type at least {MIN_SEARCH_CHARS} characters to search
+                </p>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {filteredMembers.map((m) => (
                     <button
                       key={m.id}
-                      onClick={() => setSelectedCandidateId(m.id)}
+                      onClick={() => {
+                        setSelectedCandidateId(m.id);
+                        setMemberSearch('');
+                      }}
                       className="w-full text-left p-3 rounded-lg border border-theme-surface-border hover:border-red-500/50 transition-colors"
                     >
                       <p className="font-medium text-theme-text-primary">{m.name}</p>
@@ -232,34 +298,21 @@ export const StartSkillTestPage: React.FC = () => {
                   {filteredMembers.length === 0 && (
                     <p className="text-center text-theme-text-muted py-4 text-sm">No members found</p>
                   )}
+                  {filteredMembers.length === MAX_SEARCH_RESULTS && (
+                    <p className="text-center text-theme-text-muted text-xs py-1">
+                      Showing first {MAX_SEARCH_RESULTS} results — refine your search
+                    </p>
+                  )}
                 </div>
               )}
             </>
           )}
         </div>
 
-        {/* Practice Mode Toggle */}
-        <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-4">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isPractice}
-              onChange={(e) => setIsPractice(e.target.checked)}
-              className="rounded border-theme-surface-border text-blue-600 focus:ring-blue-500 w-5 h-5"
-            />
-            <div>
-              <p className="font-medium text-theme-text-primary">Practice Mode</p>
-              <p className="text-sm text-theme-text-muted">
-                Practice attempts are not recorded and will not appear in test history or statistics.
-              </p>
-            </div>
-          </label>
-        </div>
-
-        {/* Step 3: Notes (optional) */}
+        {/* Step 4: Notes (optional) */}
         <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-3">
-            3. Notes (optional)
+            4. Notes (optional)
           </h2>
           <textarea
             value={notes}
@@ -274,7 +327,11 @@ export const StartSkillTestPage: React.FC = () => {
         <button
           onClick={() => void handleStart()}
           disabled={!selectedTemplateId || !selectedCandidateId || isStarting}
-          className="w-full flex items-center justify-center gap-3 py-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-xl text-lg font-bold transition-colors"
+          className={`w-full flex items-center justify-center gap-3 py-4 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-xl text-lg font-bold transition-colors ${
+            isPractice
+              ? 'bg-blue-600 hover:bg-blue-700'
+              : 'bg-red-600 hover:bg-red-700'
+          }`}
         >
           <Play className="w-6 h-6" />
           {isStarting ? 'Starting...' : isPractice ? 'Begin Practice' : 'Begin Evaluation'}

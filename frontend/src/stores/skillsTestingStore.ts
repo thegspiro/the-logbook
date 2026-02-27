@@ -62,6 +62,8 @@ interface SkillsTestingState {
   updateTest: (id: string, data: SkillTestUpdate) => Promise<SkillTest>;
   completeTest: (id: string) => Promise<SkillTest>;
   deleteTest: (id: string) => Promise<void>;
+  discardPracticeTest: (id: string) => Promise<void>;
+  emailTestResults: (id: string) => Promise<string>;
 
   // Active test session actions
   setActiveSectionIndex: (index: number) => void;
@@ -265,6 +267,32 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
       }));
     } catch (err: unknown) {
       set({ error: getErrorMessage(err, 'Failed to delete test') });
+      throw err;
+    }
+  },
+
+  discardPracticeTest: async (id) => {
+    set({ error: null });
+    try {
+      await skillsTestingService.discardPracticeTest(id);
+      set((state) => ({
+        tests: state.tests.filter((t) => t.id !== id),
+        currentTest: state.currentTest?.id === id ? null : state.currentTest,
+      }));
+    } catch (err: unknown) {
+      set({ error: getErrorMessage(err, 'Failed to discard practice test') });
+      throw err;
+    }
+  },
+
+  emailTestResults: async (id) => {
+    set({ error: null });
+    try {
+      const { message } = await skillsTestingService.emailTestResults(id);
+      return message;
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to email results');
+      set({ error: msg });
       throw err;
     }
   },

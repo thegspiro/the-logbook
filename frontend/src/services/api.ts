@@ -5578,6 +5578,15 @@ export const skillsTestingService = {
     await api.delete(`/training/skills-testing/tests/${testId}`);
   },
 
+  async discardPracticeTest(testId: string): Promise<void> {
+    await api.delete(`/training/skills-testing/tests/${testId}/discard`);
+  },
+
+  async emailTestResults(testId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/training/skills-testing/tests/${testId}/email-results`);
+    return response.data;
+  },
+
   // Summary
   async getSummary(): Promise<SkillTestingSummary> {
     const response = await api.get<SkillTestingSummary>('/training/skills-testing/summary');
