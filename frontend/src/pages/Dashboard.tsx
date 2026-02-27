@@ -34,7 +34,7 @@ import {
   organizationService,
   inventoryService,
 } from '../services/api';
-import type { InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
+import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
@@ -51,19 +51,6 @@ import { dashboardService } from '../services/api';
  * Member-focused landing page showing notifications, upcoming shifts,
  * training progress, and recorded hours.
  */
-interface AdminSummaryData {
-  active_members: number;
-  inactive_members: number;
-  total_members: number;
-  training_completion_pct: number;
-  upcoming_events_count: number;
-  overdue_action_items: number;
-  open_action_items: number;
-  recent_training_hours: number;
-  recent_admin_hours: number;
-  pending_admin_hours_approvals: number;
-}
-
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -74,7 +61,7 @@ const Dashboard: React.FC = () => {
 
   // Admin summary (only loaded for users with settings.manage)
   const isAdmin = checkPermission('settings.manage');
-  const [adminSummary, setAdminSummary] = useState<AdminSummaryData | null>(null);
+  const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(isAdmin);
 
   // Notifications
