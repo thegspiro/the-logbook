@@ -15,6 +15,7 @@ import type {
   AdminHoursActiveSession,
   AdminHoursSummary,
   AdminHoursQRData,
+  AdminHoursPaginatedEntries,
 } from '../types';
 
 declare module 'axios' {
@@ -165,13 +166,17 @@ export const adminHoursEntryService = {
   async listMy(params?: {
     status?: string;
     categoryId?: string;
+    startDate?: string;
+    endDate?: string;
     skip?: number;
     limit?: number;
-  }): Promise<AdminHoursEntry[]> {
-    const response = await api.get<AdminHoursEntry[]>('/admin-hours/entries/my', {
+  }): Promise<AdminHoursPaginatedEntries> {
+    const response = await api.get<AdminHoursPaginatedEntries>('/admin-hours/entries/my', {
       params: {
         status: params?.status,
         category_id: params?.categoryId,
+        start_date: params?.startDate,
+        end_date: params?.endDate,
         skip: params?.skip ?? 0,
         limit: params?.limit ?? 50,
       },
@@ -183,14 +188,18 @@ export const adminHoursEntryService = {
     status?: string;
     categoryId?: string;
     userId?: string;
+    startDate?: string;
+    endDate?: string;
     skip?: number;
     limit?: number;
-  }): Promise<AdminHoursEntry[]> {
-    const response = await api.get<AdminHoursEntry[]>('/admin-hours/entries', {
+  }): Promise<AdminHoursPaginatedEntries> {
+    const response = await api.get<AdminHoursPaginatedEntries>('/admin-hours/entries', {
       params: {
         status: params?.status,
         category_id: params?.categoryId,
         user_id: params?.userId,
+        start_date: params?.startDate,
+        end_date: params?.endDate,
         skip: params?.skip ?? 0,
         limit: params?.limit ?? 50,
       },
@@ -202,6 +211,13 @@ export const adminHoursEntryService = {
     const response = await api.post<AdminHoursEntry>(`/admin-hours/entries/${entryId}/review`, {
       action,
       rejection_reason: rejectionReason,
+    });
+    return response.data;
+  },
+
+  async bulkApprove(entryIds: string[]): Promise<{ approvedCount: number }> {
+    const response = await api.post<{ approvedCount: number }>('/admin-hours/entries/bulk-approve', {
+      entry_ids: entryIds,
     });
     return response.data;
   },
@@ -218,6 +234,33 @@ export const adminHoursEntryService = {
         end_date: params?.endDate,
       },
     });
+    return response.data;
+  },
+
+  async getPendingCount(): Promise<number> {
+    const response = await api.get<{ count: number }>('/admin-hours/pending-count');
+    return response.data.count;
+  },
+
+  getExportUrl(params?: {
+    status?: string;
+    categoryId?: string;
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): string {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.categoryId) searchParams.set('category_id', params.categoryId);
+    if (params?.userId) searchParams.set('user_id', params.userId);
+    if (params?.startDate) searchParams.set('start_date', params.startDate);
+    if (params?.endDate) searchParams.set('end_date', params.endDate);
+    const qs = searchParams.toString();
+    return `${API_BASE_URL}/admin-hours/entries/export${qs ? `?${qs}` : ''}`;
+  },
+
+  async closeStaleSessions(): Promise<{ closedCount: number }> {
+    const response = await api.post<{ closedCount: number }>('/admin-hours/close-stale-sessions');
     return response.data;
   },
 };

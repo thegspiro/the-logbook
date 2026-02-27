@@ -57,6 +57,7 @@ export interface AdminHoursEntry {
   categoryName: string | null;
   categoryColor: string | null;
   userName: string | null;
+  approverName: string | null;
 }
 
 export interface AdminHoursEntryCreate {
@@ -64,6 +65,13 @@ export interface AdminHoursEntryCreate {
   clock_in_at: string;
   clock_out_at: string;
   description?: string;
+}
+
+export interface AdminHoursPaginatedEntries {
+  entries: AdminHoursEntry[];
+  total: number;
+  skip: number;
+  limit: number;
 }
 
 export interface AdminHoursClockInResponse {
@@ -93,11 +101,16 @@ export interface AdminHoursActiveSession {
   categoryColor: string | null;
   clockInAt: string;
   elapsedMinutes: number;
+  maxSessionMinutes: number | null;
 }
 
 export interface AdminHoursSummary {
   totalHours: number;
   totalEntries: number;
+  approvedHours: number;
+  approvedEntries: number;
+  pendingHours: number;
+  pendingEntries: number;
   byCategory: Array<{
     category_id: string;
     category_name: string;

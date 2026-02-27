@@ -21,6 +21,8 @@ from app.schemas.organization import (
     MembershipIdSettings,
     ModuleSettings,
     OrganizationSettings,
+    decrypt_settings_secrets,
+    encrypt_settings_secrets,
 )
 
 
@@ -148,7 +150,8 @@ class OrganizationService:
             return OrganizationSettings()
 
         # Get settings from JSONB field, or use defaults
-        settings_dict = org.settings or {}
+        # SEC: Decrypt any encrypted secret fields (backward-compatible with plaintext)
+        settings_dict = decrypt_settings_secrets(org.settings or {})
 
         # Parse contact info visibility settings
         contact_info = settings_dict.get("contact_info_visibility", {})
@@ -238,8 +241,21 @@ class OrganizationService:
         # Get current settings
         current_settings = org.settings or {}
 
+        # SEC: If the update contains redacted placeholder values ('••••••••'),
+        # preserve the existing encrypted values instead of overwriting them.
+        for section_key in ("email_service", "file_storage"):
+            incoming = settings_update.get(section_key)
+            existing = current_settings.get(section_key)
+            if isinstance(incoming, dict) and isinstance(existing, dict):
+                for field, val in incoming.items():
+                    if val == "••••••••":
+                        incoming[field] = existing.get(field)
+
         # Update with new settings (merge dictionaries)
         updated_settings = {**current_settings, **settings_update}
+
+        # SEC: Encrypt secret fields before persisting to the database
+        updated_settings = encrypt_settings_secrets(updated_settings)
 
         # Update in database — flag_modified is required because the
         # Organization.settings column uses plain JSON (not MutableDict),
