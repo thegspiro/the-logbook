@@ -233,6 +233,12 @@ class SchedulingService:
         try:
             shift = Shift(organization_id=organization_id, created_by=created_by, **shift_data)
             self.db.add(shift)
+            await self.db.flush()
+
+            # Auto-assign shift officer to apparatus "officer" position
+            if shift.shift_officer_id:
+                await self._sync_officer_assignment(shift, shift.shift_officer_id, organization_id)
+
             await self.db.commit()
             await self.db.refresh(shift)
             return shift, None
@@ -275,6 +281,66 @@ class SchedulingService:
         )
         return result.scalar_one_or_none()
 
+    async def _sync_officer_assignment(
+        self, shift: "Shift", officer_id: str, organization_id: UUID
+    ) -> None:
+        """Ensure the shift officer is assigned to the 'officer' position on the apparatus.
+
+        When a shift officer is designated and the apparatus has an 'officer'
+        position, this creates or updates assignments so the officer fills that
+        seat on the crew board.
+        """
+        # Load apparatus to check if it has an "officer" position
+        apparatus_id = shift.apparatus_id
+        if not apparatus_id:
+            return
+
+        apparatus_map = await self._get_apparatus_map(organization_id, [apparatus_id])
+        apparatus = apparatus_map.get(apparatus_id)
+        if not apparatus or not apparatus.positions:
+            return
+
+        # Check if the apparatus has an "officer" position
+        has_officer_position = any(p.lower() == "officer" for p in apparatus.positions)
+        if not has_officer_position:
+            return
+
+        # Check if the officer already has an assignment on this shift
+        existing_result = await self.db.execute(
+            select(ShiftAssignment)
+            .where(ShiftAssignment.shift_id == str(shift.id))
+            .where(ShiftAssignment.user_id == str(officer_id))
+            .where(ShiftAssignment.assignment_status != AssignmentStatus.DECLINED)
+        )
+        existing_assignment = existing_result.scalar_one_or_none()
+
+        if existing_assignment:
+            # Officer already assigned — update their position to "officer"
+            if existing_assignment.position != ShiftPosition.OFFICER:
+                existing_assignment.position = ShiftPosition.OFFICER
+        else:
+            # Create a new assignment for the officer
+            new_assignment = ShiftAssignment(
+                organization_id=str(organization_id),
+                shift_id=str(shift.id),
+                user_id=str(officer_id),
+                position=ShiftPosition.OFFICER,
+                assignment_status=AssignmentStatus.ASSIGNED,
+                assigned_by=str(officer_id),
+            )
+            self.db.add(new_assignment)
+
+        # If a different member had the "officer" position, move them to "firefighter"
+        displaced_result = await self.db.execute(
+            select(ShiftAssignment)
+            .where(ShiftAssignment.shift_id == str(shift.id))
+            .where(ShiftAssignment.user_id != str(officer_id))
+            .where(ShiftAssignment.position == ShiftPosition.OFFICER)
+            .where(ShiftAssignment.assignment_status != AssignmentStatus.DECLINED)
+        )
+        for displaced in displaced_result.scalars().all():
+            displaced.position = ShiftPosition.FIREFIGHTER
+
     async def update_shift(
         self, shift_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Tuple[Optional[Shift], Optional[str]]:
@@ -284,9 +350,16 @@ class SchedulingService:
             if not shift:
                 return None, "Shift not found"
 
+            old_officer_id = shift.shift_officer_id
+
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
                     setattr(shift, key, value)
+
+            # Auto-assign new shift officer to apparatus "officer" position
+            new_officer_id = shift.shift_officer_id
+            if new_officer_id and new_officer_id != old_officer_id:
+                await self._sync_officer_assignment(shift, new_officer_id, organization_id)
 
             await self.db.commit()
             await self.db.refresh(shift)
