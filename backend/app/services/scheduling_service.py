@@ -727,11 +727,50 @@ class SchedulingService:
 
             config = pattern.schedule_config or {}
 
-            # Determine which dates get a shift
-            shift_dates = []
+            # -----------------------------------------------------------
+            # Resolve day/night templates for cycle_pattern support.
+            # When a platoon pattern uses cycle_pattern with "day"/"night"
+            # entries, optional day_template_id / night_template_id in
+            # schedule_config point to separate ShiftTemplate records so
+            # day and night shifts can have different start/end times and
+            # colors.  Falls back to the main template when unset.
+            # -----------------------------------------------------------
+            cycle_pattern_cfg = config.get("cycle_pattern") if isinstance(config, dict) else None
+            if cycle_pattern_cfg and not isinstance(cycle_pattern_cfg, list):
+                cycle_pattern_cfg = None
+
+            day_tmpl_times = (start_hour, start_minute, end_hour, end_minute)
+            night_tmpl_times = (start_hour, start_minute, end_hour, end_minute)
+            day_tmpl_color = template.color
+            night_tmpl_color = template.color
+
+            if cycle_pattern_cfg and any(e in ("day", "night") for e in cycle_pattern_cfg):
+                raw_day_id = config.get("day_template_id")
+                raw_night_id = config.get("night_template_id")
+                if raw_day_id:
+                    dt = await self.get_template_by_id(UUID(str(raw_day_id)), organization_id)
+                    if dt:
+                        dh, dm = map(int, dt.start_time_of_day.split(":"))
+                        deh, dem = map(int, dt.end_time_of_day.split(":"))
+                        day_tmpl_times = (dh, dm, deh, dem)
+                        day_tmpl_color = dt.color
+                if raw_night_id:
+                    nt = await self.get_template_by_id(UUID(str(raw_night_id)), organization_id)
+                    if nt:
+                        nh, nm = map(int, nt.start_time_of_day.split(":"))
+                        neh, nem = map(int, nt.end_time_of_day.split(":"))
+                        night_tmpl_times = (nh, nm, neh, nem)
+                        night_tmpl_color = nt.color
+
+            # Determine which dates get a shift and what type they are.
+            # shift_type_map tracks the cycle entry ("on"/"day"/"night")
+            # for each date so we can pick the right template later.
+            shift_dates: list[date] = []
+            shift_type_map: dict[date, str] = {}
             current = start_date
             while current <= end_date:
                 should_create = False
+                entry_type = "on"
 
                 if pattern.pattern_type == PatternType.DAILY:
                     should_create = True
@@ -746,13 +785,24 @@ class SchedulingService:
                         should_create = True
 
                 elif pattern.pattern_type == PatternType.PLATOON:
-                    days_on = pattern.days_on or 1
-                    days_off = pattern.days_off or 1
-                    cycle_length = days_on + days_off
-                    days_since_start = (current - pattern.start_date).days
-                    position_in_cycle = days_since_start % cycle_length
-                    if position_in_cycle < days_on:
-                        should_create = True
+                    if cycle_pattern_cfg and len(cycle_pattern_cfg) > 0:
+                        # Advanced cycle: array of "on"/"off"/"day"/"night"
+                        cycle_length = len(cycle_pattern_cfg)
+                        days_since_start = (current - pattern.start_date).days
+                        position_in_cycle = days_since_start % cycle_length
+                        entry = cycle_pattern_cfg[position_in_cycle]
+                        if isinstance(entry, str) and entry != "off":
+                            should_create = True
+                            entry_type = entry
+                    else:
+                        # Simple on/off cycle
+                        days_on = pattern.days_on or 1
+                        days_off = pattern.days_off or 1
+                        cycle_length = days_on + days_off
+                        days_since_start = (current - pattern.start_date).days
+                        position_in_cycle = days_since_start % cycle_length
+                        if position_in_cycle < days_on:
+                            should_create = True
 
                 elif pattern.pattern_type == PatternType.CUSTOM:
                     custom_dates = config.get("dates", [])
@@ -761,8 +811,18 @@ class SchedulingService:
 
                 if should_create:
                     shift_dates.append(current)
+                    shift_type_map[current] = entry_type
 
                 current += timedelta(days=1)
+
+            # Helper: resolve template times and color for a given shift type
+            def _resolve_times(stype: str) -> tuple:
+                """Return (s_hour, s_min, e_hour, e_min, color) for a shift type."""
+                if stype == "night":
+                    return (*night_tmpl_times, night_tmpl_color)
+                if stype == "day":
+                    return (*day_tmpl_times, day_tmpl_color)
+                return (start_hour, start_minute, end_hour, end_minute, template.color)
 
             # Duplicate guard: skip dates that already have a shift starting
             # at the same time (allows multiple shifts per day, e.g. day + night)
@@ -773,24 +833,32 @@ class SchedulingService:
                     .where(Shift.shift_date.in_(shift_dates))
                 )
                 existing_shifts = {(row[0], row[1].hour, row[1].minute) for row in existing_result.all()}
-                shift_dates = [d for d in shift_dates if (d, start_hour, start_minute) not in existing_shifts]
+                filtered_dates: list[date] = []
+                for d in shift_dates:
+                    sh, sm, _eh, _em, _c = _resolve_times(shift_type_map.get(d, "on"))
+                    if (d, sh, sm) not in existing_shifts:
+                        filtered_dates.append(d)
+                shift_dates = filtered_dates
 
             # Create shifts for each date
             created_shifts = []
             for shift_date_val in shift_dates:
+                s_hour, s_minute, e_hour, e_minute, shift_color = _resolve_times(
+                    shift_type_map.get(shift_date_val, "on")
+                )
                 shift_start = datetime(
                     shift_date_val.year,
                     shift_date_val.month,
                     shift_date_val.day,
-                    start_hour,
-                    start_minute,
+                    s_hour,
+                    s_minute,
                 )
                 shift_end = datetime(
                     shift_date_val.year,
                     shift_date_val.month,
                     shift_date_val.day,
-                    end_hour,
-                    end_minute,
+                    e_hour,
+                    e_minute,
                 )
                 # If end time is before start time, the shift ends the next day
                 if shift_end <= shift_start:
@@ -801,7 +869,7 @@ class SchedulingService:
                     shift_date=shift_date_val,
                     start_time=shift_start,
                     end_time=shift_end,
-                    color=template.color,
+                    color=shift_color,
                     created_by=created_by,
                 )
                 self.db.add(shift)
