@@ -393,7 +393,7 @@ export const ShiftReportsTab: React.FC = () => {
       weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
     });
 
-    const statusStyle = REVIEW_STATUS_STYLES[report.review_status] || REVIEW_STATUS_STYLES.approved;
+    const statusStyle = REVIEW_STATUS_STYLES[report.review_status] ?? { bg: 'bg-green-500/10', text: 'text-green-700 dark:text-green-400', label: 'Approved' };
 
     return (
       <div key={report.id} className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-hidden">
