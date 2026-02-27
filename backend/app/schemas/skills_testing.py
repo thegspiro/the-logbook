@@ -10,7 +10,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # ============================================
 # Criterion & Section Schemas (template structure)
 # ============================================
@@ -21,13 +20,16 @@ class SkillCriterionSchema(BaseModel):
 
     label: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    type: str = Field("pass_fail", max_length=50)  # pass_fail, score, checklist, time
+    type: str = Field(
+        "pass_fail", max_length=50
+    )  # pass_fail, score, checklist, time_limit, statement
     required: bool = False
     sort_order: int = 0
     passing_score: Optional[float] = Field(None, ge=0)
     max_score: Optional[float] = Field(None, ge=0)
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     checklist_items: Optional[List[str]] = None
+    statement_text: Optional[str] = None
 
 
 class SkillTemplateSectionSchema(BaseModel):

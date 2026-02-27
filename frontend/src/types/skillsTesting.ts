@@ -18,7 +18,8 @@ export type CriterionType =
   | 'pass_fail'
   | 'score'
   | 'time_limit'
-  | 'checklist';
+  | 'checklist'
+  | 'statement';
 
 export type TemplateStatus =
   | 'draft'
@@ -48,6 +49,8 @@ export interface SkillCriterion {
   time_limit_seconds?: number;
   /** For 'checklist' type: items that must be checked */
   checklist_items?: string[];
+  /** For 'statement' type: text the evaluator must read/state */
+  statement_text?: string;
 }
 
 /** A section grouping related criteria within a template */
@@ -110,6 +113,7 @@ export interface SkillCriterionCreate {
   max_score?: number;
   time_limit_seconds?: number;
   checklist_items?: string[];
+  statement_text?: string;
 }
 
 export interface SkillTemplateUpdate {

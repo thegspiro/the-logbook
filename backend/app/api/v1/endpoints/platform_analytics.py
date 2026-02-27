@@ -24,7 +24,7 @@ from app.models.forms import FormSubmission
 from app.models.inventory import InventoryItem
 from app.models.meeting import Meeting
 from app.models.training import Shift, TrainingRecord, TrainingStatus
-from app.models.user import User, UserStatus
+from app.models.user import User
 from app.schemas.platform_analytics import (
     DailyCount,
     ModuleUsage,
@@ -110,19 +110,57 @@ async def get_platform_analytics(
         logger.warning("platform-analytics: user adoption query failed: %s", exc)
 
     inactive_users = total_users - active_users
-    adoption_rate = round((active_users / total_users) * 100, 1) if total_users > 0 else 0.0
+    adoption_rate = (
+        round((active_users / total_users) * 100, 1) if total_users > 0 else 0.0
+    )
 
     # ── Module Usage ──
     modules: List[ModuleUsage] = []
     module_configs = [
         ("Events", True, Event, Event.organization_id, Event.created_at),
-        ("Training", settings.MODULE_TRAINING_ENABLED, TrainingRecord, TrainingRecord.organization_id, TrainingRecord.created_at),
-        ("Scheduling", settings.MODULE_SCHEDULING_ENABLED, Shift, Shift.organization_id, Shift.created_at),
-        ("Inventory", settings.MODULE_INVENTORY_ENABLED, InventoryItem, InventoryItem.organization_id, InventoryItem.created_at),
-        ("Meetings", settings.MODULE_MEETINGS_ENABLED, Meeting, Meeting.organization_id, Meeting.created_at),
-        ("Elections", settings.MODULE_ELECTIONS_ENABLED, Election, Election.organization_id, Election.created_at),
+        (
+            "Training",
+            settings.MODULE_TRAINING_ENABLED,
+            TrainingRecord,
+            TrainingRecord.organization_id,
+            TrainingRecord.created_at,
+        ),
+        (
+            "Scheduling",
+            settings.MODULE_SCHEDULING_ENABLED,
+            Shift,
+            Shift.organization_id,
+            Shift.created_at,
+        ),
+        (
+            "Inventory",
+            settings.MODULE_INVENTORY_ENABLED,
+            InventoryItem,
+            InventoryItem.organization_id,
+            InventoryItem.created_at,
+        ),
+        (
+            "Meetings",
+            settings.MODULE_MEETINGS_ENABLED,
+            Meeting,
+            Meeting.organization_id,
+            Meeting.created_at,
+        ),
+        (
+            "Elections",
+            settings.MODULE_ELECTIONS_ENABLED,
+            Election,
+            Election.organization_id,
+            Election.created_at,
+        ),
         ("Documents", True, Document, Document.organization_id, Document.created_at),
-        ("Forms", True, FormSubmission, FormSubmission.organization_id, FormSubmission.created_at),
+        (
+            "Forms",
+            True,
+            FormSubmission,
+            FormSubmission.organization_id,
+            FormSubmission.created_at,
+        ),
     ]
 
     for name, enabled, model, org_col, created_col in module_configs:
