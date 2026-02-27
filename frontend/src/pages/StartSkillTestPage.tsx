@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { userService } from '../services/api';
+import { getErrorMessage } from '../utils/errorHandling';
 
 interface MemberOption {
   id: string;
@@ -53,8 +54,8 @@ export const StartSkillTestPage: React.FC = () => {
           email: u.email ?? '',
         }))
       );
-    } catch {
-      toast.error('Failed to load members');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load members'));
     } finally {
       setMembersLoading(false);
     }
@@ -89,8 +90,8 @@ export const StartSkillTestPage: React.FC = () => {
       });
       toast.success('Test session started');
       navigate(`/training/skills-testing/test/${test.id}/active`);
-    } catch {
-      toast.error('Failed to start test');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to start test'));
     } finally {
       setIsStarting(false);
     }

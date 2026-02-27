@@ -64,7 +64,13 @@ interface SkillsTestingState {
 
   // Active test session actions
   setActiveSectionIndex: (index: number) => void;
-  updateCriterionResult: (sectionId: string, criterionId: string, result: Partial<CriterionResult>) => void;
+  updateCriterionResult: (
+    sectionId: string,
+    criterionId: string,
+    result: Partial<CriterionResult>,
+    sectionName?: string,
+    criterionLabel?: string,
+  ) => void;
   setActiveTestTimer: (seconds: number) => void;
   setActiveTestRunning: (running: boolean) => void;
 
@@ -251,7 +257,7 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   // Active test session actions
   setActiveSectionIndex: (index) => set({ activeSectionIndex: index }),
 
-  updateCriterionResult: (sectionId, criterionId, result) => {
+  updateCriterionResult: (sectionId, criterionId, result, sectionName?, criterionLabel?) => {
     const { currentTest } = get();
     if (!currentTest) return;
 
@@ -259,7 +265,7 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     let sectionResult = sectionResults.find((s) => s.section_id === sectionId);
 
     if (!sectionResult) {
-      sectionResult = { section_id: sectionId, criteria_results: [] };
+      sectionResult = { section_id: sectionId, section_name: sectionName, criteria_results: [] };
       sectionResults.push(sectionResult);
     }
 
@@ -274,6 +280,7 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     } else {
       criteriaResults.push({
         criterion_id: criterionId,
+        criterion_label: criterionLabel,
         passed: null,
         ...result,
       });

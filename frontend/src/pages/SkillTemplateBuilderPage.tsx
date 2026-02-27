@@ -414,6 +414,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         if (criterion.type === 'score' && criterion.max_score != null && criterion.passing_score != null && criterion.passing_score > criterion.max_score) {
           errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Passing score cannot exceed max score`);
         }
+        if (criterion.type === 'checklist' && (!criterion.checklist_items || criterion.checklist_items.length === 0)) {
+          errors.push(`Section ${si + 1}, Criterion ${ci + 1}: At least one checklist item is required`);
+        }
         if (criterion.type === 'statement' && !criterion.statement_text?.trim()) {
           errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Statement text is required`);
         }

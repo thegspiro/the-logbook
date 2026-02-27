@@ -41,7 +41,9 @@ router = APIRouter()
 
 @router.get("/templates", response_model=List[SkillTemplateListResponse])
 async def list_templates(
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (draft/published/archived)"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by status (draft/published/archived)"
+    ),
     category: Optional[str] = Query(None, description="Filter by category"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -54,7 +56,9 @@ async def list_templates(
 
     **Authentication required**
     """
-    query = select(SkillTemplate).where(SkillTemplate.organization_id == current_user.organization_id)
+    query = select(SkillTemplate).where(
+        SkillTemplate.organization_id == current_user.organization_id
+    )
 
     if status_filter:
         query = query.where(SkillTemplate.status == status_filter)
@@ -72,7 +76,9 @@ async def list_templates(
     for t in templates:
         sections = t.sections or []
         section_count = len(sections)
-        criteria_count = sum(len(s.get("criteria", [])) for s in sections if isinstance(s, dict))
+        criteria_count = sum(
+            len(s.get("criteria", [])) for s in sections if isinstance(s, dict)
+        )
 
         items.append(
             SkillTemplateListResponse(
@@ -167,7 +173,9 @@ async def get_template(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
+        )
 
     return template
 
@@ -196,7 +204,9 @@ async def update_template(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
+        )
 
     if template.status == "archived":
         raise HTTPException(
@@ -211,7 +221,12 @@ async def update_template(
         update_data["sections"] = [s.model_dump() for s in template_update.sections]
 
     # Increment version if template is published and structural fields change
-    structural_fields = {"sections", "passing_percentage", "require_all_critical", "time_limit_seconds"}
+    structural_fields = {
+        "sections",
+        "passing_percentage",
+        "require_all_critical",
+        "time_limit_seconds",
+    }
     if template.status == "published" and structural_fields & set(update_data.keys()):
         template.version = (template.version or 1) + 1
 
@@ -260,7 +275,9 @@ async def delete_template(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
+        )
 
     template.status = "archived"
     await db.commit()
@@ -302,7 +319,9 @@ async def publish_template(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
+        )
 
     if template.status == "published":
         raise HTTPException(
@@ -381,7 +400,9 @@ async def duplicate_template(
     source = result.scalar_one_or_none()
 
     if not source:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
+        )
 
     new_template = SkillTemplate(
         organization_id=current_user.organization_id,
@@ -426,7 +447,9 @@ async def duplicate_template(
 
 @router.get("/tests", response_model=List[SkillTestListResponse])
 async def list_tests(
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by status"
+    ),
     candidate_id: Optional[UUID] = Query(None, description="Filter by candidate"),
     template_id: Optional[UUID] = Query(None, description="Filter by template"),
     db: AsyncSession = Depends(get_db),
@@ -440,7 +463,9 @@ async def list_tests(
 
     **Authentication required**
     """
-    query = select(SkillTest).where(SkillTest.organization_id == current_user.organization_id)
+    query = select(SkillTest).where(
+        SkillTest.organization_id == current_user.organization_id
+    )
 
     if status_filter:
         query = query.where(SkillTest.status == status_filter)
@@ -473,7 +498,9 @@ async def list_tests(
     # Batch fetch templates
     templates_map = {}
     if template_ids:
-        templates_result = await db.execute(select(SkillTemplate).where(SkillTemplate.id.in_(list(template_ids))))
+        templates_result = await db.execute(
+            select(SkillTemplate).where(SkillTemplate.id.in_(list(template_ids)))
+        )
         templates_map = {tmpl.id: tmpl for tmpl in templates_result.scalars().all()}
 
     items = []
@@ -534,7 +561,9 @@ async def create_test(
     template = template_result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
+        )
 
     if template.status != "published":
         raise HTTPException(
@@ -551,7 +580,9 @@ async def create_test(
     candidate = candidate_result.scalar_one_or_none()
 
     if not candidate:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
+        )
 
     new_test = SkillTest(
         organization_id=current_user.organization_id,
@@ -607,15 +638,21 @@ async def get_test(
     test = result.scalar_one_or_none()
 
     if not test:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
 
     # Fetch related entities for display names
     template = None
-    template_result = await db.execute(select(SkillTemplate).where(SkillTemplate.id == test.template_id))
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
     template = template_result.scalar_one_or_none()
 
     candidate = None
-    candidate_result = await db.execute(select(User).where(User.id == test.candidate_id))
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
     candidate = candidate_result.scalar_one_or_none()
 
     examiner = None
@@ -649,7 +686,9 @@ async def update_test(
     test = result.scalar_one_or_none()
 
     if not test:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
 
     if test.status in ("completed", "cancelled"):
         raise HTTPException(
@@ -661,7 +700,9 @@ async def update_test(
 
     # Convert section_results to JSON-serializable dicts if provided
     if "section_results" in update_data and update_data["section_results"] is not None:
-        update_data["section_results"] = [sr.model_dump() for sr in test_update.section_results]
+        update_data["section_results"] = [
+            sr.model_dump() for sr in test_update.section_results
+        ]
 
     # Auto-set started_at when transitioning to in_progress
     if update_data.get("status") == "in_progress" and test.started_at is None:
@@ -674,10 +715,14 @@ async def update_test(
     await db.refresh(test)
 
     # Fetch related entities for response
-    template_result = await db.execute(select(SkillTemplate).where(SkillTemplate.id == test.template_id))
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
     template = template_result.scalar_one_or_none()
 
-    candidate_result = await db.execute(select(User).where(User.id == test.candidate_id))
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
     candidate = candidate_result.scalar_one_or_none()
 
     examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
@@ -711,7 +756,9 @@ async def complete_test(
     test = result.scalar_one_or_none()
 
     if not test:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
 
     if test.status == "completed":
         raise HTTPException(
@@ -726,7 +773,9 @@ async def complete_test(
         )
 
     # Fetch template for scoring rules
-    template_result = await db.execute(select(SkillTemplate).where(SkillTemplate.id == test.template_id))
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
     template = template_result.scalar_one_or_none()
 
     if not template:
@@ -752,7 +801,9 @@ async def complete_test(
     await db.refresh(test)
 
     # Fetch participant info for response
-    candidate_result = await db.execute(select(User).where(User.id == test.candidate_id))
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
     candidate = candidate_result.scalar_one_or_none()
 
     examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
@@ -863,7 +914,9 @@ async def get_testing_summary(
         )
     )
     avg_score_raw = avg_score_result.scalar()
-    average_score = round(float(avg_score_raw), 1) if avg_score_raw is not None else None
+    average_score = (
+        round(float(avg_score_raw), 1) if avg_score_raw is not None else None
+    )
 
     return SkillTestingSummaryResponse(
         total_templates=total_templates,
@@ -893,7 +946,7 @@ def _build_test_response(
     candidate: Optional[User],
     examiner: Optional[User],
 ) -> SkillTestResponse:
-    """Build a SkillTestResponse with denormalized names."""
+    """Build a SkillTestResponse with denormalized names and template structure."""
     return SkillTestResponse(
         id=test.id,
         organization_id=test.organization_id,
@@ -913,10 +966,14 @@ def _build_test_response(
         template_name=template.name if template else None,
         candidate_name=_format_user_name(candidate) if candidate else None,
         examiner_name=_format_user_name(examiner) if examiner else None,
+        template_sections=template.sections if template else None,
+        template_time_limit_seconds=template.time_limit_seconds if template else None,
     )
 
 
-def _calculate_test_result(test: SkillTest, template: SkillTemplate) -> tuple[float | None, str]:
+def _calculate_test_result(
+    test: SkillTest, template: SkillTemplate
+) -> tuple[float | None, str]:
     """
     Calculate the overall score and pass/fail result for a completed test.
 
@@ -935,7 +992,9 @@ def _calculate_test_result(test: SkillTest, template: SkillTemplate) -> tuple[fl
         if isinstance(sr, dict) and sr.get("section_score") is not None:
             section_scores.append(sr["section_score"])
 
-    overall_score = round(sum(section_scores) / len(section_scores), 1) if section_scores else None
+    overall_score = (
+        round(sum(section_scores) / len(section_scores), 1) if section_scores else None
+    )
 
     # Check passing percentage
     passes_percentage = True
@@ -949,27 +1008,47 @@ def _calculate_test_result(test: SkillTest, template: SkillTemplate) -> tuple[fl
             if not isinstance(section, dict):
                 continue
             criteria = section.get("criteria", [])
-            # Find matching section result
+            section_id = f"section-{section_idx}"
+            section_name = section.get("name")
+
+            # Find matching section result (by ID or name)
             section_result = None
             for sr in section_results:
-                if isinstance(sr, dict) and sr.get("section_name") == section.get("name"):
+                if not isinstance(sr, dict):
+                    continue
+                if (
+                    sr.get("section_id") == section_id
+                    or sr.get("section_name") == section_name
+                ):
                     section_result = sr
                     break
 
             if not section_result:
                 # If a section with required criteria has no result, it fails
-                if any(c.get("required", False) for c in criteria if isinstance(c, dict)):
+                if any(
+                    c.get("required", False) for c in criteria if isinstance(c, dict)
+                ):
                     all_critical_passed = False
                 continue
 
             criteria_results = section_result.get("criteria_results", [])
-            for criterion in criteria:
-                if not isinstance(criterion, dict) or not criterion.get("required", False):
+            for ci, criterion in enumerate(criteria):
+                if not isinstance(criterion, dict) or not criterion.get(
+                    "required", False
+                ):
                     continue
-                # Find matching criterion result
+                criterion_id = f"criterion-{section_idx}-{ci}"
+                criterion_label = criterion.get("label")
+
+                # Find matching criterion result (by ID or label)
                 cr_result = None
                 for cr in criteria_results:
-                    if isinstance(cr, dict) and cr.get("criterion_label") == criterion.get("label"):
+                    if not isinstance(cr, dict):
+                        continue
+                    if (
+                        cr.get("criterion_id") == criterion_id
+                        or cr.get("criterion_label") == criterion_label
+                    ):
                         cr_result = cr
                         break
                 if not cr_result or not cr_result.get("passed", False):
