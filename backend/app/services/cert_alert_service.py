@@ -16,6 +16,7 @@ Designed to be triggered by a daily cron job / scheduled task.
 Can also be triggered manually by training officers.
 """
 
+import html as _html
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from uuid import UUID
@@ -65,9 +66,7 @@ class CertAlertService:
             "include_personal_email_on_final": true
         }
         """
-        result = await self.db.execute(
-            select(Organization).where(Organization.id == str(organization_id))
-        )
+        result = await self.db.execute(select(Organization).where(Organization.id == str(organization_id)))
         org = result.scalar_one_or_none()
         if not org:
             return {"enabled": False}
@@ -105,9 +104,7 @@ class CertAlertService:
         )
         return list(result.scalars().all())
 
-    async def _get_officers_with_roles(
-        self, organization_id: UUID, role_slugs: List[str]
-    ) -> List[User]:
+    async def _get_officers_with_roles(self, organization_id: UUID, role_slugs: List[str]) -> List[User]:
         """Get users with specific roles."""
         result = await self.db.execute(
             select(User)
@@ -119,9 +116,7 @@ class CertAlertService:
         users = result.scalars().all()
         return [u for u in users if any(r.slug in role_slugs for r in u.roles)]
 
-    async def _get_officer_emails(
-        self, organization_id: UUID, role_slugs: List[str]
-    ) -> List[str]:
+    async def _get_officer_emails(self, organization_id: UUID, role_slugs: List[str]) -> List[str]:
         """Get email addresses for users with specific roles."""
         officers = await self._get_officers_with_roles(organization_id, role_slugs)
         return [u.email for u in officers if u.email]
@@ -178,9 +173,7 @@ class CertAlertService:
                 "errors": 0,
             }
 
-        org_result = await self.db.execute(
-            select(Organization).where(Organization.id == str(organization_id))
-        )
+        org_result = await self.db.execute(select(Organization).where(Organization.id == str(organization_id)))
         org = org_result.scalar_one_or_none()
         if not org:
             return {
@@ -191,12 +184,8 @@ class CertAlertService:
             }
 
         email_service = EmailService(org)
-        training_roles = config.get(
-            "training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES
-        )
-        compliance_roles = config.get(
-            "compliance_officer_roles", DEFAULT_COMPLIANCE_OFFICER_ROLES
-        )
+        training_roles = config.get("training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES)
+        compliance_roles = config.get("compliance_officer_roles", DEFAULT_COMPLIANCE_OFFICER_ROLES)
         escalation_roles = config.get("escalation_roles", training_roles + [ROLE_CHIEF])
 
         alerts_sent = 0
@@ -220,16 +209,12 @@ class CertAlertService:
                     continue
 
                 # Get the member
-                member_result = await self.db.execute(
-                    select(User).where(User.id == record.user_id)
-                )
+                member_result = await self.db.execute(select(User).where(User.id == record.user_id))
                 member = member_result.scalar_one_or_none()
                 if not member:
                     continue
 
-                subject = (
-                    f"Certification Expiring in {days_until} Days: {record.course_name}"
-                )
+                subject = f"Certification Expiring in {days_until} Days: {record.course_name}"
                 message = (
                     f"Your {record.course_name} certification expires on "
                     f"{record.expiration_date.strftime('%B %d, %Y')} ({days_until} days). "
@@ -249,15 +234,9 @@ class CertAlertService:
 
                     # Also notify officers in-app for escalation tiers
                     if cc_officers:
-                        officers = await self._get_officers_with_roles(
-                            organization_id, training_roles
-                        )
+                        officers = await self._get_officers_with_roles(organization_id, training_roles)
                         if tier_days <= 7:
-                            officers.extend(
-                                await self._get_officers_with_roles(
-                                    organization_id, compliance_roles
-                                )
-                            )
+                            officers.extend(await self._get_officers_with_roles(organization_id, compliance_roles))
                         for officer in officers:
                             await self._log_in_app_notification(
                                 organization_id=organization_id,
@@ -271,17 +250,16 @@ class CertAlertService:
                     if self._member_has_email_enabled(member) and member.email:
                         cc_emails = []
                         if cc_officers:
-                            cc_emails.extend(
-                                await self._get_officer_emails(
-                                    organization_id, training_roles
-                                )
-                            )
+                            cc_emails.extend(await self._get_officer_emails(organization_id, training_roles))
                             if tier_days <= 7:
-                                cc_emails.extend(
-                                    await self._get_officer_emails(
-                                        organization_id, compliance_roles
-                                    )
-                                )
+                                cc_emails.extend(await self._get_officer_emails(organization_id, compliance_roles))
+
+                        e_first = _html.escape(member.first_name or "")
+                        e_course = _html.escape(record.course_name or "")
+                        e_cert_num = (
+                            _html.escape(record.certification_number or "") if record.certification_number else ""
+                        )
+                        e_agency = _html.escape(record.issuing_agency or "") if record.issuing_agency else ""
 
                         html_body = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -289,12 +267,12 @@ class CertAlertService:
         <h2>Certification Expiration {'Warning' if days_until <= 30 else 'Notice'}</h2>
     </div>
     <div style="padding: 20px; background-color: #f9fafb;">
-        <p>Hello {member.first_name},</p>
-        <p>Your <strong>{record.course_name}</strong> certification expires on
+        <p>Hello {e_first},</p>
+        <p>Your <strong>{e_course}</strong> certification expires on
         <strong>{record.expiration_date.strftime('%B %d, %Y')}</strong>
         ({days_until} day{'s' if days_until != 1 else ''} from today).</p>
-        {f'<p><strong>Certification #:</strong> {record.certification_number}</p>' if record.certification_number else ''}
-        {f'<p><strong>Issuing Agency:</strong> {record.issuing_agency}</p>' if record.issuing_agency else ''}
+        {f'<p><strong>Certification #:</strong> {e_cert_num}</p>' if record.certification_number else ''}
+        {f'<p><strong>Issuing Agency:</strong> {e_agency}</p>' if record.issuing_agency else ''}
         <p>Please renew your certification before it expires. Contact your training officer if you need assistance.</p>
     </div>
 </div>"""
@@ -333,17 +311,13 @@ class CertAlertService:
         include_personal_email = config.get("include_personal_email_on_final", False)
 
         for record in expired:
-            member_result = await self.db.execute(
-                select(User).where(User.id == record.user_id)
-            )
+            member_result = await self.db.execute(select(User).where(User.id == record.user_id))
             member = member_result.scalar_one_or_none()
             if not member:
                 continue
 
             days_expired = (today - record.expiration_date).days
-            subject = (
-                f"EXPIRED Certification: {record.course_name} - {member.full_name}"
-            )
+            subject = f"EXPIRED Certification: {record.course_name} - {member.full_name}"
             message = (
                 f"{member.full_name}'s {record.course_name} certification "
                 f"expired on {record.expiration_date.strftime('%B %d, %Y')} "
@@ -362,9 +336,7 @@ class CertAlertService:
                 in_app_sent += 1
 
                 # In-app notification to escalation officers
-                escalation_officers = await self._get_officers_with_roles(
-                    organization_id, escalation_roles
-                )
+                escalation_officers = await self._get_officers_with_roles(organization_id, escalation_roles)
                 for officer in escalation_officers:
                     await self._log_in_app_notification(
                         organization_id=organization_id,
@@ -375,16 +347,10 @@ class CertAlertService:
                     )
 
                 # Email escalation
-                cc_emails = await self._get_officer_emails(
-                    organization_id, training_roles
-                )
-                cc_emails.extend(
-                    await self._get_officer_emails(organization_id, compliance_roles)
-                )
+                cc_emails = await self._get_officer_emails(organization_id, training_roles)
+                cc_emails.extend(await self._get_officer_emails(organization_id, compliance_roles))
                 if config.get("cc_chief_on_escalation"):
-                    cc_emails.extend(
-                        await self._get_officer_emails(organization_id, [ROLE_CHIEF])
-                    )
+                    cc_emails.extend(await self._get_officer_emails(organization_id, [ROLE_CHIEF]))
 
                 to_emails = []
                 if self._member_has_email_enabled(member) and member.email:
@@ -394,16 +360,20 @@ class CertAlertService:
                     to_emails.append(member.personal_email)
 
                 if to_emails or cc_emails:
+                    e_full_name = _html.escape(member.full_name or "")
+                    e_course = _html.escape(record.course_name or "")
+                    e_cert_num = _html.escape(record.certification_number or "") if record.certification_number else ""
+
                     html_body = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <div style="background-color: #7f1d1d; color: white; padding: 20px; text-align: center;">
         <h2>Certification EXPIRED</h2>
     </div>
     <div style="padding: 20px; background-color: #fef2f2;">
-        <p><strong>{member.full_name}</strong>'s <strong>{record.course_name}</strong> certification
+        <p><strong>{e_full_name}</strong>'s <strong>{e_course}</strong> certification
         expired on <strong>{record.expiration_date.strftime('%B %d, %Y')}</strong>
         ({days_expired} day{'s' if days_expired != 1 else ''} ago).</p>
-        {f'<p><strong>Certification #:</strong> {record.certification_number}</p>' if record.certification_number else ''}
+        {f'<p><strong>Certification #:</strong> {e_cert_num}</p>' if record.certification_number else ''}
         <p>No renewal has been logged. This member may need to be taken out of service for activities requiring this certification.</p>
     </div>
 </div>"""

@@ -17,6 +17,7 @@ import {
   Loader2,
   ClipboardList,
   BarChart3,
+  Briefcase,
 } from 'lucide-react';
 import { HelpLink } from '../components/HelpLink';
 import { reportsService } from '../services/api';
@@ -29,7 +30,7 @@ interface ReportCard {
   title: string;
   description: string;
   icon: React.ElementType;
-  category: 'member' | 'training' | 'event' | 'compliance';
+  category: 'member' | 'training' | 'event' | 'compliance' | 'admin';
   available: boolean;
   usesDateRange?: boolean;
 }
@@ -41,6 +42,7 @@ const REPORT_TYPE_MAP: Record<string, string> = {
   'event-attendance': 'event_attendance',
   'training-progress': 'training_progress',
   'annual-training': 'annual_training',
+  'admin-hours': 'admin_hours',
 };
 
 type DatePreset = 'this-year' | 'last-year' | 'last-90' | 'custom';
@@ -136,6 +138,15 @@ export const ReportsPage: React.FC = () => {
       usesDateRange: true,
     },
     {
+      id: 'admin-hours',
+      title: 'Admin Hours Report',
+      description: 'Administrative hours logged by members, broken down by category',
+      icon: Briefcase,
+      category: 'admin',
+      available: true,
+      usesDateRange: true,
+    },
+    {
       id: 'compliance-status',
       title: 'Compliance Status',
       description: 'Current compliance status for certifications and requirements',
@@ -150,6 +161,7 @@ export const ReportsPage: React.FC = () => {
     { id: 'member', label: 'Member Reports' },
     { id: 'training', label: 'Training Reports' },
     { id: 'event', label: 'Event Reports' },
+    { id: 'admin', label: 'Admin Reports' },
     { id: 'compliance', label: 'Compliance Reports' },
   ];
 
@@ -500,6 +512,76 @@ export const ReportsPage: React.FC = () => {
     );
   };
 
+  const renderAdminHours = (data: Record<string, unknown>) => {
+    const summary = (data.summary ?? {}) as Record<string, unknown>;
+    const entries = (data.entries ?? []) as Array<Record<string, unknown>>;
+    const byCategory = (summary.hours_by_category ?? {}) as Record<string, number>;
+
+    return (
+      <>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+          <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-theme-text-primary">{toStr(summary.total_hours ?? 0)}</div>
+            <div className="text-xs text-theme-text-muted">Total Hours</div>
+          </div>
+          <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-theme-text-primary">{toStr(summary.total_entries ?? 0)}</div>
+            <div className="text-xs text-theme-text-muted">Entries</div>
+          </div>
+          <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-theme-text-primary">{toStr(summary.unique_members ?? 0)}</div>
+            <div className="text-xs text-theme-text-muted">Members</div>
+          </div>
+        </div>
+
+        {Object.keys(byCategory).length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs text-theme-text-muted mb-1">By Category:</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(byCategory).map(([cat, hrs]) => (
+                <span key={cat} className="text-xs px-2 py-1 bg-theme-surface rounded text-theme-text-secondary">
+                  {cat}: <span className="font-semibold text-theme-text-primary">{hrs}h</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {entries.length > 0 && (
+          <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
+                <tr>
+                  <th className="px-4 py-2">Member</th>
+                  <th className="px-4 py-2">Category</th>
+                  <th className="px-4 py-2">Date</th>
+                  <th className="px-4 py-2">Hours</th>
+                  <th className="px-4 py-2">Method</th>
+                  <th className="px-4 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-theme-surface-border">
+                {entries.map((e, i) => (
+                  <tr key={i} className="text-theme-text-secondary">
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.member_name ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.category_name ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.date ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.hours ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(e.entry_method ?? '-').replace('_', ' ')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(e.status ?? '-')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {entries.length === 0 && (
+          <p className="text-theme-text-muted text-sm">No admin hours entries found for this period.</p>
+        )}
+      </>
+    );
+  };
+
   const renderReportContent = () => {
     if (!reportData || !activeReport) return null;
 
@@ -514,6 +596,8 @@ export const ReportsPage: React.FC = () => {
         return renderTrainingProgress(reportData);
       case 'annual-training':
         return renderAnnualTraining(reportData);
+      case 'admin-hours':
+        return renderAdminHours(reportData);
       default:
         return (
           <pre className="text-sm text-theme-text-secondary whitespace-pre-wrap overflow-auto max-h-[50vh]">

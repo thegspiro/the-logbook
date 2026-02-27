@@ -175,4 +175,42 @@ npm install
 
 ---
 
+## QR Code & Clipboard Issues (2026-02-27)
+
+### QR Codes Not Displaying on Locations & Rooms Page
+
+**Status (Fixed):** Room cards now render toggleable QR codes for their kiosk display URL using `qrcode.react` QRCodeSVG. Pull latest to get the fix.
+
+### "Failed to copy" Error When Copying Links
+
+**Status (Fixed):** A clipboard fallback using `document.execCommand('copy')` has been added for contexts where `navigator.clipboard` is unavailable (e.g., non-HTTPS, older browsers, embedded webviews).
+
+### QR Code Refresh Errors on Event QR Code Page
+
+**Status (Fixed):** A stale closure bug in `EventQRCodePage` caused the refresh interval to capture an outdated `fetchQRData` callback. The callback reference is now stable.
+
+---
+
+## ESLint & Code Quality (2026-02-27)
+
+### ESLint Shows 0 Errors, 0 Warnings
+
+As of February 27, 2026, the entire frontend codebase has **zero ESLint errors and zero warnings**. Key cleanups:
+- 565 floating/misused promise warnings fixed (added `void` operator, wrapped async handlers)
+- 94 axios calls typed with generic parameters to eliminate `no-unsafe-return`
+- Non-null assertions replaced with nullish coalescing and optional chaining
+- `any` types replaced with `unknown` or proper types
+
+If ESLint reports new warnings after adding code, fix them before committing. The CI enforces `--max-warnings 0`.
+
+---
+
+## Auth Token Persistence (2026-02-27)
+
+### Problem: User logged out on page refresh
+
+**Status (Fixed):** Auth tokens are now correctly persisted in `localStorage`. A race condition that could clear tokens during page refresh has been resolved. If users still experience this, clear browser storage and re-login.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

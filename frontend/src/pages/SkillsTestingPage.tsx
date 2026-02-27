@@ -1,338 +1,84 @@
 /**
- * Skills Testing Admin Hub Page
+ * Skills Testing Page (Member-Facing)
  *
- * Desktop-optimized admin hub for managing skill evaluation templates
- * and viewing test results. Training officers use this to create and
- * manage skill sheets from a station computer.
+ * Shows published skill evaluation templates so regular members can
+ * browse available tests and view their own test history/results.
+ * Training officers also see this page but manage templates via the
+ * Training Admin Hub (/training/admin?page=skills-testing).
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ClipboardCheck,
-  Plus,
   Search,
   FileText,
-  Users,
-  TrendingUp,
-  BarChart3,
-  Copy,
-  Pencil,
-  Trash2,
-  Eye,
-  Send,
+  Layers,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  ChevronRight,
 } from 'lucide-react';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
-import type {
-  SkillTemplateListItem,
-  SkillTestListItem,
-} from '../types/skillsTesting';
+import { useAuthStore } from '../stores/authStore';
+import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
 
-// ==================== Sub-components ====================
+// ── Sub-components ─────────────────────────────────────────────
 
-const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
+const ResultBadge: React.FC<{ result: string }> = ({ result }) => {
   const styles: Record<string, string> = {
-    draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-    published: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    archived: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
-    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     pass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     incomplete: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] ?? styles['draft']}`}>
-      {status.replace('_', ' ')}
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[result] ?? styles['incomplete']}`}>
+      {result.replace('_', ' ')}
     </span>
   );
 };
 
-const SummaryCard: React.FC<{
-  label: string;
-  value: string | number;
-  icon: React.ReactNode;
-  color: string;
-}> = ({ label, value, icon, color }) => (
-  <div className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm text-theme-text-muted">{label}</p>
-        <p className="text-2xl font-bold text-theme-text-primary mt-1">{value}</p>
-      </div>
-      <div className={`p-3 rounded-lg ${color}`}>
-        {icon}
-      </div>
-    </div>
-  </div>
-);
-
-// ==================== Templates Tab ====================
-
-const TemplatesTab: React.FC = () => {
-  const navigate = useNavigate();
-  const { templates, templatesLoading, loadTemplates, deleteTemplate, publishTemplate, duplicateTemplate } = useSkillsTestingStore();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-
-  useEffect(() => {
-    void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
-  }, [loadTemplates, statusFilter]);
-
-  const filteredTemplates = templates.filter((t) =>
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (t.category ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handlePublish = useCallback(async (id: string) => {
-    if (window.confirm('Publish this template? It will be available for use in tests.')) {
-      await publishTemplate(id);
-      void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
-    }
-  }, [publishTemplate, loadTemplates, statusFilter]);
-
-  const handleDuplicate = useCallback(async (id: string) => {
-    const newTemplate = await duplicateTemplate(id);
-    navigate(`/training/skills-testing/templates/${newTemplate.id}/edit`);
-  }, [duplicateTemplate, navigate]);
-
-  const handleDelete = useCallback(async (id: string) => {
-    if (window.confirm('Are you sure you want to archive this template?')) {
-      await deleteTemplate(id);
-    }
-  }, [deleteTemplate]);
-
-  return (
-    <div>
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-          <input
-            type="text"
-            placeholder="Search templates..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50"
-          />
-        </div>
-        <div className="flex gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
-            aria-label="Filter by status"
-          >
-            <option value="">All Statuses</option>
-            <option value="draft">Draft</option>
-            <option value="published">Published</option>
-            <option value="archived">Archived</option>
-          </select>
-          <button
-            onClick={() => navigate('/training/skills-testing/templates/new')}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">New Template</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Templates Table */}
-      {templatesLoading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
-        </div>
-      ) : filteredTemplates.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
-          <ClipboardCheck className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
-          <p className="text-theme-text-muted">No templates found</p>
-          <button
-            onClick={() => navigate('/training/skills-testing/templates/new')}
-            className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
-          >
-            Create Your First Template
-          </button>
-        </div>
-      ) : (
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-theme-surface-border">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Template</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden md:table-cell">Category</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden lg:table-cell">Sections</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden lg:table-cell">Criteria</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-theme-surface-border">
-                {filteredTemplates.map((template) => (
-                  <TemplateRow
-                    key={template.id}
-                    template={template}
-                    onEdit={() => navigate(`/training/skills-testing/templates/${template.id}/edit`)}
-                    onView={() => navigate(`/training/skills-testing/templates/${template.id}`)}
-                    onPublish={() => void handlePublish(template.id)}
-                    onDuplicate={() => void handleDuplicate(template.id)}
-                    onDelete={() => void handleDelete(template.id)}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const TemplateRow: React.FC<{
+const TemplateCard: React.FC<{
   template: SkillTemplateListItem;
-  onEdit: () => void;
-  onView: () => void;
-  onPublish: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
-}> = ({ template, onEdit, onView, onPublish, onDuplicate, onDelete }) => (
-  <tr className="hover:bg-theme-surface-hover transition-colors">
-    <td className="px-4 py-3">
-      <div>
-        <p className="font-medium text-theme-text-primary">{template.name}</p>
+  onClick: () => void;
+}> = ({ template, onClick }) => (
+  <button
+    onClick={onClick}
+    className="w-full text-left bg-theme-surface rounded-lg p-5 border border-theme-surface-border hover:border-red-500/50 hover:shadow-sm transition-all group"
+  >
+    <div className="flex items-start justify-between">
+      <div className="flex-1 min-w-0">
+        <h3 className="font-semibold text-theme-text-primary text-base group-hover:text-red-600 transition-colors">
+          {template.name}
+        </h3>
         {template.description && (
-          <p className="text-sm text-theme-text-muted line-clamp-1">{template.description}</p>
+          <p className="text-sm text-theme-text-muted mt-1 line-clamp-2">{template.description}</p>
         )}
+        <div className="flex items-center gap-3 mt-3 text-xs text-theme-text-muted">
+          {template.category && (
+            <span className="inline-flex items-center gap-1">
+              <FileText className="w-3 h-3" />
+              {template.category}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1">
+            <Layers className="w-3 h-3" />
+            {template.section_count} section{template.section_count !== 1 ? 's' : ''}
+          </span>
+          <span>
+            {template.criteria_count} criteria
+          </span>
+        </div>
       </div>
-    </td>
-    <td className="px-4 py-3 hidden md:table-cell">
-      <span className="text-sm text-theme-text-muted">{template.category ?? '—'}</span>
-    </td>
-    <td className="px-4 py-3">
-      <StatusBadge status={template.status} />
-    </td>
-    <td className="px-4 py-3 text-center hidden lg:table-cell">
-      <span className="text-sm text-theme-text-muted">{template.section_count}</span>
-    </td>
-    <td className="px-4 py-3 text-center hidden lg:table-cell">
-      <span className="text-sm text-theme-text-muted">{template.criteria_count}</span>
-    </td>
-    <td className="px-4 py-3">
-      <div className="flex items-center justify-end gap-1">
-        <button onClick={onView} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="View">
-          <Eye className="w-4 h-4 text-theme-text-muted" />
-        </button>
-        <button onClick={onEdit} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="Edit">
-          <Pencil className="w-4 h-4 text-theme-text-muted" />
-        </button>
-        {template.status === 'draft' && (
-          <button onClick={onPublish} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="Publish">
-            <Send className="w-4 h-4 text-green-600" />
-          </button>
-        )}
-        <button onClick={onDuplicate} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="Duplicate">
-          <Copy className="w-4 h-4 text-theme-text-muted" />
-        </button>
-        <button onClick={onDelete} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="Archive">
-          <Trash2 className="w-4 h-4 text-red-500" />
-        </button>
-      </div>
-    </td>
-  </tr>
+      <ChevronRight className="w-5 h-5 text-theme-text-muted group-hover:text-red-500 transition-colors shrink-0 mt-1" />
+    </div>
+  </button>
 );
 
-// ==================== Tests Tab ====================
-
-const TestsTab: React.FC = () => {
-  const navigate = useNavigate();
-  const { tests, testsLoading, loadTests, templates, loadTemplates } = useSkillsTestingStore();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-
-  useEffect(() => {
-    void loadTests(statusFilter ? { status: statusFilter } : undefined);
-    void loadTemplates({ status: 'published' });
-  }, [loadTests, loadTemplates, statusFilter]);
-
-  const filteredTests = tests.filter((t) =>
-    t.template_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.candidate_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.examiner_name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  return (
-    <div>
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-          <input
-            type="text"
-            placeholder="Search tests..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50"
-          />
-        </div>
-        <div className="flex gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
-            aria-label="Filter by status"
-          >
-            <option value="">All Statuses</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-          <button
-            onClick={() => navigate('/training/skills-testing/test/new')}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Start Test</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Tests List */}
-      {testsLoading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
-        </div>
-      ) : filteredTests.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
-          <Users className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
-          <p className="text-theme-text-muted">No test records found</p>
-          {templates.length > 0 && (
-            <button
-              onClick={() => navigate('/training/skills-testing/test/new')}
-              className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
-            >
-              Start a New Test
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredTests.map((test) => (
-            <TestCard
-              key={test.id}
-              test={test}
-              onClick={() => navigate(`/training/skills-testing/test/${test.id}`)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const TestCard: React.FC<{
+const TestHistoryCard: React.FC<{
   test: SkillTestListItem;
   onClick: () => void;
 }> = ({ test, onClick }) => (
@@ -344,120 +90,195 @@ const TestCard: React.FC<{
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <p className="font-medium text-theme-text-primary truncate">{test.template_name}</p>
-          <StatusBadge status={test.status} />
-          {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
+          <ResultBadge result={test.status} />
+          {test.result !== 'incomplete' && <ResultBadge result={test.result} />}
         </div>
         <p className="text-sm text-theme-text-muted">
-          Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}
+          Examiner: {test.examiner_name}
+          {test.completed_at && (
+            <> &middot; {new Date(test.completed_at).toLocaleDateString()}</>
+          )}
         </p>
       </div>
       <div className="text-right ml-4 shrink-0">
-        {test.overall_score != null && (
-          <p className="text-lg font-bold text-theme-text-primary">{Math.round(test.overall_score)}%</p>
+        {test.overall_score != null ? (
+          <div className="flex items-center gap-1.5">
+            {test.result === 'pass' ? (
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
+            ) : test.result === 'fail' ? (
+              <XCircle className="w-5 h-5 text-red-500" />
+            ) : null}
+            <p className={`text-lg font-bold ${test.result === 'pass' ? 'text-green-600' : test.result === 'fail' ? 'text-red-600' : 'text-theme-text-primary'}`}>
+              {Math.round(test.overall_score)}%
+            </p>
+          </div>
+        ) : (
+          <span className="text-sm text-theme-text-muted flex items-center gap-1">
+            <Clock className="w-4 h-4" />
+            In Progress
+          </span>
         )}
-        <p className="text-xs text-theme-text-muted">
-          {test.completed_at ? new Date(test.completed_at).toLocaleDateString() : test.started_at ? 'In Progress' : 'Not Started'}
-        </p>
       </div>
     </div>
   </button>
 );
 
-// ==================== Main Page Component ====================
+// ── Main Page Component ────────────────────────────────────────
 
-type TabType = 'templates' | 'tests';
+type TabType = 'available' | 'history';
 
 export const SkillsTestingPage: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as TabType) || 'templates';
-  const { summary, summaryLoading, loadSummary } = useSkillsTestingStore();
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const {
+    templates,
+    templatesLoading,
+    loadTemplates,
+    tests,
+    testsLoading,
+    loadTests,
+  } = useSkillsTestingStore();
+
+  const [activeTab, setActiveTab] = useState<TabType>('available');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
+    // Load only published templates for regular users
+    void loadTemplates({ status: 'published' });
+    // Load the current user's test history
+    if (user?.id) {
+      void loadTests({ candidate_id: user.id });
+    }
+  }, [loadTemplates, loadTests, user?.id]);
 
-  const setActiveTab = (tab: TabType) => {
-    setSearchParams({ tab });
-  };
+  const filteredTemplates = templates.filter((t) =>
+    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (t.category ?? '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredTests = tests.filter((t) =>
+    t.template_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-            <ClipboardCheck className="w-8 h-8 text-red-700" />
+          <h1 className="text-2xl sm:text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
+            <ClipboardCheck className="w-7 h-7 sm:w-8 sm:h-8 text-red-700" />
             <span>Skills Testing</span>
           </h1>
           <p className="text-theme-text-muted mt-1">
-            Create evaluation templates and conduct skill assessments
+            Practice and review your skill evaluations
           </p>
         </div>
-
-        {/* Summary Cards */}
-        {!summaryLoading && summary && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <SummaryCard
-              label="Templates"
-              value={summary.total_templates}
-              icon={<FileText className="w-5 h-5 text-blue-600" />}
-              color="bg-blue-100 dark:bg-blue-900/30"
-            />
-            <SummaryCard
-              label="Tests This Month"
-              value={summary.tests_this_month}
-              icon={<Users className="w-5 h-5 text-purple-600" />}
-              color="bg-purple-100 dark:bg-purple-900/30"
-            />
-            <SummaryCard
-              label="Pass Rate"
-              value={`${Math.round(summary.pass_rate)}%`}
-              icon={<TrendingUp className="w-5 h-5 text-green-600" />}
-              color="bg-green-100 dark:bg-green-900/30"
-            />
-            <SummaryCard
-              label="Avg Score"
-              value={`${Math.round(summary.average_score)}%`}
-              icon={<BarChart3 className="w-5 h-5 text-orange-600" />}
-              color="bg-orange-100 dark:bg-orange-900/30"
-            />
-          </div>
-        )}
 
         {/* Tab Navigation */}
         <div className="border-b border-theme-surface-border mb-6">
           <nav className="flex gap-6" aria-label="Skills Testing Tabs">
             <button
-              onClick={() => setActiveTab('templates')}
+              onClick={() => { setActiveTab('available'); setSearchQuery(''); }}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'templates'
+                activeTab === 'available'
                   ? 'border-red-600 text-red-600'
                   : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                Templates
+                Available Tests
               </div>
             </button>
             <button
-              onClick={() => setActiveTab('tests')}
+              onClick={() => { setActiveTab('history'); setSearchQuery(''); }}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'tests'
+                activeTab === 'history'
                   ? 'border-red-600 text-red-600'
                   : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               <div className="flex items-center gap-2">
                 <ClipboardCheck className="w-4 h-4" />
-                Test Records
+                My Results
               </div>
             </button>
           </nav>
         </div>
 
-        {/* Tab Content */}
-        {activeTab === 'templates' ? <TemplatesTab /> : <TestsTab />}
+        {/* Search */}
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+          <input
+            type="text"
+            placeholder={activeTab === 'available' ? 'Search available tests...' : 'Search your results...'}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50"
+          />
+        </div>
+
+        {/* Available Tests Tab */}
+        {activeTab === 'available' && (
+          <>
+            {templatesLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
+              </div>
+            ) : filteredTemplates.length === 0 ? (
+              <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
+                <ClipboardCheck className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
+                <p className="text-theme-text-muted">
+                  {searchQuery ? 'No tests match your search' : 'No tests are available yet'}
+                </p>
+                <p className="text-sm text-theme-text-muted mt-1">
+                  Check back later for published skill evaluations.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredTemplates.map((template) => (
+                  <TemplateCard
+                    key={template.id}
+                    template={template}
+                    onClick={() => navigate(`/training/skills-testing/test/new?template=${template.id}`)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* My Results Tab */}
+        {activeTab === 'history' && (
+          <>
+            {testsLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
+              </div>
+            ) : filteredTests.length === 0 ? (
+              <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
+                <ClipboardCheck className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
+                <p className="text-theme-text-muted">
+                  {searchQuery ? 'No results match your search' : 'You haven\'t taken any tests yet'}
+                </p>
+                <p className="text-sm text-theme-text-muted mt-1">
+                  Browse the Available Tests tab to get started.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredTests.map((test) => (
+                  <TestHistoryCard
+                    key={test.id}
+                    test={test}
+                    onClick={() => navigate(`/training/skills-testing/test/${test.id}`)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </main>
     </div>
   );

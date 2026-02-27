@@ -125,6 +125,7 @@ These variables are baked into the frontend at build time via Vite.
 | `MODULE_INVENTORY_ENABLED` | Inventory module | `true` |
 | `MODULE_FACILITIES_ENABLED` | Facilities module | `false` |
 | `MODULE_APPARATUS_ENABLED` | Apparatus module | `false` |
+| `MODULE_ADMIN_HOURS_ENABLED` | Admin hours tracking module | `false` |
 
 ---
 
@@ -149,6 +150,17 @@ These variables are baked into the frontend at build time via Vite.
 | `UPLOAD_DIR` | Upload directory path | `/app/uploads` |
 | `MAX_UPLOAD_SIZE_MB` | Maximum file upload size | `10` |
 | `ALLOWED_IMAGE_TYPES` | Allowed image MIME types | `image/png,image/jpeg` |
+
+---
+
+## Logging & Observability
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LOG_LEVEL` | Logging verbosity (DEBUG, INFO, WARNING, ERROR) | `INFO` |
+| `LOG_FORMAT` | Log output format (`text` or `json`) | `text` |
+| `SENTRY_ENABLED` | Enable Sentry error tracking | `false` |
+| `SENTRY_DSN` | Sentry Data Source Name URL | — |
 
 ---
 

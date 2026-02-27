@@ -205,4 +205,47 @@ Backend dependencies updated for Python 3.13 compatibility:
 
 ---
 
+## Centralized Logging (2026-02-27)
+
+Backend logging has been centralized through Loguru with Sentry integration. All log output (including uvicorn, sqlalchemy, and alembic) is routed through a single configuration.
+
+### Request Correlation IDs
+
+Every HTTP request is assigned a UUID4 correlation ID. All log entries within that request include the ID, making it easy to trace a single request across all services.
+
+```bash
+# Trace a specific request through all log entries
+docker-compose logs backend | grep "req_id=<UUID>"
+
+# Find slow requests (>1000ms)
+docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 1000) print}'
+```
+
+### Log Output Formats
+
+- **Development**: Human-readable text format with colors
+- **Production**: Structured JSON format (set `LOG_FORMAT=json` in `.env`)
+- **File rotation**: Logs rotate at 10MB with 7-day retention
+
+### Sentry Integration
+
+Error tracking with Sentry is enabled when `SENTRY_ENABLED=true` and `SENTRY_DSN` is configured. Verify:
+```bash
+docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_initialized())"
+```
+
+### Duplicate Log Entries
+
+If you see duplicate log lines, remove any custom `logging.basicConfig()` or `logging.getLogger()` calls. All logging should use Loguru via `from loguru import logger`.
+
+---
+
+## Auth Token Persistence (2026-02-27)
+
+### Problem: User logged out on page refresh
+
+**Status (Fixed):** Auth tokens are now properly persisted in `localStorage`. Previously, a race condition could clear tokens during page refresh. If users still experience this, clear browser storage and re-login.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)

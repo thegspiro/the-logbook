@@ -17,6 +17,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { userService, organizationService, trainingService, inventoryService, memberStatusService } from '../services/api';
+import { adminHoursEntryService } from '../modules/admin-hours/services/api';
+import type { AdminHoursSummary } from '../modules/admin-hours/types';
 import type { LeaveOfAbsenceResponse } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -101,6 +103,8 @@ export const MemberProfilePage: React.FC = () => {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [activeLeaves, setActiveLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
+  const [adminHoursSummary, setAdminHoursSummary] = useState<AdminHoursSummary | null>(null);
+  const [adminHoursLoading, setAdminHoursLoading] = useState(false);
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
@@ -185,17 +189,30 @@ export const MemberProfilePage: React.FC = () => {
     }
   }, []);
 
+  const fetchAdminHours = React.useCallback(async (uid: string) => {
+    try {
+      setAdminHoursLoading(true);
+      const summary = await adminHoursEntryService.getSummary({ userId: uid });
+      setAdminHoursSummary(summary);
+    } catch {
+      // Don't set error - admin hours section is optional
+    } finally {
+      setAdminHoursLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (userId) {
       void fetchUserData(userId);
       void fetchModuleStatus(userId);
       void fetchLeaves(userId);
+      void fetchAdminHours(userId);
       if (trainingEnabled) {
         void fetchTrainingRecords(userId);
         void fetchComplianceSummary(userId);
       }
     }
-  }, [userId, trainingEnabled, fetchUserData, fetchModuleStatus, fetchLeaves, fetchTrainingRecords, fetchComplianceSummary]);
+  }, [userId, trainingEnabled, fetchUserData, fetchModuleStatus, fetchLeaves, fetchAdminHours, fetchTrainingRecords, fetchComplianceSummary]);
 
   const getTrainingStatusColor = (status: string) => {
     switch (status) {
@@ -720,6 +737,58 @@ export const MemberProfilePage: React.FC = () => {
             </div>
           )}
 
+          {/* Admin Hours Summary */}
+          {(adminHoursSummary && adminHoursSummary.totalEntries > 0) && (
+            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-theme-text-primary">
+                  Administrative Hours
+                </h2>
+                <Link
+                  to="/admin-hours"
+                  className="text-sm text-blue-400 hover:text-blue-300 font-medium"
+                >
+                  View Details
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-theme-text-primary">{adminHoursSummary.totalHours.toFixed(1)}</p>
+                  <p className="text-xs text-theme-text-muted">Total Hours</p>
+                </div>
+                <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-theme-text-primary">{adminHoursSummary.totalEntries}</p>
+                  <p className="text-xs text-theme-text-muted">Entries</p>
+                </div>
+              </div>
+              {adminHoursSummary.byCategory.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-theme-text-muted uppercase font-medium">By Category</p>
+                  {adminHoursSummary.byCategory.map((cat) => (
+                    <div key={cat.category_id} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        {cat.category_color && (
+                          <span
+                            className="w-2.5 h-2.5 rounded-full"
+                            style={{ backgroundColor: cat.category_color }}
+                          />
+                        )}
+                        <span className="text-theme-text-secondary">{cat.category_name}</span>
+                      </div>
+                      <span className="font-medium text-theme-text-primary">{cat.total_hours.toFixed(1)} hrs</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {adminHoursLoading && (
+            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Administrative Hours</h2>
+              <div className="text-center py-4 text-theme-text-muted">Loading admin hours...</div>
+            </div>
+          )}
+
           {/* Assigned Inventory - Only shown if inventory module is enabled */}
           {inventoryModuleEnabled && (
             <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
@@ -1169,6 +1238,14 @@ export const MemberProfilePage: React.FC = () => {
                   <span className="text-sm text-theme-text-secondary">Assigned Equipment</span>
                   <span className="text-sm font-semibold text-theme-text-primary">
                     {inventoryItems.length}
+                  </span>
+                </div>
+              )}
+              {adminHoursSummary && adminHoursSummary.totalEntries > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-theme-text-secondary">Admin Hours</span>
+                  <span className="text-sm font-semibold text-theme-text-primary">
+                    {adminHoursSummary.totalHours.toFixed(1)} hrs
                   </span>
                 </div>
               )}

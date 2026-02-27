@@ -11,6 +11,7 @@ checklist tasks via settings and work them in whatever order suits
 their workflow.
 """
 
+import html as _html
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -54,9 +55,7 @@ def _get_outreach_types_from_settings(org: Organization) -> List[Dict[str, str]]
     from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
 
     settings = (org.settings or {}).get("events", {})
-    return settings.get(
-        "outreach_event_types", EVENT_SETTINGS_DEFAULTS["outreach_event_types"]
-    )
+    return settings.get("outreach_event_types", EVENT_SETTINGS_DEFAULTS["outreach_event_types"])
 
 
 def _get_pipeline_settings(org: Organization) -> dict:
@@ -71,9 +70,7 @@ def _get_pipeline_settings(org: Organization) -> dict:
 
 async def _get_user_name(db: AsyncSession, user_id: str) -> Optional[str]:
     """Look up a user's display name."""
-    result = await db.execute(
-        select(User.first_name, User.last_name).where(User.id == user_id)
-    )
+    result = await db.execute(select(User.first_name, User.last_name).where(User.id == user_id))
     row = result.first()
     if row:
         return f"{row[0]} {row[1]}".strip()
@@ -125,21 +122,21 @@ async def _send_request_notification(
             "declined": "Declined",
             "cancelled": "Cancelled",
         }
-        status_label = status_labels.get(
-            event_request.status.value, event_request.status.value
-        )
+        status_label = status_labels.get(event_request.status.value, event_request.status.value)
 
         # Notify the requester
         if trigger_config.get("notify_requester", False):
+            e_contact = _html.escape(event_request.contact_name or "")
+            e_status = _html.escape(status_label)
             subject = f"Event Request Update — {status_label}"
-            body = f"""<p>Hello {event_request.contact_name},</p>
-<p>Your event request has been updated to: <strong>{status_label}</strong>.</p>"""
+            body = f"""<p>Hello {e_contact},</p>
+<p>Your event request has been updated to: <strong>{e_status}</strong>.</p>"""
             if event_request.event_date:
                 body += f"<p>Scheduled date: <strong>{event_request.event_date.strftime('%B %d, %Y at %I:%M %p')}</strong></p>"
             if event_request.decline_reason:
-                body += f"<p>Reason: {event_request.decline_reason}</p>"
+                body += f"<p>Reason: {_html.escape(event_request.decline_reason)}</p>"
             if extra_context and extra_context.get("message"):
-                body += f"<p>{extra_context['message']}</p>"
+                body += f"<p>{_html.escape(extra_context['message'])}</p>"
             body += "<p>Thank you for your request.</p>"
 
             await email_service.send_email(
@@ -150,19 +147,21 @@ async def _send_request_notification(
 
         # Notify the assigned coordinator
         if trigger_config.get("notify_assignee", False) and event_request.assigned_to:
-            assignee_result = await db.execute(
-                select(User).where(User.id == event_request.assigned_to)
-            )
+            assignee_result = await db.execute(select(User).where(User.id == event_request.assigned_to))
             assignee = assignee_result.scalar_one_or_none()
             if assignee and assignee.email:
                 outreach_label = event_request.outreach_type.replace("_", " ").title()
+                e_assignee = _html.escape(assignee.first_name or "")
+                e_contact = _html.escape(event_request.contact_name or "")
+                e_outreach = _html.escape(outreach_label)
+                e_org_name = _html.escape(event_request.organization_name or "N/A")
                 subject = f"New Event Request Assigned — {outreach_label}"
-                body = f"""<p>Hello {assignee.first_name},</p>
+                body = f"""<p>Hello {e_assignee},</p>
 <p>A new event request has been assigned to you:</p>
 <ul>
-<li><strong>Contact:</strong> {event_request.contact_name}</li>
-<li><strong>Type:</strong> {outreach_label}</li>
-<li><strong>Organization:</strong> {event_request.organization_name or 'N/A'}</li>
+<li><strong>Contact:</strong> {e_contact}</li>
+<li><strong>Type:</strong> {e_outreach}</li>
+<li><strong>Organization:</strong> {e_org_name}</li>
 </ul>
 <p>Please review and begin processing this request.</p>"""
 
@@ -188,9 +187,7 @@ async def _send_request_notification(
         pass
 
 
-async def _build_response(
-    db: AsyncSession, event_request: EventRequest
-) -> EventRequestResponse:
+async def _build_response(db: AsyncSession, event_request: EventRequest) -> EventRequestResponse:
     """Build a full EventRequestResponse from a model instance."""
     assignee_name = None
     if event_request.assigned_to:
@@ -304,9 +301,7 @@ async def submit_public_event_request(
     the review pipeline. Auto-assigns the default coordinator if configured.
     """
     result = await db.execute(
-        select(Organization).where(
-            Organization.id == organization_id, Organization.active.is_(True)
-        )
+        select(Organization).where(Organization.id == organization_id, Organization.active.is_(True))
     )
     org = result.scalar_one_or_none()
     if not org:
@@ -383,17 +378,13 @@ async def check_request_status(
     No authentication required. Returns limited public-facing information.
     Pipeline progress is included if the department has enabled public visibility.
     """
-    result = await db.execute(
-        select(EventRequest).where(EventRequest.status_token == token)
-    )
+    result = await db.execute(select(EventRequest).where(EventRequest.status_token == token))
     event_request = result.scalar_one_or_none()
     if not event_request:
         raise HTTPException(status_code=404, detail="Request not found")
 
     # Check if department wants to show progress publicly
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == event_request.organization_id)
-    )
+    org_result = await db.execute(select(Organization).where(Organization.id == event_request.organization_id))
     org = org_result.scalar_one_or_none()
     pipeline = _get_pipeline_settings(org) if org else {}
     show_progress = pipeline.get("public_progress_visible", False)
@@ -401,20 +392,14 @@ async def check_request_status(
     task_progress = None
     if show_progress and event_request.task_completions:
         tasks = pipeline.get("tasks", [])
-        completed_count = sum(
-            1
-            for t in tasks
-            if event_request.task_completions.get(t["id"], {}).get("completed")
-        )
+        completed_count = sum(1 for t in tasks if event_request.task_completions.get(t["id"], {}).get("completed"))
         task_progress = {
             "total": len(tasks),
             "completed": completed_count,
             "tasks": [
                 {
                     "label": t["label"],
-                    "completed": bool(
-                        event_request.task_completions.get(t["id"], {}).get("completed")
-                    ),
+                    "completed": bool(event_request.task_completions.get(t["id"], {}).get("completed")),
                 }
                 for t in tasks
             ],
@@ -425,9 +410,7 @@ async def check_request_status(
     if not event_date and event_request.event_id:
         from app.models.event import Event
 
-        event_result = await db.execute(
-            select(Event.start_datetime).where(Event.id == event_request.event_id)
-        )
+        event_result = await db.execute(select(Event.start_datetime).where(Event.id == event_request.event_id))
         row = event_result.first()
         if row:
             event_date = row[0]
@@ -468,9 +451,7 @@ async def public_cancel_request(
     No authentication required. Only works on requests that are not
     in a terminal state (completed, declined, already cancelled).
     """
-    result = await db.execute(
-        select(EventRequest).where(EventRequest.status_token == token)
-    )
+    result = await db.execute(select(EventRequest).where(EventRequest.status_token == token))
     event_request = result.scalar_one_or_none()
     if not event_request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -499,9 +480,7 @@ async def public_cancel_request(
     await db.commit()
 
     # Notify department
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == event_request.organization_id)
-    )
+    org_result = await db.execute(select(Organization).where(Organization.id == event_request.organization_id))
     org = org_result.scalar_one_or_none()
     if org:
         await _send_request_notification(db, event_request, "on_cancelled", org)
@@ -522,9 +501,7 @@ async def list_event_requests(
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """List event requests for the organization."""
-    query = select(EventRequest).where(
-        EventRequest.organization_id == current_user.organization_id
-    )
+    query = select(EventRequest).where(EventRequest.organization_id == current_user.organization_id)
 
     if status_filter:
         query = query.where(EventRequest.status == status_filter)
@@ -640,14 +617,10 @@ async def update_event_request_status(
     await db.commit()
 
     # Send notification
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
+    org_result = await db.execute(select(Organization).where(Organization.id == current_user.organization_id))
     org = org_result.scalar_one_or_none()
     if org:
-        await _send_request_notification(
-            db, event_request, f"on_{new_status.value}", org
-        )
+        await _send_request_notification(db, event_request, f"on_{new_status.value}", org)
 
     return {
         "message": f"Request status updated to {new_status.value}",
@@ -707,9 +680,7 @@ async def assign_request(
     await db.commit()
 
     # Notify the new assignee
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
+    org_result = await db.execute(select(Organization).where(Organization.id == current_user.organization_id))
     org = org_result.scalar_one_or_none()
     if org:
         await _send_request_notification(db, event_request, "on_submitted", org)
@@ -817,9 +788,7 @@ async def schedule_request(
         event_service = EventService(db)
 
         # Get outreach type label for event title
-        org_result = await db.execute(
-            select(Organization).where(Organization.id == current_user.organization_id)
-        )
+        org_result = await db.execute(select(Organization).where(Organization.id == current_user.organization_id))
         org = org_result.scalar_one_or_none()
         outreach_types = _get_outreach_types_from_settings(org) if org else []
         type_label = event_request.outreach_type.replace("_", " ").title()
@@ -879,8 +848,7 @@ async def schedule_request(
         action="scheduled",
         old_status=old_status,
         new_status=EventRequestStatus.SCHEDULED.value,
-        notes=data.notes
-        or f"Scheduled for {data.event_date.strftime('%B %d, %Y at %I:%M %p')}",
+        notes=data.notes or f"Scheduled for {data.event_date.strftime('%B %d, %Y at %I:%M %p')}",
         details={
             "event_date": data.event_date.isoformat(),
             "location_id": data.location_id,
@@ -893,9 +861,7 @@ async def schedule_request(
     await db.commit()
 
     # Send notification
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
+    org_result = await db.execute(select(Organization).where(Organization.id == current_user.organization_id))
     org = org_result.scalar_one_or_none()
     if org:
         await _send_request_notification(db, event_request, "on_scheduled", org)
@@ -950,9 +916,7 @@ async def postpone_request(
 
     notes = data.reason or "Request postponed"
     if data.new_event_date:
-        notes += (
-            f" — tentatively rescheduled to {data.new_event_date.strftime('%B %d, %Y')}"
-        )
+        notes += f" — tentatively rescheduled to {data.new_event_date.strftime('%B %d, %Y')}"
 
     activity = EventRequestActivity(
         request_id=event_request.id,
@@ -962,9 +926,7 @@ async def postpone_request(
         notes=notes,
         details={
             "reason": data.reason,
-            "new_date": (
-                data.new_event_date.isoformat() if data.new_event_date else None
-            ),
+            "new_date": (data.new_event_date.isoformat() if data.new_event_date else None),
         },
         performed_by=current_user.id,
     )
@@ -972,9 +934,7 @@ async def postpone_request(
     await db.commit()
 
     # Send notification
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
+    org_result = await db.execute(select(Organization).where(Organization.id == current_user.organization_id))
     org = org_result.scalar_one_or_none()
     if org:
         await _send_request_notification(
@@ -1036,9 +996,7 @@ async def update_task_completion(
         event_request.status = EventRequestStatus.IN_PROGRESS
         auto_transitioned = True
 
-    action = (
-        f"task_{'completed' if update.completed else 'uncompleted'}:{update.task_id}"
-    )
+    action = f"task_{'completed' if update.completed else 'uncompleted'}:{update.task_id}"
     activity = EventRequestActivity(
         request_id=event_request.id,
         action=action,
@@ -1092,9 +1050,7 @@ async def send_template_email(
     if not template:
         raise HTTPException(status_code=404, detail="Email template not found")
 
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
+    org_result = await db.execute(select(Organization).where(Organization.id == current_user.organization_id))
     org = org_result.scalar_one_or_none()
 
     try:
@@ -1108,9 +1064,7 @@ async def send_template_email(
             "outreach_type": event_request.outreach_type.replace("_", " ").title(),
             "organization_name": event_request.organization_name or "",
             "event_date": (
-                event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
-                if event_request.event_date
-                else "TBD"
+                event_request.event_date.strftime("%B %d, %Y at %I:%M %p") if event_request.event_date else "TBD"
             ),
         }
         if data.additional_context:
@@ -1120,7 +1074,7 @@ async def send_template_email(
         body = template.body_html
         for key, value in context.items():
             subject = subject.replace(f"{{{{{key}}}}}", value)
-            body = body.replace(f"{{{{{key}}}}}", value)
+            body = body.replace(f"{{{{{key}}}}}", _html.escape(value))
 
         await email_service.send_email(
             to_emails=[event_request.contact_email],
@@ -1140,9 +1094,7 @@ async def send_template_email(
         db.add(activity)
         await db.commit()
 
-        return {
-            "message": f"Email '{template.name}' sent to {event_request.contact_email}"
-        }
+        return {"message": f"Email '{template.name}' sent to {event_request.contact_email}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
@@ -1160,9 +1112,7 @@ async def list_email_templates(
     """List all email templates for the organization."""
     result = await db.execute(
         select(EventRequestEmailTemplate)
-        .where(
-            EventRequestEmailTemplate.organization_id == current_user.organization_id
-        )
+        .where(EventRequestEmailTemplate.organization_id == current_user.organization_id)
         .order_by(EventRequestEmailTemplate.name)
     )
     return result.scalars().all()
@@ -1250,9 +1200,7 @@ async def delete_email_template(
 
 @router.get("/types/labels")
 async def get_outreach_type_labels(
-    organization_id: Optional[str] = Query(
-        None, description="Organization ID to get types for"
-    ),
+    organization_id: Optional[str] = Query(None, description="Organization ID to get types for"),
     db: AsyncSession = Depends(get_db),
 ):
     """Get labels for outreach event types. No auth required."""
@@ -1260,9 +1208,7 @@ async def get_outreach_type_labels(
 
     if organization_id:
         result = await db.execute(
-            select(Organization).where(
-                Organization.id == organization_id, Organization.active.is_(True)
-            )
+            select(Organization).where(Organization.id == organization_id, Organization.active.is_(True))
         )
         org = result.scalar_one_or_none()
         if org:
@@ -1295,17 +1241,13 @@ async def generate_event_request_form(
         IntegrationType,
     )
 
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
+    org_result = await db.execute(select(Organization).where(Organization.id == current_user.organization_id))
     org = org_result.scalar_one_or_none()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
     outreach_types = _get_outreach_types_from_settings(org)
-    outreach_options = [
-        {"value": t["value"], "label": t["label"]} for t in outreach_types
-    ]
+    outreach_options = [{"value": t["value"], "label": t["label"]} for t in outreach_types]
     venue_options = [
         {"value": "their_location", "label": "Our Location"},
         {"value": "our_station", "label": "Your Station"},

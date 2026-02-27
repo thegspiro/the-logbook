@@ -33,6 +33,7 @@ import {
   Rocket,
   ShieldCheck,
   ClipboardCheck,
+  Activity,
 } from 'lucide-react';
 import { Sun, Moon, Monitor, Contrast } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -141,6 +142,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         { label: 'Submit Training', path: '/training/submit', icon: ClipboardList },
         { label: 'Course Library', path: '/training/courses', icon: BookOpen },
         { label: 'Programs', path: '/training/programs', icon: Layers },
+        { label: 'Skills Testing', path: '/training/skills-testing', icon: ClipboardCheck },
       ],
     },
     {
@@ -228,6 +230,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           { label: 'Organization', path: '/settings', icon: Building2 },
           { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'positions.manage_permissions' },
           { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'settings.manage' },
+          { label: 'Platform Analytics', path: '/admin/platform-analytics', icon: Activity, permission: 'settings.manage' },
           { label: 'QR Code Analytics', path: '/admin/analytics', icon: BarChart3, permission: 'analytics.view' },
           { label: 'Error Monitor', path: '/admin/errors', icon: AlertTriangle, permission: 'settings.manage' },
         ],

@@ -15,6 +15,7 @@ import {
   Shield,
   Users,
   ClipboardList,
+  ClipboardCheck,
   Activity,
   Megaphone,
   Pin,
@@ -33,7 +34,8 @@ import {
   organizationService,
   inventoryService,
 } from '../services/api';
-import type { InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
+import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
+import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
@@ -49,16 +51,6 @@ import { dashboardService } from '../services/api';
  * Member-focused landing page showing notifications, upcoming shifts,
  * training progress, and recorded hours.
  */
-interface AdminSummaryData {
-  active_members: number;
-  inactive_members: number;
-  total_members: number;
-  training_completion_pct: number;
-  upcoming_events_count: number;
-  overdue_action_items: number;
-  open_action_items: number;
-  recent_training_hours: number;
-}
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -70,7 +62,7 @@ const Dashboard: React.FC = () => {
 
   // Admin summary (only loaded for users with settings.manage)
   const isAdmin = checkPermission('settings.manage');
-  const [adminSummary, setAdminSummary] = useState<AdminSummaryData | null>(null);
+  const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(isAdmin);
 
   // Notifications
@@ -225,14 +217,15 @@ const Dashboard: React.FC = () => {
 
   const loadHours = async () => {
     try {
-      const [schedulingSummary, trainingSummary] = await Promise.all([
+      const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
         schedulingService.getSummary().catch((err) => { console.error('Failed to load scheduling summary:', err); return null; }),
         trainingModuleConfigService.getMyTraining().catch((err) => { console.error('Failed to load training summary:', err); return null; }),
+        adminHoursEntryService.getSummary().catch((err) => { console.error('Failed to load admin hours summary:', err); return null; }),
       ]);
       setHours({
         training: trainingSummary?.hours_summary?.total_hours ?? 0,
         standby: schedulingSummary?.total_hours_this_month || 0,
-        administrative: 0,
+        administrative: adminHoursSummary?.totalHours ?? 0,
       });
     } catch {
       // Hours are non-critical
@@ -366,7 +359,7 @@ const Dashboard: React.FC = () => {
               <Shield className="w-5 h-5 text-red-500" />
               Department Overview
             </h3>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" role="region" aria-label="Department overview">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4" role="region" aria-label="Department overview">
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
@@ -435,6 +428,26 @@ const Dashboard: React.FC = () => {
                   }
                 </p>
               </div>
+
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/admin-hours/manage')}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Admin Hours</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.recent_admin_hours ?? 0}</p>
+                    )}
+                  </div>
+                  <ClipboardCheck className="w-8 h-8 text-indigo-400" />
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">
+                  {(adminSummary?.pending_admin_hours_approvals ?? 0) > 0
+                    ? `${adminSummary?.pending_admin_hours_approvals} pending approval`
+                    : 'Last 30 days'
+                  }
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -486,7 +499,13 @@ const Dashboard: React.FC = () => {
             <p className="text-theme-text-muted text-xs mt-2">Standby hours</p>
           </div>
 
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
+          <div
+            className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-purple-500/40 transition-colors"
+            onClick={() => navigate('/admin-hours')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/admin-hours'); }}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Administrative</p>

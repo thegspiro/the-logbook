@@ -474,7 +474,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         await updateTemplate(id, payload);
         await publishTemplate(id);
         toast.success('Template published');
-        navigate('/training/skills-testing?tab=templates');
+        navigate('/training/admin?page=skills-testing&tab=templates');
       } catch {
         toast.error('Failed to publish template');
       }
@@ -513,7 +513,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <Link
-            to="/training/skills-testing?tab=templates"
+            to="/training/admin?page=skills-testing&tab=templates"
             className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
@@ -684,7 +684,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         {/* Bottom Save Bar */}
         <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-sm border-t border-theme-surface-border py-4 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 flex justify-end gap-2">
           <button
-            onClick={() => navigate('/training/skills-testing?tab=templates')}
+            onClick={() => navigate('/training/admin?page=skills-testing&tab=templates')}
             className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
           >
             Cancel

@@ -84,6 +84,7 @@ These links are available to all active members:
 | **Apparatus** | Vehicles and apparatus |
 | **Facilities** | Stations and buildings |
 | **Elections** | Active and past elections |
+| **Admin Hours** | Log administrative work hours (if module enabled) |
 | **Minutes** | Meeting minutes and records |
 | **Action Items** | Tasks assigned to you from meetings |
 | **Notifications** | Notification preferences and history |

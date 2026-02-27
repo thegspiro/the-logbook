@@ -166,8 +166,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   }, [memberSearch, memberOptions]);
 
   const refreshAssignments = async () => {
-    const data = await schedulingService.getShiftAssignments(shift.id);
-    setAssignments(data as unknown as Assignment[]);
+    const [assignData, shiftData] = await Promise.all([
+      schedulingService.getShiftAssignments(shift.id),
+      schedulingService.getShift(shift.id),
+    ]);
+    setAssignments(assignData as unknown as Assignment[]);
+    setShift(shiftData);
   };
 
   const handleSignup = async (position?: string) => {

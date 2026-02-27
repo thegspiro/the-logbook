@@ -27,6 +27,7 @@ MODULE_EVENTS_ENABLED=true
 MODULE_INVENTORY_ENABLED=true
 MODULE_FACILITIES_ENABLED=false
 MODULE_APPARATUS_ENABLED=false
+MODULE_ADMIN_HOURS_ENABLED=false
 ```
 
 ---
@@ -57,6 +58,7 @@ MODULE_APPARATUS_ENABLED=false
 | **[Apparatus](Module-Apparatus)** | Vehicle management, crew positions, maintenance | — |
 | **Forms** | Custom form builder with public forms and QR codes | — |
 | **Meeting Minutes** | Meeting minutes with templates and publish workflow | — |
+| **[Admin Hours](Module-Admin-Hours)** | Administrative hours tracking with QR code clock-in/clock-out | — |
 | **Prospective Members** | Applicant pipeline with stages and election packages | — |
 
 ### Module Interactions
@@ -70,6 +72,7 @@ Some modules provide enhanced functionality when used together:
 - **Elections + Prospective Members**: Pipeline stages can trigger election packages
 - **Facilities vs Locations**: Facilities module replaces the lightweight Locations page
 - **Apparatus Full vs Basic**: When disabled, a lightweight Apparatus Basic page is available
+- **Elections + Meetings**: Elections can be linked to meeting records for procedural compliance
 
 ---
 
@@ -84,6 +87,7 @@ Each module may have its own settings page accessible after enabling:
 | Events | Events Admin > Settings |
 | Inventory | Inventory Admin > Settings |
 | Facilities | Facilities > Settings |
+| Admin Hours | Admin Hours > Manage (categories, approval settings) |
 
 ---
 

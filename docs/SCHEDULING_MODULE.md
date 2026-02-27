@@ -8,11 +8,15 @@ The Scheduling module manages the full shift lifecycle for fire departments and 
 
 - **Shift creation and calendar views** (week/month)
 - **Member self-service signup** for open shift positions
-- **Shift assignments** with 9 position types
+- **Shift assignments** with 9 position types (officer, driver, firefighter, EMT, captain, lieutenant, probationary, volunteer, other)
+- **Shift conflict detection** preventing duplicate assignments and overlapping time conflicts
+- **Shift officer assignment** from a member dropdown in the create/edit modal
+- **Understaffing indicators** with amber warning badges on calendar when staffing is below minimum
+- **Template colors on calendar** — shifts inherit color from their template for visual organization
 - **Swap and time-off requests** with admin approval workflow
 - **Shift templates and patterns** for recurring schedules (daily, weekly, platoon, custom)
-- **Shift generation** from patterns for bulk schedule creation
-- **Apparatus connection** linking shifts to vehicles
+- **Shift generation** from patterns for bulk schedule creation with correct weekday mapping
+- **Apparatus connection** linking shifts to vehicles (vehicle type dropdown on Standard and Specialty templates)
 - **Scheduling reports** (member hours, coverage, call volume, availability)
 - **Training integration** via shift completion reports and observations
 
@@ -77,7 +81,9 @@ Core shift record representing a single scheduled shift.
 | `status` | String | scheduled, in_progress, completed, cancelled |
 | `notes` | Text | Optional notes |
 | `activities` | JSON | What happened during shift |
-| `attendee_count` | Integer | Number of attendees |
+| `color` | String | Template color for calendar display (nullable) |
+| `attendee_count` | Integer | Computed count of confirmed attendees |
+| `min_staffing` | Integer | Minimum staffing (enriched from apparatus) |
 
 ### ShiftAssignment
 
@@ -88,7 +94,7 @@ Links a member to a shift with a specific position.
 | `id` | UUID | Primary key |
 | `shift_id` | UUID | FK to shifts |
 | `user_id` | UUID | FK to users |
-| `position` | String | officer, driver, firefighter, ems, captain, lieutenant, probationary, volunteer, other |
+| `position` | String | officer, driver, firefighter, emt, captain, lieutenant, probationary, volunteer, other |
 | `assignment_status` | String | assigned, confirmed, declined, no_show, cancelled |
 | `assigned_by` | UUID | Who made the assignment |
 | `confirmed_at` | DateTime | When member confirmed |
@@ -439,8 +445,38 @@ This integration allows training officers to document field observations and aut
 ### Data Integrity
 - Foreign key constraints on all relationship fields
 - Cascade delete on organization removal
-- Unique constraints prevent duplicate assignments
+- `UniqueConstraint(shift_id, user_id)` on `ShiftAssignment` prevents duplicate assignments
+- `IntegrityError` catch on concurrent assignment attempts as a race condition fallback
+- Overlap query scoped to ±1 day of `shift_date` to prevent false positives from ancient unclosed shifts
+- `confirm_assignment` validates `organization_id` to prevent cross-org access
+- Date range validation on time-off requests (`end_date >= start_date`)
+- Pattern generation deduplicates `assigned_members` by `user_id`
+- PATCH endpoints use `exclude_unset` so clients can explicitly clear optional fields
 
 ---
 
-*Last Updated: February 18, 2026*
+## Recent Fixes (2026-02-27)
+
+### Shift Pattern Weekday Convention
+The frontend sends weekday numbers in JavaScript convention (0=Sunday) but the backend previously used Python's `date.weekday()` (0=Monday). Weekly patterns now convert Python weekday to JS convention before comparison, ensuring shifts land on the correct days.
+
+### Route Ordering
+`/shifts/open` is now defined before `/shifts/{shift_id}` to prevent route shadowing that made the open shifts endpoint unreachable (422 error).
+
+### Data Enrichment
+All shift responses now populate:
+- `shift_officer_name` via User join
+- `attendee_count` computed on list/calendar endpoints (was always 0)
+- `user_name` on assignment, swap, time-off, and attendance responses
+- Embedded shift data on `my-assignments` endpoint
+- `min_staffing` from apparatus on shift responses
+
+### Time String Handling
+`formatTime()` handles bare time strings like `"08:00:00"` from the backend by prepending the shift date to form valid datetime strings. `getShiftTemplateColor()` parses hours directly from the time string instead of via `new Date()`.
+
+### Dashboard
+Dashboard changed from `getMyShifts()` (user-assigned only) to `getShifts()` to show all organization shifts on the Upcoming Shifts widget.
+
+---
+
+*Last Updated: February 27, 2026*
