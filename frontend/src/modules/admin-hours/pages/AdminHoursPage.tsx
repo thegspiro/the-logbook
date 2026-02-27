@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Plus, Timer } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Clock, LogOut, Plus, Timer } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import type { AdminHoursEntryCreate } from '../types';
 import toast from 'react-hot-toast';
@@ -33,6 +33,7 @@ const AdminHoursPage: React.FC = () => {
 
   const [showManualForm, setShowManualForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [clockingOut, setClockingOut] = useState(false);
   const [manualData, setManualData] = useState<AdminHoursEntryCreate>({
     category_id: '',
     clock_in_at: '',
@@ -84,12 +85,15 @@ const AdminHoursPage: React.FC = () => {
   }, [error, clearError]);
 
   const handleClockOut = async () => {
-    if (!activeSession) return;
+    if (!activeSession || clockingOut) return;
+    setClockingOut(true);
     try {
       await clockOut(activeSession.id);
       toast.success('Clocked out successfully');
     } catch {
       // error handled by store
+    } finally {
+      setClockingOut(false);
     }
   };
 
@@ -170,34 +174,60 @@ const AdminHoursPage: React.FC = () => {
         <p className="text-theme-text-secondary mt-1">Track and view your administrative hours</p>
       </div>
 
-      {/* Active Session Banner */}
+      {/* Active Session Card */}
       {!activeSessionLoading && activeSession && (
-        <div className={`border rounded-lg p-4 mb-6 ${isSessionNearLimit ? 'bg-orange-500/10 border-orange-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Timer className={`w-6 h-6 ${isSessionNearLimit ? 'text-orange-400' : 'text-blue-400'}`} />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+        <div className={`border rounded-xl p-6 mb-6 ${isSessionNearLimit ? 'bg-orange-500/10 border-orange-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
+          <div className="flex flex-col md:flex-row md:items-center gap-5">
+            {/* Left: icon + info */}
+            <div className="flex items-start gap-4 flex-1 min-w-0">
+              <div className="relative flex-shrink-0">
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isSessionNearLimit ? 'bg-orange-500/20' : 'bg-blue-500/20'}`}>
+                  <Timer className={`w-7 h-7 ${isSessionNearLimit ? 'text-orange-400' : 'text-blue-400'}`} />
+                </div>
+                <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full animate-pulse border-2 border-theme-surface-secondary" />
               </div>
-              <div>
-                <p className={`font-semibold ${isSessionNearLimit ? 'text-orange-300' : 'text-blue-300'}`}>Currently clocked in</p>
-                <p className={`text-sm ${isSessionNearLimit ? 'text-orange-400' : 'text-blue-400'}`}>
-                  {activeSession.categoryName} - {formatDuration(localElapsed ?? activeSession.elapsedMinutes)} elapsed
-                  {' '} (started {new Date(activeSession.clockInAt).toLocaleTimeString()})
+              <div className="min-w-0">
+                <p className={`text-lg font-bold ${isSessionNearLimit ? 'text-orange-300' : 'text-blue-300'}`}>
+                  Currently Clocked In
                 </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div
+                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: activeSession.categoryColor ?? '#6B7280' }}
+                  />
+                  <span className="text-theme-text-primary font-medium truncate">{activeSession.categoryName}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm">
+                  <span className={isSessionNearLimit ? 'text-orange-400' : 'text-blue-400'}>
+                    <span className="font-medium">Elapsed:</span>{' '}
+                    <span className="text-lg font-bold">{formatDuration(localElapsed ?? activeSession.elapsedMinutes)}</span>
+                  </span>
+                  <span className="text-theme-text-muted">
+                    Started at {new Date(activeSession.clockInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {activeSession.maxSessionMinutes && (
+                    <span className="text-theme-text-muted">
+                      Limit: {formatDuration(activeSession.maxSessionMinutes)}
+                    </span>
+                  )}
+                </div>
                 {isSessionNearLimit && (
-                  <p className="text-sm text-orange-300 flex items-center gap-1 mt-1">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    Approaching session limit of {formatDuration(activeSession.maxSessionMinutes)}
+                  <p className="text-sm text-orange-300 flex items-center gap-1.5 mt-2">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    Approaching session limit &mdash; please clock out soon
                   </p>
                 )}
               </div>
             </div>
+
+            {/* Right: clock-out button */}
             <button
               onClick={() => { void handleClockOut(); }}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+              disabled={clockingOut}
+              className="flex items-center justify-center gap-2 w-full md:w-auto px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-xl hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
             >
-              Clock Out
+              <LogOut className="w-5 h-5" />
+              {clockingOut ? 'Clocking Out...' : 'Clock Out'}
             </button>
           </div>
         </div>
