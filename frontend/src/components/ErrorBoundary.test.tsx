@@ -138,13 +138,13 @@ describe('ErrorBoundary', () => {
 
     expect(mockedLogError).toHaveBeenCalledTimes(1);
     expect(mockedLogError).toHaveBeenCalledWith(
-      expect.any(Error),
+      expect.any(Error) as unknown,
       expect.objectContaining({
         errorType: 'REACT_ERROR_BOUNDARY',
         additionalContext: expect.objectContaining({
-          componentStack: expect.any(String),
-        }),
-      }),
+          componentStack: expect.any(String) as unknown,
+        }) as unknown,
+      }) as unknown,
     );
   });
 

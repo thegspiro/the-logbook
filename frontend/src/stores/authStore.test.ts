@@ -10,17 +10,17 @@ const mockGetCurrentUser = vi.fn();
 
 vi.mock('../services/api', () => ({
   authService: {
-    login: (...args: unknown[]) => mockLogin(...args),
-    register: (...args: unknown[]) => mockRegister(...args),
-    logout: (...args: unknown[]) => mockLogout(...args),
-    getCurrentUser: (...args: unknown[]) => mockGetCurrentUser(...args),
+    login: (...args: unknown[]) => mockLogin(...args) as unknown,
+    register: (...args: unknown[]) => mockRegister(...args) as unknown,
+    logout: (...args: unknown[]) => mockLogout(...args) as unknown,
+    getCurrentUser: (...args: unknown[]) => mockGetCurrentUser(...args) as unknown,
   },
 }));
 
 const mockDecodeJwt = vi.fn();
 
 vi.mock('jose', () => ({
-  decodeJwt: (...args: unknown[]) => mockDecodeJwt(...args),
+  decodeJwt: (...args: unknown[]) => mockDecodeJwt(...args) as unknown,
 }));
 
 // ---- Import store AFTER mocks are in place ----
@@ -111,7 +111,7 @@ describe('authStore', () => {
       const state = getState();
       expect(state.isAuthenticated).toBe(true);
       expect(state.user).not.toBeNull();
-      expect(state.user!.username).toBe('testuser');
+      expect(state.user?.username).toBe('testuser');
       expect(state.isLoading).toBe(false);
     });
 
@@ -259,7 +259,7 @@ describe('authStore', () => {
       const state = getState();
       expect(state.isAuthenticated).toBe(true);
       expect(state.user).not.toBeNull();
-      expect(state.user!.id).toBe('u1');
+      expect(state.user?.id).toBe('u1');
       expect(state.isLoading).toBe(false);
     });
 

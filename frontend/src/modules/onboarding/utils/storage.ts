@@ -234,7 +234,7 @@ export const clearLegacySensitiveData = () => {
   });
 
   if (cleared) {
-    console.info('SECURITY: Cleared legacy sensitive data from session storage');
+    console.warn('SECURITY: Cleared legacy sensitive data from session storage');
   }
 };
 

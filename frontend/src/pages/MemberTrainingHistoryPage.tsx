@@ -40,16 +40,18 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     if (userId) {
       void fetchData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const fetchData = async () => {
+    if (!userId) return;
     try {
       setLoading(true);
       setError(null);
 
       const [userData, records] = await Promise.all([
-        userService.getUserWithRoles(userId!),
-        trainingService.getRecords({ user_id: userId! }),
+        userService.getUserWithRoles(userId),
+        trainingService.getRecords({ user_id: userId }),
       ]);
 
       setUser(userData);

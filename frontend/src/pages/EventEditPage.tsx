@@ -25,6 +25,7 @@ export const EventEditPage: React.FC = () => {
     if (eventId) {
       void fetchEvent();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   const fetchEvent = async () => {

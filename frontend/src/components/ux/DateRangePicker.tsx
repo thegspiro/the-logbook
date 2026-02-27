@@ -89,7 +89,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                     key={preset.label}
                     onClick={() => {
                       const [s, e] = preset.getDates();
-                      onChange(s!, e!);
+                      if (s && e) onChange(s, e);
                       setShowPresets(false);
                     }}
                     className="w-full text-left px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-surface-hover transition-colors"

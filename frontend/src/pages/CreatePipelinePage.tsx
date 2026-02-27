@@ -825,12 +825,14 @@ const CreatePipelinePage: React.FC = () => {
 
   const goNext = () => {
     const idx = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
-    if (idx < WIZARD_STEPS.length - 1) setCurrentStep(WIZARD_STEPS[idx + 1]!.key);
+    const next = WIZARD_STEPS[idx + 1];
+    if (idx < WIZARD_STEPS.length - 1 && next) setCurrentStep(next.key);
   };
 
   const goBack = () => {
     const idx = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
-    if (idx > 0) setCurrentStep(WIZARD_STEPS[idx - 1]!.key);
+    const prev = WIZARD_STEPS[idx - 1];
+    if (idx > 0 && prev) setCurrentStep(prev.key);
   };
 
   // ---- Info handlers ----
@@ -939,7 +941,9 @@ const CreatePipelinePage: React.FC = () => {
         const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
         if (swapIdx < 0 || swapIdx >= p.milestones.length) return p;
         const updated = [...p.milestones];
-        [updated[idx], updated[swapIdx]] = [updated[swapIdx]!, updated[idx]!];
+        const a = updated[idx];
+        const b = updated[swapIdx];
+        if (a && b) { updated[idx] = b; updated[swapIdx] = a; }
         return { ...p, milestones: updated };
       })
     );

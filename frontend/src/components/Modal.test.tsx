@@ -63,7 +63,7 @@ describe('Modal', () => {
     expect(backdrop).toBeTruthy();
 
     // fireEvent.click on the container triggers handler with target === currentTarget
-    fireEvent.click(backdrop!);
+    if (backdrop) fireEvent.click(backdrop);
 
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
@@ -73,7 +73,7 @@ describe('Modal', () => {
 
     const backdrop = screen.getByRole('dialog').querySelector('.flex.items-center');
     expect(backdrop).toBeTruthy();
-    fireEvent.click(backdrop!);
+    if (backdrop) fireEvent.click(backdrop);
 
     expect(defaultProps.onClose).not.toHaveBeenCalled();
   });

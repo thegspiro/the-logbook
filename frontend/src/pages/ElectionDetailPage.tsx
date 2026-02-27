@@ -76,6 +76,7 @@ export const ElectionDetailPage: React.FC = () => {
     if (electionId) {
       void fetchElection();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [electionId]);
 
   const fetchElection = async () => {

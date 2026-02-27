@@ -9,8 +9,8 @@ const mockGetUserInventory = vi.fn();
 
 vi.mock('../services/api', () => ({
   inventoryService: {
-    getMembersSummary: (...args: unknown[]) => mockGetMembersSummary(...args),
-    getUserInventory: (...args: unknown[]) => mockGetUserInventory(...args),
+    getMembersSummary: (...args: unknown[]) => mockGetMembersSummary(...args) as unknown,
+    getUserInventory: (...args: unknown[]) => mockGetUserInventory(...args) as unknown,
   },
 }));
 

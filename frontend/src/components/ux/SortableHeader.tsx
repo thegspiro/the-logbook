@@ -60,7 +60,9 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   );
 };
 
-/** Generic sort utility */
+/** Generic sort utility
+ * @deprecated Prefer dedicated sort logic in components */
+// eslint-disable-next-line react-refresh/only-export-components
 export function sortItems<T>(
   items: T[],
   field: string | null,

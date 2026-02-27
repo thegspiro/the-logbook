@@ -88,7 +88,6 @@ export const useApiRequest = () => {
       } catch (err: unknown) {
         // Handle abort (not an error, just cancelled)
         if (err instanceof DOMException && err.name === 'AbortError') {
-          console.info('Request cancelled');
           setIsLoading(false);
           return { data: null, error: 'Request cancelled' };
         }

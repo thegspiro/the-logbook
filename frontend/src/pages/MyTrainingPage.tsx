@@ -554,7 +554,7 @@ const MyTrainingPage: React.FC = () => {
                             ) : req.cert_expired ? (
                               <span className="text-red-400 font-medium">Expired — Renew ASAP</span>
                             ) : isOverdue ? (
-                              <span className="text-red-400 font-medium">Overdue by {Math.abs(req.days_until_due!)} days</span>
+                              <span className="text-red-400 font-medium">Overdue by {Math.abs(req.days_until_due ?? 0)} days</span>
                             ) : req.days_until_due != null ? (
                               <span className={isDueSoon ? 'text-yellow-400' : ''}>
                                 Due: {formatDate(req.due_date, tz)} ({req.days_until_due} days)

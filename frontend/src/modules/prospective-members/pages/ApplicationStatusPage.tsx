@@ -79,7 +79,7 @@ export const ApplicationStatusPage: React.FC = () => {
     );
   }
 
-  const statusInfo = (STATUS_LABELS[data.status] ?? STATUS_LABELS.active)!;
+  const statusInfo = STATUS_LABELS[data.status] ?? STATUS_LABELS.active ?? { label: 'Active', color: '' };
   const completedCount = data.stage_timeline.filter((s) => s.status === 'completed').length;
 
   return (

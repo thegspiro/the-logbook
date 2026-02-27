@@ -24,7 +24,7 @@ function getStatusBadge(waiver: { start_date: string; end_date: string | null; a
   if (!waiver.active) {
     return { label: 'Deactivated', color: 'bg-gray-500/20 text-gray-400' };
   }
-  const today = new Date().toISOString().split('T')[0]!;
+  const today = new Date().toISOString().split('T')[0] ?? '';
   if (waiver.start_date > today) {
     return { label: 'Future', color: 'bg-blue-500/20 text-blue-400' };
   }
@@ -137,7 +137,7 @@ const TrainingWaiversTab: React.FC = () => {
 
   // Apply filters
   const filteredWaivers = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]!;
+    const today = new Date().toISOString().split('T')[0] ?? '';
     let result = waiverList;
 
     if (statusFilter === 'active') {
@@ -164,7 +164,7 @@ const TrainingWaiversTab: React.FC = () => {
 
   // Summary stats
   const stats = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]!;
+    const today = new Date().toISOString().split('T')[0] ?? '';
     const active = waiverList.filter((w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today));
     const future = waiverList.filter((w) => w.active && w.start_date > today);
     const expired = waiverList.filter((w) => w.active && w.end_date && w.end_date < today);

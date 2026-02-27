@@ -21,6 +21,7 @@ const ExpiringCertsTab: React.FC = () => {
 
   useEffect(() => {
     void loadCerts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [daysWindow]);
 
   const loadCerts = async () => {

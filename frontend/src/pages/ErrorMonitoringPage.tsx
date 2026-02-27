@@ -191,19 +191,19 @@ const ErrorMonitoringPage: React.FC = () => {
                     <td className="px-6 py-4 text-sm text-theme-text-secondary">
                       {error.context.source === 'backend' ? (
                         <span className="font-mono text-xs">
-                          {error.context.method} {error.context.path}
+                          {(error.context.method as string | undefined) ?? ''} {(error.context.path as string | undefined) ?? ''}
                         </span>
                       ) : (
                         <>
                           {error.context.eventId && (
                             <Link
-                              to={`/events/${error.context.eventId}`}
+                              to={`/events/${error.context.eventId as string}`}
                               className="text-blue-600 hover:text-blue-800"
                             >
                               Event
                             </Link>
                           )}
-                          {error.context.userId && ` | User: ${String(error.context.userId).substring(0, 8)}`}
+                          {error.context.userId && ` | User: ${(error.context.userId as string).substring(0, 8)}`}
                         </>
                       )}
                     </td>

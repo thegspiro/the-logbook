@@ -63,7 +63,7 @@ const LocationKioskPage: React.FC = () => {
         }
         return;
       }
-      const result = await response.json();
+      const result = (await response.json()) as DisplayData;
       setData(result);
       setError(null);
       setConnected(true);

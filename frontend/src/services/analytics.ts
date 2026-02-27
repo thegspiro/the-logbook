@@ -20,7 +20,7 @@ export interface AnalyticsEvent {
   eventType: 'qr_scan' | 'check_in_success' | 'check_in_failure' | 'qr_view' | 'qr_print';
   eventId: string;
   userId?: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 export interface QRCodeMetrics {
@@ -129,7 +129,7 @@ class AnalyticsService {
     eventType: AnalyticsEvent['eventType'],
     eventId: string,
     userId: string | undefined,
-    metadata: Record<string, any>
+    metadata: Record<string, unknown>
   ): void {
     analyticsApiService.trackEvent({
       event_type: eventType,

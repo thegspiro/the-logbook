@@ -8,7 +8,9 @@ import type { Event } from '../types/event';
 
 /** Create a mock API error object (not a Promise) */
 function makeApiError(message: string, status = 400) {
-  const error: any = new Error(message);
+  const error = new Error(message) as Error & {
+    response: { data: { detail: string }; status: number };
+  };
   error.response = { data: { detail: message }, status };
   return error;
 }
@@ -150,7 +152,7 @@ describe('EventEditPage', () => {
   describe('Form Submission', () => {
     it('should navigate to event detail on successful update', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
-      vi.mocked(eventService.updateEvent).mockResolvedValue({} as any);
+      vi.mocked(eventService.updateEvent).mockResolvedValue({} as unknown as Event);
 
       const user = userEvent.setup();
       renderWithRouter(<EventEditPage />);

@@ -115,16 +115,21 @@ export const localToUTC = (localDateTimeStr?: string | null, timezone?: string):
   if (!localDateTimeStr) return '';
 
   const [datePart, timePart] = localDateTimeStr.split('T');
-  const [year, month, day] = datePart!.split('-').map(Number);
-  const [hour, minute] = (timePart || '00:00').split(':').map(Number);
+  const parts = (datePart ?? '').split('-').map(Number);
+  const year = parts[0] ?? 0;
+  const month = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
+  const timeParts = (timePart || '00:00').split(':').map(Number);
+  const hour = timeParts[0] ?? 0;
+  const minute = timeParts[1] ?? 0;
 
   if (!timezone) {
     // No timezone specified — interpret as browser-local time
-    return new Date(year!, month! - 1, day, hour, minute).toISOString();
+    return new Date(year, month - 1, day, hour, minute).toISOString();
   }
 
   // Treat the local datetime components as if they were UTC to get a reference point
-  const refUtcMs = Date.UTC(year!, month! - 1, day, hour, minute);
+  const refUtcMs = Date.UTC(year, month - 1, day, hour, minute);
 
   // Determine what local time that UTC instant corresponds to in the target timezone
   const fmt = new Intl.DateTimeFormat('en-CA', {
@@ -136,8 +141,8 @@ export const localToUTC = (localDateTimeStr?: string | null, timezone?: string):
     minute: '2-digit',
     hour12: false,
   });
-  const parts = fmt.formatToParts(new Date(refUtcMs));
-  const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+  const dtParts = fmt.formatToParts(new Date(refUtcMs));
+  const get = (type: string) => dtParts.find(p => p.type === type)?.value ?? '';
   const localAtRefMs = Date.UTC(+get('year'), +get('month') - 1, +get('day'), +get('hour'), +get('minute'));
 
   // Offset = how far ahead the timezone is from UTC at this instant

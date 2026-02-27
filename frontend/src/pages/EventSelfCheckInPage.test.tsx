@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter, mockQRCheckInData, mockRSVP, createMockApiError } from '../test/utils';
 import EventSelfCheckInPage from './EventSelfCheckInPage';
 import * as apiModule from '../services/api';
+import * as reactRouterDom from 'react-router-dom';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -425,8 +426,8 @@ describe('EventSelfCheckInPage', () => {
 
   describe('Edge Cases', () => {
     it('should handle missing event ID gracefully', async () => {
-      const originalUseParams = vi.mocked(require('react-router-dom').useParams);
-      vi.mocked(require('react-router-dom').useParams).mockReturnValue({ id: undefined });
+      const originalUseParams = vi.mocked(reactRouterDom.useParams);
+      vi.mocked(reactRouterDom.useParams).mockReturnValue({ id: undefined });
 
       renderWithRouter(<EventSelfCheckInPage />);
 
@@ -434,7 +435,7 @@ describe('EventSelfCheckInPage', () => {
       expect(eventService.getQRCheckInData).not.toHaveBeenCalled();
 
       // Restore original mock
-      vi.mocked(require('react-router-dom').useParams).mockImplementation(originalUseParams);
+      vi.mocked(reactRouterDom.useParams).mockImplementation(originalUseParams);
     });
 
     it('should handle missing location in event data', async () => {
