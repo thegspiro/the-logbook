@@ -5553,6 +5553,10 @@ export const skillsTestingService = {
     return response.data;
   },
 
+  async deleteTest(testId: string): Promise<void> {
+    await api.delete(`/training/skills-testing/tests/${testId}`);
+  },
+
   // Summary
   async getSummary(): Promise<SkillTestingSummary> {
     const response = await api.get<SkillTestingSummary>('/training/skills-testing/summary');

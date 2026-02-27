@@ -11,7 +11,9 @@ import {
   Plus,
   Search,
   Users,
+  Trash2,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type { SkillTestListItem } from '../types/skillsTesting';
 
@@ -37,10 +39,14 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 const TestCard: React.FC<{
   test: SkillTestListItem;
   onClick: () => void;
-}> = ({ test, onClick }) => (
-  <button
+  onDelete: () => void;
+}> = ({ test, onClick, onDelete }) => (
+  <div
+    role="button"
+    tabIndex={0}
     onClick={onClick}
-    className="w-full text-left bg-theme-surface rounded-lg p-4 border border-theme-surface-border hover:border-red-500/50 transition-colors"
+    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
+    className="w-full text-left bg-theme-surface rounded-lg p-4 border border-theme-surface-border hover:border-red-500/50 transition-colors cursor-pointer"
   >
     <div className="flex items-center justify-between">
       <div className="flex-1 min-w-0">
@@ -53,23 +59,35 @@ const TestCard: React.FC<{
           Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}
         </p>
       </div>
-      <div className="text-right ml-4 shrink-0">
-        {test.overall_score != null && (
-          <p className="text-lg font-bold text-theme-text-primary">{Math.round(test.overall_score)}%</p>
-        )}
-        <p className="text-xs text-theme-text-muted">
-          {test.completed_at ? new Date(test.completed_at).toLocaleDateString() : test.started_at ? 'In Progress' : 'Not Started'}
-        </p>
+      <div className="flex items-center gap-3 ml-4 shrink-0">
+        <div className="text-right">
+          {test.overall_score != null && (
+            <p className="text-lg font-bold text-theme-text-primary">{Math.round(test.overall_score)}%</p>
+          )}
+          <p className="text-xs text-theme-text-muted">
+            {test.completed_at ? new Date(test.completed_at).toLocaleDateString() : test.started_at ? 'In Progress' : 'Not Started'}
+          </p>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="p-2 rounded-lg text-theme-text-muted hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          aria-label={`Delete test for ${test.candidate_name}`}
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
     </div>
-  </button>
+  </div>
 );
 
 // ── Main component ─────────────────────────────────────────────
 
 const SkillsTestingTestRecordsTab: React.FC = () => {
   const navigate = useNavigate();
-  const { tests, testsLoading, loadTests, templates, loadTemplates } = useSkillsTestingStore();
+  const { tests, testsLoading, loadTests, deleteTest, templates, loadTemplates } = useSkillsTestingStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
 
@@ -83,6 +101,20 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
     t.candidate_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.examiner_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleDelete = async (test: SkillTestListItem) => {
+    const confirmed = window.confirm(
+      `Delete the test record for ${test.candidate_name} (${test.template_name})? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteTest(test.id);
+      toast.success('Test record deleted');
+    } catch {
+      toast.error('Failed to delete test record');
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -145,6 +177,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               key={test.id}
               test={test}
               onClick={() => navigate(`/training/skills-testing/test/${test.id}`)}
+              onDelete={() => void handleDelete(test)}
             />
           ))}
         </div>
