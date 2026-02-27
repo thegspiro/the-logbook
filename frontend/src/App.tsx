@@ -20,6 +20,7 @@ import { getOnboardingRoutes } from './modules/onboarding';
 import { getApparatusRoutes } from './modules/apparatus';
 import { getMembershipRoutes } from './modules/membership';
 import { getProspectiveMembersRoutes, getProspectiveMembersPublicRoutes } from './modules/prospective-members';
+import { getAdminHoursRoutes } from './modules/admin-hours';
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -164,6 +165,9 @@ function App() {
 
               {/* Prospective Members Module */}
               {getProspectiveMembersRoutes()}
+
+              {/* Admin Hours Module */}
+              {getAdminHoursRoutes()}
 
               {/* Main Dashboard */}
               <Route path="/dashboard" element={<Dashboard />} />

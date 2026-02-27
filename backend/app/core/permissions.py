@@ -47,6 +47,7 @@ class PermissionCategory(str, Enum):
     NOTIFICATIONS = "notifications"
     REPORTS = "reports"
     PROSPECTIVE_MEMBERS = "prospective_members"
+    ADMIN_HOURS = "admin_hours"
 
 
 class Permission:
@@ -375,6 +376,19 @@ TRAINING_VIEW_ALL = Permission(
 )
 
 
+# Admin Hours
+ADMIN_HOURS_VIEW = Permission(
+    "admin_hours.view", "View own admin hours", PermissionCategory.ADMIN_HOURS
+)
+ADMIN_HOURS_LOG = Permission(
+    "admin_hours.log", "Log admin hours (clock in/out, manual entry)", PermissionCategory.ADMIN_HOURS
+)
+ADMIN_HOURS_MANAGE = Permission(
+    "admin_hours.manage",
+    "Manage admin hours categories, approve/reject entries, view all members",
+    PermissionCategory.ADMIN_HOURS,
+)
+
 # ============================================
 # All Permissions Registry
 # ============================================
@@ -475,6 +489,10 @@ ALL_PERMISSIONS: List[Permission] = [
     MEMBERS_CREATE,
     # Training (additional)
     TRAINING_VIEW_ALL,
+    # Admin Hours
+    ADMIN_HOURS_VIEW,
+    ADMIN_HOURS_LOG,
+    ADMIN_HOURS_MANAGE,
 ]
 
 
