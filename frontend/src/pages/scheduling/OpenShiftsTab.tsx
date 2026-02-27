@@ -160,8 +160,8 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm sm:text-base font-semibold text-theme-text-primary">
-                              {formatTime(shift.start_time, tz)}
-                              {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                              {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
+                              {shift.end_time ? ` - ${formatTime(shift.shift_date + 'T' + shift.end_time, tz)}` : ''}
                             </p>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
                               <span className="flex items-center gap-1 text-xs text-theme-text-muted">

@@ -231,7 +231,7 @@ const BUILTIN_POSITION_OPTIONS: { value: string; label: string }[] = [
   { value: 'officer', label: 'Officer' },
   { value: 'driver', label: 'Driver/Operator' },
   { value: 'firefighter', label: 'Firefighter' },
-  { value: 'ems', label: 'EMS' },
+  { value: 'ems', label: 'EMT' },
   { value: 'probationary', label: 'Probationary' },
   { value: 'volunteer', label: 'Volunteer' },
   { value: 'other', label: 'Other' },
@@ -242,8 +242,8 @@ const getPositionOptions = (): { value: string; label: string }[] => {
   try {
     const stored = localStorage.getItem('scheduling_settings');
     if (stored) {
-      const settings = JSON.parse(stored);
-      const custom = (settings.customPositions || []) as { value: string; label: string }[];
+      const settings = JSON.parse(stored) as { customPositions?: { value: string; label: string }[] };
+      const custom = settings.customPositions ?? [];
       const merged = [...BUILTIN_POSITION_OPTIONS];
       for (const cp of custom) {
         if (!merged.some(p => p.value === cp.value)) {
@@ -354,13 +354,13 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
     try {
       const stored = localStorage.getItem('scheduling_settings');
       if (stored) {
-        const settings = JSON.parse(stored);
+        const settings = JSON.parse(stored) as { apparatusTypeDefaults?: Record<string, { positions?: string[]; minStaffing?: number }> };
         const defaults = settings.apparatusTypeDefaults?.[type];
         if (defaults) {
           setFormData(prev => ({
             ...prev,
-            positions: defaults.positions || prev.positions,
-            min_staffing: String(defaults.minStaffing || prev.min_staffing),
+            positions: defaults.positions ?? prev.positions,
+            min_staffing: String(defaults.minStaffing ?? prev.min_staffing),
           }));
           return;
         }
@@ -480,7 +480,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
           <div>
             <label htmlFor="template-name" className="block text-sm font-medium text-theme-text-secondary mb-1">
               Name <span aria-hidden="true">*</span>
@@ -526,7 +526,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                       setFormData(prev => ({
                         ...prev,
                         category: cat.value,
-                        apparatus_type: cat.value !== 'specialty' ? '' : prev.apparatus_type,
+                        apparatus_type: cat.value === 'event' ? '' : prev.apparatus_type,
                       }));
                     }}
                     className={`p-2.5 rounded-lg border text-left transition-colors ${
@@ -543,11 +543,11 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
             </div>
           </div>
 
-          {/* Apparatus Type (for specialty templates) */}
-          {formData.category === 'specialty' && (
+          {/* Apparatus Type (for standard & specialty templates) */}
+          {(formData.category === 'standard' || formData.category === 'specialty') && (
             <div>
               <label htmlFor="template-apparatus-type" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                <span className="flex items-center gap-1.5"><Truck className="w-4 h-4" /> Vehicle Type</span>
+                <span className="flex items-center gap-1.5"><Truck className="w-4 h-4" /> Vehicle Type{formData.category === 'specialty' && <span aria-hidden="true">*</span>}</span>
               </label>
               <select
                 id="template-apparatus-type"
@@ -558,14 +558,19 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                   loadApparatusTypeDefaults(newType);
                 }}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                required={formData.category === 'specialty'}
               >
-                <option value="">Select vehicle type...</option>
+                <option value="">
+                  {formData.category === 'specialty' ? 'Select vehicle type...' : 'No specific vehicle (optional)'}
+                </option>
                 {APPARATUS_TYPES.map(t => (
                   <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                 ))}
               </select>
               <p className="text-xs text-theme-text-muted mt-1">
-                Selecting a vehicle type will load default positions from your department settings.
+                {formData.category === 'specialty'
+                  ? 'Selecting a vehicle type will load default positions from your department settings.'
+                  : 'Optionally assign a vehicle to load default positions from your department settings.'}
               </p>
             </div>
           )}
@@ -965,7 +970,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
           <div>
             <label htmlFor="pattern-name" className="block text-sm font-medium text-theme-text-secondary mb-1">
               Name <span aria-hidden="true">*</span>
@@ -1186,7 +1191,7 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
           </button>
         </div>
 
-        <form onSubmit={handleGenerate} className="p-6 space-y-4">
+        <form onSubmit={(e) => { void handleGenerate(e); }} className="p-6 space-y-4">
           <div className="bg-theme-surface rounded-lg p-3 border border-theme-surface-border">
             <p className="text-sm text-theme-text-muted">Pattern</p>
             <p className="text-theme-text-primary font-medium">{pattern.name}</p>
@@ -1299,14 +1304,14 @@ export const ShiftTemplatesPage: React.FC = () => {
   }, [loadTemplates, loadPatterns]);
 
   useEffect(() => {
-    loadAll();
+    void loadAll();
   }, [loadAll]);
 
   // Template handlers
   const handleCreateTemplate = async (data: Record<string, unknown>) => {
     await schedulingService.createTemplate(data);
     toast.success('Template created');
-    loadTemplates();
+    void loadTemplates();
   };
 
   const handleUpdateTemplate = async (data: Record<string, unknown>) => {
@@ -1314,7 +1319,7 @@ export const ShiftTemplatesPage: React.FC = () => {
     await schedulingService.updateTemplate(editingTemplate.id, data);
     toast.success('Template updated');
     setEditingTemplate(null);
-    loadTemplates();
+    void loadTemplates();
   };
 
   const handleDeleteTemplate = async (id: string) => {
@@ -1322,7 +1327,7 @@ export const ShiftTemplatesPage: React.FC = () => {
     try {
       await schedulingService.deleteTemplate(id);
       toast.success('Template deleted');
-      loadTemplates();
+      void loadTemplates();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete template'));
     } finally {
@@ -1334,7 +1339,7 @@ export const ShiftTemplatesPage: React.FC = () => {
   const handleCreatePattern = async (data: Record<string, unknown>) => {
     await schedulingService.createPattern(data);
     toast.success('Pattern created');
-    loadPatterns();
+    void loadPatterns();
   };
 
   const handleUpdatePattern = async (data: Record<string, unknown>) => {
@@ -1342,7 +1347,7 @@ export const ShiftTemplatesPage: React.FC = () => {
     await schedulingService.updatePattern(editingPattern.id, data);
     toast.success('Pattern updated');
     setEditingPattern(null);
-    loadPatterns();
+    void loadPatterns();
   };
 
   const handleDeletePattern = async (id: string) => {
@@ -1350,7 +1355,7 @@ export const ShiftTemplatesPage: React.FC = () => {
     try {
       await schedulingService.deletePattern(id);
       toast.success('Pattern deleted');
-      loadPatterns();
+      void loadPatterns();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete pattern'));
     } finally {
@@ -1658,7 +1663,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                       Edit
                     </button>
                     <button
-                      onClick={() => handleDeleteTemplate(template.id)}
+                      onClick={() => { void handleDeleteTemplate(template.id); }}
                       disabled={deletingTemplateId === template.id}
                       className="flex items-center gap-1 px-3 py-1.5 bg-theme-surface hover:bg-theme-surface-hover text-red-700 dark:text-red-400 text-sm rounded-lg disabled:opacity-50"
                       aria-label={`Delete ${template.name}`}
@@ -1757,7 +1762,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                       Edit
                     </button>
                     <button
-                      onClick={() => handleDeletePattern(pattern.id)}
+                      onClick={() => { void handleDeletePattern(pattern.id); }}
                       disabled={deletingPatternId === pattern.id}
                       className="flex items-center gap-1 px-3 py-1.5 bg-theme-surface hover:bg-theme-surface-hover text-red-700 dark:text-red-400 text-sm rounded-lg disabled:opacity-50"
                       aria-label={`Delete ${pattern.name}`}

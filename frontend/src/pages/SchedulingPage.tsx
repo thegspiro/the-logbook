@@ -80,7 +80,7 @@ const hexColorStyle = (hex: string): React.CSSProperties => ({
 const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
   // If the shift carries a template color, use inline styles instead (via getShiftStyle)
   if (shift.color) return undefined;
-  const startHour = new Date(shift.start_time).getHours();
+  const startHour = parseInt(shift.start_time.split(':')[0] ?? '0', 10);
   if (startHour >= 5 && startHour < 10) return 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30';
   if (startHour >= 10 && startHour < 17) return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
   return 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30';
@@ -180,7 +180,7 @@ const SchedulingPage: React.FC = () => {
         setTemplatesLoaded(true);
       }
     };
-    loadCreateData();
+    void loadCreateData();
     // Load members for shift officer dropdown (non-blocking)
     userService.getUsers().then((users) => {
       setMembersList(
@@ -292,7 +292,7 @@ const SchedulingPage: React.FC = () => {
   }, [currentDate, viewMode]);
 
   useEffect(() => {
-    fetchShifts();
+    void fetchShifts();
   }, [fetchShifts]);
 
   // Fetch summary on mount
@@ -305,7 +305,7 @@ const SchedulingPage: React.FC = () => {
         console.warn('Failed to load scheduling summary:', err);
       }
     };
-    fetchSummary();
+    void fetchSummary();
   }, []);
 
   const getShiftsForDate = useCallback((date: Date): ShiftRecord[] => {
@@ -562,8 +562,8 @@ const SchedulingPage: React.FC = () => {
                               style={getShiftStyle(shift)}
                             >
                               <p className="font-medium truncate">
-                                {formatTime(shift.start_time, tz)}
-                                {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                                {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
+                                {shift.end_time ? ` - ${formatTime(shift.shift_date + 'T' + shift.end_time, tz)}` : ''}
                               </p>
                               {shift.notes && (
                                 <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
@@ -627,8 +627,8 @@ const SchedulingPage: React.FC = () => {
                                   style={getShiftStyle(shift)}
                                 >
                                   <p className="font-medium">
-                                    {formatTime(shift.start_time, tz)}
-                                    {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                                    {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
+                                    {shift.end_time ? ` - ${formatTime(shift.shift_date + 'T' + shift.end_time, tz)}` : ''}
                                   </p>
                                   {shift.notes && (
                                     <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
@@ -697,7 +697,7 @@ const SchedulingPage: React.FC = () => {
                             >
                               <p className="font-medium truncate">
                                 {isUnderstaffed(shift) && <AlertTriangle className="w-3 h-3 inline text-amber-600 dark:text-amber-400 mr-0.5" />}
-                                {formatTime(shift.start_time)}
+                                {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
                                 {shift.apparatus_unit_number && <span className="ml-1 opacity-70">{shift.apparatus_unit_number}</span>}
                                 <span className="ml-1 opacity-70">({shift.attendee_count})</span>
                               </p>
@@ -800,8 +800,8 @@ const SchedulingPage: React.FC = () => {
                                     style={getShiftStyle(shift)}
                                   >
                                     <p className="font-medium">
-                                      {formatTime(shift.start_time, tz)}
-                                      {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                                      {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
+                                      {shift.end_time ? ` - ${formatTime(shift.shift_date + 'T' + shift.end_time, tz)}` : ''}
                                     </p>
                                     {shift.notes && (
                                       <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
@@ -888,7 +888,7 @@ const SchedulingPage: React.FC = () => {
             <ShiftDetailPanel
               shift={selectedShift}
               onClose={() => setSelectedShift(null)}
-              onRefresh={fetchShifts}
+              onRefresh={() => { void fetchShifts(); }}
             />
           </Suspense>
         )}
@@ -937,7 +937,7 @@ const SchedulingPage: React.FC = () => {
                               {standard.length > 0 && (
                                 <optgroup label="Standard Shifts">
                                   {standard.map(t => (
-                                    <option key={t.id} value={t.id}>{t.name} ({t.start_time_of_day} - {t.end_time_of_day})</option>
+                                    <option key={t.id} value={t.id}>{t.name}{t.apparatus_type ? ` — ${t.apparatus_type}` : ''} ({t.start_time_of_day} - {t.end_time_of_day})</option>
                                   ))}
                                 </optgroup>
                               )}
@@ -994,7 +994,7 @@ const SchedulingPage: React.FC = () => {
                               <div>
                                 <p className="text-xs text-theme-text-muted mb-1">Required positions:</p>
                                 <div className="flex flex-wrap gap-1">
-                                  {tmpl.positions!.map((pos, i) => (
+                                  {tmpl.positions?.map((pos, i) => (
                                     <span key={i} className="px-2 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded capitalize font-medium">
                                       {pos}
                                     </span>
@@ -1170,7 +1170,7 @@ const SchedulingPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={handleCreateShift}
+                    onClick={() => { void handleCreateShift(); }}
                     disabled={creating || !shiftForm.startDate}
                     className={`px-4 py-2 rounded-lg transition-colors inline-flex items-center space-x-2 ${
                       creating || !shiftForm.startDate
@@ -1202,7 +1202,7 @@ const BUILTIN_POSITIONS = [
   { value: 'officer', label: 'Officer' },
   { value: 'driver', label: 'Driver/Operator' },
   { value: 'firefighter', label: 'Firefighter' },
-  { value: 'ems', label: 'EMS' },
+  { value: 'ems', label: 'EMT' },
   { value: 'probationary', label: 'Probationary' },
   { value: 'volunteer', label: 'Volunteer' },
 ];
@@ -1296,7 +1296,7 @@ const SchedulingNotificationsPanel: React.FC = () => {
         setLoadingRules(false);
       }
     };
-    load();
+    void load();
   }, []);
 
   const isRuleEnabled = (presetName: string) => {
@@ -1364,7 +1364,7 @@ const SchedulingNotificationsPanel: React.FC = () => {
                   <p className="text-xs text-theme-text-muted mt-0.5">{preset.description}</p>
                 </div>
                 <button
-                  onClick={() => handleToggle(preset)}
+                  onClick={() => { void handleToggle(preset); }}
                   disabled={isCreating}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
                     enabled ? 'bg-violet-600' : 'bg-gray-300 dark:bg-gray-600'
@@ -1397,7 +1397,7 @@ const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   const [settings, setSettings] = useState<ShiftSettings>(() => {
     try {
       const stored = localStorage.getItem(SETTINGS_KEY);
-      return stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS;
+      return stored ? { ...DEFAULT_SETTINGS, ...(JSON.parse(stored) as Partial<ShiftSettings>) } : DEFAULT_SETTINGS;
     } catch {
       return DEFAULT_SETTINGS;
     }

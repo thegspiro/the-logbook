@@ -49,14 +49,14 @@ const APPARATUS_TYPES = [
 ];
 
 const POSITION_OPTIONS = [
-  'officer', 'driver', 'firefighter', 'EMS', 'captain',
+  'officer', 'driver', 'firefighter', 'EMT', 'captain',
   'lieutenant', 'probationary', 'volunteer',
 ];
 
 const DEFAULT_POSITIONS_BY_TYPE: Record<string, string[]> = {
   engine: ['officer', 'driver', 'firefighter', 'firefighter'],
   ladder: ['officer', 'driver', 'firefighter', 'firefighter'],
-  ambulance: ['driver', 'EMS'],
+  ambulance: ['driver', 'EMT'],
   rescue: ['officer', 'driver', 'firefighter', 'firefighter'],
   tanker: ['driver', 'firefighter'],
   brush: ['driver', 'firefighter'],
@@ -98,7 +98,7 @@ export default function ApparatusBasicPage() {
     }
   }, []);
 
-  useEffect(() => { loadApparatus(); }, [loadApparatus]);
+  useEffect(() => { void loadApparatus(); }, [loadApparatus]);
 
   const filtered = apparatusList.filter(a =>
     a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -180,7 +180,7 @@ export default function ApparatusBasicPage() {
         toast.success('Apparatus added');
       }
       setShowModal(false);
-      loadApparatus();
+      void loadApparatus();
     } catch {
       toast.error('Failed to save apparatus');
     } finally {
@@ -193,7 +193,7 @@ export default function ApparatusBasicPage() {
     try {
       await schedulingService.deleteBasicApparatus(apparatus.id);
       toast.success('Apparatus deleted');
-      loadApparatus();
+      void loadApparatus();
     } catch {
       toast.error('Failed to delete apparatus');
     }
@@ -279,7 +279,7 @@ export default function ApparatusBasicPage() {
                     >
                       <Pencil className="w-4 h-4" aria-hidden="true" />
                     </button>
-                    <button onClick={() => handleDelete(apparatus)} title="Delete" aria-label="Delete apparatus"
+                    <button onClick={() => { void handleDelete(apparatus); }} title="Delete" aria-label="Delete apparatus"
                       className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-4 h-4" aria-hidden="true" />
@@ -392,7 +392,7 @@ export default function ApparatusBasicPage() {
             </div>
             <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">Cancel</button>
-              <button onClick={handleSave} disabled={isSaving || !form.unit_number.trim() || !form.name.trim()}
+              <button onClick={() => { void handleSave(); }} disabled={isSaving || !form.unit_number.trim() || !form.name.trim()}
                 className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

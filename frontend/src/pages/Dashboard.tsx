@@ -117,16 +117,16 @@ const Dashboard: React.FC = () => {
       }).catch(() => { /* keep default */ });
     }
 
-    loadNotifications();
-    loadUpcomingShifts();
-    loadDeptMessages();
+    void loadNotifications();
+    void loadUpcomingShifts();
+    void loadDeptMessages();
     if (isAdmin) {
-      loadAdminSummary();
-      loadSetupProgress();
+      void loadAdminSummary();
+      void loadSetupProgress();
     }
-    loadHours();
-    loadTrainingProgress();
-    loadInventorySummary();
+    void loadHours();
+    void loadTrainingProgress();
+    void loadInventorySummary();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
@@ -214,7 +214,7 @@ const Dashboard: React.FC = () => {
     try {
       const today = getTodayLocalDate(tz);
       const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
-      const data = await schedulingService.getMyShifts({ start_date: today, end_date: nextMonth, limit: 5 });
+      const data = await schedulingService.getShifts({ start_date: today, end_date: nextMonth, limit: 5 });
       setUpcomingShifts(data.shifts || []);
     } catch {
       // Shifts are non-critical
@@ -253,7 +253,8 @@ const Dashboard: React.FC = () => {
       const details = new Map<string, MemberProgramProgress>();
       results.forEach((result, i) => {
         if (result.status === 'fulfilled') {
-          details.set(top3[i]!.id, result.value);
+          const item = top3[i];
+          if (item) details.set(item.id, result.value);
         }
       });
       setProgressDetails(details);
@@ -315,7 +316,7 @@ const Dashboard: React.FC = () => {
               <button onClick={() => setDismissedInstall(true)} className="text-xs text-theme-text-muted hover:text-theme-text-primary px-2 py-1">
                 Dismiss
               </button>
-              <button onClick={install} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium">
+              <button onClick={() => { void install(); }} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium">
                 Install
               </button>
             </div>
@@ -531,7 +532,7 @@ const Dashboard: React.FC = () => {
                     className={`rounded-lg border p-4 transition-colors ${priorityStyles[msg.priority]} ${
                       !msg.is_read ? 'ring-1 ring-amber-400/30' : ''
                     }`}
-                    onClick={() => !msg.is_read && markMessageRead(msg.id)}
+                    onClick={() => { if (!msg.is_read) void markMessageRead(msg.id); }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
@@ -556,7 +557,7 @@ const Dashboard: React.FC = () => {
                       <div className="flex flex-col gap-1 shrink-0">
                         {!msg.is_read && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); markMessageRead(msg.id); }}
+                            onClick={(e) => { e.stopPropagation(); void markMessageRead(msg.id); }}
                             className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
                             title="Mark as read"
                           >
@@ -565,7 +566,7 @@ const Dashboard: React.FC = () => {
                         )}
                         {msg.requires_acknowledgment && !msg.is_acknowledged && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); acknowledgeMessage(msg.id); }}
+                            onClick={(e) => { e.stopPropagation(); void acknowledgeMessage(msg.id); }}
                             className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
                           >
                             Acknowledge
@@ -621,7 +622,7 @@ const Dashboard: React.FC = () => {
                   <button
                     key={notification.id}
                     onClick={() => {
-                      if (!notification.read) markNotificationRead(notification.id);
+                      if (!notification.read) void markNotificationRead(notification.id);
                       if (notification.action_url) navigate(notification.action_url);
                     }}
                     className={`w-full text-left p-3 rounded-lg transition-colors ${
