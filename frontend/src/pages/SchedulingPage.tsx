@@ -80,7 +80,7 @@ const hexColorStyle = (hex: string): React.CSSProperties => ({
 const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
   // If the shift carries a template color, use inline styles instead (via getShiftStyle)
   if (shift.color) return undefined;
-  const startHour = new Date(shift.start_time).getHours();
+  const startHour = parseInt(shift.start_time.split(':')[0] ?? '0', 10);
   if (startHour >= 5 && startHour < 10) return 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30';
   if (startHour >= 10 && startHour < 17) return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
   return 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30';
