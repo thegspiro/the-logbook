@@ -182,12 +182,22 @@ const ScoreCriterion: React.FC<{
   const maxScore = criterion.max_score ?? 100;
   const passingScore = criterion.passing_score ?? 0;
   const currentScore = result?.score ?? 0;
-  const isPassing = currentScore >= passingScore;
+  const isCritical = criterion.required;
+  // Non-critical criteria always "pass" — only critical criteria can fail
+  const isPassing = isCritical ? currentScore >= passingScore : true;
   const usePointButtons = maxScore <= 10;
 
   const handleScoreChange = (score: number) => {
-    onChange({ score, passed: score >= passingScore });
+    // Non-critical: always passed (score just contributes to overall %).
+    // Critical: passed only when score meets the passing threshold.
+    const passed = isCritical ? score >= passingScore : true;
+    onChange({ score, passed });
   };
+
+  // Non-critical uses neutral blue styling; critical uses green/red
+  const scoreColor = isCritical
+    ? isPassing ? 'text-green-600' : 'text-red-600'
+    : 'text-blue-600 dark:text-blue-400';
 
   return (
     <div className="space-y-2">
@@ -195,13 +205,13 @@ const ScoreCriterion: React.FC<{
         <div>
           <p className="font-medium text-theme-text-primary text-base">
             {criterion.label}
-            {criterion.required && <span className="ml-1 text-red-500 text-sm">(Critical)</span>}
+            {isCritical && <span className="ml-1 text-red-500 text-sm">(Critical)</span>}
           </p>
           {criterion.description && (
             <p className="text-sm text-theme-text-muted mt-0.5">{criterion.description}</p>
           )}
         </div>
-        <div className={`text-2xl font-bold ${isPassing ? 'text-green-600' : 'text-red-600'}`}>
+        <div className={`text-2xl font-bold ${scoreColor}`}>
           {currentScore}/{maxScore}
         </div>
       </div>
@@ -213,18 +223,20 @@ const ScoreCriterion: React.FC<{
               onClick={() => handleScoreChange(i)}
               className={`min-w-[3rem] h-12 rounded-xl text-lg font-bold transition-all ${
                 currentScore === i
-                  ? i >= passingScore
-                    ? 'bg-green-600 text-white shadow-lg shadow-green-600/30 scale-105'
-                    : 'bg-red-600 text-white shadow-lg shadow-red-600/30 scale-105'
+                  ? isCritical
+                    ? i >= passingScore
+                      ? 'bg-green-600 text-white shadow-lg shadow-green-600/30 scale-105'
+                      : 'bg-red-600 text-white shadow-lg shadow-red-600/30 scale-105'
+                    : 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 scale-105'
                   : 'bg-theme-surface border-2 border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
               }`}
             >
               {i}
             </button>
           ))}
-          {passingScore > 0 && (
+          {isCritical && passingScore > 0 && (
             <p className="w-full text-xs text-theme-text-muted mt-1">
-              Pass: {passingScore}+ pts
+              Must score {passingScore}+ pts to pass
             </p>
           )}
         </div>
@@ -237,11 +249,11 @@ const ScoreCriterion: React.FC<{
             value={currentScore}
             onChange={(e) => handleScoreChange(Number(e.target.value))}
             className="w-full h-3 rounded-lg appearance-none cursor-pointer accent-red-600"
-            style={{ background: `linear-gradient(to right, ${isPassing ? '#16a34a' : '#dc2626'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)` }}
+            style={{ background: `linear-gradient(to right, ${isCritical ? (isPassing ? '#16a34a' : '#dc2626') : '#2563eb'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)` }}
           />
           <div className="flex justify-between text-xs text-theme-text-muted">
             <span>0</span>
-            <span className="text-yellow-600">Pass: {passingScore}</span>
+            {isCritical && <span className="text-yellow-600">Pass: {passingScore}</span>}
             <span>{maxScore}</span>
           </div>
         </div>
@@ -547,11 +559,21 @@ const CriterionResultDisplay: React.FC<{
   result: CriterionResult | undefined;
 }> = ({ criterion, result }) => {
   const passed = result?.passed;
+  const isCritical = criterion.required;
 
   const statusBadge = () => {
     if (criterion.type === 'statement') {
       return (
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">Statement</span>
+      );
+    }
+    // Non-critical score criteria show a neutral "Scored" badge — not earning
+    // full points is NOT a fail, only critical steps can fail.
+    if (!isCritical && criterion.type === 'score' && result?.score != null) {
+      return (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+          {result.score}/{criterion.max_score ?? 100} pts
+        </span>
       );
     }
     if (passed === true) {
@@ -578,12 +600,17 @@ const CriterionResultDisplay: React.FC<{
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-theme-text-primary">
           {criterion.label}
-          {criterion.required && <span className="ml-1 text-red-500 text-xs">(Critical)</span>}
+          {isCritical && <span className="ml-1 text-red-500 text-xs">(Critical)</span>}
         </p>
-        {criterion.type === 'score' && result?.score != null && (
+        {criterion.type === 'score' && result?.score != null && isCritical && (
           <p className="text-xs text-theme-text-muted mt-0.5">
             {result.score}/{criterion.max_score ?? 100} pts
             {criterion.passing_score != null && ` (pass: ${criterion.passing_score}+)`}
+          </p>
+        )}
+        {criterion.type === 'score' && result?.score != null && !isCritical && (
+          <p className="text-xs text-theme-text-muted mt-0.5">
+            {result.score}/{criterion.max_score ?? 100} pts
           </p>
         )}
         {criterion.type === 'time_limit' && result?.time_seconds != null && (
