@@ -115,7 +115,7 @@ export const UsageStatsTab: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={refetch}
+          onClick={() => { void refetch(); }}
           className="px-4 py-2 text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
         >
           <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

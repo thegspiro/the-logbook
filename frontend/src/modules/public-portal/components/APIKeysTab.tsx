@@ -70,7 +70,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="space-y-4">
             {/* Name */}
             <div>
@@ -171,7 +171,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(apiKey);
+    void navigator.clipboard.writeText(apiKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -480,7 +480,7 @@ export const APIKeysTab: React.FC = () => {
       <RevokeConfirmModal
         isOpen={!!revokeTarget}
         keyName={revokeTarget?.name || ''}
-        onConfirm={handleRevokeKey}
+        onConfirm={() => { void handleRevokeKey(); }}
         onCancel={() => setRevokeTarget(null)}
       />
     </div>

@@ -94,11 +94,11 @@ export const ApparatusFormPage: React.FC = () => {
       return;
     }
 
-    fetchTypes();
-    fetchStatuses();
+    void fetchTypes();
+    void fetchStatuses();
 
     if (isEditing && id) {
-      fetchApparatus(id);
+      void fetchApparatus(id);
     }
   }, [navigate, isEditing, id, fetchApparatus, fetchTypes, fetchStatuses]);
 
@@ -286,7 +286,7 @@ export const ApparatusFormPage: React.FC = () => {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-8">
           {/* Basic Information */}
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
             <h2 className="text-theme-text-primary font-bold mb-6">Basic Information</h2>

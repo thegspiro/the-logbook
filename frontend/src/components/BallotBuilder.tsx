@@ -52,7 +52,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   });
 
   useEffect(() => {
-    loadTemplates();
+    void loadTemplates();
   }, []);
 
   const loadTemplates = async () => {
@@ -280,7 +280,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleApplyTemplate}
+                onClick={() => { void handleApplyTemplate(); }}
                 disabled={saving || !templateNameInput.trim()}
                 className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
               >
@@ -390,7 +390,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleAddCustom}
+                onClick={() => { void handleAddCustom(); }}
                 disabled={saving || !customForm.title?.trim()}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
@@ -451,7 +451,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                   <div className="flex items-center gap-1 ml-4">
                     <button
                       type="button"
-                      onClick={() => handleMoveItem(index, 'up')}
+                      onClick={() => { void handleMoveItem(index, 'up'); }}
                       disabled={index === 0 || saving}
                       className="min-w-[44px] min-h-[44px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
                       aria-label="Move up"
@@ -460,7 +460,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleMoveItem(index, 'down')}
+                      onClick={() => { void handleMoveItem(index, 'down'); }}
                       disabled={index === ballotItems.length - 1 || saving}
                       className="min-w-[44px] min-h-[44px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
                       aria-label="Move down"
@@ -469,7 +469,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleRemoveItem(item.id)}
+                      onClick={() => { void handleRemoveItem(item.id); }}
                       disabled={saving}
                       className="min-w-[44px] min-h-[44px] flex items-center justify-center text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
                       aria-label="Remove item"

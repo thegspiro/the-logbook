@@ -24,11 +24,11 @@ const EventCheckInMonitoringPage: React.FC = () => {
   useEffect(() => {
     if (!eventId) return;
 
-    fetchStats();
+    void fetchStats();
 
     // Auto-refresh every 10 seconds
     const interval = setInterval(() => {
-      fetchStats();
+      void fetchStats();
     }, 10000);
 
     return () => clearInterval(interval);

@@ -61,7 +61,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchCheckouts();
+    void fetchCheckouts();
   }, [fetchCheckouts]);
 
   const handleCheckIn = async () => {
@@ -148,7 +148,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={fetchCheckouts}
+            onClick={() => { void fetchCheckouts(); }}
             className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg border border-theme-surface-border transition-colors flex-shrink-0"
           >
             <RefreshCw className="w-4 h-4" aria-hidden="true" />
@@ -373,7 +373,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={handleCheckIn}
+                    onClick={() => { void handleCheckIn(); }}
                     disabled={submitting}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 inline-flex items-center space-x-2"
                   >
@@ -426,7 +426,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={handleExtend}
+                    onClick={() => { void handleExtend(); }}
                     disabled={submitting || !extendDate}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >

@@ -41,8 +41,8 @@ const AnalyticsDashboardPage: React.FC = () => {
       }
     };
 
-    loadMetrics();
-    const interval = setInterval(loadMetrics, 10000); // Refresh every 10 seconds
+    void loadMetrics();
+    const interval = setInterval(() => { void loadMetrics(); }, 10000); // Refresh every 10 seconds
 
     return () => {
       cancelled = true;
@@ -96,7 +96,7 @@ const AnalyticsDashboardPage: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={exportData}
+          onClick={() => { void exportData(); }}
           className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-400 bg-theme-surface hover:bg-theme-surface-hover"
         >
           Export Data

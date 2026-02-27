@@ -94,7 +94,7 @@ const TrainingOfficerDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    fetchDashboardData();
+    void fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
@@ -258,7 +258,7 @@ const TrainingOfficerDashboard: React.FC = () => {
           <div className="flex items-center space-x-3">
             {/* Refresh Button */}
             <button
-              onClick={fetchDashboardData}
+              onClick={() => { void fetchDashboardData(); }}
               className="p-2 bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               title="Refresh Data"
             >

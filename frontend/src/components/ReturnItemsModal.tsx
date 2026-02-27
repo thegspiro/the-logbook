@@ -151,7 +151,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      loadInventory();
+      void loadInventory();
       setSelections({});
       setResults(null);
     }
@@ -465,7 +465,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                                   onChange={(e) =>
                                     updateQuantity(
                                       item.recordId,
-                                      Math.min(item.quantityIssued!, Math.max(1, parseInt(e.target.value) || 1)),
+                                      Math.min(item.quantityIssued ?? 1, Math.max(1, parseInt(e.target.value) || 1)),
                                     )
                                   }
                                   className="w-16 px-2 py-1 border border-theme-border rounded text-xs text-center bg-theme-surface text-theme-text-primary"
@@ -492,7 +492,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                       Cancel
                     </button>
                     <button
-                      onClick={handleSubmit}
+                      onClick={() => { void handleSubmit(); }}
                       disabled={submitting}
                       className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm"
                     >

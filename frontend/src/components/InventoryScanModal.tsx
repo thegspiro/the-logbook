@@ -120,7 +120,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       });
       streamRef.current = stream;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       detectorRef.current = new (window as any).BarcodeDetector({
         formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'],
       });
@@ -149,21 +149,23 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     });
 
     const alreadyScanned = new Set<string>();
-    scanIntervalRef.current = setInterval(async () => {
+    scanIntervalRef.current = setInterval(() => {
       if (!videoRef.current || !detectorRef.current) return;
-      try {
-        const barcodes = await detectorRef.current.detect(videoRef.current);
-        for (const barcode of barcodes) {
-          const value = barcode.rawValue;
-          if (value && !alreadyScanned.has(value)) {
-            alreadyScanned.add(value);
-            setTimeout(() => alreadyScanned.delete(value), 3000);
-            handleCodeScannedRef.current(value);
+      void (async () => {
+        try {
+          const barcodes = await detectorRef.current?.detect(videoRef.current as HTMLVideoElement) ?? [];
+          for (const barcode of barcodes) {
+            const value = barcode.rawValue;
+            if (value && !alreadyScanned.has(value)) {
+              alreadyScanned.add(value);
+              setTimeout(() => alreadyScanned.delete(value), 3000);
+              handleCodeScannedRef.current(value);
+            }
           }
+        } catch {
+          // Detection can fail on individual frames; ignore
         }
-      } catch {
-        // Detection can fail on individual frames; ignore
-      }
+      })();
     }, 300);
 
     return () => {
@@ -212,18 +214,20 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     }
 
     setSearchLoading(true);
-    searchTimerRef.current = setTimeout(async () => {
-      try {
-        const response: ScanLookupResponse = await inventoryService.lookupByCode(trimmed);
-        setSearchResults(response.results);
-        setShowDropdown(response.results.length > 0);
-        setActiveDropdownIndex(-1);
-      } catch {
-        setSearchResults([]);
-        setShowDropdown(false);
-      } finally {
-        setSearchLoading(false);
-      }
+    searchTimerRef.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const response: ScanLookupResponse = await inventoryService.lookupByCode(trimmed);
+          setSearchResults(response.results);
+          setShowDropdown(response.results.length > 0);
+          setActiveDropdownIndex(-1);
+        } catch {
+          setSearchResults([]);
+          setShowDropdown(false);
+        } finally {
+          setSearchLoading(false);
+        }
+      })();
     }, 300);
 
     return () => {
@@ -321,7 +325,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   };
 
   // Keep the ref up to date so startCamera's interval sees current state
-  handleCodeScannedRef.current = handleCodeScanned;
+  handleCodeScannedRef.current = (code: string) => { void handleCodeScanned(code); };
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -332,12 +336,13 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     }
     // If dropdown is showing with results, add the first one
     if (showDropdown && searchResults.length > 0) {
-      addItemFromResult(searchResults[0]!);
+      const firstResult = searchResults[0];
+      if (firstResult) addItemFromResult(firstResult);
       return;
     }
     // Fallback: search by what was typed
     if (manualCode.trim()) {
-      handleCodeScanned(manualCode);
+      void handleCodeScanned(manualCode);
       setManualCode('');
       inputRef.current?.focus();
     }
@@ -775,7 +780,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 <button onClick={() => setShowConfirm(false)} className="px-3 py-1.5 border border-theme-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-secondary text-sm">
                   Cancel
                 </button>
-                <button onClick={handleSubmit} className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+                <button onClick={() => { void handleSubmit(); }} className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
                   Confirm
                 </button>
               </div>

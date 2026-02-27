@@ -56,7 +56,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
     }
   }, [filterFacilityId]);
 
-  useEffect(() => { loadRecords(); }, [loadRecords]);
+  useEffect(() => { void loadRecords(); }, [loadRecords]);
 
   const filtered = records.filter(r => {
     if (statusFilter === 'completed' && !r.is_completed) return false;
@@ -121,7 +121,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
         toast.success('Record created');
       }
       setShowModal(false);
-      loadRecords();
+      void loadRecords();
     } catch {
       toast.error('Failed to save record');
     } finally {
@@ -136,7 +136,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
         completed_date: getTodayLocalDate(tz),
       });
       toast.success('Marked as completed');
-      loadRecords();
+      void loadRecords();
     } catch {
       toast.error('Failed to update record');
     }
@@ -147,7 +147,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
     try {
       await facilitiesService.deleteMaintenanceRecord(record.id);
       toast.success('Record deleted');
-      loadRecords();
+      void loadRecords();
     } catch {
       toast.error('Failed to delete record');
     }
@@ -238,7 +238,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
               {/* Actions */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {!record.is_completed && (
-                  <button onClick={() => handleComplete(record)} title="Mark completed" aria-label="Mark completed"
+                  <button onClick={() => { void handleComplete(record); }} title="Mark completed" aria-label="Mark completed"
                     className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors"
                   >
                     <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
@@ -249,7 +249,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
                 >
                   <Wrench className="w-4 h-4" aria-hidden="true" />
                 </button>
-                <button onClick={() => handleDelete(record)} title="Delete" aria-label="Delete record"
+                <button onClick={() => { void handleDelete(record); }} title="Delete" aria-label="Delete record"
                   className="p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
@@ -309,7 +309,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
             </div>
             <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm">Cancel</button>
-              <button onClick={handleSave} disabled={isSaving}
+              <button onClick={() => { void handleSave(); }} disabled={isSaving}
                 className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}

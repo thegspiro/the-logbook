@@ -20,8 +20,8 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchResults();
-  }, [electionId]);
+    void fetchResults();
+  }, [electionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchResults = async () => {
     try {

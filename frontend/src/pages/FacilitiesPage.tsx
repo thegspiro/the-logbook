@@ -63,7 +63,7 @@ export default function FacilitiesPage() {
   }, [showArchived]);
 
   useEffect(() => {
-    loadFacilities();
+    void loadFacilities();
   }, [loadFacilities]);
 
   // When a facility is updated, reload and re-select the updated version
@@ -97,7 +97,7 @@ export default function FacilitiesPage() {
       toast.success('Facility created');
       setShowCreateModal(false);
       setNewFacility({ name: '', facility_number: '', address_line1: '', city: '', state: '', zip_code: '', facility_type_id: '', notes: '' });
-      loadFacilities();
+      void loadFacilities();
     } catch {
       toast.error('Failed to create facility');
     } finally {
@@ -109,7 +109,7 @@ export default function FacilitiesPage() {
     try {
       await facilitiesService.archiveFacility(facility.id);
       toast.success(`${facility.name} archived`);
-      loadFacilities();
+      void loadFacilities();
       if (selectedFacility?.id === facility.id) setSelectedFacility(null);
     } catch {
       toast.error('Failed to archive facility');
@@ -120,7 +120,7 @@ export default function FacilitiesPage() {
     try {
       await facilitiesService.restoreFacility(facility.id);
       toast.success(`${facility.name} restored`);
-      loadFacilities();
+      void loadFacilities();
     } catch {
       toast.error('Failed to restore facility');
     }
@@ -300,9 +300,9 @@ export default function FacilitiesPage() {
               facilityTypes={facilityTypes}
               facilityStatuses={facilityStatuses}
               onClose={() => setSelectedFacility(null)}
-              onArchive={handleArchive}
-              onRestore={handleRestore}
-              onUpdated={handleFacilityUpdated}
+              onArchive={(f) => { void handleArchive(f); }}
+              onRestore={(f) => { void handleRestore(f); }}
+              onUpdated={() => { void handleFacilityUpdated(); }}
               onViewMaintenance={handleViewMaintenance}
               onViewInspections={handleViewInspections}
             />
@@ -423,7 +423,7 @@ export default function FacilitiesPage() {
                 Cancel
               </button>
               <button
-                onClick={handleCreate}
+                onClick={() => { void handleCreate(); }}
                 disabled={isCreating || !newFacility.name.trim()}
                 className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >

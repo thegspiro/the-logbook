@@ -59,7 +59,7 @@ export const PipelineSettingsPage: React.FC = () => {
   const [isSavingInactivity, setIsSavingInactivity] = useState(false);
 
   useEffect(() => {
-    fetchPipelines();
+    void fetchPipelines();
   }, [fetchPipelines]);
 
   useEffect(() => {
@@ -191,7 +191,7 @@ export const PipelineSettingsPage: React.FC = () => {
   };
 
   const selectPipeline = (item: PipelineListItem) => {
-    fetchPipeline(item.id);
+    void fetchPipeline(item.id);
   };
 
   return (
@@ -342,7 +342,7 @@ export const PipelineSettingsPage: React.FC = () => {
                         Cancel
                       </button>
                       <button
-                        onClick={handleUpdatePipelineName}
+                        onClick={() => { void handleUpdatePipelineName(); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
                       >
                         <Save className="w-3.5 h-3.5" aria-hidden="true" />
@@ -382,7 +382,7 @@ export const PipelineSettingsPage: React.FC = () => {
                         <Edit2 className="w-4 h-4" aria-hidden="true" />
                       </button>
                       <button
-                        onClick={handleToggleActive}
+                        onClick={() => { void handleToggleActive(); }}
                         className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                         aria-label={currentPipeline.is_active ? 'Deactivate pipeline' : 'Activate pipeline'}
                       >
@@ -393,7 +393,7 @@ export const PipelineSettingsPage: React.FC = () => {
                         )}
                       </button>
                       <button
-                        onClick={handleDeletePipeline}
+                        onClick={() => { void handleDeletePipeline(); }}
                         className="p-2 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
                         aria-label="Delete pipeline"
                       >
@@ -606,7 +606,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   {/* Save Button */}
                   <div className="flex items-center justify-end pt-2">
                     <button
-                      onClick={handleSaveInactivitySettings}
+                      onClick={() => { void handleSaveInactivitySettings(); }}
                       disabled={isSavingInactivity}
                       className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
                     >
@@ -637,7 +637,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   <input
                     type="checkbox"
                     checked={currentPipeline.public_status_enabled}
-                    onChange={handleTogglePublicStatus}
+                    onChange={() => { void handleTogglePublicStatus(); }}
                     className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                   />
                   Allow prospects to check their application status via a public link
@@ -706,7 +706,7 @@ export const PipelineSettingsPage: React.FC = () => {
                 Cancel
               </button>
               <button
-                onClick={handleCreatePipeline}
+                onClick={() => { void handleCreatePipeline(); }}
                 disabled={isCreating}
                 className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >

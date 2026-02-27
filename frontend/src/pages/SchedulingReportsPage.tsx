@@ -308,19 +308,19 @@ export const SchedulingReportsPage: React.FC = () => {
   const handleSearch = () => {
     switch (activeTab) {
       case 'member-hours':
-        loadMemberHours();
+        void loadMemberHours();
         break;
       case 'coverage':
-        loadCoverage();
+        void loadCoverage();
         break;
       case 'call-volume':
-        loadCallVolume();
+        void loadCallVolume();
         break;
       case 'availability':
-        loadAvailability();
+        void loadAvailability();
         break;
       case 'compliance':
-        loadCompliance();
+        void loadCompliance();
         break;
     }
   };

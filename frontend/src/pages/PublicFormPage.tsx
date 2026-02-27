@@ -26,7 +26,7 @@ const PublicFormPage = () => {
 
   useEffect(() => {
     if (slug) {
-      loadForm();
+      void loadForm();
     }
   }, [slug]);
 
@@ -351,7 +351,7 @@ const PublicFormPage = () => {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-theme-surface rounded-xl shadow-lg p-8">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="bg-theme-surface rounded-xl shadow-lg p-8">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-700 text-sm">{error}</p>

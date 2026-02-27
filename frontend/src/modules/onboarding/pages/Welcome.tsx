@@ -22,8 +22,8 @@ const Welcome: React.FC = () => {
       try {
         const response = await fetch('/api/v1/auth/branding');
         if (response.ok) {
-          const data = await response.json();
-          if (data.name) {
+          const data: unknown = await response.json();
+          if (data && typeof data === 'object' && 'name' in data && data.name) {
             // Organization exists → onboarding is done → go to login
             navigate('/login', { replace: true });
             return;
@@ -35,7 +35,7 @@ const Welcome: React.FC = () => {
       setChecking(false);
     };
 
-    checkOnboardingStatus();
+    void checkOnboardingStatus();
   }, [navigate]);
 
   useEffect(() => {

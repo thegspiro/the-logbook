@@ -767,7 +767,7 @@ const CreateTrainingSessionPage: React.FC = () => {
               </button>
             ) : (
               <button
-                onClick={handleSubmit}
+                onClick={() => { void handleSubmit(); }}
                 disabled={saving}
                 className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
               >

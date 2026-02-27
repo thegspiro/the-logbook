@@ -129,7 +129,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
                   <input
                     type="checkbox"
                     checked={field.is_enabled}
-                    onChange={(e) => onToggle(field.id, e.target.checked)}
+                    onChange={(e) => { void onToggle(field.id, e.target.checked); }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-theme-surface-border peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-theme-surface-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -160,12 +160,18 @@ export const DataWhitelistTab: React.FC = () => {
       if (!grouped[field.category]) {
         grouped[field.category] = [];
       }
-      grouped[field.category]!.push(field);
+      const categoryGroup = grouped[field.category];
+      if (categoryGroup) {
+        categoryGroup.push(field);
+      }
     });
 
     // Sort fields within each category by field name
     Object.keys(grouped).forEach(category => {
-      grouped[category]!.sort((a, b) => a.field_name.localeCompare(b.field_name));
+      const categoryGroup = grouped[category];
+      if (categoryGroup) {
+        categoryGroup.sort((a, b) => a.field_name.localeCompare(b.field_name));
+      }
     });
 
     return grouped;

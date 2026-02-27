@@ -35,7 +35,7 @@ const ComplianceMatrixTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadMatrix();
+    void loadMatrix();
   }, []);
 
   const loadMatrix = async () => {

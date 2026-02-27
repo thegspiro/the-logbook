@@ -205,7 +205,7 @@ const ShiftReportPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   const loadData = async () => {
@@ -318,7 +318,7 @@ const ShiftReportPage: React.FC = () => {
       setSkills([]);
       setTasks([]);
       setEnrollmentId('');
-      loadData();
+      void loadData();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
@@ -333,7 +333,7 @@ const ShiftReportPage: React.FC = () => {
     try {
       await shiftCompletionService.acknowledgeReport(reportId);
       toast.success('Report acknowledged');
-      loadData();
+      void loadData();
     } catch {
       toast.error('Failed to acknowledge report');
     }
@@ -419,7 +419,7 @@ const ShiftReportPage: React.FC = () => {
 
         {/* New Report Form */}
         {activeTab === 'new' && (
-          <form onSubmit={handleSubmit} className="bg-theme-surface rounded-lg border border-theme-surface-border p-6 space-y-5">
+          <form onSubmit={(e) => { void handleSubmit(e); }} className="bg-theme-surface rounded-lg border border-theme-surface-border p-6 space-y-5">
             <h2 className="text-lg font-semibold text-theme-text-primary">File Shift Completion Report</h2>
 
             {/* Trainee + Date */}
@@ -707,7 +707,7 @@ const ShiftReportPage: React.FC = () => {
                   {!r.trainee_acknowledged && (
                     <div className="mt-1 flex justify-end">
                       <button
-                        onClick={() => handleAcknowledge(r.id)}
+                        onClick={() => { void handleAcknowledge(r.id); }}
                         className="text-xs px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
                       >
                         Acknowledge

@@ -34,8 +34,8 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
   const [checking, setChecking] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
-  }, [electionId]);
+    void loadData();
+  }, [electionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     try {
@@ -146,7 +146,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                 {!isClosed && (
                   <button
                     type="button"
-                    onClick={() => handleRemove(attendee.user_id, attendee.name)}
+                    onClick={() => { void handleRemove(attendee.user_id, attendee.name); }}
                     className="ml-1 p-1 min-w-[28px] min-h-[28px] flex items-center justify-center text-green-700 dark:text-green-500 hover:text-red-700 dark:hover:text-red-400 text-xs rounded focus:outline-none focus:ring-2 focus:ring-red-500"
                     title="Remove from attendance"
                     aria-label={`Remove ${attendee.name} from attendance`}
@@ -213,7 +213,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleCheckIn(member.id)}
+                    onClick={() => { void handleCheckIn(member.id); }}
                     disabled={checking === member.id}
                     className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                   >

@@ -66,7 +66,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Enter') void handleSave();
     if (e.key === 'Escape') handleCancel();
   };
 
@@ -79,7 +79,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          onBlur={handleSave}
+          onBlur={() => { void handleSave(); }}
           disabled={saving}
           className={`px-2 py-1 text-sm bg-theme-input-bg border border-red-500 rounded text-theme-text-primary focus:outline-none ${inputClassName}`}
         />
@@ -89,7 +89,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
           <>
             <button
               onMouseDown={(e) => e.preventDefault()}
-              onClick={handleSave}
+              onClick={() => { void handleSave(); }}
               className="p-0.5 text-green-600 hover:text-green-700"
               aria-label="Save"
             >

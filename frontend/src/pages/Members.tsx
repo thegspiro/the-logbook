@@ -63,8 +63,8 @@ const Members: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
 
   useEffect(() => {
-    loadMembers();
-    checkContactInfoSettings();
+    void loadMembers();
+    void checkContactInfoSettings();
   }, []);
 
   const loadMembers = async () => {
@@ -215,7 +215,7 @@ const Members: React.FC = () => {
     a.download = `members-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [filteredMembers, tz]);
+  }, [filteredMembers, selectedIds, tz]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -272,7 +272,7 @@ const Members: React.FC = () => {
             <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" />
             <p className="text-red-700 dark:text-red-300 text-sm flex-1">{error}</p>
             <button
-              onClick={loadMembers}
+              onClick={() => { void loadMembers(); }}
               className="flex items-center gap-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm"
             >
               <RefreshCw className="w-4 h-4" />

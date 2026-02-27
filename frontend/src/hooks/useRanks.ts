@@ -34,7 +34,7 @@ export function useRanks(activeOnly = true) {
       setLoading(false);
       return;
     }
-    fetchRanks();
+    void fetchRanks();
   }, [fetchRanks]);
 
   const refetch = useCallback(async () => {

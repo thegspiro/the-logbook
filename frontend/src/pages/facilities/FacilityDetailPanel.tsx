@@ -107,7 +107,7 @@ export default function FacilityDetailPanel({
   }, [facility.id]);
 
   useEffect(() => {
-    if (showRooms) loadRooms();
+    if (showRooms) void loadRooms();
   }, [showRooms, loadRooms]);
 
   const handleAddRoom = async () => {
@@ -126,7 +126,7 @@ export default function FacilityDetailPanel({
       toast.success('Room added');
       setNewRoom({ name: '', room_number: '', floor: '', room_type: 'OTHER', capacity: '', square_footage: '', description: '' });
       setShowAddRoom(false);
-      loadRooms();
+      void loadRooms();
     } catch {
       toast.error('Failed to add room');
     }
@@ -137,7 +137,7 @@ export default function FacilityDetailPanel({
     try {
       await facilitiesService.deleteRoom(room.id);
       toast.success('Room deleted');
-      loadRooms();
+      void loadRooms();
     } catch {
       toast.error('Failed to delete room');
     }
@@ -285,7 +285,7 @@ export default function FacilityDetailPanel({
           <div><label className={labelCls}>Description</label><textarea value={editData.description as string} onChange={e => setEditData(p => ({...p, description: e.target.value}))} rows={2} className={inputCls + ' resize-none'} /></div>
           <div><label className={labelCls}>Notes</label><textarea value={editData.notes as string} onChange={e => setEditData(p => ({...p, notes: e.target.value}))} rows={2} className={inputCls + ' resize-none'} /></div>
           <div className="flex items-center gap-3 pt-2">
-            <button onClick={handleSave} disabled={isSaving}
+            <button onClick={() => { void handleSave(); }} disabled={isSaving}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Changes
@@ -341,7 +341,7 @@ export default function FacilityDetailPanel({
                 <input type="number" value={newRoom.square_footage} onChange={e => setNewRoom(p => ({...p, square_footage: e.target.value}))} placeholder="Sq ft" className={inputCls} />
               </div>
               <div className="flex gap-2">
-                <button onClick={handleAddRoom} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs transition-colors">Add</button>
+                <button onClick={() => { void handleAddRoom(); }} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs transition-colors">Add</button>
                 <button onClick={() => setShowAddRoom(false)} className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors">Cancel</button>
               </div>
             </div>
@@ -365,7 +365,7 @@ export default function FacilityDetailPanel({
                       </p>
                     </div>
                   </div>
-                  <button onClick={() => handleDeleteRoom(room)} className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-500 transition-all">
+                  <button onClick={() => { void handleDeleteRoom(room); }} className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-500 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>

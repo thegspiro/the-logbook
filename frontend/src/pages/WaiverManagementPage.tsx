@@ -49,7 +49,7 @@ function getStatusBadge(waiver: { start_date: string; end_date: string | null; a
   if (!waiver.active) {
     return { label: 'Inactive', color: 'bg-gray-500/20 text-gray-400' };
   }
-  const today = new Date().toISOString().split('T')[0]!;
+  const today = new Date().toISOString().split('T')[0] ?? '';
   if (waiver.start_date > today) {
     return { label: 'Future', color: 'bg-blue-500/20 text-blue-400' };
   }
@@ -122,7 +122,7 @@ export const WaiverManagementPage: React.FC = () => {
   ];
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, []);
 
   useEffect(() => {
@@ -215,7 +215,7 @@ export const WaiverManagementPage: React.FC = () => {
 
   // Active waivers (current period)
   const activeWaivers = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]!;
+    const today = new Date().toISOString().split('T')[0] ?? '';
     return unifiedWaivers.filter(
       (w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today)
     );
@@ -224,7 +224,7 @@ export const WaiverManagementPage: React.FC = () => {
   // Filtered history
   const filteredHistory = useMemo(() => {
     let result = unifiedWaivers;
-    const today = new Date().toISOString().split('T')[0]!;
+    const today = new Date().toISOString().split('T')[0] ?? '';
 
     if (historyFilter === 'active') {
       result = result.filter((w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today));
@@ -293,7 +293,7 @@ export const WaiverManagementPage: React.FC = () => {
         is_permanent: false,
         exempt_from_training_waiver: false,
       });
-      fetchData();
+      void fetchData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create waiver';
       setCreateError(msg);
@@ -311,7 +311,7 @@ export const WaiverManagementPage: React.FC = () => {
       } else {
         await memberStatusService.deleteTrainingWaiver(waiver.id);
       }
-      fetchData();
+      void fetchData();
     } catch {
       alert('Failed to deactivate waiver');
     }
@@ -430,7 +430,7 @@ export const WaiverManagementPage: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
-                            onClick={() => handleDeactivate(waiver)}
+                            onClick={() => { void handleDeactivate(waiver); }}
                             className="text-xs text-red-400 hover:text-red-300"
                           >
                             Deactivate
@@ -462,7 +462,7 @@ export const WaiverManagementPage: React.FC = () => {
                 </div>
               )}
 
-              <form onSubmit={handleCreateWaiver} className="space-y-4">
+              <form onSubmit={(e) => { void handleCreateWaiver(e); }} className="space-y-4">
                 {/* Member Selection */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Member</label>
@@ -680,7 +680,7 @@ export const WaiverManagementPage: React.FC = () => {
                           <td className="px-4 py-3 text-right">
                             {waiver.active && (
                               <button
-                                onClick={() => handleDeactivate(waiver)}
+                                onClick={() => { void handleDeactivate(waiver); }}
                                 className="text-xs text-red-400 hover:text-red-300"
                               >
                                 Deactivate

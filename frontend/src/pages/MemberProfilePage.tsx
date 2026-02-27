@@ -105,72 +105,10 @@ export const MemberProfilePage: React.FC = () => {
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
 
-  useEffect(() => {
-    if (userId) {
-      fetchUserData();
-      fetchModuleStatus();
-      fetchLeaves();
-      if (trainingEnabled) {
-        fetchTrainingRecords();
-        fetchComplianceSummary();
-      }
-    }
-  }, [userId, trainingEnabled]);
-
-  const fetchModuleStatus = async () => {
-    try {
-      const response = await organizationService.getEnabledModules();
-      const inventoryEnabled = (response?.enabled_modules ?? []).includes('inventory');
-      setInventoryModuleEnabled(inventoryEnabled);
-
-      // Fetch inventory if module is enabled
-      if (inventoryEnabled && userId) {
-        fetchInventoryItems();
-      }
-    } catch (_err) {
-      // If we can't fetch module status, default to not showing inventory
-      setInventoryModuleEnabled(false);
-    }
-  };
-
-  const fetchUserData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const userData = await userService.getUserWithRoles(userId!);
-      setUser(userData);
-    } catch (_err) {
-      setError('Unable to load member information. The member may not exist or you may not have access.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchTrainingRecords = async () => {
-    try {
-      setTrainingsLoading(true);
-      const records = await trainingService.getRecords({ user_id: userId! });
-      setTrainings(records);
-    } catch (_err) {
-      // Don't set error - show empty state
-    } finally {
-      setTrainingsLoading(false);
-    }
-  };
-
-  const fetchComplianceSummary = async () => {
-    try {
-      const summary = await trainingService.getComplianceSummary(userId!);
-      setComplianceSummary(summary);
-    } catch (_err) {
-      // Don't set error - compliance summary is optional
-    }
-  };
-
-  const fetchInventoryItems = async () => {
+  const fetchInventoryItems = React.useCallback(async (uid: string) => {
     try {
       setInventoryLoading(true);
-      const response = await inventoryService.getUserInventory(userId!);
+      const response = await inventoryService.getUserInventory(uid);
       // Transform the inventory response to match our InventoryItem interface
       const items: InventoryItem[] = (response?.permanent_assignments ?? []).map((item) => ({
         id: item.assignment_id,
@@ -186,16 +124,78 @@ export const MemberProfilePage: React.FC = () => {
     } finally {
       setInventoryLoading(false);
     }
-  };
+  }, []);
 
-  const fetchLeaves = async () => {
+  const fetchModuleStatus = React.useCallback(async (uid: string) => {
     try {
-      const data = await memberStatusService.getMemberLeaves(userId!);
+      const response = await organizationService.getEnabledModules();
+      const inventoryEnabled = (response?.enabled_modules ?? []).includes('inventory');
+      setInventoryModuleEnabled(inventoryEnabled);
+
+      // Fetch inventory if module is enabled
+      if (inventoryEnabled) {
+        void fetchInventoryItems(uid);
+      }
+    } catch (_err) {
+      // If we can't fetch module status, default to not showing inventory
+      setInventoryModuleEnabled(false);
+    }
+  }, [fetchInventoryItems]);
+
+  const fetchUserData = React.useCallback(async (uid: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const userData = await userService.getUserWithRoles(uid);
+      setUser(userData);
+    } catch (_err) {
+      setError('Unable to load member information. The member may not exist or you may not have access.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchTrainingRecords = React.useCallback(async (uid: string) => {
+    try {
+      setTrainingsLoading(true);
+      const records = await trainingService.getRecords({ user_id: uid });
+      setTrainings(records);
+    } catch (_err) {
+      // Don't set error - show empty state
+    } finally {
+      setTrainingsLoading(false);
+    }
+  }, []);
+
+  const fetchComplianceSummary = React.useCallback(async (uid: string) => {
+    try {
+      const summary = await trainingService.getComplianceSummary(uid);
+      setComplianceSummary(summary);
+    } catch (_err) {
+      // Don't set error - compliance summary is optional
+    }
+  }, []);
+
+  const fetchLeaves = React.useCallback(async (uid: string) => {
+    try {
+      const data = await memberStatusService.getMemberLeaves(uid);
       setActiveLeaves(data);
     } catch {
       // Don't set error - show empty state
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (userId) {
+      void fetchUserData(userId);
+      void fetchModuleStatus(userId);
+      void fetchLeaves(userId);
+      if (trainingEnabled) {
+        void fetchTrainingRecords(userId);
+        void fetchComplianceSummary(userId);
+      }
+    }
+  }, [userId, trainingEnabled, fetchUserData, fetchModuleStatus, fetchLeaves, fetchTrainingRecords, fetchComplianceSummary]);
 
   const getTrainingStatusColor = (status: string) => {
     switch (status) {
@@ -284,13 +284,24 @@ export const MemberProfilePage: React.FC = () => {
   };
 
   const handleNotificationToggle = (type: keyof NotificationPreferences) => {
-    setEditForm((prev) => ({
-      ...prev,
-      notification_preferences: {
-        ...prev.notification_preferences!,
-        [type]: !prev.notification_preferences![type],
-      },
-    }));
+    setEditForm((prev) => {
+      const currentPrefs = prev.notification_preferences ?? {
+        email: true,
+        sms: false,
+        push: false,
+        email_notifications: true,
+        event_reminders: true,
+        training_reminders: true,
+        announcement_notifications: true,
+      };
+      return {
+        ...prev,
+        notification_preferences: {
+          ...currentPrefs,
+          [type]: !currentPrefs[type],
+        },
+      };
+    });
   };
 
   // Photo upload handlers
@@ -496,7 +507,7 @@ export const MemberProfilePage: React.FC = () => {
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       className="hidden"
-                      onChange={handlePhotoUpload}
+                      onChange={(e) => { void handlePhotoUpload(e); }}
                     />
                     {uploadingPhoto ? (
                       <span className="text-white text-xs">Uploading...</span>
@@ -513,7 +524,7 @@ export const MemberProfilePage: React.FC = () => {
                 )}
                 {canEdit && user.photo_url && (
                   <button
-                    onClick={handlePhotoRemove}
+                    onClick={() => { void handlePhotoRemove(); }}
                     className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
                     aria-label="Remove photo"
                     title="Remove photo"
@@ -881,7 +892,7 @@ export const MemberProfilePage: React.FC = () => {
 
                 <div className="flex gap-2 pt-4">
                   <button
-                    onClick={handleSaveContact}
+                    onClick={() => { void handleSaveContact(); }}
                     disabled={saving}
                     className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -998,7 +1009,7 @@ export const MemberProfilePage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <button onClick={handleSaveAddress} disabled={savingAddress} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50">
+                  <button onClick={() => { void handleSaveAddress(); }} disabled={savingAddress} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50">
                     {savingAddress ? 'Saving...' : 'Save'}
                   </button>
                   <button onClick={() => setEditingAddress(false)} disabled={savingAddress} className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50">
@@ -1098,7 +1109,7 @@ export const MemberProfilePage: React.FC = () => {
                   + Add Contact
                 </button>
                 <div className="flex gap-2">
-                  <button onClick={handleSaveEmergencyContacts} disabled={savingContacts} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50">
+                  <button onClick={() => { void handleSaveEmergencyContacts(); }} disabled={savingContacts} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50">
                     {savingContacts ? 'Saving...' : 'Save'}
                   </button>
                   <button onClick={() => setEditingContacts(false)} disabled={savingContacts} className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50">

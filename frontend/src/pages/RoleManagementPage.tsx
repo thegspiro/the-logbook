@@ -27,7 +27,7 @@ export const RoleManagementPage: React.FC = () => {
   });
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, []);
 
   const fetchData = async () => {
@@ -211,7 +211,7 @@ export const RoleManagementPage: React.FC = () => {
                     </button>
                     {!role.is_system && (
                       <button
-                        onClick={() => handleDelete(role)}
+                        onClick={() => { void handleDelete(role); }}
                         className="text-red-400 hover:text-red-300 text-sm font-medium"
                       >
                         Delete
@@ -360,7 +360,7 @@ export const RoleManagementPage: React.FC = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={handleSubmit}
+                  onClick={() => { void handleSubmit(); }}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
                 >
                   {editingRole ? 'Save Changes' : 'Create Role'}

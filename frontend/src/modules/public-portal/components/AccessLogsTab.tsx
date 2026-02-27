@@ -23,7 +23,7 @@ export const AccessLogsTab: React.FC = () => {
 
   // Refetch when filters change
   useEffect(() => {
-    refetch();
+    void refetch();
   }, [filters, refetch]);
 
   const getStatusColor = (statusCode: number) => {

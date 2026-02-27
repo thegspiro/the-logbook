@@ -69,7 +69,7 @@ const DepartmentSetupPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadChecklist();
+    void loadChecklist();
   }, []);
 
   const loadChecklist = async () => {

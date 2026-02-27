@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -32,11 +32,7 @@ const TrainingProgramsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [importingRegistry, setImportingRegistry] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, [activeTab]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       if (activeTab === 'programs' || activeTab === 'templates') {
@@ -53,14 +49,18 @@ const TrainingProgramsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleImportRegistry = async (registryName: string) => {
     setImportingRegistry(registryName);
     try {
       const result = await trainingProgramService.importRegistry(registryName);
       toast.success(`Successfully imported ${result.imported_count} requirements from ${result.registry_name}`);
-      loadData();
+      void loadData();
     } catch (error: unknown) {
       toast.error(`Failed to import registry: ${getErrorMessage(error)}`);
     } finally {
@@ -246,7 +246,7 @@ const TrainingProgramsPage: React.FC = () => {
                     {['nfpa', 'nremt', 'proboard'].map((registry) => (
                       <button
                         key={registry}
-                        onClick={() => handleImportRegistry(registry)}
+                        onClick={() => { void handleImportRegistry(registry); }}
                         disabled={importingRegistry !== null}
                         className="flex items-center justify-center space-x-2 px-4 py-3 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover disabled:opacity-50"
                       >

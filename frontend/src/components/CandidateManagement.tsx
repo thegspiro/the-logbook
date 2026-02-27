@@ -49,8 +49,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
   const [memberSearch, setMemberSearch] = useState('');
 
   useEffect(() => {
-    fetchData();
-  }, [electionId]);
+    void fetchData();
+  }, [electionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = async () => {
     try {
@@ -364,7 +364,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleAdd}
+                onClick={() => { void handleAdd(); }}
                 disabled={submitting || !formData.name.trim()}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
@@ -423,7 +423,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => handleEdit(candidate.id)}
+                            onClick={() => { void handleEdit(candidate.id); }}
                             disabled={submitting}
                             className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                           >
@@ -465,7 +465,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                           <div className="flex items-center gap-2 ml-4">
                             <button
                               type="button"
-                              onClick={() => handleToggleAccepted(candidate)}
+                              onClick={() => { void handleToggleAccepted(candidate); }}
                               className={`px-2 py-1 text-xs rounded ${
                                 candidate.accepted
                                   ? 'bg-green-500/20 text-green-700 dark:text-green-300 hover:bg-green-500/30'
@@ -483,7 +483,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleDelete(candidate.id, candidate.name)}
+                              onClick={() => { void handleDelete(candidate.id, candidate.name); }}
                               className="px-2 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded hover:bg-red-500/30"
                             >
                               Remove

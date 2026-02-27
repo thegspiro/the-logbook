@@ -45,7 +45,7 @@ const ActionItemsPage: React.FC = () => {
   const [assignedToMe, setAssignedToMe] = useState(false);
 
   useEffect(() => {
-    fetchItems();
+    void fetchItems();
   }, [statusFilter, assignedToMe]);
 
   const fetchItems = async () => {

@@ -428,7 +428,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
                 className={`${inputClass} pl-10`}
                 placeholder={field.placeholder || 'Search members...'}
                 value={memberQuery}
-                onChange={(e) => handleMemberSearch(e.target.value)}
+                onChange={(e) => { void handleMemberSearch(e.target.value); }}
                 disabled={disabled}
                 {...ariaProps}
               />
@@ -463,7 +463,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
       case 'file': {
         let fileInfo: { name: string; size: number; type: string } | null = null;
         if (value) {
-          try { fileInfo = JSON.parse(value); } catch { /* invalid stored value */ }
+          try { fileInfo = JSON.parse(value) as { name: string; size: number; type: string }; } catch { /* invalid stored value */ }
         }
 
         const handleFileSelect = (file: File) => {

@@ -281,7 +281,7 @@ export const StorageAreasPage: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { void loadData(); }, [loadData]);
 
   const openAddModal = (parent?: StorageAreaResponse) => {
     setEditingArea(null);
@@ -334,7 +334,7 @@ export const StorageAreasPage: React.FC = () => {
         toast.success('Storage area created');
       }
       setShowModal(false);
-      loadData();
+      void loadData();
     } catch (err: unknown) {
       setFormError(getErrorMessage(err, 'Failed to save storage area'));
     } finally {
@@ -349,7 +349,7 @@ export const StorageAreasPage: React.FC = () => {
       await inventoryService.deleteStorageArea(deleteTarget.id);
       toast.success('Storage area deleted');
       setDeleteTarget(null);
-      loadData();
+      void loadData();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to delete storage area'));
     } finally {
@@ -418,7 +418,7 @@ export const StorageAreasPage: React.FC = () => {
       {error && (
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3">
           <p className="text-red-700 dark:text-red-300 text-sm flex-1">{error}</p>
-          <button onClick={loadData} className="flex items-center gap-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm">
+          <button onClick={() => { void loadData(); }} className="flex items-center gap-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm">
             <RefreshCw className="w-4 h-4" /> Retry
           </button>
         </div>
@@ -480,7 +480,7 @@ export const StorageAreasPage: React.FC = () => {
 
       {/* Add/Edit Modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingArea ? 'Edit Storage Area' : 'Add Storage Area'}>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="space-y-4">
             {formError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">{formError}</div>
@@ -554,7 +554,7 @@ export const StorageAreasPage: React.FC = () => {
         )}
         <div className="flex justify-end gap-3 mt-4">
           <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-          <button onClick={handleDelete} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+          <button onClick={() => { void handleDelete(); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
             {submitting ? 'Deleting...' : 'Delete'}
           </button>
         </div>

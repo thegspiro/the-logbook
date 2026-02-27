@@ -50,7 +50,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
       setDeleting(false);
       setImpact(null);
       setImpactError(null);
-      fetchImpact(member.id);
+      void fetchImpact(member.id);
     }
   }, [isOpen, member, fetchImpact]);
 
@@ -141,7 +141,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => fetchImpact(member.id)}
+            onClick={() => { void fetchImpact(member.id); }}
             className="mt-2 text-sm text-red-400 underline hover:text-red-300"
           >
             Retry
@@ -199,7 +199,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={handleSoftDelete}
+                  onClick={() => { void handleSoftDelete(); }}
                   disabled={deleting}
                   className="px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-md hover:bg-yellow-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-[var(--ring-offset-bg)]"
                 >
@@ -300,7 +300,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={handleHardDelete}
+                  onClick={() => { void handleHardDelete(); }}
                   disabled={deleting || !isConfirmNameValid}
                   className="px-4 py-2 bg-red-700 text-white text-sm font-medium rounded-md hover:bg-red-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-[var(--ring-offset-bg)]"
                 >

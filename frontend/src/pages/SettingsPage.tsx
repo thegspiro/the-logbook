@@ -227,7 +227,7 @@ export const SettingsPage: React.FC = () => {
         setLoading(false);
       }
     };
-    load();
+    void load();
   }, [fetchRanks]);
 
   // ── Profile handlers ──
@@ -378,7 +378,10 @@ export const SettingsPage: React.FC = () => {
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     if (swapIndex < 0 || swapIndex >= ranks.length) return;
     const newRanks = [...ranks];
-    [newRanks[index], newRanks[swapIndex]] = [newRanks[swapIndex]!, newRanks[index]!];
+    const a = newRanks[index];
+    const b = newRanks[swapIndex];
+    if (a === undefined || b === undefined) return;
+    [newRanks[index], newRanks[swapIndex]] = [b, a];
     const reorderPayload = newRanks.map((r, i) => ({ id: r.id, sort_order: i }));
     setRanks(newRanks);
     try {
@@ -563,7 +566,7 @@ export const SettingsPage: React.FC = () => {
             {/* Save */}
             <div className="flex justify-end pt-2">
               <button
-                onClick={handleSaveProfile}
+                onClick={() => { void handleSaveProfile(); }}
                 disabled={savingProfile || !profileDirty}
                 className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
@@ -622,7 +625,7 @@ export const SettingsPage: React.FC = () => {
                       ) : (
                         <Toggle
                           checked={isEnabled}
-                          onChange={() => handleModuleToggle(mod.key)}
+                          onChange={() => { void handleModuleToggle(mod.key); }}
                           color="red"
                           label={`Toggle ${mod.name}`}
                         />
@@ -680,7 +683,7 @@ export const SettingsPage: React.FC = () => {
 
               <div className="flex justify-end mt-4">
                 <button
-                  onClick={handleSaveContact}
+                  onClick={() => { void handleSaveContact(); }}
                   disabled={savingContact}
                   className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
@@ -753,7 +756,7 @@ export const SettingsPage: React.FC = () => {
 
               <div className="flex justify-end mt-4">
                 <button
-                  onClick={handleSaveMembershipId}
+                  onClick={() => { void handleSaveMembershipId(); }}
                   disabled={savingMembershipId}
                   className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
@@ -836,7 +839,7 @@ export const SettingsPage: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={editingRank ? handleUpdateRank : handleAddRank}
+                    onClick={() => { void (editingRank ? handleUpdateRank : handleAddRank)(); }}
                     disabled={rankSaving || !rankForm.display_name.trim() || !rankForm.rank_code.trim()}
                     className="inline-flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-3 py-1.5 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
@@ -864,10 +867,10 @@ export const SettingsPage: React.FC = () => {
                     className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-theme-surface-secondary/50 transition-colors group"
                   >
                     <div className="flex flex-col flex-shrink-0">
-                      <button type="button" onClick={() => handleMoveRank(idx, 'up')} disabled={idx === 0} className="text-theme-text-muted hover:text-theme-text-primary disabled:opacity-20 disabled:cursor-not-allowed p-0.5" aria-label="Move up">
+                      <button type="button" onClick={() => { void handleMoveRank(idx, 'up'); }} disabled={idx === 0} className="text-theme-text-muted hover:text-theme-text-primary disabled:opacity-20 disabled:cursor-not-allowed p-0.5" aria-label="Move up">
                         <ChevronUp className="w-3.5 h-3.5" />
                       </button>
-                      <button type="button" onClick={() => handleMoveRank(idx, 'down')} disabled={idx === ranks.length - 1} className="text-theme-text-muted hover:text-theme-text-primary disabled:opacity-20 disabled:cursor-not-allowed p-0.5" aria-label="Move down">
+                      <button type="button" onClick={() => { void handleMoveRank(idx, 'down'); }} disabled={idx === ranks.length - 1} className="text-theme-text-muted hover:text-theme-text-primary disabled:opacity-20 disabled:cursor-not-allowed p-0.5" aria-label="Move down">
                         <ChevronDown className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -887,7 +890,7 @@ export const SettingsPage: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDeleteRank(rank.id)}
+                        onClick={() => { void handleDeleteRank(rank.id); }}
                         disabled={deletingRankId === rank.id}
                         className="p-1.5 rounded text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 disabled:opacity-50"
                         aria-label={`Delete ${rank.display_name}`}

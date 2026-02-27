@@ -228,14 +228,14 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
           </span>
           <div className="flex items-center gap-2 ml-auto flex-wrap">
             <button
-              onClick={() => handleBulkAction('advance')}
+              onClick={() => { void handleBulkAction('advance'); }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
             >
               <Forward className="w-3.5 h-3.5" />
               Advance
             </button>
             <button
-              onClick={() => handleBulkAction('hold')}
+              onClick={() => { void handleBulkAction('hold'); }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
             >
               <Pause className="w-3.5 h-3.5" />
@@ -267,7 +267,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
             </button>
             <button
               onClick={() => {
-                handleBulkAction('reject');
+                void handleBulkAction('reject');
                 setShowBulkRejectConfirm(false);
               }}
               className="flex items-center gap-1 px-4 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
@@ -421,7 +421,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                               <>
                                 <button
                                   onClick={() => {
-                                    advanceApplicant(applicant.id);
+                                    void advanceApplicant(applicant.id);
                                     setActionMenuId(null);
                                   }}
                                   className="w-full text-left px-4 py-2 text-sm text-emerald-700 dark:text-emerald-400 hover:bg-theme-surface-secondary"
@@ -430,7 +430,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                 </button>
                                 <button
                                   onClick={() => {
-                                    holdApplicant(applicant.id);
+                                    void holdApplicant(applicant.id);
                                     setActionMenuId(null);
                                   }}
                                   className="w-full text-left px-4 py-2 text-sm text-amber-700 dark:text-amber-400 hover:bg-theme-surface-secondary"
@@ -449,7 +449,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                       </button>
                                       <button
                                         onClick={() => {
-                                          withdrawApplicant(applicant.id);
+                                          void withdrawApplicant(applicant.id);
                                           setWithdrawConfirmId(null);
                                           setActionMenuId(null);
                                         }}
@@ -481,7 +481,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                       </button>
                                       <button
                                         onClick={() => {
-                                          rejectApplicant(applicant.id);
+                                          void rejectApplicant(applicant.id);
                                           setRejectConfirmId(null);
                                           setActionMenuId(null);
                                         }}

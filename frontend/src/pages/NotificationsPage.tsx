@@ -146,7 +146,7 @@ const NotificationsPage: React.FC = () => {
       }
     };
 
-    fetchData();
+    void fetchData();
   }, []);
 
   const toggleRule = async (ruleId: string, currentEnabled: boolean) => {
@@ -403,7 +403,7 @@ const NotificationsPage: React.FC = () => {
                         )}
                         {canManage && (
                           <button
-                            onClick={() => toggleRule(rule.id, rule.enabled)}
+                            onClick={() => { void toggleRule(rule.id, rule.enabled); }}
                             disabled={togglingRuleId === rule.id}
                             className="text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-50"
                           >
@@ -446,7 +446,7 @@ const NotificationsPage: React.FC = () => {
             {logs.some((l) => !l.read) && (
               <div className="flex items-center justify-end mb-4">
                 <button
-                  onClick={handleMarkAllRead}
+                  onClick={() => { void handleMarkAllRead(); }}
                   className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
                 >
                   <CheckCheck className="w-4 h-4" />
@@ -604,7 +604,7 @@ const NotificationsPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={handleCreateRule}
+                    onClick={() => { void handleCreateRule(); }}
                     disabled={creating}
                     className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                   >

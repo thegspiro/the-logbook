@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -193,7 +193,7 @@ const ReviewPanel: React.FC<{
 
       {/* Submit */}
       <button
-        onClick={handleSubmit}
+        onClick={() => { void handleSubmit(); }}
         disabled={submitting || (action !== 'approve' && !notes.trim())}
         className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -366,7 +366,7 @@ const EditRecordPanel: React.FC<{
       </div>
       <div className="flex items-center space-x-2 mt-3">
         <button
-          onClick={handleSave}
+          onClick={() => { void handleSave(); }}
           disabled={saving}
           className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
         >
@@ -506,7 +506,7 @@ const SubmissionCard: React.FC<{
           {/* Edit Record Panel (approved submissions only) */}
           {isApproved && (
             <EditRecordPanel
-              recordId={submission.training_record_id!}
+              recordId={submission.training_record_id ?? ''}
               submission={submission}
               onSaved={onRecordUpdated}
             />
@@ -728,7 +728,7 @@ const ConfigEditor: React.FC<{
       {/* Save */}
       <div className="flex justify-end pt-2">
         <button
-          onClick={handleSave}
+          onClick={() => { void handleSave(); }}
           disabled={saving}
           className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
         >
@@ -753,7 +753,7 @@ const ReviewSubmissionsPage: React.FC = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [configData, countData] = await Promise.all([
@@ -778,18 +778,18 @@ const ReviewSubmissionsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeView, statusFilter]);
 
   useEffect(() => {
-    loadData();
-  }, [activeView, statusFilter]);
+    void loadData();
+  }, [loadData]);
 
   const handleReview = async (submissionId: string, review: SubmissionReviewRequest) => {
     try {
       await trainingSubmissionService.reviewSubmission(submissionId, review);
       const actionLabel = review.action === 'approve' ? 'approved' : review.action === 'reject' ? 'rejected' : 'sent back for revision';
       toast.success(`Submission ${actionLabel}`);
-      loadData();
+      void loadData();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
@@ -939,7 +939,7 @@ const ReviewSubmissionsPage: React.FC = () => {
               </div>
             )}
             {submissions.map((sub) => (
-              <SubmissionCard key={sub.id} submission={sub} onReview={handleReview} onRecordUpdated={loadData} />
+              <SubmissionCard key={sub.id} submission={sub} onReview={handleReview} onRecordUpdated={() => { void loadData(); }} />
             ))}
           </div>
         )}

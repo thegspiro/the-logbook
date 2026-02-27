@@ -180,6 +180,6 @@ if (typeof window !== 'undefined') {
 
   // Check security headers on load (async)
   if (!import.meta.env.DEV) {
-    checkSecurityHeaders();
+    void checkSecurityHeaders();
   }
 }

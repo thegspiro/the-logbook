@@ -29,8 +29,8 @@ const ErrorMonitoringPage: React.FC = () => {
   }, [filter]);
 
   useEffect(() => {
-    loadErrors();
-    const interval = setInterval(loadErrors, 10000);
+    void loadErrors();
+    const interval = setInterval(() => { void loadErrors(); }, 10000);
     return () => clearInterval(interval);
   }, [loadErrors]);
 
@@ -78,9 +78,9 @@ const ErrorMonitoringPage: React.FC = () => {
           </div>
 
           {Object.entries(stats.byType)
-            .sort(([, a]: any, [, b]: any) => b - a)
+            .sort(([, a], [, b]) => b - a)
             .slice(0, 3)
-            .map(([type, count]: [string, any]) => (
+            .map(([type, count]) => (
               <div key={type} className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
                 <div className="text-theme-text-muted text-sm font-medium mb-1 truncate">{type}</div>
                 <div className="text-3xl font-bold text-red-600">{count}</div>
@@ -110,13 +110,13 @@ const ErrorMonitoringPage: React.FC = () => {
 
         <div className="flex gap-2">
           <button
-            onClick={exportErrors}
+            onClick={() => { void exportErrors(); }}
             className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-400 bg-theme-surface hover:bg-theme-surface-hover"
           >
             Export Errors
           </button>
           <button
-            onClick={clearAllErrors}
+            onClick={() => { void clearAllErrors(); }}
             className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-red-400 bg-theme-surface hover:bg-theme-surface-hover"
           >
             Clear All
@@ -203,7 +203,7 @@ const ErrorMonitoringPage: React.FC = () => {
                               Event
                             </Link>
                           )}
-                          {error.context.userId && ` | User: ${error.context.userId.substring(0, 8)}`}
+                          {error.context.userId && ` | User: ${String(error.context.userId).substring(0, 8)}`}
                         </>
                       )}
                     </td>

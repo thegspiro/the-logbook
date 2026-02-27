@@ -58,8 +58,9 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
       grouped[stage.id] = [];
     }
     for (const applicant of applicants) {
-      if (grouped[applicant.current_stage_id]) {
-        grouped[applicant.current_stage_id]!.push(applicant);
+      const stageGroup = grouped[applicant.current_stage_id];
+      if (stageGroup) {
+        stageGroup.push(applicant);
       }
     }
     return grouped;
@@ -114,7 +115,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
     try {
       await advanceApplicant(draggedApplicant.id);
       toast.success(
-        `${draggedApplicant.first_name} advanced to ${sortedStages[targetStageIndex]!.name}`
+        `${draggedApplicant.first_name} advanced to ${sortedStages[targetStageIndex]?.name ?? 'next stage'}`
       );
     } catch {
       toast.error('Failed to advance applicant');
@@ -141,7 +142,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
             key={stage.id}
             onDragOver={(e) => handleDragOver(e, stage.id)}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, stage.id)}
+            onDrop={(e) => { void handleDrop(e, stage.id); }}
             className={`flex-shrink-0 w-72 bg-theme-input-bg rounded-lg border transition-all ${
               isDropTarget
                 ? 'border-red-500 bg-red-500/5'

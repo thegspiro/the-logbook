@@ -242,34 +242,7 @@ const InventoryPage: React.FC = () => {
   const [reviewingWriteOff, setReviewingWriteOff] = useState<WriteOffRequestItem | null>(null);
   const [writeOffReviewNotes, setWriteOffReviewNotes] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  useEffect(() => {
-    if (!loading) {
-      loadItems();
-    }
-  }, [searchQuery, statusFilter, categoryFilter, conditionFilter, itemTypeFilter, sortBy, sortOrder]);
-
-  // Close label format menu on outside click
-  useEffect(() => {
-    if (!showLabelMenu) return;
-    const handler = () => setShowLabelMenu(false);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, [showLabelMenu]);
-
-  // Real-time updates via WebSocket
-  useInventoryWebSocket({
-    onEvent: useCallback(() => {
-      // Refresh item list and summary when another user makes a change
-      loadItems();
-      inventoryService.getSummary().then(setSummary).catch(() => { /* non-critical refresh */ });
-    }, [searchQuery, statusFilter, categoryFilter, conditionFilter, itemTypeFilter, sortBy, sortOrder]),
-  });
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -290,18 +263,18 @@ const InventoryPage: React.FC = () => {
       // Rooms are locations that have a room_number or a building (parent station) set
       setRooms(locationsData.filter(l => l.room_number || l.building));
       // Positions for restriction dropdown (non-critical)
-      roleService.getRoles().then(setPositions).catch(() => { /* non-critical */ });
+      void roleService.getRoles().then(setPositions).catch(() => { /* non-critical */ });
       // Low stock alerts (non-critical)
-      inventoryService.getLowStockItems().then(setLowStockAlerts).catch(() => { /* non-critical */ });
+      void inventoryService.getLowStockItems().then(setLowStockAlerts).catch(() => { /* non-critical */ });
       // Load members for pool issuance and pending requests (non-critical)
       if (canManage) {
-        inventoryService.getMembersSummary().then(data => {
+        void inventoryService.getMembersSummary().then(data => {
           setMembers((data.members || []).map(m => ({ id: m.user_id, name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username || 'Unknown' })));
         }).catch(() => { /* non-critical */ });
-        inventoryService.getEquipmentRequests({ status: 'pending' }).then(data => {
+        void inventoryService.getEquipmentRequests({ status: 'pending' }).then(data => {
           setPendingRequests(data.requests || []);
         }).catch(() => { /* non-critical */ });
-        inventoryService.getWriteOffRequests({ status: 'pending' }).then(data => {
+        void inventoryService.getWriteOffRequests({ status: 'pending' }).then(data => {
           setWriteOffRequests(data || []);
         }).catch(() => { /* non-critical */ });
       }
@@ -310,9 +283,9 @@ const InventoryPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canManage]);
 
-  const loadItems = async () => {
+  const loadItems = useCallback(async () => {
     setFilterLoading(true);
     try {
       const data = await inventoryService.getItems({
@@ -333,7 +306,34 @@ const InventoryPage: React.FC = () => {
     } finally {
       setFilterLoading(false);
     }
-  };
+  }, [searchQuery, statusFilter, categoryFilter, conditionFilter, itemTypeFilter, sortBy, sortOrder]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!loading) {
+      void loadItems();
+    }
+  }, [loadItems, loading]);
+
+  // Close label format menu on outside click
+  useEffect(() => {
+    if (!showLabelMenu) return;
+    const handler = () => setShowLabelMenu(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [showLabelMenu]);
+
+  // Real-time updates via WebSocket
+  useInventoryWebSocket({
+    onEvent: useCallback(() => {
+      // Refresh item list and summary when another user makes a change
+      void loadItems();
+      void inventoryService.getSummary().then(setSummary).catch(() => { /* non-critical refresh */ });
+    }, [loadItems]),
+  });
 
   const loadMaintenanceData = async () => {
     setMaintenanceLoading(true);
@@ -380,8 +380,8 @@ const InventoryPage: React.FC = () => {
       toast.success('Maintenance record created');
       setShowMaintenanceModal(false);
       setMaintenanceForm({ maintenance_type: 'inspection', description: '', notes: '', is_completed: false });
-      loadMaintenanceData();
-      loadData();
+      void loadMaintenanceData();
+      void loadData();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to create maintenance record'));
     } finally {
@@ -426,7 +426,7 @@ const InventoryPage: React.FC = () => {
       await inventoryService.createItem(payload as unknown as InventoryItemCreate);
       setShowAddItem(false);
       setItemForm(defaultItemForm);
-      loadData();
+      void loadData();
       toast.success('Item added successfully');
     } catch (err: unknown) {
       setFormError(getErrorMessage(err, 'Unable to create the item. Please check your input and try again.'));
@@ -444,7 +444,7 @@ const InventoryPage: React.FC = () => {
         requires_serial_number: false, requires_maintenance: false, requires_assignment: false,
         nfpa_tracking_enabled: false,
       });
-      loadData();
+      void loadData();
       toast.success('Category created successfully');
     } catch (err: unknown) {
       setFormError(getErrorMessage(err, 'Unable to create the category. Please check your input and try again.'));
@@ -539,7 +539,7 @@ const InventoryPage: React.FC = () => {
       await inventoryService.updateItem(editingItem.id, payload as Partial<InventoryItemCreate>);
       setShowEditModal(false);
       setEditingItem(null);
-      loadData();
+      void loadData();
       toast.success('Item updated successfully');
     } catch (err: unknown) {
       setFormError(getErrorMessage(err, 'Unable to update the item.'));
@@ -555,7 +555,7 @@ const InventoryPage: React.FC = () => {
       await inventoryService.retireItem(showRetireConfirm.id, retireNotes || undefined);
       setShowRetireConfirm(null);
       setRetireNotes('');
-      loadData();
+      void loadData();
       toast.success('Item retired successfully');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Unable to retire item.'));
@@ -612,7 +612,7 @@ const InventoryPage: React.FC = () => {
       const fmt = labelFormats.find(f => f.id === labelFormat);
       toast.success(`Generated ${fmt?.description || labelFormat} labels for ${selectedItemIds.size} item(s)`);
       // Refresh items so auto-populated barcode values are visible in edit form
-      loadData();
+      void loadData();
     } catch {
       toast.error('Failed to generate barcode labels');
     } finally {
@@ -635,7 +635,7 @@ const InventoryPage: React.FC = () => {
       setShowBulkStatusModal(false);
       setBulkStatus('');
       setSelectedItemIds(new Set());
-      loadData();
+      void loadData();
       toast.success(`Updated status for ${successCount} item(s)`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Bulk update failed'));
@@ -658,7 +658,7 @@ const InventoryPage: React.FC = () => {
       }
       setShowBulkRetireModal(false);
       setSelectedItemIds(new Set());
-      loadData();
+      void loadData();
       toast.success(`Retired ${successCount} item(s)`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Bulk retire failed'));
@@ -690,7 +690,7 @@ const InventoryPage: React.FC = () => {
     try {
       await inventoryService.updateCategory(editingCategory.id, editCategoryForm);
       setEditingCategory(null);
-      loadData();
+      void loadData();
       toast.success('Category updated');
     } catch (err: unknown) {
       setFormError(getErrorMessage(err, 'Unable to update category.'));
@@ -734,7 +734,7 @@ const InventoryPage: React.FC = () => {
       toast.success(`Issued ${poolIssueForm.quantity} ${poolIssueItem.name} successfully`);
       setShowPoolIssueModal(false);
       setPoolIssueItem(null);
-      loadData();
+      void loadData();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to issue item'));
     } finally {
@@ -781,7 +781,7 @@ const InventoryPage: React.FC = () => {
       setShowWriteOffModal(false);
       setWriteOffItem(null);
       // Refresh write-off list
-      inventoryService.getWriteOffRequests({ status: 'pending' }).then(data => {
+      void inventoryService.getWriteOffRequests({ status: 'pending' }).then(data => {
         setWriteOffRequests(data || []);
       }).catch(() => { /* non-critical refresh */ });
     } catch (err: unknown) {
@@ -802,7 +802,7 @@ const InventoryPage: React.FC = () => {
       setWriteOffRequests(prev => prev.filter(w => w.id !== writeOffId));
       setReviewingWriteOff(null);
       setWriteOffReviewNotes('');
-      if (decision === 'approved') loadData();
+      if (decision === 'approved') void loadData();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to review write-off'));
     } finally {
@@ -845,7 +845,7 @@ const InventoryPage: React.FC = () => {
                 <div className="relative">
                   <div className="flex items-center">
                     <button
-                      onClick={handlePrintLabels}
+                      onClick={() => { void handlePrintLabels(); }}
                       disabled={printingLabels}
                       className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-l-lg border border-theme-surface-border transition-colors text-sm disabled:opacity-50"
                     >
@@ -946,7 +946,7 @@ const InventoryPage: React.FC = () => {
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3" role="alert">
             <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" aria-hidden="true" />
             <p className="text-red-700 dark:text-red-300 text-sm flex-1">{error}</p>
-            <button onClick={loadData} className="flex items-center gap-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm" aria-label="Retry loading inventory">
+            <button onClick={() => { void loadData(); }} className="flex items-center gap-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm" aria-label="Retry loading inventory">
               <RefreshCw className="w-4 h-4" aria-hidden="true" /> Retry
             </button>
           </div>
@@ -1039,7 +1039,7 @@ const InventoryPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
-                      onClick={() => handleReviewWriteOff(wo.id, 'approved')}
+                      onClick={() => { void handleReviewWriteOff(wo.id, 'approved'); }}
                       disabled={submitting}
                       className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50"
                       title="Approve write-off"
@@ -1078,7 +1078,7 @@ const InventoryPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setReviewingWriteOff(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={() => handleReviewWriteOff(reviewingWriteOff.id, 'denied')} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleReviewWriteOff(reviewingWriteOff.id, 'denied'); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Denying...' : 'Deny Write-Off'}
                   </button>
                 </div>
@@ -1147,7 +1147,7 @@ const InventoryPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setReviewingRequest(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={() => handleReviewRequest(reviewingRequest.id, 'denied')} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleReviewRequest(reviewingRequest.id, 'denied'); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Denying...' : 'Deny Request'}
                   </button>
                 </div>
@@ -1174,7 +1174,7 @@ const InventoryPage: React.FC = () => {
                     onClick={() => {
                       const reqId = showApproveConfirm.id;
                       setShowApproveConfirm(null);
-                      handleReviewRequest(reqId, 'approved');
+                      void handleReviewRequest(reqId, 'approved');
                     }}
                     disabled={submitting}
                     className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
@@ -1214,7 +1214,7 @@ const InventoryPage: React.FC = () => {
             Categories ({categories.length})
           </button>
           <button
-            onClick={() => { setActiveTab('maintenance'); loadMaintenanceData(); }}
+            onClick={() => { setActiveTab('maintenance'); void loadMaintenanceData(); }}
             role="tab"
             aria-selected={activeTab === 'maintenance'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
@@ -1304,7 +1304,7 @@ const InventoryPage: React.FC = () => {
                 </div>
                 {canManage && (
                   <div className="flex items-center gap-2 ml-auto">
-                    <button onClick={handleExportCsv} className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary bg-theme-input-bg border border-theme-input-border rounded-lg hover:bg-theme-surface-hover transition-colors" title="Export CSV">
+                    <button onClick={() => { void handleExportCsv(); }} className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary bg-theme-input-bg border border-theme-input-border rounded-lg hover:bg-theme-surface-hover transition-colors" title="Export CSV">
                       <Download className="w-4 h-4" aria-hidden="true" />
                       <span className="hidden sm:inline">Export</span>
                     </button>
@@ -1515,7 +1515,7 @@ const InventoryPage: React.FC = () => {
                 {items.length < totalItems && (
                   <div className="flex justify-center py-4">
                     <button
-                      onClick={loadMoreItems}
+                      onClick={() => { void loadMoreItems(); }}
                       disabled={loadingMore}
                       className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors disabled:opacity-50"
                     >
@@ -1615,7 +1615,7 @@ const InventoryPage: React.FC = () => {
               <div className="space-y-4">
                 {/* Overdue / Due Soon / In Maintenance sections */}
                 {(() => {
-                  const today = new Date().toISOString().split('T')[0]!;
+                  const today = new Date().toISOString().split('T')[0] ?? '';
                   const overdue = maintenanceDueItems.filter(i => i.next_inspection_due && i.next_inspection_due < today);
                   const dueSoon = maintenanceDueItems.filter(i => i.next_inspection_due && i.next_inspection_due >= today);
                   const inMaintenance = maintenanceDueItems.filter(i => i.status === 'in_maintenance' && !i.next_inspection_due);
@@ -1670,7 +1670,7 @@ const InventoryPage: React.FC = () => {
                                             is_completed: false,
                                             condition_after: item.condition,
                                           });
-                                          loadItemMaintenanceHistory(item.id);
+                                          void loadItemMaintenanceHistory(item.id);
                                           setShowMaintenanceModal(true);
                                         }}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg transition-colors"
@@ -1707,7 +1707,7 @@ const InventoryPage: React.FC = () => {
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowMaintenanceModal(false)} aria-hidden="true" />
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border max-h-[90vh] overflow-y-auto">
-                <form onSubmit={handleCreateMaintenanceRecord}>
+                <form onSubmit={(e) => { void handleCreateMaintenanceRecord(e); }}>
                   <div className="px-4 sm:px-6 pt-5 pb-4">
                     <h3 className="text-lg font-medium text-theme-text-primary mb-1">Log Maintenance</h3>
                     <p className="text-theme-text-muted text-sm mb-4">{maintenanceItem.name}{maintenanceItem.serial_number ? ` (SN: ${maintenanceItem.serial_number})` : ''}</p>
@@ -1794,7 +1794,7 @@ const InventoryPage: React.FC = () => {
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddItem(false)} aria-hidden="true" />
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border">
-                <form onSubmit={handleCreateItem}>
+                <form onSubmit={(e) => { void handleCreateItem(e); }}>
                   <div className="px-4 sm:px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
                       <h3 id="add-item-title" className="text-lg font-medium text-theme-text-primary">Add Inventory Item</h3>
@@ -2200,7 +2200,7 @@ const InventoryPage: React.FC = () => {
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddCategory(false)} aria-hidden="true" />
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
-                <form onSubmit={handleCreateCategory}>
+                <form onSubmit={(e) => { void handleCreateCategory(e); }}>
                   <div className="px-4 sm:px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
                       <h3 id="add-category-title" className="text-lg font-medium text-theme-text-primary">Add Category</h3>
@@ -2339,7 +2339,7 @@ const InventoryPage: React.FC = () => {
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowEditModal(false)} aria-hidden="true" />
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border">
-                <form onSubmit={handleUpdateItem}>
+                <form onSubmit={(e) => { void handleUpdateItem(e); }}>
                   <div className="px-4 sm:px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
                       <h3 id="edit-item-title" className="text-lg font-medium text-theme-text-primary flex items-center gap-2">
@@ -2633,7 +2633,7 @@ const InventoryPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => { setShowRetireConfirm(null); setRetireNotes(''); }} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={handleRetireItem} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleRetireItem(); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Retiring...' : 'Retire Item'}
                   </button>
                 </div>
@@ -2659,7 +2659,7 @@ const InventoryPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setShowBulkStatusModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={handleBulkStatusUpdate} disabled={submitting || !bulkStatus} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleBulkStatusUpdate(); }} disabled={submitting || !bulkStatus} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Updating...' : 'Update Status'}
                   </button>
                 </div>
@@ -2687,7 +2687,7 @@ const InventoryPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setShowBulkRetireModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={handleBulkRetire} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleBulkRetire(); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Retiring...' : 'Retire All'}
                   </button>
                 </div>
@@ -2702,7 +2702,7 @@ const InventoryPage: React.FC = () => {
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setEditingCategory(null)} aria-hidden="true" />
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
-                <form onSubmit={handleUpdateCategory}>
+                <form onSubmit={(e) => { void handleUpdateCategory(e); }}>
                   <div className="px-4 sm:px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-lg font-medium text-theme-text-primary">Edit Category</h3>
@@ -2795,7 +2795,7 @@ const InventoryPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setShowPoolIssueModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={handlePoolIssue} disabled={submitting || !poolIssueForm.member_id} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handlePoolIssue(); }} disabled={submitting || !poolIssueForm.member_id} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Issuing...' : 'Issue Items'}
                   </button>
                 </div>
@@ -2809,7 +2809,7 @@ const InventoryPage: React.FC = () => {
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowWriteOffModal(false)} aria-hidden="true" />
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
-                <form onSubmit={handleCreateWriteOff}>
+                <form onSubmit={(e) => { void handleCreateWriteOff(e); }}>
                   <div className="px-6 pt-5 pb-4">
                     <h3 className="text-lg font-medium text-theme-text-primary mb-2">Request Write-Off</h3>
                     <p className="text-theme-text-secondary text-sm mb-4">

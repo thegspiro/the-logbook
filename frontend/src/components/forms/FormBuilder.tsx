@@ -80,9 +80,9 @@ const FormBuilder = ({
   // Load fields from backend
   useEffect(() => {
     if (formId) {
-      loadFields();
+      void loadFields();
     }
-  }, [formId]);
+  }, [formId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync external fields
   useEffect(() => {
@@ -160,7 +160,10 @@ const FormBuilder = ({
       if (editingFieldId) {
         const idx = updated.findIndex((f) => f.id === editingFieldId);
         if (idx >= 0) {
-          updated[idx] = { ...updated[idx]!, ...fieldData, id: updated[idx]!.id };
+          const existing = updated[idx];
+          if (existing) {
+            updated[idx] = { ...existing, ...fieldData, id: existing.id };
+          }
         }
       } else {
         const newField: FieldDefinition = {
@@ -214,8 +217,9 @@ const FormBuilder = ({
     if (swapIdx < 0 || swapIdx >= sorted.length) return;
 
     // Swap sort_orders
-    const fieldA = sorted[idx]!;
-    const fieldB = sorted[swapIdx]!;
+    const fieldA = sorted[idx];
+    const fieldB = sorted[swapIdx];
+    if (!fieldA || !fieldB) return;
     const tempOrder = fieldA.sort_order;
     fieldA.sort_order = fieldB.sort_order;
     fieldB.sort_order = tempOrder;
@@ -237,7 +241,7 @@ const FormBuilder = ({
       setFields([...sorted]);
       onFieldsChange?.([...sorted] as FieldDefinition[]);
     }
-  }, [fields, formId, isConnected, onFieldsChange]);
+  }, [fields, formId, isConnected, onFieldsChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Loading
   if (loading) {
@@ -347,7 +351,7 @@ const FormBuilder = ({
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  onClick={() => handleReorder(field.id, 'up')}
+                  onClick={() => { void handleReorder(field.id, 'up'); }}
                   disabled={idx === 0}
                   className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
                   title="Move up"
@@ -356,7 +360,7 @@ const FormBuilder = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleReorder(field.id, 'down')}
+                  onClick={() => { void handleReorder(field.id, 'down'); }}
                   disabled={idx === sortedFields.length - 1}
                   className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
                   title="Move down"
@@ -373,7 +377,7 @@ const FormBuilder = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDeleteField(field.id)}
+                  onClick={() => { void handleDeleteField(field.id); }}
                   className="p-1 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
                   title="Delete field"
                 >
@@ -420,7 +424,7 @@ const FormBuilder = ({
       {editorOpen && (
         <FieldEditor
           field={editingField}
-          onSave={handleSaveField}
+          onSave={(fieldData) => { void handleSaveField(fieldData); }}
           onClose={() => {
             setEditorOpen(false);
             setEditingField(null);

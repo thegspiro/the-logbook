@@ -131,7 +131,7 @@ const OnboardingCheck: React.FC = () => {
       return () => clearInterval(tipRotation);
     }
     return undefined;
-  }, [isWaiting, startupInfo]);
+  }, [isWaiting, startupInfo, educationalTips.length]);
 
   // Show skip option after certain attempts
   useEffect(() => {
@@ -339,9 +339,9 @@ const OnboardingCheck: React.FC = () => {
         return;
       }
 
-      const status = response.data;
+      const status = response.data as { needs_onboarding?: boolean } | undefined;
 
-      if (status.needs_onboarding) {
+      if (status?.needs_onboarding) {
         navigate('/onboarding/start');
       } else {
         navigate('/login');
@@ -388,7 +388,7 @@ const OnboardingCheck: React.FC = () => {
             clearTimeout(timeoutRef.current);
           }
           timeoutRef.current = setTimeout(() => {
-            runCheck();
+            void runCheck();
           }, CHECK_INTERVAL);
         } else {
           setError('Services did not become ready in time. Please check that all containers are running and review logs.');
@@ -414,11 +414,11 @@ const OnboardingCheck: React.FC = () => {
       { name: 'Database', status: ConnectionStatus.CHECKING },
       { name: 'Cache (Redis)', status: ConnectionStatus.CHECKING, optional: true },
     ]);
-    runCheck();
+    void runCheck();
   };
 
   useEffect(() => {
-    runCheck();
+    void runCheck();
   }, [runCheck]);
 
   const getStatusIcon = (status: ServiceStatus['status']) => {

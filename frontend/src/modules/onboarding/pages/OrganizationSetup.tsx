@@ -607,7 +607,7 @@ const OrganizationSetup: React.FC = () => {
       const errorCount = errorMessages.length;
 
       if (errorCount === 1) {
-        toast.error(errorMessages[0]!);
+        toast.error(errorMessages[0] ?? 'Validation error');
       } else {
         // Show summary with count
         toast.error(
@@ -1154,7 +1154,7 @@ const OrganizationSetup: React.FC = () => {
           {/* Continue Button */}
           <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
             <button
-              onClick={handleContinue}
+              onClick={() => { void handleContinue(); }}
               disabled={isSaving}
               className={`w-full px-6 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 !isSaving

@@ -142,12 +142,12 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
     e.preventDefault();
     setDragActive(false);
     const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    if (file) void handleFile(file);
   }, [handleFile]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) handleFile(file);
+    if (file) void handleFile(file);
   }, [handleFile]);
 
   return (
@@ -860,7 +860,7 @@ const HistoricalImportPage: React.FC = () => {
 
       <StepIndicator currentStep={step} />
 
-      {step === 1 && <UploadStep onParsed={handleParsed} matchBy={matchBy} onMatchByChange={setMatchBy} />}
+      {step === 1 && <UploadStep onParsed={(result) => { void handleParsed(result); }} matchBy={matchBy} onMatchByChange={setMatchBy} />}
 
       {step === 2 && parseResult && (
         <MapCoursesStep
@@ -877,7 +877,7 @@ const HistoricalImportPage: React.FC = () => {
         <PreviewStep
           parseResult={parseResult}
           courseMappings={courseMappings}
-          onConfirm={handleConfirm}
+          onConfirm={() => { void handleConfirm(); }}
           onBack={() => parseResult.unmatched_courses.length > 0 ? setStep(2) : setStep(1)}
           confirming={confirming}
         />

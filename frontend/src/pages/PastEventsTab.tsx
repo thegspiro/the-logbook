@@ -22,7 +22,7 @@ const PastEventsTab: React.FC = () => {
   const tz = useTimezone();
 
   useEffect(() => {
-    fetchPastEvents();
+    void fetchPastEvents();
   }, []);
 
   useEffect(() => {
@@ -66,7 +66,7 @@ const PastEventsTab: React.FC = () => {
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
-            onClick={fetchPastEvents}
+            onClick={() => { void fetchPastEvents(); }}
             className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
           >
             Try again

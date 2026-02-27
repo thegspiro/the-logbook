@@ -23,7 +23,7 @@ export const EventEditPage: React.FC = () => {
 
   useEffect(() => {
     if (eventId) {
-      fetchEvent();
+      void fetchEvent();
     }
   }, [eventId]);
 

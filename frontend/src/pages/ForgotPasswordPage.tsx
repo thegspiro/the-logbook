@@ -75,7 +75,7 @@ export const ForgotPasswordPage: React.FC = () => {
         </div>
 
         <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
             {error && (
               <div className="rounded-md bg-red-500/20 border border-red-500/50 p-4" role="alert" aria-live="polite">
                 <div className="flex">
