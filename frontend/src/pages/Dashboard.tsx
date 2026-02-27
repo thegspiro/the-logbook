@@ -51,7 +51,6 @@ import { dashboardService } from '../services/api';
  * Member-focused landing page showing notifications, upcoming shifts,
  * training progress, and recorded hours.
  */
-
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
