@@ -23,7 +23,7 @@ const tabs: { id: AdminTab; label: string }[] = [
   { id: 'create', label: 'Create Event' },
   { id: 'past_events', label: 'Past Events' },
   { id: 'requests', label: 'Requests' },
-  { id: 'analytics', label: 'Analytics' },
+  { id: 'analytics', label: 'QR Code Analytics' },
   { id: 'community', label: 'Community Engagement' },
   { id: 'settings', label: 'Settings' },
 ];
