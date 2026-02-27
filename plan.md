@@ -1,149 +1,145 @@
-# Scheduling Module Production Readiness Fixes
+# Plan: Platform Analytics Dashboard
 
-## Summary
+## Overview
+Add a new **Platform Analytics** page at `/admin/platform-analytics` accessible to IT admins (`settings.manage` permission). This gives a bird's-eye view of platform adoption, user engagement, module usage, and system health — standard KPIs for intranet/SaaS platforms, tailored for fire department operations.
 
-Cleanup of the scheduling/shifts module across frontend and backend to fix bugs,
-improve type safety, remove dead code, and harden error handling for production.
+The existing **QR Code Analytics** page remains untouched.
 
----
+## Data Points (informed by industry standards)
 
-## 1. Frontend: Remove unsafe non-null assertions (`!`) on array indexes
+Based on intranet analytics best practices and fire department software standards:
 
-**Files:** `SchedulingPage.tsx`
+### Section 1: User Adoption & Activity
+| Metric | Source | Why it matters |
+|--------|--------|----------------|
+| Total users | `users` table count | Platform scale |
+| Active users (logged in last 30 days) | `users.last_login_at` | Adoption rate — intranet benchmark is 75-80% weekly |
+| Inactive users (no login in 30+ days) | Derived | Identifies disengaged members |
+| New users (created last 30 days) | `users.created_at` | Growth trend |
+| Login trend (daily logins, past 30 days) | `users.last_login_at` grouped by date | Engagement over time |
+| Adoption rate % | `(active / total) * 100` | Key intranet KPI |
 
-Lines 239-240 use `weekDates[0]!` and `weekDates[6]!` for the date range label.
-Line 267 uses `weekDates[0]!` for the fetch query. While `weekDates` is always
-length 7, the `!` assertions circumvent strict null checks. Replace with safe
-fallbacks:
+### Section 2: Module Usage
+| Metric | Source | Why it matters |
+|--------|--------|----------------|
+| Module name + enabled status | `config.py` feature flags | Shows which modules are turned on |
+| Record count per module | Count rows in each module's table | Shows actual usage vs just "enabled" |
+| Last activity date per module | Most recent `created_at` in each table | Is the module actively being used? |
 
-```ts
-const start = weekDates[0] ?? new Date();
-const end = weekDates[6] ?? new Date();
-```
+Modules to track: Events, Training, Scheduling, Inventory, Meetings, Elections, Forms, Documents, Apparatus
 
-Same in `fetchShifts` callback at line 267.
+### Section 3: Operational Activity
+| Metric | Source | Why it matters |
+|--------|--------|----------------|
+| Total events | `events` table count | Core platform activity |
+| Events last 30 days | `events.created_at` filtered | Recent activity volume |
+| Total check-ins | `event_attendance` count | Engagement with events |
+| Training hours (last 30 days) | Training records | Compliance tracking — key for fire depts |
+| Forms submitted (last 30 days) | `form_submissions` count | Content engagement |
 
----
+### Section 4: System Health
+| Metric | Source | Why it matters |
+|--------|--------|----------------|
+| Errors last 7 days | `error_logs` count | System reliability |
+| Error trend (daily, past 7 days) | `error_logs.created_at` grouped | Spotting regressions |
+| Top error types | `error_logs.error_type` grouped | Prioritize fixes |
 
-## 2. Frontend: Remove unused `shiftForm` fields
-
-**File:** `SchedulingPage.tsx` (lines 154-161)
-
-`shiftForm.name` and `shiftForm.minStaffing` are initialized in state and reset
-after creation, but never wired to any form input or sent to the API. Remove them
-to avoid confusion.
-
----
-
-## 3. Frontend: Replace `as unknown as` casts with proper typing
-
-**File:** `SchedulingPage.tsx` (lines 172-173)
-
-The apparatus list and backend templates are cast with `as unknown as`. Instead,
-type the API service methods to return the correct types so consumers don't need
-unsafe casts.
-
-**File:** `services/api.ts` — update `getBasicApparatus()` and `getTemplates()`
-return types to match the `BasicApparatus` and `BackendTemplate` interfaces.
-
----
-
-## 4. Frontend: Improve error handling — replace silent `catch {}` blocks
-
-**Files:** `SchedulingPage.tsx`, `MyShiftsTab.tsx`, `OpenShiftsTab.tsx`
-
-Multiple empty `catch {}` blocks silently swallow errors. Add `console.warn` at
-minimum so failures are visible during development/debugging. Use
-`getErrorMessage(err, ...)` for user-facing toast messages.
+### Section 5: Content & Documents
+| Metric | Source | Why it matters |
+|--------|--------|----------------|
+| Total documents | `documents` table count | Content volume |
+| Documents uploaded (last 30 days) | `documents.created_at` filtered | Content freshness |
 
 ---
 
-## 5. Frontend: Add double-click guard on confirmation buttons
+## Backend Changes
 
-**File:** `ShiftDetailPanel.tsx`
-
-The inline decline/remove confirmation buttons (`Yes`/`No`) have no loading
-state. If the user double-clicks `Yes`, duplicate requests fire. Add a
-`submitting` flag to disable the button while the async operation runs.
-
----
-
-## 6. Frontend: Fix missing `useEffect` cleanup for stale async results
-
-**File:** `ShiftDetailPanel.tsx` (lines ~107-121)
-
-The assignment/calls fetch `useEffect` sets state after an async call with no
-abort check. If the component unmounts (user closes panel) before the fetch
-completes, React warns about setting state on unmounted component. Add an
-`aborted` flag pattern:
-
-```ts
-useEffect(() => {
-  let aborted = false;
-  const load = async () => { ... if (!aborted) setAssignments(...); };
-  load();
-  return () => { aborted = true; };
-}, [shift.id]);
-```
-
----
-
-## 7. Backend: Add `attendee_count` to `_enrich_shifts` helper
-
-**File:** `scheduling.py` endpoint (lines 67-80)
-
-The `_enrich_shifts` helper builds a dict from ORM columns but omits
-`attendee_count`. The Pydantic `ShiftResponse` model defaults it to `0`, which
-works — but the GET `/shifts/{id}` endpoint explicitly sets it to
-`len(attendance)`. The calendar/week and list endpoints don't. For consistency,
-compute `attendee_count` inside `_enrich_shifts` by querying attendance counts.
-
-*This is a lower-priority optimization — current behavior returns 0 which is
-technically correct for list views.*
-
----
-
-## 8. Backend: Guard against `None` result from `create_shift`
-
-**File:** `scheduling.py` endpoint (line 141)
-
-After `create_shift`, if `result` is `None` and `error` is also `None` (edge
-case), `_enrich_shifts(... [result])` would crash with `NoneType has no attribute
-__table__`. Add an explicit None check:
+### 1. New Pydantic schema
+**File:** `backend/app/schemas/platform_analytics.py` (new)
 
 ```python
-if error or result is None:
-    raise HTTPException(status_code=400, detail=...)
+class DailyCount(BaseModel):
+    date: str           # YYYY-MM-DD
+    count: int
+
+class ModuleUsage(BaseModel):
+    name: str           # e.g. "Training", "Events"
+    enabled: bool
+    record_count: int
+    last_activity: Optional[datetime]
+
+class PlatformAnalyticsResponse(BaseModel):
+    # User Adoption
+    total_users: int
+    active_users: int
+    inactive_users: int
+    new_users_last_30_days: int
+    adoption_rate: float          # percentage
+    login_trend: list[DailyCount] # past 30 days
+
+    # Module Usage
+    modules: list[ModuleUsage]
+
+    # Operational Activity
+    total_events: int
+    events_last_30_days: int
+    total_check_ins: int
+    training_hours_last_30_days: float
+    forms_submitted_last_30_days: int
+
+    # System Health
+    errors_last_7_days: int
+    error_trend: list[DailyCount]
+    top_error_types: dict[str, int]  # type -> count
+
+    # Content
+    total_documents: int
+    documents_last_30_days: int
+
+    generated_at: datetime
 ```
 
-Apply the same pattern to `update_shift` (line 188) and any other endpoints that
-unpack tuples from service methods.
+### 2. New endpoint: `GET /api/v1/platform-analytics`
+**File:** `backend/app/api/v1/endpoints/platform_analytics.py` (new)
+
+- **Permission:** `settings.manage`
+- Queries each model independently with isolated try/catch per section
+- Returns all-zero defaults if a module's table isn't available
+
+### 3. Register in API router
+**File:** `backend/app/api/v1/api.py` — add the new router with prefix `/platform-analytics`
 
 ---
 
-## 9. Backend: Use `exclude_unset` instead of `exclude_none` for updates
+## Frontend Changes
 
-**File:** `scheduling.py` endpoint (line 182)
+### 4. New page: `PlatformAnalyticsPage.tsx`
+**File:** `frontend/src/pages/PlatformAnalyticsPage.tsx` (new)
 
-`shift.model_dump(exclude_none=True)` means a client cannot explicitly set a
-field to `null` (e.g., clearing `notes` or `apparatus_id`). Use
-`exclude_unset=True` instead, which only excludes fields the client didn't send
-at all.
+Layout (following existing dashboard patterns):
+
+1. **Header** — "Platform Analytics" title + last-refreshed timestamp + Export button
+2. **Adoption cards** — 4 stat cards: Total Users, Active Users, Adoption Rate %, New Members
+3. **Login trend chart** — 30-day bar chart of daily logins
+4. **Module usage grid** — Cards per module showing enabled/disabled, record count, last activity
+5. **Operational stats** — Events, Check-ins, Training Hours, Forms submitted
+6. **System health** — Error count + 7-day trend + top error types
+7. **Content stats** — Document counts
+
+Auto-refresh every 60 seconds. Export data as JSON.
+
+### 5. Frontend API service
+**File:** `frontend/src/services/api.ts` — add `platformAnalyticsService` with `getAnalytics()` method
+
+### 6. Route + Navigation
+- **`App.tsx`**: Add lazy import + route at `/admin/platform-analytics` with `settings.manage`
+- **`SideNavigation.tsx`**: Add "Platform Analytics" in Organization Settings (above QR Code Analytics), using `BarChart3` icon
+- **`TopNavigation.tsx`**: Same
+- **`routePrefetch.ts`**: Add prefetch entry
 
 ---
 
-## 10. Frontend: Memoize template category filtering in Create Modal
-
-**File:** `SchedulingPage.tsx` (lines 903-937)
-
-The IIFE inside the template `<select>` filters `effectiveTemplates` by category
-on every render. Move this to a `useMemo` to avoid repeated work.
-
----
-
-## Order of Implementation
-
-1. Items 1-2 (quick safety fixes)
-2. Items 5-6 (runtime correctness)
-3. Items 4, 8-9 (error handling + backend safety)
-4. Items 3, 7, 10 (cleanup + optimization)
+## What stays the same
+- The existing **QR Code Analytics** page (`/admin/analytics`) is untouched
+- No changes to existing endpoints, models, or services
+- No new database tables needed — all queries use existing tables
