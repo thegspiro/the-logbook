@@ -121,7 +121,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           schedulingService.getShiftCalls(shift.id),
         ]);
         if (!cancelled) {
-          setAssignments(assignData as unknown as Assignment[]);
+          setAssignments(assignData);
           setCalls(callData);
         }
       } catch (err) {
@@ -170,7 +170,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       schedulingService.getShiftAssignments(shift.id),
       schedulingService.getShift(shift.id),
     ]);
-    setAssignments(assignData as unknown as Assignment[]);
+    setAssignments(assignData);
     setShift(shiftData);
   };
 

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.training import BasicApparatus, ShiftAssignment
 from app.models.user import User
 from app.schemas.scheduling import (
@@ -57,6 +58,13 @@ from app.schemas.scheduling import (
 from app.services.scheduling_service import SchedulingService
 
 router = APIRouter()
+
+
+def _safe_detail(prefix: str, error: Optional[str]) -> str:
+    """Build a sanitized error detail from a service-layer error string."""
+    if not error:
+        return f"{prefix} An unexpected error occurred."
+    return f"{prefix} {safe_error_detail(ValueError(error))}"
 
 
 # ============================================
@@ -163,7 +171,7 @@ async def create_shift(
     if error or result is None:
         raise HTTPException(
             status_code=400,
-            detail=f"Unable to create shift. {error or 'Unknown error'}",
+            detail=_safe_detail("Unable to create shift.", error),
         )
     enriched = await _enrich_shifts(service, current_user.organization_id, [result])
     return enriched[0]
@@ -250,7 +258,7 @@ async def update_shift(
     if error or result is None:
         raise HTTPException(
             status_code=400,
-            detail=f"Unable to update shift. {error or 'Unknown error'}",
+            detail=_safe_detail("Unable to update shift.", error),
         )
     enriched = await _enrich_shifts(service, current_user.organization_id, [result])
     return enriched[0]
@@ -266,7 +274,7 @@ async def delete_shift(
     service = SchedulingService(db)
     success, error = await service.delete_shift(shift_id, current_user.organization_id)
     if not success:
-        raise HTTPException(status_code=400, detail=f"Unable to delete shift. {error}")
+        raise HTTPException(status_code=400, detail=_safe_detail("Unable to delete shift.", error))
 
 
 # ============================================
@@ -292,7 +300,7 @@ async def add_attendance(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to add attendance. {error}"
+            status_code=400, detail=_safe_detail("Unable to add attendance.", error)
         )
     enriched = await service.enrich_attendance_records([result])
     return enriched[0]
@@ -330,7 +338,7 @@ async def update_attendance(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to update attendance. {error}"
+            status_code=400, detail=_safe_detail("Unable to update attendance.", error)
         )
     enriched = await service.enrich_attendance_records([result])
     return enriched[0]
@@ -349,7 +357,7 @@ async def remove_attendance(
     )
     if not success:
         raise HTTPException(
-            status_code=400, detail=f"Unable to remove attendance. {error}"
+            status_code=400, detail=_safe_detail("Unable to remove attendance.", error)
         )
 
 
@@ -435,7 +443,7 @@ async def create_call(
         current_user.organization_id, shift_id, call_data
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to create call. {error}")
+        raise HTTPException(status_code=400, detail=_safe_detail("Unable to create call.", error))
     return result
 
 
@@ -479,7 +487,7 @@ async def update_call(
         call_id, current_user.organization_id, update_data
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to update call. {error}")
+        raise HTTPException(status_code=400, detail=_safe_detail("Unable to update call.", error))
     return result
 
 
@@ -495,7 +503,7 @@ async def delete_call(
         call_id, current_user.organization_id
     )
     if not success:
-        raise HTTPException(status_code=400, detail=f"Unable to delete call. {error}")
+        raise HTTPException(status_code=400, detail=_safe_detail("Unable to delete call.", error))
 
 
 # ============================================
@@ -535,7 +543,7 @@ async def create_template(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to create template. {error}"
+            status_code=400, detail=_safe_detail("Unable to create template.", error)
         )
     return result
 
@@ -571,7 +579,7 @@ async def update_template(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to update template. {error}"
+            status_code=400, detail=_safe_detail("Unable to update template.", error)
         )
     return result
 
@@ -589,7 +597,7 @@ async def delete_template(
     )
     if not success:
         raise HTTPException(
-            status_code=400, detail=f"Unable to delete template. {error}"
+            status_code=400, detail=_safe_detail("Unable to delete template.", error)
         )
 
 
@@ -630,7 +638,7 @@ async def create_pattern(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to create pattern. {error}"
+            status_code=400, detail=_safe_detail("Unable to create pattern.", error)
         )
     return result
 
@@ -664,7 +672,7 @@ async def update_pattern(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to update pattern. {error}"
+            status_code=400, detail=_safe_detail("Unable to update pattern.", error)
         )
     return result
 
@@ -682,7 +690,7 @@ async def delete_pattern(
     )
     if not success:
         raise HTTPException(
-            status_code=400, detail=f"Unable to delete pattern. {error}"
+            status_code=400, detail=_safe_detail("Unable to delete pattern.", error)
         )
 
 
@@ -704,7 +712,7 @@ async def generate_shifts_from_pattern(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to generate shifts. {error}"
+            status_code=400, detail=_safe_detail("Unable to generate shifts.", error)
         )
     enriched = await _enrich_shifts(service, current_user.organization_id, result)
     return {"shifts_created": len(result), "shifts": enriched}
@@ -750,7 +758,7 @@ async def create_assignment(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to create assignment. {error}"
+            status_code=400, detail=_safe_detail("Unable to create assignment.", error)
         )
     enriched = await service.enrich_assignments([result])
     return enriched[0]
@@ -771,7 +779,7 @@ async def update_assignment(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to update assignment. {error}"
+            status_code=400, detail=_safe_detail("Unable to update assignment.", error)
         )
     enriched = await service.enrich_assignments([result])
     return enriched[0]
@@ -790,7 +798,7 @@ async def delete_assignment(
     )
     if not success:
         raise HTTPException(
-            status_code=400, detail=f"Unable to delete assignment. {error}"
+            status_code=400, detail=_safe_detail("Unable to delete assignment.", error)
         )
 
 
@@ -809,7 +817,7 @@ async def confirm_assignment(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to confirm assignment. {error}"
+            status_code=400, detail=_safe_detail("Unable to confirm assignment.", error)
         )
     enriched = await service.enrich_assignments([result])
     return enriched[0]
@@ -865,7 +873,7 @@ async def create_swap_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to create swap request. {error}"
+            status_code=400, detail=_safe_detail("Unable to create swap request.", error)
         )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]
@@ -908,7 +916,7 @@ async def review_swap_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to review swap request. {error}"
+            status_code=400, detail=_safe_detail("Unable to review swap request.", error)
         )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]
@@ -929,7 +937,7 @@ async def cancel_swap_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to cancel swap request. {error}"
+            status_code=400, detail=_safe_detail("Unable to cancel swap request.", error)
         )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]
@@ -987,7 +995,7 @@ async def create_time_off_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to create time-off request. {error}"
+            status_code=400, detail=_safe_detail("Unable to create time-off request.", error)
         )
     enriched = await service.enrich_time_off_requests([result])
     return enriched[0]
@@ -1028,7 +1036,7 @@ async def review_time_off_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to review time-off request. {error}"
+            status_code=400, detail=_safe_detail("Unable to review time-off request.", error)
         )
     enriched = await service.enrich_time_off_requests([result])
     return enriched[0]
@@ -1047,7 +1055,7 @@ async def cancel_time_off_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to cancel time-off request. {error}"
+            status_code=400, detail=_safe_detail("Unable to cancel time-off request.", error)
         )
     enriched = await service.enrich_time_off_requests([result])
     return enriched[0]
@@ -1282,7 +1290,7 @@ async def signup_for_shift(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to sign up for shift. {error}"
+            status_code=400, detail=_safe_detail("Unable to sign up for shift.", error)
         )
     enriched = await service.enrich_assignments([result])
     return enriched[0]
@@ -1313,7 +1321,7 @@ async def withdraw_from_shift(
         UUID(user_assignment.id), current_user.organization_id
     )
     if not success:
-        raise HTTPException(status_code=400, detail=f"Unable to withdraw. {error}")
+        raise HTTPException(status_code=400, detail=_safe_detail("Unable to withdraw.", error))
 
 
 # ============================================

@@ -896,10 +896,12 @@ class SchedulingService:
                         Shift.shift_date == shift.shift_date,
                     )
                 overlap_result = await self.db.execute(overlap_query)
-                conflicting = overlap_result.first()
-                if conflicting:
-                    conflict_date = conflicting[0]
-                    return None, f"Member has a conflicting shift on {conflict_date}"
+                conflicting_rows = overlap_result.all()
+                if conflicting_rows:
+                    conflict_dates = sorted({str(row[0]) for row in conflicting_rows})
+                    if len(conflict_dates) == 1:
+                        return None, f"Member has a conflicting shift on {conflict_dates[0]}"
+                    return None, f"Member has conflicting shifts on {', '.join(conflict_dates)}"
 
             # Check if the member is on leave of absence for the shift date
             if user_id and shift.shift_date:

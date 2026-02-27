@@ -55,7 +55,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     setLoading(true);
     try {
       const assignData = await schedulingService.getMyAssignments();
-      setAssignments(assignData as unknown as Assignment[]);
+      setAssignments(assignData);
     } catch {
       toast.error('Failed to load your shifts');
     } finally {

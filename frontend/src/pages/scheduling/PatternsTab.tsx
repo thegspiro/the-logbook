@@ -13,34 +13,10 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../services/api';
+import type { ShiftTemplateRecord } from '../../services/api';
+import type { ShiftPattern } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
-
-interface Pattern {
-  id: string;
-  name: string;
-  description?: string;
-  pattern_type: string;
-  template_id?: string;
-  rotation_days?: number;
-  days_on?: number;
-  days_off?: number;
-  schedule_config?: Record<string, unknown>;
-  start_date: string;
-  end_date?: string;
-  assigned_members?: Array<{ user_id: string; platoon?: string; position?: string }>;
-  is_active: boolean;
-  created_at: string;
-}
-
-interface Template {
-  id: string;
-  name: string;
-  start_time_of_day: string;
-  end_time_of_day: string;
-  duration_hours: number;
-  is_active: boolean;
-}
 
 const PATTERN_TYPE_LABELS: Record<string, string> = {
   daily: 'Daily',
@@ -55,8 +31,8 @@ const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border roun
 
 export const PatternsTab: React.FC = () => {
   const tz = useTimezone();
-  const [patterns, setPatterns] = useState<Pattern[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [patterns, setPatterns] = useState<ShiftPattern[]>([]);
+  const [templates, setTemplates] = useState<ShiftTemplateRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Create form
@@ -93,8 +69,8 @@ export const PatternsTab: React.FC = () => {
         schedulingService.getPatterns(),
         schedulingService.getTemplates(),
       ]);
-      setPatterns(patternsData as unknown as Pattern[]);
-      setTemplates(templatesData as unknown as Template[]);
+      setPatterns(patternsData);
+      setTemplates(templatesData);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load patterns'));
     } finally {
