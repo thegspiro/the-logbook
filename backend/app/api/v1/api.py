@@ -35,6 +35,7 @@ from app.api.v1.endpoints import (
     notifications,
     operational_ranks,
     organizations,
+    platform_analytics,
     reports,
     roles,
     scheduled,
@@ -116,6 +117,9 @@ api_router.include_router(
 )
 api_router.include_router(messages.router, prefix="/messages", tags=["messages"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(
+    platform_analytics.router, prefix="/platform-analytics", tags=["platform-analytics"]
+)
 api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
 api_router.include_router(
     integrations.router, prefix="/integrations", tags=["integrations"]
@@ -174,6 +178,7 @@ async def api_root():
             "reports": "/api/v1/reports",
             "notifications": "/api/v1/notifications",
             "analytics": "/api/v1/analytics",
+            "platform_analytics": "/api/v1/platform-analytics",
             "errors": "/api/v1/errors",
             "integrations": "/api/v1/integrations",
             "prospective_members": "/api/v1/prospective-members",

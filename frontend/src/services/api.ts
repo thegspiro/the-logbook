@@ -5552,3 +5552,27 @@ export const skillsTestingService = {
     return response.data;
   },
 };
+
+// ============================================================================
+// Platform Analytics Service
+// ============================================================================
+
+import type { PlatformAnalytics } from '../types/platformAnalytics';
+
+export const platformAnalyticsService = {
+  /**
+   * Get aggregated platform-wide analytics for IT admins.
+   */
+  async getAnalytics(): Promise<PlatformAnalytics> {
+    const response = await api.get<PlatformAnalytics>('/platform-analytics');
+    return response.data;
+  },
+
+  /**
+   * Export platform analytics as a JSON blob.
+   */
+  async exportAnalytics(): Promise<PlatformAnalytics> {
+    const data = await this.getAnalytics();
+    return data;
+  },
+};
