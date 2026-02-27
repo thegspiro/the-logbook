@@ -966,7 +966,7 @@ export const trainingService = {
   },
 
   /**
-   * Delete a training requirement (soft delete)
+   * Permanently delete a training requirement
    */
   async deleteRequirement(requirementId: string): Promise<void> {
     await api.delete(`/training/requirements/${requirementId}`);
