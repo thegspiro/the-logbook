@@ -25,6 +25,7 @@ from app.models.training import (
     ShiftAttendance,
     ShiftCall,
     ShiftPattern,
+    ShiftPosition,
     ShiftSwapRequest,
     ShiftTemplate,
     ShiftTimeOff,
@@ -919,6 +920,20 @@ class SchedulingService:
                 **assignment_data,
             )
             self.db.add(assignment)
+
+            # Auto-set shift officer when an officer-position member is assigned/signs up
+            # and no shift officer has been designated yet
+            officer_positions = {
+                ShiftPosition.OFFICER.value,
+                ShiftPosition.CAPTAIN.value,
+                ShiftPosition.LIEUTENANT.value,
+            }
+            assigned_position = assignment_data.get("position", "")
+            if isinstance(assigned_position, ShiftPosition):
+                assigned_position = assigned_position.value
+            if not shift.shift_officer_id and assigned_position in officer_positions and user_id:
+                shift.shift_officer_id = str(user_id)
+
             await self.db.commit()
             await self.db.refresh(assignment)
             return assignment, None

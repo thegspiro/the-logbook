@@ -757,6 +757,120 @@ class TestAssignmentManagement:
         )
         assert len(assignments) == 2
 
+    @pytest.mark.asyncio
+    async def test_officer_assignment_sets_default_shift_officer(self, db_session, setup_org_and_users):
+        """When a member is assigned the officer position and no shift officer is set, auto-populate it."""
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        assert shift.shift_officer_id is None
+
+        # Assign user2 as officer
+        assignment, err = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "officer"},
+            uuid.UUID(user_id),
+        )
+        assert err is None
+
+        # Re-fetch the shift to verify shift_officer_id was set
+        updated_shift = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        assert updated_shift.shift_officer_id == user2_id
+
+    @pytest.mark.asyncio
+    async def test_captain_assignment_sets_default_shift_officer(self, db_session, setup_org_and_users):
+        """Captain position should also auto-set shift officer."""
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+
+        assignment, err = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "captain"},
+            uuid.UUID(user_id),
+        )
+        assert err is None
+
+        updated_shift = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        assert updated_shift.shift_officer_id == user2_id
+
+    @pytest.mark.asyncio
+    async def test_officer_assignment_does_not_override_existing(self, db_session, setup_org_and_users):
+        """If a shift already has a shift officer, assigning another officer should NOT override."""
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+                "shift_officer_id": user_id,
+            },
+            uuid.UUID(user_id),
+        )
+        assert shift.shift_officer_id == user_id
+
+        # Assign user2 as officer — should NOT change shift_officer_id
+        assignment, err = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "officer"},
+            uuid.UUID(user_id),
+        )
+        assert err is None
+
+        updated_shift = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        assert updated_shift.shift_officer_id == user_id  # unchanged
+
+    @pytest.mark.asyncio
+    async def test_firefighter_assignment_does_not_set_shift_officer(self, db_session, setup_org_and_users):
+        """Non-officer positions (firefighter, driver, etc.) should NOT auto-set shift officer."""
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+
+        assignment, err = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+        assert err is None
+
+        updated_shift = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        assert updated_shift.shift_officer_id is None
+
 
 # ── Swap Request Tests ───────────────────────────────────────────────
 
