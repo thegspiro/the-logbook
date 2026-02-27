@@ -5,9 +5,13 @@
  */
 
 /**
- * Sanitize HTML to prevent XSS attacks
+ * Escape a plain-text string for safe insertion into HTML.
+ *
+ * NOTE: This does NOT sanitize HTML — it escapes ALL markup so the output
+ * is rendered as literal text. For actual HTML sanitization (allowing safe
+ * tags), use DOMPurify instead.
  */
-export const sanitizeHTML = (input: string): string => {
+export const escapeTextForHTML = (input: string): string => {
   const element = document.createElement('div');
   element.textContent = input;
   return element.innerHTML;

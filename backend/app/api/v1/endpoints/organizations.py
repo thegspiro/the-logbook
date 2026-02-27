@@ -47,10 +47,14 @@ async def get_organization_settings(
     org_service = OrganizationService(db)
     settings = await org_service.get_organization_settings(current_user.organization_id)
 
+    # SEC: Redact secrets (OAuth client secrets, SMTP passwords, etc.)
+    # before returning to the client to prevent credential exfiltration.
+    redacted = settings.redacted()
+
     # Return as dict so FastAPI's response_model validation preserves
     # extra fields (e.g. station_mode).  Pydantic V2 drops __pydantic_extra__
     # when converting between model instances via model_validate(from_attributes=True).
-    return settings.model_dump()
+    return redacted.model_dump()
 
 
 @router.patch("/settings", response_model=OrganizationSettingsResponse)
@@ -104,8 +108,9 @@ async def update_organization_settings(
             username=current_user.username,
         )
 
+        # SEC: Redact secrets before returning to the client.
         # Return as dict to preserve extra fields (see GET /settings comment).
-        return updated_settings.model_dump()
+        return updated_settings.redacted().model_dump()
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
@@ -210,7 +215,8 @@ async def update_email_settings(
             username=current_user.username,
         )
 
-        return email_settings
+        # SEC: Redact secrets before returning to the client
+        return email_settings.redacted()
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
@@ -257,7 +263,8 @@ async def update_file_storage_settings(
             username=current_user.username,
         )
 
-        return storage_settings
+        # SEC: Redact secrets before returning to the client
+        return storage_settings.redacted()
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)

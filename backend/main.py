@@ -1015,6 +1015,24 @@ def validate_security_configuration():
     """
     warnings = settings.validate_security_config()
 
+    # SEC: Also validate CORS configuration
+    cors_warnings = settings.validate_cors_config()
+    warnings.extend(cors_warnings)
+
+    # SEC: Block wildcard CORS with credentials — this combination is
+    # explicitly insecure and browsers will reject it, but a misconfigured
+    # reverse proxy could still be exploited.
+    origins = (
+        settings.ALLOWED_ORIGINS
+        if isinstance(settings.ALLOWED_ORIGINS, list)
+        else [settings.ALLOWED_ORIGINS]
+    )
+    if "*" in origins:
+        warnings.append(
+            "CRITICAL: ALLOWED_ORIGINS contains wildcard '*'. "
+            "This is insecure with allow_credentials=True and MUST be fixed."
+        )
+
     if warnings:
         logger.warning("=" * 60)
         logger.warning("SECURITY CONFIGURATION WARNINGS:")
