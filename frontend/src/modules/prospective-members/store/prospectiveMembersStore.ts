@@ -626,12 +626,12 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
     // Filter & view actions
     setFilters: (filters: ApplicantListFilters) => {
       set({ filters: { ...get().filters, ...filters }, currentPage: 1 });
-      get().fetchApplicants(1);
+      void get().fetchApplicants(1);
     },
 
     clearFilters: () => {
       set({ filters: defaultFilters, currentPage: 1 });
-      get().fetchApplicants(1);
+      void get().fetchApplicants(1);
     },
 
     setViewMode: (mode: PipelineViewMode) => {
@@ -641,11 +641,11 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
     setActiveTab: (tab: PipelineTab) => {
       set({ activeTab: tab });
       if (tab === 'inactive') {
-        get().fetchInactiveApplicants(1);
+        void get().fetchInactiveApplicants(1);
       } else if (tab === 'withdrawn') {
-        get().fetchWithdrawnApplicants(1);
+        void get().fetchWithdrawnApplicants(1);
       } else {
-        get().fetchApplicants(1);
+        void get().fetchApplicants(1);
       }
     },
 

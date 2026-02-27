@@ -92,13 +92,13 @@ const InventoryMembersTab: React.FC = () => {
   }, [searchDebounce]);
 
   useEffect(() => {
-    loadMembers();
+    void loadMembers();
   }, [loadMembers]);
 
   // Real-time updates via WebSocket
   useInventoryWebSocket({
     onEvent: useCallback(() => {
-      loadMembers();
+      void loadMembers();
     }, [loadMembers]),
   });
 
@@ -227,7 +227,7 @@ const InventoryMembersTab: React.FC = () => {
             </select>
           </div>
           <button
-            onClick={loadMembers}
+            onClick={() => { void loadMembers(); }}
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
             title="Refresh"
           >
@@ -241,7 +241,7 @@ const InventoryMembersTab: React.FC = () => {
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" />
           <p className="text-red-700 dark:text-red-300 text-sm flex-1">{error}</p>
-          <button onClick={loadMembers} className="text-red-700 dark:text-red-400 hover:text-red-500 text-sm flex items-center gap-1">
+          <button onClick={() => { void loadMembers(); }} className="text-red-700 dark:text-red-400 hover:text-red-500 text-sm flex items-center gap-1">
             <RefreshCw className="w-4 h-4" /> Retry
           </button>
         </div>
@@ -284,7 +284,7 @@ const InventoryMembersTab: React.FC = () => {
                     {/* Member row */}
                     <tr
                       className="hover:bg-theme-surface-secondary transition-colors cursor-pointer"
-                      onClick={() => handleExpand(member.user_id)}
+                      onClick={() => { void handleExpand(member.user_id); }}
                     >
                       <td className="px-2 sm:px-4 py-3">
                         {isExpanded ? (
@@ -474,7 +474,7 @@ const InventoryMembersTab: React.FC = () => {
         mode={scanModal.mode}
         userId={scanModal.userId}
         memberName={scanModal.memberName}
-        onComplete={handleScanComplete}
+        onComplete={() => { void handleScanComplete(); }}
       />
 
       {/* Return Items Modal */}
@@ -483,7 +483,7 @@ const InventoryMembersTab: React.FC = () => {
         onClose={() => setReturnModal((prev) => ({ ...prev, isOpen: false }))}
         userId={returnModal.userId}
         memberName={returnModal.memberName}
-        onComplete={handleScanComplete}
+        onComplete={() => { void handleScanComplete(); }}
       />
     </div>
   );

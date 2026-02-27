@@ -44,8 +44,8 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
   const [approvals, setApprovals] = useState<Record<string, Set<string>>>({});
 
   useEffect(() => {
-    fetchData();
-  }, [electionId]);
+    void fetchData();
+  }, [electionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = async () => {
     try {
@@ -437,7 +437,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                   <div className="mt-4">
                     <button
                       type="button"
-                      onClick={() => handleSubmitVote(position)}
+                      onClick={() => { void handleSubmitVote(position); }}
                       disabled={submitting}
                       className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                     >

@@ -47,7 +47,7 @@ export const ElectionsPage: React.FC = () => {
   const tz = useTimezone();
 
   useEffect(() => {
-    fetchElections();
+    void fetchElections();
   }, []);
 
   useEffect(() => {
@@ -321,7 +321,7 @@ export const ElectionsPage: React.FC = () => {
               <h3 id="create-election-title" className="text-lg font-medium text-theme-text-primary">Create New Election</h3>
             </div>
 
-            <form onSubmit={handleCreateElection} className="px-6 py-4">
+            <form onSubmit={(e) => { void handleCreateElection(e); }} className="px-6 py-4">
               {createError && (
                 <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
                   <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>

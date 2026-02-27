@@ -102,13 +102,13 @@ const DocumentsPage: React.FC = () => {
       await Promise.all([fetchFolders(), fetchSummary()]);
       setLoading(false);
     };
-    init();
+    void init();
   }, [fetchFolders, fetchSummary]);
 
   // Fetch documents when folder is selected
   useEffect(() => {
     if (selectedFolder) {
-      fetchDocuments(selectedFolder);
+      void fetchDocuments(selectedFolder);
     } else {
       setDocuments([]);
     }
@@ -200,7 +200,7 @@ const DocumentsPage: React.FC = () => {
     setUploadForm({
       name: '',
       description: '',
-      folder: selectedFolder || (folders.length > 0 ? folders[0]!.id : 'general'),
+      folder: selectedFolder || (folders.length > 0 && folders[0] ? folders[0].id : 'general'),
       file: null,
     });
     setShowUploadModal(true);
@@ -614,7 +614,7 @@ const DocumentsPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={handleUploadDocument}
+                    onClick={() => { void handleUploadDocument(); }}
                     disabled={!uploadForm.file || actionLoading}
                     className={`px-4 py-2 rounded-lg text-white transition-colors inline-flex items-center space-x-2 ${
                       !uploadForm.file || actionLoading
@@ -683,7 +683,7 @@ const DocumentsPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={handleCreateFolder}
+                    onClick={() => { void handleCreateFolder(); }}
                     disabled={!folderForm.name.trim() || actionLoading}
                     className={`px-4 py-2 rounded-lg text-white transition-colors inline-flex items-center space-x-2 ${
                       !folderForm.name.trim() || actionLoading
@@ -727,7 +727,7 @@ const DocumentsPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={() => handleDeleteDocument(deleteConfirm)}
+                    onClick={() => { void handleDeleteDocument(deleteConfirm); }}
                     disabled={actionLoading}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
                   >

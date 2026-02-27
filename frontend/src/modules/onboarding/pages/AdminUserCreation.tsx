@@ -310,7 +310,7 @@ const SystemOwnerCreation: React.FC = () => {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
             {/* Personal Information */}
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
               <h3 className="text-xl font-bold text-theme-text-primary mb-4">

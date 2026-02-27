@@ -665,7 +665,7 @@ export const ReportsPage: React.FC = () => {
                 <button
                   disabled={isGenerating}
                   className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-70 disabled:cursor-wait text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                  onClick={() => handleGenerateReport(report)}
+                  onClick={() => { void handleGenerateReport(report); }}
                 >
                   {isGenerating ? (
                     <>

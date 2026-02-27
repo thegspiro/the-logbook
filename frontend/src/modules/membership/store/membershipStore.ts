@@ -165,12 +165,12 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
 
   setSearchQuery: (query: string) => {
     set({ searchQuery: query, currentPage: 1 });
-    get().fetchMembers(1);
+    void get().fetchMembers(1);
   },
 
   setStatusFilter: (status: string) => {
     set({ statusFilter: status, currentPage: 1 });
-    get().fetchMembers(1);
+    void get().fetchMembers(1);
   },
 
   setCurrentMember: (member) => {

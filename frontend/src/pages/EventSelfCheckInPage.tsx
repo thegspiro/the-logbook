@@ -29,7 +29,8 @@ const EventSelfCheckInPage: React.FC = () => {
 
   useEffect(() => {
     if (!eventId) return;
-    fetchEventData();
+    void fetchEventData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   const fetchEventData = async () => {
@@ -158,7 +159,7 @@ const EventSelfCheckInPage: React.FC = () => {
 
             <div className="space-y-3">
               <button
-                onClick={handleCheckOut}
+                onClick={() => { void handleCheckOut(); }}
                 disabled={checkingIn}
                 className="w-full px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-lg hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed"
               >
@@ -342,7 +343,7 @@ const EventSelfCheckInPage: React.FC = () => {
             )}
 
             <button
-              onClick={() => handleCheckIn()}
+              onClick={() => { void handleCheckIn(); }}
               disabled={checkingIn}
               className="w-full px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed"
             >

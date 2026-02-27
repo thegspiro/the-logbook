@@ -112,21 +112,21 @@ export const MemberAuditHistoryPage: React.FC = () => {
       await fetchAuditHistory(1, eventTypeFilter, false);
     };
 
-    loadInitialData();
-  }, [userId]);
+    void loadInitialData();
+  }, [userId, eventTypeFilter, fetchAuditHistory]);
 
   useEffect(() => {
     if (!userId || !user) return;
 
     setPage(1);
     setExpandedEntryIds(new Set());
-    fetchAuditHistory(1, eventTypeFilter, false);
-  }, [eventTypeFilter]);
+    void fetchAuditHistory(1, eventTypeFilter, false);
+  }, [eventTypeFilter, fetchAuditHistory, user, userId]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
     setPage(nextPage);
-    fetchAuditHistory(nextPage, eventTypeFilter, true);
+    void fetchAuditHistory(nextPage, eventTypeFilter, true);
   };
 
   const toggleEntryExpanded = (entryId: number) => {
@@ -142,7 +142,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
   };
 
   const getSeverityStyle = (severity: string): { dot: string; label: string } => {
-    return (SEVERITY_STYLES[severity] || SEVERITY_STYLES.info)!;
+    return SEVERITY_STYLES[severity] ?? { dot: 'bg-blue-500', label: 'Info' };
   };
 
   const formatEventDataValue = (value: unknown): string => {
@@ -345,7 +345,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
                             Event Data
                           </p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                            {Object.entries(entry.event_data!).map(([key, value]) => (
+                            {Object.entries(entry.event_data ?? {}).map(([key, value]) => (
                               <div key={key} className="flex flex-col">
                                 <span className="text-xs text-theme-text-muted">
                                   {formatEventDataKey(key)}

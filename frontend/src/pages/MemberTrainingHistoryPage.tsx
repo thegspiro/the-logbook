@@ -38,7 +38,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
 
   useEffect(() => {
     if (userId) {
-      fetchData();
+      void fetchData();
     }
   }, [userId]);
 

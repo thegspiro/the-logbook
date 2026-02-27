@@ -188,7 +188,8 @@ function LocationSetupWizard({
     try {
       const newStations = [...stations];
       for (let i = 0; i < newStations.length; i++) {
-        const s = newStations[i]!;
+        const s = newStations[i];
+        if (!s) continue;
         if (!s.saved) {
           const created = await locationsService.createLocation({
             name: s.name.trim(),
@@ -325,7 +326,7 @@ function LocationSetupWizard({
               </div>
               <div className="grid grid-cols-1 gap-3">
                 <button
-                  onClick={() => handleModeSelect('single_station')}
+                  onClick={() => { void handleModeSelect('single_station'); }}
                   className="flex items-center gap-4 p-4 bg-theme-surface-hover border-2 border-theme-surface-border rounded-xl hover:border-red-500/50 transition-all text-left group"
                 >
                   <div className="w-12 h-12 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/10 transition-colors">
@@ -339,7 +340,7 @@ function LocationSetupWizard({
                   </div>
                 </button>
                 <button
-                  onClick={() => handleModeSelect('multi_station')}
+                  onClick={() => { void handleModeSelect('multi_station'); }}
                   className="flex items-center gap-4 p-4 bg-theme-surface-hover border-2 border-theme-surface-border rounded-xl hover:border-red-500/50 transition-all text-left group"
                 >
                   <div className="w-12 h-12 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/10 transition-colors">
@@ -649,7 +650,7 @@ function LocationSetupWizard({
                 ← Back
               </button>
               <button
-                onClick={handleSaveStations}
+                onClick={() => { void handleSaveStations(); }}
                 disabled={isSaving || stations.every(s => !s.name.trim())}
                 className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >
@@ -675,7 +676,7 @@ function LocationSetupWizard({
                   Skip for now
                 </button>
                 <button
-                  onClick={handleFinishRooms}
+                  onClick={() => { void handleFinishRooms(); }}
                   disabled={isSaving}
                   className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
@@ -748,7 +749,7 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
       </div>
       {kioskUrl && (
         <button
-          onClick={handleCopyKioskUrl}
+          onClick={() => { void handleCopyKioskUrl(); }}
           className="mt-2 flex items-center gap-1.5 text-xs text-theme-text-muted hover:text-blue-500 transition-colors"
           title="Copy kiosk display URL for this room"
         >
@@ -801,7 +802,7 @@ export default function LocationsPage() {
         setStationModeLoading(false);
       }
     };
-    loadStationMode();
+    void loadStationMode();
   }, []);
 
   const handleSetStationMode = async (mode: 'single_station' | 'multi_station') => {
@@ -826,7 +827,7 @@ export default function LocationsPage() {
     }
   }, []);
 
-  useEffect(() => { loadLocations(); }, [loadLocations]);
+  useEffect(() => { void loadLocations(); }, [loadLocations]);
 
   // Auto-show wizard only when the user has zero locations and hasn't dismissed it
   useEffect(() => {
@@ -907,7 +908,7 @@ export default function LocationsPage() {
         toast.success('Station added');
       }
       setShowStationModal(false);
-      loadLocations();
+      void loadLocations();
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       toast.error(detail || 'Failed to save station');
@@ -926,7 +927,7 @@ export default function LocationsPage() {
       }
       await locationsService.deleteLocation(station.id);
       toast.success('Station deleted');
-      loadLocations();
+      void loadLocations();
     } catch {
       toast.error('Failed to delete station. It may have events associated with it.');
     }
@@ -973,7 +974,7 @@ export default function LocationsPage() {
         toast.success('Room added');
       }
       setShowRoomModal(false);
-      loadLocations();
+      void loadLocations();
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       toast.error(detail || 'Failed to save room');
@@ -987,7 +988,7 @@ export default function LocationsPage() {
     try {
       await locationsService.deleteLocation(room.id);
       toast.success('Room deleted');
-      loadLocations();
+      void loadLocations();
     } catch {
       toast.error('Failed to delete room. It may have events associated with it.');
     }
@@ -1013,7 +1014,7 @@ export default function LocationsPage() {
           onComplete={() => {
             wizardDismissedRef.current = true;
             setShowWizard(false);
-            loadLocations();
+            void loadLocations();
             // Reload station mode from settings in case it changed
             organizationService.getSettings().then(settings => {
               const mode = (settings as Record<string, unknown>).station_mode as StationMode;
@@ -1036,7 +1037,7 @@ export default function LocationsPage() {
             </span>
           )}
           <button
-            onClick={() => handleSetStationMode(isSingleStation ? 'multi_station' : 'single_station')}
+            onClick={() => { void handleSetStationMode(isSingleStation ? 'multi_station' : 'single_station'); }}
             className="text-theme-text-muted hover:text-theme-text-secondary underline"
           >
             Change
@@ -1057,13 +1058,13 @@ export default function LocationsPage() {
             <HelpCircle className="w-3.5 h-3.5" /> Station mode not configured
           </span>
           <button
-            onClick={() => handleSetStationMode('single_station')}
+            onClick={() => { void handleSetStationMode('single_station'); }}
             className="text-theme-text-muted hover:text-theme-text-secondary underline"
           >
             Set Single-Station
           </button>
           <button
-            onClick={() => handleSetStationMode('multi_station')}
+            onClick={() => { void handleSetStationMode('multi_station'); }}
             className="text-theme-text-muted hover:text-theme-text-secondary underline"
           >
             Set Multi-Station
@@ -1166,7 +1167,7 @@ export default function LocationsPage() {
                     >
                       <Pencil className="w-4 h-4" aria-hidden="true" />
                     </button>
-                    <button onClick={() => handleDeleteStation(station)} title="Delete station" aria-label="Delete station"
+                    <button onClick={() => { void handleDeleteStation(station); }} title="Delete station" aria-label="Delete station"
                       className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-4 h-4" aria-hidden="true" />
@@ -1197,7 +1198,7 @@ export default function LocationsPage() {
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                         {stationRooms.map(room => (
-                          <RoomCard key={room.id} room={room} onEdit={openEditRoom} onDelete={handleDeleteRoom} />
+                          <RoomCard key={room.id} room={room} onEdit={openEditRoom} onDelete={(r) => { void handleDeleteRoom(r); }} />
                         ))}
                       </div>
                     )}
@@ -1213,7 +1214,7 @@ export default function LocationsPage() {
               <h3 className="text-lg font-semibold text-theme-text-primary mb-3">Other Locations</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {(rooms.get('__other__') || []).map(room => (
-                  <RoomCard key={room.id} room={room} onEdit={openEditRoom} onDelete={handleDeleteRoom} />
+                  <RoomCard key={room.id} room={room} onEdit={openEditRoom} onDelete={(r) => { void handleDeleteRoom(r); }} />
                 ))}
               </div>
             </div>
@@ -1271,7 +1272,7 @@ export default function LocationsPage() {
             </div>
             <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowStationModal(false)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">Cancel</button>
-              <button onClick={handleSaveStation} disabled={isSavingStation || !stationForm.name.trim()}
+              <button onClick={() => { void handleSaveStation(); }} disabled={isSavingStation || !stationForm.name.trim()}
                 className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >
                 {isSavingStation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -1332,7 +1333,7 @@ export default function LocationsPage() {
             </div>
             <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowRoomModal(false)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">Cancel</button>
-              <button onClick={handleSaveRoom} disabled={isSavingRoom || !roomForm.name.trim()}
+              <button onClick={() => { void handleSaveRoom(); }} disabled={isSavingRoom || !roomForm.name.trim()}
                 className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >
                 {isSavingRoom ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

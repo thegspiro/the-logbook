@@ -124,7 +124,9 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
 
     const reordered = [...stages];
     const [moved] = reordered.splice(fromIndex, 1);
-    reordered.splice(toIndex, 0, moved!);
+    if (moved) {
+      reordered.splice(toIndex, 0, moved);
+    }
 
     // Update sort_order values
     const withNewOrder = reordered.map((s, idx) => ({
@@ -163,7 +165,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
   const handleDrop = (e: React.DragEvent, toIndex: number) => {
     e.preventDefault();
     if (dragIndex !== null && dragIndex !== toIndex && !isSaving) {
-      moveStage(dragIndex, toIndex);
+      void moveStage(dragIndex, toIndex);
     }
     setDragIndex(null);
     setDragOverIndex(null);
@@ -258,7 +260,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                 {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button
-                    onClick={() => moveStage(index, index - 1)}
+                    onClick={() => { void moveStage(index, index - 1); }}
                     disabled={index === 0 || isSaving}
                     className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title="Move up"
@@ -266,7 +268,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                     <ArrowUp className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => moveStage(index, index + 1)}
+                    onClick={() => { void moveStage(index, index + 1); }}
                     disabled={index === stages.length - 1 || isSaving}
                     className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title="Move down"
@@ -293,7 +295,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                       </button>
                       <button
                         onClick={() => {
-                          handleDeleteStage(stage.id);
+                          void handleDeleteStage(stage.id);
                           setDeleteConfirmId(null);
                         }}
                         className="px-1.5 py-0.5 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors"
@@ -344,7 +346,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
           setModalOpen(false);
           setEditingStage(null);
         }}
-        onSave={editingStage ? handleUpdateStage : handleAddStage}
+        onSave={(data) => { void (editingStage ? handleUpdateStage(data) : handleAddStage(data)); }}
         editingStage={editingStage}
         existingStageCount={stages.length}
       />

@@ -361,7 +361,7 @@ const ModuleSelection: React.FC = () => {
           {/* Continue Button */}
           <div className="max-w-md mx-auto">
             <button
-              onClick={handleContinue}
+              onClick={() => { void handleContinue(); }}
               disabled={isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 isSaving

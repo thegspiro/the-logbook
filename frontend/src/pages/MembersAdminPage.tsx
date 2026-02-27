@@ -84,7 +84,7 @@ export const MembersAdminPage: React.FC = () => {
   const canCreateMembers = checkPermission('users.create');
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
 
     // Load stations for dropdown (top-level locations with an address)
     locationsService.getLocations({ is_active: true }).then((locs) => {
@@ -531,7 +531,7 @@ export const MembersAdminPage: React.FC = () => {
                           >
                             {role.name}
                             <button
-                              onClick={() => handleQuickRemoveRole(user, role.id)}
+                              onClick={() => { void handleQuickRemoveRole(user, role.id); }}
                               className="ml-1 hover:text-red-600"
                               aria-label={`Remove ${role.name} role from ${user.full_name || user.username}`}
                             >
@@ -654,7 +654,7 @@ export const MembersAdminPage: React.FC = () => {
                             </div>
                           </div>
                           <button
-                            onClick={() => handleQuickRemoveUser(user.id, role)}
+                            onClick={() => { void handleQuickRemoveUser(user.id, role); }}
                             className="ml-2 text-theme-text-muted hover:text-red-600"
                             aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
                           >
@@ -679,7 +679,7 @@ export const MembersAdminPage: React.FC = () => {
         footer={
           <>
             <button
-              onClick={handleSaveProfile}
+              onClick={() => { void handleSaveProfile(); }}
               disabled={savingProfile}
               className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
             >
@@ -810,7 +810,7 @@ export const MembersAdminPage: React.FC = () => {
         footer={
           <>
             <button
-              onClick={handleResetPassword}
+              onClick={() => { void handleResetPassword(); }}
               disabled={savingReset || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
               className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
             >
@@ -883,7 +883,7 @@ export const MembersAdminPage: React.FC = () => {
         footer={
           <>
             <button
-              onClick={handleSaveRoles}
+              onClick={() => { void handleSaveRoles(); }}
               disabled={saving}
               className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
             >
@@ -943,7 +943,7 @@ export const MembersAdminPage: React.FC = () => {
         footer={
           <>
             <button
-              onClick={handleSaveMembers}
+              onClick={() => { void handleSaveMembers(); }}
               disabled={saving}
               className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
             >

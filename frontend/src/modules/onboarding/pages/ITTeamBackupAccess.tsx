@@ -235,7 +235,7 @@ const ITTeamBackupAccess: React.FC = () => {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
             {/* IT Team Section */}
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
               <div className="flex items-center justify-between mb-4">

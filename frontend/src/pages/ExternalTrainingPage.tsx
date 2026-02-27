@@ -5,7 +5,7 @@
  * like Vector Solutions, Target Solutions, Lexipol, etc.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
@@ -145,7 +145,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
             {error && (
               <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded" role="alert">
                 {error}
@@ -602,7 +602,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
           {error && (
             <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded" role="alert">
               {error}
@@ -767,13 +767,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
   const [userMappings, setUserMappings] = useState<ExternalUserMapping[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (isOpen && providerId) {
-      loadMappings();
-    }
-  }, [isOpen, providerId]);
-
-  const loadMappings = async () => {
+  const loadMappings = useCallback(async () => {
     setLoading(true);
     try {
       const [categories, users] = await Promise.all([
@@ -787,7 +781,13 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
     } finally {
       setLoading(false);
     }
-  };
+  }, [providerId]);
+
+  useEffect(() => {
+    if (isOpen && providerId) {
+      void loadMappings();
+    }
+  }, [isOpen, providerId, loadMappings]);
 
   if (!isOpen) return null;
 
@@ -959,7 +959,7 @@ const ExternalTrainingPage: React.FC = () => {
   });
 
   useEffect(() => {
-    loadProviders();
+    void loadProviders();
   }, []);
 
   const loadProviders = async () => {
@@ -998,7 +998,7 @@ const ExternalTrainingPage: React.FC = () => {
       const result = await externalTrainingService.triggerSync(providerId, { sync_type: 'incremental' });
       toast.success(result.message || 'Sync initiated. Check sync logs for progress.');
       // Reload providers after a short delay to show updated last_sync_at
-      setTimeout(() => loadProviders(), 2000);
+      setTimeout(() => { void loadProviders(); }, 2000);
     } catch (err: unknown) {
       toast.error(`Sync failed: ${getErrorMessage(err)}`);
     } finally {
@@ -1123,10 +1123,10 @@ const ExternalTrainingPage: React.FC = () => {
                 <ProviderCard
                   key={provider.id}
                   provider={provider}
-                  onTestConnection={handleTestConnection}
-                  onSync={handleSync}
+                  onTestConnection={(id) => { void handleTestConnection(id); }}
+                  onSync={(id) => { void handleSync(id); }}
                   onEdit={handleEdit}
-                  onDelete={handleDelete}
+                  onDelete={(id) => { void handleDelete(id); }}
                   onViewMappings={handleViewMappings}
                   isTestingConnection={testingProvider === provider.id}
                   isSyncing={syncingProvider === provider.id}
@@ -1157,13 +1157,13 @@ const ExternalTrainingPage: React.FC = () => {
       <CreateProviderModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onSuccess={loadProviders}
+        onSuccess={() => { void loadProviders(); }}
       />
       <EditProviderModal
         isOpen={editModal.isOpen}
         provider={editModal.provider}
         onClose={() => setEditModal({ isOpen: false, provider: null })}
-        onSuccess={loadProviders}
+        onSuccess={() => { void loadProviders(); }}
       />
       <MappingsModal
         isOpen={mappingsModal.isOpen}

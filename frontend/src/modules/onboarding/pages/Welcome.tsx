@@ -35,7 +35,7 @@ const Welcome: React.FC = () => {
       setChecking(false);
     };
 
-    checkOnboardingStatus();
+    void checkOnboardingStatus();
   }, [navigate]);
 
   useEffect(() => {

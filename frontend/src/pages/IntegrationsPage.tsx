@@ -89,7 +89,7 @@ const IntegrationsPage: React.FC = () => {
         setLoading(false);
       }
     };
-    loadIntegrations();
+    void loadIntegrations();
   }, []);
 
   const getUI = (type: string) => INTEGRATION_UI[type] || DEFAULT_UI;
@@ -260,7 +260,7 @@ const IntegrationsPage: React.FC = () => {
                   )}
                   {integration.status === 'connected' && canManage && (
                     <button
-                      onClick={() => handleDisconnect(integration.id)}
+                      onClick={() => { void handleDisconnect(integration.id); }}
                       className="px-4 py-1.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center space-x-1"
                     >
                       <Settings className="w-3.5 h-3.5" />
@@ -323,7 +323,7 @@ const IntegrationsPage: React.FC = () => {
                       Cancel
                     </button>
                     <button
-                      onClick={() => handleConnect(selectedIntegration.id)}
+                      onClick={() => { void handleConnect(selectedIntegration.id); }}
                       disabled={connecting}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
                     >

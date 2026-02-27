@@ -66,7 +66,7 @@ export const usePortalConfig = () => {
   );
 
   useEffect(() => {
-    fetchConfig();
+    void fetchConfig();
   }, [fetchConfig]);
 
   return {
@@ -135,7 +135,7 @@ export const useAPIKeys = (includeInactive = false) => {
   );
 
   useEffect(() => {
-    fetchAPIKeys();
+    void fetchAPIKeys();
   }, [fetchAPIKeys]);
 
   return {
@@ -173,7 +173,7 @@ export const useAccessLogs = (filters: AccessLogFilters = {}) => {
   }, [filters]);
 
   useEffect(() => {
-    fetchLogs();
+    void fetchLogs();
   }, [fetchLogs]);
 
   return {
@@ -209,7 +209,7 @@ export const useUsageStats = () => {
   }, []);
 
   useEffect(() => {
-    fetchStats();
+    void fetchStats();
   }, [fetchStats]);
 
   return {
@@ -277,7 +277,7 @@ export const useDataWhitelist = (category?: string) => {
   );
 
   useEffect(() => {
-    fetchWhitelist();
+    void fetchWhitelist();
   }, [fetchWhitelist]);
 
   return {

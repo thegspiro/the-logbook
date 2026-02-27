@@ -41,7 +41,7 @@ export const useEvent = (eventId: string | undefined) => {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchEvent(controller.signal);
+    void fetchEvent(controller.signal);
     return () => controller.abort();
   }, [fetchEvent]);
 

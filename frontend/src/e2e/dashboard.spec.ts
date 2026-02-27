@@ -17,7 +17,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock current user endpoint
   await page.route('**/api/v1/auth/me', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -36,7 +36,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock branding endpoint with a specific department name
   await page.route('**/api/v1/auth/branding', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ name: 'Oakville Fire Department', logo: null }),
@@ -45,7 +45,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock dashboard branding (used by Dashboard component directly)
   await page.route('**/api/v1/dashboard/branding', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ name: 'Oakville Fire Department', logo: null }),
@@ -54,7 +54,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock OAuth config
   await page.route('**/api/v1/auth/oauth-config', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ googleEnabled: false, microsoftEnabled: false }),
@@ -63,7 +63,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock organization enabled-modules
   await page.route('**/api/v1/organization/enabled-modules', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ enabled_modules: [] }),
@@ -72,7 +72,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock notifications with sample data
   await page.route('**/api/v1/notifications/**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -100,7 +100,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock upcoming shifts with sample data
   await page.route('**/api/v1/scheduling/my-shifts**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -126,7 +126,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock scheduling summary
   await page.route('**/api/v1/scheduling/summary**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ total_hours_this_month: 24 }),
@@ -135,7 +135,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock training enrollments with sample data
   await page.route('**/api/v1/training/programs/enrollments**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify([
@@ -165,7 +165,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock training enrollment progress detail
   await page.route('**/api/v1/training/programs/enrollments/*/progress', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -180,7 +180,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock training my-training summary
   await page.route('**/api/v1/training/config/my-training**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ hours_summary: { total_hours: 12 } }),
@@ -191,9 +191,9 @@ async function setupAuthenticatedDashboard(page: Page) {
   await page.route('**/api/v1/training/**', (route) => {
     if (route.request().url().includes('enrollments') || route.request().url().includes('config')) {
       // Already handled by more specific routes above; let them through
-      route.fallback();
+      void route.fallback();
     } else {
-      route.fulfill({
+      void route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([]),
@@ -203,7 +203,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock messages
   await page.route('**/api/v1/messages/**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify([]),
@@ -212,7 +212,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock inventory
   await page.route('**/api/v1/inventory/**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({}),
@@ -221,7 +221,7 @@ async function setupAuthenticatedDashboard(page: Page) {
 
   // Mock dashboard admin summary (returns 403 for non-admin user)
   await page.route('**/api/v1/dashboard/admin-summary', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 403,
       contentType: 'application/json',
       body: JSON.stringify({ detail: 'Forbidden' }),
@@ -431,7 +431,7 @@ test.describe('Dashboard', () => {
       });
 
       await page.route('**/api/v1/auth/me', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
@@ -449,7 +449,7 @@ test.describe('Dashboard', () => {
       });
 
       await page.route('**/api/v1/auth/branding', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ name: 'Test Department', logo: null }),
@@ -457,7 +457,7 @@ test.describe('Dashboard', () => {
       });
 
       await page.route('**/api/v1/auth/oauth-config', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ googleEnabled: false, microsoftEnabled: false }),
@@ -465,7 +465,7 @@ test.describe('Dashboard', () => {
       });
 
       await page.route('**/api/v1/organization/enabled-modules', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ enabled_modules: [] }),
@@ -474,7 +474,7 @@ test.describe('Dashboard', () => {
 
       // Return empty data for all dashboard endpoints
       await page.route('**/api/v1/dashboard/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({}),
@@ -482,7 +482,7 @@ test.describe('Dashboard', () => {
       });
 
       await page.route('**/api/v1/notifications/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ logs: [] }),
@@ -490,7 +490,7 @@ test.describe('Dashboard', () => {
       });
 
       await page.route('**/api/v1/scheduling/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ shifts: [], total_hours_this_month: 0 }),
@@ -498,7 +498,7 @@ test.describe('Dashboard', () => {
       });
 
       await page.route('**/api/v1/training/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify([]),
@@ -506,7 +506,7 @@ test.describe('Dashboard', () => {
       });
 
       await page.route('**/api/v1/messages/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify([]),
@@ -514,7 +514,7 @@ test.describe('Dashboard', () => {
       });
 
       await page.route('**/api/v1/inventory/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({}),

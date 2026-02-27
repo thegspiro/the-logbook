@@ -17,7 +17,7 @@ async function setupAuthenticatedSession(page: Page) {
 
   // Mock current user endpoint (called by ProtectedRoute's loadUser)
   await page.route('**/api/v1/auth/me', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -36,7 +36,7 @@ async function setupAuthenticatedSession(page: Page) {
 
   // Mock branding
   await page.route('**/api/v1/auth/branding', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ name: 'Test Department', logo: null }),
@@ -45,7 +45,7 @@ async function setupAuthenticatedSession(page: Page) {
 
   // Mock OAuth config
   await page.route('**/api/v1/auth/oauth-config', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ googleEnabled: false, microsoftEnabled: false }),
@@ -54,7 +54,7 @@ async function setupAuthenticatedSession(page: Page) {
 
   // Mock organization enabled-modules (used by SideNavigation)
   await page.route('**/api/v1/organization/enabled-modules', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ enabled_modules: [] }),
@@ -63,7 +63,7 @@ async function setupAuthenticatedSession(page: Page) {
 
   // Mock dashboard data endpoints so the dashboard renders without errors
   await page.route('**/api/v1/dashboard/**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({}),
@@ -71,7 +71,7 @@ async function setupAuthenticatedSession(page: Page) {
   });
 
   await page.route('**/api/v1/notifications/**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ logs: [] }),
@@ -79,7 +79,7 @@ async function setupAuthenticatedSession(page: Page) {
   });
 
   await page.route('**/api/v1/scheduling/**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ shifts: [], total_hours_this_month: 0 }),
@@ -87,7 +87,7 @@ async function setupAuthenticatedSession(page: Page) {
   });
 
   await page.route('**/api/v1/training/**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify([]),
@@ -95,7 +95,7 @@ async function setupAuthenticatedSession(page: Page) {
   });
 
   await page.route('**/api/v1/messages/**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify([]),
@@ -103,7 +103,7 @@ async function setupAuthenticatedSession(page: Page) {
   });
 
   await page.route('**/api/v1/inventory/**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({}),
@@ -112,7 +112,7 @@ async function setupAuthenticatedSession(page: Page) {
 
   // Mock members endpoint for Members page
   await page.route('**/api/v1/members**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ members: [], total: 0 }),
@@ -121,7 +121,7 @@ async function setupAuthenticatedSession(page: Page) {
 
   // Mock events endpoint for Events page
   await page.route('**/api/v1/events**', (route) => {
-    route.fulfill({
+    void route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ events: [], total: 0 }),

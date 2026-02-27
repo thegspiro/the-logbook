@@ -63,10 +63,10 @@ export const ApparatusListPage: React.FC = () => {
     }
 
     // Load initial data
-    fetchTypes();
-    fetchStatuses();
-    fetchFleetSummary();
-    fetchApparatusList(1);
+    void fetchTypes();
+    void fetchStatuses();
+    void fetchFleetSummary();
+    void fetchApparatusList(1);
   }, [navigate, fetchTypes, fetchStatuses, fetchFleetSummary, fetchApparatusList]);
 
   // Apply filters when they change
@@ -89,7 +89,7 @@ export const ApparatusListPage: React.FC = () => {
   }, [filterType, filterStatus, showArchived, searchQuery, setFilters]);
 
   const handlePageChange = (page: number) => {
-    fetchApparatusList(page);
+    void fetchApparatusList(page);
   };
 
   const getTypeById = (typeId: string) => {

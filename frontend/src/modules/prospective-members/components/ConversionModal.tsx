@@ -83,7 +83,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       setIsConverting(false);
       setConversionResult(null);
     }
-  }, [applicant?.id, isOpen]);
+  }, [applicant, isOpen]);
 
   if (!isOpen || !applicant) return null;
 
@@ -461,7 +461,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 Back
               </button>
               <button
-                onClick={handleConvert}
+                onClick={() => { void handleConvert(); }}
                 disabled={isConverting}
                 className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >

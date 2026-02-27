@@ -54,12 +54,13 @@ export const EventDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (eventId) {
-      fetchEvent();
+      void fetchEvent();
       if (canManage) {
-        fetchRSVPs();
-        fetchStats();
+        void fetchRSVPs();
+        void fetchStats();
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, canManage]);
 
   const fetchEvent = async () => {
@@ -111,7 +112,7 @@ export const EventDetailPage: React.FC = () => {
   };
 
   const openCheckInModal = () => {
-    fetchEligibleMembers();
+    void fetchEligibleMembers();
     setShowCheckInModal(true);
     setMemberSearch('');
   };
@@ -398,7 +399,7 @@ export const EventDetailPage: React.FC = () => {
                     Edit
                   </button>
                   <button
-                    onClick={handleDuplicateEvent}
+                    onClick={() => { void handleDuplicateEvent(); }}
                     disabled={submitting}
                     className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover disabled:opacity-50"
                   >
@@ -435,15 +436,18 @@ export const EventDetailPage: React.FC = () => {
                     Monitoring
                   </button>
                   <button
-                    onClick={async () => {
-                      try {
-                        const _meeting = await meetingsService.createFromEvent(eventId!);
-                        toast.success('Meeting created from event');
-                        navigate(`/minutes`);
-                      } catch (err) {
-                        const axiosErr = err as AxiosError<{ detail?: string }>;
-                        toast.error(axiosErr.response?.data?.detail || 'Failed to create meeting');
-                      }
+                    onClick={() => {
+                      void (async () => {
+                        if (!eventId) return;
+                        try {
+                          const _meeting = await meetingsService.createFromEvent(eventId);
+                          toast.success('Meeting created from event');
+                          navigate(`/minutes`);
+                        } catch (err) {
+                          const axiosErr = err as AxiosError<{ detail?: string }>;
+                          toast.error(axiosErr.response?.data?.detail || 'Failed to create meeting');
+                        }
+                      })();
                     }}
                     disabled={submitting}
                     className="inline-flex items-center px-4 py-2 border border-cyan-300 rounded-md shadow-sm text-sm font-medium text-cyan-700 dark:text-cyan-400 bg-theme-surface hover:bg-cyan-500/20 disabled:opacity-50"
@@ -666,7 +670,7 @@ export const EventDetailPage: React.FC = () => {
                           </span>
                           {rsvp.status === 'going' && !rsvp.checked_in && (
                             <button
-                              onClick={() => handleCheckIn(rsvp.user_id)}
+                              onClick={() => { void handleCheckIn(rsvp.user_id); }}
                               className="text-xs text-red-400 hover:text-red-300"
                             >
                               Check In
@@ -717,7 +721,7 @@ export const EventDetailPage: React.FC = () => {
                           <span className="flex items-center gap-2">
                             <span className="text-xs text-theme-text-muted">Remove?</span>
                             <button
-                              onClick={() => handleRemoveAttendee(rsvp.user_id)}
+                              onClick={() => { void handleRemoveAttendee(rsvp.user_id); }}
                               className="text-xs font-medium text-red-400 hover:text-red-300"
                             >
                               Yes
@@ -836,7 +840,7 @@ export const EventDetailPage: React.FC = () => {
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <form onSubmit={handleRSVP}>
+              <form onSubmit={(e) => { void handleRSVP(e); }}>
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="rsvp-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">RSVP for {event.title}</h3>
 
@@ -943,7 +947,7 @@ export const EventDetailPage: React.FC = () => {
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <form onSubmit={handleCancelEvent}>
+              <form onSubmit={(e) => { void handleCancelEvent(e); }}>
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="cancel-event-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Event</h3>
 
@@ -1123,8 +1127,8 @@ export const EventDetailPage: React.FC = () => {
                             ) : (
                               <button
                                 onClick={() => {
-                                  handleCheckIn(member.id);
-                                  fetchEligibleMembers();
+                                  void handleCheckIn(member.id);
+                                  void fetchEligibleMembers();
                                 }}
                                 className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
                               >
@@ -1179,7 +1183,7 @@ export const EventDetailPage: React.FC = () => {
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <form onSubmit={handleRecordTimes}>
+              <form onSubmit={(e) => { void handleRecordTimes(e); }}>
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="record-times-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Record Official Event Times</h3>
 
@@ -1283,7 +1287,7 @@ export const EventDetailPage: React.FC = () => {
             </div>
 
             <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <form onSubmit={handleOverrideAttendance}>
+              <form onSubmit={(e) => { void handleOverrideAttendance(e); }}>
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="override-modal-title" className="text-lg font-medium text-theme-text-primary mb-1">
                     Edit Attendance Times
@@ -1401,7 +1405,7 @@ export const EventDetailPage: React.FC = () => {
                 <button
                   type="button"
                   disabled={submitting}
-                  onClick={handleDeleteEvent}
+                  onClick={() => { void handleDeleteEvent(); }}
                   className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                 >
                   {submitting ? 'Deleting...' : 'Delete Permanently'}

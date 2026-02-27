@@ -105,7 +105,7 @@ const MyEquipmentPage: React.FC = () => {
     setItemResults([]);
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
     setError(null);
@@ -117,16 +117,16 @@ const MyEquipmentPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
     try {
       const result = await inventoryService.getEquipmentRequests({ mine_only: true });
       setMyRequests(result.requests || []);
     } catch { /* non-critical */ }
-  };
+  }, []);
 
-  useEffect(() => { loadData(); loadRequests(); }, [user?.id]);
+  useEffect(() => { void loadData(); void loadRequests(); }, [loadData, loadRequests]);
 
   const handleCheckIn = async () => {
     if (!checkInModal.checkoutId) return;
@@ -178,7 +178,7 @@ const MyEquipmentPage: React.FC = () => {
       setShowRequestModal(false);
       setRequestForm({ item_name: '', item_id: '', category_id: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
       setItemSearch('');
-      loadRequests();
+      void loadRequests();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to submit request'));
     } finally {
@@ -210,7 +210,7 @@ const MyEquipmentPage: React.FC = () => {
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-8 text-center">
             <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <p className="text-red-700 dark:text-red-300">{error}</p>
-            <button onClick={loadData} className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg">Retry</button>
+            <button onClick={() => { void loadData(); }} className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg">Retry</button>
           </div>
         </main>
       </div>
@@ -243,7 +243,7 @@ const MyEquipmentPage: React.FC = () => {
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Request Equipment</span>
             </button>
-            <button onClick={loadData} className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover" title="Refresh">
+            <button onClick={() => { void loadData(); }} className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover" title="Refresh">
               <RefreshCw className="w-5 h-5" />
             </button>
           </div>
@@ -268,14 +268,14 @@ const MyEquipmentPage: React.FC = () => {
         ) : (
           <div className="space-y-6">
             {/* Permanent Assignments */}
-            {data!.permanent_assignments.length > 0 && (
+            {(data?.permanent_assignments.length ?? 0) > 0 && (
               <section>
                 <h2 className="text-lg font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                   <CheckCircle className="w-5 h-5 text-blue-500" />
-                  Permanently Assigned ({data!.permanent_assignments.length})
+                  Permanently Assigned ({data?.permanent_assignments.length ?? 0})
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {data!.permanent_assignments.map((item: UserInventoryItem) => (
+                  {data?.permanent_assignments.map((item: UserInventoryItem) => (
                     <div key={item.assignment_id} className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border">
                       <h3 className="text-theme-text-primary font-medium text-sm">{item.item_name}</h3>
                       <div className="mt-2 space-y-1">
@@ -301,11 +301,11 @@ const MyEquipmentPage: React.FC = () => {
             )}
 
             {/* Active Checkouts */}
-            {data!.active_checkouts.length > 0 && (
+            {(data?.active_checkouts.length ?? 0) > 0 && (
               <section>
                 <h2 className="text-lg font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                   <Clock className="w-5 h-5 text-yellow-500" />
-                  Checked Out ({data!.active_checkouts.length})
+                  Checked Out ({data?.active_checkouts.length ?? 0})
                 </h2>
                 <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
                   <table className="w-full text-sm">
@@ -318,7 +318,7 @@ const MyEquipmentPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {data!.active_checkouts.map((co: UserCheckoutItem) => (
+                      {data?.active_checkouts.map((co: UserCheckoutItem) => (
                         <tr key={co.checkout_id} className={`border-b border-theme-surface-border ${co.is_overdue ? 'bg-red-500/5' : ''}`}>
                           <td className="p-3">
                             <span className="text-theme-text-primary font-medium">{co.item_name}</span>
@@ -358,11 +358,11 @@ const MyEquipmentPage: React.FC = () => {
             )}
 
             {/* Issued Pool Items */}
-            {data!.issued_items.length > 0 && (
+            {(data?.issued_items.length ?? 0) > 0 && (
               <section>
                 <h2 className="text-lg font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                   <Package className="w-5 h-5 text-purple-500" />
-                  Issued Items ({data!.issued_items.length})
+                  Issued Items ({data?.issued_items.length ?? 0})
                 </h2>
                 <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
                   <table className="w-full text-sm">
@@ -376,7 +376,7 @@ const MyEquipmentPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {data!.issued_items.map((iss: UserIssuedItem) => (
+                      {data?.issued_items.map((iss: UserIssuedItem) => (
                         <tr key={iss.issuance_id} className="border-b border-theme-surface-border">
                           <td className="p-3 text-theme-text-primary font-medium">{iss.item_name}</td>
                           <td className="p-3 text-theme-text-secondary">{iss.quantity_issued}</td>
@@ -530,7 +530,7 @@ const MyEquipmentPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setShowRequestModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={handleSubmitRequest} disabled={submitting || !requestForm.item_name.trim()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleSubmitRequest(); }} disabled={submitting || !requestForm.item_name.trim()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Submitting...' : 'Submit Request'}
                   </button>
                 </div>
@@ -566,7 +566,7 @@ const MyEquipmentPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={handleCheckIn} disabled={submitting} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleCheckIn(); }} disabled={submitting} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Returning...' : 'Return Item'}
                   </button>
                 </div>
@@ -601,7 +601,7 @@ const MyEquipmentPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={handleExtend} disabled={submitting || !extendDate} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleExtend(); }} disabled={submitting || !extendDate} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Extending...' : 'Extend'}
                   </button>
                 </div>

@@ -765,7 +765,7 @@ const PositionSetup: React.FC = () => {
                 Create Custom Position
               </button>
               <button
-                onClick={handleContinue}
+                onClick={() => { void handleContinue(); }}
                 disabled={isSaving || selectedCount < 2}
                 className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                   selectedCount >= 2 && !isSaving

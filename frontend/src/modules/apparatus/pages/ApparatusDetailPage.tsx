@@ -79,9 +79,9 @@ export const ApparatusDetailPage: React.FC = () => {
       return;
     }
 
-    fetchTypes();
-    fetchStatuses();
-    fetchApparatus(id);
+    void fetchTypes();
+    void fetchStatuses();
+    void fetchApparatus(id);
   }, [id, navigate, fetchApparatus, fetchTypes, fetchStatuses]);
 
   // Load tab-specific data
@@ -121,7 +121,7 @@ export const ApparatusDetailPage: React.FC = () => {
     };
 
     if (activeTab !== 'overview' && activeTab !== 'documents') {
-      loadTabData();
+      void loadTabData();
     }
   }, [id, activeTab, currentApparatus]);
 

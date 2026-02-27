@@ -51,7 +51,7 @@ const TrainingRequirementsPage: React.FC = () => {
   const [filterSource, setFilterSource] = useState<FilterSource>('all');
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, []);
 
   const fetchData = async () => {
@@ -182,7 +182,7 @@ const TrainingRequirementsPage: React.FC = () => {
 
           <div className="flex items-center space-x-3">
             <button
-              onClick={fetchData}
+              onClick={() => { void fetchData(); }}
               className="p-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
               aria-label="Refresh requirements"
             >
@@ -271,9 +271,9 @@ const TrainingRequirementsPage: React.FC = () => {
                   setSelectedRequirement(requirement);
                   setShowCreateModal(true);
                 }}
-                onDelete={() => handleDelete(requirement.id)}
-                onDuplicate={() => handleDuplicate(requirement)}
-                onToggleActive={() => toggleActive(requirement.id)}
+                onDelete={() => { void handleDelete(requirement.id); }}
+                onDuplicate={() => { void handleDuplicate(requirement); }}
+                onToggleActive={() => { void toggleActive(requirement.id); }}
               />
             ))
           )}
@@ -288,7 +288,7 @@ const TrainingRequirementsPage: React.FC = () => {
               setShowCreateModal(false);
               setSelectedRequirement(null);
             }}
-            onSave={handleSave}
+            onSave={(...args) => { void handleSave(...args); }}
           />
         )}
 
@@ -296,15 +296,17 @@ const TrainingRequirementsPage: React.FC = () => {
         {showTemplateModal && (
           <TemplateModal
             onClose={() => setShowTemplateModal(false)}
-            onSelect={async (template) => {
-              try {
-                const created = await trainingService.createRequirement(template);
-                setRequirements([...requirements, created]);
-                toast.success(`Template "${template.name}" added`);
-                setShowTemplateModal(false);
-              } catch (_error) {
-                toast.error('Failed to create requirement from template');
-              }
+            onSelect={(template) => {
+              void (async () => {
+                try {
+                  const created = await trainingService.createRequirement(template);
+                  setRequirements([...requirements, created]);
+                  toast.success(`Template "${template.name}" added`);
+                  setShowTemplateModal(false);
+                } catch (_error) {
+                  toast.error('Failed to create requirement from template');
+                }
+              })();
             }}
           />
         )}

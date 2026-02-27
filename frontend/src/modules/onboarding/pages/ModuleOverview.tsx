@@ -164,7 +164,7 @@ const ModuleOverview: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={handleContinue}
+              onClick={() => { void handleContinue(); }}
               disabled={isSaving || enabledCount === 0}
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                 enabledCount > 0 && !isSaving

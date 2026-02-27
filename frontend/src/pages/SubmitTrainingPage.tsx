@@ -149,7 +149,7 @@ const SubmissionForm: React.FC<{
       return;
     }
 
-    const completionDate = startDatetime.split('T')[0]!; // YYYY-MM-DD
+    const completionDate = startDatetime.split('T')[0] ?? ''; // YYYY-MM-DD
 
     try {
       const submitData = {
@@ -188,13 +188,13 @@ const SubmissionForm: React.FC<{
 
   // Filter training types if config restricts them
   const allowedTypes = config.allowed_training_types
-    ? TRAINING_TYPES.filter((t) => config.allowed_training_types!.includes(t.value))
+    ? TRAINING_TYPES.filter((t) => config.allowed_training_types?.includes(t.value))
     : TRAINING_TYPES;
 
   const parentCategories = categories.filter((c) => !c.parent_category_id);
 
   return (
-    <form onSubmit={handleSubmit} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-6 space-y-4">
+    <form onSubmit={(e) => { void handleSubmit(e); }} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-6 space-y-4">
       <h2 className="text-lg font-semibold text-theme-text-primary mb-2">
         {isEdit ? 'Edit Submission' : 'Report External Training'}
       </h2>
@@ -493,14 +493,14 @@ const SubmitTrainingPage: React.FC = () => {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { void loadData(); }, []);
 
   const handleDelete = async (submissionId: string) => {
     if (!confirm('Are you sure you want to delete this submission?')) return;
     try {
       await trainingSubmissionService.deleteSubmission(submissionId);
       toast.success('Submission deleted');
-      loadData();
+      void loadData();
     } catch {
       toast.error('Failed to delete submission');
     }
@@ -522,7 +522,7 @@ const SubmitTrainingPage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{loadError || 'Unable to load configuration.'}</p>
-          <button onClick={loadData} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+          <button onClick={() => { void loadData(); }} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
             Try Again
           </button>
         </div>
@@ -556,7 +556,7 @@ const SubmitTrainingPage: React.FC = () => {
         <SubmissionForm
           config={config}
           categories={categories}
-          onSuccess={() => { setEditingSubmission(null); loadData(); }}
+          onSuccess={() => { setEditingSubmission(null); void loadData(); }}
           editSubmission={editingSubmission}
           onCancelEdit={() => setEditingSubmission(null)}
         />
@@ -599,7 +599,7 @@ const SubmitTrainingPage: React.FC = () => {
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(sub.id)}
+                            onClick={() => { void handleDelete(sub.id); }}
                             className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 rounded"
                             aria-label="Delete submission"
                           >

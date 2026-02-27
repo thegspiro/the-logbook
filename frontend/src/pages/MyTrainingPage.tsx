@@ -292,7 +292,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
       {Object.keys(draft).length > 0 && (
         <div className="flex justify-end">
           <button
-            onClick={handleSave}
+            onClick={() => { void handleSave(); }}
             disabled={saving}
             className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
           >
@@ -317,7 +317,7 @@ const MyTrainingPage: React.FC = () => {
   const [isOfficer, setIsOfficer] = useState(false);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   const loadData = async () => {

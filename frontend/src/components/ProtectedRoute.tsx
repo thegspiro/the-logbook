@@ -25,7 +25,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   useEffect(() => {
     // Try to load user from token on mount
     if (!user && !isLoading && hasStoredToken) {
-      loadUser();
+      void loadUser();
     }
   }, [user, isLoading, loadUser, hasStoredToken]);
 

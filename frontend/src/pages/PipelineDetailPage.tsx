@@ -153,7 +153,7 @@ const EnrollModal: React.FC<{
           <h2 className="text-xl font-bold text-white">Enroll Members</h2>
           <p className="text-gray-300 text-sm mt-1">Enroll members into {programName}</p>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">
               Member IDs (one per line)
@@ -215,7 +215,8 @@ const PipelineDetailPage: React.FC = () => {
   const [isDuplicating, setIsDuplicating] = useState(false);
 
   useEffect(() => {
-    if (programId) loadProgram();
+    if (programId) void loadProgram();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programId]);
 
   const loadProgram = async () => {

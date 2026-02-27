@@ -39,7 +39,7 @@ const ImportMembers: React.FC = () => {
     setFile(selectedFile);
     setPreviewData([]);
     setImportResult(null);
-    validateFile(selectedFile);
+    void validateFile(selectedFile);
   };
 
   const validateFile = async (file: File) => {
@@ -480,7 +480,7 @@ const ImportMembers: React.FC = () => {
 
             <div className="mt-6 flex items-center justify-end">
               <button
-                onClick={handleImport}
+                onClick={() => { void handleImport(); }}
                 disabled={importing}
                 className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >

@@ -44,10 +44,10 @@ const EventQRCodePage: React.FC = () => {
 
   useEffect(() => {
     if (!eventId) return;
-    fetchQRData(false);
+    void fetchQRData(false);
 
     // Refresh QR data every 30 seconds to update validity status
-    const interval = setInterval(() => fetchQRData(true), 30000);
+    const interval = setInterval(() => { void fetchQRData(true); }, 30000);
     return () => clearInterval(interval);
   }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps
 

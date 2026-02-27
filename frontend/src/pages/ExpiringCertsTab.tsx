@@ -20,7 +20,7 @@ const ExpiringCertsTab: React.FC = () => {
   const [daysWindow, setDaysWindow] = useState(90);
 
   useEffect(() => {
-    loadCerts();
+    void loadCerts();
   }, [daysWindow]);
 
   const loadCerts = async () => {

@@ -60,9 +60,9 @@ const SubmissionViewer = ({
 
   useEffect(() => {
     if (formId && !directSubmission) {
-      loadData();
+      void loadData();
     }
-  }, [formId, page]);
+  }, [formId, page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (directSubmission) {

@@ -51,7 +51,7 @@ export const BallotVotingPage: React.FC = () => {
 
   useEffect(() => {
     if (token) {
-      loadBallot();
+      void loadBallot();
     } else {
       setError('No voting token provided. Please use the link from your ballot email.');
       setLoading(false);
@@ -478,7 +478,7 @@ export const BallotVotingPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={handleConfirmSubmit}
+                onClick={() => { void handleConfirmSubmit(); }}
                 disabled={submitting}
                 className="px-6 py-2 bg-red-700 text-white font-semibold rounded-md hover:bg-red-800 disabled:opacity-50"
               >

@@ -270,7 +270,7 @@ const AddMember: React.FC = () => {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
           {/* Personal Information */}
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
             <div className="flex items-center space-x-2 mb-4">

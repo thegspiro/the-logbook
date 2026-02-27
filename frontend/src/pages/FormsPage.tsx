@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FormInput,
   Plus,
@@ -238,7 +238,7 @@ const FormsPage: React.FC = () => {
   const [integrationTarget, setIntegrationTarget] = useState('membership');
   const [integrationType, setIntegrationType] = useState('membership_interest');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -257,11 +257,11 @@ const FormsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, categoryFilter]);
 
   useEffect(() => {
-    loadData();
-  }, [searchQuery, categoryFilter]);
+    void loadData();
+  }, [loadData]);
 
   const handleCreateForm = async () => {
     if (!formData.name.trim()) return;
@@ -368,7 +368,7 @@ const FormsPage: React.FC = () => {
 
   const handleCloseEditor = () => {
     setEditingForm(null);
-    loadData(); // Refresh list to reflect any changes
+    void loadData(); // Refresh list to reflect any changes
   };
 
   const handleShareForm = (form: FormDef) => {
@@ -421,7 +421,7 @@ const FormsPage: React.FC = () => {
 
   const copyPublicUrl = (slug: string) => {
     const url = `${window.location.origin}/f/${slug}`;
-    navigator.clipboard.writeText(url);
+    void navigator.clipboard.writeText(url);
     setCopiedSlug(slug);
     setTimeout(() => setCopiedSlug(null), 2000);
   };
@@ -462,7 +462,7 @@ const FormsPage: React.FC = () => {
           </div>
           <div className="flex items-center space-x-2">
             <button
-              onClick={loadData}
+              onClick={() => { void loadData(); }}
               className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
               aria-label="Refresh forms"
             >
@@ -654,7 +654,7 @@ const FormsPage: React.FC = () => {
                         <Link className="w-4 h-4 text-cyan-700 dark:text-cyan-400 flex-shrink-0" aria-hidden="true" />
                         <span className="text-cyan-700 dark:text-cyan-300 text-xs truncate flex-1">{getPublicUrl(form.public_slug)}</span>
                         <button
-                          onClick={() => copyPublicUrl(form.public_slug!)}
+                          onClick={() => copyPublicUrl(form.public_slug ?? '')}
                           className="flex-shrink-0 text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors"
                           aria-label="Copy public URL"
                         >
@@ -675,7 +675,7 @@ const FormsPage: React.FC = () => {
                       <div className="flex items-center space-x-1">
                         {canManage && (
                           <button
-                            onClick={() => handleEditForm(form.id)}
+                            onClick={() => { void handleEditForm(form.id); }}
                             className="p-1.5 text-pink-700 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 hover:bg-pink-500/10 rounded transition-colors"
                             aria-label="Edit form fields"
                           >
@@ -700,7 +700,7 @@ const FormsPage: React.FC = () => {
                         )}
                         {canManage && (
                           <button
-                            onClick={() => handleOpenIntegrationModal(form.id)}
+                            onClick={() => { void handleOpenIntegrationModal(form.id); }}
                             className="p-1.5 text-orange-700 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:bg-orange-500/10 rounded transition-colors"
                             aria-label="Manage integrations"
                           >
@@ -709,7 +709,7 @@ const FormsPage: React.FC = () => {
                         )}
                         {canManage && form.status === FormStatus.DRAFT && (
                           <button
-                            onClick={() => handlePublish(form.id)}
+                            onClick={() => { void handlePublish(form.id); }}
                             className="p-1.5 text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
                             aria-label="Publish form"
                           >
@@ -718,7 +718,7 @@ const FormsPage: React.FC = () => {
                         )}
                         {canManage && form.status === FormStatus.PUBLISHED && (
                           <button
-                            onClick={() => handleArchive(form.id)}
+                            onClick={() => { void handleArchive(form.id); }}
                             className="p-1.5 text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
                             aria-label="Archive form"
                           >
@@ -727,7 +727,7 @@ const FormsPage: React.FC = () => {
                         )}
                         {canManage && (
                           <button
-                            onClick={() => handleDelete(form.id)}
+                            onClick={() => { void handleDelete(form.id); }}
                             className="p-1.5 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                             aria-label="Delete form"
                           >
@@ -778,7 +778,7 @@ const FormsPage: React.FC = () => {
                       <div className="flex space-x-2">
                         {canManage && (
                           <button
-                            onClick={() => handleUseTemplate(template)}
+                            onClick={() => { void handleUseTemplate(template); }}
                             disabled={creating}
                             className="px-3 py-1 text-xs bg-pink-600/20 text-pink-700 dark:text-pink-400 hover:bg-pink-600/30 rounded transition-colors flex items-center space-x-1 disabled:opacity-50"
                           >
@@ -1013,7 +1013,7 @@ const FormsPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={handleCreateForm}
+                    onClick={() => { void handleCreateForm(); }}
                     disabled={!formData.name.trim() || creating}
                     className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -1060,7 +1060,7 @@ const FormsPage: React.FC = () => {
                             </p>
                           </div>
                           <button
-                            onClick={() => handleTogglePublic(form)}
+                            onClick={() => { void handleTogglePublic(form); }}
                             aria-label={form.is_public ? 'Disable public access' : 'Enable public access'}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                               form.is_public ? 'bg-cyan-600' : 'bg-theme-surface-hover'
@@ -1085,7 +1085,7 @@ const FormsPage: React.FC = () => {
                                   aria-label="Public URL"
                                 />
                                 <button
-                                  onClick={() => copyPublicUrl(form.public_slug!)}
+                                  onClick={() => copyPublicUrl(form.public_slug ?? '')}
                                   className="px-3 py-2 bg-cyan-600/20 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors"
                                   aria-label="Copy public URL"
                                 >
@@ -1240,7 +1240,7 @@ const FormsPage: React.FC = () => {
                               </p>
                             </div>
                             <button
-                              onClick={() => handleDeleteIntegration(integ.id)}
+                              onClick={() => { void handleDeleteIntegration(integ.id); }}
                               className="p-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded"
                               aria-label="Delete integration"
                             >
@@ -1299,7 +1299,7 @@ const FormsPage: React.FC = () => {
                       </div>
 
                       <button
-                        onClick={handleAddIntegration}
+                        onClick={() => { void handleAddIntegration(); }}
                         className="w-full px-4 py-2 bg-orange-600/20 text-orange-700 dark:text-orange-400 hover:bg-orange-600/30 rounded-lg transition-colors flex items-center justify-center space-x-2"
                       >
                         <Plus className="w-4 h-4" aria-hidden="true" />

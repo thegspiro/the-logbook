@@ -58,17 +58,15 @@ export function usePullToRefresh({
     [disabled, threshold]
   );
 
-  const handleTouchEnd = useCallback(async () => {
+  const handleTouchEnd = useCallback(() => {
     if (!pullingRef.current || disabled) return;
     pullingRef.current = false;
 
     if (state.pullDistance >= threshold) {
       setState((prev) => ({ ...prev, refreshing: true, pullDistance: 0 }));
-      try {
-        await onRefresh();
-      } finally {
+      void onRefresh().finally(() => {
         setState({ pulling: false, refreshing: false, pullDistance: 0 });
-      }
+      });
     } else {
       setState({ pulling: false, refreshing: false, pullDistance: 0 });
     }

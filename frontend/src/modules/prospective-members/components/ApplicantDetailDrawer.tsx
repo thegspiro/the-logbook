@@ -169,7 +169,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       // Refresh the applicant data
       const { fetchApplicant } = useProspectiveMembersStore.getState();
       if (fetchApplicant) {
-        fetchApplicant(applicant.id);
+        void fetchApplicant(applicant.id);
       }
     } catch {
       toast.error('Failed to update contact info');
@@ -181,9 +181,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   // Load election package when applicant is on an election stage
   useEffect(() => {
     if (isOnElectionStage && applicant) {
-      fetchElectionPackage(applicant.id);
+      void fetchElectionPackage(applicant.id);
     }
-  }, [applicant?.id, isOnElectionStage, fetchElectionPackage]);
+  }, [applicant, isOnElectionStage, fetchElectionPackage]);
 
   // Sync package fields to local state when package loads
   useEffect(() => {
@@ -194,7 +194,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       setPkgNotes('');
       setPkgStatement('');
     }
-  }, [currentElectionPackage?.id]);
+  }, [currentElectionPackage]);
 
   const fetchActivityLog = useCallback(async () => {
     if (!applicant) return;
@@ -208,14 +208,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     } finally {
       setIsLoadingActivity(false);
     }
-  }, [applicant?.id]);
+  }, [applicant]);
 
   // Load activity log when toggled open
   useEffect(() => {
     if (showActivityLog && applicant && activityLog.length === 0) {
-      fetchActivityLog();
+      void fetchActivityLog();
     }
-  }, [showActivityLog, applicant?.id, fetchActivityLog]);
+  }, [showActivityLog, applicant, activityLog.length, fetchActivityLog]);
 
   // Reset activity log when applicant changes
   useEffect(() => {
@@ -462,7 +462,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         Cancel
                       </button>
                       <button
-                        onClick={saveContactEdits}
+                        onClick={() => { void saveContactEdits(); }}
                         disabled={isSavingContact}
                         className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-500 disabled:opacity-50 transition-colors"
                       >
@@ -715,13 +715,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                           </div>
                           <div className="flex items-center gap-2 justify-end">
                             <button
-                              onClick={handleSavePackage}
+                              onClick={() => { void handleSavePackage(); }}
                               className="px-3 py-1.5 text-xs text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
                             >
                               Save Draft
                             </button>
                             <button
-                              onClick={handleSubmitPackage}
+                              onClick={() => { void handleSubmitPackage(); }}
                               disabled={isSubmittingPackage}
                               className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
                             >
@@ -975,7 +975,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         Cancel
                       </button>
                       <button
-                        onClick={handleWithdraw}
+                        onClick={() => { void handleWithdraw(); }}
                         disabled={isWithdrawing}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors disabled:opacity-50"
                       >
@@ -1000,7 +1000,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         Cancel
                       </button>
                       <button
-                        onClick={handleReject}
+                        onClick={() => { void handleReject(); }}
                         disabled={isRejecting}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
                       >
@@ -1032,7 +1032,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <span className="action-label">Withdraw</span>
                   </button>
                   <button
-                    onClick={handleHold}
+                    onClick={() => { void handleHold(); }}
                     disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors disabled:opacity-50"
                   >
@@ -1048,7 +1048,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <span className="action-label">Reject</span>
                   </button>
                   <button
-                    onClick={handleAdvance}
+                    onClick={() => { void handleAdvance(); }}
                     disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
@@ -1091,7 +1091,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         Cancel
                       </button>
                       <button
-                        onClick={handleWithdraw}
+                        onClick={() => { void handleWithdraw(); }}
                         disabled={isWithdrawing}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors disabled:opacity-50"
                       >
@@ -1114,7 +1114,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         Cancel
                       </button>
                       <button
-                        onClick={handleReject}
+                        onClick={() => { void handleReject(); }}
                         disabled={isRejecting}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
                       >
@@ -1151,7 +1151,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <span className="action-label">Reject</span>
                   </button>
                   <button
-                    onClick={handleResume}
+                    onClick={() => { void handleResume(); }}
                     disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
@@ -1187,7 +1187,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </button>
                   <div className="flex-1" />
                   <button
-                    onClick={handleReactivate}
+                    onClick={() => { void handleReactivate(); }}
                     disabled={isReactivating}
                     className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
@@ -1230,7 +1230,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         Cancel
                       </button>
                       <button
-                        onClick={handleReject}
+                        onClick={() => { void handleReject(); }}
                         disabled={isRejecting}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
                       >
@@ -1258,7 +1258,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <span className="action-label">Reject</span>
                   </button>
                   <button
-                    onClick={handleReactivate}
+                    onClick={() => { void handleReactivate(); }}
                     disabled={isReactivating}
                     className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >

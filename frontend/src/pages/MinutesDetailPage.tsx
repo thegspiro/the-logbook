@@ -5,7 +5,7 @@
  * section reordering, and publish-to-documents workflow.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -106,9 +106,22 @@ export const MinutesDetailPage: React.FC = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
-  useEffect(() => {
-    if (minutesId) fetchMinutes();
+  const fetchMinutes = useCallback(async () => {
+    if (!minutesId) return;
+    try {
+      setLoading(true);
+      const data = await minutesService.getMinutes(minutesId);
+      setMinutes(data);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load minutes'));
+    } finally {
+      setLoading(false);
+    }
   }, [minutesId]);
+
+  useEffect(() => {
+    if (minutesId) void fetchMinutes();
+  }, [minutesId, fetchMinutes]);
 
   // Fetch linked event details when minutes load
   useEffect(() => {
@@ -120,19 +133,6 @@ export const MinutesDetailPage: React.FC = () => {
       setLinkedEvent(null);
     }
   }, [minutes?.event_id]);
-
-  const fetchMinutes = async () => {
-    if (!minutesId) return;
-    try {
-      setLoading(true);
-      const data = await minutesService.getMinutes(minutesId);
-      setMinutes(data);
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to load minutes'));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const isEditable = minutes && (minutes.status === 'draft' || minutes.status === 'rejected');
 
@@ -286,7 +286,7 @@ export const MinutesDetailPage: React.FC = () => {
       });
       setShowMotionForm(false);
       setMotionForm({ motion_text: '', moved_by: '', seconded_by: '', status: 'passed', votes_for: undefined, votes_against: undefined, votes_abstain: undefined });
-      fetchMinutes();
+      void fetchMinutes();
       toast.success('Motion added');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to add motion'));
@@ -297,7 +297,7 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId || !confirm('Delete this motion?')) return;
     try {
       await minutesService.deleteMotion(minutesId, motionId);
-      fetchMinutes();
+      void fetchMinutes();
       toast.success('Motion deleted');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to delete motion'));
@@ -312,7 +312,7 @@ export const MinutesDetailPage: React.FC = () => {
       await minutesService.addActionItem(minutesId, actionForm);
       setShowActionForm(false);
       setActionForm({ description: '', assignee_name: '', due_date: undefined, priority: 'medium' });
-      fetchMinutes();
+      void fetchMinutes();
       toast.success('Action item added');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to add action item'));
@@ -323,7 +323,7 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId) return;
     try {
       await minutesService.updateActionItem(minutesId, itemId, { status: newStatus });
-      fetchMinutes();
+      void fetchMinutes();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update'));
     }
@@ -333,7 +333,7 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId || !confirm('Delete this action item?')) return;
     try {
       await minutesService.deleteActionItem(minutesId, itemId);
-      fetchMinutes();
+      void fetchMinutes();
       toast.success('Action item deleted');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to delete'));
@@ -454,14 +454,14 @@ export const MinutesDetailPage: React.FC = () => {
               <div className="flex gap-2">
                 {linkedEvent && (
                   <button
-                    onClick={handleUnlinkEvent}
+                    onClick={() => { void handleUnlinkEvent(); }}
                     className="text-xs text-red-500 hover:text-red-700"
                   >
                     Unlink
                   </button>
                 )}
                 <button
-                  onClick={handleOpenLinkEvent}
+                  onClick={() => { void handleOpenLinkEvent(); }}
                   className="text-xs text-blue-600 hover:text-blue-800"
                 >
                   {linkedEvent ? 'Change' : 'Link to Event'}
@@ -501,7 +501,7 @@ export const MinutesDetailPage: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             {(minutes.status === 'draft' || minutes.status === 'rejected') && (
               <button
-                onClick={handleSubmit}
+                onClick={() => { void handleSubmit(); }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
                 Submit for Approval
@@ -510,7 +510,7 @@ export const MinutesDetailPage: React.FC = () => {
             {minutes.status === 'submitted' && (
               <>
                 <button
-                  onClick={handleApprove}
+                  onClick={() => { void handleApprove(); }}
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
                 >
                   Approve Minutes
@@ -525,7 +525,7 @@ export const MinutesDetailPage: React.FC = () => {
             )}
             {minutes.status === 'approved' && (
               <button
-                onClick={handlePublish}
+                onClick={() => { void handlePublish(); }}
                 disabled={publishing}
                 className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50 inline-flex items-center gap-2"
               >
@@ -544,7 +544,7 @@ export const MinutesDetailPage: React.FC = () => {
             )}
             {minutes.status === 'draft' && (
               <button
-                onClick={handleDelete}
+                onClick={() => { void handleDelete(); }}
                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
               >
                 Delete Draft
@@ -628,7 +628,7 @@ export const MinutesDetailPage: React.FC = () => {
               />
             </div>
             <button
-              onClick={handleAddSection}
+              onClick={() => { void handleAddSection(); }}
               disabled={!newSectionTitle.trim() || saving}
               className="px-4 py-2 bg-cyan-600 text-white text-sm rounded-md hover:bg-cyan-700 disabled:opacity-50"
             >
@@ -668,7 +668,7 @@ export const MinutesDetailPage: React.FC = () => {
                       {canManage && isEditable && (
                         <div className="flex flex-col" role="group" aria-label={`Reorder ${section.title}`}>
                           <button
-                            onClick={() => handleReorderSection(idx, 'up')}
+                            onClick={() => { void handleReorderSection(idx, 'up'); }}
                             disabled={idx === 0 || saving}
                             className="text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 p-0.5"
                             aria-label={`Move ${section.title} up`}
@@ -676,7 +676,7 @@ export const MinutesDetailPage: React.FC = () => {
                             <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                           <button
-                            onClick={() => handleReorderSection(idx, 'down')}
+                            onClick={() => { void handleReorderSection(idx, 'down'); }}
                             disabled={idx === minutes.sections.length - 1 || saving}
                             className="text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 p-0.5"
                             aria-label={`Move ${section.title} down`}
@@ -698,7 +698,7 @@ export const MinutesDetailPage: React.FC = () => {
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDeleteSection(section.key)}
+                            onClick={() => { void handleDeleteSection(section.key); }}
                             className="text-theme-text-muted hover:text-red-400 p-1"
                             aria-label={`Delete ${section.title} section`}
                           >
@@ -722,7 +722,7 @@ export const MinutesDetailPage: React.FC = () => {
                       />
                       <div className="mt-2 flex gap-2">
                         <button
-                          onClick={() => handleSaveSection(section.key)}
+                          onClick={() => { void handleSaveSection(section.key); }}
                           disabled={saving}
                           className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50"
                         >
@@ -866,7 +866,7 @@ export const MinutesDetailPage: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={handleAddMotion}
+              onClick={() => { void handleAddMotion(); }}
               disabled={!motionForm.motion_text.trim()}
               className="px-4 py-2 bg-cyan-600 text-white text-sm rounded-md hover:bg-cyan-700 disabled:opacity-50"
             >
@@ -903,7 +903,7 @@ export const MinutesDetailPage: React.FC = () => {
                   </div>
                   {canManage && isEditable && (
                     <button
-                      onClick={() => handleDeleteMotion(motion.id)}
+                      onClick={() => { void handleDeleteMotion(motion.id); }}
                       className="text-xs text-red-500 hover:text-red-700 ml-2"
                     >
                       Delete
@@ -983,7 +983,7 @@ export const MinutesDetailPage: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={handleAddActionItem}
+              onClick={() => { void handleAddActionItem(); }}
               disabled={!actionForm.description.trim()}
               className="px-4 py-2 bg-cyan-600 text-white text-sm rounded-md hover:bg-cyan-700 disabled:opacity-50"
             >
@@ -1022,7 +1022,7 @@ export const MinutesDetailPage: React.FC = () => {
                     {canManage && item.status !== 'completed' && item.status !== 'cancelled' && (
                       <select
                         value={item.status}
-                        onChange={(e) => handleUpdateActionItemStatus(item.id, e.target.value)}
+                        onChange={(e) => { void handleUpdateActionItemStatus(item.id, e.target.value); }}
                         aria-label={`Update status for: ${item.description.substring(0, 30)}`}
                         className="text-xs bg-theme-input-bg border border-theme-input-border rounded px-2 py-1 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-cyan-500"
                       >
@@ -1034,7 +1034,7 @@ export const MinutesDetailPage: React.FC = () => {
                     )}
                     {canManage && isEditable && (
                       <button
-                        onClick={() => handleDeleteActionItem(item.id)}
+                        onClick={() => { void handleDeleteActionItem(item.id); }}
                         className="text-xs text-red-500 hover:text-red-700"
                       >
                         Delete
@@ -1074,7 +1074,7 @@ export const MinutesDetailPage: React.FC = () => {
                   {availableEvents.map(ev => (
                     <button
                       key={ev.id}
-                      onClick={() => handleLinkEvent(ev.id)}
+                      onClick={() => { void handleLinkEvent(ev.id); }}
                       className={`w-full text-left p-3 border rounded-lg hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-colors ${
                         minutes?.event_id === ev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-theme-surface-border'
                       }`}
@@ -1136,7 +1136,7 @@ export const MinutesDetailPage: React.FC = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={handleReject}
+                  onClick={() => { void handleReject(); }}
                   disabled={rejectReason.trim().length < 10}
                   className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
                 >

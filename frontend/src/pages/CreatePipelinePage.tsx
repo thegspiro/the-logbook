@@ -1137,7 +1137,7 @@ const CreatePipelinePage: React.FC = () => {
 
           {currentStep === 'review' ? (
             <button
-              onClick={handleSubmit}
+              onClick={() => { void handleSubmit(); }}
               disabled={isSubmitting || !info.name.trim()}
               className="flex items-center space-x-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
             >

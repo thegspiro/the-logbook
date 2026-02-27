@@ -87,9 +87,9 @@ const FormRenderer = ({
   // Load form definition if formId is provided
   useEffect(() => {
     if (formId) {
-      loadForm();
+      void loadForm();
     }
-  }, [formId]);
+  }, [formId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync direct fields
   useEffect(() => {
@@ -311,7 +311,7 @@ const FormRenderer = ({
   const formDesc = description || form?.description;
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={(e) => { void handleSubmit(e); }}>
       {/* Header */}
       {(formTitle || formDesc) && (
         <div className={`mb-${compact ? '4' : '6'}`}>

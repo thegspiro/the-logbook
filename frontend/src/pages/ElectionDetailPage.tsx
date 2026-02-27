@@ -72,7 +72,7 @@ export const ElectionDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (electionId) {
-      fetchElection();
+      void fetchElection();
     }
   }, [electionId]);
 
@@ -218,7 +218,7 @@ export const ElectionDetailPage: React.FC = () => {
       setShowSendEmailModal(false);
       setEmailSubject('');
       setEmailMessage('');
-      fetchElection(); // Refresh to update email_sent status
+      void fetchElection(); // Refresh to update email_sent status
 
       if (response.failed_count > 0) {
         toast.success(`Ballots sent to ${response.recipients_count} voters (${response.failed_count} failed)`);
@@ -304,7 +304,7 @@ export const ElectionDetailPage: React.FC = () => {
       setVoidVoteReason('');
       // Refresh forensics if open
       if (forensicsReport) {
-        handleLoadForensics();
+        void handleLoadForensics();
       }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to void vote'));
@@ -468,7 +468,7 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Preview Ballot */}
               {election.ballot_items && election.ballot_items.length > 0 && (
                 <button
-                  onClick={handleOpenPreview}
+                  onClick={() => { void handleOpenPreview(); }}
                   disabled={loadingPreview}
                   className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50"
                 >
@@ -478,7 +478,7 @@ export const ElectionDetailPage: React.FC = () => {
 
               {election.status === ElectionStatus.DRAFT && (
                 <button
-                  onClick={handleOpenElection}
+                  onClick={() => { void handleOpenElection(); }}
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
                 >
                   Open Election
@@ -503,7 +503,7 @@ export const ElectionDetailPage: React.FC = () => {
                     Extend Time
                   </button>
                   <button
-                    onClick={handleCloseElection}
+                    onClick={() => { void handleCloseElection(); }}
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                   >
                     Close Election
@@ -523,7 +523,7 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Results visibility toggle — blocked for open elections to prevent strategic voting */}
               {election.status !== ElectionStatus.OPEN && (
                 <button
-                  onClick={handleToggleResultsVisibility}
+                  onClick={() => { void handleToggleResultsVisibility(); }}
                   disabled={updatingVisibility}
                   className={`px-4 py-2 rounded-md ${
                     election.results_visible_immediately
@@ -602,7 +602,7 @@ export const ElectionDetailPage: React.FC = () => {
           <ElectionBallot
             electionId={electionId}
             election={election}
-            onVoteCast={fetchElection}
+            onVoteCast={() => { void fetchElection(); }}
           />
         </div>
       )}
@@ -656,7 +656,7 @@ export const ElectionDetailPage: React.FC = () => {
             onClick={() => {
               setShowForensics(!showForensics);
               if (!showForensics && !forensicsReport) {
-                handleLoadForensics();
+                void handleLoadForensics();
               }
             }}
             className="w-full bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 flex items-center justify-between hover:bg-theme-surface-hover"
@@ -684,7 +684,7 @@ export const ElectionDetailPage: React.FC = () => {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-md font-semibold text-theme-text-primary">Vote Integrity Check</h3>
                   <button
-                    onClick={handleRunIntegrityCheck}
+                    onClick={() => { void handleRunIntegrityCheck(); }}
                     disabled={loadingIntegrity}
                     className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                   >
@@ -774,7 +774,7 @@ export const ElectionDetailPage: React.FC = () => {
                     className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-sm text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
                   />
                   <button
-                    onClick={handleVoidVote}
+                    onClick={() => { void handleVoidVote(); }}
                     disabled={isVoidingVote || !voidVoteId.trim() || !voidVoteReason.trim()}
                     className="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
                   >
@@ -934,7 +934,7 @@ export const ElectionDetailPage: React.FC = () => {
 
                   <div className="border-t border-theme-surface-border pt-3">
                     <button
-                      onClick={handleLoadForensics}
+                      onClick={() => { void handleLoadForensics(); }}
                       disabled={loadingForensics}
                       className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
                     >
@@ -1036,7 +1036,7 @@ export const ElectionDetailPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleSendBallotEmails}
+                  onClick={() => { void handleSendBallotEmails(); }}
                   disabled={isSendingEmails}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
                 >
@@ -1154,7 +1154,7 @@ export const ElectionDetailPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleDeleteElection}
+                  onClick={() => { void handleDeleteElection(); }}
                   disabled={isDeleting || (!isDraft && deleteReason.trim().length < 10)}
                   className={`px-4 py-2 text-white rounded-md disabled:opacity-50 ${
                     isDraft
@@ -1268,7 +1268,7 @@ export const ElectionDetailPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleExtendElection}
+                  onClick={() => { void handleExtendElection(); }}
                   className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
                 >
                   Extend Election
@@ -1546,7 +1546,7 @@ export const ElectionDetailPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleRollbackElection}
+                  onClick={() => { void handleRollbackElection(); }}
                   disabled={isRollingBack || rollbackReason.trim().length < 10}
                   className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
                 >

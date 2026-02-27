@@ -76,7 +76,7 @@ test.describe('Authentication', () => {
     test('should show error message with invalid credentials', async ({ page }) => {
       // Mock the login API to return a 401 error
       await page.route('**/api/v1/auth/login', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 401,
           contentType: 'application/json',
           body: JSON.stringify({ detail: 'Invalid username or password' }),
@@ -97,7 +97,7 @@ test.describe('Authentication', () => {
       // Delay the login API response to observe loading state
       await page.route('**/api/v1/auth/login', async (route) => {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        route.fulfill({
+        await route.fulfill({
           status: 401,
           contentType: 'application/json',
           body: JSON.stringify({ detail: 'Invalid credentials' }),
@@ -117,7 +117,7 @@ test.describe('Authentication', () => {
     test('should redirect to dashboard on successful login', async ({ page }) => {
       // Mock the login API to return a successful response with tokens
       await page.route('**/api/v1/auth/login', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
@@ -130,7 +130,7 @@ test.describe('Authentication', () => {
 
       // Mock the current user endpoint (called by loadUser after login)
       await page.route('**/api/v1/auth/me', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
@@ -149,7 +149,7 @@ test.describe('Authentication', () => {
 
       // Mock branding and other non-critical endpoints
       await page.route('**/api/v1/auth/branding', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ name: 'Test Department', logo: null }),
@@ -195,7 +195,7 @@ test.describe('Authentication', () => {
 
       // Mock the current user endpoint
       await page.route('**/api/v1/auth/me', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
@@ -214,7 +214,7 @@ test.describe('Authentication', () => {
 
       // Mock non-critical API endpoints to prevent errors
       await page.route('**/api/v1/auth/branding', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ name: 'Test Department', logo: null }),
@@ -222,7 +222,7 @@ test.describe('Authentication', () => {
       });
 
       await page.route('**/api/v1/auth/oauth-config', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ googleEnabled: false, microsoftEnabled: false }),
@@ -230,7 +230,7 @@ test.describe('Authentication', () => {
       });
 
       await page.route('**/api/v1/organization/enabled-modules', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ enabled_modules: [] }),
@@ -239,7 +239,7 @@ test.describe('Authentication', () => {
 
       // Mock dashboard data endpoints to prevent errors
       await page.route('**/api/v1/dashboard/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({}),
@@ -247,7 +247,7 @@ test.describe('Authentication', () => {
       });
 
       await page.route('**/api/v1/notifications/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ logs: [] }),
@@ -255,7 +255,7 @@ test.describe('Authentication', () => {
       });
 
       await page.route('**/api/v1/scheduling/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ shifts: [] }),
@@ -263,7 +263,7 @@ test.describe('Authentication', () => {
       });
 
       await page.route('**/api/v1/training/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify([]),
@@ -271,7 +271,7 @@ test.describe('Authentication', () => {
       });
 
       await page.route('**/api/v1/messages/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify([]),
@@ -279,7 +279,7 @@ test.describe('Authentication', () => {
       });
 
       await page.route('**/api/v1/inventory/**', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({}),
@@ -288,7 +288,7 @@ test.describe('Authentication', () => {
 
       // Mock the logout endpoint
       await page.route('**/api/v1/auth/logout', (route) => {
-        route.fulfill({
+        void route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ message: 'Logged out' }),

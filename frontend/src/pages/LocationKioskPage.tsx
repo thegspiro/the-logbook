@@ -79,8 +79,8 @@ const LocationKioskPage: React.FC = () => {
 
   // Initial fetch + polling
   useEffect(() => {
-    fetchDisplay(false);
-    const interval = setInterval(() => fetchDisplay(true), POLL_INTERVAL_MS);
+    void fetchDisplay(false);
+    const interval = setInterval(() => { void fetchDisplay(true); }, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchDisplay]);
 

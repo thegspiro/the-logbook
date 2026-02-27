@@ -609,7 +609,7 @@ const EmailConfiguration: React.FC = () => {
             {/* Test Connection Button */}
             <div className="pt-4 border-t border-theme-nav-border">
               <button
-                onClick={handleTestConnection}
+                onClick={() => { void handleTestConnection(); }}
                 disabled={testingConnection || !config.fromEmail}
                 className={`w-full px-6 py-3 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center ${
                   connectionTested
@@ -659,7 +659,7 @@ const EmailConfiguration: React.FC = () => {
               Skip for Now
             </button>
             <button
-              onClick={handleContinue}
+              onClick={() => { void handleContinue(); }}
               disabled={isSaving}
               className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >

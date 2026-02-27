@@ -54,7 +54,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
     }
   }, [filterFacilityId]);
 
-  useEffect(() => { loadInspections(); }, [loadInspections]);
+  useEffect(() => { void loadInspections(); }, [loadInspections]);
 
   const filtered = inspections.filter(i => {
     if (resultFilter === 'passed' && i.passed !== true) return false;
@@ -127,7 +127,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
         toast.success('Inspection created');
       }
       setShowModal(false);
-      loadInspections();
+      void loadInspections();
     } catch {
       toast.error('Failed to save inspection');
     } finally {
@@ -140,7 +140,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
     try {
       await facilitiesService.deleteInspection(insp.id);
       toast.success('Inspection deleted');
-      loadInspections();
+      void loadInspections();
     } catch {
       toast.error('Failed to delete inspection');
     }
@@ -237,7 +237,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
                 >
                   <Pencil className="w-4 h-4" aria-hidden="true" />
                 </button>
-                <button onClick={() => handleDelete(insp)} title="Delete" aria-label="Delete inspection"
+                <button onClick={() => { void handleDelete(insp); }} title="Delete" aria-label="Delete inspection"
                   className="p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
@@ -306,7 +306,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
             </div>
             <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm">Cancel</button>
-              <button onClick={handleSave} disabled={isSaving}
+              <button onClick={() => { void handleSave(); }} disabled={isSaving}
                 className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}

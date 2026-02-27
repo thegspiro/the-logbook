@@ -46,7 +46,7 @@ export const LoginPage: React.FC = () => {
     // Load organization branding (logo + name) for the login page
     const loadBranding = async () => {
       try {
-        const response = await axios.get('/api/v1/auth/branding');
+        const response = await axios.get<OrgBranding>('/api/v1/auth/branding');
         setBranding(response.data);
       } catch (_err) {
         // Branding is optional - login page works fine without it
@@ -55,15 +55,15 @@ export const LoginPage: React.FC = () => {
 
     const loadOAuthConfig = async () => {
       try {
-        const response = await axios.get('/api/v1/auth/oauth-config');
+        const response = await axios.get<OAuthConfig>('/api/v1/auth/oauth-config');
         setOAuthConfig(response.data);
       } catch {
         // OAuth config is optional - leave defaults (disabled)
       }
     };
 
-    loadBranding();
-    loadOAuthConfig();
+    void loadBranding();
+    void loadOAuthConfig();
   }, [clearError]);
 
   const validateForm = (): boolean => {
@@ -154,7 +154,7 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit} aria-label="Sign in form">
+        <form className="mt-8 space-y-6" onSubmit={(e) => { void handleSubmit(e); }} aria-label="Sign in form">
           {(location.state as { reason?: string })?.reason === 'timeout' && (
             <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4" role="alert" aria-live="polite">
               <div className="flex">

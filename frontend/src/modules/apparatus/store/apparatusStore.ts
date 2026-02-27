@@ -183,12 +183,12 @@ export const useApparatusStore = create<ApparatusState>((set, get) => ({
 
   setFilters: (filters: ApparatusListFilters) => {
     set({ filters: { ...get().filters, ...filters }, currentPage: 1 });
-    get().fetchApparatusList(1);
+    void get().fetchApparatusList(1);
   },
 
   clearFilters: () => {
     set({ filters: defaultFilters, currentPage: 1 });
-    get().fetchApparatusList(1);
+    void get().fetchApparatusList(1);
   },
 
   setCurrentApparatus: (apparatus: Apparatus | null) => {

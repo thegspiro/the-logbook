@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   BookOpen,
@@ -80,7 +80,7 @@ const MinutesPage: React.FC = () => {
   // Data fetching
   // -------------------------------------------------------
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -102,11 +102,11 @@ const MinutesPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [typeFilter, searchQuery]);
 
   useEffect(() => {
-    fetchData();
-  }, [typeFilter, searchQuery]);
+    void fetchData();
+  }, [fetchData]);
 
   // -------------------------------------------------------
   // Handlers
@@ -159,7 +159,7 @@ const MinutesPage: React.FC = () => {
   };
 
   const getMeetingTypeInfo = (type: string) => {
-    return MEETING_TYPES.find(t => t.value === type) || MEETING_TYPES[MEETING_TYPES.length - 1]!;
+    return MEETING_TYPES.find(t => t.value === type) ?? MEETING_TYPES[MEETING_TYPES.length - 1] ?? { value: 'other' as MeetingType, label: 'Other', color: 'bg-theme-surface-secondary text-theme-text-primary' };
   };
 
   const handleToggleWaivers = async (meetingId: string) => {
@@ -348,7 +348,7 @@ const MinutesPage: React.FC = () => {
                     {/* Waivers Toggle */}
                     {canManage && (
                       <button
-                        onClick={() => handleToggleWaivers(meeting.id)}
+                        onClick={() => { void handleToggleWaivers(meeting.id); }}
                         className="flex items-center gap-1.5 mt-3 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
                       >
                         <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
@@ -364,14 +364,16 @@ const MinutesPage: React.FC = () => {
                   {canManage && (
                     <div className="flex items-center gap-1 ml-4">
                       <button
-                        onClick={async () => {
-                          try {
-                            const minutes = await minutesService.createFromMeeting(meeting.id);
-                            toast.success('Minutes created from meeting');
-                            navigate(`/minutes/${minutes.id}`);
-                          } catch {
-                            toast.error('Failed to create minutes from meeting');
-                          }
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              const minutes = await minutesService.createFromMeeting(meeting.id);
+                              toast.success('Minutes created from meeting');
+                              navigate(`/minutes/${minutes.id}`);
+                            } catch {
+                              toast.error('Failed to create minutes from meeting');
+                            }
+                          })();
                         }}
                         className="p-2 text-theme-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors"
                         title="Create minutes from this meeting"
@@ -379,7 +381,7 @@ const MinutesPage: React.FC = () => {
                         <BookOpen className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteMeeting(meeting.id)}
+                        onClick={() => { void handleDeleteMeeting(meeting.id); }}
                         disabled={deletingId === meeting.id}
                         className="p-2 text-theme-text-muted hover:text-red-700 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
                         title="Delete meeting"
@@ -623,7 +625,7 @@ const MinutesPage: React.FC = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={handleCreateMeeting}
+                  onClick={() => { void handleCreateMeeting(); }}
                   disabled={creating || !minutesForm.title.trim()}
                   className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >

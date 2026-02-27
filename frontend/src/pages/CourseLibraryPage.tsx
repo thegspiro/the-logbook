@@ -170,7 +170,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
           {error && (
             <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
               {error}
@@ -409,14 +409,14 @@ const CourseLibraryPage: React.FC = () => {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { void loadData(); }, []);
 
   const handleDelete = async (courseId: string, courseName: string) => {
     if (!confirm(`Are you sure you want to delete "${courseName}"? This cannot be undone.`)) return;
     try {
       await trainingService.updateCourse(courseId, { active: false });
       toast.success('Course deactivated');
-      loadData();
+      void loadData();
     } catch {
       toast.error('Failed to deactivate course');
     }
@@ -576,7 +576,7 @@ const CourseLibraryPage: React.FC = () => {
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(course.id, course.name)}
+                      onClick={() => { void handleDelete(course.id, course.name); }}
                       className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 rounded"
                       aria-label={`Delete ${course.name}`}
                     >
@@ -643,7 +643,7 @@ const CourseLibraryPage: React.FC = () => {
         course={editCourse}
         categories={categories}
         onClose={() => { setShowModal(false); setEditCourse(null); }}
-        onSuccess={loadData}
+        onSuccess={() => { void loadData(); }}
       />
     </div>
   );

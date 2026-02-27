@@ -107,14 +107,16 @@ export const ProspectiveMembersPage: React.FC = () => {
 
   // Load pipelines on mount
   useEffect(() => {
-    fetchPipelines();
+    void fetchPipelines();
   }, [fetchPipelines]);
 
   // Select first active pipeline by default
   useEffect(() => {
     if (pipelines.length > 0 && !currentPipeline) {
       const activePipeline = pipelines.find((p) => p.is_active) ?? pipelines[0];
-      fetchPipeline(activePipeline!.id);
+      if (activePipeline) {
+        void fetchPipeline(activePipeline.id);
+      }
     }
   }, [pipelines, currentPipeline, fetchPipeline]);
 
@@ -122,9 +124,9 @@ export const ProspectiveMembersPage: React.FC = () => {
   useEffect(() => {
     if (currentPipeline) {
       setFilters({ pipeline_id: currentPipeline.id });
-      fetchPipelineStats(currentPipeline.id);
+      void fetchPipelineStats(currentPipeline.id);
     }
-  }, [currentPipeline?.id]);
+  }, [currentPipeline, fetchPipelineStats, setFilters]);
 
   // Handle search debounce
   useEffect(() => {
@@ -134,15 +136,15 @@ export const ProspectiveMembersPage: React.FC = () => {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, filters.search, setFilters]);
 
   // Handle status filter
   useEffect(() => {
     setFilters({ status: statusFilter || undefined });
-  }, [statusFilter]);
+  }, [statusFilter, setFilters]);
 
   const handleApplicantClick = (applicantItem: ApplicantListItem) => {
-    fetchApplicant(applicantItem.id);
+    void fetchApplicant(applicantItem.id);
   };
 
   const handleConvert = (applicant: Applicant) => {
@@ -204,8 +206,8 @@ export const ProspectiveMembersPage: React.FC = () => {
         phone: '',
         target_membership_type: 'probationary',
       });
-      fetchApplicants();
-      fetchPipelineStats(currentPipeline.id);
+      void fetchApplicants();
+      void fetchPipelineStats(currentPipeline.id);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create applicant';
       toast.error(msg);
@@ -395,7 +397,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             value={currentPipeline?.id ?? ''}
             onChange={(e) => {
               const pipeline = pipelines.find((p) => p.id === e.target.value);
-              if (pipeline) fetchPipeline(pipeline.id);
+              if (pipeline) void fetchPipeline(pipeline.id);
             }}
             className="bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
           >
@@ -482,7 +484,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
         {/* Refresh */}
         <button
-          onClick={() => fetchApplicants()}
+          onClick={() => { void fetchApplicants(); }}
           disabled={isLoading}
           className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-50"
           title="Refresh"
@@ -564,7 +566,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   totalApplicants={totalApplicants}
                   currentPage={currentPage}
                   totalPages={totalPages}
-                  onPageChange={(page) => fetchApplicants(page)}
+                  onPageChange={(page) => { void fetchApplicants(page); }}
                   onApplicantClick={handleApplicantClick}
                 />
               )}
@@ -584,23 +586,25 @@ export const ProspectiveMembersPage: React.FC = () => {
               </span>
               <div className="flex items-center gap-2 ml-auto">
                 <button
-                  onClick={async () => {
-                    const ids = Array.from(selectedInactive);
-                    let successCount = 0;
-                    for (const id of ids) {
-                      try {
-                        await reactivateApplicant(id);
-                        successCount++;
-                      } catch {
-                        // continue
+                  onClick={() => {
+                    void (async () => {
+                      const ids = Array.from(selectedInactive);
+                      let successCount = 0;
+                      for (const id of ids) {
+                        try {
+                          await reactivateApplicant(id);
+                          successCount++;
+                        } catch {
+                          // continue
+                        }
                       }
-                    }
-                    if (successCount === ids.length) {
-                      toast.success(`Reactivated ${successCount} application(s)`);
-                    } else {
-                      toast.success(`Reactivated ${successCount} of ${ids.length} application(s)`);
-                    }
-                    setSelectedInactive(new Set());
+                      if (successCount === ids.length) {
+                        toast.success(`Reactivated ${successCount} application(s)`);
+                      } else {
+                        toast.success(`Reactivated ${successCount} of ${ids.length} application(s)`);
+                      }
+                      setSelectedInactive(new Set());
+                    })();
                   }}
                   disabled={isReactivating}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
@@ -710,13 +714,15 @@ export const ProspectiveMembersPage: React.FC = () => {
                       </td>
                       <td className="p-3">
                         <button
-                          onClick={async () => {
-                            try {
-                              await reactivateApplicant(applicant.id);
-                              toast.success(`${applicant.first_name} reactivated`);
-                            } catch {
-                              toast.error('Failed to reactivate');
-                            }
+                          onClick={() => {
+                            void (async () => {
+                              try {
+                                await reactivateApplicant(applicant.id);
+                                toast.success(`${applicant.first_name} reactivated`);
+                              } catch {
+                                toast.error('Failed to reactivate');
+                              }
+                            })();
                           }}
                           disabled={isReactivating}
                           className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
@@ -736,14 +742,14 @@ export const ProspectiveMembersPage: React.FC = () => {
                   </p>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => fetchInactiveApplicants(inactiveCurrentPage - 1)}
+                      onClick={() => { void fetchInactiveApplicants(inactiveCurrentPage - 1); }}
                       disabled={inactiveCurrentPage <= 1}
                       className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
                     >
                       Previous
                     </button>
                     <button
-                      onClick={() => fetchInactiveApplicants(inactiveCurrentPage + 1)}
+                      onClick={() => { void fetchInactiveApplicants(inactiveCurrentPage + 1); }}
                       disabled={inactiveCurrentPage >= inactiveTotalPages}
                       className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
                     >
@@ -808,7 +814,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       <td className="p-3">
                         <div
                           className="flex items-center gap-2.5 cursor-pointer"
-                          onClick={() => fetchApplicant(applicant.id)}
+                          onClick={() => { void fetchApplicant(applicant.id); }}
                         >
                           <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-xs font-bold text-theme-text-secondary flex-shrink-0">
                             {getInitials(applicant.first_name, applicant.last_name)}
@@ -836,19 +842,21 @@ export const ProspectiveMembersPage: React.FC = () => {
                       <td className="p-3">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => fetchApplicant(applicant.id)}
+                            onClick={() => { void fetchApplicant(applicant.id); }}
                             className="text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
                           >
                             View
                           </button>
                           <button
-                            onClick={async () => {
-                              try {
-                                await reactivateApplicant(applicant.id);
-                                toast.success(`${applicant.first_name} reactivated`);
-                              } catch {
-                                toast.error('Failed to reactivate');
-                              }
+                            onClick={() => {
+                              void (async () => {
+                                try {
+                                  await reactivateApplicant(applicant.id);
+                                  toast.success(`${applicant.first_name} reactivated`);
+                                } catch {
+                                  toast.error('Failed to reactivate');
+                                }
+                              })();
                             }}
                             disabled={isReactivating}
                             className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
@@ -869,14 +877,14 @@ export const ProspectiveMembersPage: React.FC = () => {
                   </p>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => fetchWithdrawnApplicants(withdrawnCurrentPage - 1)}
+                      onClick={() => { void fetchWithdrawnApplicants(withdrawnCurrentPage - 1); }}
                       disabled={withdrawnCurrentPage <= 1}
                       className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
                     >
                       Previous
                     </button>
                     <button
-                      onClick={() => fetchWithdrawnApplicants(withdrawnCurrentPage + 1)}
+                      onClick={() => { void fetchWithdrawnApplicants(withdrawnCurrentPage + 1); }}
                       disabled={withdrawnCurrentPage >= withdrawnTotalPages}
                       className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
                     >
@@ -929,15 +937,17 @@ export const ProspectiveMembersPage: React.FC = () => {
                 Cancel
               </button>
               <button
-                onClick={async () => {
-                  try {
-                    await purgeInactiveApplicants(Array.from(selectedInactive));
-                    toast.success(`Purged ${selectedInactive.size} application(s)`);
-                    setSelectedInactive(new Set());
-                  } catch {
-                    toast.error('Failed to purge applications');
-                  }
-                  setShowPurgeConfirm(false);
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      await purgeInactiveApplicants(Array.from(selectedInactive));
+                      toast.success(`Purged ${selectedInactive.size} application(s)`);
+                      setSelectedInactive(new Set());
+                    } catch {
+                      toast.error('Failed to purge applications');
+                    }
+                    setShowPurgeConfirm(false);
+                  })();
                 }}
                 disabled={isPurging}
                 className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
@@ -1051,7 +1061,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 Cancel
               </button>
               <button
-                onClick={handleCreateApplicant}
+                onClick={() => { void handleCreateApplicant(); }}
                 disabled={isCreating}
                 className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >

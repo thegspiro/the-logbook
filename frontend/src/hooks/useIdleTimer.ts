@@ -73,7 +73,7 @@ export function useIdleTimer() {
       );
     }, warningMs);
 
-    timeoutRef.current = setTimeout(performLogout, timeoutMs);
+    timeoutRef.current = setTimeout(() => { void performLogout(); }, timeoutMs);
   }, [performLogout]);
 
   useEffect(() => {
@@ -82,8 +82,8 @@ export function useIdleTimer() {
     // Fetch session timeout from backend
     axios
       .get('/api/v1/auth/session-settings', { withCredentials: true })
-      .then((res) => {
-        const minutes = res.data.session_timeout_minutes || DEFAULT_TIMEOUT_MINUTES;
+      .then((res: { data?: { session_timeout_minutes?: number } }) => {
+        const minutes = res.data?.session_timeout_minutes ?? DEFAULT_TIMEOUT_MINUTES;
         timeoutMsRef.current = minutes * 60 * 1000;
         resetTimers();
       })

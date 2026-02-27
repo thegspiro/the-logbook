@@ -61,16 +61,18 @@ export function useAutoSave<T>({
       return;
     }
 
-    intervalRef.current = setInterval(async () => {
+    intervalRef.current = setInterval(() => {
       const currentDataString = JSON.stringify(dataRef.current);
 
       if (currentDataString !== savedDataRef.current) {
-        try {
-          await onSaveRef.current(dataRef.current);
-          savedDataRef.current = currentDataString;
-        } catch (error) {
-          console.error('Auto-save failed:', error);
-        }
+        void (async () => {
+          try {
+            await onSaveRef.current(dataRef.current);
+            savedDataRef.current = currentDataString;
+          } catch (error) {
+            console.error('Auto-save failed:', error);
+          }
+        })();
       }
     }, interval);
 

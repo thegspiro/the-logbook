@@ -115,7 +115,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
 
   useEffect(() => {
-    loadLocations();
+    void loadLocations();
     eventService.getVisibleEventTypes()
       .then(setVisibleTypes)
       .catch(() => { /* fall back to showing all types */ });
@@ -260,7 +260,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-8">
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>

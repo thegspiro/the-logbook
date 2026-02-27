@@ -388,7 +388,7 @@ const OnboardingCheck: React.FC = () => {
             clearTimeout(timeoutRef.current);
           }
           timeoutRef.current = setTimeout(() => {
-            runCheck();
+            void runCheck();
           }, CHECK_INTERVAL);
         } else {
           setError('Services did not become ready in time. Please check that all containers are running and review logs.');
@@ -414,11 +414,11 @@ const OnboardingCheck: React.FC = () => {
       { name: 'Database', status: ConnectionStatus.CHECKING },
       { name: 'Cache (Redis)', status: ConnectionStatus.CHECKING, optional: true },
     ]);
-    runCheck();
+    void runCheck();
   };
 
   useEffect(() => {
-    runCheck();
+    void runCheck();
   }, [runCheck]);
 
   const getStatusIcon = (status: ServiceStatus['status']) => {
