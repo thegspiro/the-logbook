@@ -70,6 +70,96 @@ def _redact(value: Optional[str]) -> Optional[str]:
     return "••••••••"
 
 
+# SEC: Fields that contain secrets and must be encrypted at rest.
+# Used by encrypt_settings_secrets / decrypt_settings_secrets in the service layer.
+_EMAIL_SECRET_FIELDS = frozenset({
+    "google_client_secret",
+    "google_app_password",
+    "microsoft_client_secret",
+    "smtp_password",
+})
+
+_FILE_STORAGE_SECRET_FIELDS = frozenset({
+    "google_drive_client_secret",
+    "onedrive_client_secret",
+    "s3_secret_access_key",
+})
+
+# Prefix that marks a value as already encrypted (avoids double-encryption)
+_ENC_PREFIX = "enc:"
+
+
+def encrypt_settings_secrets(settings_dict: dict) -> dict:
+    """
+    Encrypt secret fields inside email_service / file_storage sub-dicts
+    before persisting to the database JSON column.
+
+    Idempotent: already-encrypted values (prefixed with 'enc:') are skipped.
+    Redacted placeholder values ('••••••••') are also skipped so PATCH
+    operations that echo back the redacted response don't overwrite the
+    real encrypted value.
+    """
+    from app.core.security import encrypt_data
+
+    result = {**settings_dict}
+
+    for section_key, secret_fields in [
+        ("email_service", _EMAIL_SECRET_FIELDS),
+        ("file_storage", _FILE_STORAGE_SECRET_FIELDS),
+    ]:
+        section = result.get(section_key)
+        if not isinstance(section, dict):
+            continue
+        section = {**section}
+        for field in secret_fields:
+            val = section.get(field)
+            if not val or not isinstance(val, str):
+                continue
+            # Skip already-encrypted, redacted, or empty values
+            if val.startswith(_ENC_PREFIX) or val == "••••••••":
+                continue
+            section[field] = _ENC_PREFIX + encrypt_data(val)
+        result[section_key] = section
+
+    return result
+
+
+def decrypt_settings_secrets(settings_dict: dict) -> dict:
+    """
+    Decrypt secret fields inside email_service / file_storage sub-dicts
+    after reading from the database JSON column.
+
+    Backward-compatible: plaintext values (without the 'enc:' prefix)
+    are returned as-is so existing installations keep working.
+    """
+    from app.core.security import decrypt_data
+
+    result = {**settings_dict}
+
+    for section_key, secret_fields in [
+        ("email_service", _EMAIL_SECRET_FIELDS),
+        ("file_storage", _FILE_STORAGE_SECRET_FIELDS),
+    ]:
+        section = result.get(section_key)
+        if not isinstance(section, dict):
+            continue
+        section = {**section}
+        for field in secret_fields:
+            val = section.get(field)
+            if not val or not isinstance(val, str):
+                continue
+            if val.startswith(_ENC_PREFIX):
+                try:
+                    section[field] = decrypt_data(val[len(_ENC_PREFIX):])
+                except Exception:
+                    # Decryption failed — return raw value so the admin can
+                    # see there's a problem rather than silently swallowing it
+                    pass
+        result[section_key] = section
+
+    return result
+
+
 class EmailServiceSettings(BaseModel):
     """Settings for organization email service configuration"""
 

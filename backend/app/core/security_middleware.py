@@ -292,20 +292,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
         # Content Security Policy
-        # NOTE: style-src 'unsafe-inline' is required because the frontend
-        # uses inline style attributes (Tailwind + component styles).
-        # Removing it would break the UI.  img-src restricts https: to
-        # 'self' + data/blob for inline images.
+        # SEC: 'unsafe-inline' is limited to style-src only because Tailwind
+        # and React use inline style attributes. style-src-elem restricts
+        # <style> blocks to 'self' (blocks XSS-injected <style> elements).
+        # object-src 'none' blocks Flash/Java/PDF embeds entirely.
+        # upgrade-insecure-requests forces HTTPS for all sub-resources.
         csp = (
             "default-src 'self'; "
             "script-src 'self'; "
             "style-src 'self' 'unsafe-inline'; "
+            "style-src-elem 'self' 'unsafe-inline'; "
+            "style-src-attr 'unsafe-inline'; "
             "img-src 'self' data: blob:; "
             "font-src 'self'; "
             "connect-src 'self'; "
+            "object-src 'none'; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
-            "form-action 'self'"
+            "form-action 'self'; "
+            "upgrade-insecure-requests"
         )
         response.headers["Content-Security-Policy"] = csp
 
