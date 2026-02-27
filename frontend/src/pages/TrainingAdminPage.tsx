@@ -16,7 +16,7 @@
 
 import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, Settings } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Settings, ClipboardCheck } from 'lucide-react';
 import { HelpLink } from '../components/HelpLink';
 
 // Lazy-loaded tab components
@@ -34,9 +34,12 @@ const CreatePipelinePage = lazy(() => import('./CreatePipelinePage'));
 const ExternalTrainingPage = lazy(() => import('./ExternalTrainingPage'));
 const HistoricalImportPage = lazy(() => import('./HistoricalImportPage'));
 
+const SkillsTestingTemplatesTab = lazy(() => import('./SkillsTestingTemplatesTab'));
+const SkillsTestingTestRecordsTab = lazy(() => import('./SkillsTestingTestRecordsTab'));
+
 // ── Type definitions ────────────────────────────────────────────
 
-type PageId = 'dashboard' | 'records' | 'setup';
+type PageId = 'dashboard' | 'records' | 'setup' | 'skills-testing';
 
 interface TabDef {
   id: string;
@@ -93,6 +96,17 @@ const pages: PageDef[] = [
     ],
     defaultTab: 'requirements',
   },
+  {
+    id: 'skills-testing',
+    label: 'Skills Testing',
+    icon: ClipboardCheck,
+    description: 'Create evaluation templates and conduct skill assessments',
+    tabs: [
+      { id: 'templates', label: 'Templates' },
+      { id: 'tests', label: 'Test Records' },
+    ],
+    defaultTab: 'templates',
+  },
 ];
 
 // Map from old flat tab IDs to new page+tab for backwards compatibility
@@ -108,6 +122,8 @@ const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
   'pipelines': { page: 'setup', tab: 'pipelines' },
   'integrations': { page: 'setup', tab: 'integrations' },
   'import': { page: 'setup', tab: 'import' },
+  'templates': { page: 'skills-testing', tab: 'templates' },
+  'tests': { page: 'skills-testing', tab: 'tests' },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -154,6 +170,12 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
     if (tab === 'pipelines') return <CreatePipelinePage />;
     if (tab === 'integrations') return <ExternalTrainingPage />;
     if (tab === 'import') return <HistoricalImportPage />;
+  }
+
+  // Skills Testing sub-page
+  if (page === 'skills-testing') {
+    if (tab === 'templates') return <SkillsTestingTemplatesTab />;
+    if (tab === 'tests') return <SkillsTestingTestRecordsTab />;
   }
 
   return null;

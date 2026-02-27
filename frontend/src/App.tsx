@@ -213,8 +213,8 @@ function App() {
               <Route path="/training/shift-reports" element={<Navigate to="/training/admin?page=records&tab=shift-reports" replace />} />
               <Route path="/training/integrations" element={<Navigate to="/training/admin?page=setup&tab=integrations" replace />} />
 
-              {/* Skills Testing Module */}
-              <Route path="/training/skills-testing" element={<ProtectedRoute requiredPermission="training.manage"><SkillsTestingPage /></ProtectedRoute>} />
+              {/* Skills Testing Module — member-facing (available to all authenticated users) */}
+              <Route path="/training/skills-testing" element={<SkillsTestingPage />} />
               <Route path="/training/skills-testing/templates/new" element={<ProtectedRoute requiredPermission="training.manage"><SkillTemplateBuilderPage /></ProtectedRoute>} />
               <Route path="/training/skills-testing/templates/:id" element={<ProtectedRoute requiredPermission="training.manage"><SkillTemplateBuilderPage /></ProtectedRoute>} />
               <Route path="/training/skills-testing/templates/:id/edit" element={<ProtectedRoute requiredPermission="training.manage"><SkillTemplateBuilderPage /></ProtectedRoute>} />

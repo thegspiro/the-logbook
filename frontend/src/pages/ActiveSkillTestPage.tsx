@@ -572,7 +572,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           )}
 
           <button
-            onClick={() => navigate('/training/skills-testing?tab=tests')}
+            onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
             className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
           >
             Back to Tests
@@ -598,7 +598,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-sm border-b border-theme-surface-border px-4 py-3">
           <div className="flex items-center justify-between mb-2">
             <button
-              onClick={() => navigate('/training/skills-testing?tab=tests')}
+              onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
               className="p-2 rounded-lg hover:bg-theme-surface-hover transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -678,7 +678,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-sm border-b border-theme-surface-border px-4 py-3">
         <div className="flex items-center justify-between mb-2">
           <button
-            onClick={() => navigate('/training/skills-testing?tab=tests')}
+            onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
             className="p-2 rounded-lg hover:bg-theme-surface-hover transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />

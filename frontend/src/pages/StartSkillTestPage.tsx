@@ -105,7 +105,7 @@ export const StartSkillTestPage: React.FC = () => {
         {/* Header */}
         <div className="mb-6">
           <Link
-            to="/training/skills-testing?tab=tests"
+            to="/training/admin?page=skills-testing&tab=tests"
             className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
