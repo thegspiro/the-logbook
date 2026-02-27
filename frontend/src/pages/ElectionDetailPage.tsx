@@ -14,6 +14,8 @@ import { ElectionBallot } from '../components/ElectionBallot';
 import { CandidateManagement } from '../components/CandidateManagement';
 import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
+import { VoterOverrideManagement } from '../components/VoterOverrideManagement';
+import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -459,6 +461,16 @@ export const ElectionDetailPage: React.FC = () => {
               {election.anonymous_voting ? 'Yes' : 'No'}
             </div>
           </div>
+          {election.meeting_id && (
+            <div>
+              <div className="text-sm text-theme-text-muted">Linked Meeting</div>
+              <div className="mt-1 text-sm font-medium text-theme-text-primary">
+                <Link to={`/meetings/${election.meeting_id}`} className="text-blue-600 hover:text-blue-800">
+                  View Meeting &rarr;
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Secretary Controls */}
@@ -593,6 +605,20 @@ export const ElectionDetailPage: React.FC = () => {
             election={election}
             onUpdate={setElection}
           />
+        </div>
+      )}
+
+      {/* Voter Override Management (Admin) */}
+      {canManage && electionId && election.status !== 'cancelled' && (
+        <div className="mb-6">
+          <VoterOverrideManagement electionId={electionId} canManage={canManage} />
+        </div>
+      )}
+
+      {/* Proxy Voting Management (Admin) */}
+      {canManage && electionId && election.status !== 'cancelled' && (
+        <div className="mb-6">
+          <ProxyVotingManagement electionId={electionId} canManage={canManage} />
         </div>
       )}
 

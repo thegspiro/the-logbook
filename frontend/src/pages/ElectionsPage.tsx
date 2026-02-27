@@ -6,7 +6,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { electionService } from '../services/api';
+import { electionService, meetingsService } from '../services/api';
+import type { MeetingRecord } from '../services/api';
 import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus } from '../constants/enums';
@@ -41,6 +42,7 @@ export const ElectionsPage: React.FC = () => {
     max_runoff_rounds: 3,
   });
   const [positionInput, setPositionInput] = useState('');
+  const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
@@ -48,6 +50,7 @@ export const ElectionsPage: React.FC = () => {
 
   useEffect(() => {
     fetchElections();
+    fetchMeetings();
   }, []);
 
   useEffect(() => {
@@ -68,6 +71,30 @@ export const ElectionsPage: React.FC = () => {
       setError('Unable to load elections. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMeetings = async () => {
+    try {
+      const data = await meetingsService.getMeetings({ limit: 100 });
+      setMeetings(data.meetings);
+    } catch {
+      // Non-critical — meeting selector will just be empty
+    }
+  };
+
+  const handleMeetingChange = (meetingId: string) => {
+    if (!meetingId) {
+      setFormData({ ...formData, meeting_id: undefined });
+      return;
+    }
+    const meeting = meetings.find(m => m.id === meetingId);
+    if (meeting) {
+      setFormData({
+        ...formData,
+        meeting_id: meetingId,
+        meeting_date: meeting.meeting_date,
+      });
     }
   };
 
@@ -355,6 +382,28 @@ export const ElectionsPage: React.FC = () => {
                     rows={3}
                     className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
+                </div>
+
+                <div>
+                  <label htmlFor="election-meeting" className="block text-sm font-medium text-theme-text-primary">
+                    Linked Meeting
+                  </label>
+                  <select
+                    id="election-meeting"
+                    value={formData.meeting_id || ''}
+                    onChange={(e) => handleMeetingChange(e.target.value)}
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">No linked meeting</option>
+                    {meetings.map((meeting) => (
+                      <option key={meeting.id} value={meeting.id}>
+                        {meeting.title} ({formatDate(meeting.meeting_date, tz)})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-theme-text-muted">
+                    Optionally link this election to a meeting for shared context and attendance.
+                  </p>
                 </div>
 
                 <div className="space-y-4">

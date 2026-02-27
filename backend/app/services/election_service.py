@@ -1617,7 +1617,7 @@ class ElectionService:
 
     async def close_election(
         self, election_id: UUID, organization_id: UUID
-    ) -> Optional[Election]:
+    ) -> Tuple[Optional[Election], Optional[str]]:
         """Close an election and finalize results, creating runoff if needed"""
         result = await self.db.execute(
             select(Election)
@@ -1627,14 +1627,14 @@ class ElectionService:
         election = result.scalar_one_or_none()
 
         if not election:
-            return None
+            return None, "Election not found"
 
         if election.status == ElectionStatus.CLOSED:
-            return election
+            return election, None
 
         # Only OPEN elections can be closed
         if election.status != ElectionStatus.OPEN:
-            return None
+            return None, f"Cannot close election with status '{election.status.value}'. Only open elections can be closed."
 
         election.status = ElectionStatus.CLOSED
         await self.db.commit()
@@ -1670,7 +1670,7 @@ class ElectionService:
                     },
                 )
 
-        return election
+        return election, None
 
     async def open_election(
         self, election_id: UUID, organization_id: UUID
@@ -1689,16 +1689,17 @@ class ElectionService:
         if election.status != ElectionStatus.DRAFT:
             return None, f"Cannot open election with status {election.status.value}"
 
-        # Validate election has at least one candidate
+        # Validate election has at least one candidate or ballot item
         candidates_result = await self.db.execute(
             select(func.count(Candidate.id))
             .where(Candidate.election_id == str(election_id))
             .where(Candidate.accepted == True)  # noqa: E712
         )
         candidate_count = candidates_result.scalar() or 0
+        ballot_items = election.ballot_items or []
 
-        if candidate_count == 0:
-            return None, "Election must have at least one accepted candidate"
+        if candidate_count == 0 and len(ballot_items) == 0:
+            return None, "Election must have at least one accepted candidate or ballot item"
 
         election.status = ElectionStatus.OPEN
         await self.db.commit()
