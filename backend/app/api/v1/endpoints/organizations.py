@@ -15,8 +15,11 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import Role, User
 from app.schemas.organization import (
+    AuthSettings,
     ContactInfoSettings,
+    EmailServiceSettings,
     EnabledModulesResponse,
+    FileStorageSettings,
     MembershipIdSettings,
     ModuleSettingsUpdate,
     OrganizationSettingsResponse,
@@ -160,6 +163,148 @@ async def update_contact_info_settings(
         )
 
         return contact_settings
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
+        )
+
+
+@router.patch("/settings/email", response_model=EmailServiceSettings)
+async def update_email_settings(
+    email_settings: EmailServiceSettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Update email service settings
+
+    Configure the email platform (Gmail, Microsoft 365, self-hosted SMTP)
+    and connection details for sending notifications.
+
+    **Authentication and admin permission required**
+    """
+    org_service = OrganizationService(db)
+
+    settings_dict = {
+        "email_service": email_settings.model_dump(exclude_unset=False)
+    }
+
+    try:
+        await org_service.update_organization_settings(
+            current_user.organization_id, settings_dict
+        )
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "settings_changed": ["email_service"],
+                "email_platform": email_settings.platform,
+                "email_enabled": email_settings.enabled,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return email_settings
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
+        )
+
+
+@router.patch("/settings/file-storage", response_model=FileStorageSettings)
+async def update_file_storage_settings(
+    storage_settings: FileStorageSettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Update file storage settings
+
+    Configure the file storage platform (Google Drive, OneDrive, S3, local)
+    and connection details.
+
+    **Authentication and admin permission required**
+    """
+    org_service = OrganizationService(db)
+
+    settings_dict = {
+        "file_storage": storage_settings.model_dump(exclude_unset=False)
+    }
+
+    try:
+        await org_service.update_organization_settings(
+            current_user.organization_id, settings_dict
+        )
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "settings_changed": ["file_storage"],
+                "storage_platform": storage_settings.platform,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return storage_settings
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
+        )
+
+
+@router.patch("/settings/auth", response_model=AuthSettings)
+async def update_auth_settings(
+    auth_settings: AuthSettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Update authentication settings
+
+    Configure the authentication provider (Google OAuth, Microsoft Azure AD,
+    Authentik SSO, or local passwords).
+
+    **Authentication and admin permission required**
+    """
+    org_service = OrganizationService(db)
+
+    settings_dict = {
+        "auth": auth_settings.model_dump(exclude_unset=False)
+    }
+
+    try:
+        await org_service.update_organization_settings(
+            current_user.organization_id, settings_dict
+        )
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "settings_changed": ["auth"],
+                "auth_provider": auth_settings.provider,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return auth_settings
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
