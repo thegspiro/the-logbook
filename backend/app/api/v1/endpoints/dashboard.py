@@ -19,6 +19,7 @@ from app.core.database import get_db
 from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
 from app.models.meeting import ActionItemStatus, MeetingActionItem
 from app.models.minute import ActionItem, MeetingMinutes, MinutesActionItemStatus
+from app.models.admin_hours import AdminHoursEntry, AdminHoursEntryStatus
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import User, UserStatus
 from app.services.training_compliance import compute_org_compliance_pct
@@ -48,6 +49,8 @@ class AdminSummary(BaseModel):
     overdue_action_items: int
     open_action_items: int
     recent_training_hours: float
+    recent_admin_hours: float
+    pending_admin_hours_approvals: int
 
 
 class ActionItemSummary(BaseModel):
@@ -261,6 +264,32 @@ async def get_admin_summary(
     except Exception as exc:
         logger.warning("admin-summary: recent training hours query failed: %s", exc)
 
+    # ── Admin hours (last 30 days) ──
+    recent_admin_hours = 0.0
+    pending_admin_approvals = 0
+    try:
+        thirty_days_ago_admin = datetime.now(timezone.utc) - timedelta(days=30)
+        result = await db.execute(
+            select(func.coalesce(func.sum(AdminHoursEntry.duration_minutes), 0)).where(
+                AdminHoursEntry.organization_id == org_id,
+                AdminHoursEntry.status == AdminHoursEntryStatus.APPROVED,
+                AdminHoursEntry.clock_in_at >= thirty_days_ago_admin,
+                AdminHoursEntry.duration_minutes.isnot(None),
+            )
+        )
+        total_minutes = float(result.scalar() or 0)
+        recent_admin_hours = round(total_minutes / 60.0, 1)
+
+        result = await db.execute(
+            select(func.count(AdminHoursEntry.id)).where(
+                AdminHoursEntry.organization_id == org_id,
+                AdminHoursEntry.status == AdminHoursEntryStatus.PENDING,
+            )
+        )
+        pending_admin_approvals = result.scalar() or 0
+    except Exception as exc:
+        logger.warning("admin-summary: admin hours query failed: %s", exc)
+
     return AdminSummary(
         active_members=active_members,
         inactive_members=inactive_members,
@@ -270,6 +299,8 @@ async def get_admin_summary(
         overdue_action_items=overdue_meeting + overdue_minutes,
         open_action_items=open_meeting + open_minutes,
         recent_training_hours=recent_hours,
+        recent_admin_hours=recent_admin_hours,
+        pending_admin_hours_approvals=pending_admin_approvals,
     )
 
 
