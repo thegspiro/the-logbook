@@ -284,9 +284,9 @@ const Dashboard: React.FC = () => {
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
   };
 
-  const formatShiftTime = (dateStr: string, timeStr?: string) => {
+  const formatShiftTime = (_dateStr: string, timeStr?: string) => {
     if (!timeStr) return '';
-    return formatTime(dateStr + 'T' + timeStr, tz);
+    return formatTime(timeStr, tz);
   };
 
   const totalHours = hours.training + hours.standby + hours.administrative;

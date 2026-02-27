@@ -243,7 +243,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                         {shiftDate ? shiftDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz }) : 'Unknown Date'}
                       </p>
                       <p className="text-xs sm:text-sm text-theme-text-secondary">
-                        {shift?.start_time ? `${formatTime(shift.shift_date + 'T' + shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.shift_date + 'T' + shift.end_time, tz)}` : ''}` : ''}
+                        {shift?.start_time ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}` : ''}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <p className="text-xs text-theme-text-muted capitalize">
@@ -332,8 +332,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     return (
                       <option key={s.id} value={s.id}>
                         {d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz })}
-                        {' '}{formatTime(s.shift_date + 'T' + s.start_time, tz)}
-                        {s.end_time ? ` - ${formatTime(s.shift_date + 'T' + s.end_time, tz)}` : ''}
+                        {' '}{formatTime(s.start_time, tz)}
+                        {s.end_time ? ` - ${formatTime(s.end_time, tz)}` : ''}
                         {s.apparatus_unit_number ? ` (${s.apparatus_unit_number})` : ''}
                       </option>
                     );
