@@ -131,8 +131,8 @@ export const UsageStatsTab: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard
             title="Last 24 Hours"
-            value={stats.total_requests_24h.toLocaleString()}
-            subtitle={`Avg: ${Math.round(stats.total_requests_24h / 24)}/hour`}
+            value={(stats.total_requests_24h ?? 0).toLocaleString()}
+            subtitle={`Avg: ${Math.round((stats.total_requests_24h ?? 0) / 24)}/hour`}
             color="blue"
             icon={
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,8 +142,8 @@ export const UsageStatsTab: React.FC = () => {
           />
           <StatCard
             title="Last 7 Days"
-            value={stats.total_requests_7d.toLocaleString()}
-            subtitle={`Avg: ${Math.round(stats.total_requests_7d / 7)}/day`}
+            value={(stats.total_requests_7d ?? 0).toLocaleString()}
+            subtitle={`Avg: ${Math.round((stats.total_requests_7d ?? 0) / 7)}/day`}
             color="green"
             icon={
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -153,8 +153,8 @@ export const UsageStatsTab: React.FC = () => {
           />
           <StatCard
             title="Last 30 Days"
-            value={stats.total_requests_30d.toLocaleString()}
-            subtitle={`Avg: ${Math.round(stats.total_requests_30d / 30)}/day`}
+            value={(stats.total_requests_30d ?? 0).toLocaleString()}
+            subtitle={`Avg: ${Math.round((stats.total_requests_30d ?? 0) / 30)}/day`}
             color="purple"
             icon={
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -260,9 +260,9 @@ export const UsageStatsTab: React.FC = () => {
           />
           <StatCard
             title="Error Rate"
-            value={`${stats.error_rate_percentage.toFixed(2)}%`}
+            value={`${(stats.error_rate_percentage ?? 0).toFixed(2)}%`}
             subtitle="4xx + 5xx errors"
-            color={stats.error_rate_percentage > 5 ? 'red' : stats.error_rate_percentage > 2 ? 'yellow' : 'green'}
+            color={(stats.error_rate_percentage ?? 0) > 5 ? 'red' : (stats.error_rate_percentage ?? 0) > 2 ? 'yellow' : 'green'}
             icon={
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -295,7 +295,7 @@ export const UsageStatsTab: React.FC = () => {
       )}
 
       {/* Alerts */}
-      {(stats.error_rate_percentage > 5 || stats.flagged_suspicious_24h > 10 || stats.rate_limit_hits_24h > 50) && (
+      {((stats.error_rate_percentage ?? 0) > 5 || (stats.flagged_suspicious_24h ?? 0) > 10 || (stats.rate_limit_hits_24h ?? 0) > 50) && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -307,14 +307,14 @@ export const UsageStatsTab: React.FC = () => {
               <h3 className="text-sm font-medium text-yellow-800">Attention Required</h3>
               <div className="mt-2 text-sm text-yellow-700">
                 <ul className="list-disc list-inside space-y-1">
-                  {stats.error_rate_percentage > 5 && (
-                    <li>High error rate detected ({stats.error_rate_percentage.toFixed(2)}%)</li>
+                  {(stats.error_rate_percentage ?? 0) > 5 && (
+                    <li>High error rate detected ({(stats.error_rate_percentage ?? 0).toFixed(2)}%)</li>
                   )}
-                  {stats.flagged_suspicious_24h > 10 && (
-                    <li>Elevated suspicious activity ({stats.flagged_suspicious_24h} incidents in 24h)</li>
+                  {(stats.flagged_suspicious_24h ?? 0) > 10 && (
+                    <li>Elevated suspicious activity ({stats.flagged_suspicious_24h ?? 0} incidents in 24h)</li>
                   )}
-                  {stats.rate_limit_hits_24h > 50 && (
-                    <li>Frequent rate limiting ({stats.rate_limit_hits_24h} hits in 24h)</li>
+                  {(stats.rate_limit_hits_24h ?? 0) > 50 && (
+                    <li>Frequent rate limiting ({stats.rate_limit_hits_24h ?? 0} hits in 24h)</li>
                   )}
                 </ul>
               </div>

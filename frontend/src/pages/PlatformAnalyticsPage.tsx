@@ -141,7 +141,7 @@ const PlatformAnalyticsPage: React.FC = () => {
       </div>
 
       {/* Login Trend Chart */}
-      {data.loginTrend.length > 0 && (
+      {(data.loginTrend?.length ?? 0) > 0 && (
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
           <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Daily Login Activity (30 Days)</h3>
           <BarChart data={data.loginTrend} color="blue" />
@@ -180,7 +180,7 @@ const PlatformAnalyticsPage: React.FC = () => {
         {/* Error Trend */}
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 lg:col-span-2">
           <h3 className="text-sm font-medium text-theme-text-muted mb-3">Error Trend (7 Days)</h3>
-          {data.errorTrend.length > 0 ? (
+          {(data.errorTrend?.length ?? 0) > 0 ? (
             <BarChart data={data.errorTrend} color="red" />
           ) : (
             <p className="text-theme-text-muted text-sm">No error data</p>
@@ -189,11 +189,11 @@ const PlatformAnalyticsPage: React.FC = () => {
       </div>
 
       {/* Top Error Types */}
-      {Object.keys(data.topErrorTypes).length > 0 && (
+      {Object.keys(data.topErrorTypes ?? {}).length > 0 && (
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
           <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Top Error Types</h3>
           <div className="space-y-2">
-            {Object.entries(data.topErrorTypes)
+            {Object.entries(data.topErrorTypes ?? {})
               .sort(([, a], [, b]) => b - a)
               .map(([errorType, count]) => (
                 <div key={errorType} className="flex justify-between items-center">
