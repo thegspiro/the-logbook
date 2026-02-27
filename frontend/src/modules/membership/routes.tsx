@@ -20,41 +20,42 @@
  *   /members/import → /members/admin?tab=import
  */
 
-import React, { lazy } from 'react';
-import { Route, Navigate } from 'react-router-dom';
-import { ProtectedRoute } from '../../components/ProtectedRoute';
+import React from "react";
+import { Route, Navigate } from "react-router-dom";
+import { ProtectedRoute } from "../../components/ProtectedRoute";
+import { lazyWithRetry } from "../../utils/lazyWithRetry";
 
 // Lazy-loaded pages
-const Members = lazy(() => import('../../pages/Members'));
-const MemberProfilePage = lazy(() =>
-  import('../../pages/MemberProfilePage').then((m) => ({
+const Members = lazyWithRetry(() => import("../../pages/Members"));
+const MemberProfilePage = lazyWithRetry(() =>
+  import("../../pages/MemberProfilePage").then((m) => ({
     default: m.MemberProfilePage,
-  }))
+  })),
 );
-const MemberTrainingHistoryPage = lazy(() =>
-  import('../../pages/MemberTrainingHistoryPage').then((m) => ({
+const MemberTrainingHistoryPage = lazyWithRetry(() =>
+  import("../../pages/MemberTrainingHistoryPage").then((m) => ({
     default: m.MemberTrainingHistoryPage,
-  }))
+  })),
 );
-const MembersAdminHub = lazy(() =>
-  import('../../pages/MembersAdminHub').then((m) => ({
+const MembersAdminHub = lazyWithRetry(() =>
+  import("../../pages/MembersAdminHub").then((m) => ({
     default: m.MembersAdminHub,
-  }))
+  })),
 );
-const MemberAdminEditPage = lazy(() =>
-  import('../../pages/MemberAdminEditPage').then((m) => ({
+const MemberAdminEditPage = lazyWithRetry(() =>
+  import("../../pages/MemberAdminEditPage").then((m) => ({
     default: m.MemberAdminEditPage,
-  }))
+  })),
 );
-const MemberAuditHistoryPage = lazy(() =>
-  import('../../pages/MemberAuditHistoryPage').then((m) => ({
+const MemberAuditHistoryPage = lazyWithRetry(() =>
+  import("../../pages/MemberAuditHistoryPage").then((m) => ({
     default: m.MemberAuditHistoryPage,
-  }))
+  })),
 );
-const WaiverManagementPage = lazy(() =>
-  import('../../pages/WaiverManagementPage').then((m) => ({
+const WaiverManagementPage = lazyWithRetry(() =>
+  import("../../pages/WaiverManagementPage").then((m) => ({
     default: m.WaiverManagementPage,
-  }))
+  })),
 );
 
 export const getMembershipRoutes = () => {
@@ -63,7 +64,10 @@ export const getMembershipRoutes = () => {
       {/* Member-facing */}
       <Route path="/members" element={<Members />} />
       <Route path="/members/:userId" element={<MemberProfilePage />} />
-      <Route path="/members/:userId/training" element={<MemberTrainingHistoryPage />} />
+      <Route
+        path="/members/:userId/training"
+        element={<MemberTrainingHistoryPage />}
+      />
 
       {/* Admin Hub */}
       <Route
@@ -104,9 +108,18 @@ export const getMembershipRoutes = () => {
       />
 
       {/* Legacy redirects to admin hub */}
-      <Route path="/admin/members" element={<Navigate to="/members/admin" replace />} />
-      <Route path="/members/add" element={<Navigate to="/members/admin?tab=add" replace />} />
-      <Route path="/members/import" element={<Navigate to="/members/admin?tab=import" replace />} />
+      <Route
+        path="/admin/members"
+        element={<Navigate to="/members/admin" replace />}
+      />
+      <Route
+        path="/members/add"
+        element={<Navigate to="/members/admin?tab=add" replace />}
+      />
+      <Route
+        path="/members/import"
+        element={<Navigate to="/members/admin?tab=import" replace />}
+      />
     </React.Fragment>
   );
 };

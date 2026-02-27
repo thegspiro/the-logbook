@@ -5,8 +5,8 @@
  * Displays a user-friendly error message with the option to reload.
  */
 
-import { Component, ErrorInfo, ReactNode } from 'react';
-import { errorTracker } from '../services/errorTracking';
+import { Component, ErrorInfo, ReactNode } from "react";
+import { errorTracker } from "../services/errorTracking";
 
 interface Props {
   children: ReactNode;
@@ -16,6 +16,17 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  isChunkError: boolean;
+}
+
+function isChunkLoadError(error: Error): boolean {
+  const msg = error.message.toLowerCase();
+  return (
+    msg.includes("failed to fetch dynamically imported module") ||
+    msg.includes("loading chunk") ||
+    msg.includes("loading css chunk") ||
+    msg.includes("importing a module script failed")
+  );
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -25,17 +36,17 @@ export class ErrorBoundary extends Component<Props, State> {
       hasError: false,
       error: null,
       errorInfo: null,
+      isChunkError: false,
     };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    // Update state so the next render will show the fallback UI
-    return { hasError: true, error };
+    return { hasError: true, error, isChunkError: isChunkLoadError(error) };
   }
 
   override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // Log the error to console (or send to error tracking service)
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
 
     this.setState({
       error,
@@ -43,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
     });
 
     errorTracker.logError(error, {
-      errorType: 'REACT_ERROR_BOUNDARY',
+      errorType: "REACT_ERROR_BOUNDARY",
       additionalContext: { componentStack: errorInfo.componentStack },
     });
   }
@@ -53,12 +64,17 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleGoHome = (): void => {
-    window.location.href = '/dashboard';
+    window.location.href = "/dashboard";
   };
 
   handleRetry = (): void => {
     // Try to recover by resetting the error state (#65)
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    this.setState({
+      hasError: false,
+      error: null,
+      errorInfo: null,
+      isChunkError: false,
+    });
   };
 
   handleCopyError = (): void => {
@@ -67,8 +83,10 @@ export class ErrorBoundary extends Component<Props, State> {
       `\nComponent Stack: ${this.state.errorInfo?.componentStack}`,
       `\nURL: ${window.location.href}`,
       `\nTime: ${new Date().toISOString()}`,
-    ].join('');
-    navigator.clipboard.writeText(errorText).catch(() => { /* clipboard not available */ });
+    ].join("");
+    navigator.clipboard.writeText(errorText).catch(() => {
+      /* clipboard not available */
+    });
   };
 
   override render(): ReactNode {
@@ -97,15 +115,18 @@ export class ErrorBoundary extends Component<Props, State> {
 
               {/* Error Message */}
               <h1 className="text-2xl font-bold text-theme-text-primary mb-2">
-                Oops! Something went wrong
+                {this.state.isChunkError
+                  ? "New Version Available"
+                  : "Oops! Something went wrong"}
               </h1>
               <p className="text-theme-text-secondary mb-6">
-                We're sorry, but something unexpected happened. Please try reloading the page or
-                return to the dashboard.
+                {this.state.isChunkError
+                  ? "The application has been updated. Please reload the page to get the latest version."
+                  : "We're sorry, but something unexpected happened. Please try reloading the page or return to the dashboard."}
               </p>
 
               {/* Error Details (Development Only) */}
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {process.env.NODE_ENV === "development" && this.state.error && (
                 <details className="mb-6 text-left">
                   <summary className="cursor-pointer text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 mb-2">
                     Show error details (Development)
@@ -113,7 +134,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   <div className="bg-theme-input-bg rounded-lg p-4 overflow-auto max-h-64">
                     <pre className="text-xs text-red-700 dark:text-red-300 whitespace-pre-wrap">
                       <strong>Error:</strong> {this.state.error.toString()}
-                      {'\n\n'}
+                      {"\n\n"}
                       <strong>Component Stack:</strong>
                       {this.state.errorInfo?.componentStack}
                     </pre>
@@ -127,8 +148,18 @@ export class ErrorBoundary extends Component<Props, State> {
                   onClick={this.handleRetry}
                   className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
                 >
-                  <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  <svg
+                    className="mr-2 h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
                   </svg>
                   Try Again
                 </button>
