@@ -2119,6 +2119,7 @@ class ShiftTemplate(Base):
     # Categorization
     category = Column(String(20), default="standard")  # "standard", "specialty", "event"
     apparatus_type = Column(String(50))  # Links template to a vehicle type (e.g., "engine", "ambulance")
+    apparatus_id = Column(String(36))  # Links template to a specific vehicle (BasicApparatus or full Apparatus)
 
     # Defaults
     is_default = Column(Boolean, default=False)

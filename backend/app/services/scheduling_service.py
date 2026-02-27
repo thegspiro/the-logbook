@@ -942,6 +942,7 @@ class SchedulingService:
                     shift_date=shift_date_val,
                     start_time=shift_start,
                     end_time=shift_end,
+                    apparatus_id=getattr(template, "apparatus_id", None),
                     color=shift_color,
                     created_by=created_by,
                 )

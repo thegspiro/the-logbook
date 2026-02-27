@@ -39,6 +39,7 @@ import {
 } from '../services/api';
 import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
+import { getErrorMessage } from '../utils/errorHandling';
 import { getProgressBarColor } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
@@ -245,7 +246,7 @@ const Dashboard: React.FC = () => {
       void loadMyShifts();
       void loadOpenShifts();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to sign up for shift');
+      toast.error(getErrorMessage(error, 'Failed to sign up for shift'));
     } finally {
       setSigningUpShiftId(null);
     }

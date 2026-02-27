@@ -289,6 +289,7 @@ class ShiftTemplateCreate(BaseModel):
     min_staffing: int = 1
     category: Optional[str] = "standard"
     apparatus_type: Optional[str] = None
+    apparatus_id: Optional[str] = None
     is_default: bool = False
 
 
@@ -305,6 +306,7 @@ class ShiftTemplateUpdate(BaseModel):
     min_staffing: Optional[int] = None
     category: Optional[str] = None
     apparatus_type: Optional[str] = None
+    apparatus_id: Optional[str] = None
     is_default: Optional[bool] = None
 
 
@@ -323,6 +325,7 @@ class ShiftTemplateResponse(BaseModel):
     min_staffing: int = 1
     category: Optional[str] = "standard"
     apparatus_type: Optional[str] = None
+    apparatus_id: Optional[str] = None
     is_default: bool = False
     is_active: bool = True
     created_at: datetime
@@ -618,6 +621,25 @@ class ShiftSignupRequest(BaseModel):
 # ============================================
 # Basic Apparatus (Lightweight, for non-module departments)
 # ============================================
+
+
+class ApparatusOption(BaseModel):
+    """A single vehicle option for shift template assignment"""
+
+    id: Optional[str] = None
+    name: str
+    unit_number: Optional[str] = None
+    apparatus_type: str
+    source: str  # "apparatus", "basic", or "default"
+    positions: Optional[List[str]] = None
+    min_staffing: Optional[int] = None
+
+
+class ApparatusOptionsResponse(BaseModel):
+    """Response for apparatus options endpoint"""
+
+    options: List[ApparatusOption]
+    source: str  # primary source used: "apparatus", "basic", or "default"
 
 
 class BasicApparatusCreate(BaseModel):
