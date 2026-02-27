@@ -562,8 +562,8 @@ const SchedulingPage: React.FC = () => {
                               style={getShiftStyle(shift)}
                             >
                               <p className="font-medium truncate">
-                                {formatTime(shift.start_time, tz)}
-                                {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                                {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
+                                {shift.end_time ? ` - ${formatTime(shift.shift_date + 'T' + shift.end_time, tz)}` : ''}
                               </p>
                               {shift.notes && (
                                 <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
@@ -627,8 +627,8 @@ const SchedulingPage: React.FC = () => {
                                   style={getShiftStyle(shift)}
                                 >
                                   <p className="font-medium">
-                                    {formatTime(shift.start_time, tz)}
-                                    {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                                    {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
+                                    {shift.end_time ? ` - ${formatTime(shift.shift_date + 'T' + shift.end_time, tz)}` : ''}
                                   </p>
                                   {shift.notes && (
                                     <p className="mt-1 opacity-80 truncate">{shift.notes}</p>
@@ -697,7 +697,7 @@ const SchedulingPage: React.FC = () => {
                             >
                               <p className="font-medium truncate">
                                 {isUnderstaffed(shift) && <AlertTriangle className="w-3 h-3 inline text-amber-600 dark:text-amber-400 mr-0.5" />}
-                                {formatTime(shift.start_time)}
+                                {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
                                 {shift.apparatus_unit_number && <span className="ml-1 opacity-70">{shift.apparatus_unit_number}</span>}
                                 <span className="ml-1 opacity-70">({shift.attendee_count})</span>
                               </p>
@@ -800,8 +800,8 @@ const SchedulingPage: React.FC = () => {
                                     style={getShiftStyle(shift)}
                                   >
                                     <p className="font-medium">
-                                      {formatTime(shift.start_time, tz)}
-                                      {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                                      {formatTime(shift.shift_date + 'T' + shift.start_time, tz)}
+                                      {shift.end_time ? ` - ${formatTime(shift.shift_date + 'T' + shift.end_time, tz)}` : ''}
                                     </p>
                                     {shift.notes && (
                                       <p className="mt-1 opacity-80 truncate">{shift.notes}</p>

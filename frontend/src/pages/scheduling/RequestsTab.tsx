@@ -216,14 +216,14 @@ export const RequestsTab: React.FC = () => {
                           {req.offering_shift ? (
                             <>
                               Offering: {new Date(req.offering_shift.shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
-                              {' '}{formatTime(req.offering_shift.start_time, tz)}
+                              {' '}{formatTime(req.offering_shift.shift_date + 'T' + req.offering_shift.start_time, tz)}
                             </>
                           ) : (
                             <>Offering shift (details unavailable)</>
                           )}
                           {req.requesting_shift ? (
                             <> {' \u2192 '} {new Date(req.requesting_shift.shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
-                              {' '}{formatTime(req.requesting_shift.start_time, tz)}
+                              {' '}{formatTime(req.requesting_shift.shift_date + 'T' + req.requesting_shift.start_time, tz)}
                             </>
                           ) : req.requesting_shift_id ? (
                             <> {' \u2192 '} Requested shift (details unavailable)</>
