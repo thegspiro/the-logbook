@@ -75,6 +75,7 @@ All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps 
 - **Test data:** Faker
 - **Run:** `npm run test:backend` or `cd backend && pytest`
 - Test files live in `backend/tests/`
+- **Config:** `asyncio_mode = auto` in `pytest.ini` — no need for `@pytest.mark.asyncio` on individual tests. Markers: `integration`, `unit`, `slow`, `docker`
 - **Fixtures:** `conftest.py` provides `db_session` (auto-rolled-back transaction per test), `sample_org_data`, `sample_admin_data`, `sample_roles_data`, `sample_stations_data`
 
 ### Frontend Test Patterns
@@ -113,12 +114,12 @@ beforeEach(() => {
 
 ### Frontend
 
-- ESLint 8 with @typescript-eslint (max-warnings 0)
+- ESLint 8 with @typescript-eslint (max-warnings 1500 — existing warning debt)
 - Prettier 3.4 with prettier-plugin-tailwindcss
 
 ### Backend
 
-- Black (line length 120)
+- Black (line length 88, the default)
 - flake8
 - isort
 - mypy
@@ -218,7 +219,9 @@ backend/app/
 - **API response caching:** The global axios instance includes an in-memory stale-while-revalidate cache (`utils/apiCache.ts`). GET responses are cached with a 30s fresh / 90s stale window. Mutations (POST/PUT/PATCH/DELETE) auto-invalidate related cache entries by URL prefix. HIPAA-sensitive endpoints (`/auth/`, `/users/`, `/security/`, etc.) are excluded from caching via `UNCACHEABLE_PREFIXES`. When adding new sensitive endpoints, add them to this list
 - **Auth (httpOnly cookies):** Auth tokens are stored exclusively in **httpOnly cookies** set by the backend — never in `localStorage`. The global axios instance uses `withCredentials: true` so cookies are sent automatically. A lightweight `has_session` flag in `localStorage` tells `loadUser()` whether to attempt an API call on page refresh. **Never store tokens in localStorage or send `Authorization` headers.** CSRF protection: state-changing requests (POST/PUT/PATCH/DELETE) read a `csrf_token` cookie and attach it as an `X-CSRF-Token` header (double-submit pattern). Response interceptor catches 401 → attempts cookie-based refresh via `POST /auth/refresh` → retries original request. A shared `refreshPromise` prevents concurrent refresh races (token rotation).
 - **Toast notifications:** `react-hot-toast` — use `toast.success()`, `toast.error()` for user feedback. `<Toaster>` is mounted in `App.tsx`
-- **Styling:** Tailwind CSS with `theme-*` CSS variable classes. Dark mode via `class` strategy. Size variants as objects (`{ sm: 'max-w-md', md: 'max-w-lg' }`)
+- **Styling:** Tailwind CSS with `theme-*` CSS variable classes defined in `styles/index.css` (e.g., `bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`). Dark mode via `class` strategy. High-contrast mode also supported (`ThemeContext` handles `'light' | 'dark' | 'system' | 'high-contrast'`). Size variants as objects (`{ sm: 'max-w-md', md: 'max-w-lg' }`)
+- **UX component library:** Reusable components in `components/ux/` — use these before building custom UI: `Skeleton`/`SkeletonCard`/`SkeletonPage` (loading states), `Pagination`, `EmptyState`, `ConfirmDialog`, `Tooltip`, `CommandPalette`, `SortableHeader`, `Breadcrumbs`, `ProgressSteps`, `Collapsible`, `DateRangePicker`, `FileDropzone`, `InlineEdit`, `PageTransition`
+- **Form input classes:** Forms define shared Tailwind class constants (`inputClass`, `selectClass`, `labelClass`, `checkboxClass`) for consistency. Reuse these patterns in new forms
 - **Types:** Defined as `interface` (not `type`) for domain objects. One file per domain in `types/`. Enums use `as const` objects with an extracted type of the same name (value union pattern):
   ```typescript
   export const EventType = {
@@ -227,7 +230,10 @@ backend/app/
   } as const;
   export type EventType = (typeof EventType)[keyof typeof EventType];
   ```
-  All enums live in `constants/enums.ts` — use these constants instead of string literals
+  All enums live in `constants/enums.ts` — use these constants instead of string literals. Status badge color mappings are also defined here as `Record<string, string>` with Tailwind classes
+- **Floating promises:** Use `void` prefix for intentionally unhandled promises to satisfy `@typescript-eslint/no-floating-promises`: `void fetchData()`, `void handleSubmit()`
+- **Date formatting:** Use `utils/dateFormatting.ts` utilities (which use `Intl.DateTimeFormat` internally, not date-fns). All formatters accept an optional `timezone` parameter for IANA timezone support
+- **Constants:** Magic numbers and config values are centralized in `constants/config.ts` (`API_TIMEOUT_MS`, `DEFAULT_PAGE_SIZE`, `PAGE_SIZE_OPTIONS`, `AUTO_SAVE_INTERVAL_MS`, etc.). Use these instead of inline values
 
 ### Backend Patterns
 
