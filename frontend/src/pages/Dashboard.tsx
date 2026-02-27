@@ -15,6 +15,7 @@ import {
   Shield,
   Users,
   ClipboardList,
+  ClipboardCheck,
   Activity,
   Megaphone,
   Pin,
@@ -59,6 +60,8 @@ interface AdminSummaryData {
   overdue_action_items: number;
   open_action_items: number;
   recent_training_hours: number;
+  recent_admin_hours: number;
+  pending_admin_hours_approvals: number;
 }
 
 const Dashboard: React.FC = () => {
@@ -368,7 +371,7 @@ const Dashboard: React.FC = () => {
               <Shield className="w-5 h-5 text-red-500" />
               Department Overview
             </h3>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" role="region" aria-label="Department overview">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4" role="region" aria-label="Department overview">
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
@@ -434,6 +437,26 @@ const Dashboard: React.FC = () => {
                   {(adminSummary?.overdue_action_items ?? 0) > 0
                     ? `${adminSummary?.overdue_action_items} overdue`
                     : 'All on track'
+                  }
+                </p>
+              </div>
+
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/admin-hours/manage')}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Admin Hours</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.recent_admin_hours ?? 0}</p>
+                    )}
+                  </div>
+                  <ClipboardCheck className="w-8 h-8 text-indigo-400" />
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">
+                  {(adminSummary?.pending_admin_hours_approvals ?? 0) > 0
+                    ? `${adminSummary?.pending_admin_hours_approvals} pending approval`
+                    : 'Last 30 days'
                   }
                 </p>
               </div>
