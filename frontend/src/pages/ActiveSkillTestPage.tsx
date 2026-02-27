@@ -28,6 +28,8 @@ import {
   XCircle,
   MessageSquare,
   Timer,
+  Save,
+  FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
@@ -35,6 +37,7 @@ import type {
   SkillCriterion,
   SkillTemplateSection,
   CriterionResult,
+  SectionResult,
 } from '../types/skillsTesting';
 
 // ==================== Helpers ====================
@@ -504,6 +507,144 @@ const SectionView: React.FC<{
   );
 };
 
+// ==================== Completed Test Review ====================
+
+/** Read-only display of a single criterion result */
+const CriterionResultDisplay: React.FC<{
+  criterion: SkillCriterion;
+  result: CriterionResult | undefined;
+}> = ({ criterion, result }) => {
+  const passed = result?.passed;
+
+  const statusBadge = () => {
+    if (criterion.type === 'statement') {
+      return passed ? (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">Acknowledged</span>
+      ) : (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">Not acknowledged</span>
+      );
+    }
+    if (passed === true) {
+      return (
+        <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+          <Check className="w-3 h-3" /> Pass
+        </span>
+      );
+    }
+    if (passed === false) {
+      return (
+        <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+          <X className="w-3 h-3" /> Fail
+        </span>
+      );
+    }
+    return (
+      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">Not evaluated</span>
+    );
+  };
+
+  return (
+    <div className="flex items-start justify-between gap-2 py-2">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-theme-text-primary">
+          {criterion.label}
+          {criterion.required && <span className="ml-1 text-red-500 text-xs">(Critical)</span>}
+        </p>
+        {criterion.type === 'score' && result?.score != null && (
+          <p className="text-xs text-theme-text-muted mt-0.5">
+            Score: {result.score}/{criterion.max_score ?? 100}
+            {criterion.passing_score != null && ` (pass: ${criterion.passing_score})`}
+          </p>
+        )}
+        {criterion.type === 'time_limit' && result?.time_seconds != null && (
+          <p className="text-xs text-theme-text-muted mt-0.5">
+            Time: {Math.floor(result.time_seconds / 60)}:{String(result.time_seconds % 60).padStart(2, '0')}
+            {criterion.time_limit_seconds != null && ` / ${Math.floor(criterion.time_limit_seconds / 60)}:${String(criterion.time_limit_seconds % 60).padStart(2, '0')}`}
+          </p>
+        )}
+        {criterion.type === 'checklist' && result?.checklist_completed && (
+          <p className="text-xs text-theme-text-muted mt-0.5">
+            {result.checklist_completed.filter(Boolean).length}/{criterion.checklist_items?.length ?? 0} items completed
+          </p>
+        )}
+        {result?.notes && (
+          <p className="text-xs text-theme-text-muted mt-1 italic">&ldquo;{result.notes}&rdquo;</p>
+        )}
+      </div>
+      {statusBadge()}
+    </div>
+  );
+};
+
+/** Review section showing results + editable notes for a completed test */
+const ReviewSection: React.FC<{
+  section: SkillTemplateSection;
+  sectionResult: SectionResult | undefined;
+  sectionNotes: string;
+  onNotesChange: (notes: string) => void;
+}> = ({ section, sectionResult, sectionNotes, onNotesChange }) => {
+  const criteriaResults = sectionResult?.criteria_results ?? [];
+  const passCount = criteriaResults.filter((r) => r.passed === true).length;
+  const failCount = criteriaResults.filter((r) => r.passed === false).length;
+  const nonStatementCriteria = section.criteria.filter((c) => c.type !== 'statement');
+
+  return (
+    <div className="bg-theme-surface rounded-xl border border-theme-surface-border overflow-hidden">
+      {/* Section header */}
+      <div className="px-4 py-3 border-b border-theme-surface-border bg-theme-surface-hover/50">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-theme-text-primary">{section.name}</h3>
+          <div className="flex items-center gap-2 text-xs">
+            {passCount > 0 && (
+              <span className="text-green-600 font-medium">{passCount} passed</span>
+            )}
+            {failCount > 0 && (
+              <span className="text-red-600 font-medium">{failCount} failed</span>
+            )}
+            {nonStatementCriteria.length - passCount - failCount > 0 && (
+              <span className="text-gray-500 font-medium">
+                {nonStatementCriteria.length - passCount - failCount} unevaluated
+              </span>
+            )}
+          </div>
+        </div>
+        {section.description && (
+          <p className="text-xs text-theme-text-muted mt-0.5">{section.description}</p>
+        )}
+      </div>
+
+      {/* Criteria results */}
+      <div className="px-4 divide-y divide-theme-surface-border">
+        {section.criteria.map((criterion) => {
+          const result = criteriaResults.find((r) => r.criterion_id === criterion.id);
+          return (
+            <CriterionResultDisplay
+              key={criterion.id}
+              criterion={criterion}
+              result={result}
+            />
+          );
+        })}
+      </div>
+
+      {/* Section notes */}
+      <div className="px-4 py-3 border-t border-theme-surface-border">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-theme-text-muted mb-1.5">
+          <FileText className="w-3 h-3" />
+          Section Notes
+        </label>
+        <textarea
+          value={sectionNotes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          placeholder="Add notes for this section..."
+          rows={2}
+          className="w-full px-3 py-2 text-sm bg-theme-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted/50 focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+        />
+      </div>
+    </div>
+  );
+};
+
 // ==================== Main Active Test Page ====================
 
 export const ActiveSkillTestPage: React.FC = () => {
@@ -526,6 +667,9 @@ export const ActiveSkillTestPage: React.FC = () => {
   } = useSkillsTestingStore();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
 
   // Load the test
   useEffect(() => {
@@ -576,8 +720,12 @@ export const ActiveSkillTestPage: React.FC = () => {
     }
   }, [currentTest, activeTestTimer, updateTest]);
 
+  /** "Complete Test" — stops the clock, saves progress, and enters review mode */
   const handleComplete = useCallback(async () => {
     if (!currentTest) return;
+
+    // Stop the clock immediately
+    setActiveTestRunning(false);
 
     // Check for unevaluated criteria
     const totalCriteria = templateSections.reduce(
@@ -590,26 +738,78 @@ export const ActiveSkillTestPage: React.FC = () => {
     );
     const unevaluated = totalCriteria - evaluatedCriteria;
 
-    const confirmMessage = unevaluated > 0
-      ? `${unevaluated} criterion${unevaluated === 1 ? '' : 'a'} ha${unevaluated === 1 ? 's' : 've'} not been evaluated. Complete this test anyway? Results will be finalized.`
-      : 'Complete this test? Results will be finalized.';
-
-    if (!window.confirm(confirmMessage)) return;
+    if (unevaluated > 0) {
+      const confirmMessage = `${unevaluated} criterion${unevaluated === 1 ? '' : 'a'} ha${unevaluated === 1 ? 's' : 've'} not been evaluated. Continue to review?`;
+      if (!window.confirm(confirmMessage)) return;
+    }
 
     try {
-      // Save current state first
+      // Save current state before entering review
       await updateTest(currentTest.id, {
         section_results: currentTest.section_results,
         elapsed_seconds: activeTestTimer,
       });
-      // Then complete
+      setReviewing(true);
+    } catch {
+      toast.error('Failed to save progress');
+    }
+  }, [currentTest, activeTestTimer, updateTest, templateSections, setActiveTestRunning]);
+
+  /** "Submit Test" — finalizes the test with notes from review, calculates results */
+  const handleSubmit = useCallback(async () => {
+    if (!currentTest) return;
+
+    if (!window.confirm('Submit this test? Results will be finalized and cannot be changed.')) return;
+
+    setSubmitting(true);
+    try {
+      // Merge review notes into section results before submitting
+      const updatedSectionResults: SectionResult[] = templateSections.map((section) => {
+        const existing = currentTest.section_results?.find((sr) => sr.section_id === section.id);
+        const sectionNotes = reviewNotes[section.id] ?? '';
+        const criteriaResults = existing?.criteria_results ?? [];
+
+        // Append section-level review note to the first criterion's notes or store as section note
+        // For now, store section notes in a special criterion entry
+        const finalCriteria = [...criteriaResults];
+        if (sectionNotes) {
+          // Add section notes as a special entry
+          const existingNoteEntry = finalCriteria.find((cr) => cr.criterion_id === `${section.id}-review-notes`);
+          if (existingNoteEntry) {
+            existingNoteEntry.notes = sectionNotes;
+          } else {
+            finalCriteria.push({
+              criterion_id: `${section.id}-review-notes`,
+              criterion_label: 'Section Review Notes',
+              passed: null,
+              notes: sectionNotes,
+            });
+          }
+        }
+
+        return {
+          section_id: section.id,
+          section_name: existing?.section_name ?? section.name,
+          criteria_results: finalCriteria,
+        };
+      });
+
+      // Save section results with review notes
+      await updateTest(currentTest.id, {
+        section_results: updatedSectionResults,
+        elapsed_seconds: activeTestTimer,
+      });
+
+      // Then finalize
       const completed = await completeTest(currentTest.id);
-      toast.success(`Test completed: ${completed.result.toUpperCase()}`);
+      toast.success(`Test submitted: ${completed.result.toUpperCase()}`);
       navigate(`/training/skills-testing/test/${currentTest.id}`);
     } catch {
-      toast.error('Failed to complete test');
+      toast.error('Failed to submit test');
+    } finally {
+      setSubmitting(false);
     }
-  }, [currentTest, activeTestTimer, updateTest, completeTest, navigate, templateSections]);
+  }, [currentTest, activeTestTimer, updateTest, completeTest, navigate, templateSections, reviewNotes]);
 
   const handleUpdateCriterion = useCallback((
     sectionId: string,
@@ -630,8 +830,8 @@ export const ActiveSkillTestPage: React.FC = () => {
     );
   }
 
-  // Completed test view
-  if (currentTest.status === 'completed') {
+  // Completed test — final summary (after submission)
+  if (currentTest.status === 'completed' && !reviewing) {
     return (
       <div className="min-h-screen">
         <main className="max-w-lg mx-auto px-4 py-8">
@@ -673,6 +873,80 @@ export const ActiveSkillTestPage: React.FC = () => {
             Back to Tests
           </button>
         </main>
+      </div>
+    );
+  }
+
+  // Review screen — shown after completing evaluation, before final submission
+  if (reviewing) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        {/* Review Header */}
+        <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-sm border-b border-theme-surface-border px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setReviewing(false)}
+              className="flex items-center gap-1 p-2 rounded-lg hover:bg-theme-surface-hover transition-colors text-sm"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Back
+            </button>
+            <div className="text-center">
+              <p className="font-bold text-theme-text-primary text-sm">{currentTest.template_name}</p>
+              <p className="text-xs text-theme-text-muted">Review &amp; Submit</p>
+            </div>
+            <div className="w-16" /> {/* Spacer for centering */}
+          </div>
+        </div>
+
+        {/* Review Content */}
+        <div className="flex-1 px-4 py-4 overflow-y-auto">
+          {/* Summary stats */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="bg-theme-surface rounded-xl p-4 border border-theme-surface-border text-center">
+              <p className="text-xs text-theme-text-muted">Candidate</p>
+              <p className="font-bold text-theme-text-primary text-sm mt-1">{currentTest.candidate_name}</p>
+            </div>
+            <div className="bg-theme-surface rounded-xl p-4 border border-theme-surface-border text-center">
+              <p className="text-xs text-theme-text-muted">Total Time</p>
+              <p className="font-bold font-mono text-theme-text-primary text-sm mt-1">
+                {Math.floor(activeTestTimer / 60)}:{String(activeTestTimer % 60).padStart(2, '0')}
+              </p>
+            </div>
+          </div>
+
+          {/* Sections with results and notes */}
+          <div className="space-y-4">
+            {templateSections.map((section) => {
+              const sectionResult = currentTest.section_results?.find(
+                (sr) => sr.section_id === section.id
+              );
+              return (
+                <ReviewSection
+                  key={section.id}
+                  section={section}
+                  sectionResult={sectionResult}
+                  sectionNotes={reviewNotes[section.id] ?? ''}
+                  onNotesChange={(notes) =>
+                    setReviewNotes((prev) => ({ ...prev, [section.id]: notes }))
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Submit Bar */}
+        <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-sm border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+          <button
+            onClick={() => void handleSubmit()}
+            disabled={submitting}
+            className="w-full flex items-center justify-center gap-2 py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg transition-colors"
+          >
+            <Save className="w-5 h-5" />
+            {submitting ? 'Submitting...' : 'Submit Test'}
+          </button>
+        </div>
       </div>
     );
   }
