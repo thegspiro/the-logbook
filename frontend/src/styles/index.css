@@ -627,4 +627,23 @@ option {
   img {
     max-width: 100% !important;
   }
+
+  /* ── Member ID Card print layout ── */
+  .id-card-printable {
+    width: 3.375in !important;   /* CR-80 card width */
+    max-width: 3.375in !important;
+    margin: 0 auto !important;
+    page-break-inside: avoid;
+  }
+
+  .id-card-printable * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Suppress the link-URL-after-text rule inside the card */
+  .id-card-printable a[href]:after {
+    content: "" !important;
+  }
 }

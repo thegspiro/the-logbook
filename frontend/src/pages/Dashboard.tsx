@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import { formatRelativeTime } from '../hooks/useRelativeTime';
+import React, { useState, useEffect } from "react";
+import toast from "react-hot-toast";
+import { formatRelativeTime } from "../hooks/useRelativeTime";
 import {
   Bell,
   Calendar,
@@ -26,8 +26,9 @@ import {
   Smartphone,
   UserPlus,
   Loader2,
-} from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+  CreditCard,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   trainingProgramService,
   trainingModuleConfigService,
@@ -36,18 +37,31 @@ import {
   messagesService,
   organizationService,
   inventoryService,
-} from '../services/api';
-import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
-import { adminHoursEntryService } from '../modules/admin-hours/services/api';
-import { getErrorMessage } from '../utils/errorHandling';
-import { getProgressBarColor } from '../utils/eventHelpers';
-import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
-import { useAuthStore } from '../stores/authStore';
-import { usePWAInstall } from '../hooks/usePWAInstall';
-import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
-import type { NotificationLogRecord, ShiftRecord } from '../services/api';
-import { dashboardService } from '../services/api';
+} from "../services/api";
+import type {
+  AdminSummary,
+  InboxMessage,
+  InventorySummary,
+  LowStockAlert,
+} from "../services/api";
+import { adminHoursEntryService } from "../modules/admin-hours/services/api";
+import { getErrorMessage } from "../utils/errorHandling";
+import { getProgressBarColor } from "../utils/eventHelpers";
+import { useTimezone } from "../hooks/useTimezone";
+import {
+  formatDate,
+  formatTime,
+  getTodayLocalDate,
+  toLocalDateString,
+} from "../utils/dateFormatting";
+import { useAuthStore } from "../stores/authStore";
+import { usePWAInstall } from "../hooks/usePWAInstall";
+import type {
+  ProgramEnrollment,
+  MemberProgramProgress,
+} from "../types/training";
+import type { NotificationLogRecord, ShiftRecord } from "../services/api";
+import { dashboardService } from "../services/api";
 
 /**
  * Main Dashboard Component
@@ -58,18 +72,20 @@ import { dashboardService } from '../services/api';
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
-  const { checkPermission } = useAuthStore();
-  const [departmentName, setDepartmentName] = useState('Fire Department');
+  const { user: currentUser, checkPermission } = useAuthStore();
+  const [departmentName, setDepartmentName] = useState("Fire Department");
   const { canInstall, install } = usePWAInstall();
   const [dismissedInstall, setDismissedInstall] = useState(false);
 
   // Admin summary (only loaded for users with settings.manage)
-  const isAdmin = checkPermission('settings.manage');
+  const isAdmin = checkPermission("settings.manage");
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(isAdmin);
 
   // Notifications
-  const [notifications, setNotifications] = useState<NotificationLogRecord[]>([]);
+  const [notifications, setNotifications] = useState<NotificationLogRecord[]>(
+    [],
+  );
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
 
@@ -83,7 +99,11 @@ const Dashboard: React.FC = () => {
   const [signingUpShiftId, setSigningUpShiftId] = useState<string | null>(null);
 
   // Hours
-  const [hours, setHours] = useState({ training: 0, standby: 0, administrative: 0 });
+  const [hours, setHours] = useState({
+    training: 0,
+    standby: 0,
+    administrative: 0,
+  });
   const [loadingHours, setLoadingHours] = useState(true);
 
   // Department Messages
@@ -93,28 +113,39 @@ const Dashboard: React.FC = () => {
 
   // Training
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
-  const [progressDetails, setProgressDetails] = useState<Map<string, MemberProgramProgress>>(new Map());
+  const [progressDetails, setProgressDetails] = useState<
+    Map<string, MemberProgramProgress>
+  >(new Map());
   const [loadingTraining, setLoadingTraining] = useState(true);
 
   // Inventory (admin summary)
-  const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
+  const [inventorySummary, setInventorySummary] =
+    useState<InventorySummary | null>(null);
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
 
   // Setup checklist (admin-only)
-  const [setupProgress, setSetupProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [setupProgress, setSetupProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
 
   useEffect(() => {
-    const savedDepartmentName = sessionStorage.getItem('departmentName');
+    const savedDepartmentName = sessionStorage.getItem("departmentName");
     if (savedDepartmentName) {
       setDepartmentName(savedDepartmentName);
     } else {
-      dashboardService.getBranding().then((data) => {
-        if (data?.name) {
-          setDepartmentName(data.name);
-          sessionStorage.setItem('departmentName', data.name);
-        }
-      }).catch(() => { /* keep default */ });
+      dashboardService
+        .getBranding()
+        .then((data) => {
+          if (data?.name) {
+            setDepartmentName(data.name);
+            sessionStorage.setItem("departmentName", data.name);
+          }
+        })
+        .catch(() => {
+          /* keep default */
+        });
     }
 
     void loadNotifications();
@@ -128,7 +159,7 @@ const Dashboard: React.FC = () => {
     void loadHours();
     void loadTrainingProgress();
     void loadInventorySummary();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
   const loadAdminSummary = async () => {
@@ -136,7 +167,7 @@ const Dashboard: React.FC = () => {
       const data = await dashboardService.getAdminSummary();
       setAdminSummary(data);
     } catch (err) {
-      console.error('Failed to load admin summary:', err);
+      console.error("Failed to load admin summary:", err);
     } finally {
       setLoadingAdmin(false);
     }
@@ -145,7 +176,10 @@ const Dashboard: React.FC = () => {
   const loadSetupProgress = async () => {
     try {
       const data = await organizationService.getSetupChecklist();
-      setSetupProgress({ completed: data.completed_count, total: data.total_count });
+      setSetupProgress({
+        completed: data.completed_count,
+        total: data.total_count,
+      });
     } catch {
       // Non-critical
     }
@@ -170,7 +204,9 @@ const Dashboard: React.FC = () => {
     try {
       const data = await notificationsService.getLogs({ limit: 10 });
       setNotifications(data.logs || []);
-      setUnreadCount((data.logs || []).filter((n: NotificationLogRecord) => !n.read).length);
+      setUnreadCount(
+        (data.logs || []).filter((n: NotificationLogRecord) => !n.read).length,
+      );
     } catch {
       // Notifications are non-critical
     } finally {
@@ -182,7 +218,7 @@ const Dashboard: React.FC = () => {
     try {
       const data = await messagesService.getInbox({ limit: 10 });
       setDeptMessages(data);
-      setDeptMsgUnread(data.filter(m => !m.is_read).length);
+      setDeptMsgUnread(data.filter((m) => !m.is_read).length);
     } catch {
       // Messages are non-critical
     } finally {
@@ -193,29 +229,42 @@ const Dashboard: React.FC = () => {
   const markMessageRead = async (msgId: string) => {
     try {
       await messagesService.markAsRead(msgId);
-      setDeptMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_read: true } : m));
-      setDeptMsgUnread(prev => Math.max(0, prev - 1));
+      setDeptMessages((prev) =>
+        prev.map((m) => (m.id === msgId ? { ...m, is_read: true } : m)),
+      );
+      setDeptMsgUnread((prev) => Math.max(0, prev - 1));
     } catch {
-      toast.error('Failed to mark message as read');
+      toast.error("Failed to mark message as read");
     }
   };
 
   const acknowledgeMessage = async (msgId: string) => {
     try {
       await messagesService.acknowledge(msgId);
-      setDeptMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_read: true, is_acknowledged: true } : m));
-      setDeptMsgUnread(prev => Math.max(0, prev - 1));
-      toast.success('Message acknowledged');
+      setDeptMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId ? { ...m, is_read: true, is_acknowledged: true } : m,
+        ),
+      );
+      setDeptMsgUnread((prev) => Math.max(0, prev - 1));
+      toast.success("Message acknowledged");
     } catch {
-      toast.error('Failed to acknowledge message');
+      toast.error("Failed to acknowledge message");
     }
   };
 
   const loadMyShifts = async () => {
     try {
       const today = getTodayLocalDate(tz);
-      const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
-      const data = await schedulingService.getMyShifts({ start_date: today, end_date: nextMonth, limit: 5 });
+      const nextMonth = toLocalDateString(
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        tz,
+      );
+      const data = await schedulingService.getMyShifts({
+        start_date: today,
+        end_date: nextMonth,
+        limit: 5,
+      });
       setMyShifts(data.shifts || []);
     } catch {
       // Shifts are non-critical
@@ -227,8 +276,14 @@ const Dashboard: React.FC = () => {
   const loadOpenShifts = async () => {
     try {
       const today = getTodayLocalDate(tz);
-      const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
-      const data = await schedulingService.getOpenShifts({ start_date: today, end_date: nextMonth });
+      const nextMonth = toLocalDateString(
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        tz,
+      );
+      const data = await schedulingService.getOpenShifts({
+        start_date: today,
+        end_date: nextMonth,
+      });
       setOpenShifts(data);
     } catch {
       // Open shifts are non-critical
@@ -240,13 +295,13 @@ const Dashboard: React.FC = () => {
   const handleSignup = async (shiftId: string) => {
     setSigningUpShiftId(shiftId);
     try {
-      await schedulingService.signupForShift(shiftId, { position: 'general' });
-      toast.success('Signed up for shift');
+      await schedulingService.signupForShift(shiftId, { position: "general" });
+      toast.success("Signed up for shift");
       // Refresh both lists: the signed-up shift moves from open to my shifts
       void loadMyShifts();
       void loadOpenShifts();
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to sign up for shift'));
+      toast.error(getErrorMessage(error, "Failed to sign up for shift"));
     } finally {
       setSigningUpShiftId(null);
     }
@@ -254,11 +309,21 @@ const Dashboard: React.FC = () => {
 
   const loadHours = async () => {
     try {
-      const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
-        schedulingService.getSummary().catch((err) => { console.error('Failed to load scheduling summary:', err); return null; }),
-        trainingModuleConfigService.getMyTraining().catch((err) => { console.error('Failed to load training summary:', err); return null; }),
-        adminHoursEntryService.getSummary().catch((err) => { console.error('Failed to load admin hours summary:', err); return null; }),
-      ]);
+      const [schedulingSummary, trainingSummary, adminHoursSummary] =
+        await Promise.all([
+          schedulingService.getSummary().catch((err) => {
+            console.error("Failed to load scheduling summary:", err);
+            return null;
+          }),
+          trainingModuleConfigService.getMyTraining().catch((err) => {
+            console.error("Failed to load training summary:", err);
+            return null;
+          }),
+          adminHoursEntryService.getSummary().catch((err) => {
+            console.error("Failed to load admin hours summary:", err);
+            return null;
+          }),
+        ]);
       setHours({
         training: trainingSummary?.hours_summary?.total_hours ?? 0,
         standby: schedulingSummary?.total_hours_this_month || 0,
@@ -273,16 +338,16 @@ const Dashboard: React.FC = () => {
 
   const loadTrainingProgress = async () => {
     try {
-      const data = await trainingProgramService.getMyEnrollments('active');
+      const data = await trainingProgramService.getMyEnrollments("active");
       setEnrollments(data);
 
       const top3 = data.slice(0, 3);
       const results = await Promise.allSettled(
-        top3.map((e) => trainingProgramService.getEnrollmentProgress(e.id))
+        top3.map((e) => trainingProgramService.getEnrollmentProgress(e.id)),
       );
       const details = new Map<string, MemberProgramProgress>();
       results.forEach((result, i) => {
-        if (result.status === 'fulfilled') {
+        if (result.status === "fulfilled") {
           const item = top3[i];
           if (item) details.set(item.id, result.value);
         }
@@ -299,21 +364,26 @@ const Dashboard: React.FC = () => {
     try {
       await notificationsService.markAsRead(logId);
       setNotifications((prev) =>
-        prev.map((n) => (n.id === logId ? { ...n, read: true } : n))
+        prev.map((n) => (n.id === logId ? { ...n, read: true } : n)),
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch {
-      toast.error('Failed to mark notification as read');
+      toast.error("Failed to mark notification as read");
     }
   };
 
   const formatShiftDate = (dateStr: string) => {
-    const date = new Date(dateStr + 'T00:00:00');
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+    const date = new Date(dateStr + "T00:00:00");
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: tz,
+    });
   };
 
   const formatShiftTime = (_dateStr: string, timeStr?: string) => {
-    if (!timeStr) return '';
+    if (!timeStr) return "";
     return formatTime(timeStr, tz);
   };
 
@@ -328,7 +398,13 @@ const Dashboard: React.FC = () => {
             Welcome to {departmentName}
           </h2>
           <p className="text-theme-text-secondary text-sm sm:text-base">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz })}
+            {new Date().toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              timeZone: tz,
+            })}
           </p>
         </div>
 
@@ -338,15 +414,27 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-3">
               <Smartphone className="w-5 h-5 text-blue-500" />
               <div>
-                <p className="text-sm font-medium text-theme-text-primary">Install The Logbook</p>
-                <p className="text-xs text-theme-text-muted">Add to your home screen for quick access</p>
+                <p className="text-sm font-medium text-theme-text-primary">
+                  Install The Logbook
+                </p>
+                <p className="text-xs text-theme-text-muted">
+                  Add to your home screen for quick access
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setDismissedInstall(true)} className="text-xs text-theme-text-muted hover:text-theme-text-primary px-2 py-1">
+              <button
+                onClick={() => setDismissedInstall(true)}
+                className="text-xs text-theme-text-muted hover:text-theme-text-primary px-2 py-1"
+              >
                 Dismiss
               </button>
-              <button onClick={() => { void install(); }} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium">
+              <button
+                onClick={() => {
+                  void install();
+                }}
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium"
+              >
                 Install
               </button>
             </div>
@@ -354,40 +442,49 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* Setup Prompt (shown to admins when setup is incomplete) */}
-        {isAdmin && setupProgress && setupProgress.completed < setupProgress.total && (
-          <button
-            onClick={() => navigate('/setup')}
-            className="w-full mb-6 sm:mb-8 bg-theme-surface border border-red-500/20 rounded-xl p-4 hover:border-red-500/40 transition-colors text-left group"
-          >
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                <Rocket className="w-5 h-5 text-red-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-theme-text-primary">Complete Department Setup</h3>
-                <p className="text-xs text-theme-text-muted mt-0.5">
-                  {setupProgress.completed} of {setupProgress.total} steps complete
-                </p>
-                {/* Progress bar — mobile inline, desktop in separate column */}
-                <div className="mt-2 sm:hidden w-full bg-theme-surface-secondary rounded-full h-2">
-                  <div
-                    className="h-2 rounded-full bg-red-500 transition-all"
-                    style={{ width: `${Math.round((setupProgress.completed / setupProgress.total) * 100)}%` }}
-                  />
+        {isAdmin &&
+          setupProgress &&
+          setupProgress.completed < setupProgress.total && (
+            <button
+              onClick={() => navigate("/setup")}
+              className="w-full mb-6 sm:mb-8 bg-theme-surface border border-red-500/20 rounded-xl p-4 hover:border-red-500/40 transition-colors text-left group"
+            >
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                  <Rocket className="w-5 h-5 text-red-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-theme-text-primary">
+                    Complete Department Setup
+                  </h3>
+                  <p className="text-xs text-theme-text-muted mt-0.5">
+                    {setupProgress.completed} of {setupProgress.total} steps
+                    complete
+                  </p>
+                  {/* Progress bar — mobile inline, desktop in separate column */}
+                  <div className="mt-2 sm:hidden w-full bg-theme-surface-secondary rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-red-500 transition-all"
+                      style={{
+                        width: `${Math.round((setupProgress.completed / setupProgress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
+                  <div className="w-24 bg-theme-surface-secondary rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-red-500 transition-all"
+                      style={{
+                        width: `${Math.round((setupProgress.completed / setupProgress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-theme-text-muted group-hover:text-red-500 transition-colors" />
                 </div>
               </div>
-              <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
-                <div className="w-24 bg-theme-surface-secondary rounded-full h-2">
-                  <div
-                    className="h-2 rounded-full bg-red-500 transition-all"
-                    style={{ width: `${Math.round((setupProgress.completed / setupProgress.total) * 100)}%` }}
-                  />
-                </div>
-                <ChevronRight className="w-5 h-5 text-theme-text-muted group-hover:text-red-500 transition-colors" />
-              </div>
-            </div>
-          </button>
-        )}
+            </button>
+          )}
 
         {/* Admin Department Summary (visible to Chiefs and admins) */}
         {isAdmin && (
@@ -396,45 +493,65 @@ const Dashboard: React.FC = () => {
               <Shield className="w-5 h-5 text-red-500" />
               Department Overview
             </h3>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4" role="region" aria-label="Department overview">
+            <div
+              className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4"
+              role="region"
+              aria-label="Department overview"
+            >
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Active Members</p>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
+                      Active Members
+                    </p>
                     {loadingAdmin ? (
                       <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                     ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.active_members ?? 0}</p>
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
+                        {adminSummary?.active_members ?? 0}
+                      </p>
                     )}
                   </div>
                   <Users className="w-8 h-8 text-blue-400" />
                 </div>
-                <p className="text-theme-text-muted text-xs mt-2">{adminSummary?.total_members ?? 0} total</p>
+                <p className="text-theme-text-muted text-xs mt-2">
+                  {adminSummary?.total_members ?? 0} total
+                </p>
               </div>
 
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Training Compliance</p>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
+                      Training Compliance
+                    </p>
                     {loadingAdmin ? (
                       <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                     ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.training_completion_pct ?? 0}%</p>
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
+                        {adminSummary?.training_completion_pct ?? 0}%
+                      </p>
                     )}
                   </div>
                   <GraduationCap className="w-8 h-8 text-green-400" />
                 </div>
-                <p className="text-theme-text-muted text-xs mt-2">{adminSummary?.recent_training_hours ?? 0} hrs last 30 days</p>
+                <p className="text-theme-text-muted text-xs mt-2">
+                  {adminSummary?.recent_training_hours ?? 0} hrs last 30 days
+                </p>
               </div>
 
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Upcoming Events</p>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
+                      Upcoming Events
+                    </p>
                     {loadingAdmin ? (
                       <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                     ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.upcoming_events_count ?? 0}</p>
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
+                        {adminSummary?.upcoming_events_count ?? 0}
+                      </p>
                     )}
                   </div>
                   <Calendar className="w-8 h-8 text-purple-400" />
@@ -442,14 +559,21 @@ const Dashboard: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
               </div>
 
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/action-items')}>
+              <div
+                className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors"
+                onClick={() => navigate("/action-items")}
+              >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Action Items</p>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
+                      Action Items
+                    </p>
                     {loadingAdmin ? (
                       <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                     ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.open_action_items ?? 0}</p>
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
+                        {adminSummary?.open_action_items ?? 0}
+                      </p>
                     )}
                   </div>
                   {(adminSummary?.overdue_action_items ?? 0) > 0 ? (
@@ -461,19 +585,25 @@ const Dashboard: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mt-2">
                   {(adminSummary?.overdue_action_items ?? 0) > 0
                     ? `${adminSummary?.overdue_action_items} overdue`
-                    : 'All on track'
-                  }
+                    : "All on track"}
                 </p>
               </div>
 
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/admin-hours/manage')}>
+              <div
+                className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors"
+                onClick={() => navigate("/admin-hours/manage")}
+              >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Admin Hours</p>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
+                      Admin Hours
+                    </p>
                     {loadingAdmin ? (
                       <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                     ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.recent_admin_hours ?? 0}</p>
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
+                        {adminSummary?.recent_admin_hours ?? 0}
+                      </p>
                     )}
                   </div>
                   <ClipboardCheck className="w-8 h-8 text-indigo-400" />
@@ -481,8 +611,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mt-2">
                   {(adminSummary?.pending_admin_hours_approvals ?? 0) > 0
                     ? `${adminSummary?.pending_admin_hours_approvals} pending approval`
-                    : 'Last 30 days'
-                  }
+                    : "Last 30 days"}
                 </p>
               </div>
             </div>
@@ -490,15 +619,23 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* Hours Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8" role="region" aria-label="Hours summary">
+        <div
+          className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8"
+          role="region"
+          aria-label="Hours summary"
+        >
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-theme-text-secondary text-xs font-medium uppercase">Total Hours</p>
+                <p className="text-theme-text-secondary text-xs font-medium uppercase">
+                  Total Hours
+                </p>
                 {loadingHours ? (
                   <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                 ) : (
-                  <p className="text-theme-text-primary text-2xl font-bold mt-1">{totalHours}</p>
+                  <p className="text-theme-text-primary text-2xl font-bold mt-1">
+                    {totalHours}
+                  </p>
                 )}
               </div>
               <Clock className="w-8 h-8 text-blue-400" aria-hidden="true" />
@@ -509,11 +646,15 @@ const Dashboard: React.FC = () => {
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-theme-text-secondary text-xs font-medium uppercase">Training</p>
+                <p className="text-theme-text-secondary text-xs font-medium uppercase">
+                  Training
+                </p>
                 {loadingHours ? (
                   <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                 ) : (
-                  <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{hours.training}</p>
+                  <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">
+                    {hours.training}
+                  </p>
                 )}
               </div>
               <BookOpen className="w-8 h-8 text-green-400" aria-hidden="true" />
@@ -524,11 +665,15 @@ const Dashboard: React.FC = () => {
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-theme-text-secondary text-xs font-medium uppercase">Standby</p>
+                <p className="text-theme-text-secondary text-xs font-medium uppercase">
+                  Standby
+                </p>
                 {loadingHours ? (
                   <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                 ) : (
-                  <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">{hours.standby}</p>
+                  <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">
+                    {hours.standby}
+                  </p>
                 )}
               </div>
               <Shield className="w-8 h-8 text-yellow-400" aria-hidden="true" />
@@ -538,21 +683,30 @@ const Dashboard: React.FC = () => {
 
           <div
             className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-purple-500/40 transition-colors"
-            onClick={() => navigate('/admin-hours')}
+            onClick={() => navigate("/admin-hours")}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/admin-hours'); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") navigate("/admin-hours");
+            }}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-theme-text-secondary text-xs font-medium uppercase">Administrative</p>
+                <p className="text-theme-text-secondary text-xs font-medium uppercase">
+                  Administrative
+                </p>
                 {loadingHours ? (
                   <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                 ) : (
-                  <p className="text-purple-400 text-2xl font-bold mt-1">{hours.administrative}</p>
+                  <p className="text-purple-400 text-2xl font-bold mt-1">
+                    {hours.administrative}
+                  </p>
                 )}
               </div>
-              <Briefcase className="w-8 h-8 text-purple-400" aria-hidden="true" />
+              <Briefcase
+                className="w-8 h-8 text-purple-400"
+                aria-hidden="true"
+              />
             </div>
             <p className="text-theme-text-muted text-xs mt-2">Admin hours</p>
           </div>
@@ -566,37 +720,47 @@ const Dashboard: React.FC = () => {
                 <Megaphone className="w-5 h-5 text-amber-400" />
                 <span>Department Messages</span>
                 {deptMsgUnread > 0 && (
-                  <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">{deptMsgUnread} new</span>
+                  <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">
+                    {deptMsgUnread} new
+                  </span>
                 )}
               </h3>
             </div>
             <div className="space-y-3">
-              {deptMessages.map(msg => {
+              {deptMessages.map((msg) => {
                 const priorityStyles = {
-                  urgent: 'border-red-500/40 bg-red-500/10',
-                  important: 'border-amber-500/30 bg-amber-500/10',
-                  normal: 'border-theme-surface-border bg-theme-surface',
+                  urgent: "border-red-500/40 bg-red-500/10",
+                  important: "border-amber-500/30 bg-amber-500/10",
+                  normal: "border-theme-surface-border bg-theme-surface",
                 };
                 const priorityBadge = {
-                  urgent: 'bg-red-500 text-white',
-                  important: 'bg-amber-500 text-white',
-                  normal: '',
+                  urgent: "bg-red-500 text-white",
+                  important: "bg-amber-500 text-white",
+                  normal: "",
                 };
                 return (
                   <div
                     key={msg.id}
                     className={`rounded-lg border p-4 transition-colors ${priorityStyles[msg.priority]} ${
-                      !msg.is_read ? 'ring-1 ring-amber-400/30' : ''
+                      !msg.is_read ? "ring-1 ring-amber-400/30" : ""
                     }`}
-                    onClick={() => { if (!msg.is_read) void markMessageRead(msg.id); }}
+                    onClick={() => {
+                      if (!msg.is_read) void markMessageRead(msg.id);
+                    }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          {msg.is_pinned && <Pin className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
-                          <h4 className="text-theme-text-primary font-semibold text-sm truncate">{msg.title}</h4>
-                          {msg.priority !== 'normal' && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase ${priorityBadge[msg.priority]}`}>
+                          {msg.is_pinned && (
+                            <Pin className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                          )}
+                          <h4 className="text-theme-text-primary font-semibold text-sm truncate">
+                            {msg.title}
+                          </h4>
+                          {msg.priority !== "normal" && (
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase ${priorityBadge[msg.priority]}`}
+                            >
                               {msg.priority}
                             </span>
                           )}
@@ -604,30 +768,43 @@ const Dashboard: React.FC = () => {
                             <span className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0" />
                           )}
                         </div>
-                        <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">{msg.body}</p>
+                        <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">
+                          {msg.body}
+                        </p>
                         <div className="flex items-center gap-3 mt-2 text-xs text-theme-text-muted">
-                          {msg.author_name && <span>From: {msg.author_name}</span>}
-                          {msg.created_at && <span>{formatDate(msg.created_at, tz)}</span>}
+                          {msg.author_name && (
+                            <span>From: {msg.author_name}</span>
+                          )}
+                          {msg.created_at && (
+                            <span>{formatDate(msg.created_at, tz)}</span>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
                         {!msg.is_read && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); void markMessageRead(msg.id); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void markMessageRead(msg.id);
+                            }}
                             className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
                             title="Mark as read"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        {msg.requires_acknowledgment && !msg.is_acknowledged && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); void acknowledgeMessage(msg.id); }}
-                            className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
-                          >
-                            Acknowledge
-                          </button>
-                        )}
+                        {msg.requires_acknowledgment &&
+                          !msg.is_acknowledged && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void acknowledgeMessage(msg.id);
+                              }}
+                              className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
+                            >
+                              Acknowledge
+                            </button>
+                          )}
                         {msg.is_acknowledged && (
                           <span className="text-xs text-green-400 flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3" /> Acknowledged
@@ -650,11 +827,13 @@ const Dashboard: React.FC = () => {
                 <Bell className="w-5 h-5 text-red-400" />
                 <span>Notifications</span>
                 {unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{unreadCount}</span>
+                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                    {unreadCount}
+                  </span>
                 )}
               </h3>
               <button
-                onClick={() => navigate('/notifications')}
+                onClick={() => navigate("/notifications")}
                 className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
               >
                 <span>View All</span>
@@ -665,7 +844,10 @@ const Dashboard: React.FC = () => {
             {loadingNotifications ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-14 bg-slate-700/30 animate-pulse rounded-lg"></div>
+                  <div
+                    key={i}
+                    className="h-14 bg-slate-700/30 animate-pulse rounded-lg"
+                  ></div>
                 ))}
               </div>
             ) : notifications.length === 0 ? (
@@ -678,22 +860,31 @@ const Dashboard: React.FC = () => {
                   <button
                     key={notification.id}
                     onClick={() => {
-                      if (!notification.read) void markNotificationRead(notification.id);
-                      if (notification.action_url) navigate(notification.action_url);
+                      if (!notification.read)
+                        void markNotificationRead(notification.id);
+                      if (notification.action_url)
+                        navigate(notification.action_url);
                     }}
                     className={`w-full text-left p-3 rounded-lg transition-colors ${
                       notification.read
-                        ? 'bg-theme-surface-secondary text-theme-text-muted'
-                        : 'bg-blue-500/10 border border-blue-500/20 text-theme-text-primary'
+                        ? "bg-theme-surface-secondary text-theme-text-muted"
+                        : "bg-blue-500/10 border border-blue-500/20 text-theme-text-primary"
                     }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{notification.subject || 'Notification'}</p>
-                        <p className="text-xs text-theme-text-muted mt-0.5 truncate">{notification.message || ''}</p>
+                        <p className="text-sm font-medium truncate">
+                          {notification.subject || "Notification"}
+                        </p>
+                        <p className="text-xs text-theme-text-muted mt-0.5 truncate">
+                          {notification.message || ""}
+                        </p>
                       </div>
                       <div className="flex items-center ml-2 shrink-0">
-                        <span className="text-xs text-theme-text-muted whitespace-nowrap" title={formatDate(notification.sent_at, tz)}>
+                        <span
+                          className="text-xs text-theme-text-muted whitespace-nowrap"
+                          title={formatDate(notification.sent_at, tz)}
+                        >
                           {formatRelativeTime(notification.sent_at)}
                         </span>
                         {notification.action_url && (
@@ -715,7 +906,7 @@ const Dashboard: React.FC = () => {
                 <span>My Upcoming Shifts</span>
               </h3>
               <button
-                onClick={() => navigate('/scheduling')}
+                onClick={() => navigate("/scheduling")}
                 className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
               >
                 <span>View Schedule</span>
@@ -726,7 +917,10 @@ const Dashboard: React.FC = () => {
             {loadingMyShifts ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-14 bg-slate-700/30 animate-pulse rounded-lg"></div>
+                  <div
+                    key={i}
+                    className="h-14 bg-slate-700/30 animate-pulse rounded-lg"
+                  ></div>
                 ))}
               </div>
             ) : myShifts.length === 0 ? (
@@ -749,7 +943,8 @@ const Dashboard: React.FC = () => {
                           {formatShiftDate(shift.shift_date)}
                         </p>
                         <p className="text-xs text-theme-text-muted">
-                          {formatShiftTime(shift.shift_date, shift.start_time)} - {formatShiftTime(shift.shift_date, shift.end_time)}
+                          {formatShiftTime(shift.shift_date, shift.start_time)}{" "}
+                          - {formatShiftTime(shift.shift_date, shift.end_time)}
                         </p>
                       </div>
                     </div>
@@ -773,7 +968,7 @@ const Dashboard: React.FC = () => {
               <span>Open Shifts</span>
             </h3>
             <button
-              onClick={() => navigate('/scheduling')}
+              onClick={() => navigate("/scheduling")}
               className="text-green-400 hover:text-green-300 text-sm flex items-center space-x-1"
             >
               <span>View Schedule</span>
@@ -784,7 +979,10 @@ const Dashboard: React.FC = () => {
           {loadingOpenShifts ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-14 bg-slate-700/30 animate-pulse rounded-lg"></div>
+                <div
+                  key={i}
+                  className="h-14 bg-slate-700/30 animate-pulse rounded-lg"
+                ></div>
               ))}
             </div>
           ) : openShifts.length === 0 ? (
@@ -807,7 +1005,8 @@ const Dashboard: React.FC = () => {
                         {formatShiftDate(shift.shift_date)}
                       </p>
                       <p className="text-xs text-theme-text-muted">
-                        {formatShiftTime(shift.shift_date, shift.start_time)} - {formatShiftTime(shift.shift_date, shift.end_time)}
+                        {formatShiftTime(shift.shift_date, shift.start_time)} -{" "}
+                        {formatShiftTime(shift.shift_date, shift.end_time)}
                       </p>
                     </div>
                   </div>
@@ -844,7 +1043,7 @@ const Dashboard: React.FC = () => {
               Recent Activity
             </h3>
             <button
-              onClick={() => navigate('/notifications')}
+              onClick={() => navigate("/notifications")}
               className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
             >
               View All <ChevronRight className="w-3 h-3" />
@@ -853,18 +1052,27 @@ const Dashboard: React.FC = () => {
           {loadingNotifications ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-8 bg-slate-700/30 animate-pulse rounded"></div>
+                <div
+                  key={i}
+                  className="h-8 bg-slate-700/30 animate-pulse rounded"
+                ></div>
               ))}
             </div>
           ) : notifications.length === 0 ? (
-            <p className="text-sm text-theme-text-muted text-center py-4">No recent activity</p>
+            <p className="text-sm text-theme-text-muted text-center py-4">
+              No recent activity
+            </p>
           ) : (
             <div className="space-y-3">
               {notifications.slice(0, 8).map((notif, idx) => (
                 <div key={notif.id ?? idx} className="flex items-start gap-3">
-                  <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${notif.read ? 'bg-theme-text-muted' : 'bg-blue-500'}`} />
+                  <div
+                    className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${notif.read ? "bg-theme-text-muted" : "bg-blue-500"}`}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-theme-text-primary truncate">{notif.subject || notif.message || 'Notification'}</p>
+                    <p className="text-sm text-theme-text-primary truncate">
+                      {notif.subject || notif.message || "Notification"}
+                    </p>
                     <p className="text-xs text-theme-text-muted">
                       {formatRelativeTime(notif.sent_at || notif.created_at)}
                     </p>
@@ -875,8 +1083,37 @@ const Dashboard: React.FC = () => {
           )}
         </div>
 
+        {/* Quick Access: My ID Card */}
+        {currentUser?.id && (
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+                <CreditCard className="w-5 h-5 text-blue-500" />
+                <span>My ID Card</span>
+              </h3>
+              <button
+                onClick={() => navigate(`/members/${currentUser.id}/id-card`)}
+                className="text-blue-400 hover:text-blue-300 text-sm flex items-center space-x-1"
+              >
+                <span>View</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-sm text-theme-text-muted mt-2">
+              Show your digital member ID card with QR code and barcode for
+              quick identification.
+            </p>
+            <button
+              onClick={() => navigate(`/members/${currentUser.id}/id-card`)}
+              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+            >
+              Open My ID Card
+            </button>
+          </div>
+        )}
+
         {/* Quick Access: Meeting Minutes */}
-        {checkPermission('meetings.manage') && (
+        {checkPermission("meetings.manage") && (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
@@ -884,7 +1121,7 @@ const Dashboard: React.FC = () => {
                 <span>Meeting Minutes</span>
               </h3>
               <button
-                onClick={() => navigate('/minutes')}
+                onClick={() => navigate("/minutes")}
                 className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center space-x-1"
               >
                 <span>View All</span>
@@ -892,17 +1129,18 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
             <p className="text-sm text-theme-text-muted mt-2">
-              Record, review, and publish meeting minutes. Track motions, votes, and action items.
+              Record, review, and publish meeting minutes. Track motions, votes,
+              and action items.
             </p>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-4">
               <button
-                onClick={() => navigate('/minutes')}
+                onClick={() => navigate("/minutes")}
                 className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded-lg transition-colors text-center"
               >
                 Record Minutes
               </button>
               <button
-                onClick={() => navigate('/minutes')}
+                onClick={() => navigate("/minutes")}
                 className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors text-center"
               >
                 Review Pending
@@ -920,7 +1158,7 @@ const Dashboard: React.FC = () => {
                 <span>My Training Progress</span>
               </h3>
               <button
-                onClick={() => navigate('/training/my-training')}
+                onClick={() => navigate("/training/my-training")}
                 className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
               >
                 <span>View All</span>
@@ -932,23 +1170,30 @@ const Dashboard: React.FC = () => {
               {enrollments.slice(0, 3).map((enrollment) => {
                 const progress = progressDetails.get(enrollment.id);
                 const nextSteps = progress?.requirement_progress
-                  .filter(rp => rp.status === 'not_started' || rp.status === 'in_progress')
+                  .filter(
+                    (rp) =>
+                      rp.status === "not_started" ||
+                      rp.status === "in_progress",
+                  )
                   .slice(0, 2);
-                const upcomingDeadline = progress?.time_remaining_days !== null &&
-                                        progress?.time_remaining_days !== undefined &&
-                                        progress.time_remaining_days < 30;
+                const upcomingDeadline =
+                  progress?.time_remaining_days !== null &&
+                  progress?.time_remaining_days !== undefined &&
+                  progress.time_remaining_days < 30;
 
                 return (
                   <button
                     key={enrollment.id}
-                    onClick={() => navigate('/training/my-training')}
+                    onClick={() => navigate("/training/my-training")}
                     className="w-full bg-theme-surface-secondary rounded-lg p-4 hover:bg-theme-surface-hover cursor-pointer transition-colors text-left"
-                    aria-label={`${enrollment.program?.name || 'Program'}: ${Math.round(enrollment.progress_percentage)}% complete`}
+                    aria-label={`${enrollment.program?.name || "Program"}: ${Math.round(enrollment.progress_percentage)}% complete`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
-                          <h4 className="text-theme-text-primary font-semibold">{enrollment.program?.name || 'Program'}</h4>
+                          <h4 className="text-theme-text-primary font-semibold">
+                            {enrollment.program?.name || "Program"}
+                          </h4>
                           {upcomingDeadline && (
                             <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded flex items-center space-x-1">
                               <AlertTriangle className="w-3 h-3" />
@@ -957,7 +1202,9 @@ const Dashboard: React.FC = () => {
                           )}
                         </div>
                         {enrollment.program?.description && (
-                          <p className="text-theme-text-secondary text-sm">{enrollment.program.description}</p>
+                          <p className="text-theme-text-secondary text-sm">
+                            {enrollment.program.description}
+                          </p>
                         )}
                       </div>
                       <span className="text-2xl font-bold text-theme-text-primary ml-4">
@@ -974,36 +1221,50 @@ const Dashboard: React.FC = () => {
 
                     {progress && (
                       <div className="space-y-2">
-                        {enrollment.status === 'completed' ? (
+                        {enrollment.status === "completed" ? (
                           <div className="flex items-center space-x-2 text-green-400 text-sm">
                             <CheckCircle2 className="w-4 h-4" />
                             <span>Program Completed!</span>
                           </div>
                         ) : nextSteps && nextSteps.length > 0 ? (
                           <div>
-                            <p className="text-theme-text-secondary text-xs mb-1">Next Steps:</p>
+                            <p className="text-theme-text-secondary text-xs mb-1">
+                              Next Steps:
+                            </p>
                             <div className="space-y-1">
                               {nextSteps.map((rp) => (
-                                <div key={rp.id} className="flex items-start space-x-2 text-sm">
+                                <div
+                                  key={rp.id}
+                                  className="flex items-start space-x-2 text-sm"
+                                >
                                   <TrendingUp className="w-3 h-3 text-blue-400 mt-0.5 flex-shrink-0" />
-                                  <span className="text-theme-text-secondary">{rp.requirement?.name || 'Requirement'}</span>
+                                  <span className="text-theme-text-secondary">
+                                    {rp.requirement?.name || "Requirement"}
+                                  </span>
                                 </div>
                               ))}
                             </div>
                           </div>
                         ) : (
-                          <div className="text-theme-text-secondary text-sm">All requirements in progress</div>
-                        )}
-
-                        {progress.time_remaining_days !== null && progress.time_remaining_days !== undefined && (
-                          <div className={`text-xs ${
-                            progress.time_remaining_days < 30 ? 'text-red-400' :
-                            progress.time_remaining_days < 90 ? 'text-yellow-400' :
-                            'text-theme-text-secondary'
-                          }`}>
-                            {progress.time_remaining_days} days remaining
+                          <div className="text-theme-text-secondary text-sm">
+                            All requirements in progress
                           </div>
                         )}
+
+                        {progress.time_remaining_days !== null &&
+                          progress.time_remaining_days !== undefined && (
+                            <div
+                              className={`text-xs ${
+                                progress.time_remaining_days < 30
+                                  ? "text-red-400"
+                                  : progress.time_remaining_days < 90
+                                    ? "text-yellow-400"
+                                    : "text-theme-text-secondary"
+                              }`}
+                            >
+                              {progress.time_remaining_days} days remaining
+                            </div>
+                          )}
                       </div>
                     )}
                   </button>
@@ -1014,90 +1275,118 @@ const Dashboard: React.FC = () => {
             {enrollments.length > 3 && (
               <div className="mt-4 text-center">
                 <button
-                  onClick={() => navigate('/training/my-training')}
+                  onClick={() => navigate("/training/my-training")}
                   className="text-red-400 hover:text-red-300 text-sm px-2 py-1"
                 >
-                  View {enrollments.length - 3} more program{enrollments.length - 3 !== 1 ? 's' : ''}
+                  View {enrollments.length - 3} more program
+                  {enrollments.length - 3 !== 1 ? "s" : ""}
                 </button>
               </div>
             )}
           </div>
         )}
         {/* Inventory Summary Widget */}
-        {!loadingInventory && inventorySummary && inventorySummary.total_items > 0 && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Package className="w-5 h-5 text-emerald-500" />
-                <span>Equipment & Inventory</span>
-              </h3>
-              <button
-                onClick={() => navigate('/inventory')}
-                className="text-emerald-400 hover:text-emerald-300 text-sm flex items-center space-x-1"
-              >
-                <span>View All</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+        {!loadingInventory &&
+          inventorySummary &&
+          inventorySummary.total_items > 0 && (
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+                  <Package className="w-5 h-5 text-emerald-500" />
+                  <span>Equipment & Inventory</span>
+                </h3>
+                <button
+                  onClick={() => navigate("/inventory")}
+                  className="text-emerald-400 hover:text-emerald-300 text-sm flex items-center space-x-1"
+                >
+                  <span>View All</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                <p className="text-theme-text-muted text-xs font-medium uppercase">Total Items</p>
-                <p className="text-theme-text-primary text-xl font-bold mt-1">{inventorySummary.total_items}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                  <p className="text-theme-text-muted text-xs font-medium uppercase">
+                    Total Items
+                  </p>
+                  <p className="text-theme-text-primary text-xl font-bold mt-1">
+                    {inventorySummary.total_items}
+                  </p>
+                </div>
+                <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                  <p className="text-theme-text-muted text-xs font-medium uppercase">
+                    Total Value
+                  </p>
+                  <p className="text-emerald-700 dark:text-emerald-400 text-xl font-bold mt-1">
+                    $
+                    {inventorySummary.total_value.toLocaleString("en-US", {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })}
+                  </p>
+                </div>
+                <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                  <p className="text-theme-text-muted text-xs font-medium uppercase">
+                    Checked Out
+                  </p>
+                  <p className="text-yellow-700 dark:text-yellow-400 text-xl font-bold mt-1">
+                    {inventorySummary.active_checkouts}
+                  </p>
+                  {inventorySummary.overdue_checkouts > 0 && (
+                    <p className="text-red-400 text-xs">
+                      {inventorySummary.overdue_checkouts} overdue
+                    </p>
+                  )}
+                </div>
+                <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+                  <p className="text-theme-text-muted text-xs font-medium uppercase">
+                    Maintenance Due
+                  </p>
+                  <p className="text-orange-700 dark:text-orange-400 text-xl font-bold mt-1">
+                    {inventorySummary.maintenance_due_count}
+                  </p>
+                </div>
               </div>
-              <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                <p className="text-theme-text-muted text-xs font-medium uppercase">Total Value</p>
-                <p className="text-emerald-700 dark:text-emerald-400 text-xl font-bold mt-1">
-                  ${inventorySummary.total_value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </p>
-              </div>
-              <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                <p className="text-theme-text-muted text-xs font-medium uppercase">Checked Out</p>
-                <p className="text-yellow-700 dark:text-yellow-400 text-xl font-bold mt-1">{inventorySummary.active_checkouts}</p>
-                {inventorySummary.overdue_checkouts > 0 && (
-                  <p className="text-red-400 text-xs">{inventorySummary.overdue_checkouts} overdue</p>
+
+              {lowStockAlerts.length > 0 && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                    <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                      Low Stock
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {lowStockAlerts.map((a) => (
+                      <span
+                        key={a.category_id}
+                        className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded"
+                      >
+                        {a.category_name}: {a.current_stock} left
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-4">
+                <button
+                  onClick={() => navigate("/inventory/my-equipment")}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors text-center"
+                >
+                  My Equipment
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => navigate("/inventory/checkouts")}
+                    className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors text-center"
+                  >
+                    View Checkouts
+                  </button>
                 )}
               </div>
-              <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                <p className="text-theme-text-muted text-xs font-medium uppercase">Maintenance Due</p>
-                <p className="text-orange-700 dark:text-orange-400 text-xl font-bold mt-1">{inventorySummary.maintenance_due_count}</p>
-              </div>
             </div>
-
-            {lowStockAlerts.length > 0 && (
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                  <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">Low Stock</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {lowStockAlerts.map(a => (
-                    <span key={a.category_id} className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded">
-                      {a.category_name}: {a.current_stock} left
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-4">
-              <button
-                onClick={() => navigate('/inventory/my-equipment')}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors text-center"
-              >
-                My Equipment
-              </button>
-              {isAdmin && (
-                <button
-                  onClick={() => navigate('/inventory/checkouts')}
-                  className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors text-center"
-                >
-                  View Checkouts
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+          )}
       </main>
     </div>
   );

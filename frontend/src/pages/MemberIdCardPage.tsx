@@ -5,6 +5,7 @@
  * - Photo, name, rank, station, membership number
  * - Organization name and logo
  * - QR code encoding the member's ID for scanning (e.g., gear assignment)
+ * - Code128 barcode of the membership number (for USB barcode scanners)
  * - Member status badge
  *
  * Accessible at /members/:userId/id-card. Any authenticated user can view
@@ -12,9 +13,10 @@
  * members.manage permission.
  */
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
+import JsBarcode from "jsbarcode";
 import { CreditCard, Printer, ArrowLeft } from "lucide-react";
 import { userService, organizationService } from "../services/api";
 import type { OrganizationProfile } from "../services/api";
@@ -41,6 +43,7 @@ function getStatusColor(status: string): string {
 export const MemberIdCardPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user: currentUser } = useAuthStore();
+  const barcodeRef = useRef<SVGSVGElement>(null);
 
   const [member, setMember] = useState<UserWithRoles | null>(null);
   const [org, setOrg] = useState<OrganizationProfile | null>(null);
@@ -69,6 +72,23 @@ export const MemberIdCardPage: React.FC = () => {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  // Render the Code128 barcode when the member data loads
+  useEffect(() => {
+    if (barcodeRef.current && member?.membership_number) {
+      try {
+        JsBarcode(barcodeRef.current, member.membership_number, {
+          format: "CODE128",
+          width: 2,
+          height: 50,
+          displayValue: false,
+          margin: 0,
+        });
+      } catch {
+        // If the membership number contains invalid characters, skip the barcode
+      }
+    }
+  }, [member?.membership_number]);
 
   /** Build the QR payload — a JSON string with the member's ID and membership number. */
   const getQRValue = (): string => {
@@ -130,7 +150,7 @@ export const MemberIdCardPage: React.FC = () => {
   const qrValue = getQRValue();
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-8">
+    <div className="min-h-screen flex flex-col items-center px-4 py-8 print:min-h-0 print:py-0 print:px-0">
       {/* Navigation — hidden when printing */}
       <div className="w-full max-w-sm mb-6 print:hidden">
         <Link
@@ -143,10 +163,10 @@ export const MemberIdCardPage: React.FC = () => {
       </div>
 
       {/* ID Card */}
-      <div className="w-full max-w-sm" id="member-id-card">
-        <div className="bg-theme-surface rounded-2xl shadow-lg overflow-hidden border border-theme-surface-border">
+      <div className="w-full max-w-sm id-card-printable" id="member-id-card">
+        <div className="bg-theme-surface rounded-2xl shadow-lg overflow-hidden border border-theme-surface-border print:shadow-none print:border print:border-gray-300 print:rounded-lg">
           {/* Card Header — accent stripe */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 print:bg-blue-700 print:py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-white">
                 <CreditCard className="h-5 w-5" />
@@ -170,9 +190,9 @@ export const MemberIdCardPage: React.FC = () => {
           </div>
 
           {/* Card Body */}
-          <div className="px-6 py-5">
+          <div className="px-6 py-5 print:py-3 print:px-4">
             {/* Photo + Info */}
-            <div className="flex items-start gap-4 mb-5">
+            <div className="flex items-start gap-4 mb-5 print:mb-3">
               {member.photo_url ? (
                 <img
                   src={member.photo_url}
@@ -180,29 +200,29 @@ export const MemberIdCardPage: React.FC = () => {
                   className="h-20 w-20 rounded-lg object-cover flex-shrink-0 border-2 border-theme-surface-border"
                 />
               ) : (
-                <div className="h-20 w-20 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center flex-shrink-0 border-2 border-theme-surface-border">
-                  <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                <div className="h-20 w-20 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center flex-shrink-0 border-2 border-theme-surface-border print:bg-indigo-100">
+                  <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 print:text-indigo-600">
                     {initials}
                   </span>
                 </div>
               )}
 
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-bold text-theme-text-primary truncate">
+                <h2 className="text-lg font-bold text-theme-text-primary truncate print:text-black">
                   {displayName}
                 </h2>
                 {member.rank && (
-                  <p className="text-sm text-theme-text-secondary capitalize mt-0.5">
+                  <p className="text-sm text-theme-text-secondary capitalize mt-0.5 print:text-gray-600">
                     {member.rank.replace(/_/g, " ")}
                   </p>
                 )}
                 {member.station && (
-                  <p className="text-sm text-theme-text-muted mt-0.5">
+                  <p className="text-sm text-theme-text-muted mt-0.5 print:text-gray-500">
                     {member.station}
                   </p>
                 )}
                 <span
-                  className={`inline-block mt-1.5 px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(member.status)}`}
+                  className={`inline-block mt-1.5 px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(member.status)} print:bg-gray-100 print:text-gray-800`}
                 >
                   {member.status}
                 </span>
@@ -211,12 +231,27 @@ export const MemberIdCardPage: React.FC = () => {
 
             {/* Membership Number */}
             {member.membership_number && (
-              <div className="bg-theme-surface-hover rounded-lg px-4 py-2 mb-5 text-center">
-                <p className="text-xs text-theme-text-muted uppercase tracking-wider">
+              <div className="bg-theme-surface-hover rounded-lg px-4 py-2 mb-4 text-center print:bg-gray-50 print:border print:border-gray-200">
+                <p className="text-xs text-theme-text-muted uppercase tracking-wider print:text-gray-500">
                   Membership #
                 </p>
-                <p className="text-lg font-mono font-bold text-theme-text-primary tracking-wide">
+                <p className="text-lg font-mono font-bold text-theme-text-primary tracking-wide print:text-black">
                   {member.membership_number}
+                </p>
+              </div>
+            )}
+
+            {/* Code128 Barcode — ideal for USB barcode scanners */}
+            {member.membership_number && (
+              <div
+                className="flex flex-col items-center mb-4"
+                data-testid="barcode-container"
+              >
+                <div className="bg-white p-2 rounded">
+                  <svg ref={barcodeRef} data-testid="barcode" />
+                </div>
+                <p className="text-[10px] text-theme-text-muted mt-1 print:text-gray-400">
+                  Code 128
                 </p>
               </div>
             )}
@@ -224,7 +259,7 @@ export const MemberIdCardPage: React.FC = () => {
             {/* QR Code */}
             {qrValue && (
               <div className="flex flex-col items-center">
-                <div className="bg-white p-4 rounded-lg">
+                <div className="bg-white p-4 rounded-lg print:p-2">
                   <QRCodeSVG
                     value={qrValue}
                     size={180}
@@ -232,7 +267,7 @@ export const MemberIdCardPage: React.FC = () => {
                     includeMargin={false}
                   />
                 </div>
-                <p className="text-xs text-theme-text-muted mt-2">
+                <p className="text-xs text-theme-text-muted mt-2 print:text-gray-400">
                   Scan to identify member
                 </p>
               </div>
@@ -240,8 +275,8 @@ export const MemberIdCardPage: React.FC = () => {
           </div>
 
           {/* Card Footer */}
-          <div className="bg-theme-surface-hover px-6 py-3 text-center">
-            <p className="text-xs text-theme-text-muted">
+          <div className="bg-theme-surface-hover px-6 py-3 text-center print:bg-gray-50 print:py-2">
+            <p className="text-xs text-theme-text-muted print:text-gray-500">
               {org?.name ?? "Organization"} &middot; Digital Member ID
             </p>
           </div>
