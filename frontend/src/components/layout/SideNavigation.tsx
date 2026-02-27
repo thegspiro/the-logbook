@@ -142,6 +142,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         { label: 'Submit Training', path: '/training/submit', icon: ClipboardList },
         { label: 'Course Library', path: '/training/courses', icon: BookOpen },
         { label: 'Programs', path: '/training/programs', icon: Layers },
+        { label: 'Skills Testing', path: '/training/skills-testing', icon: ClipboardCheck },
       ],
     },
     {
