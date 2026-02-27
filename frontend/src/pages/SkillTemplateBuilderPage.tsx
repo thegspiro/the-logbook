@@ -135,7 +135,10 @@ const CriterionEditor: React.FC<{
                 />
               </div>
               <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-theme-text-muted mb-1">Passing Points</label>
+                <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                  Passing Points
+                  <span className="font-normal text-theme-text-muted/70"> (critical only)</span>
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -203,7 +206,10 @@ const CriterionEditor: React.FC<{
                 onChange={(e) => onChange({ ...criterion, required: e.target.checked })}
                 className="rounded border-theme-surface-border text-red-600 focus:ring-red-500"
               />
-              <span className="text-sm text-theme-text-primary">Critical</span>
+              <div>
+                <span className="text-sm text-theme-text-primary">Critical</span>
+                <p className="text-xs text-theme-text-muted">Must pass to pass the test</p>
+              </div>
             </label>
           </div>
         </div>
