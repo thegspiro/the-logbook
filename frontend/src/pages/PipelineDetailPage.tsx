@@ -252,6 +252,7 @@ const PipelineDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === 'enrollments') loadEnrollments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const handleDuplicate = async () => {
@@ -345,7 +346,7 @@ const PipelineDetailPage: React.FC = () => {
               <span>Enroll</span>
             </button>
             <button
-              onClick={handleDuplicate}
+              onClick={() => { void handleDuplicate(); }}
               disabled={isDuplicating}
               className="flex items-center space-x-1 px-3 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm disabled:opacity-50"
             >
@@ -576,7 +577,7 @@ const PipelineDetailPage: React.FC = () => {
         programId={programId || ''}
         programName={program.name}
         onClose={() => setShowEnrollModal(false)}
-        onSuccess={loadProgram}
+        onSuccess={() => { void loadProgram(); }}
       />
     </div>
   );

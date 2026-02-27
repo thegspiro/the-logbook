@@ -607,7 +607,7 @@ const OrganizationSetup: React.FC = () => {
       const errorCount = errorMessages.length;
 
       if (errorCount === 1) {
-        toast.error(errorMessages[0]!);
+        toast.error(errorMessages[0] ?? 'Validation error');
       } else {
         // Show summary with count
         toast.error(

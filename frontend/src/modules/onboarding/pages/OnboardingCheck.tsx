@@ -131,7 +131,7 @@ const OnboardingCheck: React.FC = () => {
       return () => clearInterval(tipRotation);
     }
     return undefined;
-  }, [isWaiting, startupInfo]);
+  }, [isWaiting, startupInfo, educationalTips.length]);
 
   // Show skip option after certain attempts
   useEffect(() => {
@@ -339,9 +339,9 @@ const OnboardingCheck: React.FC = () => {
         return;
       }
 
-      const status = response.data;
+      const status = response.data as { needs_onboarding?: boolean } | undefined;
 
-      if (status.needs_onboarding) {
+      if (status?.needs_onboarding) {
         navigate('/onboarding/start');
       } else {
         navigate('/login');

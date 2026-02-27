@@ -556,7 +556,15 @@ const PositionSetup: React.FC = () => {
 
   // Persist position changes to Zustand store (survives navigation)
   useEffect(() => {
-    const serializable: Record<string, any> = {};
+    const serializable: Record<string, {
+      id: string;
+      name: string;
+      description: string;
+      icon: string;
+      priority: number;
+      permissions: Record<string, { view: boolean; manage: boolean }>;
+      isCustom?: boolean;
+    }> = {};
     for (const [posId, position] of Object.entries(selectedPositions)) {
       serializable[posId] = {
         id: position.id,

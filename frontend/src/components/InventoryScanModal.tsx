@@ -120,7 +120,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       });
       streamRef.current = stream;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       detectorRef.current = new (window as any).BarcodeDetector({
         formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'],
       });
@@ -153,7 +153,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       if (!videoRef.current || !detectorRef.current) return;
       void (async () => {
         try {
-          const barcodes = await detectorRef.current!.detect(videoRef.current!);
+          const barcodes = await detectorRef.current?.detect(videoRef.current as HTMLVideoElement) ?? [];
           for (const barcode of barcodes) {
             const value = barcode.rawValue;
             if (value && !alreadyScanned.has(value)) {
@@ -336,7 +336,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     }
     // If dropdown is showing with results, add the first one
     if (showDropdown && searchResults.length > 0) {
-      addItemFromResult(searchResults[0]!);
+      const firstResult = searchResults[0];
+      if (firstResult) addItemFromResult(firstResult);
       return;
     }
     // Fallback: search by what was typed

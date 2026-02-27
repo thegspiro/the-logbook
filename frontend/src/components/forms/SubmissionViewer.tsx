@@ -192,7 +192,7 @@ const SubmissionViewer = ({
         <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0" />
         <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         {formId && (
-          <button onClick={loadData} className="ml-auto text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline">Retry</button>
+          <button onClick={() => { void loadData(); }} className="ml-auto text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline">Retry</button>
         )}
       </div>
     );
@@ -226,7 +226,7 @@ const SubmissionViewer = ({
             {formId && (
               <button
                 type="button"
-                onClick={loadData}
+                onClick={() => { void loadData(); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -301,7 +301,7 @@ const SubmissionViewer = ({
                     <div className="mt-3 flex justify-end">
                       <button
                         type="button"
-                        onClick={() => handleDelete(sub.id)}
+                        onClick={() => { void handleDelete(sub.id); }}
                         disabled={deleting === sub.id}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
                       >

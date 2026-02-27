@@ -83,7 +83,7 @@ export const UserSettingsPage: React.FC = () => {
         setLoadingProfile(false);
       }
     };
-    loadProfile();
+    void loadProfile();
   }, [user?.id]);
 
   // Load notification preferences from backend
@@ -103,7 +103,7 @@ export const UserSettingsPage: React.FC = () => {
         setLoadingPreferences(false);
       }
     };
-    loadPreferences();
+    void loadPreferences();
   }, [user?.id]);
 
   const handleSaveProfile = async () => {
@@ -440,7 +440,7 @@ export const UserSettingsPage: React.FC = () => {
                 {/* Save Button */}
                 <div className="pt-4 border-t border-theme-surface-border">
                   <button
-                    onClick={handleSaveProfile}
+                    onClick={() => { void handleSaveProfile(); }}
                     disabled={savingProfile}
                     className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
@@ -475,7 +475,7 @@ export const UserSettingsPage: React.FC = () => {
               </p>
             </div>
 
-            <form onSubmit={handlePasswordChange} className="space-y-4">
+            <form onSubmit={(e) => { void handlePasswordChange(e); }} className="space-y-4">
               {/* Current Password */}
               <div>
                 <label htmlFor="currentPassword" className="block text-sm font-medium text-theme-text-secondary mb-2">
@@ -806,7 +806,7 @@ export const UserSettingsPage: React.FC = () => {
 
             <div className="pt-4">
               <button
-                onClick={handleSavePreferences}
+                onClick={() => { void handleSavePreferences(); }}
                 disabled={savingPreferences}
                 className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >

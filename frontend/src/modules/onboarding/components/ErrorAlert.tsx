@@ -22,7 +22,8 @@ interface ErrorAlertProps {
   /**
    * Retry callback
    */
-  onRetry?: (() => void) | (() => Promise<void>);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onRetry?: (...args: any[]) => void | Promise<void>;
 
   /**
    * Dismiss callback
@@ -62,7 +63,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
             <div className="mt-3 flex items-center gap-2">
               {canRetry && onRetry && (
                 <button
-                  onClick={onRetry}
+                  onClick={() => { void onRetry?.(); }}
                   className="inline-flex items-center px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition-colors"
                   aria-label="Retry action"
                 >

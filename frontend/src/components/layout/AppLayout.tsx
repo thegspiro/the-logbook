@@ -45,7 +45,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
     // If localStorage is empty (first visit), fetch branding from backend
     if (!savedDepartmentName) {
-      axios.get('/api/v1/auth/branding').then((response) => {
+      axios.get<{ name?: string; logo?: string }>('/api/v1/auth/branding').then((response) => {
         const { name, logo } = response.data;
         if (name) {
           setDepartmentName(name);
@@ -62,7 +62,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
     // Listen for branding updates from the Settings page (same-tab)
     const onBrandingUpdate = (e: Event) => {
-      const { name, logo } = (e as CustomEvent).detail;
+      const { name, logo } = (e as CustomEvent<{ name?: string; logo?: string }>).detail;
       if (name) setDepartmentName(name);
       setLogoPreview(logo || null);
     };
@@ -126,7 +126,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         </div>
         <LogoutConfirmModal
           isOpen={showLogoutModal}
-          onConfirm={handleLogoutConfirm}
+          onConfirm={() => { void handleLogoutConfirm(); }}
           onCancel={handleLogoutCancel}
         />
       </div>
@@ -157,7 +157,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       {footer}
       <LogoutConfirmModal
         isOpen={showLogoutModal}
-        onConfirm={handleLogoutConfirm}
+        onConfirm={() => { void handleLogoutConfirm(); }}
         onCancel={handleLogoutCancel}
       />
     </div>
