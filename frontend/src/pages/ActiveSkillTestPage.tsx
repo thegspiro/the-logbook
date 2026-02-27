@@ -579,6 +579,9 @@ export const ActiveSkillTestPage: React.FC = () => {
   const handleComplete = useCallback(async () => {
     if (!currentTest) return;
 
+    // Stop the clock immediately
+    setActiveTestRunning(false);
+
     // Check for unevaluated criteria
     const totalCriteria = templateSections.reduce(
       (sum, s) => sum + s.criteria.filter((c) => c.type !== 'statement').length,
@@ -609,7 +612,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     } catch {
       toast.error('Failed to complete test');
     }
-  }, [currentTest, activeTestTimer, updateTest, completeTest, navigate, templateSections]);
+  }, [currentTest, activeTestTimer, updateTest, completeTest, navigate, templateSections, setActiveTestRunning]);
 
   const handleUpdateCriterion = useCallback((
     sectionId: string,

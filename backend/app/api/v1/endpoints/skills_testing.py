@@ -794,7 +794,14 @@ async def complete_test(
 
     # Calculate elapsed time if started_at is set
     if test.started_at:
-        elapsed = test.completed_at - test.started_at
+        started = test.started_at
+        completed = test.completed_at
+        # Ensure both datetimes are timezone-aware before subtracting
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        if completed is not None and completed.tzinfo is None:
+            completed = completed.replace(tzinfo=timezone.utc)
+        elapsed = completed - started
         test.elapsed_seconds = int(elapsed.total_seconds())
 
     await db.commit()
