@@ -7,11 +7,14 @@ Pydantic response models for the platform-wide analytics endpoint.
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
 class DailyCount(BaseModel):
     """A single day's count for trend data."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     date: str  # YYYY-MM-DD
     count: int
@@ -19,6 +22,8 @@ class DailyCount(BaseModel):
 
 class ModuleUsage(BaseModel):
     """Usage summary for a single platform module."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     name: str
     enabled: bool
@@ -28,6 +33,8 @@ class ModuleUsage(BaseModel):
 
 class PlatformAnalyticsResponse(BaseModel):
     """Aggregated platform-wide analytics for IT admins."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     # User Adoption
     total_users: int = 0
