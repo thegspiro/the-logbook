@@ -48,6 +48,7 @@ const CRITERION_TYPE_OPTIONS: { value: CriterionType; label: string }[] = [
   { value: 'score', label: 'Numeric Score' },
   { value: 'time_limit', label: 'Timed Task' },
   { value: 'checklist', label: 'Checklist' },
+  { value: 'statement', label: 'Statement' },
 ];
 
 function createEmptyCriterion(sortOrder: number): LocalCriterion {
@@ -175,6 +176,19 @@ const CriterionEditor: React.FC<{
                 }}
                 rows={3}
                 placeholder="Check airway&#10;Assess breathing&#10;Check pulse"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+              />
+            </div>
+          )}
+
+          {criterion.type === 'statement' && (
+            <div className="lg:col-span-4">
+              <label className="block text-xs font-medium text-theme-text-muted mb-1">Statement Text <span className="text-red-500">*</span></label>
+              <textarea
+                value={criterion.statement_text ?? ''}
+                onChange={(e) => onChange({ ...criterion, statement_text: e.target.value || undefined })}
+                rows={3}
+                placeholder="Enter the statement the evaluator must read or announce..."
                 className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
               />
             </div>
@@ -336,7 +350,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
-  const [timeLimitSeconds, setTimeLimitSeconds] = useState<number | undefined>();
+  const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | undefined>();
   const [passingPercentage, setPassingPercentage] = useState<number | undefined>();
   const [requireAllCritical, setRequireAllCritical] = useState(true);
   const [tags, setTags] = useState('');
@@ -358,7 +372,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       setName(currentTemplate.name);
       setDescription(currentTemplate.description ?? '');
       setCategory(currentTemplate.category ?? '');
-      setTimeLimitSeconds(currentTemplate.time_limit_seconds ?? undefined);
+      setTimeLimitMinutes(currentTemplate.time_limit_seconds != null ? currentTemplate.time_limit_seconds / 60 : undefined);
       setPassingPercentage(currentTemplate.passing_percentage ?? undefined);
       setRequireAllCritical(currentTemplate.require_all_critical);
       setTags((currentTemplate.tags ?? []).join(', '));
@@ -380,6 +394,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
             max_score: c.max_score,
             time_limit_seconds: c.time_limit_seconds,
             checklist_items: c.checklist_items,
+            statement_text: c.statement_text,
           })),
         }))
       );
@@ -399,6 +414,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         if (criterion.type === 'score' && criterion.max_score != null && criterion.passing_score != null && criterion.passing_score > criterion.max_score) {
           errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Passing score cannot exceed max score`);
         }
+        if (criterion.type === 'statement' && !criterion.statement_text?.trim()) {
+          errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Statement text is required`);
+        }
       });
     });
 
@@ -411,7 +429,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       name: name.trim(),
       description: description.trim() || undefined,
       category: category.trim() || undefined,
-      time_limit_seconds: timeLimitSeconds,
+      time_limit_seconds: timeLimitMinutes != null ? Math.round(timeLimitMinutes * 60) : undefined,
       passing_percentage: passingPercentage,
       require_all_critical: requireAllCritical,
       tags: parsedTags.length > 0 ? parsedTags : undefined,
@@ -429,10 +447,11 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           max_score: c.max_score,
           time_limit_seconds: c.time_limit_seconds,
           checklist_items: c.checklist_items?.length ? c.checklist_items : undefined,
+          statement_text: c.statement_text?.trim() || undefined,
         })),
       })),
     };
-  }, [name, description, category, timeLimitSeconds, passingPercentage, requireAllCritical, tags, sections]);
+  }, [name, description, category, timeLimitMinutes, passingPercentage, requireAllCritical, tags, sections]);
 
   const handleSave = async () => {
     const errors = validate();
@@ -606,13 +625,14 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-muted mb-1">Global Time Limit (seconds)</label>
+              <label className="block text-sm font-medium text-theme-text-muted mb-1">Global Time Limit (minutes)</label>
               <input
                 type="number"
                 min="0"
-                value={timeLimitSeconds ?? ''}
-                onChange={(e) => setTimeLimitSeconds(e.target.value ? Number(e.target.value) : undefined)}
-                placeholder="Optional overall time limit"
+                step="1"
+                value={timeLimitMinutes ?? ''}
+                onChange={(e) => setTimeLimitMinutes(e.target.value ? Number(e.target.value) : undefined)}
+                placeholder="e.g., 30"
                 className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
               />
             </div>

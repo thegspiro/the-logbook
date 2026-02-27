@@ -339,6 +339,43 @@ const ChecklistCriterion: React.FC<{
   );
 };
 
+const StatementCriterion: React.FC<{
+  criterion: SkillCriterion;
+  result: CriterionResult | undefined;
+  onChange: (result: Partial<CriterionResult>) => void;
+}> = ({ criterion, result, onChange }) => {
+  const acknowledged = result?.passed === true;
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <p className="font-medium text-theme-text-primary text-base">
+          {criterion.label}
+        </p>
+        {criterion.description && (
+          <p className="text-sm text-theme-text-muted mt-0.5">{criterion.description}</p>
+        )}
+      </div>
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+        <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap">
+          {criterion.statement_text}
+        </p>
+      </div>
+      <button
+        onClick={() => onChange({ passed: !acknowledged })}
+        className={`w-full flex items-center justify-center gap-2 py-4 rounded-xl text-lg font-bold transition-all ${
+          acknowledged
+            ? 'bg-green-600 text-white shadow-lg shadow-green-600/30 scale-[1.02]'
+            : 'bg-theme-surface border-2 border-theme-surface-border text-theme-text-muted hover:border-green-500'
+        }`}
+      >
+        <Check className="w-6 h-6" />
+        {acknowledged ? 'ACKNOWLEDGED' : 'ACKNOWLEDGE'}
+      </button>
+    </div>
+  );
+};
+
 // ==================== Notes Input ====================
 
 const CriterionNotes: React.FC<{
@@ -419,6 +456,9 @@ const SectionView: React.FC<{
             )}
             {criterion.type === 'checklist' && (
               <ChecklistCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r)} />
+            )}
+            {criterion.type === 'statement' && (
+              <StatementCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r)} />
             )}
             <CriterionNotes
               criterionId={criterion.id}
