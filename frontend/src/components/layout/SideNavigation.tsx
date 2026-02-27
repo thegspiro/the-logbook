@@ -32,6 +32,7 @@ import {
   MapPin,
   Rocket,
   ShieldCheck,
+  ClipboardCheck,
 } from 'lucide-react';
 import { Sun, Moon, Monitor, Contrast } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -120,6 +121,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     checkPermission('events.manage') ||
     checkPermission('training.manage') ||
     checkPermission('inventory.manage') ||
+    checkPermission('admin_hours.manage') ||
     checkPermission('positions.manage_permissions') ||
     checkPermission('settings.manage') ||
     checkPermission('analytics.view');
@@ -140,6 +142,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         { label: 'Course Library', path: '/training/courses', icon: BookOpen },
         { label: 'Programs', path: '/training/programs', icon: Layers },
       ],
+    },
+    {
+      label: 'Admin Hours',
+      path: '/admin-hours',
+      icon: ClipboardCheck,
     },
     {
       label: 'Shift Scheduling',
@@ -200,6 +207,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       { label: 'Events Admin', path: '/events/admin', icon: Calendar, permission: 'events.manage' } as NavItem,
       { label: 'Training Admin', path: '/training/admin', icon: GraduationCap, permission: 'training.manage' } as NavItem,
       { label: 'Inventory Admin', path: '/inventory/admin', icon: Package, permission: 'inventory.manage' } as NavItem,
+      { label: 'Admin Hours', path: '/admin-hours/manage', icon: ClipboardCheck, permission: 'admin_hours.manage' } as NavItem,
       {
         label: 'Forms & Comms',
         path: '#',

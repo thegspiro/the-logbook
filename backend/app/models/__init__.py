@@ -4,6 +4,12 @@ Database Models
 Exports all SQLAlchemy models for the application.
 """
 
+from app.models.admin_hours import (
+    AdminHoursCategory,
+    AdminHoursEntry,
+    AdminHoursEntryMethod,
+    AdminHoursEntryStatus,
+)
 from app.models.analytics import AnalyticsEvent
 from app.models.apparatus import (
     Apparatus,
@@ -195,6 +201,11 @@ from app.models.user import (
 )
 
 __all__ = [
+    # Admin hours models
+    "AdminHoursCategory",
+    "AdminHoursEntry",
+    "AdminHoursEntryMethod",
+    "AdminHoursEntryStatus",
     # User models
     "Organization",
     "User",

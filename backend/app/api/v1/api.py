@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 # Import route modules
 from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
+    admin_hours,
     analytics,
     apparatus,
     auth,
@@ -132,6 +133,9 @@ api_router.include_router(member_leaves.router, prefix="/users", tags=["member-l
 api_router.include_router(
     operational_ranks.router, prefix="/operational-ranks", tags=["operational-ranks"]
 )
+api_router.include_router(
+    admin_hours.router, prefix="/admin-hours", tags=["admin-hours"]
+)
 api_router.include_router(public_portal_admin.router)
 
 
@@ -174,5 +178,6 @@ async def api_root():
             "integrations": "/api/v1/integrations",
             "prospective_members": "/api/v1/prospective-members",
             "public_portal": "/api/v1/public-portal",
+            "admin_hours": "/api/v1/admin-hours",
         },
     }
