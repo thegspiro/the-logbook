@@ -14,7 +14,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, database, and member management issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-20 with member deletion, JavaScript runtime error fixes, member profile crash, badge number enforcement, dashboard zero-member fix, login 500 error, scheduling improvements, mobile optimization, accessibility, taxonomy refactor
+   - **Updated**: 2026-02-27 with admin hours module, scheduling shift pattern fixes, elections fixes, centralized backend logging, QR code fixes, organization settings, plus all previous updates
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application
@@ -127,20 +127,36 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - API endpoints: 12 endpoints for meeting CRUD, attendees, action items, summary
     - Permissions: `meetings.view`, `meetings.manage`
 
-12. **Scheduling Module** (Enhanced 2026-02-14)
+12. **Scheduling Module** (Enhanced 2026-02-27)
     - Shift creation, templates, and recurring patterns (daily/weekly/platoon/custom)
-    - Auto-generation of shifts from patterns with pre-assigned members
+    - Auto-generation of shifts from patterns with pre-assigned members and correct JS weekday mapping
     - Duty roster: assign members to shifts with position and confirm/decline workflow
+    - Shift conflict detection: prevents duplicate assignments and overlapping time conflicts
+    - Shift officer assignment from member dropdown in create/edit modals
+    - Understaffing badges: amber warning on calendar cards when below minimum staffing
+    - Template colors: shifts inherit color from templates for visual calendar organization
     - Shift swap requests with officer approval workflow
-    - Time-off requests with approval and member availability checking
+    - Time-off requests with approval, date range validation, and member availability checking
     - Shift call recording with incident details and responding members
-    - Week and month calendar views with real shift data
+    - Week and month calendar views with real shift data and enriched responses
     - Attendance tracking per shift with check-in/check-out
     - Reports: member hours, shift coverage, call volume analysis
-    - Personal views: my-shifts, my-assignments
+    - Personal views: my-shifts, my-assignments with embedded shift data
     - API endpoints: 49 endpoints for shifts, templates, patterns, assignments, swaps, time-off, calls, reports
     - Permissions: `scheduling.view`, `scheduling.manage`, `scheduling.assign`, `scheduling.swap`, `scheduling.report`
     - Roles: Scheduling Officer with full scheduling access
+
+12. **Admin Hours Module** (New 2026-02-27)
+    - Administrative hours tracking for committee meetings, building maintenance, fundraising, etc.
+    - QR code clock-in/clock-out for hands-free time tracking at work locations
+    - Manual hours entry with notes for retroactive logging
+    - Configurable categories with auto-approve thresholds
+    - Approval workflow for entries exceeding threshold
+    - Personal hours log and active session indicators
+    - Admin dashboard with summary stats, pending reviews, and all entries
+    - Printable QR codes per category for posting at locations
+    - API endpoints: 12 endpoints under `/api/v1/admin-hours/`
+    - Permissions: `admin_hours.view`, `admin_hours.log`, `admin_hours.manage`
 
 13. **Facilities Module** (New 2026-02-14)
     - Building and property management with types, statuses, addresses, GPS, and photos

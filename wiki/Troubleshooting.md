@@ -25,6 +25,10 @@ This guide covers common issues and their solutions for The Logbook deployment.
 19. [Migration Issues on Unraid](#migration-issues-on-unraid)
 20. [Membership Admin Issues](#membership-admin-issues)
 21. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
+22. [Admin Hours Module Issues](#admin-hours-module-issues)
+23. [Elections Detail & Voting Issues](#elections-detail--voting-issues)
+24. [Shift Pattern & Calendar Issues](#shift-pattern--calendar-issues)
+25. [Organization Settings Issues](#organization-settings-issues)
 
 ---
 
@@ -1560,3 +1564,83 @@ docker-compose up -d
 ### Problem: Cannot cancel or postpone a request
 
 **Fix:** Only requests in active states (`submitted`, `in_progress`, `scheduled`, `postponed`) can be modified. Terminal states (`declined`, `cancelled`, `completed`) cannot be changed. Postponed requests can be resumed via "Resume Work" which transitions back to `in_progress`.
+
+---
+
+## Admin Hours Module Issues
+
+### Problem: QR code clock-in shows "Category not found"
+
+**Fix:** The QR code URL references a deleted or wrong-org category. Regenerate the QR code from **Administration > Admin Hours > QR Codes** and reprint.
+
+### Problem: Clock-out button not appearing
+
+**Fix:** Verify an active (unclosed) session exists on your **My Hours** page. Sessions older than 24 hours may be auto-closed. If so, submit a manual entry instead.
+
+### Problem: Hours stuck in "pending" with no reviewer
+
+**Fix:** Ensure at least one role has the `admin_hours.manage` permission. Also check the category's auto-approve threshold — entries below the threshold are auto-approved.
+
+### Problem: Manual entry rejected with "Overlapping session"
+
+**Fix:** The time range overlaps with an existing entry. Check **My Hours** for entries on that date and adjust times to avoid overlap.
+
+---
+
+## Elections Detail & Voting Issues
+
+### Problem: Election detail page hangs on loading
+
+**Status (Fixed 2026-02-27):** Route param mismatch (`:id` vs `electionId`) caused the page to never fetch data. Pull latest to fix.
+
+### Problem: Cannot open election with only ballot items
+
+**Status (Fixed 2026-02-27):** `open_election` now supports ballot-item-only elections (approval votes, resolutions) without requiring candidates.
+
+### Problem: Close election shows "Election not found"
+
+**Status (Fixed 2026-02-27):** Returns descriptive error messages for wrong-status elections instead of misleading "not found".
+
+### Problem: Voter overrides page crashes
+
+**Status (Fixed 2026-02-27):** Frontend now correctly handles `{ overrides: [...] }` response shape from the API.
+
+---
+
+## Shift Pattern & Calendar Issues
+
+### Problem: Weekly shift pattern generates on wrong days
+
+**Status (Fixed 2026-02-27):** Weekday convention mismatch between JS (0=Sunday) and Python (0=Monday) caused shifts to land on wrong days. Backend now converts correctly.
+
+### Problem: Multiple shifts per day blocked by duplicate guard
+
+**Status (Fixed 2026-02-27):** Overlap check now uses date + start_time, allowing different shift types on the same day.
+
+### Problem: Shift times show "Invalid Date"
+
+**Status (Fixed 2026-02-27):** `formatTime()` now handles bare time strings (e.g., `"08:00:00"`) from the backend.
+
+### Problem: Dashboard "Upcoming Shifts" widget is empty
+
+**Status (Fixed 2026-02-27):** Dashboard now shows all organization shifts, not just user-assigned ones.
+
+### Problem: Open shifts endpoint returns 422
+
+**Status (Fixed 2026-02-27):** Route ordering fixed — `/shifts/open` now defined before `/shifts/{shift_id}`.
+
+---
+
+## Organization Settings Issues
+
+### Problem: Cannot change email/storage/auth settings after onboarding
+
+**Status (Fixed 2026-02-27):** These settings are now accessible in **Administration > Organization Settings** under the Email, Storage, and Authentication tabs.
+
+### Problem: SMTP changes not taking effect
+
+**Fix:** After saving new SMTP settings, restart the backend: `docker-compose restart backend`. The email client needs to reinitialize with new credentials.
+
+### Problem: Switching storage provider loses files
+
+**Important:** Provider switches do not auto-migrate files. Back up existing files before switching, then re-upload to the new provider.

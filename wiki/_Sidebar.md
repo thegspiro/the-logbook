@@ -33,6 +33,7 @@
 - [Events](Module-Events)
 - [Public Programs](Public-Programs)
 - [Scheduling](Module-Scheduling)
+- [Admin Hours](Module-Admin-Hours)
 - [Apparatus](Module-Apparatus)
 - [Inventory](Module-Inventory)
 - [Compliance](Module-Compliance)
