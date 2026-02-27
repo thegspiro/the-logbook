@@ -80,7 +80,14 @@ const TemplateRow: React.FC<{
       <span className="text-sm text-theme-text-muted">{template.category ?? '—'}</span>
     </td>
     <td className="px-4 py-3">
-      <StatusBadge status={template.status} />
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <StatusBadge status={template.status} />
+        {template.visibility && template.visibility !== 'all_members' && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+            {template.visibility === 'officers_only' ? 'Officers' : 'Assigned'}
+          </span>
+        )}
+      </div>
     </td>
     <td className="px-4 py-3 text-center hidden lg:table-cell">
       <span className="text-sm text-theme-text-muted">{template.section_count}</span>

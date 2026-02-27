@@ -35,6 +35,7 @@ export const StartSkillTestPage: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
   const [notes, setNotes] = useState('');
+  const [isPractice, setIsPractice] = useState(false);
   const [templateSearch, setTemplateSearch] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
   const [isStarting, setIsStarting] = useState(false);
@@ -87,6 +88,7 @@ export const StartSkillTestPage: React.FC = () => {
         template_id: selectedTemplateId,
         candidate_id: selectedCandidateId,
         notes: notes.trim() || undefined,
+        is_practice: isPractice,
       });
       toast.success('Test session started');
       navigate(`/training/skills-testing/test/${test.id}/active`);
@@ -236,6 +238,24 @@ export const StartSkillTestPage: React.FC = () => {
           )}
         </div>
 
+        {/* Practice Mode Toggle */}
+        <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isPractice}
+              onChange={(e) => setIsPractice(e.target.checked)}
+              className="rounded border-theme-surface-border text-blue-600 focus:ring-blue-500 w-5 h-5"
+            />
+            <div>
+              <p className="font-medium text-theme-text-primary">Practice Mode</p>
+              <p className="text-sm text-theme-text-muted">
+                Practice attempts are not recorded and will not appear in test history or statistics.
+              </p>
+            </div>
+          </label>
+        </div>
+
         {/* Step 3: Notes (optional) */}
         <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-3">
@@ -257,7 +277,7 @@ export const StartSkillTestPage: React.FC = () => {
           className="w-full flex items-center justify-center gap-3 py-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-xl text-lg font-bold transition-colors"
         >
           <Play className="w-6 h-6" />
-          {isStarting ? 'Starting...' : 'Begin Evaluation'}
+          {isStarting ? 'Starting...' : isPractice ? 'Begin Practice' : 'Begin Evaluation'}
         </button>
       </main>
     </div>

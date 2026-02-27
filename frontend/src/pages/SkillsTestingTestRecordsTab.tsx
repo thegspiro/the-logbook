@@ -54,6 +54,11 @@ const TestCard: React.FC<{
           <p className="font-medium text-theme-text-primary truncate">{test.template_name}</p>
           <StatusBadge status={test.status} />
           {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
+          {test.is_practice && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+              Practice
+            </span>
+          )}
         </div>
         <p className="text-sm text-theme-text-muted">
           Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}

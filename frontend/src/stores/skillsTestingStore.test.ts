@@ -34,6 +34,7 @@ const mockTemplate = {
   category: 'Fire Operations',
   version: 1,
   status: 'draft' as const,
+  visibility: 'all_members' as const,
   sections: [
     {
       id: 'sec-1',
@@ -64,6 +65,7 @@ const mockTemplateListItem = {
   description: 'SCBA proficiency test',
   category: 'Fire Operations',
   status: 'draft' as const,
+  visibility: 'all_members' as const,
   version: 1,
   section_count: 1,
   criteria_count: 1,
@@ -83,6 +85,7 @@ const mockTest = {
   examiner_name: 'Captain Jones',
   status: 'in_progress' as const,
   result: 'incomplete' as const,
+  is_practice: false,
   section_results: [],
   overall_score: undefined,
   elapsed_seconds: 0,

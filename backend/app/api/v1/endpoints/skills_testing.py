@@ -39,20 +39,44 @@ router = APIRouter()
 # ============================================
 
 
+def _user_has_officer_role(user: User) -> bool:
+    """Check if the user has a role typically associated with officers/admins."""
+    if hasattr(user, "role") and user.role in (
+        "admin",
+        "owner",
+        "officer",
+        "training_officer",
+    ):
+        return True
+    if hasattr(user, "permissions") and user.permissions:
+        perms = user.permissions if isinstance(user.permissions, list) else []
+        if any(
+            p in perms
+            for p in ("training.manage", "admin.*", "*")
+        ):
+            return True
+    return False
+
+
 @router.get("/templates", response_model=List[SkillTemplateListResponse])
 async def list_templates(
     status_filter: Optional[str] = Query(
         None, alias="status", description="Filter by status (draft/published/archived)"
     ),
     category: Optional[str] = Query(None, description="Filter by category"),
+    visibility: Optional[str] = Query(
+        None, description="Filter by visibility (all_members/officers_only/assigned_only)"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     List all skill templates for the organization.
 
-    Supports filtering by status and category. Returns summary items
-    with section and criteria counts.
+    Supports filtering by status, category, and visibility. Returns summary
+    items with section and criteria counts. Visibility filtering is applied
+    based on the user's role: officers see all templates, regular members
+    only see templates with visibility='all_members'.
 
     **Authentication required**
     """
@@ -66,10 +90,20 @@ async def list_templates(
     if category:
         query = query.where(SkillTemplate.category == category)
 
+    if visibility:
+        query = query.where(SkillTemplate.visibility == visibility)
+
     query = query.order_by(SkillTemplate.name)
 
     result = await db.execute(query)
     templates = result.scalars().all()
+
+    # Apply visibility filtering for non-officer users
+    is_officer = _user_has_officer_role(current_user)
+    if not is_officer:
+        templates = [
+            t for t in templates if (t.visibility or "all_members") == "all_members"
+        ]
 
     # Build list responses with computed counts
     items = []
@@ -87,6 +121,7 @@ async def list_templates(
                 description=t.description,
                 category=t.category,
                 status=t.status,
+                visibility=t.visibility or "all_members",
                 version=t.version,
                 section_count=section_count,
                 criteria_count=criteria_count,
@@ -132,6 +167,7 @@ async def create_template(
         passing_percentage=template_data.passing_percentage,
         require_all_critical=template_data.require_all_critical,
         tags=template_data.tags,
+        visibility=template_data.visibility,
     )
 
     db.add(new_template)
@@ -417,6 +453,7 @@ async def duplicate_template(
         passing_percentage=source.passing_percentage,
         require_all_critical=source.require_all_critical,
         tags=source.tags,
+        visibility=source.visibility,
     )
 
     db.add(new_template)
@@ -452,6 +489,9 @@ async def list_tests(
     ),
     candidate_id: Optional[UUID] = Query(None, description="Filter by candidate"),
     template_id: Optional[UUID] = Query(None, description="Filter by template"),
+    include_practice: bool = Query(
+        False, description="Include practice attempts in results"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -459,6 +499,7 @@ async def list_tests(
     List skill tests for the organization.
 
     Supports filtering by status, candidate, and template.
+    Practice tests are excluded by default; pass include_practice=true to see them.
     Returns summary items with denormalized names.
 
     **Authentication required**
@@ -466,6 +507,9 @@ async def list_tests(
     query = select(SkillTest).where(
         SkillTest.organization_id == current_user.organization_id
     )
+
+    if not include_practice:
+        query = query.where(SkillTest.is_practice == False)  # noqa: E712
 
     if status_filter:
         query = query.where(SkillTest.status == status_filter)
@@ -524,6 +568,7 @@ async def list_tests(
                 examiner_name=examiner_name,
                 status=t.status,
                 result=t.result,
+                is_practice=t.is_practice or False,
                 overall_score=t.overall_score,
                 started_at=t.started_at,
                 completed_at=t.completed_at,
@@ -592,26 +637,29 @@ async def create_test(
         status="draft",
         result="incomplete",
         notes=test_data.notes,
+        is_practice=test_data.is_practice,
     )
 
     db.add(new_test)
     await db.commit()
     await db.refresh(new_test)
 
-    await log_audit_event(
-        db=db,
-        event_type="skill_test_created",
-        event_category="training",
-        severity="info",
-        event_data={
-            "test_id": str(new_test.id),
-            "template_id": str(test_data.template_id),
-            "template_name": template.name,
-            "candidate_id": str(test_data.candidate_id),
-        },
-        user_id=str(current_user.id),
-        username=current_user.username,
-    )
+    # Practice attempts are not logged
+    if not test_data.is_practice:
+        await log_audit_event(
+            db=db,
+            event_type="skill_test_created",
+            event_category="training",
+            severity="info",
+            event_data={
+                "test_id": str(new_test.id),
+                "template_id": str(test_data.template_id),
+                "template_name": template.name,
+                "candidate_id": str(test_data.candidate_id),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
 
     return _build_test_response(new_test, template, candidate, current_user)
 
@@ -836,22 +884,24 @@ async def complete_test(
     examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
     examiner = examiner_result.scalar_one_or_none()
 
-    await log_audit_event(
-        db=db,
-        event_type="skill_test_completed",
-        event_category="training",
-        severity="info",
-        event_data={
-            "test_id": str(test_id),
-            "template_name": template.name,
-            "candidate_id": test.candidate_id,
-            "candidate_name": _format_user_name(candidate) if candidate else None,
-            "result": test_result,
-            "overall_score": overall_score,
-        },
-        user_id=str(current_user.id),
-        username=current_user.username,
-    )
+    # Practice attempts are not logged
+    if not test.is_practice:
+        await log_audit_event(
+            db=db,
+            event_type="skill_test_completed",
+            event_category="training",
+            severity="info",
+            event_data={
+                "test_id": str(test_id),
+                "template_name": template.name,
+                "candidate_id": test.candidate_id,
+                "candidate_name": _format_user_name(candidate) if candidate else None,
+                "result": test_result,
+                "overall_score": overall_score,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
 
     return _build_test_response(test, template, candidate, examiner)
 
@@ -952,28 +1002,33 @@ async def get_testing_summary(
     )
     published_templates = published_templates_result.scalar() or 0
 
-    # Total tests
+    # Total tests (excluding practice)
     total_tests_result = await db.execute(
-        select(func.count(SkillTest.id)).where(SkillTest.organization_id == org_id)
+        select(func.count(SkillTest.id)).where(
+            SkillTest.organization_id == org_id,
+            SkillTest.is_practice == False,  # noqa: E712
+        )
     )
     total_tests = total_tests_result.scalar() or 0
 
-    # Tests this month
+    # Tests this month (excluding practice)
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     tests_this_month_result = await db.execute(
         select(func.count(SkillTest.id)).where(
             SkillTest.organization_id == org_id,
             SkillTest.created_at >= month_start,
+            SkillTest.is_practice == False,  # noqa: E712
         )
     )
     tests_this_month = tests_this_month_result.scalar() or 0
 
-    # Pass rate (completed tests only)
+    # Pass rate (completed non-practice tests only)
     completed_tests_result = await db.execute(
         select(func.count(SkillTest.id)).where(
             SkillTest.organization_id == org_id,
             SkillTest.status == "completed",
+            SkillTest.is_practice == False,  # noqa: E712
         )
     )
     completed_count = completed_tests_result.scalar() or 0
@@ -985,17 +1040,19 @@ async def get_testing_summary(
                 SkillTest.organization_id == org_id,
                 SkillTest.status == "completed",
                 SkillTest.result == "pass",
+                SkillTest.is_practice == False,  # noqa: E712
             )
         )
         passed_count = passed_tests_result.scalar() or 0
         pass_rate = round((passed_count / completed_count) * 100, 1)
 
-    # Average score (completed tests with scores)
+    # Average score (completed non-practice tests with scores)
     avg_score_result = await db.execute(
         select(func.avg(SkillTest.overall_score)).where(
             SkillTest.organization_id == org_id,
             SkillTest.status == "completed",
             SkillTest.overall_score.isnot(None),
+            SkillTest.is_practice == False,  # noqa: E712
         )
     )
     avg_score_raw = avg_score_result.scalar()
@@ -1040,6 +1097,7 @@ def _build_test_response(
         examiner_id=test.examiner_id,
         status=test.status,
         result=test.result,
+        is_practice=test.is_practice or False,
         section_results=test.section_results,
         overall_score=test.overall_score,
         elapsed_seconds=test.elapsed_seconds,
@@ -1071,15 +1129,74 @@ def _calculate_test_result(
     if not section_results:
         return None, "fail"
 
-    # Calculate overall score from section scores
-    section_scores = []
-    for sr in section_results:
-        if isinstance(sr, dict) and sr.get("section_score") is not None:
-            section_scores.append(sr["section_score"])
+    # Calculate overall score using point-based totals from score criteria.
+    # Sum earned points and total available points across all sections.
+    total_earned = 0.0
+    total_available = 0.0
+    has_score_criteria = False
 
-    overall_score = (
-        round(sum(section_scores) / len(section_scores), 1) if section_scores else None
-    )
+    for section_idx, section in enumerate(template_sections):
+        if not isinstance(section, dict):
+            continue
+        section_id = f"section-{section_idx}"
+        section_name = section.get("name")
+
+        # Find matching section result
+        sr_match = None
+        for sr in section_results:
+            if not isinstance(sr, dict):
+                continue
+            if (
+                sr.get("section_id") == section_id
+                or sr.get("section_name") == section_name
+            ):
+                sr_match = sr
+                break
+
+        criteria = section.get("criteria", [])
+        for ci, criterion in enumerate(criteria):
+            if not isinstance(criterion, dict):
+                continue
+            if criterion.get("type") != "score":
+                continue
+            max_score = criterion.get("max_score")
+            if max_score is None or max_score <= 0:
+                continue
+
+            has_score_criteria = True
+            total_available += max_score
+
+            if sr_match:
+                criterion_id = f"criterion-{section_idx}-{ci}"
+                criterion_label = criterion.get("label")
+                for cr in sr_match.get("criteria_results", []):
+                    if not isinstance(cr, dict):
+                        continue
+                    if (
+                        cr.get("criterion_id") == criterion_id
+                        or cr.get("criterion_label") == criterion_label
+                    ):
+                        earned = cr.get("score")
+                        if earned is not None:
+                            total_earned += earned
+                        break
+
+    # Use point-based totals when score criteria exist, otherwise fall back
+    # to averaging section_score percentages
+    if has_score_criteria and total_available > 0:
+        overall_score: float | None = round(
+            (total_earned / total_available) * 100, 1
+        )
+    else:
+        section_scores = []
+        for sr in section_results:
+            if isinstance(sr, dict) and sr.get("section_score") is not None:
+                section_scores.append(sr["section_score"])
+        overall_score = (
+            round(sum(section_scores) / len(section_scores), 1)
+            if section_scores
+            else None
+        )
 
     # Check passing percentage
     passes_percentage = True
@@ -1121,6 +1238,10 @@ def _calculate_test_result(
                 if not isinstance(criterion, dict) or not criterion.get(
                     "required", False
                 ):
+                    continue
+                # Statement criteria are read-only informational items
+                # and always count as passed
+                if criterion.get("type") == "statement":
                     continue
                 criterion_id = f"criterion-{section_idx}-{ci}"
                 criterion_label = criterion.get("label")

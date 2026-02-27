@@ -57,6 +57,7 @@ class SkillTemplateCreate(BaseModel):
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: bool = True
     tags: Optional[List[str]] = None
+    visibility: str = "all_members"
 
 
 class SkillTemplateUpdate(BaseModel):
@@ -70,6 +71,7 @@ class SkillTemplateUpdate(BaseModel):
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: Optional[bool] = None
     tags: Optional[List[str]] = None
+    visibility: Optional[str] = None
 
 
 class SkillTemplateResponse(BaseModel):
@@ -82,6 +84,7 @@ class SkillTemplateResponse(BaseModel):
     category: Optional[str] = None
     version: int
     status: str
+    visibility: str = "all_members"
     sections: list  # JSON — list of SkillTemplateSectionSchema dicts
     time_limit_seconds: Optional[int] = None
     passing_percentage: Optional[float] = None
@@ -102,6 +105,7 @@ class SkillTemplateListResponse(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     status: str
+    visibility: str = "all_members"
     version: int
     section_count: int = 0
     criteria_count: int = 0
@@ -151,6 +155,7 @@ class SkillTestCreate(BaseModel):
     template_id: UUID
     candidate_id: UUID
     notes: Optional[str] = None
+    is_practice: bool = False
 
 
 class SkillTestUpdate(BaseModel):
@@ -174,6 +179,7 @@ class SkillTestResponse(BaseModel):
     examiner_id: UUID
     status: str
     result: str
+    is_practice: bool = False
     section_results: Optional[list] = None
     overall_score: Optional[float] = None
     elapsed_seconds: Optional[int] = None
@@ -207,6 +213,7 @@ class SkillTestListResponse(BaseModel):
     examiner_name: Optional[str] = None
     status: str
     result: str
+    is_practice: bool = False
     overall_score: Optional[float] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

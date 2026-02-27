@@ -26,6 +26,11 @@ export type TemplateStatus =
   | 'published'
   | 'archived';
 
+export type TemplateVisibility =
+  | 'all_members'
+  | 'officers_only'
+  | 'assigned_only';
+
 export type TestResult =
   | 'pass'
   | 'fail'
@@ -71,6 +76,7 @@ export interface SkillTemplate {
   category?: string;
   version: number;
   status: TemplateStatus;
+  visibility: TemplateVisibility;
   sections: SkillTemplateSection[];
   /** Global time limit for the entire test in seconds (optional) */
   time_limit_seconds?: number;
@@ -94,6 +100,7 @@ export interface SkillTemplateCreate {
   passing_percentage?: number;
   require_all_critical?: boolean;
   tags?: string[];
+  visibility?: TemplateVisibility;
 }
 
 export interface SkillTemplateSectionCreate {
@@ -121,6 +128,7 @@ export interface SkillTemplateUpdate {
   description?: string;
   category?: string;
   status?: TemplateStatus;
+  visibility?: TemplateVisibility;
   sections?: SkillTemplateSectionCreate[];
   time_limit_seconds?: number | null;
   passing_percentage?: number | null;
@@ -162,6 +170,7 @@ export interface SkillTest {
   examiner_name: string;
   status: SkillTestStatus;
   result: TestResult;
+  is_practice: boolean;
   section_results: SectionResult[];
   /** Overall score as a percentage (0-100) */
   overall_score?: number;
@@ -182,6 +191,7 @@ export interface SkillTestCreate {
   template_id: string;
   candidate_id: string;
   notes?: string;
+  is_practice?: boolean;
 }
 
 export interface SkillTestUpdate {
@@ -201,6 +211,7 @@ export interface SkillTemplateListItem {
   description?: string;
   category?: string;
   status: TemplateStatus;
+  visibility: TemplateVisibility;
   version: number;
   section_count: number;
   criteria_count: number;
@@ -216,6 +227,7 @@ export interface SkillTestListItem {
   examiner_name: string;
   status: SkillTestStatus;
   result: TestResult;
+  is_practice: boolean;
   overall_score?: number;
   started_at?: string;
   completed_at?: string;

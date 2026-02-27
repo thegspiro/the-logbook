@@ -180,6 +180,11 @@ const ScoreCriterion: React.FC<{
   const passingScore = criterion.passing_score ?? 0;
   const currentScore = result?.score ?? 0;
   const isPassing = currentScore >= passingScore;
+  const usePointButtons = maxScore <= 10;
+
+  const handleScoreChange = (score: number) => {
+    onChange({ score, passed: score >= passingScore });
+  };
 
   return (
     <div className="space-y-2">
@@ -197,25 +202,47 @@ const ScoreCriterion: React.FC<{
           {currentScore}/{maxScore}
         </div>
       </div>
-      <div className="space-y-1">
-        <input
-          type="range"
-          min="0"
-          max={maxScore}
-          value={currentScore}
-          onChange={(e) => {
-            const score = Number(e.target.value);
-            onChange({ score, passed: score >= passingScore });
-          }}
-          className="w-full h-3 rounded-lg appearance-none cursor-pointer accent-red-600"
-          style={{ background: `linear-gradient(to right, ${isPassing ? '#16a34a' : '#dc2626'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)` }}
-        />
-        <div className="flex justify-between text-xs text-theme-text-muted">
-          <span>0</span>
-          <span className="text-yellow-600">Pass: {passingScore}</span>
-          <span>{maxScore}</span>
+      {usePointButtons ? (
+        <div className="flex gap-2 flex-wrap">
+          {Array.from({ length: maxScore + 1 }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => handleScoreChange(i)}
+              className={`min-w-[3rem] h-12 rounded-xl text-lg font-bold transition-all ${
+                currentScore === i
+                  ? i >= passingScore
+                    ? 'bg-green-600 text-white shadow-lg shadow-green-600/30 scale-105'
+                    : 'bg-red-600 text-white shadow-lg shadow-red-600/30 scale-105'
+                  : 'bg-theme-surface border-2 border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
+              }`}
+            >
+              {i}
+            </button>
+          ))}
+          {passingScore > 0 && (
+            <p className="w-full text-xs text-theme-text-muted mt-1">
+              Pass: {passingScore}+ pts
+            </p>
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="space-y-1">
+          <input
+            type="range"
+            min="0"
+            max={maxScore}
+            value={currentScore}
+            onChange={(e) => handleScoreChange(Number(e.target.value))}
+            className="w-full h-3 rounded-lg appearance-none cursor-pointer accent-red-600"
+            style={{ background: `linear-gradient(to right, ${isPassing ? '#16a34a' : '#dc2626'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)` }}
+          />
+          <div className="flex justify-between text-xs text-theme-text-muted">
+            <span>0</span>
+            <span className="text-yellow-600">Pass: {passingScore}</span>
+            <span>{maxScore}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -384,35 +411,33 @@ const StatementCriterion: React.FC<{
   criterion: SkillCriterion;
   result: CriterionResult | undefined;
   onChange: (result: Partial<CriterionResult>) => void;
-}> = ({ criterion, result, onChange }) => {
-  const acknowledged = result?.passed === true;
+}> = ({ criterion, onChange }) => {
+  // Statements are read-only boxes for the assessor to read aloud.
+  // Auto-mark as passed on first render so they don't block completion.
+  useEffect(() => {
+    onChange({ passed: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-2">
-      <div>
+      <div className="flex items-center gap-2">
+        <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
         <p className="font-medium text-theme-text-primary text-base">
           {criterion.label}
         </p>
-        {criterion.description && (
-          <p className="text-sm text-theme-text-muted mt-0.5">{criterion.description}</p>
-        )}
       </div>
+      {criterion.description && (
+        <p className="text-sm text-theme-text-muted">{criterion.description}</p>
+      )}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-        <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap">
+        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1.5">
+          Read aloud to candidate:
+        </p>
+        <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
           {criterion.statement_text}
         </p>
       </div>
-      <button
-        onClick={() => onChange({ passed: !acknowledged })}
-        className={`w-full flex items-center justify-center gap-2 py-4 rounded-xl text-lg font-bold transition-all ${
-          acknowledged
-            ? 'bg-green-600 text-white shadow-lg shadow-green-600/30 scale-[1.02]'
-            : 'bg-theme-surface border-2 border-theme-surface-border text-theme-text-muted hover:border-green-500'
-        }`}
-      >
-        <Check className="w-6 h-6" />
-        {acknowledged ? 'ACKNOWLEDGED' : 'ACKNOWLEDGE'}
-      </button>
     </div>
   );
 };
@@ -522,10 +547,8 @@ const CriterionResultDisplay: React.FC<{
 
   const statusBadge = () => {
     if (criterion.type === 'statement') {
-      return passed ? (
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">Acknowledged</span>
-      ) : (
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">Not acknowledged</span>
+      return (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">Statement</span>
       );
     }
     if (passed === true) {
@@ -556,8 +579,8 @@ const CriterionResultDisplay: React.FC<{
         </p>
         {criterion.type === 'score' && result?.score != null && (
           <p className="text-xs text-theme-text-muted mt-0.5">
-            Score: {result.score}/{criterion.max_score ?? 100}
-            {criterion.passing_score != null && ` (pass: ${criterion.passing_score})`}
+            {result.score}/{criterion.max_score ?? 100} pts
+            {criterion.passing_score != null && ` (pass: ${criterion.passing_score}+)`}
           </p>
         )}
         {criterion.type === 'time_limit' && result?.time_seconds != null && (
@@ -571,6 +594,11 @@ const CriterionResultDisplay: React.FC<{
             {result.checklist_completed.filter(Boolean).length}/{criterion.checklist_items?.length ?? 0} items completed
           </p>
         )}
+        {criterion.type === 'statement' && criterion.statement_text && (
+          <p className="text-xs text-theme-text-muted mt-0.5 italic line-clamp-2">
+            {criterion.statement_text}
+          </p>
+        )}
         {result?.notes && (
           <p className="text-xs text-theme-text-muted mt-1 italic">&ldquo;{result.notes}&rdquo;</p>
         )}
@@ -579,6 +607,28 @@ const CriterionResultDisplay: React.FC<{
     </div>
   );
 };
+
+/** Compute point totals for score-type criteria in a section */
+function computeSectionPoints(
+  criteria: SkillCriterion[],
+  criteriaResults: CriterionResult[],
+): { earned: number; available: number } | null {
+  const scoreCriteria = criteria.filter((c) => c.type === 'score' && c.max_score != null && c.max_score > 0);
+  if (scoreCriteria.length === 0) return null;
+
+  let earned = 0;
+  let available = 0;
+  for (const criterion of scoreCriteria) {
+    available += criterion.max_score ?? 0;
+    const result = criteriaResults.find(
+      (r) => r.criterion_id === criterion.id || r.criterion_label === criterion.label
+    );
+    if (result?.score != null) {
+      earned += result.score;
+    }
+  }
+  return { earned, available };
+}
 
 /** Review section showing results + editable notes for a completed test */
 const ReviewSection: React.FC<{
@@ -591,6 +641,7 @@ const ReviewSection: React.FC<{
   const passCount = criteriaResults.filter((r) => r.passed === true).length;
   const failCount = criteriaResults.filter((r) => r.passed === false).length;
   const nonStatementCriteria = section.criteria.filter((c) => c.type !== 'statement');
+  const points = computeSectionPoints(section.criteria, criteriaResults);
 
   return (
     <div className="bg-theme-surface rounded-xl border border-theme-surface-border overflow-hidden">
@@ -599,6 +650,11 @@ const ReviewSection: React.FC<{
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-theme-text-primary">{section.name}</h3>
           <div className="flex items-center gap-2 text-xs">
+            {points && (
+              <span className="font-bold text-theme-text-primary">
+                {points.earned}/{points.available} pts
+              </span>
+            )}
             {passCount > 0 && (
               <span className="text-green-600 font-medium">{passCount} passed</span>
             )}
@@ -665,6 +721,7 @@ const ReadOnlySectionView: React.FC<{
   const passCount = actualCriteria.filter((r) => r.passed === true).length;
   const failCount = actualCriteria.filter((r) => r.passed === false).length;
   const nonStatementCriteria = section.criteria.filter((c) => c.type !== 'statement');
+  const points = computeSectionPoints(section.criteria, actualCriteria);
 
   return (
     <div className="bg-theme-surface rounded-xl border border-theme-surface-border overflow-hidden">
@@ -673,6 +730,11 @@ const ReadOnlySectionView: React.FC<{
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-theme-text-primary">{section.name}</h3>
           <div className="flex items-center gap-2 text-xs">
+            {points && (
+              <span className="font-bold text-theme-text-primary">
+                {points.earned}/{points.available} pts
+              </span>
+            )}
             {passCount > 0 && (
               <span className="text-green-600 font-medium">{passCount} passed</span>
             )}
@@ -931,6 +993,14 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         <div className="flex-1 px-4 py-4 overflow-y-auto">
+          {/* Practice banner */}
+          {currentTest.is_practice && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 mb-4 text-center">
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                Practice Attempt — Not recorded in official history
+              </p>
+            </div>
+          )}
           {/* Result banner */}
           <div className={`flex items-center gap-3 p-4 rounded-xl mb-4 ${
             currentTest.result === 'pass'
@@ -1057,6 +1127,15 @@ export const ActiveSkillTestPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Practice Mode Banner */}
+        {currentTest.is_practice && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-4 py-2 text-center">
+            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+              Practice Mode — This attempt will not be recorded
+            </p>
+          </div>
+        )}
+
         {/* Review Content */}
         <div className="flex-1 px-4 py-4 overflow-y-auto">
           {/* Summary stats */}
@@ -1164,6 +1243,15 @@ export const ActiveSkillTestPage: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Practice Mode Banner */}
+      {currentTest.is_practice && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-4 py-2 text-center">
+          <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+            Practice Mode — This attempt will not be recorded
+          </p>
+        </div>
+      )}
 
       {/* Section Content */}
       <div className="flex-1 px-4 py-4 overflow-y-auto">
