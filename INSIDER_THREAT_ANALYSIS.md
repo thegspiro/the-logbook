@@ -455,7 +455,7 @@ The following security measures are well-implemented and represent strong inside
 2. **Role-Based Access Control:** Comprehensive permission system with per-endpoint checks on most sensitive operations.
 3. **Mass Assignment Protection:** The user profile update endpoint uses an explicit `ALLOWED_PROFILE_FIELDS` allowlist (`users.py:888-892`), preventing an insider from setting fields like `is_active`, `password_hash`, or `organization_id`.
 4. **Audit Logging:** Comprehensive `log_audit_event()` calls on all administrative actions with user attribution.
-5. **Password Security:** Argon2id with strong parameters, HIPAA-compliant password policy (history, age, complexity).
+5. **Password Security:** Argon2id with strong parameters, HIPAA-aligned password policy (history, age, complexity).
 6. **Token Rotation:** Refresh token rotation with replay detection that revokes all sessions on suspicious reuse.
 7. **Session Validation:** Access tokens are validated against the sessions table, so logout/revocation is effective (except for WebSocket — see Finding 2).
 8. **Account Lockout:** 5 failed attempts triggers a 30-minute lockout.

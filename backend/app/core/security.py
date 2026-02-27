@@ -2,7 +2,8 @@
 Security Utilities
 
 Comprehensive security functions for password hashing, encryption,
-and other security-critical operations. HIPAA compliant.
+and other security-critical operations. Implements security controls
+aligned with HIPAA requirements.
 """
 
 import base64

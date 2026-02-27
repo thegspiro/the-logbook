@@ -95,16 +95,16 @@ const Welcome: React.FC = () => {
           }`}
         >
           <p className="text-xl md:text-2xl text-theme-text-secondary leading-relaxed">
-            A secure, HIPAA-compliant department intranet built by a local
-            volunteer fire department and shared with the world to help other
-            volunteer departments manage their operations, training, and
-            community service.
+            A secure department intranet built by a local volunteer fire
+            department and shared with the world to help other volunteer
+            departments manage their operations, training, and community
+            service. Designed with HIPAA requirements in mind.
           </p>
 
           {/* Badge indicators */}
           <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm">
             <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
-              HIPAA Compliant
+              HIPAA-Oriented Security
             </span>
             <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
               Section 508 Accessible

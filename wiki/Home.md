@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
 ![React](https://img.shields.io/badge/React-18.3-blue.svg)
 
-An open-source, highly flexible, secure, and modular intranet platform designed for fire departments, emergency services, healthcare organizations, and other institutions requiring HIPAA-compliant, secure internal communication and management systems.
+An open-source, highly flexible, secure, and modular intranet platform designed for fire departments, emergency services, healthcare organizations, and other institutions requiring secure internal communication and management systems. Built with HIPAA requirements in mind.
 
 ---
 
@@ -73,7 +73,7 @@ docker-compose up -d
 - **[Authentication](Security-Authentication)** - OAuth, SAML, LDAP, MFA
 - **[Encryption](Security-Encryption)** - AES-256 encryption
 - **[Audit Logging](Security-Audit-Logging)** - Tamper-proof audit trails
-- **[HIPAA Compliance](Security-HIPAA)** - HIPAA compliance guide
+- **[HIPAA Security Features](Security-HIPAA)** - Security features aligned with HIPAA requirements
 
 ### 🛠️ Troubleshooting
 - **[Common Issues](Troubleshooting)** - Solutions to common problems
@@ -93,7 +93,7 @@ docker-compose up -d
 ## 🌟 Key Features
 
 - ✅ **Modular Architecture** - Enable only what you need
-- ✅ **HIPAA Compliant** - Healthcare privacy and security standards
+- ✅ **HIPAA-Oriented Security** - Built with healthcare privacy and security standards in mind
 - ✅ **Tamper-Proof Logging** - Blockchain-inspired audit trails
 - ✅ **Multi-Tenancy** - Host multiple organizations
 - ✅ **Role-Based Access Control** - Granular permissions

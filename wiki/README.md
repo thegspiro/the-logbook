@@ -32,7 +32,7 @@ This directory contains all the wiki pages for The Logbook project. These pages 
 - **Security-Authentication.md** - Auth systems (OAuth, SAML, LDAP, MFA)
 - **Security-Encryption.md** - Encryption implementation
 - **Security-Audit-Logging.md** - Tamper-proof audit trails
-- **Security-HIPAA.md** - HIPAA compliance guide
+- **Security-HIPAA.md** - Security features aligned with HIPAA requirements
 
 ### Troubleshooting
 - **Troubleshooting.md** - Common issues and solutions

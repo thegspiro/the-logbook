@@ -12,7 +12,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
       workbox: {
         // Prevent the service worker from caching API responses
-        // containing sensitive/PII data (HIPAA compliance).
+        // containing sensitive/PII data (HIPAA §164.312).
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
           {
@@ -25,7 +25,7 @@ export default defineConfig({
         name: 'The Logbook',
         short_name: 'Logbook',
         description:
-          'Volunteer Fire Department Intranet - HIPAA Compliant & Secure',
+          'Volunteer Fire Department Intranet - Secure & Built with HIPAA Requirements in Mind',
         theme_color: '#991b1b',
         background_color: '#0f172a',
         display: 'standalone',

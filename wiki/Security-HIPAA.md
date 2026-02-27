@@ -1,15 +1,17 @@
-# HIPAA Compliance
+# HIPAA Security Features
 
-The Logbook is designed to meet HIPAA (Health Insurance Portability and Accountability Act) requirements for organizations handling Protected Health Information (PHI).
+The Logbook includes security features designed with HIPAA (Health Insurance Portability and Accountability Act) requirements in mind. However, **HIPAA compliance requires an external audit and cannot be self-declared by a software project alone.** Organizations handling Protected Health Information (PHI) must conduct their own risk assessments and engage qualified assessors to verify compliance.
+
+> **Important:** The presence of these features does not constitute a claim of HIPAA compliance. Compliance is a shared responsibility between the software, the implementing organization, and qualified external reviewers.
 
 ---
 
-## HIPAA Security Rule Compliance
+## Security Features Aligned with HIPAA Security Rule
 
 ### Access Control (§ 164.312(a))
 
-| Requirement | Implementation |
-|-------------|---------------|
+| HIPAA Requirement | Feature |
+|-------------------|---------|
 | Unique user identification | Every user has a unique ID and username |
 | Emergency access procedure | System owner bypass for emergency situations |
 | Automatic logoff | 30-minute inactivity timeout (configurable) |
@@ -17,8 +19,8 @@ The Logbook is designed to meet HIPAA (Health Insurance Portability and Accounta
 
 ### Audit Controls (§ 164.312(b))
 
-| Requirement | Implementation |
-|-------------|---------------|
+| HIPAA Requirement | Feature |
+|-------------------|---------|
 | Audit log recording | All access to PHI is logged with user, timestamp, and action |
 | Tamper-proof storage | SHA-256 hash chain prevents modification |
 | Log retention | 7-year retention (2555 days), exceeds 6-year HIPAA minimum |
@@ -27,16 +29,16 @@ The Logbook is designed to meet HIPAA (Health Insurance Portability and Accounta
 
 ### Integrity (§ 164.312(c))
 
-| Requirement | Implementation |
-|-------------|---------------|
+| HIPAA Requirement | Feature |
+|-------------------|---------|
 | Data integrity | Hash chain verification for audit logs |
 | Transmission integrity | TLS 1.3 for all data in transit |
 | Modification tracking | Before/after values recorded in audit log |
 
 ### Person or Entity Authentication (§ 164.312(d))
 
-| Requirement | Implementation |
-|-------------|---------------|
+| HIPAA Requirement | Feature |
+|-------------------|---------|
 | Strong passwords | Argon2id hashing, 12+ character minimum |
 | Multi-factor authentication | TOTP-based 2FA (optional or admin-enforced) |
 | Account lockout | 5 failed attempts = 30-minute lockout |
@@ -44,8 +46,8 @@ The Logbook is designed to meet HIPAA (Health Insurance Portability and Accounta
 
 ### Transmission Security (§ 164.312(e))
 
-| Requirement | Implementation |
-|-------------|---------------|
+| HIPAA Requirement | Feature |
+|-------------------|---------|
 | Encryption | TLS 1.3 required in production |
 | Integrity controls | Message authentication codes (MAC) |
 
@@ -67,8 +69,8 @@ The Logbook is designed to meet HIPAA (Health Insurance Portability and Accounta
 
 ### Security Awareness Training
 
-- The Training module can be used to track HIPAA compliance training
-- Create HIPAA training requirements with annual frequency
+- The Training module can be used to track HIPAA-related training
+- Create training requirements with annual frequency
 - Track completion through the Compliance Matrix
 
 ### Contingency Plan
@@ -95,12 +97,12 @@ The Logbook is designed to meet HIPAA (Health Insurance Portability and Accounta
 
 ---
 
-## Compliance Monitoring
+## Security Monitoring
 
 ### Security Dashboard
 
 ```bash
-# Check HIPAA-relevant security status
+# Check security status
 curl http://YOUR-IP:3001/api/v1/security/status
 
 # Verify audit log integrity
@@ -110,7 +112,7 @@ curl http://YOUR-IP:3001/api/v1/security/audit-log/integrity
 curl http://YOUR-IP:3001/api/v1/security/alerts
 ```
 
-### Compliance Checklist
+### Security Checklist
 
 - [ ] All users have unique accounts (no shared logins)
 - [ ] MFA enabled for users with PHI access
@@ -134,5 +136,14 @@ If The Logbook is hosted by a third party (cloud provider), ensure you have a si
 For self-hosted deployments (Unraid, on-premises), the BAA requirement applies to any external services you integrate.
 
 ---
+
+## Disclaimer
+
+This software includes security features designed with HIPAA requirements in mind. However, **no software can self-certify HIPAA compliance.** Organizations must:
+
+1. Conduct a formal risk assessment
+2. Engage a qualified external assessor
+3. Implement administrative, physical, and technical safeguards beyond software alone
+4. Maintain ongoing compliance through regular audits
 
 **See also:** [Security Overview](Security-Overview) | [Audit Logging](Security-Audit-Logging) | [Encryption](Security-Encryption)

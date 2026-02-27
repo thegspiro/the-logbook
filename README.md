@@ -1,11 +1,11 @@
 # The Logbook
 
-An open-source, modular intranet platform designed for fire departments, emergency services, healthcare organizations, and other institutions requiring HIPAA-compliant internal communication and management systems.
+An open-source, modular intranet platform designed for fire departments, emergency services, healthcare organizations, and other institutions requiring secure internal communication and management systems.
 
 ## Features
 
 - **Modular Architecture** — Enable only the modules you need
-- **HIPAA Compliant** — Built with healthcare privacy and security standards in mind
+- **HIPAA-Oriented Security** — Built with healthcare privacy and security standards in mind (external review required for compliance certification)
 - **Flexible Configuration** — Customize workflows, rules, and policies to match your organization
 - **Tamper-Proof Logging** — Cryptographic audit trails with integrity verification
 - **Multi-Tenancy Ready** — Host multiple organizations on a single installation
@@ -384,7 +384,7 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 - **Session Security** — JWT with automatic timeout
 - **Rate Limiting** — Brute force protection (5 attempts = 30 min lockout)
 - **Input Sanitization** — XSS and SQL injection prevention
-- **HIPAA Compliant** — PHI encryption, audit retention, access controls
+- **HIPAA-Oriented Security** — PHI encryption, audit retention, access controls (external audit required for compliance certification)
 - **Section 508 Accessible** — WCAG 2.1 Level AA compliance
 - **Public Endpoints** — Kiosk displays and public forms use non-guessable codes; no sensitive data exposed
 

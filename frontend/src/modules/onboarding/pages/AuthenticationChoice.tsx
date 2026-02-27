@@ -229,7 +229,7 @@ const AuthenticationChoice: React.FC = () => {
                 </p>
                 <p className="text-theme-alert-info-text text-sm">
                   All authentication methods support multi-factor authentication (MFA) and are
-                  HIPAA compliant when properly configured.
+                  designed to meet HIPAA security requirements when properly configured.
                 </p>
               </div>
             </div>
