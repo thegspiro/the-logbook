@@ -35,7 +35,6 @@ from app.models.inventory import (
     ItemStatus,
     ItemType,
     NFPAExposureRecord,
-    NFPAInspectionDetail,
     NFPAItemCompliance,
     StorageArea,
 )
@@ -92,8 +91,6 @@ from app.schemas.inventory import (  # Category schemas; Item schemas; Assignmen
     NFPAComplianceUpdate,
     NFPAExposureRecordCreate,
     NFPAExposureRecordResponse,
-    NFPAInspectionDetailCreate,
-    NFPAInspectionDetailResponse,
     NFPASummaryResponse,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
@@ -1133,9 +1130,7 @@ async def extend_checkout(
         raise HTTPException(status_code=404, detail="Checkout not found")
 
     if checkout.is_returned:
-        raise HTTPException(
-            status_code=400, detail="Cannot extend a returned checkout"
-        )
+        raise HTTPException(status_code=400, detail="Cannot extend a returned checkout")
 
     # Authorization: own checkout or inventory.manage
     is_own = str(checkout.user_id) == str(current_user.id)
@@ -2035,9 +2030,9 @@ async def create_equipment_request(
     # --- Rank & position access check ---
     if request_data.item_id:
         item_result = await db.execute(
-            select(InventoryItem.min_rank_order, InventoryItem.restricted_to_positions).where(
-                InventoryItem.id == str(request_data.item_id)
-            )
+            select(
+                InventoryItem.min_rank_order, InventoryItem.restricted_to_positions
+            ).where(InventoryItem.id == str(request_data.item_id))
         )
         row = item_result.one_or_none()
         if row:
@@ -2051,7 +2046,8 @@ async def create_equipment_request(
                 if has_rank_restriction and current_user.rank:
                     rank_result = await db.execute(
                         select(OperationalRank.sort_order).where(
-                            OperationalRank.organization_id == str(current_user.organization_id),
+                            OperationalRank.organization_id
+                            == str(current_user.organization_id),
                             OperationalRank.rank_code == current_user.rank,
                         )
                     )
@@ -2068,7 +2064,9 @@ async def create_equipment_request(
 
                     pos_result = await db.execute(
                         select(Position.slug)
-                        .join(user_positions, Position.id == user_positions.c.position_id)
+                        .join(
+                            user_positions, Position.id == user_positions.c.position_id
+                        )
                         .where(
                             user_positions.c.user_id == str(current_user.id),
                             Position.slug.in_(restricted_positions),
@@ -2604,7 +2602,10 @@ async def create_write_off_request(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=sanitize_error_message(error))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error),
+        )
 
     await log_audit_event(
         db=db,
@@ -2670,7 +2671,10 @@ async def review_write_off_request(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=sanitize_error_message(error))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error),
+        )
 
     await log_audit_event(
         db=db,
@@ -2715,7 +2719,9 @@ async def get_nfpa_compliance(
     )
     record = result.scalar_one_or_none()
     if not record:
-        raise HTTPException(status_code=404, detail="No NFPA compliance record found for this item")
+        raise HTTPException(
+            status_code=404, detail="No NFPA compliance record found for this item"
+        )
     return record
 
 
@@ -2761,12 +2767,13 @@ async def create_nfpa_compliance(
 
     # Check for existing record
     existing = await db.execute(
-        select(NFPAItemCompliance.id).where(
-            NFPAItemCompliance.item_id == str(item_id)
-        )
+        select(NFPAItemCompliance.id).where(NFPAItemCompliance.item_id == str(item_id))
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="NFPA compliance record already exists for this item")
+        raise HTTPException(
+            status_code=409,
+            detail="NFPA compliance record already exists for this item",
+        )
 
     record = NFPAItemCompliance(
         id=generate_uuid(),
@@ -2808,7 +2815,9 @@ async def update_nfpa_compliance(
     )
     record = result.scalar_one_or_none()
     if not record:
-        raise HTTPException(status_code=404, detail="No NFPA compliance record found for this item")
+        raise HTTPException(
+            status_code=404, detail="No NFPA compliance record found for this item"
+        )
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -2833,7 +2842,9 @@ async def update_nfpa_compliance(
     return record
 
 
-@router.delete("/items/{item_id}/nfpa-compliance", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/items/{item_id}/nfpa-compliance", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_nfpa_compliance(
     item_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -2848,7 +2859,9 @@ async def delete_nfpa_compliance(
     )
     record = result.scalar_one_or_none()
     if not record:
-        raise HTTPException(status_code=404, detail="No NFPA compliance record found for this item")
+        raise HTTPException(
+            status_code=404, detail="No NFPA compliance record found for this item"
+        )
 
     await db.delete(record)
     await db.commit()
@@ -2867,7 +2880,9 @@ async def delete_nfpa_compliance(
 # --- Exposure Records ---
 
 
-@router.get("/items/{item_id}/exposures", response_model=List[NFPAExposureRecordResponse])
+@router.get(
+    "/items/{item_id}/exposures", response_model=List[NFPAExposureRecordResponse]
+)
 async def list_exposure_records(
     item_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -2956,7 +2971,7 @@ async def get_nfpa_summary(
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """Get NFPA compliance dashboard summary."""
-    from sqlalchemy import func as sa_func, and_
+    from sqlalchemy import func as sa_func
 
     org_id = str(current_user.organization_id)
     today = datetime.utcnow().date()
@@ -3059,9 +3074,23 @@ async def get_nfpa_retirement_due(
                 "item_id": item.id,
                 "item_name": item.name,
                 "serial_number": item.serial_number,
-                "manufacture_date": compliance.manufacture_date.isoformat() if compliance.manufacture_date else None,
-                "expected_retirement_date": compliance.expected_retirement_date.isoformat() if compliance.expected_retirement_date else None,
-                "days_remaining": (compliance.expected_retirement_date - datetime.utcnow().date()).days if compliance.expected_retirement_date else None,
+                "manufacture_date": (
+                    compliance.manufacture_date.isoformat()
+                    if compliance.manufacture_date
+                    else None
+                ),
+                "expected_retirement_date": (
+                    compliance.expected_retirement_date.isoformat()
+                    if compliance.expected_retirement_date
+                    else None
+                ),
+                "days_remaining": (
+                    (
+                        compliance.expected_retirement_date - datetime.utcnow().date()
+                    ).days
+                    if compliance.expected_retirement_date
+                    else None
+                ),
                 "ensemble_id": compliance.ensemble_id,
             }
         )

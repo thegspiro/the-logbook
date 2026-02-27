@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.models.event_request import (
     EventRequest,
@@ -54,7 +54,9 @@ def _get_outreach_types_from_settings(org: Organization) -> List[Dict[str, str]]
     from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
 
     settings = (org.settings or {}).get("events", {})
-    return settings.get("outreach_event_types", EVENT_SETTINGS_DEFAULTS["outreach_event_types"])
+    return settings.get(
+        "outreach_event_types", EVENT_SETTINGS_DEFAULTS["outreach_event_types"]
+    )
 
 
 def _get_pipeline_settings(org: Organization) -> dict:
@@ -82,9 +84,7 @@ async def _get_location_name(db: AsyncSession, location_id: str) -> Optional[str
     """Look up a location name."""
     from app.models.location import Location
 
-    result = await db.execute(
-        select(Location.name).where(Location.id == location_id)
-    )
+    result = await db.execute(select(Location.name).where(Location.id == location_id))
     row = result.first()
     return row[0] if row else None
 
@@ -125,7 +125,9 @@ async def _send_request_notification(
             "declined": "Declined",
             "cancelled": "Cancelled",
         }
-        status_label = status_labels.get(event_request.status.value, event_request.status.value)
+        status_label = status_labels.get(
+            event_request.status.value, event_request.status.value
+        )
 
         # Notify the requester
         if trigger_config.get("notify_requester", False):
@@ -400,7 +402,9 @@ async def check_request_status(
     if show_progress and event_request.task_completions:
         tasks = pipeline.get("tasks", [])
         completed_count = sum(
-            1 for t in tasks if event_request.task_completions.get(t["id"], {}).get("completed")
+            1
+            for t in tasks
+            if event_request.task_completions.get(t["id"], {}).get("completed")
         )
         task_progress = {
             "total": len(tasks),
@@ -408,7 +412,9 @@ async def check_request_status(
             "tasks": [
                 {
                     "label": t["label"],
-                    "completed": bool(event_request.task_completions.get(t["id"], {}).get("completed")),
+                    "completed": bool(
+                        event_request.task_completions.get(t["id"], {}).get("completed")
+                    ),
                 }
                 for t in tasks
             ],
@@ -639,9 +645,14 @@ async def update_event_request_status(
     )
     org = org_result.scalar_one_or_none()
     if org:
-        await _send_request_notification(db, event_request, f"on_{new_status.value}", org)
+        await _send_request_notification(
+            db, event_request, f"on_{new_status.value}", org
+        )
 
-    return {"message": f"Request status updated to {new_status.value}", "status": new_status.value}
+    return {
+        "message": f"Request status updated to {new_status.value}",
+        "status": new_status.value,
+    }
 
 
 @router.patch("/{request_id}/assign")
@@ -801,7 +812,6 @@ async def schedule_request(
 
     # Optionally create a calendar event
     if data.create_calendar_event:
-        from app.models.event import Event, EventType
         from app.services.event_service import EventService
 
         event_service = EventService(db)
@@ -869,7 +879,8 @@ async def schedule_request(
         action="scheduled",
         old_status=old_status,
         new_status=EventRequestStatus.SCHEDULED.value,
-        notes=data.notes or f"Scheduled for {data.event_date.strftime('%B %d, %Y at %I:%M %p')}",
+        notes=data.notes
+        or f"Scheduled for {data.event_date.strftime('%B %d, %Y at %I:%M %p')}",
         details={
             "event_date": data.event_date.isoformat(),
             "location_id": data.location_id,
@@ -939,7 +950,9 @@ async def postpone_request(
 
     notes = data.reason or "Request postponed"
     if data.new_event_date:
-        notes += f" — tentatively rescheduled to {data.new_event_date.strftime('%B %d, %Y')}"
+        notes += (
+            f" — tentatively rescheduled to {data.new_event_date.strftime('%B %d, %Y')}"
+        )
 
     activity = EventRequestActivity(
         request_id=event_request.id,
@@ -949,7 +962,9 @@ async def postpone_request(
         notes=notes,
         details={
             "reason": data.reason,
-            "new_date": data.new_event_date.isoformat() if data.new_event_date else None,
+            "new_date": (
+                data.new_event_date.isoformat() if data.new_event_date else None
+            ),
         },
         performed_by=current_user.id,
     )
@@ -963,7 +978,10 @@ async def postpone_request(
     org = org_result.scalar_one_or_none()
     if org:
         await _send_request_notification(
-            db, event_request, "on_postponed", org,
+            db,
+            event_request,
+            "on_postponed",
+            org,
             extra_context={"message": notes},
         )
 
@@ -1018,7 +1036,9 @@ async def update_task_completion(
         event_request.status = EventRequestStatus.IN_PROGRESS
         auto_transitioned = True
 
-    action = f"task_{'completed' if update.completed else 'uncompleted'}:{update.task_id}"
+    action = (
+        f"task_{'completed' if update.completed else 'uncompleted'}:{update.task_id}"
+    )
     activity = EventRequestActivity(
         request_id=event_request.id,
         action=action,
@@ -1087,7 +1107,11 @@ async def send_template_email(
             "contact_name": event_request.contact_name,
             "outreach_type": event_request.outreach_type.replace("_", " ").title(),
             "organization_name": event_request.organization_name or "",
-            "event_date": event_request.event_date.strftime("%B %d, %Y at %I:%M %p") if event_request.event_date else "TBD",
+            "event_date": (
+                event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
+                if event_request.event_date
+                else "TBD"
+            ),
         }
         if data.additional_context:
             context.update(data.additional_context)
@@ -1116,7 +1140,9 @@ async def send_template_email(
         db.add(activity)
         await db.commit()
 
-        return {"message": f"Email '{template.name}' sent to {event_request.contact_email}"}
+        return {
+            "message": f"Email '{template.name}' sent to {event_request.contact_email}"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
@@ -1134,13 +1160,19 @@ async def list_email_templates(
     """List all email templates for the organization."""
     result = await db.execute(
         select(EventRequestEmailTemplate)
-        .where(EventRequestEmailTemplate.organization_id == current_user.organization_id)
+        .where(
+            EventRequestEmailTemplate.organization_id == current_user.organization_id
+        )
         .order_by(EventRequestEmailTemplate.name)
     )
     return result.scalars().all()
 
 
-@router.post("/email-templates", response_model=EmailTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/email-templates",
+    response_model=EmailTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_email_template(
     data: EmailTemplateCreate,
     db: AsyncSession = Depends(get_db),
@@ -1218,7 +1250,9 @@ async def delete_email_template(
 
 @router.get("/types/labels")
 async def get_outreach_type_labels(
-    organization_id: Optional[str] = Query(None, description="Organization ID to get types for"),
+    organization_id: Optional[str] = Query(
+        None, description="Organization ID to get types for"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Get labels for outreach event types. No auth required."""
@@ -1226,7 +1260,9 @@ async def get_outreach_type_labels(
 
     if organization_id:
         result = await db.execute(
-            select(Organization).where(Organization.id == organization_id, Organization.active.is_(True))
+            select(Organization).where(
+                Organization.id == organization_id, Organization.active.is_(True)
+            )
         )
         org = result.scalar_one_or_none()
         if org:
@@ -1267,7 +1303,9 @@ async def generate_event_request_form(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     outreach_types = _get_outreach_types_from_settings(org)
-    outreach_options = [{"value": t["value"], "label": t["label"]} for t in outreach_types]
+    outreach_options = [
+        {"value": t["value"], "label": t["label"]} for t in outreach_types
+    ]
     venue_options = [
         {"value": "their_location", "label": "Our Location"},
         {"value": "our_station", "label": "Your Station"},
@@ -1301,26 +1339,142 @@ async def generate_event_request_form(
     await db.flush()
 
     field_defs = [
-        {"label": "Contact Information", "field_type": FieldType.SECTION_HEADER, "required": False},
-        {"label": "Your Name", "field_type": FieldType.TEXT, "required": True, "mapping": "contact_name", "placeholder": "Full name"},
-        {"label": "Email Address", "field_type": FieldType.EMAIL, "required": True, "mapping": "contact_email", "placeholder": "you@example.com"},
-        {"label": "Phone Number", "field_type": FieldType.PHONE, "required": False, "mapping": "contact_phone", "placeholder": "(555) 123-4567"},
-        {"label": "Your Organization", "field_type": FieldType.TEXT, "required": False, "mapping": "organization_name", "placeholder": "School, business, or group name"},
-        {"label": "Event Details", "field_type": FieldType.SECTION_HEADER, "required": False},
-        {"label": "Type of Event", "field_type": FieldType.SELECT, "required": True, "mapping": "outreach_type", "options": outreach_options},
-        {"label": "Description", "field_type": FieldType.TEXTAREA, "required": True, "mapping": "description", "placeholder": "Describe what you're looking for...", "min_length": 10, "max_length": 2000},
-        {"label": "Expected Audience Size", "field_type": FieldType.TEXT, "required": False, "mapping": "audience_size", "placeholder": "Approximate number of attendees"},
-        {"label": "Age Group", "field_type": FieldType.TEXT, "required": False, "mapping": "age_group", "placeholder": "e.g., Elementary school, Adults, All ages"},
-        {"label": "Scheduling Preference", "field_type": FieldType.SECTION_HEADER, "required": False},
-        {"label": "Date Flexibility", "field_type": FieldType.SELECT, "required": True, "mapping": "date_flexibility", "options": date_flexibility_options, "help_text": "How flexible are you on the date? We'll work with you to find the best time."},
-        {"label": "Preferred Timeframe", "field_type": FieldType.TEXT, "required": False, "mapping": "preferred_timeframe", "placeholder": "e.g., A Saturday morning in March, Any weekday after spring break", "help_text": "Describe your ideal timing in your own words."},
-        {"label": "Earliest Date", "field_type": FieldType.DATE, "required": False, "mapping": "preferred_date_start", "help_text": "If you have specific dates, what's the earliest?"},
-        {"label": "Latest Date", "field_type": FieldType.DATE, "required": False, "mapping": "preferred_date_end", "help_text": "If you have specific dates, what's the latest?"},
-        {"label": "Preferred Time of Day", "field_type": FieldType.SELECT, "required": False, "mapping": "preferred_time_of_day", "options": time_of_day_options},
-        {"label": "Venue & Logistics", "field_type": FieldType.SECTION_HEADER, "required": False},
-        {"label": "Venue Preference", "field_type": FieldType.SELECT, "required": True, "mapping": "venue_preference", "options": venue_options},
-        {"label": "Venue Address", "field_type": FieldType.TEXTAREA, "required": False, "mapping": "venue_address", "placeholder": "Address if event is at your location"},
-        {"label": "Special Requests", "field_type": FieldType.TEXTAREA, "required": False, "mapping": "special_requests", "placeholder": "Any special requirements or requests..."},
+        {
+            "label": "Contact Information",
+            "field_type": FieldType.SECTION_HEADER,
+            "required": False,
+        },
+        {
+            "label": "Your Name",
+            "field_type": FieldType.TEXT,
+            "required": True,
+            "mapping": "contact_name",
+            "placeholder": "Full name",
+        },
+        {
+            "label": "Email Address",
+            "field_type": FieldType.EMAIL,
+            "required": True,
+            "mapping": "contact_email",
+            "placeholder": "you@example.com",
+        },
+        {
+            "label": "Phone Number",
+            "field_type": FieldType.PHONE,
+            "required": False,
+            "mapping": "contact_phone",
+            "placeholder": "(555) 123-4567",
+        },
+        {
+            "label": "Your Organization",
+            "field_type": FieldType.TEXT,
+            "required": False,
+            "mapping": "organization_name",
+            "placeholder": "School, business, or group name",
+        },
+        {
+            "label": "Event Details",
+            "field_type": FieldType.SECTION_HEADER,
+            "required": False,
+        },
+        {
+            "label": "Type of Event",
+            "field_type": FieldType.SELECT,
+            "required": True,
+            "mapping": "outreach_type",
+            "options": outreach_options,
+        },
+        {
+            "label": "Description",
+            "field_type": FieldType.TEXTAREA,
+            "required": True,
+            "mapping": "description",
+            "placeholder": "Describe what you're looking for...",
+            "min_length": 10,
+            "max_length": 2000,
+        },
+        {
+            "label": "Expected Audience Size",
+            "field_type": FieldType.TEXT,
+            "required": False,
+            "mapping": "audience_size",
+            "placeholder": "Approximate number of attendees",
+        },
+        {
+            "label": "Age Group",
+            "field_type": FieldType.TEXT,
+            "required": False,
+            "mapping": "age_group",
+            "placeholder": "e.g., Elementary school, Adults, All ages",
+        },
+        {
+            "label": "Scheduling Preference",
+            "field_type": FieldType.SECTION_HEADER,
+            "required": False,
+        },
+        {
+            "label": "Date Flexibility",
+            "field_type": FieldType.SELECT,
+            "required": True,
+            "mapping": "date_flexibility",
+            "options": date_flexibility_options,
+            "help_text": "How flexible are you on the date? We'll work with you to find the best time.",
+        },
+        {
+            "label": "Preferred Timeframe",
+            "field_type": FieldType.TEXT,
+            "required": False,
+            "mapping": "preferred_timeframe",
+            "placeholder": "e.g., A Saturday morning in March, Any weekday after spring break",
+            "help_text": "Describe your ideal timing in your own words.",
+        },
+        {
+            "label": "Earliest Date",
+            "field_type": FieldType.DATE,
+            "required": False,
+            "mapping": "preferred_date_start",
+            "help_text": "If you have specific dates, what's the earliest?",
+        },
+        {
+            "label": "Latest Date",
+            "field_type": FieldType.DATE,
+            "required": False,
+            "mapping": "preferred_date_end",
+            "help_text": "If you have specific dates, what's the latest?",
+        },
+        {
+            "label": "Preferred Time of Day",
+            "field_type": FieldType.SELECT,
+            "required": False,
+            "mapping": "preferred_time_of_day",
+            "options": time_of_day_options,
+        },
+        {
+            "label": "Venue & Logistics",
+            "field_type": FieldType.SECTION_HEADER,
+            "required": False,
+        },
+        {
+            "label": "Venue Preference",
+            "field_type": FieldType.SELECT,
+            "required": True,
+            "mapping": "venue_preference",
+            "options": venue_options,
+        },
+        {
+            "label": "Venue Address",
+            "field_type": FieldType.TEXTAREA,
+            "required": False,
+            "mapping": "venue_address",
+            "placeholder": "Address if event is at your location",
+        },
+        {
+            "label": "Special Requests",
+            "field_type": FieldType.TEXTAREA,
+            "required": False,
+            "mapping": "special_requests",
+            "placeholder": "Any special requirements or requests...",
+        },
     ]
 
     field_mappings = {}

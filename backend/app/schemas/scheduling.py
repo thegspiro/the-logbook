@@ -417,6 +417,19 @@ class ShiftAssignmentUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class EmbeddedShiftInfo(BaseModel):
+    """Minimal shift data embedded in assignment responses."""
+
+    id: str
+    shift_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    notes: Optional[str] = None
+    apparatus_id: Optional[str] = None
+    shift_officer_id: Optional[str] = None
+    color: Optional[str] = None
+
+
 class ShiftAssignmentResponse(BaseModel):
     """Schema for shift assignment response"""
 
@@ -430,6 +443,7 @@ class ShiftAssignmentResponse(BaseModel):
     assigned_by: Optional[UUID] = None
     confirmed_at: Optional[datetime] = None
     notes: Optional[str] = None
+    shift: Optional[EmbeddedShiftInfo] = None
     created_at: datetime
     updated_at: datetime
 

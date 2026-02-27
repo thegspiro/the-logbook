@@ -59,8 +59,8 @@ describe('RequestsTab', () => {
     renderWithRouter(<RequestsTab />);
 
     await waitFor(() => {
-      expect(screen.getByText('Swap Requests')).toBeInTheDocument();
-      expect(screen.getByText('Time Off')).toBeInTheDocument();
+      expect(screen.getByText(/Swap Requests/)).toBeInTheDocument();
+      expect(screen.getByText(/Time Off/)).toBeInTheDocument();
     });
   });
 
@@ -102,14 +102,14 @@ describe('RequestsTab', () => {
     const user = userEvent.setup();
 
     await waitFor(() => {
-      expect(screen.getByText('Time Off')).toBeInTheDocument();
+      expect(screen.getByText(/Time Off/)).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText('Time Off'));
+    await user.click(screen.getByText(/Time Off/));
 
     await waitFor(() => {
       // Time off view should now be active
-      expect(screen.getByText('Time Off')).toBeInTheDocument();
+      expect(screen.getByText(/Time Off/)).toBeInTheDocument();
     });
   });
 

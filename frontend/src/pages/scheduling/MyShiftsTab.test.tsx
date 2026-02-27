@@ -98,8 +98,8 @@ describe('MyShiftsTab', () => {
     renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Upcoming')).toBeInTheDocument();
-      expect(screen.getByText('Past')).toBeInTheDocument();
+      expect(screen.getByText(/^Upcoming/)).toBeInTheDocument();
+      expect(screen.getByText(/^Past/)).toBeInTheDocument();
     });
   });
 });
