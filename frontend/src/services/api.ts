@@ -3630,6 +3630,21 @@ export interface BasicApparatusRecord {
   is_active: boolean;
 }
 
+export interface ApparatusOption {
+  id?: string;
+  name: string;
+  unit_number?: string;
+  apparatus_type: string;
+  source: 'apparatus' | 'basic' | 'default';
+  positions?: string[];
+  min_staffing?: number;
+}
+
+export interface ApparatusOptionsResponse {
+  options: ApparatusOption[];
+  source: 'apparatus' | 'basic' | 'default';
+}
+
 export interface MemberComplianceRecord {
   user_id: string;
   first_name?: string;
@@ -3904,6 +3919,12 @@ export const schedulingService = {
   },
   async deleteBasicApparatus(apparatusId: string): Promise<void> {
     await api.delete(`/scheduling/apparatus/${apparatusId}`);
+  },
+
+  // --- Apparatus Options (unified vehicle picker for templates) ---
+  async getApparatusOptions(): Promise<ApparatusOptionsResponse> {
+    const response = await api.get<ApparatusOptionsResponse>('/scheduling/apparatus-options');
+    return response.data;
   },
 
   // --- Shift Signup (member self-service) ---

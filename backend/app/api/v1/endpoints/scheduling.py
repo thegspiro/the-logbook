@@ -19,6 +19,7 @@ from app.core.utils import safe_error_detail
 from app.models.training import BasicApparatus, ShiftAssignment
 from app.models.user import User
 from app.schemas.scheduling import (
+    ApparatusOptionsResponse,
     BasicApparatusCreate,
     BasicApparatusResponse,
     BasicApparatusUpdate,
@@ -1322,6 +1323,109 @@ async def withdraw_from_shift(
     )
     if not success:
         raise HTTPException(status_code=400, detail=_safe_detail("Unable to withdraw.", error))
+
+
+# ============================================
+# Apparatus Options (Unified vehicle picker)
+# ============================================
+
+
+DEFAULT_APPARATUS_TYPES = [
+    "engine",
+    "ladder",
+    "ambulance",
+    "rescue",
+    "tanker",
+    "brush",
+    "tower",
+    "hazmat",
+    "boat",
+    "chief",
+    "utility",
+]
+
+
+@router.get("/apparatus-options", response_model=ApparatusOptionsResponse)
+async def list_apparatus_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return available vehicles for shift template assignment.
+
+    Priority: full Apparatus module records > BasicApparatus records > hardcoded defaults.
+    """
+    from app.schemas.scheduling import ApparatusOption
+
+    org_id = str(current_user.organization_id)
+    options: list[ApparatusOption] = []
+    source = "default"
+
+    # 1. Try the full Apparatus module
+    try:
+        from app.models.apparatus import Apparatus as FullApparatus, ApparatusType
+
+        result = await db.execute(
+            select(FullApparatus, ApparatusType.name.label("type_name"))
+            .join(ApparatusType, FullApparatus.apparatus_type_id == ApparatusType.id, isouter=True)
+            .where(FullApparatus.organization_id == org_id)
+            .where(FullApparatus.is_archived.is_(False))
+            .order_by(FullApparatus.unit_number)
+        )
+        rows = result.all()
+        if rows:
+            for row in rows:
+                apparatus = row[0]
+                type_name = row[1] or "other"
+                options.append(
+                    ApparatusOption(
+                        id=apparatus.id,
+                        name=apparatus.name or apparatus.unit_number,
+                        unit_number=apparatus.unit_number,
+                        apparatus_type=type_name.lower(),
+                        source="apparatus",
+                    )
+                )
+            source = "apparatus"
+    except Exception:
+        pass
+
+    # 2. Fall back to BasicApparatus if no full module records
+    if not options:
+        result = await db.execute(
+            select(BasicApparatus)
+            .where(BasicApparatus.organization_id == org_id)
+            .where(BasicApparatus.is_active.is_(True))
+            .order_by(BasicApparatus.unit_number)
+        )
+        basic_rows = result.scalars().all()
+        if basic_rows:
+            for ba in basic_rows:
+                options.append(
+                    ApparatusOption(
+                        id=ba.id,
+                        name=ba.name,
+                        unit_number=ba.unit_number,
+                        apparatus_type=ba.apparatus_type or "other",
+                        source="basic",
+                        positions=ba.positions,
+                        min_staffing=ba.min_staffing,
+                    )
+                )
+            source = "basic"
+
+    # 3. Fall back to hardcoded defaults
+    if not options:
+        for t in DEFAULT_APPARATUS_TYPES:
+            options.append(
+                ApparatusOption(
+                    name=t.capitalize(),
+                    apparatus_type=t,
+                    source="default",
+                )
+            )
+        source = "default"
+
+    return ApparatusOptionsResponse(options=options, source=source)
 
 
 # ============================================

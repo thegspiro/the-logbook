@@ -37,6 +37,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { schedulingService } from '../services/api';
+import type { ApparatusOption } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 
@@ -52,7 +53,9 @@ const TEMPLATE_CATEGORIES: { value: TemplateCategory; label: string; icon: React
   { value: 'event', label: 'Event / Special', icon: PartyPopper, description: 'Parades, SantaMobile, community events, details' },
 ];
 
-const APPARATUS_TYPES = [
+// Fallback types used only when neither the full Apparatus module
+// nor BasicApparatus records are available (backend returns source="default")
+const FALLBACK_APPARATUS_TYPES = [
   'engine', 'ladder', 'ambulance', 'rescue', 'tanker', 'brush',
   'tower', 'hazmat', 'boat', 'chief', 'utility',
 ];
@@ -200,6 +203,7 @@ interface ShiftTemplate {
   min_staffing: number;
   category?: string;
   apparatus_type?: string;
+  apparatus_id?: string;
   is_default: boolean;
   is_active: boolean;
   created_at: string;
@@ -268,6 +272,7 @@ interface TemplateFormData {
   positions: string[];
   category: TemplateCategory;
   apparatus_type: string;
+  apparatus_id: string;
   event_type: EventType | '';
   resources: ResourceUnit[];
 }
@@ -305,6 +310,7 @@ const emptyTemplateForm: TemplateFormData = {
   positions: [],
   category: 'standard',
   apparatus_type: '',
+  apparatus_id: '',
   event_type: '',
   resources: [],
 };
@@ -331,6 +337,8 @@ interface TemplateModalProps {
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
   initialData?: TemplateFormData;
   title: string;
+  apparatusOptions: ApparatusOption[];
+  apparatusSource: 'apparatus' | 'basic' | 'default';
 }
 
 const TemplateFormModal: React.FC<TemplateModalProps> = ({
@@ -339,6 +347,8 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
   onSubmit,
   initialData,
   title,
+  apparatusOptions,
+  apparatusSource,
 }) => {
   const [formData, setFormData] = useState<TemplateFormData>(initialData || emptyTemplateForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -444,6 +454,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
       if (formData.description) payload.description = formData.description;
       if (formData.color) payload.color = formData.color;
       if (formData.apparatus_type) payload.apparatus_type = formData.apparatus_type;
+      if (formData.apparatus_id) payload.apparatus_id = formData.apparatus_id;
       // Store event metadata in description as JSON-serializable format
       if (formData.category === 'event') {
         const eventMeta = {
@@ -543,34 +554,61 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
             </div>
           </div>
 
-          {/* Apparatus Type (for standard & specialty templates) */}
+          {/* Vehicle (for standard & specialty templates) */}
           {(formData.category === 'standard' || formData.category === 'specialty') && (
             <div>
               <label htmlFor="template-apparatus-type" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                <span className="flex items-center gap-1.5"><Truck className="w-4 h-4" /> Vehicle Type{formData.category === 'specialty' && <span aria-hidden="true">*</span>}</span>
+                <span className="flex items-center gap-1.5">
+                  <Truck className="w-4 h-4" />
+                  {apparatusSource === 'default' ? 'Vehicle Type' : 'Vehicle'}
+                  {formData.category === 'specialty' && <span aria-hidden="true">*</span>}
+                </span>
               </label>
               <select
                 id="template-apparatus-type"
-                value={formData.apparatus_type}
+                value={apparatusSource === 'default' ? formData.apparatus_type : (formData.apparatus_id || '')}
                 onChange={(e) => {
-                  const newType = e.target.value;
-                  setFormData(prev => ({ ...prev, apparatus_type: newType }));
-                  loadApparatusTypeDefaults(newType);
+                  const val = e.target.value;
+                  if (apparatusSource === 'default') {
+                    setFormData(prev => ({ ...prev, apparatus_type: val, apparatus_id: '' }));
+                    loadApparatusTypeDefaults(val);
+                  } else {
+                    const selected = apparatusOptions.find(o => o.id === val);
+                    setFormData(prev => ({
+                      ...prev,
+                      apparatus_id: val,
+                      apparatus_type: selected?.apparatus_type ?? '',
+                      positions: selected?.positions ?? prev.positions,
+                      min_staffing: selected?.min_staffing ? String(selected.min_staffing) : prev.min_staffing,
+                    }));
+                  }
                 }}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                 required={formData.category === 'specialty'}
               >
                 <option value="">
-                  {formData.category === 'specialty' ? 'Select vehicle type...' : 'No specific vehicle (optional)'}
+                  {formData.category === 'specialty' ? 'Select vehicle...' : 'No specific vehicle (optional)'}
                 </option>
-                {APPARATUS_TYPES.map(t => (
-                  <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                ))}
+                {apparatusSource === 'default'
+                  ? FALLBACK_APPARATUS_TYPES.map(t => (
+                    <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                  ))
+                  : apparatusOptions.map(o => (
+                    <option key={o.id} value={o.id}>
+                      {o.unit_number ? `${o.unit_number} — ${o.name}` : o.name}
+                      {o.apparatus_type ? ` (${o.apparatus_type})` : ''}
+                    </option>
+                  ))
+                }
               </select>
               <p className="text-xs text-theme-text-muted mt-1">
-                {formData.category === 'specialty'
-                  ? 'Selecting a vehicle type will load default positions from your department settings.'
-                  : 'Optionally assign a vehicle to load default positions from your department settings.'}
+                {apparatusSource === 'default'
+                  ? (formData.category === 'specialty'
+                    ? 'Selecting a vehicle type will load default positions from your department settings.'
+                    : 'Optionally assign a vehicle type to load default positions from your department settings.')
+                  : (formData.category === 'specialty'
+                    ? 'Select one of your department\'s vehicles. Positions and staffing will be loaded automatically.'
+                    : 'Optionally assign one of your department\'s vehicles to this template.')}
               </p>
             </div>
           )}
@@ -1279,6 +1317,10 @@ export const ShiftTemplatesPage: React.FC = () => {
   const [deletingPatternId, setDeletingPatternId] = useState<string | null>(null);
   const [generatingPattern, setGeneratingPattern] = useState<ShiftPattern | null>(null);
 
+  // Apparatus options for template vehicle picker
+  const [apparatusOptions, setApparatusOptions] = useState<ApparatusOption[]>([]);
+  const [apparatusSource, setApparatusSource] = useState<'apparatus' | 'basic' | 'default'>('default');
+
   const loadTemplates = useCallback(async () => {
     try {
       const data = await schedulingService.getTemplates({ active_only: false });
@@ -1297,11 +1339,23 @@ export const ShiftTemplatesPage: React.FC = () => {
     }
   }, []);
 
+  const loadApparatusOptions = useCallback(async () => {
+    try {
+      const resp = await schedulingService.getApparatusOptions();
+      setApparatusOptions(resp.options);
+      setApparatusSource(resp.source);
+    } catch {
+      // Fall back to defaults silently
+      setApparatusOptions([]);
+      setApparatusSource('default');
+    }
+  }, []);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadTemplates(), loadPatterns()]);
+    await Promise.all([loadTemplates(), loadPatterns(), loadApparatusOptions()]);
     setLoading(false);
-  }, [loadTemplates, loadPatterns]);
+  }, [loadTemplates, loadPatterns, loadApparatusOptions]);
 
   useEffect(() => {
     void loadAll();
@@ -1389,6 +1443,7 @@ export const ShiftTemplatesPage: React.FC = () => {
       positions,
       category: (t.category as TemplateCategory) || 'standard',
       apparatus_type: t.apparatus_type || '',
+      apparatus_id: t.apparatus_id || '',
       event_type: eventType,
       resources,
     };
@@ -1584,13 +1639,19 @@ export const ShiftTemplatesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Apparatus type (for specialty) */}
-                  {template.apparatus_type && (
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Truck className="w-3.5 h-3.5 text-orange-500" aria-hidden="true" />
-                      <span className="text-xs text-theme-text-secondary capitalize font-medium">{template.apparatus_type}</span>
-                    </div>
-                  )}
+                  {/* Apparatus / Vehicle (for specialty) */}
+                  {(template.apparatus_type || template.apparatus_id) && (() => {
+                    const matched = template.apparatus_id ? apparatusOptions.find(o => o.id === template.apparatus_id) : undefined;
+                    const label = matched
+                      ? `${matched.unit_number ?? ''} ${matched.name}`.trim()
+                      : template.apparatus_type || 'Vehicle';
+                    return (
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Truck className="w-3.5 h-3.5 text-orange-500" aria-hidden="true" />
+                        <span className="text-xs text-theme-text-secondary capitalize font-medium">{label}</span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Event resources (for event templates) */}
                   {(template.category || 'standard') === 'event' && template.positions != null && !Array.isArray(template.positions) && (() => {
@@ -1788,6 +1849,8 @@ export const ShiftTemplatesPage: React.FC = () => {
         onClose={() => setShowTemplateModal(false)}
         onSubmit={handleCreateTemplate}
         title="Create Template"
+        apparatusOptions={apparatusOptions}
+        apparatusSource={apparatusSource}
       />
 
       <TemplateFormModal
@@ -1796,6 +1859,8 @@ export const ShiftTemplatesPage: React.FC = () => {
         onSubmit={handleUpdateTemplate}
         initialData={editingTemplate ? templateToForm(editingTemplate) : undefined}
         title="Edit Template"
+        apparatusOptions={apparatusOptions}
+        apparatusSource={apparatusSource}
       />
 
       <PatternFormModal
