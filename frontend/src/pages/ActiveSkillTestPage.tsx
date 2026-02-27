@@ -30,9 +30,13 @@ import {
   Timer,
   Save,
   FileText,
+  Calendar,
+  User,
+  ClipboardCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
+import { formatDateTime } from '../utils/dateFormatting';
 import type {
   SkillCriterion,
   SkillTemplateSection,
@@ -645,6 +649,80 @@ const ReviewSection: React.FC<{
   );
 };
 
+/** Read-only section view for completed tests (no editable fields) */
+const ReadOnlySectionView: React.FC<{
+  section: SkillTemplateSection;
+  sectionResult: SectionResult | undefined;
+}> = ({ section, sectionResult }) => {
+  const criteriaResults = sectionResult?.criteria_results ?? [];
+  // Filter out the special review-notes entry for display
+  const actualCriteria = criteriaResults.filter(
+    (r) => !r.criterion_id.endsWith('-review-notes')
+  );
+  const reviewNotesEntry = criteriaResults.find(
+    (r) => r.criterion_id.endsWith('-review-notes')
+  );
+  const passCount = actualCriteria.filter((r) => r.passed === true).length;
+  const failCount = actualCriteria.filter((r) => r.passed === false).length;
+  const nonStatementCriteria = section.criteria.filter((c) => c.type !== 'statement');
+
+  return (
+    <div className="bg-theme-surface rounded-xl border border-theme-surface-border overflow-hidden">
+      {/* Section header */}
+      <div className="px-4 py-3 border-b border-theme-surface-border bg-theme-surface-hover/50">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-theme-text-primary">{section.name}</h3>
+          <div className="flex items-center gap-2 text-xs">
+            {passCount > 0 && (
+              <span className="text-green-600 font-medium">{passCount} passed</span>
+            )}
+            {failCount > 0 && (
+              <span className="text-red-600 font-medium">{failCount} failed</span>
+            )}
+            {nonStatementCriteria.length - passCount - failCount > 0 && (
+              <span className="text-gray-500 font-medium">
+                {nonStatementCriteria.length - passCount - failCount} unevaluated
+              </span>
+            )}
+          </div>
+        </div>
+        {section.description && (
+          <p className="text-xs text-theme-text-muted mt-0.5">{section.description}</p>
+        )}
+      </div>
+
+      {/* Criteria results */}
+      <div className="px-4 divide-y divide-theme-surface-border">
+        {section.criteria.map((criterion) => {
+          const result = actualCriteria.find(
+            (r) => r.criterion_id === criterion.id || r.criterion_label === criterion.label
+          );
+          return (
+            <CriterionResultDisplay
+              key={criterion.id}
+              criterion={criterion}
+              result={result}
+            />
+          );
+        })}
+      </div>
+
+      {/* Section review notes (read-only) */}
+      {reviewNotesEntry?.notes && (
+        <div className="px-4 py-3 border-t border-theme-surface-border">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-theme-text-muted mb-1">
+            <FileText className="w-3 h-3" />
+            Section Notes
+          </p>
+          <p className="text-sm text-theme-text-primary whitespace-pre-wrap">
+            {reviewNotesEntry.notes}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ==================== Main Active Test Page ====================
 
 export const ActiveSkillTestPage: React.FC = () => {
@@ -830,49 +908,129 @@ export const ActiveSkillTestPage: React.FC = () => {
     );
   }
 
-  // Completed test — final summary (after submission)
+  // Completed test — full detail view (read-only)
   if (currentTest.status === 'completed' && !reviewing) {
     return (
-      <div className="min-h-screen">
-        <main className="max-w-lg mx-auto px-4 py-8">
-          <div className="text-center mb-8">
+      <div className="min-h-screen flex flex-col">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-sm border-b border-theme-surface-border px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
+              className="flex items-center gap-1 p-2 rounded-lg hover:bg-theme-surface-hover transition-colors text-sm"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Back
+            </button>
+            <div className="text-center">
+              <p className="font-bold text-theme-text-primary text-sm">{currentTest.template_name}</p>
+              <p className="text-xs text-theme-text-muted">Test Results</p>
+            </div>
+            <div className="w-16" /> {/* Spacer for centering */}
+          </div>
+        </div>
+
+        <div className="flex-1 px-4 py-4 overflow-y-auto">
+          {/* Result banner */}
+          <div className={`flex items-center gap-3 p-4 rounded-xl mb-4 ${
+            currentTest.result === 'pass'
+              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+              : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+          }`}>
             {currentTest.result === 'pass' ? (
-              <CheckCircle2 className="w-20 h-20 mx-auto text-green-500 mb-4" />
+              <CheckCircle2 className="w-10 h-10 text-green-500 flex-shrink-0" />
             ) : (
-              <XCircle className="w-20 h-20 mx-auto text-red-500 mb-4" />
+              <XCircle className="w-10 h-10 text-red-500 flex-shrink-0" />
             )}
-            <h1 className="text-3xl font-bold text-theme-text-primary">
-              Test {currentTest.result === 'pass' ? 'Passed' : 'Failed'}
-            </h1>
-            <p className="text-theme-text-muted mt-2">{currentTest.template_name}</p>
-            <p className="text-theme-text-muted">{currentTest.candidate_name}</p>
+            <div className="flex-1">
+              <p className={`text-lg font-bold ${currentTest.result === 'pass' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+                {currentTest.result === 'pass' ? 'Passed' : 'Failed'}
+              </p>
+              {currentTest.overall_score != null && (
+                <p className={`text-sm font-medium ${currentTest.result === 'pass' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  Overall Score: {Math.round(currentTest.overall_score)}%
+                </p>
+              )}
+            </div>
           </div>
 
-          {currentTest.overall_score != null && (
-            <div className="bg-theme-surface rounded-xl p-6 border border-theme-surface-border text-center mb-4">
-              <p className="text-sm text-theme-text-muted">Overall Score</p>
-              <p className={`text-5xl font-bold mt-1 ${currentTest.result === 'pass' ? 'text-green-600' : 'text-red-600'}`}>
-                {Math.round(currentTest.overall_score)}%
+          {/* Test details grid */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="bg-theme-surface rounded-xl p-3 border border-theme-surface-border">
+              <div className="flex items-center gap-1.5 mb-1">
+                <User className="w-3 h-3 text-theme-text-muted" />
+                <p className="text-xs text-theme-text-muted">Candidate</p>
+              </div>
+              <p className="font-medium text-theme-text-primary text-sm">{currentTest.candidate_name}</p>
+            </div>
+            <div className="bg-theme-surface rounded-xl p-3 border border-theme-surface-border">
+              <div className="flex items-center gap-1.5 mb-1">
+                <ClipboardCheck className="w-3 h-3 text-theme-text-muted" />
+                <p className="text-xs text-theme-text-muted">Examiner</p>
+              </div>
+              <p className="font-medium text-theme-text-primary text-sm">{currentTest.examiner_name}</p>
+            </div>
+            {currentTest.elapsed_seconds != null && (
+              <div className="bg-theme-surface rounded-xl p-3 border border-theme-surface-border">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Timer className="w-3 h-3 text-theme-text-muted" />
+                  <p className="text-xs text-theme-text-muted">Total Time</p>
+                </div>
+                <p className="font-medium font-mono text-theme-text-primary text-sm">
+                  {Math.floor(currentTest.elapsed_seconds / 60)}:{String(currentTest.elapsed_seconds % 60).padStart(2, '0')}
+                </p>
+              </div>
+            )}
+            {currentTest.completed_at && (
+              <div className="bg-theme-surface rounded-xl p-3 border border-theme-surface-border">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Calendar className="w-3 h-3 text-theme-text-muted" />
+                  <p className="text-xs text-theme-text-muted">Completed</p>
+                </div>
+                <p className="font-medium text-theme-text-primary text-sm">
+                  {formatDateTime(currentTest.completed_at)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Section-by-section results */}
+          <div className="space-y-4">
+            {templateSections.map((section) => {
+              const sectionResult = currentTest.section_results?.find(
+                (sr) => sr.section_id === section.id || sr.section_name === section.name
+              );
+              return (
+                <ReadOnlySectionView
+                  key={section.id}
+                  section={section}
+                  sectionResult={sectionResult}
+                />
+              );
+            })}
+          </div>
+
+          {/* Test notes */}
+          {currentTest.notes && (
+            <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-4 mt-4">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-theme-text-muted mb-2">
+                <FileText className="w-3 h-3" />
+                Test Notes
               </p>
+              <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{currentTest.notes}</p>
             </div>
           )}
+        </div>
 
-          {currentTest.elapsed_seconds != null && (
-            <div className="bg-theme-surface rounded-xl p-4 border border-theme-surface-border text-center mb-4">
-              <p className="text-sm text-theme-text-muted">Total Time</p>
-              <p className="text-xl font-mono font-bold text-theme-text-primary">
-                {Math.floor(currentTest.elapsed_seconds / 60)}:{String(currentTest.elapsed_seconds % 60).padStart(2, '0')}
-              </p>
-            </div>
-          )}
-
+        {/* Bottom bar */}
+        <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-sm border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
           <button
             onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
             className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
           >
             Back to Tests
           </button>
-        </main>
+        </div>
       </div>
     );
   }
