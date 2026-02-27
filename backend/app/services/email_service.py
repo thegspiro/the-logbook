@@ -41,16 +41,14 @@ class EmailService:
 
     def _format_local_dt(self, dt: datetime, fmt: str = "%B %d, %Y at %I:%M %p") -> str:
         """Format a datetime in the organization's local timezone."""
-        tz_name = (
-            getattr(self.organization, "timezone", None) if self.organization else None
-        )
+        tz_name = getattr(self.organization, "timezone", None) if self.organization else None
         if tz_name:
             local_dt = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
         else:
             local_dt = dt
         return local_dt.strftime(fmt)
 
-    def _get_smtp_config(self) -> Dict[str, any]:
+    def _get_smtp_config(self) -> Dict[str, Any]:
         """
         Get SMTP configuration from organization settings or global config
 
@@ -68,9 +66,7 @@ class EmailService:
                     "user": org_email_config.get("smtp_user"),
                     "password": org_email_config.get("smtp_password"),
                     "from_email": org_email_config.get("from_email"),
-                    "from_name": org_email_config.get(
-                        "from_name", self.organization.name
-                    ),
+                    "from_name": org_email_config.get("from_name", self.organization.name),
                     "use_tls": org_email_config.get("use_tls", True),
                 }
 
@@ -111,12 +107,9 @@ class EmailService:
             Tuple of (success_count, failure_count)
         """
         if not settings.EMAIL_ENABLED and not (
-            self.organization
-            and self.organization.settings.get("email_service", {}).get("enabled")
+            self.organization and self.organization.settings.get("email_service", {}).get("enabled")
         ):
-            logger.info(
-                f"Email disabled. Would send to {len(to_emails)} recipients: {subject}"
-            )
+            logger.info(f"Email disabled. Would send to {len(to_emails)} recipients: {subject}")
             return 0, len(to_emails)
 
         success_count = 0
@@ -137,18 +130,14 @@ class EmailService:
                     # Attach files
                     for filepath in attachment_paths:
                         if not os.path.isfile(filepath):
-                            logger.warning(
-                                f"Attachment not found, skipping: {filepath}"
-                            )
+                            logger.warning(f"Attachment not found, skipping: {filepath}")
                             continue
                         with open(filepath, "rb") as f:
                             part = MIMEBase("application", "octet-stream")
                             part.set_payload(f.read())
                         encoders.encode_base64(part)
                         filename = os.path.basename(filepath)
-                        part.add_header(
-                            "Content-Disposition", f'attachment; filename="{filename}"'
-                        )
+                        part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
                         msg.attach(part)
                 else:
                     msg = MIMEMultipart("alternative")
@@ -156,14 +145,10 @@ class EmailService:
                         msg.attach(MIMEText(text_body, "plain"))
                     msg.attach(MIMEText(html_body, "html"))
 
-                msg["From"] = (
-                    f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
-                )
+                msg["From"] = f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
                 msg["To"] = to_email
                 msg["Subject"] = subject
-                msg["Date"] = datetime.now(timezone.utc).strftime(
-                    "%a, %d %b %Y %H:%M:%S +0000"
-                )
+                msg["Date"] = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
 
                 # Add CC and BCC recipients
                 all_recipients = [to_email]
@@ -175,16 +160,12 @@ class EmailService:
                     all_recipients.extend(bcc_emails)
 
                 # Send email
-                with smtplib.SMTP(
-                    self._smtp_config["host"], self._smtp_config["port"]
-                ) as server:
+                with smtplib.SMTP(self._smtp_config["host"], self._smtp_config["port"]) as server:
                     if self._smtp_config["use_tls"]:
                         server.starttls()
 
                     if self._smtp_config["user"] and self._smtp_config["password"]:
-                        server.login(
-                            self._smtp_config["user"], self._smtp_config["password"]
-                        )
+                        server.login(self._smtp_config["user"], self._smtp_config["password"])
 
                     server.sendmail(
                         self._smtp_config["from_email"],
@@ -498,13 +479,9 @@ Please do not reply to this email.
                 from app.services.email_template_service import EmailTemplateService
 
                 template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.WELCOME
-                )
+                template = await template_service.get_template(organization_id, EmailTemplateType.WELCOME)
                 if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context
-                    )
+                    subject, html_body, text_body = template_service.render(template, context)
                     # Gather stored attachment paths if template has attachments
                     if template.allow_attachments and template.attachments:
                         stored_paths = [a.storage_path for a in template.attachments]
@@ -513,9 +490,7 @@ Please do not reply to this email.
                         else:
                             attachment_paths = stored_paths
             except Exception as e:
-                logger.warning(
-                    f"Failed to load welcome email template, using default: {e}"
-                )
+                logger.warning(f"Failed to load welcome email template, using default: {e}")
 
         # Fall back to inline default if no template loaded
         if not subject:
@@ -581,6 +556,8 @@ Please do not reply to this email.
             "first_name": first_name,
             "reset_url": reset_url,
             "organization_name": organization_name,
+            "expiry_minutes": str(expiry_minutes),
+            # Keep legacy key for existing custom templates that reference it
             "expiry_hours": str(expiry_minutes),
         }
 
@@ -595,17 +572,11 @@ Please do not reply to this email.
                 from app.services.email_template_service import EmailTemplateService
 
                 template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.PASSWORD_RESET
-                )
+                template = await template_service.get_template(organization_id, EmailTemplateType.PASSWORD_RESET)
                 if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context
-                    )
+                    subject, html_body, text_body = template_service.render(template, context)
             except Exception as e:
-                logger.warning(
-                    f"Failed to load password reset template, using default: {e}"
-                )
+                logger.warning(f"Failed to load password reset template, using default: {e}")
 
         # Fall back to inline default
         if not subject:
@@ -882,6 +853,12 @@ This is an automated reminder from {self._smtp_config['from_name']}"""
         """
         subject = f"Inactivity Warning: {prospect_name} — {days_inactive} days"
 
+        # HTML-escape user-controlled values
+        esc = self._esc
+        e_prospect_name = esc(prospect_name)
+        e_current_stage = esc(current_stage)
+        e_organization_name = esc(organization_name)
+
         html_body = f"""<!DOCTYPE html>
 <html>
 <head><style>
@@ -900,15 +877,15 @@ This is an automated reminder from {self._smtp_config['from_name']}"""
     <div class="content">
       <p>A prospective member's application has been inactive and may require your attention.</p>
       <div class="details">
-        <p><strong>Applicant:</strong> {prospect_name}</p>
-        <p><strong>Current Stage:</strong> {current_stage}</p>
+        <p><strong>Applicant:</strong> {e_prospect_name}</p>
+        <p><strong>Current Stage:</strong> {e_current_stage}</p>
         <p><strong>Days Inactive:</strong> {days_inactive} days</p>
         <p><strong>Timeout Threshold:</strong> {timeout_days} days</p>
       </div>
       <p>Please review this application and take appropriate action.</p>
     </div>
     <div class="footer">
-      <p>Automated notification from {organization_name}.</p>
+      <p>Automated notification from {e_organization_name}.</p>
     </div>
   </div>
 </body>
