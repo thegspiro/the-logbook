@@ -79,7 +79,7 @@ class AdminHoursService:
         )
         self.db.add(category)
         await self.db.flush()
-        await self.db.refresh(category)
+        await self.db.refresh(category, ["created_at", "updated_at"])
         return category
 
     async def update_category(
@@ -103,7 +103,7 @@ class AdminHoursService:
             setattr(category, key, value)
         category.updated_by = updated_by
         await self.db.flush()
-        await self.db.refresh(category)
+        await self.db.refresh(category, ["created_at", "updated_at"])
         return category
 
     async def delete_category(
@@ -196,7 +196,7 @@ class AdminHoursService:
         )
         self.db.add(entry)
         await self.db.flush()
-        await self.db.refresh(entry)
+        await self.db.refresh(entry, ["created_at", "updated_at"])
 
         logger.info("User %s clocked in to category %s", user_id, category.name)
         return entry
@@ -356,7 +356,7 @@ class AdminHoursService:
         )
         self.db.add(entry)
         await self.db.flush()
-        await self.db.refresh(entry)
+        await self.db.refresh(entry, ["created_at", "updated_at"])
         return entry
 
     # =========================================================================
