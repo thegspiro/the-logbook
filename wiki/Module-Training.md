@@ -6,7 +6,7 @@ The Training module tracks courses, certifications, training requirements, progr
 
 ## Key Features
 
-- **Training Requirements** — Hours, shifts, calls, course completions, and certifications with annual/quarterly/monthly/rolling frequencies
+- **Training Requirements** — Hours, shifts, calls, course completions, and certifications with annual/quarterly/monthly/rolling frequencies. Requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary) or apply to all members
 - **Training Programs** — Structured multi-phase curricula (Flexible, Sequential, Phase-based) with milestone tracking
 - **Self-Reported Training** — Members submit training records for officer review and approval
 - **Shift Completion Reports** — Officers file post-shift reports that auto-credit hours/shifts/calls toward program requirements
@@ -63,6 +63,7 @@ GET    /api/v1/training/compliance-matrix    # All members x requirements
 GET    /api/v1/training/competency-matrix    # Department readiness view
 GET    /api/v1/training/requirements         # List requirements
 POST   /api/v1/training/requirements         # Create requirement
+DELETE /api/v1/training/requirements/{id}   # Permanently delete requirement
 GET    /api/v1/training/programs             # List programs
 POST   /api/v1/training/programs             # Create program
 GET    /api/v1/training/enrollments          # List enrollments

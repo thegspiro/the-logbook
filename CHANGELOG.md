@@ -7,6 +7,128 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Admin Hours Logging Module (2026-02-27)
+
+#### New Feature: Administrative Hours Tracking with QR Code Clock-In/Clock-Out
+A standalone module for tracking administrative work hours (committee meetings, building maintenance, fundraising, etc.) via QR code scanning or manual entry, with configurable approval workflows.
+
+##### Backend
+- **AdminHoursCategory** and **AdminHoursEntry** models with Alembic migration
+- **AdminHoursService** with clock-in/out, manual entry, and approval workflow
+- REST API endpoints under `/api/v1/admin-hours`
+- Permissions: `admin_hours.view`, `admin_hours.log`, `admin_hours.manage`
+- Configurable approval thresholds and auto-approve settings per category
+
+##### Frontend
+- Full `admin-hours` module (types, API service, Zustand store, routes)
+- **AdminHoursManagePage**: category CRUD, pending review queue, all entries, summary dashboard
+- **AdminHoursPage**: personal hours log, active session indicator, manual entry form
+- **AdminHoursQRCodePage**: printable QR code per category for posting at work locations
+- **AdminHoursClockInPage**: QR scan landing page with clock-in/clock-out flow
+- Sidebar navigation entries for both members and admins
+
+##### API Endpoints (under `/api/v1/admin-hours/`)
+- `GET    /categories` — List categories
+- `POST   /categories` — Create category
+- `PATCH  /categories/{id}` — Update category
+- `DELETE /categories/{id}` — Delete category
+- `POST   /clock-in` — Clock in to a category
+- `POST   /clock-out` — Clock out of active session
+- `POST   /manual-entry` — Submit manual hours entry
+- `GET    /entries` — List entries (with filters)
+- `GET    /my-entries` — List personal entries
+- `PATCH  /entries/{id}/approve` — Approve entry
+- `PATCH  /entries/{id}/reject` — Reject entry
+- `GET    /summary` — Hours summary dashboard
+
+##### Database Models
+- **AdminHoursCategory**: name, description, auto-approve settings, approval threshold minutes
+- **AdminHoursEntry**: user, category, clock_in/clock_out timestamps, duration, status (pending/approved/rejected), notes, approver
+
+### Member Categories for Training Requirements (2026-02-27)
+
+#### Enhancement: Targeted Training Requirements by Membership Type
+- Add `required_membership_types` JSON column to `training_requirements` table so requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary)
+- Add member category checkboxes in the Edit Requirement modal, shown when "Applies to all members" is unchecked
+- Display selected member categories in requirement cards and expanded details
+- Update backend filtering in `training_service` and `training_module_config` to respect `required_membership_types` when evaluating which requirements apply
+
+#### Enhancement: Permanent Delete for Training Requirements
+- Change `DELETE /training/requirements/{id}` from soft-delete (`active=False`) to permanent delete (`db.delete`) with updated confirmation messaging
+- Alembic migration for the new column
+
+### QR Code & Analytics Improvements (2026-02-27)
+
+- **Relabel "Analytics" to "QR Code Analytics"**: Navigation items in side nav, top nav, and Events Admin Hub tab now accurately reflect that the analytics page shows QR code check-in metrics only
+- **Fix QR code display on Locations & Rooms page**: Rooms now show a toggleable QR code for their kiosk display URL (uses `qrcode.react` QRCodeSVG)
+- **Fix clipboard copy fallback**: Added `document.execCommand('copy')` fallback when `navigator.clipboard` is unavailable (e.g., non-HTTPS contexts)
+- **Fix stale closure in EventQRCodePage**: Refresh interval no longer captures outdated `fetchQRData` callback
+
+### Centralized Backend Logging (2026-02-27)
+
+- **New `app/core/logging.py`**: Centralized logging configuration with text/JSON output, file rotation, stdlib interception (routes uvicorn/sqlalchemy/alembic through Loguru), Sentry SDK initialization, and request-scoped correlation IDs via ContextVar
+- **Request correlation**: UUID4 request IDs attached to every log entry for tracing requests across services
+- **Request duration tracking**: INFO-level completion logs with method, path, status code, and duration in milliseconds
+- **Updated `main.py`**: Uses `setup_logging()`/`setup_sentry()` instead of inline configuration
+
+### Shift Pattern & Scheduling Fixes (2026-02-27)
+
+- **Weekday convention mismatch fix**: Frontend sends JS weekday numbers (0=Sun) but backend used Python's `date.weekday()` (0=Mon). Weekly patterns now generate shifts on the correct days
+- **Template error clarity**: Distinguishes between "no template linked to pattern" and "linked template was deleted"
+- **Duplicate guard relaxed**: Shift overlap check now compares date + start_time, allowing multiple shift types per day (e.g., day shift and night shift)
+- **Shift conflict detection**: Backend prevents duplicate assignment of a member to the same shift and detects overlapping time conflicts
+- **Shift officer assignment**: Officer dropdown added to Create Shift modal and ShiftDetailPanel edit form
+- **Understaffing badges**: Calendar shift cards show amber warning triangle when `attendee_count < min_staffing`
+- **Template colors on calendar**: Shifts carry `color` from their template; calendar cards use inline styling with fallback to hour-based classes
+- **UniqueConstraint on ShiftAssignment**: `(shift_id, user_id)` constraint with IntegrityError catch for concurrent requests
+- **Overlap query hardening**: Scoped to ±1 day of `shift_date` to prevent false positives
+- **Pattern generation enrichment**: Generated shifts now include apparatus details, min_staffing, and color
+- **Dashboard shift fix**: Changed from `getMyShifts()` (user-only) to `getShifts()` to show all org shifts
+- **`formatTime()` fix**: Bare time strings like "08:00:00" no longer produce Invalid Date
+- **Vehicle type on Standard templates**: Vehicle type dropdown now shown for Standard category (was Specialty only)
+- **EMS renamed to EMT**: Position label updated across all files
+- **Route ordering fix**: `/shifts/open` moved before `/shifts/{shift_id}` to prevent route shadowing
+- **Data enrichment**: All shift responses now populate `shift_officer_name`, `attendee_count`, `user_name` on assignments/swaps/time-off, and embedded shift data on my-assignments
+- **`exclude_unset` on PATCH**: Clients can now explicitly clear optional fields (notes, apparatus_id)
+
+### Elections Module Fixes & Enhancements (2026-02-27)
+
+- **Fix election detail page not loading**: Route param mismatch (`/:id` vs `useParams<{ electionId }>`) caused `fetchElection()` to never fire — page hung on loading
+- **Fix election stalling for ballot-item elections**: `open_election` now allows elections with only ballot items (approval votes, resolutions) to proceed without requiring candidates
+- **Fix close_election error messages**: Returns descriptive error instead of misleading "Election not found" for wrong-status elections
+- **Meeting link**: Elections can be linked to formal meeting records via `meeting_id` FK with Alembic migration; meeting selector dropdown in creation form
+- **Voter overrides**: `VoterOverrideManagement` component for secretary to grant voting eligibility overrides
+- **Proxy voting**: `ProxyVotingManagement` component for proxy voting authorization management
+- **API response fix**: `getVoterOverrides` now correctly handles `{ overrides: [...] }` response shape
+
+### Organization Settings Enhancement (2026-02-27)
+
+- **Email settings**: Platform selector (Gmail, Outlook, Custom SMTP), OAuth credentials, SMTP encryption fields, exposed as `PATCH /settings/email`
+- **File storage settings**: Provider selector (Google Drive, OneDrive, S3, Local) with provider-specific configuration, exposed as `PATCH /settings/file-storage`
+- **Authentication settings**: Provider-specific config fields (LDAP, SAML, OAuth), exposed as `PATCH /settings/auth`
+- These settings were originally only configurable during onboarding; now accessible in Organization Settings for post-setup changes
+- Secret fields use password inputs with show/hide toggle
+- Info banners note settings were initially set during onboarding
+
+### Code Quality & Security (2026-02-27)
+
+#### ESLint & TypeScript Cleanup
+- Fix 565 floating/misused promise ESLint warnings across 99 files (added `void` operator, wrapped async handlers)
+- Add generic type parameters to 94 axios calls to eliminate `no-unsafe-return` warnings
+- Replace non-null assertions with safe alternatives (nullish coalescing, optional chaining, guards)
+- Replace `any` types with `unknown` or proper types across services, tests, and utilities
+- Fix `react-refresh/only-export-components` warnings
+- Result: **0 ESLint errors, 0 warnings**
+
+#### Security & Routing Fixes
+- Add CSRF double-submit token to module API clients (apparatus, prospective-members, public-portal)
+- Fix `FieldEditor` number min/max inputs bound to wrong state
+- Move `/application-status/:token` route outside `ProtectedRoute` for unauthenticated access
+- Add permission gates to apparatus create/edit (`apparatus.manage`) and forms/integrations routes (`settings.manage`)
+- Fix token refresh race condition in apparatus API client
+- Fix `usePWAInstall` memory leak (event listener never removed)
+- Complete incomplete enums: `on_leave` in UserStatus, all values in StageType and ApplicantStatus
+
 ### Public Outreach Event Request Pipeline (2026-02-26)
 
 #### New Feature: Community Event Request System

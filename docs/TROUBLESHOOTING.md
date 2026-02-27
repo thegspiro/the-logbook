@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-26 (added Public Outreach Request Pipeline troubleshooting — coordinator assignment, scheduling with room booking, comment threads, email templates, cancel/postpone, public status page, sample public education programs; plus all previous updates)
+**Last Updated**: 2026-02-27 (added Admin Hours module, scheduling shift pattern fixes, election fixes, centralized backend logging, QR code fixes, organization settings; plus all previous updates)
 
 ---
 
@@ -36,7 +36,12 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 22. [Dependency Version Management](#dependency-version-management)
 23. [Skills Testing Module Issues](#skills-testing-module-issues)
 24. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
-25. [Getting Help](#getting-help)
+25. [Admin Hours Module Issues](#admin-hours-module-issues)
+26. [Scheduling Shift Pattern Issues](#scheduling-shift-pattern-issues)
+27. [Elections Module — Voting & Detail Page Issues](#elections-module--voting--detail-page-issues)
+28. [Backend Logging & Observability](#backend-logging--observability)
+29. [Organization Settings Issues](#organization-settings-issues)
+30. [Getting Help](#getting-help)
 
 ---
 
@@ -3009,6 +3014,178 @@ The following examples can be used as templates when setting up public outreach 
 8. Send press release to local media
 9. Set up and assign volunteer stations day-of
 10. Post-event follow-up: collect contact info from interested recruits
+
+---
+
+## Admin Hours Module Issues
+
+### QR Code Clock-In Not Working
+
+#### Problem: Scanning QR code shows "Category not found"
+
+**Cause**: The QR code URL contains a category ID that has been deleted or belongs to a different organization.
+
+**Fix**:
+1. Go to **Administration > Admin Hours > Manage** and verify the category exists
+2. Regenerate the QR code from the **QR Codes** tab and reprint
+3. Ensure the QR code URL matches your current domain (check after domain changes)
+
+#### Problem: Clock-out button not appearing
+
+**Cause**: No active clock-in session found for the current user in any category.
+
+**Fix**:
+1. Verify you have an active (unclosed) session — check **My Hours** page for an "Active" indicator
+2. If the session was started more than 24 hours ago, it may have been auto-closed by the system. Submit a manual entry instead
+3. If you accidentally closed the browser, your session is still active on the server. Return to the clock-in page
+
+#### Problem: Hours pending approval but no reviewer
+
+**Cause**: No user with `admin_hours.manage` permission is assigned to review entries.
+
+**Fix**:
+1. Go to **Administration > Roles & Permissions** and ensure at least one role has `admin_hours.manage`
+2. Check the category's **auto-approve** settings — entries below the approval threshold are auto-approved
+3. If the category has a high approval threshold, consider lowering it for routine administrative tasks
+
+#### Problem: Manual entry rejected with "Overlapping session"
+
+**Cause**: The submitted time range overlaps with an existing clock-in/clock-out session or another manual entry.
+
+**Fix**: Check **My Hours** for existing entries on that date. Adjust the start/end times to avoid overlap, or delete the conflicting entry first if it was entered in error.
+
+---
+
+## Scheduling Shift Pattern Issues
+
+### Problem: Weekly pattern generates shifts on wrong days
+
+**Cause (Fixed 2026-02-27)**: The frontend sends weekday numbers in JavaScript convention (0=Sunday, 1=Monday, ..., 6=Saturday) but the backend was comparing them using Python's `date.weekday()` (0=Monday, ..., 6=Sunday). This caused weekly patterns to generate shifts on the wrong days (e.g., selecting Mon-Fri generated Tue-Sat).
+
+**Status**: Fixed. The backend now converts Python weekday to JS convention before comparison.
+
+**If you generated incorrect shifts before the fix**:
+1. Delete the incorrectly generated shifts from the calendar
+2. Re-run the pattern generation — shifts will now land on the correct days
+
+### Problem: "Shift template not found" when generating from pattern
+
+**Cause**: The pattern references a template that was either never linked or has been deleted.
+
+**Fix**:
+1. Edit the pattern and verify a template is selected in the template dropdown
+2. If the error says "no template linked," select a template and save
+3. If the error says "template was deleted," create a new template or link an existing one
+
+### Problem: Pattern won't generate multiple shifts per day
+
+**Cause (Fixed 2026-02-27)**: The duplicate guard was checking only the date, blocking any shift on a date that already had one. This prevented legitimate scenarios like a day shift and night shift on the same day.
+
+**Status**: Fixed. The guard now checks date + start_time, allowing different shift types on the same day.
+
+### Problem: Dashboard shows no upcoming shifts
+
+**Cause (Fixed 2026-02-27)**: The dashboard was using `getMyShifts()` which only returns user-assigned shifts, resulting in an empty widget for users without personal assignments.
+
+**Status**: Fixed. Dashboard now uses `getShifts()` to show all organization shifts.
+
+### Problem: Times display as "Invalid Date" on shift cards
+
+**Cause (Fixed 2026-02-27)**: The backend returns bare time strings like `"08:00:00"` (from Python's `time.isoformat()`), which `new Date("08:00:00")` cannot parse.
+
+**Status**: Fixed. `formatTime()` now handles bare time strings by prepending the shift date to form valid datetime strings.
+
+---
+
+## Elections Module — Voting & Detail Page Issues
+
+### Problem: Election detail page hangs on loading forever
+
+**Cause (Fixed 2026-02-27)**: The route was defined as `/elections/:id` but `ElectionDetailPage` read `useParams<{ electionId }>()`. Since the param name never matched, `fetchElection()` was guarded by `if (electionId)` and never fired.
+
+**Status**: Fixed. The route param now matches the component's expected parameter.
+
+### Problem: Cannot open election with only ballot items (no candidates)
+
+**Cause (Fixed 2026-02-27)**: `open_election` required at least one candidate, blocking elections that consist solely of ballot items (approval votes, resolutions, bylaw amendments).
+
+**Status**: Fixed. Elections with ballot items but no candidates can now proceed.
+
+### Problem: Closing election shows "Election not found"
+
+**Cause (Fixed 2026-02-27)**: The `close_election` endpoint returned a misleading "Election not found" error when the election existed but was in the wrong status.
+
+**Status**: Fixed. Returns descriptive messages like "Election is not currently open" instead.
+
+### Problem: Voter overrides API returns unexpected format
+
+**Cause (Fixed 2026-02-27)**: The backend returns `{ overrides: [...] }` but the frontend was treating the response as a raw array, crashing the `VoterOverrideManagement` component.
+
+**Status**: Fixed. Frontend now correctly destructures the response.
+
+---
+
+## Backend Logging & Observability
+
+### Understanding Request Correlation IDs (2026-02-27)
+
+All backend log entries now include a **request correlation ID** (UUID4) that links all log messages from a single HTTP request. This makes it easy to trace a request's full lifecycle.
+
+**How to use:**
+```bash
+# Find all log entries for a specific request
+docker-compose logs backend | grep "req_id=<uuid>"
+
+# Find slow requests (duration > 1000ms)
+docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 1000) print}'
+```
+
+### Problem: Logs showing duplicate entries
+
+**Cause**: If you see duplicate log lines, the stdlib logging bridge may be double-routing. This happens when custom logging configuration coexists with the new centralized setup.
+
+**Fix**: Remove any custom `logging.basicConfig()` or `logging.getLogger()` configuration in your code. All logging should go through Loguru via `from loguru import logger`.
+
+### Problem: Sentry not receiving error reports
+
+**Fix**:
+1. Verify `SENTRY_DSN` is set in your `.env` file
+2. Verify `SENTRY_ENABLED=true`
+3. Check that the Sentry DSN URL is reachable from the backend container:
+   ```bash
+   docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_initialized())"
+   ```
+
+---
+
+## Organization Settings Issues
+
+### Problem: Cannot update email/storage/auth settings after onboarding
+
+**Status (Fixed 2026-02-27)**: These settings were previously only configurable during the onboarding wizard. They are now accessible in **Administration > Organization Settings** under the Email, Storage, and Authentication tabs.
+
+### Problem: SMTP test email fails after changing settings
+
+**Fix**:
+1. After saving new SMTP settings, the backend must reinitialize the email client. Restart the backend: `docker-compose restart backend`
+2. Verify the new credentials by sending a test email from the Email settings tab
+3. For Gmail/Outlook, ensure you're using an app-specific password if 2FA is enabled
+
+### Problem: Storage provider switch loses existing files
+
+**Important**: Switching file storage providers (e.g., from Local to S3) does **not** automatically migrate existing files. Before switching:
+1. Download/backup all existing files
+2. Switch the provider in settings
+3. Re-upload files to the new storage location
+
+### Problem: Authentication provider change locks out users
+
+**Caution**: Changing the authentication provider (e.g., from local to LDAP) can prevent existing users from logging in if their credentials don't exist in the new provider.
+
+**Recommended approach**:
+1. Enable the new auth provider as an **additional** option first (if supported)
+2. Verify key admin accounts can authenticate via the new provider
+3. Only then disable the old provider
 
 ---
 

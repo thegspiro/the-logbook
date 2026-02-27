@@ -32,6 +32,11 @@ This guide covers common issues and their solutions for The Logbook deployment.
 26. [Inventory Module Issues](#inventory-module-issues)
 27. [Events Module Issues](#events-module-issues)
 28. [Notification Issues](#notification-issues)
+29. [Admin Hours Module Issues](#admin-hours-module-issues)
+30. [Scheduling Shift Pattern Issues](#scheduling-shift-pattern-issues)
+31. [Elections Module Issues (2026-02-27)](#elections-module-issues-2026-02-27)
+32. [Backend Logging & Observability](#backend-logging--observability)
+33. [Organization Settings Issues](#organization-settings-issues)
 
 ---
 
@@ -2752,6 +2757,77 @@ docker compose up -d
 1. Check the notification logs via the admin panel.
 2. Expired notifications are automatically hidden. This is by design.
 3. Notification netting is intentional — offsetting actions cancel pending notifications to prevent duplicate alerts.
+
+---
+
+## Admin Hours Module Issues
+
+### Problem: QR code clock-in shows "Category not found"
+**Fix:** The QR code URL references a deleted or wrong-org category. Regenerate from **Administration > Admin Hours > QR Codes** and reprint.
+
+### Problem: Clock-out button not appearing
+**Fix:** Verify an active session exists on your **My Hours** page. Sessions older than 24 hours may be auto-closed; submit a manual entry instead.
+
+### Problem: Hours stuck in "pending" with no reviewer
+**Fix:** Ensure at least one role has `admin_hours.manage` permission. Check the category's auto-approve threshold.
+
+### Problem: Manual entry rejected with "Overlapping session"
+**Fix:** The time range overlaps with an existing entry on that date. Adjust times to avoid overlap.
+
+---
+
+## Scheduling Shift Pattern Issues
+
+### Problem: Weekly pattern generates shifts on wrong days
+**Status (Fixed 2026-02-27):** JS weekday convention (0=Sunday) vs Python convention (0=Monday) mismatch. Backend now converts correctly.
+
+### Problem: Multiple shifts per day blocked
+**Status (Fixed 2026-02-27):** Duplicate guard now checks date + start_time, allowing multiple shift types on the same day.
+
+### Problem: Dashboard "Upcoming Shifts" is empty
+**Status (Fixed 2026-02-27):** Dashboard now uses `getShifts()` to show all org shifts instead of only user-assigned ones.
+
+### Problem: Shift times show "Invalid Date"
+**Status (Fixed 2026-02-27):** `formatTime()` now handles bare time strings from backend.
+
+---
+
+## Elections Module Issues (2026-02-27)
+
+### Problem: Election detail page hangs on loading
+**Status (Fixed):** Route param mismatch caused `fetchElection()` to never fire. Pull latest.
+
+### Problem: Cannot open ballot-item-only elections
+**Status (Fixed):** `open_election` now supports elections with only ballot items (no candidates required).
+
+### Problem: Closing election shows "Election not found"
+**Status (Fixed):** Returns descriptive errors for wrong-status elections.
+
+---
+
+## Backend Logging & Observability
+
+### Request Correlation IDs (2026-02-27)
+All log entries include a UUID4 correlation ID for tracing requests:
+```bash
+docker-compose logs backend | grep "req_id=<UUID>"
+```
+
+### Sentry Not Receiving Errors
+Verify `SENTRY_ENABLED=true` and `SENTRY_DSN` is set. Test:
+```bash
+docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_initialized())"
+```
+
+---
+
+## Organization Settings Issues
+
+### Problem: Cannot edit email/storage/auth settings after onboarding
+**Status (Fixed 2026-02-27):** These are now in **Administration > Organization Settings** under Email, Storage, and Authentication tabs.
+
+### Problem: SMTP changes not taking effect
+**Fix:** Restart backend after saving: `docker-compose restart backend`.
 
 ---
 

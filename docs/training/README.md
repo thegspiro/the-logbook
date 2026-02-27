@@ -89,5 +89,5 @@ Not all modules are enabled by default. Your department administrator controls w
 |--------|--------------|
 | Dashboard, Membership, Scheduling, Settings, Documents, Forms | **Always On** (Core) |
 | Apparatus, Inventory, Communications | **On** (Recommended) |
-| Training, Facilities, Prospective Pipeline | **Off** (Optional) |
+| Training, Facilities, Prospective Pipeline, Admin Hours | **Off** (Optional) |
 | Incidents, HR, Grants, Public Info | **Off** (Optional) |

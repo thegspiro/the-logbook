@@ -63,6 +63,7 @@ docker-compose up -d
 - **[Elections & Voting](Module-Elections)** - Election management system
 - **[Event Management](Module-Events)** - QR code check-in system
 - **[Scheduling](Module-Scheduling)** - Shift scheduling, signup, swaps, templates & reports
+- **[Admin Hours](Module-Admin-Hours)** - Administrative hours tracking with QR code clock-in/clock-out
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
 - **[Inventory](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
 - **[Compliance](Module-Compliance)** - Compliance tracking
@@ -107,7 +108,7 @@ docker-compose up -d
 | Component | Technology |
 |-----------|-----------|
 | **Backend** | Python 3.13, FastAPI, SQLAlchemy |
-| **Frontend** | React 18.3, TypeScript 5.7, Vite 6 |
+| **Frontend** | React 18.3, TypeScript 5.9, Vite 7.3 |
 | **Database** | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
 | **Cache** | Redis 7+ |
 | **Authentication** | OAuth 2.0, SAML, LDAP, TOTP MFA |
@@ -117,6 +118,18 @@ docker-compose up -d
 ---
 
 ## 📊 Latest Updates
+
+### February 2026 (Feb 27) - Admin Hours, Elections Enhancements, Scheduling Hardening & Code Quality
+
+- **Admin Hours Logging Module**: New module for tracking administrative work hours via QR code scanning or manual entry, with configurable approval workflows, category management, and summary dashboards
+- **Member categories for training requirements**: Requirements can now target specific membership types (Active, Administrative, Probationary, Life, Retired, Honorary); permanent delete replaces soft-delete
+- **Elections enhancements**: Meeting link support, voter override management, proxy voting authorization, fix for ballot-item-only elections
+- **Organization settings expansion**: Email, file storage, and authentication settings now editable post-onboarding in Administration > Organization Settings
+- **Scheduling production hardening**: Shift conflict detection, officer assignment, understaffing badges, template colors on calendar, weekday convention fix for patterns, route ordering fix, comprehensive data enrichment
+- **Centralized backend logging**: Loguru + Sentry integration with request correlation IDs, duration tracking, and structured JSON output
+- **QR code improvements**: Fixed display on Locations & Rooms, clipboard copy fallback, "Analytics" relabeled to "QR Code Analytics"
+- **Code quality**: 565 floating promise ESLint warnings fixed, 94 axios calls typed, non-null assertions replaced, 0 ESLint errors/warnings across entire frontend
+- **Security fixes**: CSRF tokens added to module API clients, permission gates on apparatus/forms routes, token refresh race condition fix, memory leak fix in PWA install hook
 
 ### February 2026 (Feb 23) - Training Compliance, Waiver Management & Membership Enhancements
 - **LOA–Training Waiver auto-linking**: Leaves of absence automatically create linked training waivers; date changes sync; deactivation cascades; opt-out with `exempt_from_training_waiver`
