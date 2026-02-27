@@ -21,13 +21,11 @@ import {
   Trash2,
   Eye,
   Send,
-  Filter,
 } from 'lucide-react';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type {
   SkillTemplateListItem,
   SkillTestListItem,
-  TemplateStatus,
 } from '../types/skillsTesting';
 
 // ==================== Sub-components ====================

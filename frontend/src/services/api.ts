@@ -5,7 +5,7 @@
  */
 
 import axios from 'axios';
-import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import type { AxiosResponse } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
 import {
   getCacheKey,
@@ -136,7 +136,7 @@ const api = axios.create({
 // Helper to read a cookie value by name
 function getCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]!) : null;
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 // Request interceptor — httpOnly cookies are sent automatically via
@@ -164,7 +164,7 @@ api.interceptors.request.use(
           status: 200,
           statusText: 'OK',
           headers: {},
-          config: config as InternalAxiosRequestConfig,
+          config,
         };
 
         // Mark this config so the response interceptor doesn't re-cache stale data

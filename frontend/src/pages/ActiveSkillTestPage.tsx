@@ -345,7 +345,7 @@ const CriterionNotes: React.FC<{
   criterionId: string;
   notes: string;
   onChange: (notes: string) => void;
-}> = ({ criterionId, notes, onChange }) => {
+}> = ({ criterionId: _criterionId, notes, onChange }) => {
   const [isOpen, setIsOpen] = useState(Boolean(notes));
 
   return (
