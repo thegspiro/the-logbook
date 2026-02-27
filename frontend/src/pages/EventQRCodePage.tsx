@@ -22,6 +22,7 @@ const EventQRCodePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qrData, setQrData] = useState<QRCheckInData | null>(null);
+  const hasDataRef = React.useRef(false);
 
   const fetchQRData = useCallback(async (isRefresh = false) => {
     if (!eventId) return;
@@ -30,17 +31,18 @@ const EventQRCodePage: React.FC = () => {
       if (!isRefresh) setError(null);
       const data = await eventService.getQRCheckInData(eventId);
       setQrData(data);
+      hasDataRef.current = true;
       setError(null);
     } catch (err: unknown) {
       // On refresh, keep existing data and only update error
       // On initial load, set the error
-      if (!isRefresh || !qrData) {
+      if (!isRefresh || !hasDataRef.current) {
         setError(getErrorMessage(err, 'Failed to load QR code'));
       }
     } finally {
       setLoading(false);
     }
-  }, [eventId, qrData]);
+  }, [eventId]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -49,7 +51,7 @@ const EventQRCodePage: React.FC = () => {
     // Refresh QR data every 30 seconds to update validity status
     const interval = setInterval(() => { void fetchQRData(true); }, 30000);
     return () => clearInterval(interval);
-  }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [eventId, fetchQRData]);
 
   const getCheckInUrl = () => {
     if (!eventId) return '';
