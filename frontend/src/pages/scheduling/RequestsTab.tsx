@@ -81,7 +81,7 @@ export const RequestsTab: React.FC = () => {
     }
   }, [statusFilter]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { void loadData(); }, [loadData]);
 
   // Escape key closes modals and inline confirmations
   useEffect(() => {
@@ -118,7 +118,7 @@ export const RequestsTab: React.FC = () => {
       toast.success(`Request ${action}`);
       setReviewing(null);
       setReviewNotes('');
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to process request'));
     } finally {
@@ -135,7 +135,7 @@ export const RequestsTab: React.FC = () => {
       }
       toast.success('Request cancelled');
       setConfirmingCancel(null);
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to cancel request'));
     }
@@ -242,7 +242,7 @@ export const RequestsTab: React.FC = () => {
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
+                      {req.status === 'pending' && (req.user_id ?? req.requesting_user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
                           className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel swap request"
                         >
@@ -252,7 +252,7 @@ export const RequestsTab: React.FC = () => {
                       {confirmingCancel?.id === req.id && confirmingCancel.type === 'swap' && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-red-500">Cancel?</span>
-                          <button onClick={() => handleCancel('swap', req.id)}
+                          <button onClick={() => { void handleCancel('swap', req.id); }}
                             className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm cancellation"
                           >Yes</button>
                           <button onClick={() => setConfirmingCancel(null)}
@@ -316,7 +316,7 @@ export const RequestsTab: React.FC = () => {
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
+                      {req.status === 'pending' && (req.user_id ?? req.requesting_user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'timeoff', id: req.id })}
                           className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel time-off request"
                         >
@@ -326,7 +326,7 @@ export const RequestsTab: React.FC = () => {
                       {confirmingCancel?.id === req.id && confirmingCancel.type === 'timeoff' && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-red-500">Cancel?</span>
-                          <button onClick={() => handleCancel('timeoff', req.id)}
+                          <button onClick={() => { void handleCancel('timeoff', req.id); }}
                             className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm cancellation"
                           >Yes</button>
                           <button onClick={() => setConfirmingCancel(null)}
@@ -359,12 +359,12 @@ export const RequestsTab: React.FC = () => {
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setReviewing(null)} className="px-4 py-2 text-theme-text-secondary">Cancel</button>
-              <button onClick={() => handleReview('denied')} disabled={submittingReview}
+              <button onClick={() => { void handleReview('denied'); }} disabled={submittingReview}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
               >
                 Deny
               </button>
-              <button onClick={() => handleReview('approved')} disabled={submittingReview}
+              <button onClick={() => { void handleReview('approved'); }} disabled={submittingReview}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50"
               >
                 Approve

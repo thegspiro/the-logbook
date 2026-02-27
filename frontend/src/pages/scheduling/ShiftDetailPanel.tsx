@@ -84,7 +84,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  const apparatusPositions = shift.apparatus_positions ?? [];
+  const apparatusPositions = useMemo(() => shift.apparatus_positions ?? [], [shift.apparatus_positions]);
   const hasApparatusPositions = apparatusPositions.length > 0;
 
   // Determine available position options based on apparatus
@@ -98,15 +98,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Set default signup position
   useEffect(() => {
     if (positionOptions.length > 0 && !signupPosition) {
-      setSignupPosition(positionOptions[0]![0]);
+      const firstOption = positionOptions[0];
+      if (firstOption) setSignupPosition(firstOption[0]);
     }
-  }, [positionOptions.length]);
+  }, [positionOptions, signupPosition]);
 
   useEffect(() => {
     if (positionOptions.length > 0 && !assignForm.position) {
-      setAssignForm(f => ({ ...f, position: positionOptions[0]![0] }));
+      const firstOption = positionOptions[0];
+      if (firstOption) setAssignForm(f => ({ ...f, position: firstOption[0] }));
     }
-  }, [positionOptions.length]);
+  }, [positionOptions, assignForm.position]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,7 +133,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         }
       }
     };
-    load();
+    void load();
     return () => { cancelled = true; };
   }, [shift.id]);
 
@@ -153,7 +155,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         setLoadingMembers(false);
       }
     };
-    loadMembers();
+    void loadMembers();
   }, [showAssignForm, isEditing]);
 
   const filteredMembers = useMemo(() => {
@@ -345,7 +347,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           </span>
           {isCurrentUser && isAssigned && confirmingDecline !== assignment.id && (
             <>
-              <button onClick={() => handleConfirm(assignment.id)}
+              <button onClick={() => { void handleConfirm(assignment.id); }}
                 className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"
               >
                 <Check className="w-4 h-4" />
@@ -360,7 +362,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {confirmingDecline === assignment.id && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-red-500">Decline?</span>
-              <button onClick={() => handleDecline(assignment.id)} disabled={declining}
+              <button onClick={() => { void handleDecline(assignment.id); }} disabled={declining}
                 className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50" aria-label="Confirm decline"
               >{declining ? '...' : 'Yes'}</button>
               <button onClick={() => setConfirmingDecline(null)}
@@ -378,7 +380,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {confirmingRemove === assignment.id && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-red-500">Remove?</span>
-              <button onClick={() => handleRemove(assignment.id)} disabled={removing}
+              <button onClick={() => { void handleRemove(assignment.id); }} disabled={removing}
                 className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50" aria-label="Confirm removal"
               >{removing ? '...' : 'Yes'}</button>
               <button onClick={() => setConfirmingRemove(null)}
@@ -438,7 +440,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               </p>
               <div className="flex items-center gap-2 justify-end">
                 <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-                <button onClick={handleDelete} disabled={deleting}
+                <button onClick={() => { void handleDelete(); }} disabled={deleting}
                   className="flex items-center gap-1 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
                 >
                   {deleting && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -486,7 +488,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               </div>
               <div className="flex items-center gap-2 justify-end">
                 <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-                <button onClick={handleSaveEdit} disabled={saving}
+                <button onClick={() => { void handleSaveEdit(); }} disabled={saving}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -563,7 +565,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 )}
               </div>
               <div className="space-y-2">
-                {crewBoard!.map(({ position, assignment }, i) => (
+                {crewBoard?.map(({ position, assignment }, i) => (
                   <div key={i} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${
                     assignment
                       ? (assignment.user_id === user?.id ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30')
@@ -607,7 +609,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           </span>
                           {assignment.user_id === user?.id && (assignment.status === 'assigned' || assignment.assignment_status === 'assigned') && confirmingDecline !== assignment.id && (
                             <>
-                              <button onClick={() => handleConfirm(assignment.id)}
+                              <button onClick={() => { void handleConfirm(assignment.id); }}
                                 className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"
                               >
                                 <Check className="w-4 h-4" />
@@ -622,7 +624,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           {confirmingDecline === assignment.id && (
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs text-red-500">Decline?</span>
-                              <button onClick={() => handleDecline(assignment.id)}
+                              <button onClick={() => { void handleDecline(assignment.id); }}
                                 className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm decline"
                               >Yes</button>
                               <button onClick={() => setConfirmingDecline(null)}
@@ -640,7 +642,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           {confirmingRemove === assignment.id && (
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs text-red-500">Remove?</span>
-                              <button onClick={() => handleRemove(assignment.id)}
+                              <button onClick={() => { void handleRemove(assignment.id); }}
                                 className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm removal"
                               >Yes</button>
                               <button onClick={() => setConfirmingRemove(null)}
@@ -652,7 +654,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                       ) : (
                         !isPast && !isUserAssigned && (
                           <button
-                            onClick={() => handleSignup(position)}
+                            onClick={() => { void handleSignup(position); }}
                             disabled={signingUp}
                             className="px-2.5 sm:px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1"
                           >
@@ -761,7 +763,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   </select>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => { setShowAssignForm(false); setMemberSearch(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-                    <button onClick={handleAssign} disabled={assigning || !assignForm.user_id}
+                    <button onClick={() => { void handleAssign(); }} disabled={assigning || !assignForm.user_id}
                       className="px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
                     >
                       {assigning ? 'Assigning...' : 'Assign'}
@@ -786,7 +788,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <option key={val} value={val}>{label}</option>
                   ))}
                 </select>
-                <button onClick={() => handleSignup()} disabled={signingUp}
+                <button onClick={() => { void handleSignup(); }} disabled={signingUp}
                   className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1"
                 >
                   {signingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}

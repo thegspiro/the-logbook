@@ -12,10 +12,10 @@ const mockReviewTimeOff = vi.fn();
 
 vi.mock('../../services/api', () => ({
   schedulingService: {
-    getSwapRequests: (...args: unknown[]) => mockGetSwapRequests(...args),
-    getTimeOffRequests: (...args: unknown[]) => mockGetTimeOffRequests(...args),
-    reviewSwapRequest: (...args: unknown[]) => mockReviewSwapRequest(...args),
-    reviewTimeOff: (...args: unknown[]) => mockReviewTimeOff(...args),
+    getSwapRequests: (...args: unknown[]) => mockGetSwapRequests(...args) as unknown,
+    getTimeOffRequests: (...args: unknown[]) => mockGetTimeOffRequests(...args) as unknown,
+    reviewSwapRequest: (...args: unknown[]) => mockReviewSwapRequest(...args) as unknown,
+    reviewTimeOff: (...args: unknown[]) => mockReviewTimeOff(...args) as unknown,
     cancelSwapRequest: vi.fn().mockResolvedValue(undefined),
     cancelTimeOff: vi.fn().mockResolvedValue(undefined),
     getShift: vi.fn().mockResolvedValue({

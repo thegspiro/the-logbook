@@ -804,7 +804,9 @@ async def confirm_assignment(
 ):
     """Confirm own shift assignment"""
     service = SchedulingService(db)
-    result, error = await service.confirm_assignment(assignment_id, current_user.id)
+    result, error = await service.confirm_assignment(
+        assignment_id, current_user.id, current_user.organization_id
+    )
     if error:
         raise HTTPException(
             status_code=400, detail=f"Unable to confirm assignment. {error}"
@@ -1096,7 +1098,7 @@ async def get_my_shifts(
         raise HTTPException(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
-    shifts, total = await service.get_my_shifts(
+    shift_dicts, total = await service.get_my_shifts(
         current_user.id,
         current_user.organization_id,
         start_date=start,
@@ -1104,8 +1106,8 @@ async def get_my_shifts(
         skip=skip,
         limit=limit,
     )
-    enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
-    return {"shifts": enriched, "total": total, "skip": skip, "limit": limit}
+    # get_my_shifts returns plain dicts (not ORM objects), so skip _enrich_shifts
+    return {"shifts": shift_dicts, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/my-assignments", response_model=list[ShiftAssignmentResponse])

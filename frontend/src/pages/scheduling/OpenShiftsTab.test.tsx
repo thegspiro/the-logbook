@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { waitFor } from '@testing-library/react';
 import { renderWithRouter } from '../../test/utils';
 import { OpenShiftsTab } from './OpenShiftsTab';
 
@@ -10,9 +10,9 @@ const mockSignupForShift = vi.fn();
 
 vi.mock('../../services/api', () => ({
   schedulingService: {
-    getOpenShifts: (...args: unknown[]) => mockGetOpenShifts(...args),
-    getShifts: (...args: unknown[]) => mockGetShifts(...args),
-    signupForShift: (...args: unknown[]) => mockSignupForShift(...args),
+    getOpenShifts: (...args: unknown[]) => mockGetOpenShifts(...args) as unknown,
+    getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
+    signupForShift: (...args: unknown[]) => mockSignupForShift(...args) as unknown,
     withdrawSignup: vi.fn().mockResolvedValue(undefined),
   },
 }));

@@ -63,14 +63,14 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { void loadData(); }, [loadData]);
 
   const handleConfirm = async (assignmentId: string) => {
     setConfirmingId(assignmentId);
     try {
       await schedulingService.confirmAssignment(assignmentId);
       toast.success('Shift confirmed');
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to confirm shift'));
     } finally {
@@ -83,7 +83,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
       toast.success('Shift declined');
       setConfirmingDecline(null);
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to decline shift'));
     }
@@ -136,7 +136,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       });
       toast.success('Swap request submitted — check Requests tab for status');
       setShowSwapModal(false);
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to submit swap request'));
     } finally {
@@ -260,7 +260,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     </span>
                     {view === 'upcoming' && assignment.status === 'assigned' && confirmingDecline !== assignment.id && (
                       <>
-                        <button onClick={() => handleConfirm(assignment.id)}
+                        <button onClick={() => { void handleConfirm(assignment.id); }}
                           disabled={confirmingId === assignment.id}
                           className="p-2 text-green-600 hover:bg-green-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Confirm shift" aria-label="Confirm shift assignment"
                         >
@@ -276,7 +276,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     {confirmingDecline === assignment.id && (
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-red-500">Decline?</span>
-                        <button onClick={() => handleDecline(assignment.id)}
+                        <button onClick={() => { void handleDecline(assignment.id); }}
                           className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm decline"
                         >Yes</button>
                         <button onClick={() => setConfirmingDecline(null)}
@@ -285,7 +285,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       </div>
                     )}
                     {view === 'upcoming' && (
-                      <button onClick={() => openSwapRequest(assignment)}
+                      <button onClick={() => { void openSwapRequest(assignment); }}
                         className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Request swap" aria-label="Request shift swap"
                       >
                         <ArrowLeftRight className="w-5 h-5" />
@@ -350,7 +350,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowSwapModal(false)} className="px-4 py-2 text-theme-text-secondary">Cancel</button>
-              <button onClick={handleSwapRequest} disabled={submittingSwap}
+              <button onClick={() => { void handleSwapRequest(); }} disabled={submittingSwap}
                 className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
               >
                 {submittingSwap ? 'Submitting...' : 'Submit Request'}
@@ -392,7 +392,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowTimeOffModal(false)} className="px-4 py-2 text-theme-text-secondary">Cancel</button>
-              <button onClick={handleTimeOffRequest} disabled={submittingTimeOff || !timeOffForm.start_date}
+              <button onClick={() => { void handleTimeOffRequest(); }} disabled={submittingTimeOff || !timeOffForm.start_date}
                 className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
               >
                 {submittingTimeOff ? 'Submitting...' : 'Submit Request'}

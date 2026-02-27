@@ -102,7 +102,7 @@ export const PatternsTab: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { void loadData(); }, [loadData]);
 
   // Escape key closes inline confirmations
   useEffect(() => {
@@ -143,7 +143,7 @@ export const PatternsTab: React.FC = () => {
         start_date: '', end_date: '', days_on: 1, days_off: 1, rotation_days: 3,
         weekdays: [1, 2, 3, 4, 5],
       });
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to create pattern'));
     } finally {
@@ -179,7 +179,7 @@ export const PatternsTab: React.FC = () => {
       await schedulingService.deletePattern(patternId);
       toast.success('Pattern deleted');
       setConfirmingDelete(null);
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete pattern'));
     }
@@ -211,7 +211,7 @@ export const PatternsTab: React.FC = () => {
           <p className="text-sm text-theme-text-muted">Create recurring patterns and generate shifts in bulk.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={loadData} className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg transition-colors" aria-label="Refresh patterns">
+          <button onClick={() => { void loadData(); }} className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg transition-colors" aria-label="Refresh patterns">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button onClick={() => setShowCreate(!showCreate)}
@@ -347,7 +347,7 @@ export const PatternsTab: React.FC = () => {
 
           <div className="flex items-center gap-2 justify-end pt-2">
             <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-            <button onClick={handleCreate} disabled={creating}
+            <button onClick={() => { void handleCreate(); }} disabled={creating}
               className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm disabled:opacity-50"
             >
               {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
@@ -464,7 +464,7 @@ export const PatternsTab: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-2 justify-end">
                           <button onClick={() => setGeneratingFor(null)} className="px-3 py-1.5 text-sm text-theme-text-secondary">Cancel</button>
-                          <button onClick={() => handleGenerate(pattern.id)} disabled={generating}
+                          <button onClick={() => { void handleGenerate(pattern.id); }} disabled={generating}
                             className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm disabled:opacity-50"
                           >
                             {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
@@ -483,7 +483,7 @@ export const PatternsTab: React.FC = () => {
                         {confirmingDelete === pattern.id ? (
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-red-500">Delete pattern? Existing shifts will not be removed.</span>
-                            <button onClick={() => handleDelete(pattern.id)}
+                            <button onClick={() => { void handleDelete(pattern.id); }}
                               className="px-2.5 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm delete"
                             >Yes, delete</button>
                             <button onClick={() => setConfirmingDelete(null)}

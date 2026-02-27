@@ -127,7 +127,7 @@ export const ShiftReportsTab: React.FC = () => {
   }, [viewMode]);
 
   useEffect(() => {
-    if (viewMode !== 'create') loadReports();
+    if (viewMode !== 'create') void loadReports();
   }, [loadReports, viewMode]);
 
   // Load members when switching to create mode
@@ -262,7 +262,7 @@ export const ShiftReportsTab: React.FC = () => {
       toast.success('Report acknowledged');
       setAckReportId(null);
       setAckComments('');
-      loadReports();
+      void loadReports();
     } catch {
       toast.error('Failed to acknowledge report');
     } finally {
@@ -283,7 +283,7 @@ export const ShiftReportsTab: React.FC = () => {
       setReviewReportId(null);
       setReviewNotes('');
       setRedactFields([]);
-      loadReports();
+      void loadReports();
     } catch {
       toast.error('Failed to review report');
     } finally {
@@ -393,7 +393,7 @@ export const ShiftReportsTab: React.FC = () => {
       weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
     });
 
-    const statusStyle = (REVIEW_STATUS_STYLES[report.review_status] || REVIEW_STATUS_STYLES.approved)!;
+    const statusStyle = REVIEW_STATUS_STYLES[report.review_status] || REVIEW_STATUS_STYLES.approved;
 
     return (
       <div key={report.id} className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-hidden">
@@ -818,7 +818,7 @@ export const ShiftReportsTab: React.FC = () => {
 
           {/* Submit */}
           <div className="flex items-center gap-3 pt-2">
-            <button onClick={handleSubmit} disabled={submitting}
+            <button onClick={() => { void handleSubmit(); }} disabled={submitting}
               className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
@@ -887,7 +887,7 @@ export const ShiftReportsTab: React.FC = () => {
               >
                 Cancel
               </button>
-              <button onClick={handleAcknowledge} disabled={acknowledging}
+              <button onClick={() => { void handleAcknowledge(); }} disabled={acknowledging}
                 className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5 transition-colors"
               >
                 {acknowledging ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -957,12 +957,12 @@ export const ShiftReportsTab: React.FC = () => {
               >
                 Cancel
               </button>
-              <button onClick={() => handleReview('flagged')} disabled={reviewing}
+              <button onClick={() => { void handleReview('flagged'); }} disabled={reviewing}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5 transition-colors"
               >
                 <AlertCircle className="w-3.5 h-3.5" /> Flag
               </button>
-              <button onClick={() => handleReview('approved')} disabled={reviewing}
+              <button onClick={() => { void handleReview('approved'); }} disabled={reviewing}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5 transition-colors"
               >
                 {reviewing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}

@@ -9,7 +9,7 @@ from enum import Enum as PyEnum
 from typing import Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ============================================
 # Shift Schemas
@@ -506,6 +506,12 @@ class ShiftTimeOffCreate(BaseModel):
     start_date: date
     end_date: date
     reason: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "ShiftTimeOffCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must not be before start_date")
+        return self
 
 
 class ShiftTimeOffUpdate(BaseModel):
