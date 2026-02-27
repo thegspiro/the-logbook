@@ -63,9 +63,7 @@ class RequirementFrequency(str, enum.Enum):
 class DueDateType(str, enum.Enum):
     """How the due date is calculated"""
 
-    CALENDAR_PERIOD = (
-        "calendar_period"  # Due by end of calendar period (e.g., Dec 31st)
-    )
+    CALENDAR_PERIOD = "calendar_period"  # Due by end of calendar period (e.g., Dec 31st)
     ROLLING = "rolling"  # Due X months from last completion
     CERTIFICATION_PERIOD = "certification_period"  # Due when certification expires
     FIXED_DATE = "fixed_date"  # Due by a specific fixed date
@@ -165,15 +163,11 @@ class TrainingCategory(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
-    subcategories = relationship(
-        "TrainingCategory", backref="parent_category", remote_side=[id]
-    )
+    subcategories = relationship("TrainingCategory", backref="parent_category", remote_side=[id])
 
     __table_args__ = (
         Index("idx_category_org_code", "organization_id", "code"),
@@ -216,9 +210,7 @@ class TrainingCourse(Base):
 
     # Requirements
     prerequisites = Column(JSON)  # List of prerequisite course IDs
-    expiration_months = Column(
-        Integer
-    )  # How long before recertification needed (null = doesn't expire)
+    expiration_months = Column(Integer)  # How long before recertification needed (null = doesn't expire)
 
     # Course Details
     instructor = Column(String(255))
@@ -226,24 +218,18 @@ class TrainingCourse(Base):
     materials_required = Column(JSON)  # List of required materials
 
     # Categories - training can count towards multiple categories
-    category_ids = Column(
-        JSON
-    )  # List of TrainingCategory IDs this course counts towards
+    category_ids = Column(JSON)  # List of TrainingCategory IDs this course counts towards
 
     # Status
     active = Column(Boolean, default=True, index=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
-    training_records = relationship(
-        "TrainingRecord", back_populates="course", cascade="all, delete-orphan"
-    )
+    training_records = relationship("TrainingRecord", back_populates="course", cascade="all, delete-orphan")
 
     __table_args__ = (Index("idx_course_org_code", "organization_id", "code"),)
 
@@ -273,14 +259,10 @@ class TrainingRecord(Base):
         nullable=False,
         index=True,
     )
-    course_id = Column(
-        String(36), ForeignKey("training_courses.id", ondelete="SET NULL"), index=True
-    )
+    course_id = Column(String(36), ForeignKey("training_courses.id", ondelete="SET NULL"), index=True)
 
     # Training Details
-    course_name = Column(
-        String(255), nullable=False
-    )  # Stored in case course is deleted
+    course_name = Column(String(255), nullable=False)  # Stored in case course is deleted
     course_code = Column(String(50))
     training_type = Column(
         Enum(TrainingType, values_callable=lambda x: [e.value for e in x]),
@@ -318,14 +300,10 @@ class TrainingRecord(Base):
         nullable=True,
         index=True,
     )
-    location = Column(
-        String(255)
-    )  # Free-text fallback for "Other Location" or legacy records
+    location = Column(String(255))  # Free-text fallback for "Other Location" or legacy records
 
     # Cross-module link: which apparatus was used for this training
-    apparatus_id = Column(
-        String(36), nullable=True, index=True
-    )  # FK to apparatus table (added conditionally)
+    apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
 
     # Snapshot of member's rank and station at time of training completion
     rank_at_completion = Column(String(100), nullable=True)
@@ -340,15 +318,11 @@ class TrainingRecord(Base):
     alert_60_sent_at = Column(DateTime(timezone=True), nullable=True)
     alert_30_sent_at = Column(DateTime(timezone=True), nullable=True)
     alert_7_sent_at = Column(DateTime(timezone=True), nullable=True)
-    escalation_sent_at = Column(
-        DateTime(timezone=True), nullable=True
-    )  # CC to training/compliance officers
+    escalation_sent_at = Column(DateTime(timezone=True), nullable=True)  # CC to training/compliance officers
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
@@ -401,13 +375,9 @@ class TrainingRequirement(Base):
         nullable=False,
         default=RequirementSource.DEPARTMENT,
     )
-    registry_name = Column(
-        String(100)
-    )  # e.g., "NFPA", "NREMT", "Pro Board", state name
+    registry_name = Column(String(100))  # e.g., "NFPA", "NREMT", "Pro Board", state name
     registry_code = Column(String(50))  # e.g., "NFPA 1001", "EMR"
-    is_editable = Column(
-        Boolean, default=True
-    )  # Department can override registry requirements
+    is_editable = Column(Boolean, default=True)  # Department can override registry requirements
 
     # Requirement Quantities (based on requirement_type)
     required_hours = Column(Float)  # For HOURS type
@@ -417,9 +387,7 @@ class TrainingRequirement(Base):
     required_call_types = Column(JSON)  # Specific incident types required
     required_skills = Column(JSON)  # For SKILLS_EVALUATION type - skill IDs
     checklist_items = Column(JSON)  # For CHECKLIST type - list of items
-    passing_score = Column(
-        Float
-    )  # For KNOWLEDGE_TEST type - minimum passing percentage
+    passing_score = Column(Float)  # For KNOWLEDGE_TEST type - minimum passing percentage
     max_attempts = Column(Integer)  # For KNOWLEDGE_TEST type - max number of attempts
 
     # Frequency
@@ -440,27 +408,22 @@ class TrainingRequirement(Base):
     # - FIXED_DATE: Due by a specific fixed date
 
     # Rolling Period (for ROLLING due_date_type)
-    rolling_period_months = Column(
-        Integer
-    )  # Number of months between required completions
+    rolling_period_months = Column(Integer)  # Number of months between required completions
 
     # Calendar Period Settings (for CALENDAR_PERIOD)
-    period_start_month = Column(
-        Integer, default=1
-    )  # Month the period starts (1=January)
+    period_start_month = Column(Integer, default=1)  # Month the period starts (1=January)
     period_start_day = Column(Integer, default=1)  # Day the period starts
 
     # Categories - which training categories count towards this requirement
-    category_ids = Column(
-        JSON
-    )  # List of TrainingCategory IDs that satisfy this requirement
+    category_ids = Column(JSON)  # List of TrainingCategory IDs that satisfy this requirement
 
     # Applicability
     applies_to_all = Column(Boolean, default=True)
     required_roles = Column(JSON)  # List of role slugs this applies to (if not all)
-    required_positions = Column(
+    required_positions = Column(JSON)  # Positions: probationary, driver_candidate, officer, aic, etc.
+    required_membership_types = Column(
         JSON
-    )  # Positions: probationary, driver_candidate, officer, aic, etc.
+    )  # List of MembershipType values this applies to (e.g. ["active", "administrative"])
 
     # Deadlines
     start_date = Column(Date)
@@ -472,9 +435,7 @@ class TrainingRequirement(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
 
     __table_args__ = (
@@ -532,9 +493,7 @@ class TrainingSession(Base):
         nullable=True,
         index=True,
     )
-    phase_id = Column(
-        String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True
-    )
+    phase_id = Column(String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True)
     requirement_id = Column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="SET NULL"),
@@ -558,49 +517,31 @@ class TrainingSession(Base):
         nullable=True,
         index=True,
     )
-    co_instructors = Column(
-        JSON, nullable=True
-    )  # List of user IDs for additional instructors
-    apparatus_id = Column(
-        String(36), nullable=True, index=True
-    )  # FK to apparatus table (added conditionally)
+    co_instructors = Column(JSON, nullable=True)  # List of user IDs for additional instructors
+    apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
 
     # Certification Details
     issues_certification = Column(Boolean, default=False)
-    certification_number_prefix = Column(
-        String(50)
-    )  # Prefix for auto-generated cert numbers
+    certification_number_prefix = Column(String(50))  # Prefix for auto-generated cert numbers
     issuing_agency = Column(String(255))
     expiration_months = Column(Integer)
 
     # Auto-completion Settings
-    auto_create_records = Column(
-        Boolean, default=True
-    )  # Create TrainingRecord on check-in
-    require_completion_confirmation = Column(
-        Boolean, default=False
-    )  # Instructor must confirm completion
+    auto_create_records = Column(Boolean, default=True)  # Create TrainingRecord on check-in
+    require_completion_confirmation = Column(Boolean, default=False)  # Instructor must confirm completion
 
     # Approval Settings
-    approval_required = Column(
-        Boolean, default=True
-    )  # Require training officer approval
-    approval_deadline_days = Column(
-        Integer, default=7
-    )  # Days to approve after event ends
+    approval_required = Column(Boolean, default=True)  # Require training officer approval
+    approval_deadline_days = Column(Integer, default=7)  # Days to approve after event ends
 
     # Status
-    is_finalized = Column(
-        Boolean, default=False
-    )  # Event ended, approval workflow triggered
+    is_finalized = Column(Boolean, default=False)  # Event ended, approval workflow triggered
     finalized_at = Column(DateTime(timezone=True))
     finalized_by = Column(String(36), ForeignKey("users.id"))
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
@@ -658,12 +599,8 @@ class TrainingApproval(Base):
     )
 
     # Approval Token (for email link)
-    approval_token = Column(
-        String(64), unique=True, nullable=False, index=True
-    )  # Random token for secure access
-    token_expires_at = Column(
-        DateTime(timezone=True), nullable=False
-    )  # Token expiration
+    approval_token = Column(String(64), unique=True, nullable=False, index=True)  # Random token for secure access
+    token_expires_at = Column(DateTime(timezone=True), nullable=False)  # Token expiration
 
     # Approval Details
     status = Column(
@@ -685,9 +622,7 @@ class TrainingApproval(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         Index("idx_approval_session", "training_session_id"),
@@ -725,9 +660,7 @@ class TrainingProgram(Base):
     version = Column(Integer, default=1)  # Version number for template duplication
 
     # Target Audience
-    target_position = Column(
-        String(100)
-    )  # probationary, driver_candidate, officer, aic, etc.
+    target_position = Column(String(100))  # probationary, driver_candidate, officer, aic, etc.
     target_roles = Column(JSON)  # Role slugs this program applies to
 
     # Structure
@@ -738,20 +671,14 @@ class TrainingProgram(Base):
     )
 
     # Prerequisites
-    prerequisite_program_ids = Column(
-        JSON
-    )  # Programs that must be completed before enrollment
+    prerequisite_program_ids = Column(JSON)  # Programs that must be completed before enrollment
 
     # Enrollment Settings
-    allows_concurrent_enrollment = Column(
-        Boolean, default=True
-    )  # Can member be in multiple programs
+    allows_concurrent_enrollment = Column(Boolean, default=True)  # Can member be in multiple programs
 
     # Time Limits
     time_limit_days = Column(Integer)  # Overall program completion deadline
-    warning_days_before = Column(
-        Integer, default=30
-    )  # Send warning X days before deadline
+    warning_days_before = Column(Integer, default=30)  # Send warning X days before deadline
 
     # Reminder Settings
     reminder_conditions = Column(JSON)  # Conditional reminder rules
@@ -759,15 +686,11 @@ class TrainingProgram(Base):
 
     # Status
     active = Column(Boolean, default=True, index=True)
-    is_template = Column(
-        Boolean, default=False
-    )  # Can be used as template for new programs
+    is_template = Column(Boolean, default=False)  # Can be used as template for new programs
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
@@ -777,9 +700,7 @@ class TrainingProgram(Base):
         cascade="all, delete-orphan",
         order_by="ProgramPhase.phase_number",
     )
-    enrollments = relationship(
-        "ProgramEnrollment", back_populates="program", cascade="all, delete-orphan"
-    )
+    enrollments = relationship("ProgramEnrollment", back_populates="program", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_program_org_active", "organization_id", "active"),
@@ -823,27 +744,19 @@ class ProgramPhase(Base):
     prerequisite_phase_ids = Column(JSON)  # Phases that must be completed first
 
     # Advancement Settings
-    requires_manual_advancement = Column(
-        Boolean, default=False
-    )  # Officer must approve advancement to next phase
+    requires_manual_advancement = Column(Boolean, default=False)  # Officer must approve advancement to next phase
 
     # Time Limits
     time_limit_days = Column(Integer)  # Deadline from phase start
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
     program = relationship("TrainingProgram", back_populates="phases")
-    requirements = relationship(
-        "ProgramRequirement", back_populates="phase", cascade="all, delete-orphan"
-    )
-    milestones = relationship(
-        "ProgramMilestone", back_populates="phase", cascade="all, delete-orphan"
-    )
+    requirements = relationship("ProgramRequirement", back_populates="phase", cascade="all, delete-orphan")
+    milestones = relationship("ProgramMilestone", back_populates="phase", cascade="all, delete-orphan")
 
     __table_args__ = (Index("idx_phase_program", "program_id", "phase_number"),)
 
@@ -882,18 +795,12 @@ class ProgramRequirement(Base):
 
     # Requirement Settings
     is_required = Column(Boolean, default=True)  # Required vs optional
-    is_prerequisite = Column(
-        Boolean, default=False
-    )  # Must complete before other requirements
+    is_prerequisite = Column(Boolean, default=False)  # Must complete before other requirements
     sort_order = Column(Integer, default=0)  # Display order within program/phase
 
     # Program-Specific Customization
-    program_specific_description = Column(
-        Text
-    )  # Override/supplement the requirement description
-    custom_deadline_days = Column(
-        Integer
-    )  # Override requirement's default time_limit_days
+    program_specific_description = Column(Text)  # Override/supplement the requirement description
+    custom_deadline_days = Column(Integer)  # Override requirement's default time_limit_days
 
     # Notification Message
     notification_message = Column(Text)  # Custom message when assigned this requirement
@@ -942,14 +849,10 @@ class ProgramMilestone(Base):
     description = Column(Text)
 
     # Trigger
-    completion_percentage_threshold = Column(
-        Float
-    )  # Trigger at X% complete (e.g., 50.0)
+    completion_percentage_threshold = Column(Float)  # Trigger at X% complete (e.g., 50.0)
 
     # Notification
-    notification_message = Column(
-        Text
-    )  # Message to display/send when milestone reached
+    notification_message = Column(Text)  # Message to display/send when milestone reached
 
     # Verification
     requires_verification = Column(Boolean, default=False)  # Officer must verify
@@ -1001,12 +904,8 @@ class ProgramEnrollment(Base):
     target_completion_date = Column(Date)  # Calculated from time_limit_days
 
     # Current Progress
-    current_phase_id = Column(
-        String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True
-    )
-    progress_percentage = Column(
-        Float, default=0.0
-    )  # Overall program completion percentage
+    current_phase_id = Column(String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True)
+    progress_percentage = Column(Float, default=0.0)  # Overall program completion percentage
 
     # Status
     status = Column(
@@ -1024,9 +923,7 @@ class ProgramEnrollment(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     enrolled_by = Column(String(36), ForeignKey("users.id"))  # Who enrolled the member
 
     # Relationships
@@ -1075,9 +972,7 @@ class RequirementProgress(Base):
         default=RequirementProgressStatus.NOT_STARTED,
         index=True,
     )
-    progress_value = Column(
-        Float, default=0.0
-    )  # Hours completed, calls responded, etc.
+    progress_value = Column(Float, default=0.0)  # Hours completed, calls responded, etc.
     progress_percentage = Column(Float, default=0.0)  # Calculated percentage
 
     # Details
@@ -1091,14 +986,10 @@ class RequirementProgress(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    enrollment = relationship(
-        "ProgramEnrollment", back_populates="requirement_progress"
-    )
+    enrollment = relationship("ProgramEnrollment", back_populates="requirement_progress")
 
     __table_args__ = (
         Index("idx_progress_enrollment", "enrollment_id", "status"),
@@ -1149,9 +1040,7 @@ class SkillEvaluation(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
 
     __table_args__ = (Index("idx_skill_org_category", "organization_id", "category"),)
@@ -1200,9 +1089,7 @@ class SkillCheckoff(Base):
         nullable=True,
         index=True,
     )
-    apparatus_id = Column(
-        String(36), nullable=True, index=True
-    )  # FK to apparatus table (added conditionally)
+    apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
     conditions = Column(
         JSON, nullable=True
     )  # Environmental context: {"time_of_day", "weather", "road_conditions", etc.}
@@ -1249,9 +1136,7 @@ class ShiftCompletionReport(Base):
     )
 
     # Shift context
-    shift_id = Column(
-        String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
-    )
+    shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True)
     shift_date = Column(Date, nullable=False)
 
     # People
@@ -1277,9 +1162,7 @@ class ShiftCompletionReport(Base):
     performance_rating = Column(Integer)  # 1-5 scale
     areas_of_strength = Column(EncryptedText)
     areas_for_improvement = Column(EncryptedText)
-    officer_narrative = Column(
-        EncryptedText
-    )  # Free-form description of the shift experience
+    officer_narrative = Column(EncryptedText)  # Free-form description of the shift experience
 
     # Skills observed
     skills_observed = Column(JSON)  # Array of { skill_name, demonstrated: bool, notes }
@@ -1291,21 +1174,13 @@ class ShiftCompletionReport(Base):
         ForeignKey("program_enrollments.id", ondelete="SET NULL"),
         nullable=True,
     )
-    requirements_progressed = Column(
-        JSON
-    )  # Array of { requirement_progress_id, value_added }
+    requirements_progressed = Column(JSON)  # Array of { requirement_progress_id, value_added }
 
     # Review workflow — reports can require approval before trainee visibility
-    review_status = Column(
-        String(20), default="approved"
-    )  # draft, pending_review, approved, flagged
-    reviewed_by = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    review_status = Column(String(20), default="approved")  # draft, pending_review, approved, flagged
+    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    reviewer_notes = Column(
-        EncryptedText, nullable=True
-    )  # Internal notes from reviewer, never shown to trainee
+    reviewer_notes = Column(EncryptedText, nullable=True)  # Internal notes from reviewer, never shown to trainee
 
     # Trainee acknowledgment
     trainee_acknowledged = Column(Boolean, default=False)
@@ -1314,9 +1189,7 @@ class ShiftCompletionReport(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         Index("idx_shift_report_trainee", "trainee_id", "shift_date"),
@@ -1371,9 +1244,7 @@ class TrainingModuleConfig(Base):
     show_shift_stats = Column(Boolean, default=True)
 
     # Officer-written content visibility to members
-    show_officer_narrative = Column(
-        Boolean, default=False
-    )  # Officer narrative on shift reports
+    show_officer_narrative = Column(Boolean, default=False)  # Officer narrative on shift reports
     show_performance_rating = Column(Boolean, default=True)  # 1-5 star ratings
     show_areas_of_strength = Column(Boolean, default=True)
     show_areas_for_improvement = Column(Boolean, default=True)
@@ -1383,22 +1254,14 @@ class TrainingModuleConfig(Base):
     show_submission_history = Column(Boolean, default=True)
 
     # Reports access
-    allow_member_report_export = Column(
-        Boolean, default=False
-    )  # Can members download their own data
+    allow_member_report_export = Column(Boolean, default=False)  # Can members download their own data
 
     # Shift report review workflow
-    report_review_required = Column(
-        Boolean, default=False
-    )  # Must reports be approved before trainee can see?
-    report_review_role = Column(
-        String(50), default="training_officer"
-    )  # Who reviews: training_officer, captain, chief
+    report_review_required = Column(Boolean, default=False)  # Must reports be approved before trainee can see?
+    report_review_role = Column(String(50), default="training_officer")  # Who reviews: training_officer, captain, chief
 
     # Rating customization
-    rating_label = Column(
-        String(100), default="Performance Rating"
-    )  # Custom label for the rating field
+    rating_label = Column(String(100), default="Performance Rating")  # Custom label for the rating field
     rating_scale_type = Column(String(20), default="stars")  # stars, competency, custom
     rating_scale_labels = Column(
         JSON, nullable=True
@@ -1406,9 +1269,7 @@ class TrainingModuleConfig(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     updated_by = Column(String(36), ForeignKey("users.id"))
 
     def __repr__(self):
@@ -1474,21 +1335,13 @@ class SelfReportConfig(Base):
     )
 
     # Approval Settings
-    require_approval = Column(
-        Boolean, default=True
-    )  # Require training officer approval
-    auto_approve_under_hours = Column(
-        Float, nullable=True
-    )  # Auto-approve if under X hours (null = never auto-approve)
+    require_approval = Column(Boolean, default=True)  # Require training officer approval
+    auto_approve_under_hours = Column(Float, nullable=True)  # Auto-approve if under X hours (null = never auto-approve)
     approval_deadline_days = Column(Integer, default=14)  # Days officers have to review
 
     # Notification Settings
-    notify_officer_on_submit = Column(
-        Boolean, default=True
-    )  # Email training officer when submission arrives
-    notify_member_on_decision = Column(
-        Boolean, default=True
-    )  # Email member when approved/rejected
+    notify_officer_on_submit = Column(Boolean, default=True)  # Email training officer when submission arrives
+    notify_member_on_decision = Column(Boolean, default=True)  # Email member when approved/rejected
 
     # Field Configuration (JSON)
     # Each key is a field name, value is { "visible": bool, "required": bool, "label": str }
@@ -1571,9 +1424,7 @@ class SelfReportConfig(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     updated_by = Column(String(36), ForeignKey("users.id"))
 
     def __repr__(self):
@@ -1659,9 +1510,7 @@ class TrainingSubmission(Base):
 
     # Timestamps
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
     training_record = relationship("TrainingRecord")
@@ -1720,9 +1569,7 @@ class ExternalTrainingProvider(Base):
     )
 
     # Provider Details
-    name = Column(
-        String(255), nullable=False
-    )  # Display name: "Vector Solutions", "Target Solutions"
+    name = Column(String(255), nullable=False)  # Display name: "Vector Solutions", "Target Solutions"
     provider_type = Column(
         Enum(ExternalProviderType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
@@ -1750,9 +1597,7 @@ class ExternalTrainingProvider(Base):
     next_sync_at = Column(DateTime(timezone=True))
 
     # Default Category Mapping
-    default_category_id = Column(
-        String(36), ForeignKey("training_categories.id", ondelete="SET NULL")
-    )
+    default_category_id = Column(String(36), ForeignKey("training_categories.id", ondelete="SET NULL"))
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -1762,9 +1607,7 @@ class ExternalTrainingProvider(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
@@ -1790,9 +1633,7 @@ class ExternalTrainingProvider(Base):
     )
 
     def __repr__(self):
-        return (
-            f"<ExternalTrainingProvider(name={self.name}, type={self.provider_type})>"
-        )
+        return f"<ExternalTrainingProvider(name={self.name}, type={self.provider_type})>"
 
 
 class ExternalCategoryMapping(Base):
@@ -1819,20 +1660,12 @@ class ExternalCategoryMapping(Base):
     )
 
     # External Category Info
-    external_category_id = Column(
-        String(255), nullable=False
-    )  # ID from external system
-    external_category_name = Column(
-        String(255), nullable=False
-    )  # Name from external system
-    external_category_code = Column(
-        String(100)
-    )  # Code from external system (if available)
+    external_category_id = Column(String(255), nullable=False)  # ID from external system
+    external_category_name = Column(String(255), nullable=False)  # Name from external system
+    external_category_code = Column(String(100))  # Code from external system (if available)
 
     # Internal Category Mapping
-    internal_category_id = Column(
-        String(36), ForeignKey("training_categories.id", ondelete="SET NULL")
-    )
+    internal_category_id = Column(String(36), ForeignKey("training_categories.id", ondelete="SET NULL"))
 
     # Mapping Status
     is_mapped = Column(Boolean, default=False)  # Has been mapped to internal category
@@ -1840,15 +1673,11 @@ class ExternalCategoryMapping(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     mapped_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
-    provider = relationship(
-        "ExternalTrainingProvider", back_populates="category_mappings"
-    )
+    provider = relationship("ExternalTrainingProvider", back_populates="category_mappings")
     internal_category = relationship("TrainingCategory")
 
     __table_args__ = (
@@ -1898,9 +1727,7 @@ class ExternalUserMapping(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     mapped_by = Column(String(36), ForeignKey("users.id"))
 
     __table_args__ = (
@@ -1949,9 +1776,7 @@ class ExternalTrainingSyncLog(Base):
     completed_at = Column(DateTime(timezone=True))
 
     # Results
-    records_fetched = Column(
-        Integer, default=0
-    )  # Records retrieved from external system
+    records_fetched = Column(Integer, default=0)  # Records retrieved from external system
     records_imported = Column(Integer, default=0)  # Records successfully imported
     records_updated = Column(Integer, default=0)  # Existing records updated
     records_skipped = Column(Integer, default=0)  # Records skipped (duplicates, etc.)
@@ -2032,30 +1857,20 @@ class ExternalTrainingImport(Base):
     raw_data = Column(JSON)
 
     # Internal Record Link
-    training_record_id = Column(
-        String(36), ForeignKey("training_records.id", ondelete="SET NULL"), index=True
-    )
-    user_id = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True
-    )  # Mapped internal user
+    training_record_id = Column(String(36), ForeignKey("training_records.id", ondelete="SET NULL"), index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True)  # Mapped internal user
 
     # Import Status
-    import_status = Column(
-        String(50), default="pending", index=True
-    )  # pending, imported, failed, skipped, duplicate
+    import_status = Column(String(50), default="pending", index=True)  # pending, imported, failed, skipped, duplicate
     import_error = Column(Text)
     imported_at = Column(DateTime(timezone=True))
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    provider = relationship(
-        "ExternalTrainingProvider", back_populates="imported_records"
-    )
+    provider = relationship("ExternalTrainingProvider", back_populates="imported_records")
     training_record = relationship("TrainingRecord")
 
     __table_args__ = (
@@ -2100,9 +1915,7 @@ class Shift(Base):
     station_id = Column(String(36))  # Link to station (future)
 
     # Leadership
-    shift_officer_id = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    shift_officer_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Display
     color = Column(String(7))  # Hex color from shift template, e.g. "#4f46e5"
@@ -2113,9 +1926,7 @@ class Shift(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
 
     __table_args__ = (Index("idx_shift_date", "organization_id", "shift_date"),)
@@ -2189,9 +2000,7 @@ class ShiftCall(Base):
 
     # Incident Details
     incident_number = Column(String(100))
-    incident_type = Column(
-        String(100), index=True
-    )  # Structure fire, medical, MVA, etc.
+    incident_type = Column(String(100), index=True)  # Structure fire, medical, MVA, etc.
 
     # Timing
     dispatched_at = Column(DateTime(timezone=True))
@@ -2217,9 +2026,7 @@ class ShiftCall(Base):
     )
 
     def __repr__(self):
-        return (
-            f"<ShiftCall(incident={self.incident_number}, type={self.incident_type})>"
-        )
+        return f"<ShiftCall(incident={self.incident_number}, type={self.incident_type})>"
 
 
 # ============================================
@@ -2306,18 +2113,12 @@ class ShiftTemplate(Base):
     color = Column(String(7))  # Hex color for calendar display
 
     # Staffing
-    positions = Column(
-        JSON
-    )  # [{"position": "officer", "count": 1}, {"position": "firefighter", "count": 3}]
+    positions = Column(JSON)  # [{"position": "officer", "count": 1}, {"position": "firefighter", "count": 3}]
     min_staffing = Column(Integer, default=1)
 
     # Categorization
-    category = Column(
-        String(20), default="standard"
-    )  # "standard", "specialty", "event"
-    apparatus_type = Column(
-        String(50)
-    )  # Links template to a vehicle type (e.g., "engine", "ambulance")
+    category = Column(String(20), default="standard")  # "standard", "specialty", "event"
+    apparatus_type = Column(String(50))  # Links template to a vehicle type (e.g., "engine", "ambulance")
 
     # Defaults
     is_default = Column(Boolean, default=False)
@@ -2325,9 +2126,7 @@ class ShiftTemplate(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
 
     __table_args__ = (Index("idx_shift_template_org", "organization_id"),)
@@ -2362,34 +2161,24 @@ class ShiftPattern(Base):
     pattern_type = Column(Enum(PatternType), nullable=False, default=PatternType.WEEKLY)
 
     # Pattern definition
-    template_id = Column(
-        String(36), ForeignKey("shift_templates.id", ondelete="SET NULL")
-    )
-    rotation_days = Column(
-        Integer
-    )  # Days in the rotation cycle (e.g., 3 for platoon A/B/C)
+    template_id = Column(String(36), ForeignKey("shift_templates.id", ondelete="SET NULL"))
+    rotation_days = Column(Integer)  # Days in the rotation cycle (e.g., 3 for platoon A/B/C)
     days_on = Column(Integer)  # Days on duty per cycle
     days_off = Column(Integer)  # Days off per cycle
-    schedule_config = Column(
-        JSON
-    )  # Flexible config: {"platoons": ["A","B","C"], "weekdays": [0,1,2,3,4]}
+    schedule_config = Column(JSON)  # Flexible config: {"platoons": ["A","B","C"], "weekdays": [0,1,2,3,4]}
 
     # Active period
     start_date = Column(Date, nullable=False)
     end_date = Column(Date)  # Null = indefinite
 
     # Members assigned to this pattern
-    assigned_members = Column(
-        JSON
-    )  # [{"user_id": "...", "platoon": "A", "position": "firefighter"}]
+    assigned_members = Column(JSON)  # [{"user_id": "...", "platoon": "A", "position": "firefighter"}]
 
     is_active = Column(Boolean, default=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
 
     __table_args__ = (Index("idx_shift_pattern_org", "organization_id"),)
@@ -2430,12 +2219,8 @@ class ShiftAssignment(Base):
         index=True,
     )
 
-    position = Column(
-        Enum(ShiftPosition), nullable=False, default=ShiftPosition.FIREFIGHTER
-    )
-    assignment_status = Column(
-        Enum(AssignmentStatus), nullable=False, default=AssignmentStatus.ASSIGNED
-    )
+    position = Column(Enum(ShiftPosition), nullable=False, default=ShiftPosition.FIREFIGHTER)
+    assignment_status = Column(Enum(AssignmentStatus), nullable=False, default=AssignmentStatus.ASSIGNED)
 
     # Tracking
     assigned_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
@@ -2444,9 +2229,7 @@ class ShiftAssignment(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint("shift_id", "user_id", name="uq_shift_assignment_shift_user"),
@@ -2480,23 +2263,15 @@ class ShiftSwapRequest(Base):
     )
 
     # The member requesting the swap
-    requesting_user_id = Column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    requesting_user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     # The shift they want to give up
-    offering_shift_id = Column(
-        String(36), ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False
-    )
+    offering_shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False)
     # The shift they want to pick up (optional — can be open request)
-    requesting_shift_id = Column(
-        String(36), ForeignKey("shifts.id", ondelete="SET NULL")
-    )
+    requesting_shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="SET NULL"))
     # The member they want to swap with (optional — can be open request)
     target_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
 
-    status = Column(
-        Enum(SwapRequestStatus), nullable=False, default=SwapRequestStatus.PENDING
-    )
+    status = Column(Enum(SwapRequestStatus), nullable=False, default=SwapRequestStatus.PENDING)
     reason = Column(Text)
 
     # Review
@@ -2506,9 +2281,7 @@ class ShiftSwapRequest(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         Index("idx_swap_req_org", "organization_id"),
@@ -2517,9 +2290,7 @@ class ShiftSwapRequest(Base):
     )
 
     def __repr__(self):
-        return (
-            f"<ShiftSwapRequest(user={self.requesting_user_id}, status={self.status})>"
-        )
+        return f"<ShiftSwapRequest(user={self.requesting_user_id}, status={self.status})>"
 
 
 # ============================================
@@ -2559,9 +2330,7 @@ class ShiftTimeOff(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         Index("idx_timeoff_org", "organization_id"),
@@ -2570,9 +2339,7 @@ class ShiftTimeOff(Base):
     )
 
     def __repr__(self):
-        return (
-            f"<ShiftTimeOff(user={self.user_id}, {self.start_date} - {self.end_date})>"
-        )
+        return f"<ShiftTimeOff(user={self.user_id}, {self.start_date} - {self.end_date})>"
 
 
 # ============================================
@@ -2602,16 +2369,12 @@ class BasicApparatus(Base):
     name = Column(String(100), nullable=False)
     apparatus_type = Column(String(50), nullable=False, default="engine")
     min_staffing = Column(Integer, default=1)
-    positions = Column(
-        JSON
-    )  # List of position strings e.g. ["officer", "driver", "firefighter"]
+    positions = Column(JSON)  # List of position strings e.g. ["officer", "driver", "firefighter"]
     is_active = Column(Boolean, default=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (Index("idx_basic_apparatus_org", "organization_id"),)
 
@@ -2677,9 +2440,7 @@ class TrainingWaiver(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
     user = relationship("User", foreign_keys=[user_id])

@@ -89,27 +89,19 @@ async def get_my_training_summary(
     Officers always get the full dataset.
     """
     config_service = TrainingModuleConfigService(db)
-    visibility = await config_service.get_member_visibility(
-        current_user.organization_id
-    )
+    visibility = await config_service.get_member_visibility(current_user.organization_id)
 
     # Officers see everything — eagerly load roles to avoid MissingGreenlet
     is_officer = False
     user_with_roles = None
     try:
-        user_result = await db.execute(
-            select(User)
-            .where(User.id == current_user.id)
-            .options(selectinload(User.roles))
-        )
+        user_result = await db.execute(select(User).where(User.id == current_user.id).options(selectinload(User.roles)))
         user_with_roles = user_result.scalar_one_or_none()
         if user_with_roles and user_with_roles.roles:
             role_names = [r.name for r in user_with_roles.roles]
             is_officer = any(r in role_names for r in TRAINING_OFFICER_ROLE_SLUGS)
     except Exception as e:
-        logger.warning(
-            f"Failed to check training officer role for user {current_user.id}: {e}"
-        )
+        logger.warning(f"Failed to check training officer role for user {current_user.id}: {e}")
 
     org_id = str(current_user.organization_id)
     user_id = str(current_user.id)
@@ -133,21 +125,11 @@ async def get_my_training_summary(
                 "id": str(r.id),
                 "course_name": r.course_name,
                 "course_code": r.course_code,
-                "training_type": (
-                    r.training_type.value
-                    if hasattr(r.training_type, "value")
-                    else str(r.training_type)
-                ),
-                "status": (
-                    r.status.value if hasattr(r.status, "value") else str(r.status)
-                ),
-                "completion_date": (
-                    str(r.completion_date) if r.completion_date else None
-                ),
+                "training_type": (r.training_type.value if hasattr(r.training_type, "value") else str(r.training_type)),
+                "status": (r.status.value if hasattr(r.status, "value") else str(r.status)),
+                "completion_date": (str(r.completion_date) if r.completion_date else None),
                 "hours_completed": float(r.hours_completed) if r.hours_completed else 0,
-                "expiration_date": (
-                    str(r.expiration_date) if r.expiration_date else None
-                ),
+                "expiration_date": (str(r.expiration_date) if r.expiration_date else None),
                 "instructor": r.instructor,
             }
             for r in records
@@ -189,13 +171,14 @@ async def get_my_training_summary(
     except Exception as e:
         logger.warning(f"Failed to load user role IDs for user {current_user.id}: {e}")
 
+    user_membership_type = getattr(current_user, "membership_type", None) or "active"
     applicable: List[Any] = []
     for req in all_requirements:
         if req.applies_to_all:
             applicable.append(req)
-        elif req.required_roles and any(
-            rid in user_role_ids for rid in req.required_roles
-        ):
+        elif req.required_membership_types and user_membership_type in req.required_membership_types:
+            applicable.append(req)
+        elif req.required_roles and any(rid in user_role_ids for rid in req.required_roles):
             applicable.append(req)
 
     # --- Fetch active waivers + leaves of absence for this user ---
@@ -233,9 +216,7 @@ async def get_my_training_summary(
         requirements_detail.append(detail)
 
     total_reqs = len(applicable)
-    avg_compliance = (
-        round(total_progress_pct / total_reqs, 1) if total_reqs > 0 else None
-    )
+    avg_compliance = round(total_progress_pct / total_reqs, 1) if total_reqs > 0 else None
 
     result["requirements_summary"] = {
         "total_requirements": total_reqs,
@@ -263,13 +244,9 @@ async def get_my_training_summary(
                 "id": str(c.id),
                 "course_name": c.course_name,
                 "certification_number": c.certification_number,
-                "expiration_date": (
-                    str(c.expiration_date) if c.expiration_date else None
-                ),
+                "expiration_date": (str(c.expiration_date) if c.expiration_date else None),
                 "is_expired": c.expiration_date < today if c.expiration_date else False,
-                "days_until_expiry": (
-                    (c.expiration_date - today).days if c.expiration_date else None
-                ),
+                "days_until_expiry": ((c.expiration_date - today).days if c.expiration_date else None),
             }
             for c in certs
         ]
@@ -288,23 +265,17 @@ async def get_my_training_summary(
             entry: Dict[str, Any] = {
                 "id": str(e.id),
                 "program_id": str(e.program_id),
-                "status": (
-                    e.status.value if hasattr(e.status, "value") else str(e.status)
-                ),
+                "status": (e.status.value if hasattr(e.status, "value") else str(e.status)),
                 "progress_percentage": float(e.progress_percentage or 0),
                 "enrolled_at": e.enrolled_at.isoformat() if e.enrolled_at else None,
-                "target_completion_date": (
-                    str(e.target_completion_date) if e.target_completion_date else None
-                ),
+                "target_completion_date": (str(e.target_completion_date) if e.target_completion_date else None),
                 "completed_at": e.completed_at.isoformat() if e.completed_at else None,
             }
 
             # Requirement details (if allowed)
             if is_officer or visibility.get("show_requirement_details", True):
                 rp_result = await db.execute(
-                    select(RequirementProgress).where(
-                        RequirementProgress.enrollment_id == str(e.id)
-                    )
+                    select(RequirementProgress).where(RequirementProgress.enrollment_id == str(e.id))
                 )
                 rps = rp_result.scalars().all()
 
@@ -324,16 +295,10 @@ async def get_my_training_summary(
                         "id": str(rp.id),
                         "requirement_id": str(rp.requirement_id),
                         "requirement_name": name_map.get(str(rp.requirement_id), ""),
-                        "status": (
-                            rp.status.value
-                            if hasattr(rp.status, "value")
-                            else str(rp.status)
-                        ),
+                        "status": (rp.status.value if hasattr(rp.status, "value") else str(rp.status)),
                         "progress_value": float(rp.progress_value or 0),
                         "progress_percentage": float(rp.progress_percentage or 0),
-                        "completed_at": (
-                            rp.completed_at.isoformat() if rp.completed_at else None
-                        ),
+                        "completed_at": (rp.completed_at.isoformat() if rp.completed_at else None),
                     }
                     for rp in rps
                 ]
@@ -419,18 +384,10 @@ async def get_my_training_summary(
             {
                 "id": str(s.id),
                 "course_name": s.course_name,
-                "training_type": (
-                    s.training_type.value
-                    if hasattr(s.training_type, "value")
-                    else str(s.training_type)
-                ),
-                "completion_date": (
-                    str(s.completion_date) if s.completion_date else None
-                ),
+                "training_type": (s.training_type.value if hasattr(s.training_type, "value") else str(s.training_type)),
+                "completion_date": (str(s.completion_date) if s.completion_date else None),
                 "hours_completed": float(s.hours_completed) if s.hours_completed else 0,
-                "status": (
-                    s.status.value if hasattr(s.status, "value") else str(s.status)
-                ),
+                "status": (s.status.value if hasattr(s.status, "value") else str(s.status)),
                 "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
                 "reviewed_at": s.reviewed_at.isoformat() if s.reviewed_at else None,
             }

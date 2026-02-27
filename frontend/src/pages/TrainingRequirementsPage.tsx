@@ -33,6 +33,15 @@ import toast from 'react-hot-toast';
 
 type FilterSource = 'all' | 'department' | 'state' | 'national';
 
+const MEMBERSHIP_TYPES = [
+  { value: 'active', label: 'Active' },
+  { value: 'probationary', label: 'Probationary' },
+  { value: 'administrative', label: 'Administrative' },
+  { value: 'life', label: 'Life' },
+  { value: 'retired', label: 'Retired' },
+  { value: 'honorary', label: 'Honorary' },
+] as const;
+
 /**
  * Training Requirements Management Page
  *
@@ -71,12 +80,12 @@ const TrainingRequirementsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this requirement?')) return;
+    if (!confirm('Are you sure you want to permanently delete this requirement? This action cannot be undone.')) return;
 
     try {
       await trainingService.deleteRequirement(id);
       setRequirements(requirements.filter(r => r.id !== id));
-      toast.success('Requirement deleted');
+      toast.success('Requirement permanently deleted');
     } catch (_error) {
       toast.error('Failed to delete requirement');
     }
@@ -95,6 +104,7 @@ const TrainingRequirementsPage: React.FC = () => {
         year: requirement.year,
         applies_to_all: requirement.applies_to_all,
         required_roles: requirement.required_roles,
+        required_membership_types: requirement.required_membership_types,
         start_date: requirement.start_date,
         due_date: requirement.due_date,
         due_date_type: requirement.due_date_type,
@@ -419,7 +429,11 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               ) : (
                 <div className="flex items-center space-x-2 text-theme-text-secondary">
                   <Users className="w-4 h-4" aria-hidden="true" />
-                  <span>Specific Roles/Members</span>
+                  <span>
+                    {requirement.required_membership_types?.length
+                      ? requirement.required_membership_types.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(', ')
+                      : 'Specific Roles/Members'}
+                  </span>
                 </div>
               )}
               {requirement.due_date_type === 'rolling' && requirement.rolling_period_months && (
@@ -519,6 +533,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   label="Applies To"
                   value={requirement.applies_to_all ? 'All Members' : 'Specific Groups'}
                 />
+                {requirement.required_membership_types && requirement.required_membership_types.length > 0 && (
+                  <DetailRow
+                    label="Member Categories"
+                    value={requirement.required_membership_types.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(', ')}
+                  />
+                )}
                 {requirement.required_roles && requirement.required_roles.length > 0 && (
                   <DetailRow label="Required Roles" value={requirement.required_roles.join(', ')} />
                 )}
@@ -574,6 +594,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
     frequency: requirement?.frequency || 'annual' as RequirementFrequency,
     year: requirement?.year || new Date().getFullYear() as number | undefined,
     applies_to_all: requirement?.applies_to_all ?? true,
+    required_membership_types: requirement?.required_membership_types || [] as string[],
     due_date: requirement?.due_date || '',
     start_date: requirement?.start_date || '',
     due_date_type: requirement?.due_date_type || 'calendar_period' as DueDateType,
@@ -603,6 +624,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
         frequency: formData.frequency,
         year: formData.year || undefined,
         applies_to_all: formData.applies_to_all,
+        required_membership_types: formData.required_membership_types.length > 0 ? formData.required_membership_types : undefined,
         due_date: formData.due_date || undefined,
         start_date: formData.start_date || undefined,
         due_date_type: formData.due_date_type,
@@ -939,7 +961,11 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 <input
                   type="checkbox"
                   checked={formData.applies_to_all}
-                  onChange={(e) => setFormData({ ...formData, applies_to_all: e.target.checked })}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    applies_to_all: e.target.checked,
+                    ...(e.target.checked ? { required_membership_types: [] } : {}),
+                  })}
                   className="w-5 h-5 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-red-500"
                 />
                 <span className="text-theme-text-secondary">Applies to all members</span>
@@ -948,6 +974,43 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 When checked, this requirement applies to everyone in the organization.
               </p>
             </div>
+
+            {/* Member Categories - shown when not applies_to_all */}
+            {!formData.applies_to_all && (
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Member Categories</label>
+                <p className="text-theme-text-muted text-sm mb-3">
+                  Select which member categories this requirement applies to.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2" role="group" aria-label="Member categories">
+                  {MEMBERSHIP_TYPES.map((memberType) => (
+                    <label
+                      key={memberType.value}
+                      className={`flex items-center space-x-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                        formData.required_membership_types.includes(memberType.value)
+                          ? 'border-red-500 bg-red-500/20 text-theme-text-primary'
+                          : 'border-theme-input-border bg-theme-input-bg text-theme-text-secondary hover:border-theme-input-border'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.required_membership_types.includes(memberType.value)}
+                        onChange={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            required_membership_types: prev.required_membership_types.includes(memberType.value)
+                              ? prev.required_membership_types.filter(v => v !== memberType.value)
+                              : [...prev.required_membership_types, memberType.value],
+                          }));
+                        }}
+                        className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-red-500"
+                      />
+                      <span className="text-sm">{memberType.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

@@ -365,6 +365,7 @@ export interface TrainingRequirement {
   year?: number;
   applies_to_all: boolean;
   required_roles?: string[];
+  required_membership_types?: string[];  // e.g. ["active", "administrative", "probationary"]
   start_date?: string;
   due_date?: string;
   // Due date calculation fields
@@ -390,6 +391,7 @@ export interface TrainingRequirementCreate {
   year?: number;
   applies_to_all?: boolean;
   required_roles?: string[];
+  required_membership_types?: string[];
   start_date?: string;
   due_date?: string;
   // Due date calculation fields
@@ -411,6 +413,7 @@ export interface TrainingRequirementUpdate {
   year?: number;
   applies_to_all?: boolean;
   required_roles?: string[];
+  required_membership_types?: string[];
   start_date?: string;
   due_date?: string;
   // Due date calculation fields
