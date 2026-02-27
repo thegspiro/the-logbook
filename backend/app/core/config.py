@@ -381,6 +381,27 @@ class Settings(BaseSettings):
     )
     RATE_LIMIT_DEFAULT: str = "100/minute"
 
+    def __repr__(self) -> str:
+        """
+        SEC: Override __repr__ to mask secrets so they never appear in logs,
+        tracebacks, or debug output. Only non-sensitive fields are shown.
+        """
+        return (
+            f"Settings(ENVIRONMENT={self.ENVIRONMENT!r}, "
+            f"APP_NAME={self.APP_NAME!r}, "
+            f"DB_HOST={self.DB_HOST!r}, "
+            f"DB_NAME={self.DB_NAME!r}, "
+            f"DB_USER={self.DB_USER!r}, "
+            f"DB_PASSWORD='****', "
+            f"SECRET_KEY='****', "
+            f"ENCRYPTION_KEY='****', "
+            f"REDIS_HOST={self.REDIS_HOST!r}, "
+            f"REDIS_PASSWORD='****')"
+        )
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
 
 @lru_cache()
 def get_settings() -> Settings:
