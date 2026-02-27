@@ -60,9 +60,9 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
     } finally {
       setLoading(false);
     }
-  }, [dateFilter]);
+  }, [dateFilter, tz]);
 
-  useEffect(() => { loadShifts(); }, [loadShifts]);
+  useEffect(() => { void loadShifts(); }, [loadShifts]);
 
   const handleSignup = async (shiftId: string) => {
     setSigningUp(true);
@@ -70,7 +70,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       await schedulingService.signupForShift(shiftId, { position: signupPosition });
       toast.success('Signed up for shift — a manager will confirm your assignment');
       setSignupShiftId(null);
-      loadShifts();
+      void loadShifts();
     } catch {
       // Fallback: try direct assignment
       try {
@@ -80,7 +80,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         });
         toast.success('Signed up for shift — a manager will confirm your assignment');
         setSignupShiftId(null);
-        loadShifts();
+        void loadShifts();
       } catch (err) {
         toast.error(getErrorMessage(err, 'Failed to sign up for shift'));
       }
@@ -110,7 +110,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
             className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
         </div>
-        <button onClick={loadShifts}
+        <button onClick={() => { void loadShifts(); }}
           className="px-3 py-2 text-sm text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors w-full sm:w-auto"
         >
           Refresh
@@ -149,7 +149,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                   {dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz })}
                 </h3>
                 <div className="space-y-3">
-                  {dayShifts!.map(shift => (
+                  {dayShifts?.map(shift => (
                     <div key={shift.id}
                       className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 hover:border-violet-500/30 transition-colors"
                     >
@@ -223,7 +223,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                               ))}
                             </select>
                             <div className="flex items-center gap-2">
-                              <button onClick={() => handleSignup(shift.id)} disabled={signingUp}
+                              <button onClick={() => { void handleSignup(shift.id); }} disabled={signingUp}
                                 className="flex-1 sm:flex-none px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1"
                               >
                                 {signingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}

@@ -11,10 +11,10 @@ const mockGetOpenShifts = vi.fn();
 
 vi.mock('../../services/api', () => ({
   schedulingService: {
-    getMyAssignments: (...args: unknown[]) => mockGetMyAssignments(...args),
-    getMyShifts: (...args: unknown[]) => mockGetMyShifts(...args),
-    confirmAssignment: (...args: unknown[]) => mockConfirmAssignment(...args),
-    getOpenShifts: (...args: unknown[]) => mockGetOpenShifts(...args),
+    getMyAssignments: (...args: unknown[]) => mockGetMyAssignments(...args) as unknown,
+    getMyShifts: (...args: unknown[]) => mockGetMyShifts(...args) as unknown,
+    confirmAssignment: (...args: unknown[]) => mockConfirmAssignment(...args) as unknown,
+    getOpenShifts: (...args: unknown[]) => mockGetOpenShifts(...args) as unknown,
     getShifts: vi.fn().mockResolvedValue({ shifts: [], total: 0 }),
     createSwapRequest: vi.fn().mockResolvedValue({}),
     createTimeOff: vi.fn().mockResolvedValue({}),
@@ -98,8 +98,8 @@ describe('MyShiftsTab', () => {
     renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Upcoming')).toBeInTheDocument();
-      expect(screen.getByText('Past')).toBeInTheDocument();
+      expect(screen.getByText(/^Upcoming/)).toBeInTheDocument();
+      expect(screen.getByText(/^Past/)).toBeInTheDocument();
     });
   });
 });

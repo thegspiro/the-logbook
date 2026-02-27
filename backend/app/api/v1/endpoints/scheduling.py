@@ -6,16 +6,16 @@ attendance tracking, and calendar views.
 """
 
 from datetime import date, timedelta
-from typing import Optional
+from typing import Dict, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
-from app.models.training import BasicApparatus
+from app.models.training import BasicApparatus, ShiftAssignment
 from app.models.user import User
 from app.schemas.scheduling import (
     BasicApparatusCreate,
@@ -69,13 +69,37 @@ async def _enrich_shifts(
     organization_id,
     shifts: list,
 ) -> list[dict]:
-    """Convert Shift ORM objects to dicts enriched with apparatus details."""
+    """Convert Shift ORM objects to dicts enriched with apparatus details,
+    shift officer names, and attendee counts."""
+    if not shifts:
+        return []
+
     apparatus_ids = list({s.apparatus_id for s in shifts if s.apparatus_id})
     apparatus_map = await service._get_apparatus_map(organization_id, apparatus_ids)
+
+    # Resolve shift officer names
+    officer_ids = list({s.shift_officer_id for s in shifts if s.shift_officer_id})
+    user_name_map = await service._get_user_name_map(officer_ids)
+
+    # Compute attendee_count per shift (count of non-declined assignments)
+    shift_ids = [s.id for s in shifts]
+    attendee_counts: Dict[str, int] = {}
+    if shift_ids:
+        count_result = await service.db.execute(
+            select(ShiftAssignment.shift_id, func.count(ShiftAssignment.id))
+            .where(ShiftAssignment.shift_id.in_(shift_ids))
+            .where(ShiftAssignment.organization_id == str(organization_id))
+            .where(ShiftAssignment.assignment_status != "declined")
+            .group_by(ShiftAssignment.shift_id)
+        )
+        for row in count_result.all():
+            attendee_counts[str(row[0])] = row[1]
+
     enriched = []
     for s in shifts:
         d = {c.key: getattr(s, c.key) for c in s.__table__.columns}
-        service._enrich_shift_dict(d, apparatus_map)
+        service._enrich_shift_dict(d, apparatus_map, user_name_map)
+        d["attendee_count"] = attendee_counts.get(str(s.id), 0)
         enriched.append(d)
     return enriched
 
@@ -137,9 +161,47 @@ async def create_shift(
         current_user.organization_id, shift_data, current_user.id
     )
     if error or result is None:
-        raise HTTPException(status_code=400, detail=f"Unable to create shift. {error or 'Unknown error'}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unable to create shift. {error or 'Unknown error'}",
+        )
     enriched = await _enrich_shifts(service, current_user.organization_id, [result])
     return enriched[0]
+
+
+@router.get("/shifts/open", response_model=list[ShiftResponse])
+async def get_open_shifts(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    apparatus_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get upcoming shifts (optionally filtered by date range and apparatus).
+    Returns shifts that still have open positions.
+    Must be registered before /shifts/{shift_id} to avoid route shadowing.
+    """
+    service = SchedulingService(db)
+    try:
+        start = date.fromisoformat(start_date) if start_date else date.today()
+        end = date.fromisoformat(end_date) if end_date else start + timedelta(days=30)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
+        )
+
+    shifts_list, total = await service.get_shifts(
+        current_user.organization_id,
+        start_date=start,
+        end_date=end,
+        skip=0,
+        limit=50,
+    )
+    # Optionally filter by apparatus_id
+    if apparatus_id:
+        shifts_list = [s for s in shifts_list if s.apparatus_id == apparatus_id]
+    return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 
 
 @router.get("/shifts/{shift_id}", response_model=ShiftDetailResponse)
@@ -161,8 +223,10 @@ async def get_shift(
     apparatus_map = await service._get_apparatus_map(
         current_user.organization_id, apparatus_ids
     )
+    officer_ids = [shift.shift_officer_id] if shift.shift_officer_id else []
+    user_name_map = await service._get_user_name_map(officer_ids)
     d = {c.key: getattr(shift, c.key) for c in shift.__table__.columns}
-    service._enrich_shift_dict(d, apparatus_map)
+    service._enrich_shift_dict(d, apparatus_map, user_name_map)
     return {
         **d,
         "attendees": attendance,
@@ -184,7 +248,10 @@ async def update_shift(
         shift_id, current_user.organization_id, update_data
     )
     if error or result is None:
-        raise HTTPException(status_code=400, detail=f"Unable to update shift. {error or 'Unknown error'}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unable to update shift. {error or 'Unknown error'}",
+        )
     enriched = await _enrich_shifts(service, current_user.organization_id, [result])
     return enriched[0]
 
@@ -227,7 +294,8 @@ async def add_attendance(
         raise HTTPException(
             status_code=400, detail=f"Unable to add attendance. {error}"
         )
-    return result
+    enriched = await service.enrich_attendance_records([result])
+    return enriched[0]
 
 
 @router.get(
@@ -243,7 +311,7 @@ async def get_attendance(
     attendance = await service.get_shift_attendance(
         shift_id, current_user.organization_id
     )
-    return attendance
+    return await service.enrich_attendance_records(attendance)
 
 
 @router.patch("/attendance/{attendance_id}", response_model=ShiftAttendanceResponse)
@@ -264,7 +332,8 @@ async def update_attendance(
         raise HTTPException(
             status_code=400, detail=f"Unable to update attendance. {error}"
         )
-    return result
+    enriched = await service.enrich_attendance_records([result])
+    return enriched[0]
 
 
 @router.delete("/attendance/{attendance_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -659,7 +728,7 @@ async def list_shift_assignments(
     assignments = await service.get_shift_assignments(
         shift_id, current_user.organization_id
     )
-    return assignments
+    return await service.enrich_assignments(assignments)
 
 
 @router.post(
@@ -683,7 +752,8 @@ async def create_assignment(
         raise HTTPException(
             status_code=400, detail=f"Unable to create assignment. {error}"
         )
-    return result
+    enriched = await service.enrich_assignments([result])
+    return enriched[0]
 
 
 @router.patch("/assignments/{assignment_id}", response_model=ShiftAssignmentResponse)
@@ -703,7 +773,8 @@ async def update_assignment(
         raise HTTPException(
             status_code=400, detail=f"Unable to update assignment. {error}"
         )
-    return result
+    enriched = await service.enrich_assignments([result])
+    return enriched[0]
 
 
 @router.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -733,12 +804,15 @@ async def confirm_assignment(
 ):
     """Confirm own shift assignment"""
     service = SchedulingService(db)
-    result, error = await service.confirm_assignment(assignment_id, current_user.id)
+    result, error = await service.confirm_assignment(
+        assignment_id, current_user.id, current_user.organization_id
+    )
     if error:
         raise HTTPException(
             status_code=400, detail=f"Unable to confirm assignment. {error}"
         )
-    return result
+    enriched = await service.enrich_assignments([result])
+    return enriched[0]
 
 
 # ============================================
@@ -770,7 +844,7 @@ async def list_swap_requests(
         skip=skip,
         limit=limit,
     )
-    return requests
+    return await service.enrich_swap_requests(requests)
 
 
 @router.post(
@@ -793,7 +867,8 @@ async def create_swap_request(
         raise HTTPException(
             status_code=400, detail=f"Unable to create swap request. {error}"
         )
-    return result
+    enriched = await service.enrich_swap_requests([result])
+    return enriched[0]
 
 
 @router.get("/swap-requests/{request_id}", response_model=ShiftSwapRequestResponse)
@@ -809,7 +884,8 @@ async def get_swap_request(
     )
     if not swap_request:
         raise HTTPException(status_code=404, detail="Swap request not found")
-    return swap_request
+    enriched = await service.enrich_swap_requests([swap_request])
+    return enriched[0]
 
 
 @router.post(
@@ -834,7 +910,8 @@ async def review_swap_request(
         raise HTTPException(
             status_code=400, detail=f"Unable to review swap request. {error}"
         )
-    return result
+    enriched = await service.enrich_swap_requests([result])
+    return enriched[0]
 
 
 @router.post(
@@ -854,7 +931,8 @@ async def cancel_swap_request(
         raise HTTPException(
             status_code=400, detail=f"Unable to cancel swap request. {error}"
         )
-    return result
+    enriched = await service.enrich_swap_requests([result])
+    return enriched[0]
 
 
 # ============================================
@@ -888,7 +966,7 @@ async def list_time_off_requests(
         skip=skip,
         limit=limit,
     )
-    return requests
+    return await service.enrich_time_off_requests(requests)
 
 
 @router.post(
@@ -911,7 +989,8 @@ async def create_time_off_request(
         raise HTTPException(
             status_code=400, detail=f"Unable to create time-off request. {error}"
         )
-    return result
+    enriched = await service.enrich_time_off_requests([result])
+    return enriched[0]
 
 
 @router.get("/time-off/{time_off_id}", response_model=ShiftTimeOffResponse)
@@ -927,7 +1006,8 @@ async def get_time_off_request(
     )
     if not time_off:
         raise HTTPException(status_code=404, detail="Time-off request not found")
-    return time_off
+    enriched = await service.enrich_time_off_requests([time_off])
+    return enriched[0]
 
 
 @router.post("/time-off/{time_off_id}/review", response_model=ShiftTimeOffResponse)
@@ -950,7 +1030,8 @@ async def review_time_off_request(
         raise HTTPException(
             status_code=400, detail=f"Unable to review time-off request. {error}"
         )
-    return result
+    enriched = await service.enrich_time_off_requests([result])
+    return enriched[0]
 
 
 @router.post("/time-off/{time_off_id}/cancel", response_model=ShiftTimeOffResponse)
@@ -968,7 +1049,8 @@ async def cancel_time_off_request(
         raise HTTPException(
             status_code=400, detail=f"Unable to cancel time-off request. {error}"
         )
-    return result
+    enriched = await service.enrich_time_off_requests([result])
+    return enriched[0]
 
 
 @router.get("/availability")
@@ -1016,7 +1098,7 @@ async def get_my_shifts(
         raise HTTPException(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
-    shifts, total = await service.get_my_shifts(
+    shift_dicts, total = await service.get_my_shifts(
         current_user.id,
         current_user.organization_id,
         start_date=start,
@@ -1024,8 +1106,8 @@ async def get_my_shifts(
         skip=skip,
         limit=limit,
     )
-    enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
-    return {"shifts": enriched, "total": total, "skip": skip, "limit": limit}
+    # get_my_shifts returns plain dicts (not ORM objects), so skip _enrich_shifts
+    return {"shifts": shift_dicts, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/my-assignments", response_model=list[ShiftAssignmentResponse])
@@ -1035,7 +1117,7 @@ async def get_my_assignments(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get current user's shift assignments"""
+    """Get current user's shift assignments with shift details"""
     service = SchedulingService(db)
     try:
         start = date.fromisoformat(start_date) if start_date else None
@@ -1050,7 +1132,9 @@ async def get_my_assignments(
         start_date=start,
         end_date=end,
     )
-    return assignments
+    return await service.enrich_assignments_with_shifts(
+        assignments, current_user.organization_id
+    )
 
 
 # ============================================
@@ -1200,7 +1284,8 @@ async def signup_for_shift(
         raise HTTPException(
             status_code=400, detail=f"Unable to sign up for shift. {error}"
         )
-    return result
+    enriched = await service.enrich_assignments([result])
+    return enriched[0]
 
 
 @router.delete("/shifts/{shift_id}/signup", status_code=status.HTTP_204_NO_CONTENT)
@@ -1229,40 +1314,6 @@ async def withdraw_from_shift(
     )
     if not success:
         raise HTTPException(status_code=400, detail=f"Unable to withdraw. {error}")
-
-
-@router.get("/shifts/open", response_model=list[ShiftResponse])
-async def get_open_shifts(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    apparatus_id: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Get upcoming shifts (optionally filtered by date range and apparatus).
-    Returns shifts that still have open positions.
-    """
-    service = SchedulingService(db)
-    try:
-        start = date.fromisoformat(start_date) if start_date else date.today()
-        end = date.fromisoformat(end_date) if end_date else start + timedelta(days=30)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
-        )
-
-    shifts_list, total = await service.get_shifts(
-        current_user.organization_id,
-        start_date=start,
-        end_date=end,
-        skip=0,
-        limit=50,
-    )
-    # Optionally filter by apparatus_id
-    if apparatus_id:
-        shifts_list = [s for s in shifts_list if s.apparatus_id == apparatus_id]
-    return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 
 
 # ============================================

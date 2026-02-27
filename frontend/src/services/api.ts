@@ -3685,7 +3685,7 @@ export const schedulingService = {
     return response.data;
   },
   async cancelSwapRequest(requestId: string): Promise<void> {
-    await api.delete(`/scheduling/swap-requests/${requestId}`);
+    await api.post(`/scheduling/swap-requests/${requestId}/cancel`);
   },
 
   // Time Off
@@ -3706,7 +3706,7 @@ export const schedulingService = {
     return response.data;
   },
   async cancelTimeOff(requestId: string): Promise<void> {
-    await api.delete(`/scheduling/time-off/${requestId}`);
+    await api.post(`/scheduling/time-off/${requestId}/cancel`);
   },
 
   // Shift Attendance

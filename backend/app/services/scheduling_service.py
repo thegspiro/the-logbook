@@ -53,7 +53,7 @@ class SchedulingService:
         self.db = db
 
     # ============================================
-    # Apparatus Enrichment
+    # Enrichment Helpers
     # ============================================
 
     async def _get_apparatus_map(
@@ -69,10 +69,29 @@ class SchedulingService:
         )
         return {str(a.id): a for a in result.scalars().all()}
 
+    async def _get_user_name_map(self, user_ids: List[str]) -> Dict[str, str]:
+        """Load user display names for a set of user IDs, returning {id: full_name}."""
+        if not user_ids:
+            return {}
+        result = await self.db.execute(
+            select(User.id, User.first_name, User.last_name).where(
+                User.id.in_(user_ids)
+            )
+        )
+        name_map: Dict[str, str] = {}
+        for row in result.all():
+            first = row.first_name or ""
+            last = row.last_name or ""
+            name_map[str(row.id)] = f"{first} {last}".strip() or "Unknown"
+        return name_map
+
     def _enrich_shift_dict(
-        self, shift_dict: Dict[str, Any], apparatus_map: Dict[str, Any]
+        self,
+        shift_dict: Dict[str, Any],
+        apparatus_map: Dict[str, Any],
+        user_name_map: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
-        """Add apparatus details and min_staffing to a shift dict."""
+        """Add apparatus details, min_staffing, and shift officer name to a shift dict."""
         aid = shift_dict.get("apparatus_id")
         if aid and aid in apparatus_map:
             a = apparatus_map[aid]
@@ -85,7 +104,150 @@ class SchedulingService:
             shift_dict["apparatus_unit_number"] = None
             shift_dict["apparatus_positions"] = []
             shift_dict["min_staffing"] = None
+
+        # Resolve shift officer name
+        officer_id = shift_dict.get("shift_officer_id")
+        if officer_id and user_name_map:
+            shift_dict["shift_officer_name"] = user_name_map.get(str(officer_id))
+        elif "shift_officer_name" not in shift_dict:
+            shift_dict["shift_officer_name"] = None
+
         return shift_dict
+
+    async def enrich_assignments(
+        self, assignments: List[ShiftAssignment]
+    ) -> List[Dict[str, Any]]:
+        """Convert assignment ORM objects to dicts with user_name populated."""
+        if not assignments:
+            return []
+        user_ids = list({a.user_id for a in assignments if a.user_id})
+        name_map = await self._get_user_name_map(user_ids)
+        result = []
+        for a in assignments:
+            d = {c.key: getattr(a, c.key) for c in a.__table__.columns}
+            d["user_name"] = name_map.get(str(a.user_id))
+            result.append(d)
+        return result
+
+    async def enrich_assignments_with_shifts(
+        self, assignments: List[ShiftAssignment], organization_id: UUID
+    ) -> List[Dict[str, Any]]:
+        """Convert assignment ORM objects to dicts with user_name and shift data populated."""
+        if not assignments:
+            return []
+        user_ids = list({a.user_id for a in assignments if a.user_id})
+        name_map = await self._get_user_name_map(user_ids)
+
+        # Batch-load shifts for all assignments
+        shift_ids = list({a.shift_id for a in assignments if a.shift_id})
+        shift_map: Dict[str, Any] = {}
+        if shift_ids:
+            shift_result = await self.db.execute(
+                select(Shift).where(Shift.id.in_(shift_ids))
+            )
+            for s in shift_result.scalars().all():
+                shift_map[str(s.id)] = {
+                    "id": s.id,
+                    "shift_date": s.shift_date.isoformat() if s.shift_date else None,
+                    "start_time": s.start_time.isoformat() if s.start_time else None,
+                    "end_time": s.end_time.isoformat() if s.end_time else None,
+                    "notes": s.notes,
+                    "apparatus_id": s.apparatus_id,
+                    "shift_officer_id": s.shift_officer_id,
+                    "color": s.color,
+                }
+
+        result = []
+        for a in assignments:
+            d = {c.key: getattr(a, c.key) for c in a.__table__.columns}
+            d["user_name"] = name_map.get(str(a.user_id))
+            d["shift"] = shift_map.get(str(a.shift_id))
+            result.append(d)
+        return result
+
+    async def enrich_swap_requests(
+        self, swap_requests: List[ShiftSwapRequest]
+    ) -> List[Dict[str, Any]]:
+        """Convert swap request ORM objects to dicts with user names and shift dates."""
+        if not swap_requests:
+            return []
+        # Collect all user IDs and shift IDs
+        user_ids: set = set()
+        shift_ids: set = set()
+        for sr in swap_requests:
+            if sr.requesting_user_id:
+                user_ids.add(sr.requesting_user_id)
+            if sr.target_user_id:
+                user_ids.add(sr.target_user_id)
+            if sr.offering_shift_id:
+                shift_ids.add(sr.offering_shift_id)
+            if sr.requesting_shift_id:
+                shift_ids.add(sr.requesting_shift_id)
+
+        name_map = await self._get_user_name_map(list(user_ids))
+
+        # Get shift dates
+        shift_date_map: Dict[str, Any] = {}
+        if shift_ids:
+            shift_result = await self.db.execute(
+                select(Shift.id, Shift.shift_date).where(Shift.id.in_(list(shift_ids)))
+            )
+            for row in shift_result.all():
+                shift_date_map[str(row[0])] = row[1]
+
+        result = []
+        for sr in swap_requests:
+            d = {c.key: getattr(sr, c.key) for c in sr.__table__.columns}
+            d["requesting_user_name"] = (
+                name_map.get(str(sr.requesting_user_id))
+                if sr.requesting_user_id
+                else None
+            )
+            d["target_user_name"] = (
+                name_map.get(str(sr.target_user_id)) if sr.target_user_id else None
+            )
+            d["offering_shift_date"] = (
+                shift_date_map.get(str(sr.offering_shift_id))
+                if sr.offering_shift_id
+                else None
+            )
+            d["requesting_shift_date"] = (
+                shift_date_map.get(str(sr.requesting_shift_id))
+                if sr.requesting_shift_id
+                else None
+            )
+            result.append(d)
+        return result
+
+    async def enrich_time_off_requests(
+        self, time_off_requests: List[ShiftTimeOff]
+    ) -> List[Dict[str, Any]]:
+        """Convert time-off ORM objects to dicts with user_name populated."""
+        if not time_off_requests:
+            return []
+        user_ids = list({t.user_id for t in time_off_requests if t.user_id})
+        name_map = await self._get_user_name_map(user_ids)
+        result = []
+        for t in time_off_requests:
+            d = {c.key: getattr(t, c.key) for c in t.__table__.columns}
+            d["user_name"] = name_map.get(str(t.user_id))
+            result.append(d)
+        return result
+
+    async def enrich_attendance_records(
+        self, attendance_records: List[ShiftAttendance]
+    ) -> List[Dict[str, Any]]:
+        """Convert attendance ORM objects to dicts with user_name populated."""
+        if not attendance_records:
+            return []
+        user_ids = list({a.user_id for a in attendance_records if a.user_id})
+        name_map = await self._get_user_name_map(user_ids)
+        result = []
+        for a in attendance_records:
+            d = {c.key: getattr(a, c.key) for c in a.__table__.columns}
+            d["user_name"] = name_map.get(str(a.user_id))
+            result.append(d)
+        return result
 
     # ============================================
     # Shift Management
@@ -335,10 +497,17 @@ class SchedulingService:
 
         # Shifts this month
         first_of_month = today.replace(day=1)
+        if first_of_month.month == 12:
+            next_month_first = first_of_month.replace(
+                year=first_of_month.year + 1, month=1
+            )
+        else:
+            next_month_first = first_of_month.replace(month=first_of_month.month + 1)
         month_result = await self.db.execute(
             select(func.count(Shift.id))
             .where(Shift.organization_id == str(organization_id))
             .where(Shift.shift_date >= first_of_month)
+            .where(Shift.shift_date < next_month_first)
         )
         shifts_this_month = month_result.scalar() or 0
 
@@ -348,6 +517,7 @@ class SchedulingService:
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
             .where(Shift.organization_id == str(organization_id))
             .where(Shift.shift_date >= first_of_month)
+            .where(Shift.shift_date < next_month_first)
         )
         total_minutes = hours_result.scalar() or 0
         total_hours = round(total_minutes / 60.0, 1)
@@ -635,7 +805,9 @@ class SchedulingService:
 
             # Parse template times safely
             try:
-                start_hour, start_minute = map(int, template.start_time_of_day.split(":"))
+                start_hour, start_minute = map(
+                    int, template.start_time_of_day.split(":")
+                )
                 end_hour, end_minute = map(int, template.end_time_of_day.split(":"))
             except (ValueError, AttributeError):
                 return [], "Invalid time format in template. Expected HH:MM."
@@ -773,7 +945,9 @@ class SchedulingService:
                     select(ShiftAssignment.id)
                     .where(ShiftAssignment.shift_id == str(shift_id))
                     .where(ShiftAssignment.user_id == str(user_id))
-                    .where(ShiftAssignment.assignment_status != AssignmentStatus.DECLINED)
+                    .where(
+                        ShiftAssignment.assignment_status != AssignmentStatus.DECLINED
+                    )
                 )
                 if dup_result.scalar_one_or_none():
                     return None, "Member is already assigned to this shift"
@@ -788,7 +962,9 @@ class SchedulingService:
                     select(Shift.shift_date, Shift.start_time)
                     .join(ShiftAssignment, ShiftAssignment.shift_id == Shift.id)
                     .where(ShiftAssignment.user_id == str(user_id))
-                    .where(ShiftAssignment.assignment_status != AssignmentStatus.DECLINED)
+                    .where(
+                        ShiftAssignment.assignment_status != AssignmentStatus.DECLINED
+                    )
                     .where(Shift.id != str(shift_id))
                     .where(Shift.organization_id == str(organization_id))
                     .where(Shift.shift_date.between(date_lo, date_hi))
@@ -798,7 +974,9 @@ class SchedulingService:
                 if shift.end_time:
                     overlap_query = overlap_query.where(
                         Shift.start_time < shift.end_time,
-                        or_(Shift.end_time.is_(None), Shift.end_time > shift.start_time),
+                        or_(
+                            Shift.end_time.is_(None), Shift.end_time > shift.start_time
+                        ),
                     )
                 else:
                     # No end time on this shift — check same-day overlap
@@ -928,15 +1106,20 @@ class SchedulingService:
             return False, str(e)
 
     async def confirm_assignment(
-        self, assignment_id: UUID, user_id: UUID
+        self, assignment_id: UUID, user_id: UUID, organization_id: Optional[UUID] = None
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
         """Confirm a shift assignment (by the assigned user)"""
         try:
-            result = await self.db.execute(
+            query = (
                 select(ShiftAssignment)
                 .where(ShiftAssignment.id == str(assignment_id))
                 .where(ShiftAssignment.user_id == str(user_id))
             )
+            if organization_id:
+                query = query.where(
+                    ShiftAssignment.organization_id == str(organization_id)
+                )
+            result = await self.db.execute(query)
             assignment = result.scalar_one_or_none()
             if not assignment:
                 return None, "Shift assignment not found or not assigned to you"
@@ -1356,7 +1539,11 @@ class SchedulingService:
                 total_confirmed += confirmed_count
 
                 # Use apparatus min_staffing if available, else default to 1
-                min_staff = apparatus_min_staffing.get(shift.apparatus_id, 1) if shift.apparatus_id else 1
+                min_staff = (
+                    apparatus_min_staffing.get(shift.apparatus_id, 1)
+                    if shift.apparatus_id
+                    else 1
+                )
                 if assigned_count < min_staff:
                     understaffed_shifts += 1
 
@@ -1513,14 +1700,31 @@ class SchedulingService:
             for a in att_result.scalars().all():
                 user_attendances[a.shift_id] = a
 
+        # Batch-load apparatus and officer enrichment data
+        apparatus_ids = list({s.apparatus_id for s in shifts if s.apparatus_id})
+        apparatus_map = await self._get_apparatus_map(organization_id, apparatus_ids)
+        officer_ids = list({s.shift_officer_id for s in shifts if s.shift_officer_id})
+        user_name_map = await self._get_user_name_map(officer_ids)
+
         # Enrich with user-specific data
         shift_list = []
         for shift in shifts:
             assignment = user_assignments.get(shift.id)
             attendance = user_attendances.get(shift.id)
 
+            # Resolve apparatus details
+            apparatus_name = None
+            apparatus_unit_number = None
+            apparatus_positions = []
+            if shift.apparatus_id and shift.apparatus_id in apparatus_map:
+                app = apparatus_map[shift.apparatus_id]
+                apparatus_name = app.get("name")
+                apparatus_unit_number = app.get("unit_number")
+                apparatus_positions = app.get("positions") or []
+
             shift_dict = {
                 "id": shift.id,
+                "organization_id": shift.organization_id,
                 "shift_date": (
                     shift.shift_date.isoformat() if shift.shift_date else None
                 ),
@@ -1529,6 +1733,23 @@ class SchedulingService:
                 ),
                 "end_time": shift.end_time.isoformat() if shift.end_time else None,
                 "notes": shift.notes,
+                "apparatus_id": shift.apparatus_id,
+                "apparatus_name": apparatus_name,
+                "apparatus_unit_number": apparatus_unit_number,
+                "apparatus_positions": apparatus_positions,
+                "shift_officer_id": shift.shift_officer_id,
+                "shift_officer_name": (
+                    user_name_map.get(str(shift.shift_officer_id))
+                    if shift.shift_officer_id
+                    else None
+                ),
+                "color": shift.color,
+                "created_at": (
+                    shift.created_at.isoformat() if shift.created_at else None
+                ),
+                "updated_at": (
+                    shift.updated_at.isoformat() if shift.updated_at else None
+                ),
                 "assignment": (
                     {
                         "id": assignment.id,

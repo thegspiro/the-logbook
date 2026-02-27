@@ -9,7 +9,7 @@ from enum import Enum as PyEnum
 from typing import Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ============================================
 # Shift Schemas
@@ -417,6 +417,19 @@ class ShiftAssignmentUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class EmbeddedShiftInfo(BaseModel):
+    """Minimal shift data embedded in assignment responses."""
+
+    id: str
+    shift_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    notes: Optional[str] = None
+    apparatus_id: Optional[str] = None
+    shift_officer_id: Optional[str] = None
+    color: Optional[str] = None
+
+
 class ShiftAssignmentResponse(BaseModel):
     """Schema for shift assignment response"""
 
@@ -430,6 +443,7 @@ class ShiftAssignmentResponse(BaseModel):
     assigned_by: Optional[UUID] = None
     confirmed_at: Optional[datetime] = None
     notes: Optional[str] = None
+    shift: Optional[EmbeddedShiftInfo] = None
     created_at: datetime
     updated_at: datetime
 
@@ -492,6 +506,12 @@ class ShiftTimeOffCreate(BaseModel):
     start_date: date
     end_date: date
     reason: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "ShiftTimeOffCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must not be before start_date")
+        return self
 
 
 class ShiftTimeOffUpdate(BaseModel):

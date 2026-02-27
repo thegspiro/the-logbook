@@ -12,10 +12,10 @@ const mockReviewTimeOff = vi.fn();
 
 vi.mock('../../services/api', () => ({
   schedulingService: {
-    getSwapRequests: (...args: unknown[]) => mockGetSwapRequests(...args),
-    getTimeOffRequests: (...args: unknown[]) => mockGetTimeOffRequests(...args),
-    reviewSwapRequest: (...args: unknown[]) => mockReviewSwapRequest(...args),
-    reviewTimeOff: (...args: unknown[]) => mockReviewTimeOff(...args),
+    getSwapRequests: (...args: unknown[]) => mockGetSwapRequests(...args) as unknown,
+    getTimeOffRequests: (...args: unknown[]) => mockGetTimeOffRequests(...args) as unknown,
+    reviewSwapRequest: (...args: unknown[]) => mockReviewSwapRequest(...args) as unknown,
+    reviewTimeOff: (...args: unknown[]) => mockReviewTimeOff(...args) as unknown,
     cancelSwapRequest: vi.fn().mockResolvedValue(undefined),
     cancelTimeOff: vi.fn().mockResolvedValue(undefined),
     getShift: vi.fn().mockResolvedValue({
@@ -59,8 +59,8 @@ describe('RequestsTab', () => {
     renderWithRouter(<RequestsTab />);
 
     await waitFor(() => {
-      expect(screen.getByText('Swap Requests')).toBeInTheDocument();
-      expect(screen.getByText('Time Off')).toBeInTheDocument();
+      expect(screen.getByText(/Swap Requests/)).toBeInTheDocument();
+      expect(screen.getByText(/Time Off/)).toBeInTheDocument();
     });
   });
 
@@ -102,14 +102,14 @@ describe('RequestsTab', () => {
     const user = userEvent.setup();
 
     await waitFor(() => {
-      expect(screen.getByText('Time Off')).toBeInTheDocument();
+      expect(screen.getByText(/Time Off/)).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText('Time Off'));
+    await user.click(screen.getByText(/Time Off/));
 
     await waitFor(() => {
       // Time off view should now be active
-      expect(screen.getByText('Time Off')).toBeInTheDocument();
+      expect(screen.getByText(/Time Off/)).toBeInTheDocument();
     });
   });
 
