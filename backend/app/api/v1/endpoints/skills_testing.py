@@ -964,6 +964,237 @@ async def delete_test(
     )
 
 
+@router.delete(
+    "/tests/{test_id}/discard", status_code=status.HTTP_204_NO_CONTENT
+)
+async def discard_practice_test(
+    test_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Discard a practice test — permanently deletes it with no audit trail.
+
+    Only practice tests created by the current user (as examiner) can be
+    discarded. This allows any user who ran a practice session to clean
+    it up without needing training.manage permission.
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == current_user.organization_id)
+    )
+    test = result.scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    if not test.is_practice:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only practice tests can be discarded",
+        )
+
+    if test.examiner_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the examiner who created this practice test can discard it",
+        )
+
+    await db.delete(test)
+    await db.commit()
+
+
+@router.post("/tests/{test_id}/email-results")
+async def email_test_results(
+    test_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Email a summary of the test results to the candidate.
+
+    Builds an HTML email with the test scorecard and sends it to the
+    candidate's email address. Works for both official and practice tests.
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == current_user.organization_id)
+    )
+    test = result.scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    # Load template, candidate, examiner
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    examiner_result = await db.execute(
+        select(User).where(User.id == test.examiner_id)
+    )
+    examiner = examiner_result.scalar_one_or_none()
+
+    if not candidate or not candidate.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Candidate has no email address on file",
+        )
+
+    # Load organization for email service
+    from app.models.user import Organization
+
+    org_result = await db.execute(
+        select(Organization).where(
+            Organization.id == current_user.organization_id
+        )
+    )
+    org = org_result.scalar_one_or_none()
+
+    # Build email body
+    candidate_name = _format_user_name(candidate)
+    examiner_name = _format_user_name(examiner) if examiner else "Unknown"
+    template_name = template.name if template else "Unknown Template"
+    test_type = "Practice" if test.is_practice else "Official"
+    result_text = (test.result or "incomplete").upper()
+    score_text = f"{round(test.overall_score)}%" if test.overall_score is not None else "N/A"
+
+    # Build section summaries
+    sections_html = ""
+    template_sections = template.sections or [] if template else []
+    section_results = test.section_results or []
+    for si, section_def in enumerate(template_sections):
+        if not isinstance(section_def, dict):
+            continue
+        section_name = section_def.get("name", f"Section {si + 1}")
+        section_id = f"section-{si}"
+
+        sr = None
+        for s in section_results:
+            if isinstance(s, dict) and (
+                s.get("section_id") == section_id
+                or s.get("section_name") == section_name
+            ):
+                sr = s
+                break
+
+        criteria_html = ""
+        for ci, criterion in enumerate(section_def.get("criteria", [])):
+            if not isinstance(criterion, dict):
+                continue
+            c_type = criterion.get("type", "")
+            if c_type == "statement":
+                continue
+
+            label = criterion.get("label", "")
+            criterion_id = f"criterion-{si}-{ci}"
+
+            cr = None
+            if sr:
+                for c in sr.get("criteria_results", []):
+                    if isinstance(c, dict) and (
+                        c.get("criterion_id") == criterion_id
+                        or c.get("criterion_label") == label
+                    ):
+                        cr = c
+                        break
+
+            if cr:
+                passed = cr.get("passed")
+                if c_type == "score":
+                    score = cr.get("score", 0)
+                    max_score = criterion.get("max_score", 0)
+                    badge = f"{score}/{max_score} pts"
+                elif passed is True:
+                    badge = "PASS"
+                elif passed is False:
+                    badge = "FAIL"
+                else:
+                    badge = "—"
+            else:
+                badge = "—"
+
+            criteria_html += (
+                f'<tr><td style="padding:4px 8px;border-bottom:1px solid #eee;">'
+                f"{label}</td>"
+                f'<td style="padding:4px 8px;border-bottom:1px solid #eee;'
+                f'text-align:center;font-weight:bold;">{badge}</td></tr>'
+            )
+
+        if criteria_html:
+            sections_html += (
+                f'<h3 style="margin:16px 0 8px;">{section_name}</h3>'
+                f'<table style="width:100%;border-collapse:collapse;">'
+                f"{criteria_html}</table>"
+            )
+
+    html_body = f"""
+    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+      <h2 style="color:#333;">Skills Test Results — {test_type}</h2>
+      <table style="width:100%;margin-bottom:16px;">
+        <tr><td style="padding:4px 0;color:#666;">Template:</td>
+            <td style="padding:4px 0;font-weight:bold;">{template_name}</td></tr>
+        <tr><td style="padding:4px 0;color:#666;">Candidate:</td>
+            <td style="padding:4px 0;font-weight:bold;">{candidate_name}</td></tr>
+        <tr><td style="padding:4px 0;color:#666;">Examiner:</td>
+            <td style="padding:4px 0;font-weight:bold;">{examiner_name}</td></tr>
+        <tr><td style="padding:4px 0;color:#666;">Result:</td>
+            <td style="padding:4px 0;font-weight:bold;">{result_text}</td></tr>
+        <tr><td style="padding:4px 0;color:#666;">Score:</td>
+            <td style="padding:4px 0;font-weight:bold;">{score_text}</td></tr>
+      </table>
+      {sections_html}
+      <hr style="margin:24px 0;border:none;border-top:1px solid #ddd;" />
+      <p style="color:#999;font-size:12px;">
+        {"This was a practice attempt and is not part of official records."
+         if test.is_practice else
+         "This is an official evaluation record."}
+      </p>
+    </div>
+    """
+
+    from app.services.email_service import EmailService
+
+    email_service = EmailService(organization=org)
+    subject = f"Skills Test Results: {template_name} ({test_type})"
+
+    try:
+        success, failure = await email_service.send_email(
+            to_emails=[candidate.email],
+            subject=subject,
+            html_body=html_body,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send email: {str(e)}",
+        ) from e
+
+    if failure > 0:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to deliver email to candidate",
+        )
+
+    return {"message": f"Results emailed to {candidate.email}"}
+
+
 # ============================================
 # Summary / Stats
 # ============================================

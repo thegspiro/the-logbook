@@ -33,6 +33,9 @@ import {
   Calendar,
   User,
   ClipboardCheck,
+  Trash2,
+  Mail,
+  RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
@@ -796,6 +799,8 @@ export const ActiveSkillTestPage: React.FC = () => {
     loadTest,
     updateTest,
     completeTest,
+    discardPracticeTest,
+    emailTestResults,
     activeTestTimer,
     activeTestRunning,
     activeSectionIndex,
@@ -810,6 +815,8 @@ export const ActiveSkillTestPage: React.FC = () => {
   const [reviewing, setReviewing] = useState(false);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [emailing, setEmailing] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
 
   // Load the test
   useEffect(() => {
@@ -951,6 +958,99 @@ export const ActiveSkillTestPage: React.FC = () => {
     }
   }, [currentTest, activeTestTimer, updateTest, completeTest, navigate, templateSections, reviewNotes]);
 
+  /** Practice: complete the test (calculate results) but keep in review mode */
+  const handlePracticeViewResults = useCallback(async () => {
+    if (!currentTest) return;
+
+    setSubmitting(true);
+    try {
+      // Merge review notes into section results
+      const updatedSectionResults: SectionResult[] = templateSections.map((section) => {
+        const existing = currentTest.section_results?.find((sr) => sr.section_id === section.id);
+        const sectionNotes = reviewNotes[section.id] ?? '';
+        const criteriaResults = existing?.criteria_results ?? [];
+        const finalCriteria = [...criteriaResults];
+        if (sectionNotes) {
+          const existingNoteEntry = finalCriteria.find((cr) => cr.criterion_id === `${section.id}-review-notes`);
+          if (existingNoteEntry) {
+            existingNoteEntry.notes = sectionNotes;
+          } else {
+            finalCriteria.push({
+              criterion_id: `${section.id}-review-notes`,
+              criterion_label: 'Section Review Notes',
+              passed: null,
+              notes: sectionNotes,
+            });
+          }
+        }
+        return {
+          section_id: section.id,
+          section_name: existing?.section_name ?? section.name,
+          criteria_results: finalCriteria,
+        };
+      });
+
+      await updateTest(currentTest.id, {
+        section_results: updatedSectionResults,
+        elapsed_seconds: activeTestTimer,
+      });
+      await completeTest(currentTest.id);
+
+      // Navigate to the completed view within this same page
+      navigate(`/training/skills-testing/test/${currentTest.id}`);
+    } catch {
+      toast.error('Failed to calculate results');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [currentTest, activeTestTimer, updateTest, completeTest, navigate, templateSections, reviewNotes]);
+
+  /** Practice: email results to candidate */
+  const handleEmailResults = useCallback(async () => {
+    if (!currentTest) return;
+    setEmailing(true);
+    try {
+      const msg = await emailTestResults(currentTest.id);
+      toast.success(msg);
+    } catch {
+      toast.error('Failed to email results');
+    } finally {
+      setEmailing(false);
+    }
+  }, [currentTest, emailTestResults]);
+
+  /** Practice: discard and return to dashboard */
+  const handleDiscardPractice = useCallback(async () => {
+    if (!currentTest) return;
+    if (!window.confirm('Discard this practice attempt? It will be permanently deleted.')) return;
+    setDiscarding(true);
+    try {
+      await discardPracticeTest(currentTest.id);
+      toast.success('Practice attempt discarded');
+      navigate('/training/skills-testing');
+    } catch {
+      toast.error('Failed to discard practice test');
+    } finally {
+      setDiscarding(false);
+    }
+  }, [currentTest, discardPracticeTest, navigate]);
+
+  /** Practice: retake — start a new practice with same template + candidate */
+  const handleRetake = useCallback(async () => {
+    if (!currentTest) return;
+    try {
+      const newTest = await useSkillsTestingStore.getState().createTest({
+        template_id: currentTest.template_id,
+        candidate_id: currentTest.candidate_id,
+        is_practice: true,
+      });
+      toast.success('New practice session started');
+      navigate(`/training/skills-testing/test/${newTest.id}/active`);
+    } catch {
+      toast.error('Failed to start new practice');
+    }
+  }, [currentTest, navigate]);
+
   const handleUpdateCriterion = useCallback((
     sectionId: string,
     criterionId: string,
@@ -978,7 +1078,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-sm border-b border-theme-surface-border px-4 py-3">
           <div className="flex items-center justify-between">
             <button
-              onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
+              onClick={() => navigate(currentTest.is_practice ? '/training/skills-testing' : '/training/admin?page=skills-testing&tab=tests')}
               className="flex items-center gap-1 p-2 rounded-lg hover:bg-theme-surface-hover transition-colors text-sm"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -986,7 +1086,7 @@ export const ActiveSkillTestPage: React.FC = () => {
             </button>
             <div className="text-center">
               <p className="font-bold text-theme-text-primary text-sm">{currentTest.template_name}</p>
-              <p className="text-xs text-theme-text-muted">Test Results</p>
+              <p className="text-xs text-theme-text-muted">{currentTest.is_practice ? 'Practice Results' : 'Test Results'}</p>
             </div>
             <div className="w-16" /> {/* Spacer for centering */}
           </div>
@@ -1094,12 +1194,42 @@ export const ActiveSkillTestPage: React.FC = () => {
 
         {/* Bottom bar */}
         <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-sm border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
-          <button
-            onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
-            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
-          >
-            Back to Tests
-          </button>
+          {currentTest.is_practice ? (
+            <div className="space-y-2">
+              <button
+                onClick={() => void handleEmailResults()}
+                disabled={emailing}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold transition-colors"
+              >
+                <Mail className="w-5 h-5" />
+                {emailing ? 'Sending...' : 'Email Results to Candidate'}
+              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => void handleRetake()}
+                  className="flex items-center justify-center gap-2 py-3 bg-theme-surface border-2 border-blue-500/50 hover:border-blue-500 text-blue-600 dark:text-blue-400 rounded-xl font-medium transition-colors"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Retake
+                </button>
+                <button
+                  onClick={() => void handleDiscardPractice()}
+                  disabled={discarding}
+                  className="flex items-center justify-center gap-2 py-3 bg-theme-surface border-2 border-theme-surface-border hover:border-red-500 text-theme-text-muted hover:text-red-600 rounded-xl font-medium transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {discarding ? 'Discarding...' : 'Discard'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
+            >
+              Back to Tests
+            </button>
+          )}
         </div>
       </div>
     );
@@ -1173,16 +1303,37 @@ export const ActiveSkillTestPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Submit Bar */}
+        {/* Action Bar */}
         <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-sm border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
-          <button
-            onClick={() => void handleSubmit()}
-            disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg transition-colors"
-          >
-            <Save className="w-5 h-5" />
-            {submitting ? 'Submitting...' : 'Submit Test'}
-          </button>
+          {currentTest.is_practice ? (
+            <div className="space-y-2">
+              <button
+                onClick={() => void handlePracticeViewResults()}
+                disabled={submitting}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold transition-colors"
+              >
+                <ClipboardCheck className="w-5 h-5" />
+                {submitting ? 'Calculating...' : 'View Results'}
+              </button>
+              <button
+                onClick={() => void handleDiscardPractice()}
+                disabled={discarding}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-theme-surface border-2 border-theme-surface-border hover:border-red-500 text-theme-text-muted hover:text-red-600 rounded-xl font-medium transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                {discarding ? 'Discarding...' : 'Discard & Return'}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => void handleSubmit()}
+              disabled={submitting}
+              className="w-full flex items-center justify-center gap-2 py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg transition-colors"
+            >
+              <Save className="w-5 h-5" />
+              {submitting ? 'Submitting...' : 'Submit Test'}
+            </button>
+          )}
         </div>
       </div>
     );
