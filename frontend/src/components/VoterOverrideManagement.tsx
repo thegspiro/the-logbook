@@ -192,7 +192,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
               </button>
               <button
                 type="button"
-                onClick={handleAdd}
+                onClick={() => { void handleAdd(); }}
                 disabled={submitting || !userId.trim() || reason.trim().length < 10}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
@@ -246,7 +246,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => handleRemove(override.user_id)}
+                          onClick={() => { void handleRemove(override.user_id); }}
                           className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
                         >
                           Confirm

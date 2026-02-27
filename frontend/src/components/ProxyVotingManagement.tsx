@@ -129,7 +129,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
         </div>
         <button
           type="button"
-          onClick={fetchAuthorizations}
+          onClick={() => { void fetchAuthorizations(); }}
           className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
           Retry
@@ -232,7 +232,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleAdd}
+                onClick={() => { void handleAdd(); }}
                 disabled={submitting || !formData.delegating_user_id.trim() || !formData.proxy_user_id.trim() || !formData.reason.trim()}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
@@ -288,7 +288,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                 {canManage && (
                   <button
                     type="button"
-                    onClick={() => handleRevoke(auth.id, auth.delegating_user_name)}
+                    onClick={() => { void handleRevoke(auth.id, auth.delegating_user_name); }}
                     disabled={revokingId === auth.id}
                     className="ml-4 px-3 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded hover:bg-red-500/30 disabled:opacity-50"
                   >
