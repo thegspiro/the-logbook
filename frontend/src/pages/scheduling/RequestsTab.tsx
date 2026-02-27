@@ -319,7 +319,7 @@ export const RequestsTab: React.FC = () => {
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && (req.user_id ?? req.requesting_user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
+                      {req.status === 'pending' && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'timeoff', id: req.id })}
                           className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel time-off request"
                         >
