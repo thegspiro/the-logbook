@@ -4,6 +4,7 @@ import { formatRelativeTime } from '../hooks/useRelativeTime';
 import {
   Bell,
   Calendar,
+  CalendarPlus,
   Clock,
   GraduationCap,
   TrendingUp,
@@ -23,6 +24,8 @@ import {
   Rocket,
   Package,
   Smartphone,
+  UserPlus,
+  Loader2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -69,9 +72,14 @@ const Dashboard: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
 
-  // Shifts
-  const [upcomingShifts, setUpcomingShifts] = useState<ShiftRecord[]>([]);
-  const [loadingShifts, setLoadingShifts] = useState(true);
+  // Shifts (user's own upcoming shifts)
+  const [myShifts, setMyShifts] = useState<ShiftRecord[]>([]);
+  const [loadingMyShifts, setLoadingMyShifts] = useState(true);
+
+  // Open shifts (available to sign up for)
+  const [openShifts, setOpenShifts] = useState<ShiftRecord[]>([]);
+  const [loadingOpenShifts, setLoadingOpenShifts] = useState(true);
+  const [signingUpShiftId, setSigningUpShiftId] = useState<string | null>(null);
 
   // Hours
   const [hours, setHours] = useState({ training: 0, standby: 0, administrative: 0 });
@@ -109,7 +117,8 @@ const Dashboard: React.FC = () => {
     }
 
     void loadNotifications();
-    void loadUpcomingShifts();
+    void loadMyShifts();
+    void loadOpenShifts();
     void loadDeptMessages();
     if (isAdmin) {
       void loadAdminSummary();
@@ -201,16 +210,44 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadUpcomingShifts = async () => {
+  const loadMyShifts = async () => {
     try {
       const today = getTodayLocalDate(tz);
       const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
-      const data = await schedulingService.getShifts({ start_date: today, end_date: nextMonth, limit: 5 });
-      setUpcomingShifts(data.shifts || []);
+      const data = await schedulingService.getMyShifts({ start_date: today, end_date: nextMonth, limit: 5 });
+      setMyShifts(data.shifts || []);
     } catch {
       // Shifts are non-critical
     } finally {
-      setLoadingShifts(false);
+      setLoadingMyShifts(false);
+    }
+  };
+
+  const loadOpenShifts = async () => {
+    try {
+      const today = getTodayLocalDate(tz);
+      const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
+      const data = await schedulingService.getOpenShifts({ start_date: today, end_date: nextMonth });
+      setOpenShifts(data);
+    } catch {
+      // Open shifts are non-critical
+    } finally {
+      setLoadingOpenShifts(false);
+    }
+  };
+
+  const handleSignup = async (shiftId: string) => {
+    setSigningUpShiftId(shiftId);
+    try {
+      await schedulingService.signupForShift(shiftId, { position: 'general' });
+      toast.success('Signed up for shift');
+      // Refresh both lists: the signed-up shift moves from open to my shifts
+      void loadMyShifts();
+      void loadOpenShifts();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to sign up for shift');
+    } finally {
+      setSigningUpShiftId(null);
     }
   };
 
@@ -669,12 +706,12 @@ const Dashboard: React.FC = () => {
             )}
           </div>
 
-          {/* Upcoming Shifts */}
+          {/* My Upcoming Shifts */}
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <Calendar className="w-5 h-5 text-blue-400" />
-                <span>Upcoming Shifts</span>
+                <span>My Upcoming Shifts</span>
               </h3>
               <button
                 onClick={() => navigate('/scheduling')}
@@ -685,19 +722,19 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
 
-            {loadingShifts ? (
+            {loadingMyShifts ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="h-14 bg-slate-700/30 animate-pulse rounded-lg"></div>
                 ))}
               </div>
-            ) : upcomingShifts.length === 0 ? (
+            ) : myShifts.length === 0 ? (
               <div className="text-center py-8 text-theme-text-muted text-sm">
                 No upcoming shifts scheduled
               </div>
             ) : (
               <div className="space-y-2">
-                {upcomingShifts.map((shift) => (
+                {myShifts.map((shift) => (
                   <div
                     key={shift.id}
                     className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg"
@@ -725,6 +762,77 @@ const Dashboard: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Open Shifts */}
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+              <CalendarPlus className="w-5 h-5 text-green-400" />
+              <span>Open Shifts</span>
+            </h3>
+            <button
+              onClick={() => navigate('/scheduling')}
+              className="text-green-400 hover:text-green-300 text-sm flex items-center space-x-1"
+            >
+              <span>View Schedule</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {loadingOpenShifts ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-14 bg-slate-700/30 animate-pulse rounded-lg"></div>
+              ))}
+            </div>
+          ) : openShifts.length === 0 ? (
+            <div className="text-center py-8 text-theme-text-muted text-sm">
+              No open shifts available
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {openShifts.map((shift) => (
+                <div
+                  key={shift.id}
+                  className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                      <CalendarPlus className="w-5 h-5 text-green-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-theme-text-primary">
+                        {formatShiftDate(shift.shift_date)}
+                      </p>
+                      <p className="text-xs text-theme-text-muted">
+                        {formatShiftTime(shift.shift_date, shift.start_time)} - {formatShiftTime(shift.shift_date, shift.end_time)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    {shift.min_staffing != null && (
+                      <span className="text-xs text-theme-text-muted">
+                        {shift.attendee_count}/{shift.min_staffing} filled
+                      </span>
+                    )}
+                    <button
+                      onClick={() => void handleSignup(shift.id)}
+                      disabled={signingUpShiftId === shift.id}
+                      className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
+                    >
+                      {signingUpShiftId === shift.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <UserPlus className="w-3.5 h-3.5" />
+                      )}
+                      <span>Sign Up</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Activity Feed */}
