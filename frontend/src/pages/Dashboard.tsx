@@ -34,6 +34,7 @@ import {
   inventoryService,
 } from '../services/api';
 import type { InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
+import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
@@ -225,14 +226,15 @@ const Dashboard: React.FC = () => {
 
   const loadHours = async () => {
     try {
-      const [schedulingSummary, trainingSummary] = await Promise.all([
+      const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
         schedulingService.getSummary().catch((err) => { console.error('Failed to load scheduling summary:', err); return null; }),
         trainingModuleConfigService.getMyTraining().catch((err) => { console.error('Failed to load training summary:', err); return null; }),
+        adminHoursEntryService.getSummary().catch((err) => { console.error('Failed to load admin hours summary:', err); return null; }),
       ]);
       setHours({
         training: trainingSummary?.hours_summary?.total_hours ?? 0,
         standby: schedulingSummary?.total_hours_this_month || 0,
-        administrative: 0,
+        administrative: adminHoursSummary?.totalHours ?? 0,
       });
     } catch {
       // Hours are non-critical
@@ -486,7 +488,13 @@ const Dashboard: React.FC = () => {
             <p className="text-theme-text-muted text-xs mt-2">Standby hours</p>
           </div>
 
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
+          <div
+            className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-purple-500/40 transition-colors"
+            onClick={() => navigate('/admin-hours')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/admin-hours'); }}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Administrative</p>
