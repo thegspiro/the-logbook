@@ -741,6 +741,20 @@ async def update_test(
     return _build_test_response(test, template, candidate, examiner)
 
 
+def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Ensure a datetime is timezone-aware (UTC).
+
+    MySQL returns naive datetimes even for timezone-aware columns.
+    This helper attaches UTC tzinfo so Pydantic serializes the offset
+    and JavaScript can correctly convert to the user's local timezone.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 @router.post("/tests/{test_id}/complete", response_model=SkillTestResponse)
 async def complete_test(
     test_id: UUID,
@@ -804,15 +818,11 @@ async def complete_test(
 
     # Calculate elapsed time if started_at is set
     if test.started_at:
-        started = test.started_at
-        completed = test.completed_at
-        # Ensure both datetimes are timezone-aware before subtracting
-        if started.tzinfo is None:
-            started = started.replace(tzinfo=timezone.utc)
-        if completed is not None and completed.tzinfo is None:
-            completed = completed.replace(tzinfo=timezone.utc)
-        elapsed = completed - started
-        test.elapsed_seconds = int(elapsed.total_seconds())
+        started = _ensure_utc(test.started_at)
+        completed = _ensure_utc(test.completed_at)
+        if started and completed:
+            elapsed = completed - started
+            test.elapsed_seconds = int(elapsed.total_seconds())
 
     await db.commit()
     await db.refresh(test)
@@ -976,10 +986,10 @@ def _build_test_response(
         overall_score=test.overall_score,
         elapsed_seconds=test.elapsed_seconds,
         notes=test.notes,
-        started_at=test.started_at,
-        completed_at=test.completed_at,
-        created_at=test.created_at,
-        updated_at=test.updated_at,
+        started_at=_ensure_utc(test.started_at),
+        completed_at=_ensure_utc(test.completed_at),
+        created_at=_ensure_utc(test.created_at),
+        updated_at=_ensure_utc(test.updated_at),
         template_name=template.name if template else None,
         candidate_name=_format_user_name(candidate) if candidate else None,
         examiner_name=_format_user_name(examiner) if examiner else None,
