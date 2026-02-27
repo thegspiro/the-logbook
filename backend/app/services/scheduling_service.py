@@ -1718,9 +1718,9 @@ class SchedulingService:
             apparatus_positions = []
             if shift.apparatus_id and shift.apparatus_id in apparatus_map:
                 app = apparatus_map[shift.apparatus_id]
-                apparatus_name = app.get("name")
-                apparatus_unit_number = app.get("unit_number")
-                apparatus_positions = app.get("positions") or []
+                apparatus_name = app.name
+                apparatus_unit_number = app.unit_number
+                apparatus_positions = app.positions or []
 
             shift_dict = {
                 "id": shift.id,
