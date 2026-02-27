@@ -15,9 +15,35 @@ import {
   Loader2, X, Save, ChevronDown, ChevronUp, QrCode,
   Building, HelpCircle, Monitor, Copy, Check,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { locationsService, organizationService } from '../services/api';
 import type { Location, LocationCreate } from '../services/api';
+
+/** Copy text to clipboard with fallback for non-HTTPS contexts */
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // clipboard API failed (e.g. non-secure context) — fall through to fallback
+    }
+  }
+  // Fallback: temporary textarea + execCommand
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
 function groupLocations(locations: Location[]): { stations: Location[]; rooms: Map<string, Location[]> } {
@@ -709,18 +735,19 @@ function LocationSetupWizard({
  */
 function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Location) => void; onDelete: (r: Location) => void }) {
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   const kioskUrl = room.display_code ? `${window.location.origin}/display/${room.display_code}` : null;
 
   const handleCopyKioskUrl = async () => {
     if (!kioskUrl) return;
     try {
-      await navigator.clipboard.writeText(kioskUrl);
+      await copyToClipboard(kioskUrl);
       setCopied(true);
       toast.success('Kiosk URL copied');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('Failed to copy');
+      toast.error('Failed to copy URL');
     }
   };
 
@@ -739,6 +766,11 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
           </div>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {kioskUrl && (
+            <button onClick={() => setShowQR(prev => !prev)} aria-label="Toggle QR code" className="p-1 text-theme-text-muted hover:text-blue-500 rounded transition-colors" title="Show QR code">
+              <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          )}
           <button onClick={() => onEdit(room)} aria-label="Edit room" className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded transition-colors">
             <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
@@ -757,6 +789,12 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
           <span className="font-mono truncate">/display/{room.display_code}</span>
           {!copied && <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
         </button>
+      )}
+      {showQR && kioskUrl && (
+        <div className="mt-3 flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-theme-surface-border">
+          <QRCodeSVG value={kioskUrl} size={140} level="H" includeMargin />
+          <p className="text-[10px] text-gray-500 font-mono break-all text-center">{kioskUrl}</p>
+        </div>
       )}
     </div>
   );
