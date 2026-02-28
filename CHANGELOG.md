@@ -7,6 +7,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Scheduling Module Refactor (2026-02-28)
+
+#### Architecture Overhaul
+The scheduling module has been refactored from a monolithic 1,200-line page component into a proper modular architecture:
+
+- **Dedicated module directory**: `frontend/src/modules/scheduling/` with services, store, components, and barrel export
+- **Scheduling Zustand store** (`schedulingStore.ts`): Centralized state management for shifts, templates, patterns, members, and apparatus with async actions
+- **Dedicated API service** (`modules/scheduling/services/api.ts`): All scheduling API calls moved out of the global `services/api.ts` into a module-scoped axios client using the shared `createApiClient` factory
+- **ShiftSettingsPanel component**: New scheduling configuration panel for notification preferences, shift rules, and coverage settings
+- **SchedulingNotificationsPanel component**: Notification management for shift reminders and scheduling alerts
+- **InlineConfirmAction UX component**: New reusable component for inline confirmation actions (e.g., "Are you sure?" before destructive operations), with comprehensive tests
+- **Scheduling store tests**: Unit tests for store state management and async actions
+- **SchedulingPage slimmed**: Main page reduced from ~1,200 lines to a thin orchestrator that delegates to the store and sub-components
+
+### Code Quality & Review Improvements (2026-02-28)
+
+#### Shared API Client Factory
+- **`createApiClient()` utility** (`utils/createApiClient.ts`): New factory function that creates pre-configured axios instances with interceptors (auth refresh, CSRF, caching). Eliminates ~300 lines of duplicated axios setup across module services (admin-hours, apparatus, prospective-members, public-portal)
+- All module API services now use `createApiClient()` instead of manually configuring interceptors
+
+#### 20+ Review Fixes Across Security, A11y, and Code Quality
+- **Facilities & admin hours endpoints**: Added `require_permission` guards on unprotected admin endpoints
+- **Organization settings**: Restricted PATCH endpoints to org-scoped fields, preventing unintended updates to billing/internal fields
+- **Training endpoints**: Added input validation for pagination parameters and sanitized error details
+- **HIPAA cache exclusions**: Expanded `UNCACHEABLE_PREFIXES` in `apiCache.ts` with `/admin-hours/`, `/facilities/`, `/organizations/` endpoints
+- **Date formatting**: Enhanced `dateFormatting.ts` utilities with improved timezone handling, graceful fallbacks for invalid dates, and expanded test coverage
+- **Error handling**: Improved `toAppError()` type narrowing for non-Error thrown values
+- **Idle timer**: Fixed potential memory leak in cleanup path
+- **Analytics & error tracking**: Defensive null checks for edge cases
+- **Modal accessibility**: Added `aria-labelledby` and `aria-describedby` attributes
+- **AppLayout accessibility**: Skip-to-content and skip-to-navigation links for keyboard users
+- **LoadingSpinner**: Added `role="status"` and `aria-label` for screen readers
+- **Login page**: Added `aria-live="polite"` region for error messages
+- **ProtectedRoute**: Improved loading/error state accessibility
+- **Prettier config**: Added `.prettierrc.json` for consistent formatting across the frontend
+
+### Mobile Responsiveness Improvements (2026-02-28)
+
+- **Pagination**: Responsive layout collapses page numbers to prev/next on small screens
+- **Settings page**: Responsive grid for settings sections, collapsible on mobile
+- **User settings**: Mobile-friendly form layout
+- **Dashboard**: Improved card grid for small viewports
+- **Apparatus list**: Responsive card/table layout toggle
+- **Member profile**: Mobile-friendly profile sections
+- **Inventory pages**: Responsive table with horizontal scroll on mobile
+- **Scheduling reports**: Mobile-friendly report cards
+- **Prospective pipeline**: Kanban and table views adapt to screen width
+- **Ballot builder**: Improved touch targets for election ballot items
+- **Field editor**: Mobile-friendly form field editor
+- **Admin hours manage**: Responsive management dashboard
+- **Global CSS**: Added `scrollbar-gutter: stable` and improved responsive utility classes
+
+### Frontend Deployment Cache Refresh (2026-02-28)
+
+#### Proactive Version Detection
+- **`useAppUpdate` hook**: Monitors app version via a build timestamp injected into `index.html` as a `<meta>` tag. Periodically checks the deployed `index.html` for a newer version. Includes tests
+- **`UpdateNotification` component**: When a new version is detected, displays a non-intrusive notification bar prompting the user to refresh. Includes tests
+- **Nginx `X-App-Version` header**: Frontend nginx config now sends a version header for cache-busting verification
+- **Vite build plugin**: Injects `BUILD_TIMESTAMP` into the HTML at build time via a custom Vite plugin
+
+### Security Hardening — Continued (2026-02-28)
+
+#### Brute-Force Protection (Backend & Frontend)
+- **Progressive rate limiting**: Login endpoint now applies increasing delays after repeated failures (exponential backoff)
+- **IP-based lockout**: Configurable lockout after N failed attempts from the same IP
+- **Per-user lockout**: Separate tracking for per-username failed attempts
+- **Frontend rate limiting**: Login and forgot-password pages now enforce client-side submission rate limiting with countdown timers, preventing rapid-fire login attempts
+- **Auth store rate limiting**: `authStore` tracks last attempt timestamp and enforces minimum intervals between login attempts
+
+#### IDOR & Open Redirect Fixes
+- **Documents endpoint**: Added organization-scoped validation to prevent cross-org document access
+- **Training endpoints**: Added authorization checks ensuring users can only access training data within their organization
+- **API redirect validation**: Response interceptor now validates redirect URLs against allowed origins, preventing open redirect attacks
+- **API cache security**: Added `/documents/` and `/training/` to `UNCACHEABLE_PREFIXES`
+
+#### Security Alert Persistence & Audit
+- **Security alerts persisted to database**: New `SecurityAlert` model and migration (`20260228_0100_add_security_alerts_table.py`) stores alerts with severity, type, description, source IP, and resolution status
+- **`rehash_chain` endpoint**: Exposed API endpoint to rebuild the audit log hash chain for integrity verification after archival
+- **Audit archival**: Scheduled task that archives audit logs older than a configurable threshold while maintaining hash chain integrity
+- **Audit log export**: New endpoint for exporting audit logs with date range filters and format options
+- **Audit deletion logging**: All audit log deletion operations are themselves logged for accountability
+- **Hardened file logs**: File-based log rotation with secure permissions and restricted access paths
+
+### Navigation Fixes (2026-02-28)
+
+- **Module enablement**: SideNavigation and TopNavigation now dynamically show/hide menu items based on module enablement settings from organization configuration
+- **Navigation sync**: TopNavigation items synced with SideNavigation to ensure consistent page access from both navigation modes
+- **Logo navigation**: Fixed logo click behavior to navigate to the dashboard instead of an incorrect route
+- **Emergency contacts**: Added emergency contacts section to the account/profile page
+
+### Member ID Card Improvements (2026-02-28)
+
+- **Rank and member since year**: ID card details section now shows the member's rank and the year they joined
+- **Barcode in membership number box**: Barcode display combined into the membership number section for a cleaner layout
+- **Org logo fix**: Organization logo now correctly displays on the ID card using the proper image URL resolution
+
+### Design & Accessibility Audit (2026-02-28)
+
+- **Light/dark theme audit**: Comprehensive review and fix of color contrast across all pages in both light and dark modes
+- **High-contrast mode**: Verified compatibility with the high-contrast theme
+- **Mobile audit**: Verified responsive behavior across breakpoints for all pages
+- **`useMediaQuery` hook**: New hook for responsive behavior in components (replaces inline `window.matchMedia` calls)
+- **Form field renderer**: Improved contrast and focus states for form inputs across themes
+- **QR code pages**: Fixed contrast issues on event QR code and self-check-in pages
+- **Onboarding pages**: Fixed theme variable usage for consistent appearance
+- **Error boundary**: Improved dark mode styling
+
+### Test Stability (2026-02-28)
+
+- **132 pre-existing test failures → 0**: Fixed all test failures across 14 test files including EventForm, ActiveSkillTestPage, EventCreatePage, EventDetailPage, EventEditPage, EventQRCodePage, EventSelfCheckInPage, EventsPage, SchedulingPage, SkillsTestingPage, and authStore tests
+- **Mock data alignment**: Test mock data updated to match current API response shapes and enum values
+- **Vitest config**: E2E tests excluded from the Vitest runner (they run separately via Playwright)
+
+### Data Integrity Fixes (2026-02-28)
+
+- **Enum synchronization**: Frontend `enums.ts` constants synchronized with backend enum values for event types, membership types, and scheduling statuses
+- **Election schemas**: Added missing ballot-related Pydantic schemas for proper API validation
+- **Scheduling schemas**: Added missing fields to scheduling response schemas
+- **Training models**: Added missing relationship columns for skills testing integration
+- **Members page**: Fixed type-safe access to membership statistics
+- **Minutes page**: Fixed optional property access patterns
+
+### Backend Formatting & Cleanup (2026-02-28)
+
+- **Black formatting**: Applied consistent Black formatting across 35 backend files
+- **Missing imports**: Fixed missing `Depends` import in multiple endpoint files
+- **Code organization**: Improved service method signatures and error handling patterns across scheduling, training, inventory, and organization services
+
 ### Digital Member ID Card (2026-02-28)
 
 #### New Feature: Member Identification Cards with QR Code and Barcode

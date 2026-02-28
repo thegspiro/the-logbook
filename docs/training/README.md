@@ -11,14 +11,14 @@ Welcome to the training documentation for The Logbook. These guides are designed
 | 0 | [Getting Started](./00-getting-started.md) | First login, navigation, dashboard, account settings |
 | 1 | [Membership Management](./01-membership.md) | Member directory, profiles, prospective pipeline, status management, leave of absence, tiers |
 | 2 | [Training & Certification](./02-training.md) | Courses, programs, requirements, submissions, compliance, external integrations |
-| 3 | [Shifts & Scheduling](./03-scheduling.md) | Calendar, assignments, attendance, time-off, swaps, templates, platoon rotations, compliance |
+| 3 | [Shifts & Scheduling](./03-scheduling.md) | Calendar, assignments, attendance, time-off, swaps, templates, platoon rotations, compliance, shift settings |
 | 4 | [Events & Meetings](./04-events-meetings.md) | Events, QR check-in, meetings, minutes, action items, elections, public outreach pipeline |
 | 5 | [Inventory Management](./05-inventory.md) | Items (individual & pool), categories, assignments, checkout, batch operations, scanning, label printing, NFPA 1851 lifecycle, departure clearance |
 | 6 | [Apparatus & Facilities](./06-apparatus-facilities.md) | Vehicles, maintenance, fuel, NFPA compliance, stations, inspections, utilities, capital projects |
 | 7 | [Documents, Forms & Communications](./07-documents-forms.md) | File storage, form builder, notifications, messages, integrations |
 | 8 | [Administration & Reports](./08-admin-reports.md) | Settings, roles, modules, reports, analytics, public portal, security, first-time setup |
 | 9 | [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | Skill sheet templates, NREMT-style evaluations, point-based scoring, statement criteria, practice mode, test visibility, post-completion review, test deletion, pass/fail, realistic example |
-| 10 | [Mobile & PWA Usage](./10-mobile-pwa.md) | Installing the app, offline behavior, mobile features, QR scanning, troubleshooting |
+| 10 | [Mobile & PWA Usage](./10-mobile-pwa.md) | Installing the app, offline behavior, mobile features, QR scanning, version detection, troubleshooting |
 
 ---
 

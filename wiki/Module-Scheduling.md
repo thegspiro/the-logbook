@@ -70,12 +70,23 @@ GET    /api/v1/scheduling/apparatus          # List basic apparatus
 
 ## Recent Improvements (2026-02-28)
 
+### Architecture Refactor
+- **Modular architecture**: Scheduling refactored from a monolithic 1,200-line page into a proper module structure under `frontend/src/modules/scheduling/`
+- **Dedicated Zustand store** (`schedulingStore.ts`): Centralized state management for shifts, templates, patterns, members, and apparatus
+- **Dedicated API service** (`modules/scheduling/services/api.ts`): All scheduling API calls moved from the global service into a module-scoped client using `createApiClient()`
+- **ShiftSettingsPanel**: New scheduling configuration panel for notification preferences and shift rules
+- **SchedulingNotificationsPanel**: Notification management for shift reminders and scheduling alerts
+- **InlineConfirmAction component**: New reusable UX component for inline confirmation actions, with tests
+- **Scheduling store tests**: Unit tests for store state and async actions
+
+### Features & Fixes
 - **Fire department shift pattern presets**: Built-in patterns (24/48, 48/96, Kelly Schedule, California 3-Platoon, ABCAB) plus custom pattern builder with 30-day preview
 - **Vehicle linking on templates**: Shift templates can be linked to actual department vehicles from the Apparatus module
 - **Auto-default shift officer**: Assigning the "Officer" position automatically sets that member as the shift officer
 - **Dashboard shift split**: Dashboard now shows "My Upcoming Shifts" and "Open Shifts" as separate sections
 - **Scheduling module hardening**: Type safety, error sanitization, input validation, and conflict detection
 - **Shift signup error fix**: Error messages from failed signups now correctly display server-provided details
+- **Mobile responsiveness**: Scheduling reports and calendar views improved for small screens
 
 ### Previous Improvements (2026-02-27)
 

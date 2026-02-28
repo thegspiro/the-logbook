@@ -103,7 +103,14 @@ The app uses an **autoUpdate** service worker strategy:
 3. The update is applied the next time you close and reopen the app
 4. You do not need to take any action — updates happen automatically
 
-There is no "Update Available" prompt or manual refresh needed.
+In addition, the app includes a **proactive version detection** system:
+
+1. A build timestamp is embedded in the app at build time
+2. The `useAppUpdate` hook periodically checks if a newer version has been deployed
+3. If a new version is detected, an **Update Available** notification bar appears at the top of the screen
+4. Click the notification to refresh and load the new version
+
+> **Hint:** If you don't see the update notification and suspect you're on an old version, you can always force a refresh with `Ctrl+Shift+R` (desktop) or by closing and reopening the app (mobile).
 
 ---
 
@@ -222,6 +229,9 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 | Form submission failed | Check your connection. The app does not queue submissions — if the network is unavailable at the moment you tap Submit, the submission fails. Wait for connectivity and try again. |
 | App icon disappeared from home screen | Some devices remove PWA icons after system updates or storage cleanups. Reinstall following the steps above. |
 | Dark mode not applying in PWA | Dark mode follows the app's theme setting (My Account > Appearance), not the device's system setting. Toggle it from within the app. |
+| "Update Available" notification not appearing | The version detection checks periodically. If you suspect you're on an old version, force refresh with Ctrl+Shift+R or close and reopen the app. |
+| Layout looks wrong on mobile | Mobile responsiveness has been significantly improved. Clear your browser cache to load the latest styles. Use landscape orientation for complex tables. |
+| Login page shows "Too many attempts" | Rate limiting is active. Wait for the countdown timer to expire before trying again. |
 
 ---
 

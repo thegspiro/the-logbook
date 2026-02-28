@@ -14,7 +14,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, database, and member management issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-28 with member ID card, skills testing enhancements, dashboard shift split, shift pattern presets, admin hours improvements, security hardening, dynamic import fix, platform analytics fix, plus all previous updates
+   - **Updated**: 2026-02-28 with scheduling module refactor, brute-force protection, IDOR/open-redirect fixes, security alert persistence, audit log export/archival, mobile responsiveness, cache-refresh detection, navigation module enablement, design accessibility audit, 132 test failures fixed, member ID card improvements, plus all previous updates
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application

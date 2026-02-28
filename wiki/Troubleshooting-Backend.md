@@ -270,4 +270,76 @@ If you see duplicate log lines, remove any custom `logging.basicConfig()` or `lo
 
 ---
 
+## Brute-Force Protection & Rate Limiting (2026-02-28)
+
+### Progressive Rate Limiting on Login
+
+The login endpoint now applies progressive rate limiting:
+- IP-based tracking of failed login attempts
+- Per-user tracking of failed login attempts
+- Exponential backoff delays after repeated failures
+- 30-minute lockout after exceeding configurable threshold
+
+**If legitimate users are locked out**: Wait for the lockout period to expire (30 minutes). Administrators can review security alerts in the Security Monitoring dashboard.
+
+### Security Middleware Hardening
+
+The security middleware has been hardened with:
+- CSRF validation on all state-changing requests
+- Improved rate limit tracking via Redis
+- Better error response sanitization
+
+---
+
+## Security Alert Persistence (2026-02-28)
+
+### Security Alerts Now Stored in Database
+
+Security alerts are now persisted to a `security_alerts` table (migration `20260228_0100`). This enables:
+- Historical alert review
+- Alert acknowledgement and resolution workflow
+- Integration with the Security Monitoring dashboard
+
+**If alerts are missing**: Run `alembic upgrade head` to create the new table.
+
+### Audit Log Export
+
+A new endpoint allows exporting audit logs with date range filters:
+```
+GET /api/v1/security/audit-log/export?start_date=2026-01-01&end_date=2026-02-28
+```
+Requires `security.manage` permission.
+
+### Audit Archival
+
+A scheduled task archives old audit log entries to cold storage while maintaining hash chain integrity. After archival, use the `rehash_chain` endpoint to rebuild the hash chain.
+
+### Audit Deletion Logging
+
+All audit log deletion operations are themselves logged for accountability — you cannot silently delete audit entries.
+
+### Hardened File Logs
+
+File-based log rotation now uses secure permissions and restricted access paths. Log files are rotated at 10MB with 7-day retention.
+
+---
+
+## IDOR & Authorization Fixes (2026-02-28)
+
+### Documents Endpoint
+
+**Status (Fixed):** Added organization-scoped validation to prevent cross-org document access.
+
+### Training Endpoints
+
+**Status (Fixed):** Added authorization checks ensuring users can only access training data within their organization.
+
+---
+
+## Backend Formatting (2026-02-28)
+
+Black formatting has been applied across 35 backend files. If you see formatting-related merge conflicts after pulling, accept the Black-formatted version.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)
