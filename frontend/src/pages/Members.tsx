@@ -79,7 +79,7 @@ const Members: React.FC = () => {
         total: users.length,
         active: users.filter(u => u.status === 'active').length,
         inactive: users.filter(u => u.status === 'inactive').length,
-        onLeave: users.filter(u => u.status === 'leave' || u.status === 'on_leave').length,
+        onLeave: users.filter(u => u.status === 'leave').length,
         retired: users.filter(u => u.status === 'retired').length,
         expiringCertifications: 0,
       };
@@ -140,7 +140,7 @@ const Members: React.FC = () => {
       const matchesFilter =
         filterStatus === 'all' ||
         member.status === filterStatus ||
-        (filterStatus === 'leave' && (member.status === 'leave' || member.status === 'on_leave'));
+        filterStatus === member.status;
 
       return matchesSearch && matchesFilter;
     });
@@ -224,7 +224,6 @@ const Members: React.FC = () => {
       case 'inactive':
         return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
       case 'leave':
-      case 'on_leave':
         return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
       case 'retired':
         return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30';

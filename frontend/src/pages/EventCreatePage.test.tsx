@@ -19,6 +19,7 @@ function makeApiError(message: string, status = 400) {
 vi.mock('../services/api', () => ({
   eventService: {
     createEvent: vi.fn(),
+    getVisibleEventTypes: vi.fn().mockResolvedValue([]),
   },
   roleService: {
     getRoles: vi.fn().mockResolvedValue([]),
@@ -26,6 +27,11 @@ vi.mock('../services/api', () => ({
   locationsService: {
     getLocations: vi.fn().mockResolvedValue([]),
   },
+}));
+
+// Mock the useTimezone hook used by EventForm
+vi.mock('../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
 }));
 
 // Mock react-router-dom
@@ -52,11 +58,12 @@ describe('EventCreatePage', () => {
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Create Event');
     });
 
-    it('should display breadcrumb navigation', () => {
+    it('should display back to events link', () => {
       renderWithRouter(<EventCreatePage />);
 
-      expect(screen.getByText('Events')).toBeInTheDocument();
-      expect(screen.getByText('Create Event', { selector: 'li' })).toBeInTheDocument();
+      const backLink = screen.getByRole('link', { name: /back to events/i });
+      expect(backLink).toBeInTheDocument();
+      expect(backLink).toHaveAttribute('href', '/events');
     });
 
     it('should display the EventForm component', () => {

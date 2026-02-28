@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { EventDetailPage } from './EventDetailPage';
 import * as apiModule from '../services/api';
-import * as authStoreModule from '../stores/authStore';
 import type { Event, EventStats, RSVP } from '../types/event';
 import type { CurrentUser } from '../types/auth';
 
@@ -54,8 +53,14 @@ vi.mock('react-router-dom', async () => {
 
 // Mock auth store
 const mockCheckPermission = vi.fn();
+const mockAuthState = {
+  checkPermission: mockCheckPermission,
+  user: null as CurrentUser | null,
+};
 vi.mock('../stores/authStore', () => ({
-  useAuthStore: vi.fn(),
+  useAuthStore: vi.fn((selector?: (state: Record<string, unknown>) => unknown) =>
+    selector ? selector(mockAuthState as unknown as Record<string, unknown>) : mockAuthState
+  ),
 }));
 
 const mockEvent: Event = {
@@ -125,10 +130,8 @@ describe('EventDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckPermission.mockReturnValue(false);
-    vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
-      checkPermission: mockCheckPermission,
-      user: null,
-    } as ReturnType<typeof authStoreModule.useAuthStore>);
+    mockAuthState.checkPermission = mockCheckPermission;
+    mockAuthState.user = null;
   });
 
   describe('Loading State', () => {
@@ -327,10 +330,8 @@ describe('EventDetailPage', () => {
   describe('Manager Features', () => {
     beforeEach(() => {
       mockCheckPermission.mockReturnValue(true);
-      vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
-        checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
-      } as ReturnType<typeof authStoreModule.useAuthStore>);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
     });
 
     it('should show management buttons for managers', async () => {
@@ -341,7 +342,8 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
+        const editButtons = screen.getAllByRole('button', { name: /edit/i });
+        expect(editButtons.length).toBeGreaterThan(0);
         expect(screen.getByRole('button', { name: /duplicate/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /check in members/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /record times/i })).toBeInTheDocument();
@@ -425,10 +427,8 @@ describe('EventDetailPage', () => {
   describe('Cancel Event Modal', () => {
     beforeEach(() => {
       mockCheckPermission.mockReturnValue(true);
-      vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
-        checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
-      } as ReturnType<typeof authStoreModule.useAuthStore>);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
     });
 
     it('should open and submit cancel modal', async () => {
@@ -513,10 +513,8 @@ describe('EventDetailPage', () => {
   describe('Delete Event Modal', () => {
     beforeEach(() => {
       mockCheckPermission.mockReturnValue(true);
-      vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
-        checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
-      } as ReturnType<typeof authStoreModule.useAuthStore>);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
     });
 
     it('should open delete confirmation modal', async () => {
@@ -600,10 +598,8 @@ describe('EventDetailPage', () => {
   describe('Duplicate Event', () => {
     beforeEach(() => {
       mockCheckPermission.mockReturnValue(true);
-      vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
-        checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
-      } as ReturnType<typeof authStoreModule.useAuthStore>);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
     });
 
     it('should duplicate event and navigate to edit page', async () => {
@@ -659,10 +655,8 @@ describe('EventDetailPage', () => {
 
     it('should not show duplicate button for non-managers', async () => {
       mockCheckPermission.mockReturnValue(false);
-      vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
-        checkPermission: mockCheckPermission,
-        user: null,
-      } as ReturnType<typeof authStoreModule.useAuthStore>);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = null;
 
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
 
@@ -750,10 +744,8 @@ describe('EventDetailPage', () => {
 
     it('should have accessible modal dialogs', async () => {
       mockCheckPermission.mockReturnValue(true);
-      vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
-        checkPermission: mockCheckPermission,
-        user: { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser,
-      } as ReturnType<typeof authStoreModule.useAuthStore>);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
 
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);

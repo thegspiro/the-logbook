@@ -5,12 +5,24 @@ import { renderWithRouter } from '../test/utils';
 import { EventForm } from './EventForm';
 import * as apiModule from '../services/api';
 import type { Location } from '../services/api';
-import type { Role } from '../types/role';
+
+// Mock the useTimezone hook
+vi.mock('../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
+}));
 
 // Mock the API module
 vi.mock('../services/api', () => ({
-  roleService: {
-    getRoles: vi.fn(),
+  eventService: {
+    getVisibleEventTypes: vi.fn().mockResolvedValue([
+      'business_meeting',
+      'public_education',
+      'training',
+      'social',
+      'fundraiser',
+      'ceremony',
+      'other',
+    ]),
   },
   locationsService: {
     getLocations: vi.fn(),
@@ -22,12 +34,6 @@ const mockLocations = [
   { id: 'loc-2', name: 'Training Center', is_active: true },
 ];
 
-const mockRoles = [
-  { id: 'role-1', name: 'Firefighter', slug: 'firefighter' },
-  { id: 'role-2', name: 'Lieutenant', slug: 'lieutenant' },
-  { id: 'role-3', name: 'Captain', slug: 'captain' },
-];
-
 describe('EventForm', () => {
   const mockOnSubmit = vi.fn();
   const mockOnCancel = vi.fn();
@@ -35,7 +41,6 @@ describe('EventForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue(mockLocations as unknown as Location[]);
-    vi.mocked(apiModule.roleService.getRoles).mockResolvedValue(mockRoles as unknown as Role[]);
   });
 
   describe('Rendering', () => {
@@ -45,8 +50,8 @@ describe('EventForm', () => {
       );
 
       await waitFor(() => {
-        // Check section headings (h3 elements)
-        const headings = screen.getAllByRole('heading', { level: 3 });
+        // Check section headings (h2 elements)
+        const headings = screen.getAllByRole('heading', { level: 2 });
         const headingTexts = headings.map(h => h.textContent);
         expect(headingTexts).toContain('Event Details');
         expect(headingTexts).toContain('Schedule');
@@ -168,15 +173,15 @@ describe('EventForm', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/choose a location/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
       });
 
       const user = userEvent.setup();
-      const otherRadio = screen.getByLabelText(/other \/ enter manually/i);
-      await user.click(otherRadio);
+      const locationSelect = screen.getByLabelText(/location/i);
+      await user.selectOptions(locationSelect, '__other__');
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/station 1 conference room/i)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/city hall/i)).toBeInTheDocument();
       });
     });
 
@@ -280,15 +285,15 @@ describe('EventForm', () => {
       expect(remindersCheckbox).toBeChecked();
     });
 
-    it('should show reminder hours when reminders enabled', () => {
+    it('should show reminder schedule when reminders enabled', () => {
       renderWithRouter(
         <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
       );
 
-      expect(screen.getByLabelText(/reminder hours before event/i)).toBeInTheDocument();
+      expect(screen.getByText(/reminder schedule/i)).toBeInTheDocument();
     });
 
-    it('should hide reminder hours when reminders disabled', async () => {
+    it('should hide reminder schedule when reminders disabled', async () => {
       renderWithRouter(
         <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
       );
@@ -297,7 +302,7 @@ describe('EventForm', () => {
       await user.click(screen.getByLabelText(/send event reminders/i));
 
       await waitFor(() => {
-        expect(screen.queryByLabelText(/reminder hours before event/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/reminder schedule/i)).not.toBeInTheDocument();
       });
     });
   });
@@ -311,16 +316,16 @@ describe('EventForm', () => {
       expect(screen.getByLabelText(/mandatory attendance/i)).toBeInTheDocument();
     });
 
-    it('should load and display eligible roles', async () => {
+    it('should render attendance section with mandatory checkbox', () => {
       renderWithRouter(
         <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
       );
 
-      await waitFor(() => {
-        expect(screen.getByLabelText('Firefighter')).toBeInTheDocument();
-        expect(screen.getByLabelText('Lieutenant')).toBeInTheDocument();
-        expect(screen.getByLabelText('Captain')).toBeInTheDocument();
-      });
+      const heading = screen.getAllByRole('heading', { level: 2 }).find(
+        (h) => h.textContent?.includes('Attendance')
+      );
+      expect(heading).toBeInTheDocument();
+      expect(screen.getByLabelText(/mandatory attendance/i)).toBeInTheDocument();
     });
   });
 

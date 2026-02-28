@@ -41,6 +41,12 @@ vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
+/** Helper: each tab label appears twice in the DOM (desktop + mobile spans). */
+function expectTabVisible(label: string) {
+  const matches = screen.getAllByText(label);
+  expect(matches.length).toBeGreaterThanOrEqual(1);
+}
+
 describe('SchedulingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -52,11 +58,11 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Schedule')).toBeInTheDocument();
-        expect(screen.getByText('My Shifts')).toBeInTheDocument();
-        expect(screen.getByText('Open Shifts')).toBeInTheDocument();
-        expect(screen.getByText('Requests')).toBeInTheDocument();
-        expect(screen.getByText('Shift Reports')).toBeInTheDocument();
+        expectTabVisible('Schedule');
+        expectTabVisible('My Shifts');
+        expectTabVisible('Open Shifts');
+        expectTabVisible('Requests');
+        expectTabVisible('Shift Reports');
       });
     });
 
@@ -68,10 +74,10 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Templates')).toBeInTheDocument();
-        expect(screen.getByText('Patterns')).toBeInTheDocument();
-        expect(screen.getByText('Reports')).toBeInTheDocument();
-        expect(screen.getByText('Settings')).toBeInTheDocument();
+        expectTabVisible('Templates');
+        expectTabVisible('Patterns');
+        expectTabVisible('Reports');
+        expectTabVisible('Settings');
       });
     });
 
@@ -81,7 +87,7 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Schedule')).toBeInTheDocument();
+        expectTabVisible('Schedule');
       });
 
       expect(screen.queryByText('Templates')).not.toBeInTheDocument();
@@ -95,6 +101,10 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
+        expectTabVisible('Schedule');
+      });
+
+      await waitFor(() => {
         expect(screen.getByText('Week')).toBeInTheDocument();
         expect(screen.getByText('Month')).toBeInTheDocument();
       });
@@ -104,7 +114,7 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Schedule')).toBeInTheDocument();
+        expectTabVisible('Schedule');
       });
 
       // Navigation arrows should be present
@@ -119,15 +129,16 @@ describe('SchedulingPage', () => {
       const user = userEvent.setup();
 
       await waitFor(() => {
-        expect(screen.getByText('My Shifts')).toBeInTheDocument();
+        expectTabVisible('My Shifts');
       });
 
-      await user.click(screen.getByText('My Shifts'));
+      const myShiftsButtons = screen.getAllByText('My Shifts');
+      // Click the first visible button
+      await user.click(myShiftsButtons[0]!);
 
-      // The tab should be active (the component lazy-loads the tab content)
+      // The tab should remain visible
       await waitFor(() => {
-        const myShiftsButton = screen.getByText('My Shifts');
-        expect(myShiftsButton).toBeInTheDocument();
+        expectTabVisible('My Shifts');
       });
     });
   });
@@ -137,7 +148,7 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
       // The component starts with loading=true, which shows a spinner
       // Since we mock the API to resolve, it should eventually load
-      expect(screen.getByText('Schedule')).toBeInTheDocument();
+      expectTabVisible('Schedule');
     });
   });
 });

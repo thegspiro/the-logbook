@@ -2054,6 +2054,8 @@ class AssignmentStatus(str, enum.Enum):
     ASSIGNED = "assigned"
     CONFIRMED = "confirmed"
     DECLINED = "declined"
+    PENDING = "pending"
+    CANCELLED = "cancelled"
     NO_SHOW = "no_show"
 
 
