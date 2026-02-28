@@ -107,7 +107,7 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
         total: allMembers.length,
         active: allMembers.filter((m) => m.status === UserStatus.ACTIVE).length,
         inactive: allMembers.filter((m) => m.status === UserStatus.INACTIVE).length,
-        onLeave: allMembers.filter((m) => m.status === 'leave' || m.status === 'on_leave').length,
+        onLeave: allMembers.filter((m) => m.status === UserStatus.LEAVE).length,
         retired: allMembers.filter((m) => m.status === UserStatus.RETIRED).length,
         expiringCertifications: 0,
       };

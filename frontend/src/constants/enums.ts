@@ -14,7 +14,6 @@ export const UserStatus = {
   SUSPENDED: 'suspended',
   PROBATIONARY: 'probationary',
   LEAVE: 'leave',
-  ON_LEAVE: 'on_leave',
   RETIRED: 'retired',
   DROPPED_VOLUNTARY: 'dropped_voluntary',
   DROPPED_INVOLUNTARY: 'dropped_involuntary',
@@ -91,13 +90,21 @@ export const FieldType = {
 export type FieldType = (typeof FieldType)[keyof typeof FieldType];
 
 // ============================================
-// Ballot / Vote Types
+// Ballot Item Types (BallotItem.type field)
+// ============================================
+export const BallotItemType = {
+  MEMBERSHIP_APPROVAL: 'membership_approval',
+  OFFICER_ELECTION: 'officer_election',
+  GENERAL_VOTE: 'general_vote',
+} as const;
+export type BallotItemType = (typeof BallotItemType)[keyof typeof BallotItemType];
+
+// ============================================
+// Ballot / Vote Types (BallotItem.vote_type field)
 // ============================================
 export const VoteType = {
   APPROVAL: 'approval',
-  RANKED_CHOICE: 'ranked_choice',
-  OFFICER_ELECTION: 'officer_election',
-  MEMBERSHIP_APPROVAL: 'membership_approval',
+  CANDIDATE_SELECTION: 'candidate_selection',
 } as const;
 export type VoteType = (typeof VoteType)[keyof typeof VoteType];
 
@@ -132,6 +139,7 @@ export type HealthStatus = (typeof HealthStatus)[keyof typeof HealthStatus];
 // Membership Type
 // ============================================
 export const MembershipType = {
+  PROSPECTIVE: 'prospective',
   PROBATIONARY: 'probationary',
   ACTIVE: 'active',
   LIFE: 'life',

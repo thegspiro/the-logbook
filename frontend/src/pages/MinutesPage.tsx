@@ -24,8 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { meetingsService, minutesService } from '../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
-
-type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'trustee' | 'executive' | 'annual' | 'other';
+import type { MeetingType } from '../types/minutes';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   { value: 'business', label: 'Business Meeting', color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400' },

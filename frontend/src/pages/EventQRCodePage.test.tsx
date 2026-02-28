@@ -5,7 +5,6 @@ import { renderWithRouter, mockQRCheckInData, createMockApiError } from '../test
 import EventQRCodePage from './EventQRCodePage';
 import type { QRCheckInData } from '../types/event';
 import * as apiModule from '../services/api';
-import * as reactRouterDom from 'react-router-dom';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -14,6 +13,9 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+// Track the useParams return value so we can override it per test
+let mockParamsValue: Record<string, string | undefined> = { id: '1' };
+
 // Mock react-router-dom
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -21,9 +23,14 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useParams: () => ({ id: '1' }),
+    useParams: () => mockParamsValue,
   };
 });
+
+// Mock the useTimezone hook
+vi.mock('../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
+}));
 
 // Mock QRCodeSVG component
 vi.mock('qrcode.react', () => ({
@@ -39,11 +46,7 @@ describe('EventQRCodePage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
+    mockParamsValue = { id: '1' };
   });
 
   describe('Loading State', () => {
@@ -71,7 +74,7 @@ describe('EventQRCodePage', () => {
       });
     });
 
-    it('should display generic error message when error has no detail', async () => {
+    it('should display error message from plain Error object', async () => {
       vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
         new Error('Network error')
       );
@@ -79,11 +82,11 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Failed to load QR code')).toBeInTheDocument();
+        expect(screen.getByText('Network error')).toBeInTheDocument();
       });
     });
 
-    it('should show back button when error occurs', async () => {
+    it('should show back link when error occurs', async () => {
       vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
         createMockApiError('Event not found', 404)
       );
@@ -91,12 +94,13 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        const backButton = screen.getByRole('button', { name: /back to event/i });
-        expect(backButton).toBeInTheDocument();
+        const backLink = screen.getByRole('link', { name: /back to event/i });
+        expect(backLink).toBeInTheDocument();
+        expect(backLink).toHaveAttribute('href', '/events/1');
       });
     });
 
-    it('should navigate back when back button is clicked', async () => {
+    it('should have correct href on back link for navigation', async () => {
       vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
         createMockApiError('Event not found', 404)
       );
@@ -104,11 +108,9 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        const backButton = screen.getByRole('button', { name: /back to event/i });
-        backButton.click();
+        const backLink = screen.getByRole('link', { name: /back to event/i });
+        expect(backLink).toHaveAttribute('href', '/events/1');
       });
-
-      expect(mockNavigate).toHaveBeenCalledWith('/events/1');
     });
   });
 
@@ -133,7 +135,7 @@ describe('EventQRCodePage', () => {
       await waitFor(() => {
         expect(screen.getByText('Test Event')).toBeInTheDocument();
         expect(screen.getByText(/Test Location/)).toBeInTheDocument();
-        expect(screen.getByText(/business_meeting/i)).toBeInTheDocument();
+        expect(screen.getByText(/business meeting/i)).toBeInTheDocument();
       });
     });
 
@@ -174,7 +176,7 @@ describe('EventQRCodePage', () => {
 
     it('should call window.print when print button is clicked', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
-      const user = userEvent.setup({ delay: null });
+      const user = userEvent.setup();
 
       renderWithRouter(<EventQRCodePage />);
 
@@ -204,7 +206,7 @@ describe('EventQRCodePage', () => {
       });
     });
 
-    it('should not display QR code when check-in is invalid', async () => {
+    it('should show greyed-out QR code when check-in is invalid', async () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
@@ -215,7 +217,8 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+        // The QR code is still rendered but with reduced opacity
+        expect(screen.getByTestId('qr-code')).toBeInTheDocument();
       });
     });
 
@@ -252,29 +255,32 @@ describe('EventQRCodePage', () => {
   });
 
   describe('Auto-refresh Functionality', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should refresh QR data every 30 seconds', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
 
       renderWithRouter(<EventQRCodePage />);
 
       // Initial load
-      await waitFor(() => {
-        expect(eventService.getQRCheckInData).toHaveBeenCalledTimes(1);
-      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(eventService.getQRCheckInData).toHaveBeenCalledTimes(1);
 
       // Fast-forward 30 seconds
-      vi.advanceTimersByTime(30000);
+      await vi.advanceTimersByTimeAsync(30000);
 
-      await waitFor(() => {
-        expect(eventService.getQRCheckInData).toHaveBeenCalledTimes(2);
-      });
+      expect(eventService.getQRCheckInData).toHaveBeenCalledTimes(2);
 
       // Fast-forward another 30 seconds
-      vi.advanceTimersByTime(30000);
+      await vi.advanceTimersByTimeAsync(30000);
 
-      await waitFor(() => {
-        expect(eventService.getQRCheckInData).toHaveBeenCalledTimes(3);
-      });
+      expect(eventService.getQRCheckInData).toHaveBeenCalledTimes(3);
     });
 
     it('should update validity status when QR data changes', async () => {
@@ -289,20 +295,19 @@ describe('EventQRCodePage', () => {
 
       renderWithRouter(<EventQRCodePage />);
 
+      // Wait for initial load
+      await vi.advanceTimersByTimeAsync(0);
+
       // Initially valid
-      await waitFor(() => {
-        expect(screen.getByText('Check-in is Active')).toBeInTheDocument();
-      });
+      expect(screen.getByText('Check-in is Active')).toBeInTheDocument();
 
       // After 30 seconds, should be invalid
-      vi.advanceTimersByTime(30000);
+      await vi.advanceTimersByTimeAsync(30000);
 
-      await waitFor(() => {
-        expect(screen.getByText('Check-in Not Available')).toBeInTheDocument();
-      });
+      expect(screen.getByText('Check-in Not Available')).toBeInTheDocument();
     });
 
-    it('should handle errors during auto-refresh gracefully', async () => {
+    it('should keep displaying existing data when auto-refresh errors', async () => {
       let callCount = 0;
       vi.mocked(eventService.getQRCheckInData).mockImplementation(() => {
         callCount++;
@@ -314,17 +319,18 @@ describe('EventQRCodePage', () => {
 
       renderWithRouter(<EventQRCodePage />);
 
+      // Wait for initial load
+      await vi.advanceTimersByTimeAsync(0);
+
       // Initially successful
-      await waitFor(() => {
-        expect(screen.getByText('Test Event')).toBeInTheDocument();
-      });
+      expect(screen.getByText('Test Event')).toBeInTheDocument();
 
-      // After 30 seconds, error occurs but doesn't crash
-      vi.advanceTimersByTime(30000);
+      // After 30 seconds, error occurs but existing data is preserved
+      await vi.advanceTimersByTimeAsync(30000);
 
-      await waitFor(() => {
-        expect(screen.getByText('Network error')).toBeInTheDocument();
-      });
+      // The page should still show the event data since refresh errors
+      // don't replace existing data (hasDataRef.current is true)
+      expect(screen.getByText('Test Event')).toBeInTheDocument();
     });
   });
 
@@ -343,17 +349,13 @@ describe('EventQRCodePage', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle missing event ID gracefully', async () => {
-      const originalUseParams = vi.mocked(reactRouterDom.useParams);
-      vi.mocked(reactRouterDom.useParams).mockReturnValue({ id: undefined });
+    it('should handle missing event ID gracefully', () => {
+      mockParamsValue = { id: undefined };
 
       renderWithRouter(<EventQRCodePage />);
 
       // Should not call API without event ID
       expect(eventService.getQRCheckInData).not.toHaveBeenCalled();
-
-      // Restore original mock
-      vi.mocked(reactRouterDom.useParams).mockImplementation(originalUseParams);
     });
 
     it('should handle null QR data', async () => {

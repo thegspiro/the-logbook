@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter, mockQRCheckInData, mockRSVP, createMockApiError } from '../test/utils';
 import EventSelfCheckInPage from './EventSelfCheckInPage';
 import * as apiModule from '../services/api';
-import * as reactRouterDom from 'react-router-dom';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -14,6 +13,14 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+// Mock the useTimezone hook
+vi.mock('../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
+}));
+
+// Track the useParams return value so we can override it per test
+let mockParamsValue: Record<string, string | undefined> = { id: '1' };
+
 // Mock react-router-dom
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -21,7 +28,7 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useParams: () => ({ id: '1' }),
+    useParams: () => mockParamsValue,
   };
 });
 
@@ -30,6 +37,7 @@ describe('EventSelfCheckInPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockParamsValue = { id: '1' };
   });
 
   describe('Loading State', () => {
@@ -425,17 +433,13 @@ describe('EventSelfCheckInPage', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle missing event ID gracefully', async () => {
-      const originalUseParams = vi.mocked(reactRouterDom.useParams);
-      vi.mocked(reactRouterDom.useParams).mockReturnValue({ id: undefined });
+    it('should handle missing event ID gracefully', () => {
+      mockParamsValue = { id: undefined };
 
       renderWithRouter(<EventSelfCheckInPage />);
 
       // Should not call API without event ID
       expect(eventService.getQRCheckInData).not.toHaveBeenCalled();
-
-      // Restore original mock
-      vi.mocked(reactRouterDom.useParams).mockImplementation(originalUseParams);
     });
 
     it('should handle missing location in event data', async () => {

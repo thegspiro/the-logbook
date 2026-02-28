@@ -20,6 +20,7 @@ vi.mock('../services/api', () => ({
   eventService: {
     getEvent: vi.fn(),
     updateEvent: vi.fn(),
+    getVisibleEventTypes: vi.fn().mockResolvedValue([]),
   },
   roleService: {
     getRoles: vi.fn().mockResolvedValue([]),
@@ -27,6 +28,11 @@ vi.mock('../services/api', () => ({
   locationsService: {
     getLocations: vi.fn().mockResolvedValue([]),
   },
+}));
+
+// Mock the useTimezone hook used by EventForm
+vi.mock('../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
 }));
 
 // Mock react-router-dom
@@ -116,15 +122,16 @@ describe('EventEditPage', () => {
       });
     });
 
-    it('should display breadcrumb with event title', async () => {
+    it('should display back link and event title in description', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
 
       renderWithRouter(<EventEditPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Events')).toBeInTheDocument();
-        expect(screen.getByText('Existing Event')).toBeInTheDocument();
-        expect(screen.getByText('Edit')).toBeInTheDocument();
+        const backLink = screen.getByRole('link', { name: /back to event/i });
+        expect(backLink).toBeInTheDocument();
+        expect(backLink).toHaveAttribute('href', '/events/evt-1');
+        expect(screen.getByText(/Existing Event/)).toBeInTheDocument();
       });
     });
 
@@ -231,14 +238,15 @@ describe('EventEditPage', () => {
       });
     });
 
-    it('should have proper breadcrumb navigation', async () => {
+    it('should have proper back navigation link', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
 
       renderWithRouter(<EventEditPage />);
 
       await waitFor(() => {
-        const breadcrumb = screen.getByRole('navigation', { name: /breadcrumb/i });
-        expect(breadcrumb).toBeInTheDocument();
+        const backLink = screen.getByRole('link', { name: /back to event/i });
+        expect(backLink).toBeInTheDocument();
+        expect(backLink).toHaveAttribute('href', '/events/evt-1');
       });
     });
   });

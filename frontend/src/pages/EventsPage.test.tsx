@@ -4,19 +4,33 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { EventsPage } from './EventsPage';
 import * as apiModule from '../services/api';
-import * as authStoreModule from '../stores/authStore';
 import type { EventListItem } from '../types/event';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
   eventService: {
     getEvents: vi.fn(),
+    getVisibleEventTypes: vi.fn().mockResolvedValue([
+      'business_meeting',
+      'public_education',
+      'training',
+      'social',
+      'fundraiser',
+      'ceremony',
+      'other',
+    ]),
   },
 }));
 
-// Mock auth store
+// Mock auth store with selector support
+const mockAuthState: Record<string, unknown> = {
+  checkPermission: vi.fn().mockReturnValue(false),
+  user: null,
+};
 vi.mock('../stores/authStore', () => ({
-  useAuthStore: vi.fn(),
+  useAuthStore: vi.fn((selector?: (state: Record<string, unknown>) => unknown) =>
+    selector ? selector(mockAuthState) : mockAuthState
+  ),
 }));
 
 const mockEvents: EventListItem[] = [
@@ -63,10 +77,8 @@ describe('EventsPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
-      checkPermission: vi.fn().mockReturnValue(false),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockAuthState.checkPermission = vi.fn().mockReturnValue(false);
+    mockAuthState.user = null;
   });
 
   describe('Loading State', () => {
@@ -146,9 +158,12 @@ describe('EventsPage', () => {
       renderWithRouter(<EventsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Business Meeting')).toBeInTheDocument();
-        expect(screen.getByText('Training')).toBeInTheDocument();
-        expect(screen.getByText('Fundraiser')).toBeInTheDocument();
+        // Event type labels appear both as filter tabs and as badges on cards.
+        // Verify at least 2 instances exist for types present in mockEvents
+        // (one tab + one badge per type).
+        expect(screen.getAllByText('Business Meeting').length).toBeGreaterThanOrEqual(2);
+        expect(screen.getAllByText('Training').length).toBeGreaterThanOrEqual(2);
+        expect(screen.getAllByText('Fundraiser').length).toBeGreaterThanOrEqual(2);
       });
     });
 
@@ -290,10 +305,7 @@ describe('EventsPage', () => {
 
   describe('Manager Actions', () => {
     it('should show Create Event button for managers', async () => {
-      vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
-        checkPermission: vi.fn().mockReturnValue(true),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
       vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
 
       renderWithRouter(<EventsPage />);

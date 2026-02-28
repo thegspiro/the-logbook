@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
 VALID_RUNOFF_TYPES = {"top_two", "eliminate_lowest"}
+VALID_BALLOT_ITEM_TYPES = {"membership_approval", "officer_election", "general_vote"}
+VALID_VOTE_TYPES = {"approval", "candidate_selection"}
 
 
 # Ballot Item Schemas
@@ -44,6 +46,24 @@ class BallotItem(BaseModel):
         default=False,
         description="If true, voter must be checked in as present at the meeting",
     )
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        if v not in VALID_BALLOT_ITEM_TYPES:
+            raise ValueError(
+                f"Invalid ballot item type '{v}'. Must be one of: {', '.join(sorted(VALID_BALLOT_ITEM_TYPES))}"
+            )
+        return v
+
+    @field_validator("vote_type")
+    @classmethod
+    def validate_vote_type(cls, v: str) -> str:
+        if v not in VALID_VOTE_TYPES:
+            raise ValueError(
+                f"Invalid vote type '{v}'. Must be one of: {', '.join(sorted(VALID_VOTE_TYPES))}"
+            )
+        return v
 
 
 class PositionEligibility(BaseModel):

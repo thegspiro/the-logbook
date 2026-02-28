@@ -233,6 +233,8 @@ class AssignmentStatus(str, PyEnum):
     ASSIGNED = "assigned"
     CONFIRMED = "confirmed"
     DECLINED = "declined"
+    PENDING = "pending"
+    CANCELLED = "cancelled"
     NO_SHOW = "no_show"
 
 

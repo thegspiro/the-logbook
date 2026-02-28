@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { Election, BallotItem, BallotTemplate } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
-import { ElectionStatus, VoteType } from '../constants/enums';
+import { ElectionStatus, VoteType, BallotItemType } from '../constants/enums';
 
 interface BallotBuilderProps {
   electionId: string;
@@ -237,9 +237,9 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-theme-text-primary">
-                {selectedTemplate.type === VoteType.MEMBERSHIP_APPROVAL
+                {selectedTemplate.type === BallotItemType.MEMBERSHIP_APPROVAL
                   ? 'Member Name'
-                  : selectedTemplate.type === VoteType.OFFICER_ELECTION
+                  : selectedTemplate.type === BallotItemType.OFFICER_ELECTION
                     ? 'Position Name'
                     : 'Title / Topic'}
               </label>
@@ -249,9 +249,9 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 onChange={(e) => setTemplateNameInput(e.target.value)}
                 className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                 placeholder={
-                  selectedTemplate.type === VoteType.MEMBERSHIP_APPROVAL
+                  selectedTemplate.type === BallotItemType.MEMBERSHIP_APPROVAL
                     ? 'e.g., John Smith'
-                    : selectedTemplate.type === VoteType.OFFICER_ELECTION
+                    : selectedTemplate.type === BallotItemType.OFFICER_ELECTION
                       ? 'e.g., Chief'
                       : 'e.g., Approve new equipment purchase'
                 }

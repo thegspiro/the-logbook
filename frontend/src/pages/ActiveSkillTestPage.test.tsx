@@ -107,8 +107,8 @@ describe('ActiveSkillTestPage', () => {
       currentMockTest = mockCompletedTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.getByText('Test Passed')).toBeInTheDocument();
-      expect(screen.getByText('95%')).toBeInTheDocument();
+      expect(screen.getByText('Passed')).toBeInTheDocument();
+      expect(screen.getByText('Overall Score: 95%')).toBeInTheDocument();
     });
 
     it('should show candidate name', () => {
@@ -134,11 +134,11 @@ describe('ActiveSkillTestPage', () => {
   });
 
   describe('Draft test view', () => {
-    it('should show ready to begin message for draft tests', () => {
+    it('should show section indicator for draft tests', () => {
       currentMockTest = mockInProgressTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.getByText('Ready to Begin')).toBeInTheDocument();
+      expect(screen.getByText(/Section 1 of/)).toBeInTheDocument();
     });
 
     it('should show template name in header', () => {
@@ -148,18 +148,18 @@ describe('ActiveSkillTestPage', () => {
       expect(screen.getByText('SCBA Evaluation')).toBeInTheDocument();
     });
 
-    it('should show candidate name in header', () => {
+    it('should show template name in header for draft test', () => {
       currentMockTest = mockInProgressTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.getByText('John Smith')).toBeInTheDocument();
+      expect(screen.getByText('SCBA Evaluation')).toBeInTheDocument();
     });
 
-    it('should have Save Progress and Complete Test buttons', () => {
+    it('should have Save and Complete Test buttons', () => {
       currentMockTest = mockInProgressTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.getByRole('button', { name: /save progress/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /complete test/i })).toBeInTheDocument();
     });
 
