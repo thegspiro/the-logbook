@@ -13,7 +13,11 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.admin_hours import AdminHoursCategory, AdminHoursEntry, AdminHoursEntryStatus
+from app.models.admin_hours import (
+    AdminHoursCategory,
+    AdminHoursEntry,
+    AdminHoursEntryStatus,
+)
 from app.models.event import Event, EventRSVP
 from app.models.training import (
     EnrollmentStatus,
@@ -919,16 +923,26 @@ class ReportsService:
         """Generate admin hours report with per-member and per-category breakdown."""
         base_conditions = [
             AdminHoursEntry.organization_id == str(organization_id),
-            AdminHoursEntry.status.in_([
-                AdminHoursEntryStatus.APPROVED,
-                AdminHoursEntryStatus.PENDING,
-            ]),
+            AdminHoursEntry.status.in_(
+                [
+                    AdminHoursEntryStatus.APPROVED,
+                    AdminHoursEntryStatus.PENDING,
+                ]
+            ),
             AdminHoursEntry.duration_minutes.isnot(None),
         ]
         if start_date:
-            base_conditions.append(AdminHoursEntry.clock_in_at >= datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc))
+            base_conditions.append(
+                AdminHoursEntry.clock_in_at
+                >= datetime.combine(
+                    start_date, datetime.min.time(), tzinfo=timezone.utc
+                )
+            )
         if end_date:
-            base_conditions.append(AdminHoursEntry.clock_in_at <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc))
+            base_conditions.append(
+                AdminHoursEntry.clock_in_at
+                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
+            )
 
         # Individual entries with user and category info
         entries_query = (
@@ -939,7 +953,9 @@ class ReportsService:
                 AdminHoursCategory.name.label("category_name"),
             )
             .join(User, AdminHoursEntry.user_id == User.id)
-            .join(AdminHoursCategory, AdminHoursEntry.category_id == AdminHoursCategory.id)
+            .join(
+                AdminHoursCategory, AdminHoursEntry.category_id == AdminHoursCategory.id
+            )
             .where(*base_conditions)
             .order_by(AdminHoursEntry.clock_in_at.desc())
         )
@@ -951,14 +967,22 @@ class ReportsService:
         for entry, first_name, last_name, category_name in entries_rows:
             unique_members.add(entry.user_id)
             hours = round((entry.duration_minutes or 0) / 60, 2)
-            entries.append({
-                "member_name": f"{first_name} {last_name}",
-                "category_name": category_name,
-                "date": entry.clock_in_at.strftime("%Y-%m-%d") if entry.clock_in_at else None,
-                "hours": hours,
-                "entry_method": entry.entry_method.value if entry.entry_method else "manual",
-                "status": entry.status.value if entry.status else "pending",
-            })
+            entries.append(
+                {
+                    "member_name": f"{first_name} {last_name}",
+                    "category_name": category_name,
+                    "date": (
+                        entry.clock_in_at.strftime("%Y-%m-%d")
+                        if entry.clock_in_at
+                        else None
+                    ),
+                    "hours": hours,
+                    "entry_method": (
+                        entry.entry_method.value if entry.entry_method else "manual"
+                    ),
+                    "status": entry.status.value if entry.status else "pending",
+                }
+            )
 
         # Summary totals
         total_query = await self.db.execute(
@@ -977,13 +1001,14 @@ class ReportsService:
                 AdminHoursCategory.name,
                 func.coalesce(func.sum(AdminHoursEntry.duration_minutes), 0),
             )
-            .join(AdminHoursCategory, AdminHoursEntry.category_id == AdminHoursCategory.id)
+            .join(
+                AdminHoursCategory, AdminHoursEntry.category_id == AdminHoursCategory.id
+            )
             .where(*base_conditions)
             .group_by(AdminHoursCategory.name)
         )
         hours_by_category = {
-            name: round(int(mins) / 60, 2)
-            for name, mins in category_query.all()
+            name: round(int(mins) / 60, 2) for name, mins in category_query.all()
         }
 
         return {

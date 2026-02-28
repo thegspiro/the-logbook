@@ -164,7 +164,9 @@ class InventoryNotificationService:
                 org = await self._get_organization(org_id)
 
                 if not user or not user.email:
-                    logger.warning(f"No email for user {member_id}, skipping inventory notification")
+                    logger.warning(
+                        f"No email for user {member_id}, skipping inventory notification"
+                    )
                     for rec in member_records:
                         rec.processed = True
                         rec.processed_at = datetime.now(timezone.utc)
@@ -172,13 +174,25 @@ class InventoryNotificationService:
                     continue
 
                 # Build email content
-                issued_items = [n for n in net_items if n["action_type"] in _OUTGOING_ACTIONS]
-                returned_items = [n for n in net_items if n["action_type"] not in _OUTGOING_ACTIONS]
+                issued_items = [
+                    n for n in net_items if n["action_type"] in _OUTGOING_ACTIONS
+                ]
+                returned_items = [
+                    n for n in net_items if n["action_type"] not in _OUTGOING_ACTIONS
+                ]
 
-                items_issued_html = self._build_item_list_html(issued_items, "Items Issued / Assigned")
-                items_returned_html = self._build_item_list_html(returned_items, "Items Returned")
-                items_issued_text = self._build_item_list_text(issued_items, "Items Issued / Assigned")
-                items_returned_text = self._build_item_list_text(returned_items, "Items Returned")
+                items_issued_html = self._build_item_list_html(
+                    issued_items, "Items Issued / Assigned"
+                )
+                items_returned_html = self._build_item_list_html(
+                    returned_items, "Items Returned"
+                )
+                items_issued_text = self._build_item_list_text(
+                    issued_items, "Items Issued / Assigned"
+                )
+                items_returned_text = self._build_item_list_text(
+                    returned_items, "Items Returned"
+                )
 
                 context = {
                     "first_name": user.first_name or "Member",
@@ -200,15 +214,21 @@ class InventoryNotificationService:
                     records_processed += len(member_records)
                 else:
                     # Email failed — leave records unprocessed for retry on next run
-                    logger.warning(f"Email send failed for user {member_id}; will retry on next run")
+                    logger.warning(
+                        f"Email send failed for user {member_id}; will retry on next run"
+                    )
 
             except Exception as e:
-                logger.error(f"Failed to process inventory notifications for user {member_id}: {e}")
+                logger.error(
+                    f"Failed to process inventory notifications for user {member_id}: {e}"
+                )
                 # Records stay unprocessed and will be retried on next scheduled run
 
         await self.db.commit()
 
-        logger.info(f"Inventory notifications: {emails_sent} emails sent, {records_processed} records processed")
+        logger.info(
+            f"Inventory notifications: {emails_sent} emails sent, {records_processed} records processed"
+        )
         return {
             "task": "inventory_notifications",
             "emails_sent": emails_sent,
@@ -219,7 +239,9 @@ class InventoryNotificationService:
     # Netting logic
     # ------------------------------------------------------------------
 
-    def _net_actions(self, records: List[InventoryNotificationQueue]) -> List[Dict[str, Any]]:
+    def _net_actions(
+        self, records: List[InventoryNotificationQueue]
+    ) -> List[Dict[str, Any]]:
         """
         Net out offsetting actions for the same item_id.
 
@@ -230,7 +252,9 @@ class InventoryNotificationService:
         Returns a list of dicts representing only the net changes.
         """
         # Accumulate per item_id: {action_type: total_quantity}
-        per_item: Dict[str, Dict[InventoryActionType, int]] = defaultdict(lambda: defaultdict(int))
+        per_item: Dict[str, Dict[InventoryActionType, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
         # Keep item metadata keyed by item_id
         item_meta: Dict[str, Dict[str, Any]] = {}
 
@@ -280,7 +304,9 @@ class InventoryNotificationService:
 
         rows = ""
         for item in items:
-            identifier = item.get("item_serial_number") or item.get("item_asset_tag") or ""
+            identifier = (
+                item.get("item_serial_number") or item.get("item_asset_tag") or ""
+            )
             qty_str = f" (x{item['quantity']})" if item["quantity"] > 1 else ""
             label = _ACTION_LABELS.get(item["action_type"], str(item["action_type"]))
             id_display = f" — {identifier}" if identifier else ""
@@ -296,7 +322,9 @@ class InventoryNotificationService:
 
         lines = [f"{heading}:", ""]
         for item in items:
-            identifier = item.get("item_serial_number") or item.get("item_asset_tag") or ""
+            identifier = (
+                item.get("item_serial_number") or item.get("item_asset_tag") or ""
+            )
             qty_str = f" (x{item['quantity']})" if item["quantity"] > 1 else ""
             label = _ACTION_LABELS.get(item["action_type"], str(item["action_type"]))
             id_display = f" — {identifier}" if identifier else ""
@@ -325,9 +353,13 @@ class InventoryNotificationService:
         if org:
             try:
                 template_service = EmailTemplateService(self.db)
-                template = await template_service.get_template(str(org.id), EmailTemplateType.INVENTORY_CHANGE)
+                template = await template_service.get_template(
+                    str(org.id), EmailTemplateType.INVENTORY_CHANGE
+                )
                 if template:
-                    subject, html_body, text_body = template_service.render(template, context)
+                    subject, html_body, text_body = template_service.render(
+                        template, context
+                    )
             except Exception as e:
                 logger.warning(f"Failed to load inventory change email template: {e}")
 
@@ -374,5 +406,7 @@ class InventoryNotificationService:
         return result.scalar_one_or_none()
 
     async def _get_organization(self, org_id: str) -> Optional[Organization]:
-        result = await self.db.execute(select(Organization).where(Organization.id == org_id))
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == org_id)
+        )
         return result.scalar_one_or_none()

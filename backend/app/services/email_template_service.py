@@ -324,7 +324,10 @@ class EmailTemplateService:
             conditions.append(EmailTemplate.is_active == True)  # noqa: E712
 
         result = await self.db.execute(
-            select(EmailTemplate).where(and_(*conditions)).options(selectinload(EmailTemplate.attachments)).limit(1)
+            select(EmailTemplate)
+            .where(and_(*conditions))
+            .options(selectinload(EmailTemplate.attachments))
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -487,7 +490,9 @@ class EmailTemplateService:
         created = []
 
         # Check for welcome template
-        existing = await self.get_template(organization_id, EmailTemplateType.WELCOME, active_only=False)
+        existing = await self.get_template(
+            organization_id, EmailTemplateType.WELCOME, active_only=False
+        )
         if not existing:
             template = await self.create_template(
                 organization_id=organization_id,
@@ -501,10 +506,14 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(f"Created default welcome email template for org {organization_id}")
+            logger.info(
+                f"Created default welcome email template for org {organization_id}"
+            )
 
         # Check for password reset template
-        existing = await self.get_template(organization_id, EmailTemplateType.PASSWORD_RESET, active_only=False)
+        existing = await self.get_template(
+            organization_id, EmailTemplateType.PASSWORD_RESET, active_only=False
+        )
         if not existing:
             template = await self.create_template(
                 organization_id=organization_id,
@@ -518,10 +527,14 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(f"Created default password reset email template for org {organization_id}")
+            logger.info(
+                f"Created default password reset email template for org {organization_id}"
+            )
 
         # Check for member dropped template
-        existing = await self.get_template(organization_id, EmailTemplateType.MEMBER_DROPPED, active_only=False)
+        existing = await self.get_template(
+            organization_id, EmailTemplateType.MEMBER_DROPPED, active_only=False
+        )
         if not existing:
             template = await self.create_template(
                 organization_id=organization_id,
@@ -539,10 +552,14 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(f"Created default member dropped email template for org {organization_id}")
+            logger.info(
+                f"Created default member dropped email template for org {organization_id}"
+            )
 
         # Check for inventory change template
-        existing = await self.get_template(organization_id, EmailTemplateType.INVENTORY_CHANGE, active_only=False)
+        existing = await self.get_template(
+            organization_id, EmailTemplateType.INVENTORY_CHANGE, active_only=False
+        )
         if not existing:
             template = await self.create_template(
                 organization_id=organization_id,
@@ -561,6 +578,8 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(f"Created default inventory change email template for org {organization_id}")
+            logger.info(
+                f"Created default inventory change email template for org {organization_id}"
+            )
 
         return created

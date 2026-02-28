@@ -1634,7 +1634,10 @@ class ElectionService:
 
         # Only OPEN elections can be closed
         if election.status != ElectionStatus.OPEN:
-            return None, f"Cannot close election with status '{election.status.value}'. Only open elections can be closed."
+            return (
+                None,
+                f"Cannot close election with status '{election.status.value}'. Only open elections can be closed.",
+            )
 
         election.status = ElectionStatus.CLOSED
         await self.db.commit()
@@ -1699,7 +1702,10 @@ class ElectionService:
         ballot_items = election.ballot_items or []
 
         if candidate_count == 0 and len(ballot_items) == 0:
-            return None, "Election must have at least one accepted candidate or ballot item"
+            return (
+                None,
+                "Election must have at least one accepted candidate or ballot item",
+            )
 
         election.status = ElectionStatus.OPEN
         await self.db.commit()
