@@ -576,6 +576,32 @@ class AuthService:
                 logger.debug("Token rejected: session expired")
                 return None
 
+            # HIPAA §164.312(a)(2)(iii): Server-side idle timeout.
+            # If the session has not been active within the configured
+            # timeout window, reject it to enforce automatic logoff.
+            idle_timeout = settings.HIPAA_SESSION_TIMEOUT_MINUTES
+            if idle_timeout > 0 and session.last_activity:
+                last_active = (
+                    session.last_activity.replace(tzinfo=timezone.utc)
+                    if session.last_activity.tzinfo is None
+                    else session.last_activity
+                )
+                idle_minutes = (
+                    datetime.now(timezone.utc) - last_active
+                ).total_seconds() / 60
+                if idle_minutes > idle_timeout:
+                    logger.info(
+                        f"Session idle timeout: {idle_minutes:.0f}m > "
+                        f"{idle_timeout}m limit"
+                    )
+                    await self.db.delete(session)
+                    await self.db.flush()
+                    return None
+
+            # Touch session activity timestamp for idle tracking
+            session.last_activity = datetime.now(timezone.utc)
+            await self.db.flush()
+
             result = await self.db.execute(
                 select(User)
                 .where(User.id == str(user_id))

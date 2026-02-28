@@ -1350,6 +1350,22 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Global Exception Handler
 # ============================================
 
+# Query parameter keys that must never appear in error logs
+_SENSITIVE_QUERY_KEYS = {"token", "api_key", "password", "secret", "key", "code", "access_token", "refresh_token"}
+
+
+def _sanitize_query_params(query_string: str) -> str:
+    """Redact sensitive query parameters before persisting to error logs."""
+    if not query_string:
+        return ""
+    from urllib.parse import parse_qs, urlencode
+
+    parsed = parse_qs(query_string, keep_blank_values=True)
+    for key in list(parsed.keys()):
+        if key.lower() in _SENSITIVE_QUERY_KEYS:
+            parsed[key] = ["[REDACTED]"]
+    return urlencode(parsed, doseq=True)
+
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
@@ -1397,8 +1413,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
                     context={
                         "method": request.method,
                         "path": str(request.url.path),
-                        "query": str(request.url.query),
-                        "traceback": tb,
+                        "query": _sanitize_query_params(str(request.url.query)),
+                        "traceback": tb if settings.ENVIRONMENT != "production" else None,
                         "source": "backend",
                     },
                     user_id=user_id,

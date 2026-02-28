@@ -73,8 +73,8 @@ export const ApparatusDetailPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
 
-    const authToken = localStorage.getItem('access_token');
-    if (!authToken) {
+    // Check authentication via session flag (tokens are in httpOnly cookies)
+    if (!localStorage.getItem('has_session')) {
       navigate('/login');
       return;
     }

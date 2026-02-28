@@ -55,9 +55,8 @@ export const ApparatusListPage: React.FC = () => {
   } = useApparatusStore();
 
   useEffect(() => {
-    // Check authentication
-    const authToken = localStorage.getItem('access_token');
-    if (!authToken) {
+    // Check authentication via session flag (tokens are in httpOnly cookies)
+    if (!localStorage.getItem('has_session')) {
       navigate('/login');
       return;
     }

@@ -133,8 +133,11 @@ describe('SchedulingPage', () => {
       });
 
       const myShiftsButtons = screen.getAllByText('My Shifts');
-      // Click the first visible button
-      await user.click(myShiftsButtons[0]!);
+      // Click the first visible button (getAllByText always returns at least one)
+      const firstButton = myShiftsButtons[0];
+      if (firstButton) {
+        await user.click(firstButton);
+      }
 
       // The tab should remain visible
       await waitFor(() => {

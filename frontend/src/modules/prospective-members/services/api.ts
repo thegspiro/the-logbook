@@ -51,13 +51,10 @@ function getCookie(name: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
-// Attach auth token and CSRF header to requests
+// Attach CSRF header to requests
+// NOTE: Auth is handled via httpOnly cookies (withCredentials: true above).
+// Tokens must NEVER be stored in or read from localStorage (HIPAA compliance).
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
   // Double-submit CSRF token for state-changing requests
   const method = (config.method || '').toUpperCase();
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
@@ -70,39 +67,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Shared refresh promise to prevent concurrent refresh attempts (matches shared API client pattern)
-let refreshPromise: Promise<string> | null = null;
+// Shared refresh promise to prevent concurrent refresh attempts
+let refreshPromise: Promise<void> | null = null;
 
-// Handle 401 responses with race-safe token refresh
+// Handle 401 responses with race-safe httpOnly cookie refresh
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config;
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) return Promise.reject(error instanceof Error ? error : new Error(String(error)));
 
       try {
         if (!refreshPromise) {
           refreshPromise = axios
-            .post<{ access_token: string; refresh_token?: string }>('/api/v1/auth/refresh', { refresh_token: refreshToken }, { withCredentials: true })
-            .then((response) => {
-              const { access_token, refresh_token: newRefreshToken } = response.data;
-              localStorage.setItem('access_token', access_token);
-              if (newRefreshToken) {
-                localStorage.setItem('refresh_token', newRefreshToken);
-              }
-              return access_token;
-            })
+            .post('/api/v1/auth/refresh', {}, { withCredentials: true })
+            .then(() => {})
             .finally(() => { refreshPromise = null; });
         }
-        const newAccessToken = await refreshPromise;
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        await refreshPromise;
         return api(originalRequest);
       } catch {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('has_session');
         window.location.href = '/login';
       }
     }

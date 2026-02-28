@@ -10,7 +10,7 @@ const Welcome: React.FC = () => {
 
   useEffect(() => {
     // If the user is already authenticated, go straight to the dashboard
-    if (localStorage.getItem('access_token')) {
+    if (localStorage.getItem('has_session')) {
       navigate('/dashboard', { replace: true });
       return;
     }

@@ -576,7 +576,8 @@ def verify_hash_chain(previous_hash: str, current_data: str, current_hash: str) 
         f"{previous_hash}{current_data}".encode()
     ).hexdigest()
 
-    return expected_hash == current_hash
+    # Use constant-time comparison to prevent timing side-channel attacks
+    return secrets.compare_digest(expected_hash, current_hash)
 
 
 def sanitize_input(text: str, max_length: int = 1000) -> str:
@@ -719,6 +720,10 @@ def is_rate_limited_sync(key: str, limit: int, window_seconds: int) -> bool:
     Note: This is a fallback for synchronous contexts. Prefer the async
     version when possible for better performance.
 
+    Fails closed: if the async check cannot be run (e.g. inside an
+    already-running event loop or when no loop exists), the request
+    is denied rather than allowed.
+
     Args:
         key: Unique key to track (e.g., IP address, user ID)
         limit: Maximum number of requests allowed in the window
@@ -729,13 +734,23 @@ def is_rate_limited_sync(key: str, limit: int, window_seconds: int) -> bool:
     """
     import asyncio
 
+    from loguru import logger
+
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            # If we're in an async context, we can't use run_until_complete
-            # Fall back to allowing the request
-            return False
+            # If we're in an async context, we can't use run_until_complete.
+            # Fail closed: deny the request to prevent bypass.
+            logger.warning(
+                "is_rate_limited_sync called inside running event loop; "
+                "failing closed (denying request)"
+            )
+            return True
         return loop.run_until_complete(is_rate_limited(key, limit, window_seconds))
     except RuntimeError:
-        # No event loop available, allow the request
-        return False
+        # No event loop available — fail closed
+        logger.warning(
+            "is_rate_limited_sync: no event loop available; "
+            "failing closed (denying request)"
+        )
+        return True

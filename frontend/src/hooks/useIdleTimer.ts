@@ -34,9 +34,9 @@ export function useIdleTimer() {
     } catch {
       // Logout may fail if session already expired
     }
-    // Clear all auth tokens from both storage mechanisms
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    // Clear session flag and transient storage.
+    // Actual auth tokens live in httpOnly cookies (cleared by logout API call above).
+    localStorage.removeItem('has_session');
     sessionStorage.clear();
     navigate('/login', { state: { reason: 'timeout' }, replace: true });
   }, [logout, navigate]);

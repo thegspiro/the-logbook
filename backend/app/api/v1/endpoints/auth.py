@@ -472,7 +472,7 @@ async def get_session_settings(
     }
 
 
-@router.post("/change-password")
+@router.post("/change-password", dependencies=[Depends(check_rate_limit)])
 async def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_active_user),

@@ -37,7 +37,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function getStatusColor(status: string): string {
-  return STATUS_COLORS[status] ?? STATUS_COLORS["inactive"]!;
+  return STATUS_COLORS[status] ?? STATUS_COLORS["inactive"] ?? "";
 }
 
 export const MemberIdCardPage: React.FC = () => {
