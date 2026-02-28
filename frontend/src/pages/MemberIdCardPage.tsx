@@ -175,11 +175,13 @@ export const MemberIdCardPage: React.FC = () => {
                 </span>
               </div>
               {org?.logo && (
-                <img
-                  src={org.logo}
-                  alt={org.name}
-                  className="h-8 w-auto object-contain brightness-0 invert"
-                />
+                <div className="h-9 w-9 rounded-md bg-white/90 p-1 flex items-center justify-center flex-shrink-0">
+                  <img
+                    src={org.logo}
+                    alt={org.name}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
               )}
             </div>
             {org?.name && (
