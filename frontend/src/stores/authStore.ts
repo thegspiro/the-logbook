@@ -24,6 +24,43 @@ const LOGIN_BACKOFF_BASE_MS = 2_000;
 /** Maximum client-side lockout duration in ms (5 minutes). */
 const LOGIN_MAX_LOCKOUT_MS = 5 * 60 * 1_000;
 
+/** sessionStorage key for persisting lockout state across page refreshes. */
+const LOCKOUT_STORAGE_KEY = 'login_lockout';
+
+/** Read lockout state from sessionStorage (survives page refresh, cleared on tab close). */
+function loadLockoutState(): { loginAttempts: number; lockedUntil: number | null } {
+  try {
+    const raw = sessionStorage.getItem(LOCKOUT_STORAGE_KEY);
+    if (!raw) return { loginAttempts: 0, lockedUntil: null };
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return { loginAttempts: 0, lockedUntil: null };
+    const obj = parsed as Record<string, unknown>;
+    const attempts = typeof obj.loginAttempts === 'number' ? obj.loginAttempts : 0;
+    const until = typeof obj.lockedUntil === 'number' ? obj.lockedUntil : null;
+    // Clear expired lockouts
+    if (until !== null && Date.now() >= until) {
+      sessionStorage.removeItem(LOCKOUT_STORAGE_KEY);
+      return { loginAttempts: 0, lockedUntil: null };
+    }
+    return { loginAttempts: attempts, lockedUntil: until };
+  } catch {
+    return { loginAttempts: 0, lockedUntil: null };
+  }
+}
+
+/** Persist lockout state to sessionStorage. */
+function saveLockoutState(loginAttempts: number, lockedUntil: number | null): void {
+  try {
+    if (loginAttempts === 0 && lockedUntil === null) {
+      sessionStorage.removeItem(LOCKOUT_STORAGE_KEY);
+    } else {
+      sessionStorage.setItem(LOCKOUT_STORAGE_KEY, JSON.stringify({ loginAttempts, lockedUntil }));
+    }
+  } catch {
+    // sessionStorage unavailable (e.g. private browsing quota exceeded) — ignore
+  }
+}
+
 interface AuthState {
   user: CurrentUser | null;
   isAuthenticated: boolean;
@@ -45,13 +82,15 @@ interface AuthState {
   hasPosition: (position: string) => boolean;
 }
 
+const initialLockout = loadLockoutState();
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: false,
   error: null,
-  loginAttempts: 0,
-  lockedUntil: null,
+  loginAttempts: initialLockout.loginAttempts,
+  lockedUntil: initialLockout.lockedUntil,
 
   login: async (credentials: LoginCredentials) => {
     // Client-side lockout check (defense-in-depth; backend enforces the real limit)
@@ -76,6 +115,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await get().loadUser();
 
       // Reset brute-force counters on successful login
+      saveLockoutState(0, null);
       set({ isLoading: false, loginAttempts: 0, lockedUntil: null });
     } catch (err: unknown) {
       const appError = toAppError(err);
@@ -103,6 +143,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         newLockedUntil = Date.now() + retryAfter * 1_000;
       }
 
+      saveLockoutState(attempts, newLockedUntil);
       set({
         isLoading: false,
         loginAttempts: attempts,
