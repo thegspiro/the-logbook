@@ -1,7 +1,7 @@
 """Add visibility to skill_templates and is_practice to skill_tests
 
 Revision ID: 20260227_0300
-Revises: 20260227_0200
+Revises: 20260227_0250
 Create Date: 2026-02-27
 
 Adds template visibility control (all_members, officers_only, assigned_only)
@@ -14,7 +14,7 @@ from alembic import op
 
 # revision identifiers
 revision = "20260227_0300"
-down_revision = "20260227_0200"
+down_revision = "20260227_0250"
 branch_labels = None
 depends_on = None
 

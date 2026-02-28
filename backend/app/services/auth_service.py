@@ -206,6 +206,11 @@ class AuthService:
             user_agent=user_agent,
             expires_at=datetime.now(timezone.utc)
             + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+            # Set last_activity explicitly in Python (UTC) instead of relying
+            # on MySQL's server_default=func.now(), which uses the DB session
+            # timezone and may differ from UTC — causing the idle timeout
+            # check to see a phantom offset (e.g. 300m for UTC-5).
+            last_activity=datetime.now(timezone.utc),
         )
 
         self.db.add(session)
@@ -286,6 +291,9 @@ class AuthService:
             session.expires_at = datetime.now(timezone.utc) + timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             )
+            # Explicitly set last_activity in Python (UTC) to avoid timezone
+            # mismatch with MySQL's onupdate=func.now() server-side default.
+            session.last_activity = datetime.now(timezone.utc)
             await self.db.commit()
 
             return new_access_token, new_refresh_token
@@ -580,7 +588,12 @@ class AuthService:
                         f"{idle_timeout}m limit"
                     )
                     await self.db.delete(session)
-                    await self.db.flush()
+                    # Use commit() instead of flush() so the deletion persists.
+                    # Returning None causes get_current_user to raise HTTPException,
+                    # which triggers a rollback in get_session() — undoing any
+                    # flush()'d changes. Without commit(), the zombie session
+                    # would survive and keep blocking authentication.
+                    await self.db.commit()
                     return None
 
             # Touch session activity timestamp for idle tracking
