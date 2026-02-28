@@ -503,8 +503,10 @@ class ShiftSwapRequestResponse(BaseModel):
     target_user_name: Optional[str] = None
     offering_shift_id: UUID
     offering_shift_date: Optional[date] = None
+    offering_shift_start_time: Optional[str] = None
     requesting_shift_id: Optional[UUID] = None
     requesting_shift_date: Optional[date] = None
+    requesting_shift_start_time: Optional[str] = None
     status: SwapRequestStatus
     reason: Optional[str] = None
     reviewed_by: Optional[UUID] = None

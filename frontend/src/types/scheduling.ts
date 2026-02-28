@@ -6,23 +6,37 @@
  * scheduling pages and components.
  */
 
-import type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord } from '../services/api';
+import type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord } from '../modules/scheduling/services/api';
 
 // Re-export the API-level types so consumers can import from one place
 export type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord };
 
-/** A member's assignment to a specific shift. */
+/** A member's assignment to a specific shift.
+ *
+ * The backend canonical field is `assignment_status`. The `status` field is a
+ * convenience alias kept for backward compatibility — both resolve to the same
+ * value. Prefer `status` in new code.
+ */
 export interface Assignment {
   id: string;
   user_id: string;
   shift_id: string;
   position: string;
+  /** Canonical status field. Resolved from `assignment_status` via {@link normalizeAssignmentStatus}. */
   status: string;
+  /** Raw backend field — prefer `status` in display code. */
   assignment_status?: string;
   user_name?: string;
   shift?: ShiftRecord;
   confirmed_at?: string;
   notes?: string;
+}
+
+/** Normalize assignment status: the backend returns `assignment_status` while
+ *  some frontend code expects `status`. This helper ensures both are populated. */
+export function normalizeAssignment(raw: Partial<Assignment>): Assignment {
+  const effectiveStatus = raw.assignment_status || raw.status || 'assigned';
+  return { ...raw, status: effectiveStatus, assignment_status: effectiveStatus } as Assignment;
 }
 
 /** A request to swap shifts between two members. */
@@ -31,6 +45,7 @@ export interface SwapRequest {
   requesting_user_id?: string;
   user_id?: string;
   user_name?: string;
+  requesting_user_name?: string;
   offering_shift_id: string;
   requesting_shift_id?: string;
   target_user_id?: string;
@@ -40,7 +55,12 @@ export interface SwapRequest {
   reviewer_notes?: string;
   reviewed_at?: string;
   created_at: string;
-  // Enriched shift info (loaded client-side)
+  // Enriched by the backend in a single query (no N+1)
+  offering_shift_date?: string;
+  offering_shift_start_time?: string;
+  requesting_shift_date?: string;
+  requesting_shift_start_time?: string;
+  // Legacy: full shift objects (loaded client-side, deprecated)
   offering_shift?: ShiftRecord;
   requesting_shift?: ShiftRecord;
 }

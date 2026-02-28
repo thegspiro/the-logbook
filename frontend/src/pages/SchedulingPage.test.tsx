@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SchedulingPage from './SchedulingPage';
 
-// Mock API services
-vi.mock('../services/api', () => ({
+// Mock scheduling module API
+vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: {
     getShifts: vi.fn().mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 100 }),
     getSummary: vi.fn().mockResolvedValue({
@@ -19,6 +19,10 @@ vi.mock('../services/api', () => ({
     getWeekCalendar: vi.fn().mockResolvedValue([]),
     getMonthCalendar: vi.fn().mockResolvedValue([]),
   },
+}));
+
+// Mock global API services
+vi.mock('../services/api', () => ({
   notificationsService: {
     getNotificationRules: vi.fn().mockResolvedValue([]),
   },

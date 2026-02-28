@@ -32,7 +32,6 @@ import { useNavigate } from "react-router-dom";
 import {
   trainingProgramService,
   trainingModuleConfigService,
-  schedulingService,
   notificationsService,
   messagesService,
   organizationService,
@@ -44,6 +43,7 @@ import type {
   InventorySummary,
   LowStockAlert,
 } from "../services/api";
+import { schedulingService } from "../modules/scheduling/services/api";
 import { adminHoursEntryService } from "../modules/admin-hours/services/api";
 import { getErrorMessage } from "../utils/errorHandling";
 import { getProgressBarColor } from "../utils/eventHelpers";
@@ -60,7 +60,8 @@ import type {
   ProgramEnrollment,
   MemberProgramProgress,
 } from "../types/training";
-import type { NotificationLogRecord, ShiftRecord } from "../services/api";
+import type { NotificationLogRecord } from "../services/api";
+import type { ShiftRecord } from "../modules/scheduling/services/api";
 import { dashboardService } from "../services/api";
 
 /**

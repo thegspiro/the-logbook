@@ -15,7 +15,7 @@ import {
   Shield, Users, Wrench,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../services/api';
+import { schedulingService } from '../modules/scheduling/services/api';
 
 interface BasicApparatus {
   id: string;

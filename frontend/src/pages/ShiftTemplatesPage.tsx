@@ -36,8 +36,8 @@ import {
   Flag,
   Copy,
 } from 'lucide-react';
-import { schedulingService } from '../services/api';
-import type { ApparatusOption } from '../services/api';
+import { schedulingService } from '../modules/scheduling/services/api';
+import type { ApparatusOption } from '../modules/scheduling/services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 

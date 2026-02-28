@@ -25,8 +25,8 @@ import {
   Moon,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { schedulingService } from "../../services/api";
-import type { ShiftTemplateRecord } from "../../services/api";
+import { schedulingService } from "../../modules/scheduling/services/api";
+import type { ShiftTemplateRecord } from "../../modules/scheduling/services/api";
 import type { ShiftPattern } from "../../types/scheduling";
 import { useTimezone } from "../../hooks/useTimezone";
 import { getErrorMessage } from "../../utils/errorHandling";

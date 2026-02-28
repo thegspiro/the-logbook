@@ -11,8 +11,8 @@ import {
   Loader2, ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../services/api';
-import type { ShiftRecord } from '../../services/api';
+import { schedulingService } from '../../modules/scheduling/services/api';
+import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
