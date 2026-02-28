@@ -245,9 +245,14 @@ async def create_record(
             day = min(comp.day, calendar.monthrange(year, month)[1])
             record_data["expiration_date"] = date(year, month, day)
 
-    # Auto-populate rank/station from member's current profile if not explicitly set
+    # Auto-populate rank/station from member's current profile if not explicitly set.
+    # SECURITY: Validate user belongs to the current user's organization.
     if not record_data.get("rank_at_completion") or not record_data.get("station_at_completion"):
-        member_result = await db.execute(select(User).where(User.id == str(record_data["user_id"])))
+        member_result = await db.execute(
+            select(User)
+            .where(User.id == str(record_data["user_id"]))
+            .where(User.organization_id == str(current_user.organization_id))
+        )
         member = member_result.scalar_one_or_none()
         if member:
             if not record_data.get("rank_at_completion"):
@@ -835,10 +840,22 @@ async def get_compliance_summary(
     training_service = TrainingService(db)
     stats = await training_service.get_user_training_stats(user_id=user_id, organization_id=org_id)
 
-    # Load user with roles for requirement applicability filtering
-    user_result = await db.execute(select(User).where(User.id == str(user_id)).options(selectinload(User.roles)))
+    # Load user with roles for requirement applicability filtering.
+    # SECURITY: Verify user belongs to the same organization to prevent
+    # cross-org data access (IDOR).
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(org_id))
+        .options(selectinload(User.roles))
+    )
     target_user = user_result.scalar_one_or_none()
-    user_role_ids = [str(r.id) for r in target_user.roles] if target_user and target_user.roles else []
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    user_role_ids = [str(r.id) for r in target_user.roles] if target_user.roles else []
 
     # Get all active requirements
     requirements_result = await db.execute(

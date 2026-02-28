@@ -262,7 +262,8 @@ api.interceptors.response.use(
         await refreshPromise;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, redirect to login
+        // Refresh failed — clear session flag and redirect to login
+        localStorage.removeItem('has_session');
         window.location.href = '/login';
         return Promise.reject(refreshError instanceof Error ? refreshError : new Error(String(refreshError)));
       }

@@ -273,7 +273,15 @@ async def upload_document(
         "image/webp": ".webp",
         "application/zip": ".zip",
     }
-    ext = MIME_TO_EXT.get(detected_mime, os.path.splitext(file.filename or "")[1])
+    ext = MIME_TO_EXT.get(detected_mime)
+    if not ext:
+        # Fallback to safe default — never use user-supplied filename extension
+        # to prevent double-extension attacks (e.g. report.pdf.exe)
+        logger.warning(
+            f"No extension mapping for MIME type '{detected_mime}'; "
+            f"using .bin fallback (filename: '{file.filename}')"
+        )
+        ext = ".bin"
     unique_name = f"{uuid_lib.uuid4().hex}{ext}"
     file_path = os.path.join(org_dir, unique_name)
 

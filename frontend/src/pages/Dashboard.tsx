@@ -862,7 +862,8 @@ const Dashboard: React.FC = () => {
                     onClick={() => {
                       if (!notification.read)
                         void markNotificationRead(notification.id);
-                      if (notification.action_url)
+                      // Only navigate to relative/internal paths to prevent open redirect
+                      if (notification.action_url && notification.action_url.startsWith('/'))
                         navigate(notification.action_url);
                     }}
                     className={`w-full text-left p-3 rounded-lg transition-colors ${
