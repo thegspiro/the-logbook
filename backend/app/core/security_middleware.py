@@ -84,10 +84,7 @@ class RateLimiter:
         current_time = time.time()
 
         # Periodic eviction to bound memory usage
-        if len(self.requests) + len(self.lockouts) > self._MAX_KEYS:
-            self._evict_stale(current_time, window_seconds)
-        else:
-            self._evict_stale(current_time, window_seconds)
+        self._evict_stale(current_time, window_seconds)
 
         # Check if currently locked out
         if key in self.lockouts:

@@ -37,6 +37,15 @@ const UNCACHEABLE_PREFIXES = [
   '/training/stats/user/',    // individual compliance stats
   '/training/reports/user/',  // individual training reports
   '/facilities/emergency-contacts', // emergency contact PII
+  '/messages/',       // private member-to-member messages
+  '/admin-hours/',    // individual work hours and clock-in records
+  '/prospective-members/', // applicant PII (name, contact, documents)
+  '/scheduling/',     // member shift assignments and availability
+  '/errors/',         // error logs may contain user context and tracebacks
+  '/organization/',   // org settings including auth config, API keys
+  '/elections/',      // voter lists, ballots, election results
+  '/minutes-records/', // meeting minutes with potentially sensitive discussions
+  '/forms/',          // form submissions may contain PII
 ] as const;
 
 interface CacheEntry {
