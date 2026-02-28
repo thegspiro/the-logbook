@@ -441,7 +441,7 @@ const DocumentsPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
+                <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-theme-surface-border">

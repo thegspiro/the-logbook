@@ -295,7 +295,7 @@ const TrainingOfficerDashboard: React.FC = () => {
         {showSettings && (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-6">
             <h3 className="text-theme-text-primary font-semibold mb-4">Customize Dashboard</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {[
                 { id: 'compliance-overview', title: 'Compliance Overview', icon: CheckCircle },
                 { id: 'upcoming-expirations', title: 'Upcoming Expirations', icon: AlertTriangle },
@@ -648,7 +648,7 @@ const TrainingHoursSummaryWidget: React.FC<TrainingHoursSummaryWidgetProps> = ({
             <div className="bg-green-600 h-2 rounded-full" style={{ width: `${progressPercent}%` }}></div>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
           <div className="bg-theme-input-bg/50 rounded p-3">
             <p className="text-theme-text-muted text-xs">Average per Member</p>
             <p className="text-theme-text-primary font-bold text-xl">{stats.avgHoursPerMember} hrs</p>

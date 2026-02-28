@@ -406,6 +406,36 @@
     @apply bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4;
   }
 
+  /* --- Toggle Switch --- */
+  /* Standard toggle-switch knob: always a visible light circle */
+  .toggle-knob {
+    @apply pointer-events-none inline-block transform rounded-full
+           bg-white dark:bg-slate-200 shadow ring-0 transition duration-200 ease-in-out;
+  }
+  .toggle-knob-sm {
+    @apply toggle-knob h-4 w-4;
+  }
+  .toggle-knob-md {
+    @apply toggle-knob h-5 w-5;
+  }
+
+  /* --- QR Code Container --- */
+  /* QR codes require a white background for scanner contrast, regardless of theme */
+  .qr-container {
+    @apply bg-white p-8 rounded-lg border-4 border-theme-surface-border;
+  }
+
+  /* --- Dynamic Color Dot/Badge --- */
+  /* For user-selected category colors applied via inline style.
+     Add filter: brightness() in dark mode so the dot stays visible. */
+  .color-dot {
+    @apply rounded-full;
+    /* Dark mode: brighten dynamic colors for better visibility */
+  }
+  .dark .color-dot {
+    filter: brightness(1.2);
+  }
+
   /* --- Mobile-Responsive Patterns --- */
 
   /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */

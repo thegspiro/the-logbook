@@ -109,7 +109,7 @@ const ExpiringCertsTab: React.FC = () => {
           <p>No certifications expiring within {daysWindow} days</p>
         </div>
       ) : (
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg overflow-hidden">
+        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg overflow-hidden overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-theme-surface-border">

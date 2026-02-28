@@ -391,7 +391,7 @@ export const WaiverManagementPage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                 <table className="min-w-full divide-y divide-theme-surface-border">
                   <thead className="bg-theme-surface-hover">
                     <tr>
@@ -632,7 +632,7 @@ export const WaiverManagementPage: React.FC = () => {
                 <p className="text-theme-text-muted">No waivers match the current filter.</p>
               </div>
             ) : (
-              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                 <table className="min-w-full divide-y divide-theme-surface-border">
                   <thead className="bg-theme-surface-hover">
                     <tr>

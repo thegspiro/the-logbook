@@ -152,7 +152,7 @@ const PastEventsTab: React.FC = () => {
                     </div>
                   </div>
                   {event.is_cancelled && (
-                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:text-red-300">
+                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300">
                       Cancelled
                     </span>
                   )}

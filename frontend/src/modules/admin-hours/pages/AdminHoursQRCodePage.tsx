@@ -105,7 +105,7 @@ const AdminHoursQRCodePage: React.FC = () => {
 
           {clockInUrl && (
             <div className="flex justify-center mb-6">
-              <div className="bg-white p-8 rounded-lg border-4 border-theme-surface-border">
+              <div className="qr-container">
                 <QRCodeSVG
                   value={clockInUrl}
                   size={300}

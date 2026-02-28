@@ -307,7 +307,7 @@ const MyEquipmentPage: React.FC = () => {
                   <Clock className="w-5 h-5 text-yellow-500" />
                   Checked Out ({data?.active_checkouts.length ?? 0})
                 </h2>
-                <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+                <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
@@ -364,7 +364,7 @@ const MyEquipmentPage: React.FC = () => {
                   <Package className="w-5 h-5 text-purple-500" />
                   Issued Items ({data?.issued_items.length ?? 0})
                 </h2>
-                <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+                <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
@@ -405,7 +405,7 @@ const MyEquipmentPage: React.FC = () => {
                 <p className="text-theme-text-secondary text-sm">No requests submitted yet.</p>
               </div>
             ) : (
-              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
@@ -500,7 +500,7 @@ const MyEquipmentPage: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label htmlFor="req-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Request Type</label>
                         <select id="req-type" value={requestForm.request_type} onChange={(e) => setRequestForm({ ...requestForm, request_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">

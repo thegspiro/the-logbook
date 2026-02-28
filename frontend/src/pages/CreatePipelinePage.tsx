@@ -349,7 +349,7 @@ const StepPhases: React.FC<{
                     placeholder="Describe what this phase covers..."
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="form-label-sm">Time Limit (days)</label>
                     <input
@@ -473,7 +473,7 @@ const StepRequirements: React.FC<{
 
                   {/* Conditional fields based on type */}
                   {req.requirement_type === 'hours' && (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Required Hours</label>
                         <input
@@ -544,7 +544,7 @@ const StepRequirements: React.FC<{
                   )}
 
                   {req.requirement_type === 'knowledge_test' && (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Passing Score (%)</label>
                         <input
@@ -717,7 +717,7 @@ const StepReview: React.FC<{
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-theme-surface rounded-lg p-4 text-center">
           <p className="text-2xl font-bold text-red-700 dark:text-red-400">{phases.length}</p>
           <p className="text-theme-text-muted text-sm">Phases</p>

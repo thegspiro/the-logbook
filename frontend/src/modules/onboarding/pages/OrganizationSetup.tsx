@@ -1071,7 +1071,7 @@ const OrganizationSetup: React.FC = () => {
                   ) : (
                     <div className="border-2 border-theme-surface-border rounded-lg p-6 bg-theme-surface-secondary">
                       <div className="flex items-start space-x-4">
-                        <div className="flex-shrink-0 w-24 h-24 bg-white rounded-lg flex items-center justify-center overflow-hidden">
+                        <div className="flex-shrink-0 w-24 h-24 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center overflow-hidden">
                           <img
                             src={formData.logo}
                             alt="Organization logo preview"

@@ -326,7 +326,7 @@ export default function ApparatusBasicPage() {
               </button>
             </div>
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Unit Number *</label>
                   <input type="text" value={form.unit_number} onChange={e => setForm(p => ({...p, unit_number: e.target.value}))}

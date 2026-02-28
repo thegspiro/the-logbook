@@ -198,7 +198,7 @@ export const StartSkillTestPage: React.FC = () => {
           <h2 className="text-lg font-semibold text-theme-text-primary mb-3">
             2. Test Mode
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               onClick={() => setIsPractice(false)}
               className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${

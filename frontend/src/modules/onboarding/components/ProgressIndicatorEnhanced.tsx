@@ -75,7 +75,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                   <div
                     className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
                       isCurrent
-                        ? 'bg-white text-red-600'
+                        ? 'bg-white dark:bg-slate-200 text-red-600'
                         : isCompleted
                         ? 'bg-green-600 text-white'
                         : 'bg-theme-surface-hover text-theme-text-muted'

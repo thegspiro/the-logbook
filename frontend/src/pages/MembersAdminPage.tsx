@@ -731,7 +731,7 @@ export const MembersAdminPage: React.FC = () => {
           </div>
 
           {/* Contact Fields */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Phone</label>
               <input
