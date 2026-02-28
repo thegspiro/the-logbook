@@ -118,7 +118,8 @@ describe('errorHandling', () => {
       expect(result.message).toBe('Something broke');
       expect(result.details).toBeDefined();
       expect(result.details?.name).toBe('Error');
-      expect(result.details?.stack).toBeDefined();
+      // Stack is intentionally omitted to avoid leaking file paths or PHI
+      expect(result.details?.stack).toBeUndefined();
     });
 
     it('handles TypeError objects', () => {

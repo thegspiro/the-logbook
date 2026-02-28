@@ -64,8 +64,9 @@ describe('authStore', () => {
     // Clear all mocks
     vi.clearAllMocks();
 
-    // Clear localStorage
+    // Clear localStorage and sessionStorage
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   // ---- Initial State ----
@@ -156,6 +157,37 @@ describe('authStore', () => {
 
       expect(mockLogin).toHaveBeenCalledTimes(5); // NOT called again
       expect(getState().error).toMatch(/wait/i);
+    });
+
+    it('persists lockout state to sessionStorage on failure', async () => {
+      mockLogin.mockRejectedValue(new Error('Invalid credentials'));
+
+      await expect(
+        act(async () => {
+          await getState().login({ username: 'bad', password: 'wrong' });
+        }),
+      ).rejects.toBeDefined();
+
+      const stored = sessionStorage.getItem('login_lockout');
+      expect(stored).not.toBeNull();
+      const parsed = JSON.parse(stored!);
+      expect(parsed.loginAttempts).toBe(1);
+    });
+
+    it('clears lockout state from sessionStorage on successful login', async () => {
+      // Seed sessionStorage with prior failed attempt
+      sessionStorage.setItem('login_lockout', JSON.stringify({ loginAttempts: 3, lockedUntil: null }));
+      useAuthStore.setState({ loginAttempts: 3, lockedUntil: null });
+
+      mockLogin.mockResolvedValue(undefined);
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().login({ username: 'good', password: 'right' });
+      });
+
+      expect(sessionStorage.getItem('login_lockout')).toBeNull();
+      expect(getState().loginAttempts).toBe(0);
     });
 
     it('resets lockout counters on successful login', async () => {
