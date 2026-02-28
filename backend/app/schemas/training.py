@@ -15,7 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class DueDateType(str, Enum):
     """How the due date for a requirement is calculated"""
 
-    CALENDAR_PERIOD = "calendar_period"  # Due by end of calendar period (e.g., Dec 31st)
+    CALENDAR_PERIOD = (
+        "calendar_period"  # Due by end of calendar period (e.g., Dec 31st)
+    )
     ROLLING = "rolling"  # Due X months from last completion
     CERTIFICATION_PERIOD = "certification_period"  # Due when certification expires
     FIXED_DATE = "fixed_date"  # Due by a specific fixed date
@@ -384,20 +386,32 @@ class ExternalProviderConfig(BaseModel):
     """Provider-specific configuration"""
 
     # Vector Solutions / TargetSolutions specific
-    site_id: Optional[str] = None  # Required for Vector Solutions - the TS site identifier
-    page_size: Optional[int] = Field(None, ge=1, le=1000)  # Max records per page (VS max: 1000)
+    site_id: Optional[str] = (
+        None  # Required for Vector Solutions - the TS site identifier
+    )
+    page_size: Optional[int] = Field(
+        None, ge=1, le=1000
+    )  # Max records per page (VS max: 1000)
     date_filter_param: Optional[str] = None  # Custom date filter parameter name
 
     # General endpoint overrides
     records_endpoint: Optional[str] = None  # Override default records endpoint path
     users_endpoint: Optional[str] = None  # Override default users endpoint path
-    categories_endpoint: Optional[str] = None  # Override default categories endpoint path
+    categories_endpoint: Optional[str] = (
+        None  # Override default categories endpoint path
+    )
     test_endpoint: Optional[str] = None  # Override default connection test endpoint
 
     # Custom API support
-    param_mapping: Optional[dict] = None  # Map standard param names to provider-specific names
-    field_mapping: Optional[dict] = None  # Map standard field names to provider-specific names
-    records_path: Optional[str] = None  # JSON path to records array in response (e.g. "data.records")
+    param_mapping: Optional[dict] = (
+        None  # Map standard param names to provider-specific names
+    )
+    field_mapping: Optional[dict] = (
+        None  # Map standard field names to provider-specific names
+    )
+    records_path: Optional[str] = (
+        None  # JSON path to records array in response (e.g. "data.records")
+    )
     additional_headers: Optional[dict] = None
     date_format: Optional[str] = None  # Date format used by the API
 
@@ -774,7 +788,9 @@ class BulkTrainingRecordCreate(BaseModel):
     """Request to create training records for multiple members at once"""
 
     records: List[BulkTrainingRecordEntry] = Field(..., min_length=1, max_length=500)
-    skip_duplicates: bool = False  # If True, silently skip duplicates instead of flagging
+    skip_duplicates: bool = (
+        False  # If True, silently skip duplicates instead of flagging
+    )
     override_duplicates: bool = False  # If True, create even if duplicates detected
 
 

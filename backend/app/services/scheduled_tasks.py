@@ -33,6 +33,9 @@ Recommended crontab (add to host or container cron):
 
 # Every 30 minutes — post-shift validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_shift_validation
+
+# Weekly on Sundays at 2:00 AM — audit log archival and integrity checkpoint
+0 2 * * 0 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=audit_log_archival
 -----------------------------------------------------
 """
 
@@ -102,6 +105,12 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "audit_log_archival": {
+        "description": "Archive old audit logs: create integrity checkpoint, verify chain, and export summary. Logs older than 90 days are checkpointed for long-term HIPAA compliance retention.",
+        "frequency": "weekly",
+        "recommended_time": "Sunday 02:00",
+        "cron": "0 2 * * 0",
+    },
 }
 
 
@@ -126,7 +135,9 @@ async def run_cert_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
             logger.error(f"Cert alert failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
 
-    logger.info(f"Cert expiration alerts complete: {total_sent} alerts sent across {len(organizations)} orgs")
+    logger.info(
+        f"Cert expiration alerts complete: {total_sent} alerts sent across {len(organizations)} orgs"
+    )
     return {
         "task": "cert_expiration_alerts",
         "total_alerts_sent": total_sent,
@@ -242,7 +253,9 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     # ── Meeting action items ──
     meeting_items = await db.execute(
         select(MeetingActionItem).where(
-            MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
+            MeetingActionItem.status.in_(
+                [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
+            ),
             MeetingActionItem.due_date.isnot(None),
             MeetingActionItem.due_date <= three_days,
         )
@@ -256,7 +269,9 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     from app.core.utils import generate_uuid
                     from app.models.notification import NotificationLog
 
-                    urgency = "overdue" if days_until < 0 else f"due in {days_until} day(s)"
+                    urgency = (
+                        "overdue" if days_until < 0 else f"due in {days_until} day(s)"
+                    )
                     log = NotificationLog(
                         id=generate_uuid(),
                         organization_id=item.organization_id,
@@ -281,22 +296,31 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                 ]
             ),
             MinutesActionItem.due_date.isnot(None),
-            MinutesActionItem.due_date <= datetime.combine(three_days, datetime.min.time()),
+            MinutesActionItem.due_date
+            <= datetime.combine(three_days, datetime.min.time()),
         )
     )
     for item in minutes_items.scalars().all():
         if item.assignee_id:
-            due_d = item.due_date.date() if hasattr(item.due_date, "date") else item.due_date
+            due_d = (
+                item.due_date.date()
+                if hasattr(item.due_date, "date")
+                else item.due_date
+            )
             days_until = (due_d - today).days if due_d else None
             if days_until is not None and days_until in (3, 1, 0, -1):
                 try:
                     from app.core.utils import generate_uuid
                     from app.models.notification import NotificationLog
 
-                    urgency = "overdue" if days_until < 0 else f"due in {days_until} day(s)"
+                    urgency = (
+                        "overdue" if days_until < 0 else f"due in {days_until} day(s)"
+                    )
                     log = NotificationLog(
                         id=generate_uuid(),
-                        organization_id=(item.minutes.organization_id if item.minutes else None),
+                        organization_id=(
+                            item.minutes.organization_id if item.minutes else None
+                        ),
                         user_id=item.assignee_id,
                         channel="in_app",
                         category="action_items",
@@ -306,7 +330,9 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     db.add(log)
                     total_reminders += 1
                 except Exception as e:
-                    logger.error(f"Failed to create minutes action item notification: {e}")
+                    logger.error(
+                        f"Failed to create minutes action item notification: {e}"
+                    )
 
     await db.commit()
     logger.info(f"Action item reminders complete: {total_reminders} notifications sent")
@@ -381,7 +407,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         try:
             # Load org event settings to get default_reminder_time
             org_settings = (org.settings or {}).get("events", {}).get("defaults", {})
-            default_reminder_time_str = org_settings.get("default_reminder_time", "12:00")
+            default_reminder_time_str = org_settings.get(
+                "default_reminder_time", "12:00"
+            )
             try:
                 parts = default_reminder_time_str.split(":")
                 default_reminder_time = dt_time(int(parts[0]), int(parts[1]))
@@ -428,8 +456,12 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                         # appropriate day in the org's timezone.
                         days_before = hours // 24
                         event_local = event.start_datetime.astimezone(org_tz)
-                        reminder_date = (event_local - timedelta(days=days_before)).date()
-                        reminder_local = datetime.combine(reminder_date, default_reminder_time, tzinfo=org_tz)
+                        reminder_date = (
+                            event_local - timedelta(days=days_before)
+                        ).date()
+                        reminder_local = datetime.combine(
+                            reminder_date, default_reminder_time, tzinfo=org_tz
+                        )
                         threshold = reminder_local.astimezone(dt_timezone.utc)
                     else:
                         # Sub-day reminder: fire at exactly X hours before
@@ -455,10 +487,14 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     recipients = list(users_result.scalars().all())
                 else:
                     going_user_ids = [
-                        str(rsvp.user_id) for rsvp in event.rsvps if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
+                        str(rsvp.user_id)
+                        for rsvp in event.rsvps
+                        if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
                     ]
                     if going_user_ids:
-                        users_result = await db.execute(select(User).where(User.id.in_(going_user_ids)))
+                        users_result = await db.execute(
+                            select(User).where(User.id.in_(going_user_ids))
+                        )
                         recipients = list(users_result.scalars().all())
 
                 if not recipients:
@@ -476,7 +512,11 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                 elif event.location:
                     location_name = event.location
 
-                event_type_label = event.event_type.value.replace("_", " ").title() if event.event_type else "Event"
+                event_type_label = (
+                    event.event_type.value.replace("_", " ").title()
+                    if event.event_type
+                    else "Event"
+                )
                 event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
                 email_service = EmailService(organization=org)
 
@@ -509,7 +549,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                             db.add(in_app_log)
                             org_reminders += 1
                         except Exception as e:
-                            logger.error(f"Failed to create in-app reminder for user {user.id}: {e}")
+                            logger.error(
+                                f"Failed to create in-app reminder for user {user.id}: {e}"
+                            )
 
                         # Email notification — only if user hasn't opted out
                         wants_email = prefs.get("email_notifications", True)
@@ -530,7 +572,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                                 if sent:
                                     org_emails += 1
                             except Exception as e:
-                                logger.error(f"Failed to send reminder email to {user.email}: {e}")
+                                logger.error(
+                                    f"Failed to send reminder email to {user.email}: {e}"
+                                )
 
                 # Mark all due intervals as sent
                 event.custom_fields = {
@@ -704,7 +748,10 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                         if sent_count > 0:
                             org_emails += 1
                     except Exception as e:
-                        logger.error(f"Failed to send post-event validation email " f"to {creator.email}: {e}")
+                        logger.error(
+                            f"Failed to send post-event validation email "
+                            f"to {creator.email}: {e}"
+                        )
 
                 # Mark as sent
                 event.custom_fields = {**custom, "validation_notification_sent": True}
@@ -807,11 +854,19 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                     continue
 
                 # Count attendance
-                att_result = await db.execute(select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift.id)))
+                att_result = await db.execute(
+                    select(ShiftAttendance).where(
+                        ShiftAttendance.shift_id == str(shift.id)
+                    )
+                )
                 attendance_records = list(att_result.scalars().all())
                 att_count = len(attendance_records)
 
-                shift_date_str = shift.shift_date.strftime("%b %d, %Y") if shift.shift_date else "Unknown"
+                shift_date_str = (
+                    shift.shift_date.strftime("%b %d, %Y")
+                    if shift.shift_date
+                    else "Unknown"
+                )
                 subject = f"Action Required: Validate attendance for shift on {shift_date_str}"
                 message = (
                     f"Your shift on {shift_date_str} has ended. "
@@ -872,7 +927,10 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         if sent_count > 0:
                             org_emails += 1
                     except Exception as e:
-                        logger.error(f"Failed to send post-shift validation email " f"to {officer.email}: {e}")
+                        logger.error(
+                            f"Failed to send post-shift validation email "
+                            f"to {officer.email}: {e}"
+                        )
 
                 # Mark as sent
                 shift.activities = {**activities, "validation_notification_sent": True}
@@ -921,6 +979,138 @@ def _format_relative_time(event_time: datetime, now: datetime) -> str:
         return f"in {days} day{'s' if days != 1 else ''}"
 
 
+async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Archive old audit logs for HIPAA compliance and long-term retention.
+
+    This task:
+    1. Identifies audit log entries older than 90 days without a checkpoint
+    2. Creates integrity checkpoints covering those entries
+    3. Verifies the hash chain integrity of the archived range
+    4. Logs the archival operation itself
+
+    Designed to run weekly so that all audit data eventually gets
+    checkpointed, enabling confident long-term integrity verification.
+    """
+    from datetime import timedelta, timezone
+
+    from sqlalchemy import func
+
+    from app.core.audit import (
+        audit_logger,
+        log_audit_event,
+        verify_audit_log_integrity,
+    )
+    from app.models.audit import AuditLog, AuditLogCheckpoint
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=90)
+    results: Dict[str, Any] = {
+        "task": "audit_log_archival",
+        "checkpoints_created": 0,
+        "entries_checkpointed": 0,
+        "integrity_verified": False,
+        "errors": [],
+    }
+
+    try:
+        # Find the latest checkpoint's last_log_id
+        latest_cp = await db.execute(
+            select(AuditLogCheckpoint)
+            .order_by(AuditLogCheckpoint.last_log_id.desc())
+            .limit(1)
+        )
+        latest_checkpoint = latest_cp.scalar_one_or_none()
+        last_checkpointed_id = (
+            latest_checkpoint.last_log_id if latest_checkpoint else 0
+        )
+
+        # Find audit log entries older than 90 days that haven't been checkpointed
+        old_logs_query = (
+            select(func.min(AuditLog.id), func.max(AuditLog.id), func.count())
+            .where(AuditLog.id > last_checkpointed_id)
+            .where(AuditLog.timestamp < cutoff)
+        )
+        old_result = await db.execute(old_logs_query)
+        row = old_result.one_or_none()
+
+        if row and row[2] and row[2] > 0:
+            min_id, max_id, count = row[0], row[1], row[2]
+
+            # Create checkpoint for the range (in batches of 10000)
+            batch_start = min_id
+            while batch_start <= max_id:
+                batch_end = min(batch_start + 9999, max_id)
+
+                # Verify batch count
+                batch_count_result = await db.execute(
+                    select(func.count())
+                    .select_from(AuditLog)
+                    .where(AuditLog.id >= batch_start)
+                    .where(AuditLog.id <= batch_end)
+                )
+                batch_count = batch_count_result.scalar() or 0
+
+                if batch_count > 0:
+                    try:
+                        checkpoint = await audit_logger.create_checkpoint(
+                            db, batch_start, batch_end
+                        )
+                        results["checkpoints_created"] += 1
+                        results["entries_checkpointed"] += checkpoint.total_entries
+                        logger.info(
+                            f"Audit archival: created checkpoint for logs "
+                            f"{batch_start}-{batch_end} ({checkpoint.total_entries} entries)"
+                        )
+                    except ValueError as e:
+                        results["errors"].append(
+                            f"Checkpoint {batch_start}-{batch_end}: {e}"
+                        )
+
+                batch_start = batch_end + 1
+
+            await db.flush()
+
+        # Verify overall integrity
+        integrity_result = await verify_audit_log_integrity(db)
+        results["integrity_verified"] = integrity_result["verified"]
+        if not integrity_result["verified"]:
+            results["errors"].extend(
+                [
+                    f"Integrity error at log {e['log_id']}: {e['error']}"
+                    for e in integrity_result.get("errors", [])[:5]
+                ]
+            )
+
+        # Log the archival operation
+        await log_audit_event(
+            db=db,
+            event_type="audit_log_archival",
+            event_category="security",
+            severity="info",
+            event_data={
+                "checkpoints_created": results["checkpoints_created"],
+                "entries_checkpointed": results["entries_checkpointed"],
+                "integrity_verified": results["integrity_verified"],
+                "errors_count": len(results["errors"]),
+            },
+        )
+
+        await db.commit()
+
+        logger.info(
+            f"Audit log archival complete: {results['checkpoints_created']} checkpoints, "
+            f"{results['entries_checkpointed']} entries, "
+            f"integrity={'OK' if results['integrity_verified'] else 'FAILED'}"
+        )
+
+    except Exception as e:
+        logger.error(f"Audit log archival failed: {e}")
+        results["errors"].append(str(e))
+
+    return results
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -932,4 +1122,5 @@ TASK_RUNNERS = {
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
     "post_shift_validation": run_post_shift_validation,
+    "audit_log_archival": run_audit_log_archival,
 }

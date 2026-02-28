@@ -175,7 +175,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 setShowCustomForm(false);
                 setSelectedTemplate(null);
               }}
-              className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
+              className="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
             >
               {showTemplates ? 'Cancel' : 'Use Template'}
             </button>
@@ -247,7 +247,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 type="text"
                 value={templateNameInput}
                 onChange={(e) => setTemplateNameInput(e.target.value)}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-red-500 focus:border-red-500 text-sm"
                 placeholder={
                   selectedTemplate.type === BallotItemType.MEMBERSHIP_APPROVAL
                     ? 'e.g., John Smith'
@@ -282,7 +282,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 type="button"
                 onClick={() => { void handleApplyTemplate(); }}
                 disabled={saving || !templateNameInput.trim()}
-                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
               >
                 {saving ? 'Adding...' : 'Add to Ballot'}
               </button>

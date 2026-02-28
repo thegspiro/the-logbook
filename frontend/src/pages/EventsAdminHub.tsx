@@ -79,25 +79,27 @@ export const EventsAdminHub: React.FC = () => {
         </div>
 
         <div className="border-b border-theme-surface-border">
-          <nav
+          <div
             className="flex space-x-1 overflow-x-auto"
+            role="tablist"
             aria-label="Events admin tabs"
           >
             {tabs.map((tab) => (
               <button
                 key={tab.id}
+                role="tab"
                 onClick={() => handleTabChange(tab.id)}
                 className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                   activeTab === tab.id
                     ? "border-red-500 text-theme-text-primary"
                     : "border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border"
                 }`}
-                aria-current={activeTab === tab.id ? "page" : undefined}
+                aria-selected={activeTab === tab.id}
               >
                 {tab.label}
               </button>
             ))}
-          </nav>
+          </div>
         </div>
       </div>
 

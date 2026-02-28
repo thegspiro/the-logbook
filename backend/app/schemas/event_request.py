@@ -77,7 +77,9 @@ class EventRequestSchedule(BaseModel):
     """Schema for scheduling a confirmed date, optionally with a room."""
 
     event_date: datetime = Field(..., description="Confirmed event start date/time")
-    event_end_date: Optional[datetime] = Field(None, description="Confirmed event end date/time")
+    event_end_date: Optional[datetime] = Field(
+        None, description="Confirmed event end date/time"
+    )
     location_id: Optional[str] = Field(None, description="Location/room ID for booking")
     notes: Optional[str] = Field(None, max_length=500)
     create_calendar_event: bool = Field(

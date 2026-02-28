@@ -9,6 +9,7 @@
  */
 
 import axios, { AxiosError } from 'axios';
+import { createApiClient } from '../../../utils/createApiClient';
 import type {
   Pipeline,
   PipelineCreate,
@@ -39,62 +40,7 @@ import type {
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS } from '../types';
 
-const api = axios.create({
-  baseURL: '/api/v1',
-  withCredentials: true,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-// Helper to read a cookie value by name
-function getCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
-}
-
-// Attach CSRF header to requests
-// NOTE: Auth is handled via httpOnly cookies (withCredentials: true above).
-// Tokens must NEVER be stored in or read from localStorage (HIPAA compliance).
-api.interceptors.request.use((config) => {
-  // Double-submit CSRF token for state-changing requests
-  const method = (config.method || '').toUpperCase();
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    const csrf = getCookie('csrf_token');
-    if (csrf) {
-      config.headers['X-CSRF-Token'] = csrf;
-    }
-  }
-
-  return config;
-});
-
-// Shared refresh promise to prevent concurrent refresh attempts
-let refreshPromise: Promise<void> | null = null;
-
-// Handle 401 responses with race-safe httpOnly cookie refresh
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config;
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      try {
-        if (!refreshPromise) {
-          refreshPromise = axios
-            .post('/api/v1/auth/refresh', {}, { withCredentials: true })
-            .then(() => {})
-            .finally(() => { refreshPromise = null; });
-        }
-        await refreshPromise;
-        return api(originalRequest);
-      } catch {
-        localStorage.removeItem('has_session');
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
-  }
-);
+const api = createApiClient();
 
 // =============================================================================
 // Backend ↔ Frontend Mapping Helpers

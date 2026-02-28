@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 
 interface ProtectedRouteProps {
@@ -36,8 +36,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          <p className="mt-4 text-theme-text-secondary">Loading...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" role="status" aria-label="Loading" />
+          <p className="mt-4 text-theme-text-secondary" aria-live="polite">Loading...</p>
         </div>
       </div>
     );
@@ -49,8 +49,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          <p className="mt-4 text-theme-text-secondary">Loading...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" role="status" aria-label="Loading" />
+          <p className="mt-4 text-theme-text-secondary" aria-live="polite">Loading...</p>
         </div>
       </div>
     );
@@ -76,12 +76,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           <p className="text-theme-text-secondary mb-6">
             You do not have the required permissions to access this page.
           </p>
-          <a
-            href="/dashboard"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+          <Link
+            to="/dashboard"
+            className="btn-primary inline-flex items-center px-4 py-2 text-sm font-medium rounded-md"
           >
             Return to Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -96,12 +96,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           <p className="text-theme-text-secondary mb-6">
             You do not have the required role to access this page.
           </p>
-          <a
-            href="/dashboard"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+          <Link
+            to="/dashboard"
+            className="btn-primary inline-flex items-center px-4 py-2 text-sm font-medium rounded-md"
           >
             Return to Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     );

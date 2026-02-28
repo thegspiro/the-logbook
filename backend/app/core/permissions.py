@@ -381,7 +381,9 @@ ADMIN_HOURS_VIEW = Permission(
     "admin_hours.view", "View own admin hours", PermissionCategory.ADMIN_HOURS
 )
 ADMIN_HOURS_LOG = Permission(
-    "admin_hours.log", "Log admin hours (clock in/out, manual entry)", PermissionCategory.ADMIN_HOURS
+    "admin_hours.log",
+    "Log admin hours (clock in/out, manual entry)",
+    PermissionCategory.ADMIN_HOURS,
 )
 ADMIN_HOURS_MANAGE = Permission(
     "admin_hours.manage",

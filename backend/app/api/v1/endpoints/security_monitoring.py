@@ -5,13 +5,16 @@ Provides endpoints for:
 - Security status and metrics
 - Alert management
 - Log integrity verification
+- Audit log query and export
 - Intrusion detection status
 - Data exfiltration monitoring
 """
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
@@ -23,6 +26,7 @@ from app.core.audit import (
 )
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.audit import AuditLog
 from app.models.user import User
 from app.services.security_monitoring import AlertType, ThreatLevel, security_monitor
 
@@ -102,6 +106,7 @@ async def get_security_alerts(
         limit=limit,
         threat_level=threat_level_enum,
         alert_type=alert_type_enum,
+        db=db,
     )
 
     return {"alerts": alerts, "total": len(alerts)}
@@ -117,7 +122,9 @@ async def acknowledge_alert(
     """
     Acknowledge a security alert
     """
-    success = security_monitor.acknowledge_alert(alert_id)
+    success = await security_monitor.acknowledge_alert(
+        alert_id, db, username=current_user.username
+    )
 
     if not success:
         raise HTTPException(
@@ -151,7 +158,9 @@ async def resolve_alert(
     """
     Mark a security alert as resolved
     """
-    success = security_monitor.resolve_alert(alert_id)
+    success = await security_monitor.resolve_alert(
+        alert_id, db, username=current_user.username
+    )
 
     if not success:
         raise HTTPException(
@@ -274,6 +283,214 @@ async def create_audit_checkpoint(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
+@router.post("/audit-log/rehash")
+async def rehash_audit_chain(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("audit.export")),
+):
+    """
+    Recompute the audit log hash chain
+
+    This is a recovery operation that recalculates all hashes in the chain
+    without modifying the underlying log data. Use when hash chain integrity
+    verification fails due to a bug in hash computation (not tampering).
+
+    Requires audit.export permission. The operation is itself audit-logged.
+    """
+    try:
+        count = await audit_logger.rehash_chain(db)
+
+        await log_audit_event(
+            db=db,
+            event_type="audit_chain_rehashed",
+            event_category="security",
+            severity="critical",
+            event_data={
+                "rehashed_by": current_user.username,
+                "entries_rehashed": count,
+            },
+            user_id=str(current_user.id),
+            ip_address=request.client.host if request.client else None,
+        )
+
+        await db.commit()
+
+        return {
+            "status": "completed",
+            "entries_rehashed": count,
+            "message": (
+                f"Rehashed {count} audit log entries"
+                if count > 0
+                else "All hashes are already correct"
+            ),
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get("/audit-log/entries")
+async def get_audit_log_entries(
+    request: Request,
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    event_category: Optional[str] = Query(None, description="Filter by category"),
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    user_id: Optional[str] = Query(None, description="Filter by user ID"),
+    skip: int = Query(0, ge=0, description="Number of entries to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Max entries to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("audit.view")),
+):
+    """
+    Query audit log entries with filtering
+
+    Returns paginated audit log entries for administrator review.
+    All queries are themselves audit-logged.
+    """
+    query = select(AuditLog).order_by(AuditLog.id.desc())
+    count_query = select(func.count()).select_from(AuditLog)
+
+    if event_type:
+        query = query.where(AuditLog.event_type == event_type)
+        count_query = count_query.where(AuditLog.event_type == event_type)
+    if event_category:
+        query = query.where(AuditLog.event_category == event_category)
+        count_query = count_query.where(AuditLog.event_category == event_category)
+    if severity:
+        query = query.where(AuditLog.severity == severity)  # type: ignore[arg-type]
+        count_query = count_query.where(AuditLog.severity == severity)  # type: ignore[arg-type]
+    if user_id:
+        query = query.where(AuditLog.user_id == user_id)
+        count_query = count_query.where(AuditLog.user_id == user_id)
+
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+
+    result = await db.execute(query.offset(skip).limit(limit))
+    logs = result.scalars().all()
+
+    await log_audit_event(
+        db=db,
+        event_type="audit_log_queried",
+        event_category="audit",
+        severity="info",
+        event_data={
+            "queried_by": current_user.username,
+            "filters": {
+                "event_type": event_type,
+                "event_category": event_category,
+                "severity": severity,
+                "user_id": user_id,
+            },
+            "results_count": len(logs),
+        },
+        user_id=str(current_user.id),
+        ip_address=request.client.host if request.client else None,
+    )
+
+    return {
+        "entries": [
+            {
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+                "event_type": log.event_type,
+                "event_category": log.event_category,
+                "severity": log.severity.value if hasattr(log.severity, "value") else log.severity,
+                "user_id": log.user_id,
+                "username": log.username,
+                "ip_address": log.ip_address,
+                "event_data": log.event_data,
+                "current_hash": log.current_hash,
+            }
+            for log in logs
+        ],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/audit-log/export")
+async def export_audit_logs(
+    request: Request,
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    event_category: Optional[str] = Query(None, description="Filter by category"),
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    start_id: Optional[int] = Query(None, description="Start log ID"),
+    end_id: Optional[int] = Query(None, description="End log ID"),
+    limit: int = Query(1000, ge=1, le=10000, description="Max entries to export"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("audit.export")),
+):
+    """
+    Export audit logs for backup and compliance purposes
+
+    Returns audit log entries with full hash chain data for
+    offline integrity verification. Requires audit.export permission.
+    """
+    query = select(AuditLog).order_by(AuditLog.id)
+
+    if event_type:
+        query = query.where(AuditLog.event_type == event_type)
+    if event_category:
+        query = query.where(AuditLog.event_category == event_category)
+    if severity:
+        query = query.where(AuditLog.severity == severity)  # type: ignore[arg-type]
+    if start_id:
+        query = query.where(AuditLog.id >= start_id)
+    if end_id:
+        query = query.where(AuditLog.id <= end_id)
+
+    result = await db.execute(query.limit(limit))
+    logs = result.scalars().all()
+
+    await log_audit_event(
+        db=db,
+        event_type="audit_log_exported",
+        event_category="security",
+        severity="warning",
+        event_data={
+            "exported_by": current_user.username,
+            "entries_exported": len(logs),
+            "filters": {
+                "event_type": event_type,
+                "event_category": event_category,
+                "severity": severity,
+                "start_id": start_id,
+                "end_id": end_id,
+            },
+        },
+        user_id=str(current_user.id),
+        ip_address=request.client.host if request.client else None,
+    )
+
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_by": current_user.username,
+        "total_entries": len(logs),
+        "entries": [
+            {
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+                "timestamp_nanos": log.timestamp_nanos,
+                "event_type": log.event_type,
+                "event_category": log.event_category,
+                "severity": log.severity.value if hasattr(log.severity, "value") else log.severity,
+                "user_id": log.user_id,
+                "username": log.username,
+                "session_id": log.session_id,
+                "ip_address": log.ip_address,
+                "user_agent": log.user_agent,
+                "event_data": log.event_data,
+                "previous_hash": log.previous_hash,
+                "current_hash": log.current_hash,
+            }
+            for log in logs
+        ],
+    }
+
+
 @router.get("/intrusion-detection/status")
 async def get_intrusion_detection_status(
     request: Request,
@@ -321,10 +538,12 @@ async def get_data_exfiltration_status(
     exfil_alerts = await security_monitor.get_recent_alerts(
         limit=20,
         alert_type=AlertType.DATA_EXFILTRATION,
+        db=db,
     )
     external_alerts = await security_monitor.get_recent_alerts(
         limit=20,
         alert_type=AlertType.EXTERNAL_DATA_TRANSFER,
+        db=db,
     )
 
     return {

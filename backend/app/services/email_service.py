@@ -41,7 +41,9 @@ class EmailService:
 
     def _format_local_dt(self, dt: datetime, fmt: str = "%B %d, %Y at %I:%M %p") -> str:
         """Format a datetime in the organization's local timezone."""
-        tz_name = getattr(self.organization, "timezone", None) if self.organization else None
+        tz_name = (
+            getattr(self.organization, "timezone", None) if self.organization else None
+        )
         if tz_name:
             local_dt = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
         else:
@@ -66,7 +68,9 @@ class EmailService:
                     "user": org_email_config.get("smtp_user"),
                     "password": org_email_config.get("smtp_password"),
                     "from_email": org_email_config.get("from_email"),
-                    "from_name": org_email_config.get("from_name", self.organization.name),
+                    "from_name": org_email_config.get(
+                        "from_name", self.organization.name
+                    ),
                     "use_tls": org_email_config.get("use_tls", True),
                 }
 
@@ -107,9 +111,12 @@ class EmailService:
             Tuple of (success_count, failure_count)
         """
         if not settings.EMAIL_ENABLED and not (
-            self.organization and self.organization.settings.get("email_service", {}).get("enabled")
+            self.organization
+            and self.organization.settings.get("email_service", {}).get("enabled")
         ):
-            logger.info(f"Email disabled. Would send to {len(to_emails)} recipients: {subject}")
+            logger.info(
+                f"Email disabled. Would send to {len(to_emails)} recipients: {subject}"
+            )
             return 0, len(to_emails)
 
         success_count = 0
@@ -130,14 +137,18 @@ class EmailService:
                     # Attach files
                     for filepath in attachment_paths:
                         if not os.path.isfile(filepath):
-                            logger.warning(f"Attachment not found, skipping: {filepath}")
+                            logger.warning(
+                                f"Attachment not found, skipping: {filepath}"
+                            )
                             continue
                         with open(filepath, "rb") as f:
                             part = MIMEBase("application", "octet-stream")
                             part.set_payload(f.read())
                         encoders.encode_base64(part)
                         filename = os.path.basename(filepath)
-                        part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
+                        part.add_header(
+                            "Content-Disposition", f'attachment; filename="{filename}"'
+                        )
                         msg.attach(part)
                 else:
                     msg = MIMEMultipart("alternative")
@@ -145,10 +156,14 @@ class EmailService:
                         msg.attach(MIMEText(text_body, "plain"))
                     msg.attach(MIMEText(html_body, "html"))
 
-                msg["From"] = f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
+                msg["From"] = (
+                    f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
+                )
                 msg["To"] = to_email
                 msg["Subject"] = subject
-                msg["Date"] = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+                msg["Date"] = datetime.now(timezone.utc).strftime(
+                    "%a, %d %b %Y %H:%M:%S +0000"
+                )
 
                 # Add CC and BCC recipients
                 all_recipients = [to_email]
@@ -160,12 +175,16 @@ class EmailService:
                     all_recipients.extend(bcc_emails)
 
                 # Send email
-                with smtplib.SMTP(self._smtp_config["host"], self._smtp_config["port"]) as server:
+                with smtplib.SMTP(
+                    self._smtp_config["host"], self._smtp_config["port"]
+                ) as server:
                     if self._smtp_config["use_tls"]:
                         server.starttls()
 
                     if self._smtp_config["user"] and self._smtp_config["password"]:
-                        server.login(self._smtp_config["user"], self._smtp_config["password"])
+                        server.login(
+                            self._smtp_config["user"], self._smtp_config["password"]
+                        )
 
                     server.sendmail(
                         self._smtp_config["from_email"],
@@ -479,9 +498,13 @@ Please do not reply to this email.
                 from app.services.email_template_service import EmailTemplateService
 
                 template_service = EmailTemplateService(db)
-                template = await template_service.get_template(organization_id, EmailTemplateType.WELCOME)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.WELCOME
+                )
                 if template:
-                    subject, html_body, text_body = template_service.render(template, context)
+                    subject, html_body, text_body = template_service.render(
+                        template, context
+                    )
                     # Gather stored attachment paths if template has attachments
                     if template.allow_attachments and template.attachments:
                         stored_paths = [a.storage_path for a in template.attachments]
@@ -490,7 +513,9 @@ Please do not reply to this email.
                         else:
                             attachment_paths = stored_paths
             except Exception as e:
-                logger.warning(f"Failed to load welcome email template, using default: {e}")
+                logger.warning(
+                    f"Failed to load welcome email template, using default: {e}"
+                )
 
         # Fall back to inline default if no template loaded
         if not subject:
@@ -572,11 +597,17 @@ Please do not reply to this email.
                 from app.services.email_template_service import EmailTemplateService
 
                 template_service = EmailTemplateService(db)
-                template = await template_service.get_template(organization_id, EmailTemplateType.PASSWORD_RESET)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.PASSWORD_RESET
+                )
                 if template:
-                    subject, html_body, text_body = template_service.render(template, context)
+                    subject, html_body, text_body = template_service.render(
+                        template, context
+                    )
             except Exception as e:
-                logger.warning(f"Failed to load password reset template, using default: {e}")
+                logger.warning(
+                    f"Failed to load password reset template, using default: {e}"
+                )
 
         # Fall back to inline default
         if not subject:

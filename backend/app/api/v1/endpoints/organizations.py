@@ -22,6 +22,7 @@ from app.schemas.organization import (
     FileStorageSettings,
     MembershipIdSettings,
     ModuleSettingsUpdate,
+    OrganizationProfileUpdate,
     OrganizationSettingsResponse,
     OrganizationSettingsUpdate,
     SetupChecklistItem,
@@ -192,9 +193,7 @@ async def update_email_settings(
     """
     org_service = OrganizationService(db)
 
-    settings_dict = {
-        "email_service": email_settings.model_dump(exclude_unset=False)
-    }
+    settings_dict = {"email_service": email_settings.model_dump(exclude_unset=False)}
 
     try:
         await org_service.update_organization_settings(
@@ -241,9 +240,7 @@ async def update_file_storage_settings(
     """
     org_service = OrganizationService(db)
 
-    settings_dict = {
-        "file_storage": storage_settings.model_dump(exclude_unset=False)
-    }
+    settings_dict = {"file_storage": storage_settings.model_dump(exclude_unset=False)}
 
     try:
         await org_service.update_organization_settings(
@@ -289,9 +286,7 @@ async def update_auth_settings(
     """
     org_service = OrganizationService(db)
 
-    settings_dict = {
-        "auth": auth_settings.model_dump(exclude_unset=False)
-    }
+    settings_dict = {"auth": auth_settings.model_dump(exclude_unset=False)}
 
     try:
         await org_service.update_organization_settings(
@@ -508,7 +503,12 @@ async def get_setup_checklist(
     from app.models.inventory import InventoryCategory
     from app.models.location import Location
     from app.models.membership_pipeline import MembershipPipeline
-    from app.models.training import BasicApparatus, ShiftTemplate, TrainingCourse, TrainingRequirement
+    from app.models.training import (
+        BasicApparatus,
+        ShiftTemplate,
+        TrainingCourse,
+        TrainingRequirement,
+    )
 
     org_id = str(current_user.organization_id)
 
@@ -767,7 +767,7 @@ async def get_setup_checklist(
             )
         )
 
-    if "prospective_members" in enabled_modules or True:
+    if "prospective_members" in enabled_modules:
         items.append(
             SetupChecklistItem(
                 key="pipeline",
@@ -878,7 +878,7 @@ async def get_organization_profile(
 
 @router.patch("/profile")
 async def update_organization_profile(
-    updates: dict,
+    updates: OrganizationProfileUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("settings.manage")),
 ):
@@ -896,32 +896,23 @@ async def update_organization_profile(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Allowed top-level scalar fields
-    allowed_fields = {
-        "name",
-        "timezone",
-        "phone",
-        "email",
-        "website",
-        "county",
-        "founded_year",
-    }
-    for field in allowed_fields:
-        if field in updates:
-            setattr(org, field, updates[field])
-
-    # Handle logo separately (can be large base64)
-    if "logo" in updates:
-        org.logo = updates["logo"]
+    # Apply validated scalar fields (only those explicitly provided)
+    update_data = updates.model_dump(exclude_unset=True, exclude={"mailing_address"})
+    for field, value in update_data.items():
+        setattr(org, field, value)
 
     # Handle mailing address
-    addr = updates.get("mailing_address")
-    if isinstance(addr, dict):
-        org.mailing_address_line1 = addr.get("line1", org.mailing_address_line1)
-        org.mailing_address_line2 = addr.get("line2", org.mailing_address_line2)
-        org.mailing_city = addr.get("city", org.mailing_city)
-        org.mailing_state = addr.get("state", org.mailing_state)
-        org.mailing_zip = addr.get("zip", org.mailing_zip)
+    if updates.mailing_address is not None:
+        addr = updates.mailing_address.model_dump(exclude_unset=True)
+        field_map = {
+            "line1": "mailing_address_line1",
+            "line2": "mailing_address_line2",
+            "city": "mailing_city",
+            "state": "mailing_state",
+            "zip": "mailing_zip",
+        }
+        for key, value in addr.items():
+            setattr(org, field_map[key], value)
 
     await db.commit()
     await db.refresh(org)
@@ -932,7 +923,7 @@ async def update_organization_profile(
         event_type="organization.profile_updated",
         event_category="administration",
         severity="info",
-        event_data={"fields_changed": list(updates.keys())},
+        event_data={"fields_changed": list(updates.model_dump(exclude_unset=True).keys())},
         user_id=str(current_user.id),
         username=current_user.username,
     )

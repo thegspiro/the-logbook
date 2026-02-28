@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
@@ -75,6 +76,15 @@ async def create_category(
             created_by=str(current_user.id),
             **data.model_dump(),
         )
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.category_created",
+            event_category="administration",
+            severity="info",
+            event_data={"category_name": data.name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
         return category
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -100,6 +110,15 @@ async def update_category(
             organization_id=str(current_user.organization_id),
             updated_by=str(current_user.id),
             **data.model_dump(exclude_unset=True),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.category_updated",
+            event_category="administration",
+            severity="info",
+            event_data={"category_id": category_id, "fields_changed": list(data.model_dump(exclude_unset=True).keys())},
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
         return category
     except ValueError as e:
@@ -501,9 +520,7 @@ async def get_pending_count(
 ):
     """Get the count of entries pending review."""
     service = AdminHoursService(db)
-    count = await service.get_pending_count(
-        str(current_user.organization_id)
-    )
+    count = await service.get_pending_count(str(current_user.organization_id))
     return {"count": count}
 
 

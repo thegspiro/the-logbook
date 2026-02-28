@@ -50,10 +50,7 @@ def _user_has_officer_role(user: User) -> bool:
         return True
     if hasattr(user, "permissions") and user.permissions:
         perms = user.permissions if isinstance(user.permissions, list) else []
-        if any(
-            p in perms
-            for p in ("training.manage", "admin.*", "*")
-        ):
+        if any(p in perms for p in ("training.manage", "admin.*", "*")):
             return True
     return False
 
@@ -65,7 +62,8 @@ async def list_templates(
     ),
     category: Optional[str] = Query(None, description="Filter by category"),
     visibility: Optional[str] = Query(
-        None, description="Filter by visibility (all_members/officers_only/assigned_only)"
+        None,
+        description="Filter by visibility (all_members/officers_only/assigned_only)",
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -964,9 +962,7 @@ async def delete_test(
     )
 
 
-@router.delete(
-    "/tests/{test_id}/discard", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/tests/{test_id}/discard", status_code=status.HTTP_204_NO_CONTENT)
 async def discard_practice_test(
     test_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1046,9 +1042,7 @@ async def email_test_results(
     )
     candidate = candidate_result.scalar_one_or_none()
 
-    examiner_result = await db.execute(
-        select(User).where(User.id == test.examiner_id)
-    )
+    examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
     examiner = examiner_result.scalar_one_or_none()
 
     if not candidate or not candidate.email:
@@ -1061,9 +1055,7 @@ async def email_test_results(
     from app.models.user import Organization
 
     org_result = await db.execute(
-        select(Organization).where(
-            Organization.id == current_user.organization_id
-        )
+        select(Organization).where(Organization.id == current_user.organization_id)
     )
     org = org_result.scalar_one_or_none()
 
@@ -1073,7 +1065,9 @@ async def email_test_results(
     template_name = template.name if template else "Unknown Template"
     test_type = "Practice" if test.is_practice else "Official"
     result_text = (test.result or "incomplete").upper()
-    score_text = f"{round(test.overall_score)}%" if test.overall_score is not None else "N/A"
+    score_text = (
+        f"{round(test.overall_score)}%" if test.overall_score is not None else "N/A"
+    )
 
     # Build section summaries
     sections_html = ""
@@ -1415,9 +1409,7 @@ def _calculate_test_result(
     # Use point-based totals when score criteria exist, otherwise fall back
     # to averaging section_score percentages
     if has_score_criteria and total_available > 0:
-        overall_score: float | None = round(
-            (total_earned / total_available) * 100, 1
-        )
+        overall_score: float | None = round((total_earned / total_available) * 100, 1)
     else:
         section_scores = []
         for sr in section_results:

@@ -1,12 +1,37 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import crypto from 'crypto';
+import fs from 'fs';
+
+// Unique build ID generated once per build. Injected into the app via
+// `define` and written to `/version.json` so the running app can poll
+// for new deployments and prompt users to reload.
+const BUILD_ID = crypto.randomBytes(8).toString('hex');
+
+function versionJsonPlugin(): Plugin {
+  return {
+    name: 'version-json',
+    apply: 'build',
+    closeBundle() {
+      const outDir = path.resolve(__dirname, 'dist');
+      fs.writeFileSync(
+        path.join(outDir, 'version.json'),
+        JSON.stringify({ buildId: BUILD_ID }) + '\n',
+      );
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
+  },
   plugins: [
     react(),
+    versionJsonPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
@@ -17,6 +42,12 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /^.*\/api\/.*/,
+            handler: 'NetworkOnly',
+          },
+          // version.json must always be fetched from the network so the
+          // app can detect new deployments even when served by the SW.
+          {
+            urlPattern: /\/version\.json$/,
             handler: 'NetworkOnly',
           },
         ],

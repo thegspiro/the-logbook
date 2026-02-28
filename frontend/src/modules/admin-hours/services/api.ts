@@ -2,8 +2,7 @@
  * Admin Hours API Service
  */
 
-import axios, { AxiosError } from 'axios';
-import { API_TIMEOUT_MS } from '../../../constants/config';
+import { createApiClient } from '../../../utils/createApiClient';
 import type {
   AdminHoursCategory,
   AdminHoursCategoryCreate,
@@ -18,73 +17,7 @@ import type {
   AdminHoursPaginatedEntries,
 } from '../types';
 
-declare module 'axios' {
-  export interface InternalAxiosRequestConfig {
-    _retry?: boolean;
-  }
-}
-
-const API_BASE_URL = '/api/v1';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: API_TIMEOUT_MS,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-function getCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
-}
-
-// Request interceptor to add CSRF header
-// NOTE: Auth is handled via httpOnly cookies (withCredentials: true above).
-// Tokens must NEVER be stored in or read from localStorage (HIPAA compliance).
-api.interceptors.request.use(
-  (config) => {
-    const method = (config.method || '').toUpperCase();
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      const csrf = getCookie('csrf_token');
-      if (csrf) {
-        config.headers['X-CSRF-Token'] = csrf;
-      }
-    }
-    return config;
-  },
-  (error: unknown) => {
-    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
-  }
-);
-
-let refreshPromise: Promise<void> | null = null;
-
-// Response interceptor to handle token expiration via httpOnly cookie refresh
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config;
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      originalRequest._retry = true;
-      try {
-        if (!refreshPromise) {
-          refreshPromise = axios
-            .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
-            .then(() => {})
-            .finally(() => { refreshPromise = null; });
-        }
-        await refreshPromise;
-        return api(originalRequest);
-      } catch {
-        localStorage.removeItem('has_session');
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
-  }
-);
+const api = createApiClient();
 
 // =============================================================================
 // Categories
@@ -247,7 +180,7 @@ export const adminHoursEntryService = {
     if (params?.startDate) searchParams.set('start_date', params.startDate);
     if (params?.endDate) searchParams.set('end_date', params.endDate);
     const qs = searchParams.toString();
-    return `${API_BASE_URL}/admin-hours/entries/export${qs ? `?${qs}` : ''}`;
+    return `/api/v1/admin-hours/entries/export${qs ? `?${qs}` : ''}`;
   },
 
   async closeStaleSessions(): Promise<{ closedCount: number }> {

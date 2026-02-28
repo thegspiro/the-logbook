@@ -208,12 +208,12 @@ class EventRequestActivity(Base):
     request = relationship("EventRequest", back_populates="activity_log")
     performer = relationship("User", foreign_keys=[performed_by])
 
-    __table_args__ = (
-        Index("idx_event_req_activity_request", "request_id"),
-    )
+    __table_args__ = (Index("idx_event_req_activity_request", "request_id"),)
 
     def __repr__(self):
-        return f"<EventRequestActivity(request={self.request_id}, action={self.action})>"
+        return (
+            f"<EventRequestActivity(request={self.request_id}, action={self.action})>"
+        )
 
 
 class EventRequestEmailTemplate(Base):
@@ -255,6 +255,4 @@ class EventRequestEmailTemplate(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    __table_args__ = (
-        Index("idx_email_tpl_org", "organization_id"),
-    )
+    __table_args__ = (Index("idx_email_tpl_org", "organization_id"),)
