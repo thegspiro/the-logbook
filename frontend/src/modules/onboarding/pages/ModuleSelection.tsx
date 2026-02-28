@@ -20,6 +20,11 @@ import {
   Globe,
   ChevronDown,
   ChevronUp,
+  Building2,
+  UserPlus,
+  Vote,
+  Smartphone,
+  FormInput,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../components';
@@ -45,6 +50,11 @@ const iconMap: Record<string, React.ReactNode> = {
   Briefcase: <Briefcase className="w-6 h-6" />,
   DollarSign: <DollarSign className="w-6 h-6" />,
   Globe: <Globe className="w-6 h-6" />,
+  Building2: <Building2 className="w-6 h-6" />,
+  UserPlus: <UserPlus className="w-6 h-6" />,
+  Vote: <Vote className="w-6 h-6" />,
+  Smartphone: <Smartphone className="w-6 h-6" />,
+  FormInput: <FormInput className="w-6 h-6" />,
 };
 
 const ModuleSelection: React.FC = () => {

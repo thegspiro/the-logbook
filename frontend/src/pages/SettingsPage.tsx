@@ -82,26 +82,33 @@ interface ConfigurableModule {
   icon: React.ReactNode;
 }
 
-const CONFIGURABLE_MODULES: ConfigurableModule[] = [
+/** Standard modules — enabled by default for all organizations */
+const STANDARD_MODULES: ConfigurableModule[] = [
   { key: 'training', name: 'Training & Certification', description: 'Course management, certification tracking, and compliance monitoring', icon: <GraduationCap className="w-5 h-5" /> },
   { key: 'inventory', name: 'Inventory Management', description: 'Equipment tracking, supply levels, and procurement', icon: <Package className="w-5 h-5" /> },
   { key: 'scheduling', name: 'Scheduling', description: 'Duty rosters, shift scheduling, and calendar management', icon: <Calendar className="w-5 h-5" /> },
   { key: 'apparatus', name: 'Apparatus Management', description: 'Vehicle tracking, maintenance schedules, and equipment inventory', icon: <Truck className="w-5 h-5" /> },
-  { key: 'communications', name: 'Communications', description: 'Internal messaging, announcements, and notifications', icon: <MessageSquare className="w-5 h-5" /> },
-  { key: 'elections', name: 'Elections & Voting', description: 'Ballot creation, voting management, and election results', icon: <Vote className="w-5 h-5" /> },
   { key: 'minutes', name: 'Meeting Minutes', description: 'Meeting documentation, attendance tracking, and action items', icon: <FileText className="w-5 h-5" /> },
   { key: 'reports', name: 'Reports & Analytics', description: 'Custom reports, data export, and analytics dashboards', icon: <BarChart3 className="w-5 h-5" /> },
   { key: 'notifications', name: 'Email Notifications', description: 'Automated email alerts and notification rules', icon: <Bell className="w-5 h-5" /> },
-  { key: 'mobile', name: 'Mobile App Access', description: 'Mobile-optimized access and push notifications', icon: <Smartphone className="w-5 h-5" /> },
   { key: 'forms', name: 'Custom Forms', description: 'Form builder for inspections, surveys, and data collection', icon: <ClipboardList className="w-5 h-5" /> },
   { key: 'integrations', name: 'External Integrations', description: 'Third-party service connections and API access', icon: <Plug className="w-5 h-5" /> },
   { key: 'facilities', name: 'Facilities Management', description: 'Building management, maintenance scheduling, and inspections', icon: <Building2 className="w-5 h-5" /> },
-  { key: 'incidents', name: 'Incidents & Reports', description: 'Incident logging, run reports, and analytics', icon: <FileText className="w-5 h-5" /> },
-  { key: 'hr_payroll', name: 'HR & Payroll', description: 'Time tracking, compensation, and benefits management', icon: <Briefcase className="w-5 h-5" /> },
-  { key: 'grants', name: 'Grants & Fundraising', description: 'Grant tracking, fundraising campaigns, and budget management', icon: <DollarSign className="w-5 h-5" /> },
   { key: 'prospective_members', name: 'Prospective Members', description: 'Applicant-to-member pipeline with configurable stages', icon: <UserPlus className="w-5 h-5" /> },
   { key: 'public_info', name: 'Public Information', description: 'Public-facing pages, community outreach, and fire safety education', icon: <Globe className="w-5 h-5" /> },
 ];
+
+/** Additional modules — disabled by default, opt-in */
+const ADDITIONAL_MODULES: ConfigurableModule[] = [
+  { key: 'communications', name: 'Communications', description: 'Internal messaging, announcements, and notifications', icon: <MessageSquare className="w-5 h-5" /> },
+  { key: 'elections', name: 'Elections & Voting', description: 'Ballot creation, voting management, and election results', icon: <Vote className="w-5 h-5" /> },
+  { key: 'mobile', name: 'Mobile App Access', description: 'Mobile-optimized access and push notifications', icon: <Smartphone className="w-5 h-5" /> },
+  { key: 'incidents', name: 'Incidents & Reports', description: 'Incident logging, run reports, and analytics', icon: <FileText className="w-5 h-5" /> },
+  { key: 'hr_payroll', name: 'HR & Payroll', description: 'Time tracking, compensation, and benefits management', icon: <Briefcase className="w-5 h-5" /> },
+  { key: 'grants', name: 'Grants & Fundraising', description: 'Grant tracking, fundraising campaigns, and budget management', icon: <DollarSign className="w-5 h-5" /> },
+];
+
+const CONFIGURABLE_MODULES: ConfigurableModule[] = [...STANDARD_MODULES, ...ADDITIONAL_MODULES];
 
 // ── Timezone helper ──
 
@@ -654,9 +661,72 @@ export const SettingsPage: React.FC = () => {
       // ════════════════════════════════════════════
       // MODULES
       // ════════════════════════════════════════════
-      case 'modules':
+      case 'modules': {
+        const renderModuleRow = (mod: ConfigurableModule) => {
+          const isEnabled = moduleSettings?.[mod.key] ?? false;
+          const isToggling = togglingModule === mod.key;
+          return (
+            <div
+              key={mod.key}
+              className={`flex items-center justify-between py-3 px-3 rounded-lg border transition-colors ${
+                isEnabled
+                  ? 'border-green-500/30 bg-green-500/5'
+                  : 'border-theme-surface-border bg-theme-surface-secondary/30'
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${
+                  isEnabled ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'
+                }`}>
+                  {mod.icon}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className={`text-sm font-medium ${isEnabled ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
+                      {mod.name}
+                    </p>
+                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded ${
+                      isEnabled
+                        ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                        : 'bg-theme-surface-secondary text-theme-text-muted'
+                    }`}>
+                      {isEnabled ? (
+                        <><Check className="w-3 h-3" /> Enabled</>
+                      ) : (
+                        <><X className="w-3 h-3" /> Disabled</>
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-xs text-theme-text-muted truncate">{mod.description}</p>
+                </div>
+              </div>
+              <div className="flex-shrink-0 ml-4">
+                <button
+                  type="button"
+                  onClick={() => { void handleModuleToggle(mod.key); }}
+                  disabled={isToggling}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isEnabled
+                      ? 'bg-theme-surface-secondary text-theme-text-secondary hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 focus:ring-red-500'
+                      : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
+                  }`}
+                  aria-label={isEnabled ? `Disable ${mod.name}` : `Enable ${mod.name}`}
+                >
+                  {isToggling ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : isEnabled ? (
+                    'Disable'
+                  ) : (
+                    'Enable'
+                  )}
+                </button>
+              </div>
+            </div>
+          );
+        };
+
         return (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-theme-text-primary">Modules</h3>
@@ -664,53 +734,33 @@ export const SettingsPage: React.FC = () => {
                   Enable or disable optional modules. Core modules (Members, Events, Documents) are always active.
                 </p>
               </div>
-              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
-                {enabledCount} / {CONFIGURABLE_MODULES.length}
+              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
+                {enabledCount} / {CONFIGURABLE_MODULES.length} enabled
               </span>
             </div>
 
-            <div className="space-y-1">
-              {CONFIGURABLE_MODULES.map((mod) => {
-                const isEnabled = moduleSettings?.[mod.key] ?? false;
-                const isToggling = togglingModule === mod.key;
-                return (
-                  <div
-                    key={mod.key}
-                    className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-theme-surface-secondary/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${
-                        isEnabled ? 'bg-red-500/10 text-red-500' : 'bg-theme-surface-secondary text-theme-text-muted'
-                      }`}>
-                        {mod.icon}
-                      </div>
-                      <div className="min-w-0">
-                        <p className={`text-sm font-medium ${isEnabled ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
-                          {mod.name}
-                        </p>
-                        <p className="text-xs text-theme-text-muted truncate">{mod.description}</p>
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0 ml-4">
-                      {isToggling ? (
-                        <div className="w-11 h-6 flex items-center justify-center">
-                          <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
-                        </div>
-                      ) : (
-                        <Toggle
-                          checked={isEnabled}
-                          onChange={() => { void handleModuleToggle(mod.key); }}
-                          color="red"
-                          label={`Toggle ${mod.name}`}
-                        />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            {/* Standard modules */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+                Standard Modules
+              </h4>
+              <div className="space-y-1.5">
+                {STANDARD_MODULES.map(renderModuleRow)}
+              </div>
+            </div>
+
+            {/* Additional modules */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+                Additional Modules
+              </h4>
+              <div className="space-y-1.5">
+                {ADDITIONAL_MODULES.map(renderModuleRow)}
+              </div>
             </div>
           </div>
         );
+      }
 
       // ════════════════════════════════════════════
       // MEMBERS
