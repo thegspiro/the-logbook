@@ -24,8 +24,8 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { schedulingService } from '../services/api';
-import type { RequirementComplianceSummary } from '../services/api';
+import { schedulingService } from '../modules/scheduling/services/api';
+import type { RequirementComplianceSummary } from '../modules/scheduling/services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 

@@ -187,14 +187,19 @@ class SchedulingService:
 
         name_map = await self._get_user_name_map(list(user_ids))
 
-        # Get shift dates
-        shift_date_map: Dict[str, Any] = {}
+        # Get shift dates and start times in a single query
+        shift_info_map: Dict[str, Dict[str, Any]] = {}
         if shift_ids:
             shift_result = await self.db.execute(
-                select(Shift.id, Shift.shift_date).where(Shift.id.in_(list(shift_ids)))
+                select(Shift.id, Shift.shift_date, Shift.start_time).where(
+                    Shift.id.in_(list(shift_ids))
+                )
             )
             for row in shift_result.all():
-                shift_date_map[str(row[0])] = row[1]
+                shift_info_map[str(row[0])] = {
+                    "date": row[1],
+                    "start_time": str(row[2]) if row[2] else None,
+                }
 
         result = []
         for sr in swap_requests:
@@ -207,15 +212,25 @@ class SchedulingService:
             d["target_user_name"] = (
                 name_map.get(str(sr.target_user_id)) if sr.target_user_id else None
             )
-            d["offering_shift_date"] = (
-                shift_date_map.get(str(sr.offering_shift_id))
+            offering_info = (
+                shift_info_map.get(str(sr.offering_shift_id))
                 if sr.offering_shift_id
                 else None
             )
-            d["requesting_shift_date"] = (
-                shift_date_map.get(str(sr.requesting_shift_id))
+            d["offering_shift_date"] = offering_info["date"] if offering_info else None
+            d["offering_shift_start_time"] = (
+                offering_info["start_time"] if offering_info else None
+            )
+            requesting_info = (
+                shift_info_map.get(str(sr.requesting_shift_id))
                 if sr.requesting_shift_id
                 else None
+            )
+            d["requesting_shift_date"] = (
+                requesting_info["date"] if requesting_info else None
+            )
+            d["requesting_shift_start_time"] = (
+                requesting_info["start_time"] if requesting_info else None
             )
             result.append(d)
         return result
@@ -1557,7 +1572,11 @@ class SchedulingService:
         status: TimeOffStatus,
         reviewer_notes: Optional[str] = None,
     ) -> Tuple[Optional[ShiftTimeOff], Optional[str]]:
-        """Review (approve/deny) a time-off request"""
+        """Review (approve/deny) a time-off request.
+
+        When approved, automatically cancels any conflicting shift assignments
+        for the member within the time-off date range.
+        """
         try:
             time_off = await self.get_time_off_by_id(time_off_id, organization_id)
             if not time_off:
@@ -1571,12 +1590,58 @@ class SchedulingService:
             time_off.approved_at = datetime.now(timezone.utc)
             time_off.reviewer_notes = reviewer_notes
 
+            # When approving, cancel conflicting shift assignments
+            if status == TimeOffStatus.APPROVED and time_off.user_id:
+                cancelled_count = await self._cancel_conflicting_assignments(
+                    organization_id=organization_id,
+                    user_id=time_off.user_id,
+                    start_date=time_off.start_date,
+                    end_date=time_off.end_date,
+                )
+                if cancelled_count > 0:
+                    conflict_note = (
+                        f" ({cancelled_count} conflicting assignment"
+                        f"{'s' if cancelled_count != 1 else ''} auto-cancelled)"
+                    )
+                    time_off.reviewer_notes = (
+                        (time_off.reviewer_notes or "") + conflict_note
+                    )
+
             await self.db.commit()
             await self.db.refresh(time_off)
             return time_off, None
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def _cancel_conflicting_assignments(
+        self,
+        organization_id: UUID,
+        user_id: str,
+        start_date,
+        end_date,
+    ) -> int:
+        """Cancel shift assignments that overlap with an approved time-off range.
+
+        Returns the number of assignments cancelled.
+        """
+        result = await self.db.execute(
+            select(ShiftAssignment)
+            .join(Shift, ShiftAssignment.shift_id == Shift.id)
+            .where(ShiftAssignment.user_id == str(user_id))
+            .where(Shift.organization_id == str(organization_id))
+            .where(Shift.shift_date >= start_date)
+            .where(Shift.shift_date <= end_date)
+            .where(
+                ShiftAssignment.assignment_status.notin_(
+                    [AssignmentStatus.DECLINED, AssignmentStatus.CANCELLED]
+                )
+            )
+        )
+        conflicting = result.scalars().all()
+        for assignment in conflicting:
+            assignment.assignment_status = AssignmentStatus.CANCELLED
+        return len(conflicting)
 
     async def cancel_time_off(
         self, time_off_id: UUID, organization_id: UUID, user_id: UUID

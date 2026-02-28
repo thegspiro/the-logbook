@@ -10,7 +10,7 @@ const mockGetTimeOffRequests = vi.fn();
 const mockReviewSwapRequest = vi.fn();
 const mockReviewTimeOff = vi.fn();
 
-vi.mock('../../services/api', () => ({
+vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getSwapRequests: (...args: unknown[]) => mockGetSwapRequests(...args) as unknown,
     getTimeOffRequests: (...args: unknown[]) => mockGetTimeOffRequests(...args) as unknown,

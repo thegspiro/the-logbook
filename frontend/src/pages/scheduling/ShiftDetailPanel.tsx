@@ -18,12 +18,13 @@ import {
   Loader2, Phone, ChevronDown, ChevronUp, Pencil, Trash2, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService, userService } from '../../services/api';
-import type { ShiftRecord } from '../../services/api';
-import type { Assignment } from '../../types/scheduling';
+import { userService } from '../../services/api';
+import { schedulingService } from '../../modules/scheduling/services/api';
+import type { ShiftRecord } from '../../modules/scheduling/services/api';
+import type { Assignment, ShiftCall } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime } from '../../utils/dateFormatting';
+import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
 
@@ -49,7 +50,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
   const [shift, setShift] = useState(initialShift);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [calls, setCalls] = useState<Record<string, unknown>[]>([]);
+  const [calls, setCalls] = useState<ShiftCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCalls, setShowCalls] = useState(false);
 
@@ -304,7 +305,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
   const isUserAssigned = assignments.some(a => a.user_id === user?.id);
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
-  const isPast = shiftDate < new Date();
+  const isPast = shift.shift_date < getTodayLocalDate(tz);
 
   // Build crew board data: for each apparatus position, find the assignment(s) filling it
   const crewBoard = useMemo(() => {
@@ -331,7 +332,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500';
 
   const renderAssignmentRow = (assignment: Assignment) => {
-    const effectiveStatus = assignment.status || assignment.assignment_status || 'assigned';
+    const effectiveStatus = assignment.status || 'assigned';
     const statusColor = ASSIGNMENT_STATUS_COLORS[effectiveStatus] || ASSIGNMENT_STATUS_COLORS.assigned;
     const isCurrentUser = assignment.user_id === user?.id;
     const isAssigned = effectiveStatus === 'assigned';
@@ -613,10 +614,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                       {assignment ? (
                         <>
-                          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || assignment.assignment_status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
-                            {assignment.status || assignment.assignment_status || 'assigned'}
+                          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
+                            {assignment.status || 'assigned'}
                           </span>
-                          {assignment.user_id === user?.id && (assignment.status === 'assigned' || assignment.assignment_status === 'assigned') && confirmingDecline !== assignment.id && (
+                          {assignment.user_id === user?.id && assignment.status === 'assigned' && confirmingDecline !== assignment.id && (
                             <>
                               <button onClick={() => { void handleConfirm(assignment.id); }}
                                 className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"
@@ -832,19 +833,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 </p>
               ) : (
                 <div className="space-y-2 mt-2">
-                  {calls.map((call, i) => (
-                    <div key={i} className="p-3 bg-theme-surface-hover/30 rounded-lg border border-theme-surface-border">
+                  {calls.map((call) => (
+                    <div key={call.id} className="p-3 bg-theme-surface-hover/30 rounded-lg border border-theme-surface-border">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium text-theme-text-primary capitalize">
-                          {String((call.incident_type ?? 'Unknown') as string)}
+                          {call.incident_type ?? 'Unknown'}
                         </p>
-                        {Boolean(call.incident_number) && (
-                          <span className="text-xs text-theme-text-muted">#{String(call.incident_number)}</span>
+                        {call.incident_number && (
+                          <span className="text-xs text-theme-text-muted">#{call.incident_number}</span>
                         )}
                       </div>
-                      {Boolean(call.dispatched_at) && (
+                      {call.dispatched_at && (
                         <p className="text-xs text-theme-text-muted mt-1">
-                          Dispatched: {formatTime(String(call.dispatched_at), tz)}
+                          Dispatched: {formatTime(call.dispatched_at, tz)}
                         </p>
                       )}
                     </div>

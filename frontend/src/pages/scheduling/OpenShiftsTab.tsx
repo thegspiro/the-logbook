@@ -11,8 +11,8 @@ import {
   CalendarDays, Filter, Check, MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../services/api';
-import type { ShiftRecord } from '../../services/api';
+import { schedulingService } from '../../modules/scheduling/services/api';
+import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';

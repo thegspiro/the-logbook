@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import Dashboard from './Dashboard';
-import type { ShiftRecord } from '../services/api';
+import type { ShiftRecord } from '../modules/scheduling/services/api';
 
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
@@ -30,13 +30,16 @@ const { mockGetMyShifts, mockGetOpenShifts, mockSignupForShift } = vi.hoisted(()
   mockSignupForShift: vi.fn(),
 }));
 
-vi.mock('../services/api', () => ({
+vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: {
     getMyShifts: mockGetMyShifts,
     getOpenShifts: mockGetOpenShifts,
     getSummary: vi.fn().mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
     signupForShift: mockSignupForShift,
   },
+}));
+
+vi.mock('../services/api', () => ({
   notificationsService: {
     getLogs: vi.fn().mockResolvedValue({ logs: [], total: 0 }),
   },

@@ -8,7 +8,7 @@ const mockGetOpenShifts = vi.fn();
 const mockGetShifts = vi.fn();
 const mockSignupForShift = vi.fn();
 
-vi.mock('../../services/api', () => ({
+vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getOpenShifts: (...args: unknown[]) => mockGetOpenShifts(...args) as unknown,
     getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,

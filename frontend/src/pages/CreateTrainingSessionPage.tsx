@@ -17,7 +17,8 @@ import type { Location } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
-import { userService, schedulingService, locationsService, trainingSessionService, trainingService } from '../services/api';
+import { userService, locationsService, trainingSessionService, trainingService } from '../services/api';
+import { schedulingService } from '../modules/scheduling/services/api';
 import { useRanks } from '../hooks/useRanks';
 
 /**

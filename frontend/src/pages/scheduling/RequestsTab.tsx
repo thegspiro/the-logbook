@@ -11,8 +11,8 @@ import {
   Loader2, Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../services/api';
-import type { ShiftRecord, SwapRequest, TimeOffRequest } from '../../types/scheduling';
+import { schedulingService } from '../../modules/scheduling/services/api';
+import type { SwapRequest, TimeOffRequest } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
@@ -50,30 +50,9 @@ export const RequestsTab: React.FC = () => {
         schedulingService.getSwapRequests(params),
         schedulingService.getTimeOffRequests(params),
       ]);
-      const rawSwaps = swaps;
-
-      // Enrich swap requests with shift details
-      const shiftIds = new Set<string>();
-      rawSwaps.forEach(s => {
-        if (s.offering_shift_id) shiftIds.add(s.offering_shift_id);
-        if (s.requesting_shift_id) shiftIds.add(s.requesting_shift_id);
-      });
-      const shiftMap = new Map<string, ShiftRecord>();
-      await Promise.all(
-        Array.from(shiftIds).map(async (id) => {
-          try {
-            const shift = await schedulingService.getShift(id);
-            shiftMap.set(id, shift);
-          } catch { /* shift may have been deleted */ }
-        })
-      );
-      const enrichedSwaps = rawSwaps.map(s => ({
-        ...s,
-        offering_shift: shiftMap.get(s.offering_shift_id),
-        requesting_shift: s.requesting_shift_id ? shiftMap.get(s.requesting_shift_id) : undefined,
-      }));
-
-      setSwapRequests(enrichedSwaps);
+      // Swap requests are now enriched server-side with shift dates and start
+      // times — no need to fetch individual shifts (fixes N+1 query).
+      setSwapRequests(swaps);
       setTimeOffRequests(timeOff);
     } catch {
       toast.error('Failed to load requests');
@@ -204,26 +183,26 @@ export const RequestsTab: React.FC = () => {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-semibold text-theme-text-primary">
-                            {(req.user_id ?? req.requesting_user_id) === currentUser?.id
+                            {(req.requesting_user_id ?? req.user_id) === currentUser?.id
                               ? 'Your swap request'
-                              : `${req.user_name || 'Member'} requests swap`}
+                              : `${req.requesting_user_name || req.user_name || 'Member'} requests swap`}
                           </p>
                           <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border capitalize ${statusColor}`}>
                             {req.status}
                           </span>
                         </div>
                         <p className="text-xs text-theme-text-muted mt-0.5">
-                          {req.offering_shift ? (
+                          {req.offering_shift_date ? (
                             <>
-                              Offering: {new Date(req.offering_shift.shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
-                              {' '}{formatTime(req.offering_shift.start_time, tz)}
+                              Offering: {new Date(req.offering_shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
+                              {req.offering_shift_start_time ? ` ${formatTime(req.offering_shift_start_time, tz)}` : ''}
                             </>
                           ) : (
                             <>Offering shift (details unavailable)</>
                           )}
-                          {req.requesting_shift ? (
-                            <> {' \u2192 '} {new Date(req.requesting_shift.shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
-                              {' '}{formatTime(req.requesting_shift.start_time, tz)}
+                          {req.requesting_shift_date ? (
+                            <> {' \u2192 '} {new Date(req.requesting_shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
+                              {req.requesting_shift_start_time ? ` ${formatTime(req.requesting_shift_start_time, tz)}` : ''}
                             </>
                           ) : req.requesting_shift_id ? (
                             <> {' \u2192 '} Requested shift (details unavailable)</>
@@ -245,7 +224,7 @@ export const RequestsTab: React.FC = () => {
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && (req.user_id ?? req.requesting_user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
+                      {req.status === 'pending' && (req.requesting_user_id ?? req.user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
                           className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel swap request"
                         >
