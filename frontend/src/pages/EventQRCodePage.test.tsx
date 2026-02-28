@@ -39,7 +39,7 @@ describe('EventQRCodePage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
   afterEach(() => {
@@ -79,11 +79,12 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Failed to load QR code')).toBeInTheDocument();
+        // getErrorMessage extracts the Error message, so "Network error" is shown
+        expect(screen.getByText('Network error')).toBeInTheDocument();
       });
     });
 
-    it('should show back button when error occurs', async () => {
+    it('should show back link when error occurs', async () => {
       vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
         createMockApiError('Event not found', 404)
       );
@@ -91,24 +92,10 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        const backButton = screen.getByRole('button', { name: /back to event/i });
-        expect(backButton).toBeInTheDocument();
+        const backLink = screen.getByRole('link', { name: /back to event/i });
+        expect(backLink).toBeInTheDocument();
+        expect(backLink).toHaveAttribute('href', '/events/1');
       });
-    });
-
-    it('should navigate back when back button is clicked', async () => {
-      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
-        createMockApiError('Event not found', 404)
-      );
-
-      renderWithRouter(<EventQRCodePage />);
-
-      await waitFor(() => {
-        const backButton = screen.getByRole('button', { name: /back to event/i });
-        backButton.click();
-      });
-
-      expect(mockNavigate).toHaveBeenCalledWith('/events/1');
     });
   });
 
@@ -133,7 +120,8 @@ describe('EventQRCodePage', () => {
       await waitFor(() => {
         expect(screen.getByText('Test Event')).toBeInTheDocument();
         expect(screen.getByText(/Test Location/)).toBeInTheDocument();
-        expect(screen.getByText(/business_meeting/i)).toBeInTheDocument();
+        // event_type is displayed with .replace('_', ' ') → "business meeting"
+        expect(screen.getByText(/business meeting/i)).toBeInTheDocument();
       });
     });
 
@@ -204,7 +192,7 @@ describe('EventQRCodePage', () => {
       });
     });
 
-    it('should not display QR code when check-in is invalid', async () => {
+    it('should show greyed-out QR code when check-in is invalid', async () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
@@ -215,7 +203,8 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+        // QR code is still rendered (greyed out via opacity) so it's ready when the window opens
+        expect(screen.getByTestId('qr-code')).toBeInTheDocument();
       });
     });
 
@@ -319,11 +308,15 @@ describe('EventQRCodePage', () => {
         expect(screen.getByText('Test Event')).toBeInTheDocument();
       });
 
-      // After 30 seconds, error occurs but doesn't crash
+      // After 30 seconds, a refresh occurs and fails silently.
+      // The component keeps showing existing data without crashing.
       vi.advanceTimersByTime(30000);
 
       await waitFor(() => {
-        expect(screen.getByText('Network error')).toBeInTheDocument();
+        // Event data should still be visible (error swallowed on refresh when data exists)
+        expect(screen.getByText('Test Event')).toBeInTheDocument();
+        // The API was called twice (initial + refresh)
+        expect(eventService.getQRCheckInData).toHaveBeenCalledTimes(2);
       });
     });
   });
@@ -344,8 +337,11 @@ describe('EventQRCodePage', () => {
 
   describe('Edge Cases', () => {
     it('should handle missing event ID gracefully', async () => {
-      const originalUseParams = vi.mocked(reactRouterDom.useParams);
-      vi.mocked(reactRouterDom.useParams).mockReturnValue({ id: undefined });
+      // useParams is a plain arrow function in the mock, not a vi.fn(),
+      // so we temporarily replace the module export.
+      const original = reactRouterDom.useParams;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (reactRouterDom as any).useParams = () => ({ id: undefined });
 
       renderWithRouter(<EventQRCodePage />);
 
@@ -353,7 +349,8 @@ describe('EventQRCodePage', () => {
       expect(eventService.getQRCheckInData).not.toHaveBeenCalled();
 
       // Restore original mock
-      vi.mocked(reactRouterDom.useParams).mockImplementation(originalUseParams);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (reactRouterDom as any).useParams = original;
     });
 
     it('should handle null QR data', async () => {

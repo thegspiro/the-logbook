@@ -58,6 +58,11 @@ vi.mock('../stores/authStore', () => ({
   useAuthStore: vi.fn(),
 }));
 
+// Mock useTimezone to return a valid IANA timezone string
+vi.mock('../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
+}));
+
 const mockEvent: Event = {
   id: 'evt-1',
   organization_id: 'org-1',
@@ -341,7 +346,9 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
+        // "Edit" may appear multiple times (e.g. breadcrumb); check at least one button matches
+        const editButtons = screen.getAllByRole('button', { name: /edit/i });
+        expect(editButtons.length).toBeGreaterThanOrEqual(1);
         expect(screen.getByRole('button', { name: /duplicate/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /check in members/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /record times/i })).toBeInTheDocument();

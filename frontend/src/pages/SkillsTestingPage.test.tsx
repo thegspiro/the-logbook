@@ -7,10 +7,6 @@ import { SkillsTestingPage } from './SkillsTestingPage';
 // Mock the store
 const mockLoadTemplates = vi.fn();
 const mockLoadTests = vi.fn();
-const mockLoadSummary = vi.fn();
-const mockDeleteTemplate = vi.fn();
-const mockPublishTemplate = vi.fn();
-const mockDuplicateTemplate = vi.fn();
 
 vi.mock('../stores/skillsTestingStore', () => ({
   useSkillsTestingStore: vi.fn((selector) => {
@@ -35,7 +31,7 @@ vi.mock('../stores/skillsTestingStore', () => ({
           name: 'Ladder Operations',
           description: 'Ground and aerial ladder skills',
           category: 'Fire Operations',
-          status: 'draft',
+          status: 'published',
           visibility: 'all_members',
           version: 1,
           section_count: 2,
@@ -62,21 +58,21 @@ vi.mock('../stores/skillsTestingStore', () => ({
         },
       ],
       testsLoading: false,
-      summary: {
-        total_templates: 5,
-        published_templates: 3,
-        total_tests: 42,
-        tests_this_month: 8,
-        pass_rate: 85,
-        average_score: 88,
-      },
-      summaryLoading: false,
       loadTemplates: mockLoadTemplates,
       loadTests: mockLoadTests,
-      loadSummary: mockLoadSummary,
-      deleteTemplate: mockDeleteTemplate,
-      publishTemplate: mockPublishTemplate,
-      duplicateTemplate: mockDuplicateTemplate,
+    };
+    if (typeof selector === 'function') {
+      return (selector as (s: typeof state) => unknown)(state);
+    }
+    return state;
+  }),
+}));
+
+// Mock auth store
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: vi.fn((selector) => {
+    const state = {
+      user: { id: 'user-1', first_name: 'Test', last_name: 'User' },
     };
     if (typeof selector === 'function') {
       return (selector as (s: typeof state) => unknown)(state);
@@ -92,7 +88,6 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useSearchParams: () => [new URLSearchParams(''), vi.fn()],
   };
 });
 
@@ -108,30 +103,25 @@ describe('SkillsTestingPage', () => {
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Skills Testing');
     });
 
-    it('should display summary cards', () => {
+    it('should display tab navigation with Available Tests and My Results', () => {
       renderWithRouter(<SkillsTestingPage />);
 
-      expect(screen.getByText('Tests This Month')).toBeInTheDocument();
-      expect(screen.getByText('Pass Rate')).toBeInTheDocument();
-      expect(screen.getByText('85%')).toBeInTheDocument();
-      expect(screen.getByText('Avg Score')).toBeInTheDocument();
-      expect(screen.getByText('88%')).toBeInTheDocument();
+      expect(screen.getByText('Available Tests')).toBeInTheDocument();
+      expect(screen.getByText('My Results')).toBeInTheDocument();
     });
 
-    it('should display tab navigation', () => {
+    it('should load templates on mount', () => {
       renderWithRouter(<SkillsTestingPage />);
-
-      expect(screen.getAllByText('Templates').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Test Records')).toBeInTheDocument();
+      expect(mockLoadTemplates).toHaveBeenCalledWith({ status: 'published' });
     });
 
-    it('should load summary on mount', () => {
+    it('should load user test history on mount', () => {
       renderWithRouter(<SkillsTestingPage />);
-      expect(mockLoadSummary).toHaveBeenCalled();
+      expect(mockLoadTests).toHaveBeenCalledWith({ candidate_id: 'user-1' });
     });
   });
 
-  describe('Templates Tab', () => {
+  describe('Available Tests Tab', () => {
     it('should display template list', () => {
       renderWithRouter(<SkillsTestingPage />);
 
@@ -139,29 +129,33 @@ describe('SkillsTestingPage', () => {
       expect(screen.getByText('Ladder Operations')).toBeInTheDocument();
     });
 
-    it('should display template status badges', () => {
+    it('should display template descriptions', () => {
       renderWithRouter(<SkillsTestingPage />);
 
-      expect(screen.getByText('published')).toBeInTheDocument();
-      expect(screen.getByText('draft')).toBeInTheDocument();
-    });
-
-    it('should have a New Template button', () => {
-      renderWithRouter(<SkillsTestingPage />);
-
-      const button = screen.getByRole('button', { name: /new template/i });
-      expect(button).toBeInTheDocument();
+      expect(screen.getByText('SCBA proficiency test')).toBeInTheDocument();
+      expect(screen.getByText('Ground and aerial ladder skills')).toBeInTheDocument();
     });
 
     it('should filter templates by search', async () => {
       const user = userEvent.setup();
       renderWithRouter(<SkillsTestingPage />);
 
-      const searchInput = screen.getByPlaceholderText('Search templates...');
+      const searchInput = screen.getByPlaceholderText('Search available tests...');
       await user.type(searchInput, 'Ladder');
 
       expect(screen.getByText('Ladder Operations')).toBeInTheDocument();
       expect(screen.queryByText('SCBA Evaluation')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('My Results Tab', () => {
+    it('should switch to My Results tab', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillsTestingPage />);
+
+      await user.click(screen.getByText('My Results'));
+
+      expect(screen.getByPlaceholderText('Search your results...')).toBeInTheDocument();
     });
   });
 });

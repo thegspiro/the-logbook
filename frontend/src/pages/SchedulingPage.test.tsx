@@ -48,15 +48,17 @@ describe('SchedulingPage', () => {
   });
 
   describe('Tab Rendering', () => {
+    // Note: Each tab label is rendered twice (one hidden sm:inline, one sm:hidden)
+    // so we use getAllByText to account for both DOM elements in jsdom.
     it('should render core tabs for all users', async () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Schedule')).toBeInTheDocument();
-        expect(screen.getByText('My Shifts')).toBeInTheDocument();
-        expect(screen.getByText('Open Shifts')).toBeInTheDocument();
-        expect(screen.getByText('Requests')).toBeInTheDocument();
-        expect(screen.getByText('Shift Reports')).toBeInTheDocument();
+        expect(screen.getAllByText('Schedule').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('My Shifts').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Open Shifts').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Requests').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Shift Reports').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -68,10 +70,10 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Templates')).toBeInTheDocument();
-        expect(screen.getByText('Patterns')).toBeInTheDocument();
-        expect(screen.getByText('Reports')).toBeInTheDocument();
-        expect(screen.getByText('Settings')).toBeInTheDocument();
+        expect(screen.getAllByText('Templates').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Patterns').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Reports').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -81,7 +83,7 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Schedule')).toBeInTheDocument();
+        expect(screen.getAllByText('Schedule').length).toBeGreaterThanOrEqual(1);
       });
 
       expect(screen.queryByText('Templates')).not.toBeInTheDocument();
@@ -104,7 +106,7 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Schedule')).toBeInTheDocument();
+        expect(screen.getAllByText('Schedule').length).toBeGreaterThanOrEqual(1);
       });
 
       // Navigation arrows should be present
@@ -119,15 +121,14 @@ describe('SchedulingPage', () => {
       const user = userEvent.setup();
 
       await waitFor(() => {
-        expect(screen.getByText('My Shifts')).toBeInTheDocument();
+        expect(screen.getAllByText('My Shifts').length).toBeGreaterThanOrEqual(1);
       });
 
-      await user.click(screen.getByText('My Shifts'));
+      await user.click(screen.getAllByText('My Shifts')[0]);
 
       // The tab should be active (the component lazy-loads the tab content)
       await waitFor(() => {
-        const myShiftsButton = screen.getByText('My Shifts');
-        expect(myShiftsButton).toBeInTheDocument();
+        expect(screen.getAllByText('My Shifts').length).toBeGreaterThanOrEqual(1);
       });
     });
   });
@@ -137,7 +138,7 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
       // The component starts with loading=true, which shows a spinner
       // Since we mock the API to resolve, it should eventually load
-      expect(screen.getByText('Schedule')).toBeInTheDocument();
+      expect(screen.getAllByText('Schedule').length).toBeGreaterThanOrEqual(1);
     });
   });
 });

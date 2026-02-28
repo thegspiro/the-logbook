@@ -11,12 +11,20 @@ import type { EventListItem } from '../types/event';
 vi.mock('../services/api', () => ({
   eventService: {
     getEvents: vi.fn(),
+    getVisibleEventTypes: vi.fn().mockResolvedValue([
+      'business_meeting', 'public_education', 'training', 'social', 'fundraiser', 'ceremony', 'other',
+    ]),
   },
 }));
 
 // Mock auth store
 vi.mock('../stores/authStore', () => ({
   useAuthStore: vi.fn(),
+}));
+
+// Mock useTimezone to return a valid IANA timezone string
+vi.mock('../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
 }));
 
 const mockEvents: EventListItem[] = [
@@ -146,9 +154,11 @@ describe('EventsPage', () => {
       renderWithRouter(<EventsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Business Meeting')).toBeInTheDocument();
-        expect(screen.getByText('Training')).toBeInTheDocument();
-        expect(screen.getByText('Fundraiser')).toBeInTheDocument();
+        // "Business Meeting" etc. appear both as filter tabs and event type badges;
+        // use getAllByText to confirm they appear at least once in badge form.
+        expect(screen.getAllByText('Business Meeting').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Training').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Fundraiser').length).toBeGreaterThanOrEqual(1);
       });
     });
 

@@ -426,8 +426,11 @@ describe('EventSelfCheckInPage', () => {
 
   describe('Edge Cases', () => {
     it('should handle missing event ID gracefully', async () => {
-      const originalUseParams = vi.mocked(reactRouterDom.useParams);
-      vi.mocked(reactRouterDom.useParams).mockReturnValue({ id: undefined });
+      // useParams is a plain arrow function in the mock, not a vi.fn(),
+      // so we temporarily replace the module export and restore it afterward.
+      const original = reactRouterDom.useParams;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (reactRouterDom as any).useParams = () => ({ id: undefined });
 
       renderWithRouter(<EventSelfCheckInPage />);
 
@@ -435,7 +438,8 @@ describe('EventSelfCheckInPage', () => {
       expect(eventService.getQRCheckInData).not.toHaveBeenCalled();
 
       // Restore original mock
-      vi.mocked(reactRouterDom.useParams).mockImplementation(originalUseParams);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (reactRouterDom as any).useParams = original;
     });
 
     it('should handle missing location in event data', async () => {

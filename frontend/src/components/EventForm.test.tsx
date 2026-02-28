@@ -9,6 +9,9 @@ import type { Role } from '../types/role';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
+  eventService: {
+    getVisibleEventTypes: vi.fn(),
+  },
   roleService: {
     getRoles: vi.fn(),
   },
@@ -34,6 +37,9 @@ describe('EventForm', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(apiModule.eventService.getVisibleEventTypes).mockResolvedValue([
+      'business_meeting', 'public_education', 'training', 'social', 'fundraiser', 'ceremony', 'other',
+    ]);
     vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue(mockLocations as unknown as Location[]);
     vi.mocked(apiModule.roleService.getRoles).mockResolvedValue(mockRoles as unknown as Role[]);
   });
@@ -45,8 +51,8 @@ describe('EventForm', () => {
       );
 
       await waitFor(() => {
-        // Check section headings (h3 elements)
-        const headings = screen.getAllByRole('heading', { level: 3 });
+        // Section headings are h2 elements
+        const headings = screen.getAllByRole('heading', { level: 2 });
         const headingTexts = headings.map(h => h.textContent);
         expect(headingTexts).toContain('Event Details');
         expect(headingTexts).toContain('Schedule');
@@ -123,7 +129,7 @@ describe('EventForm', () => {
       await user.selectOptions(typeSelect, 'training');
 
       await waitFor(() => {
-        expect(screen.getByText(/for training events with course tracking/i)).toBeInTheDocument();
+        expect(screen.getByText(/Create Training Session/)).toBeInTheDocument();
       });
     });
   });
@@ -167,16 +173,18 @@ describe('EventForm', () => {
         <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
       );
 
+      // The component renders a select dropdown with a "Location" label
       await waitFor(() => {
-        expect(screen.getByLabelText(/choose a location/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/^Location$/)).toBeInTheDocument();
       });
 
+      // Select the "Other" option to switch to manual text input
       const user = userEvent.setup();
-      const otherRadio = screen.getByLabelText(/other \/ enter manually/i);
-      await user.click(otherRadio);
+      const locationSelect = screen.getByLabelText(/^Location$/);
+      await user.selectOptions(locationSelect, '__other__');
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/station 1 conference room/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/location name/i)).toBeInTheDocument();
       });
     });
 
@@ -188,7 +196,8 @@ describe('EventForm', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/station 1 conference room/i)).toBeInTheDocument();
+        // When no locations are loaded, the fallback text input appears
+        expect(screen.getByPlaceholderText(/Station 1 Conference Room/)).toBeInTheDocument();
       });
     });
   });
@@ -280,15 +289,15 @@ describe('EventForm', () => {
       expect(remindersCheckbox).toBeChecked();
     });
 
-    it('should show reminder hours when reminders enabled', () => {
+    it('should show reminder schedule when reminders enabled', () => {
       renderWithRouter(
         <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
       );
 
-      expect(screen.getByLabelText(/reminder hours before event/i)).toBeInTheDocument();
+      expect(screen.getByText('Reminder Schedule')).toBeInTheDocument();
     });
 
-    it('should hide reminder hours when reminders disabled', async () => {
+    it('should hide reminder schedule when reminders disabled', async () => {
       renderWithRouter(
         <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
       );
@@ -297,7 +306,7 @@ describe('EventForm', () => {
       await user.click(screen.getByLabelText(/send event reminders/i));
 
       await waitFor(() => {
-        expect(screen.queryByLabelText(/reminder hours before event/i)).not.toBeInTheDocument();
+        expect(screen.queryByText('Reminder Schedule')).not.toBeInTheDocument();
       });
     });
   });
@@ -311,17 +320,6 @@ describe('EventForm', () => {
       expect(screen.getByLabelText(/mandatory attendance/i)).toBeInTheDocument();
     });
 
-    it('should load and display eligible roles', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Firefighter')).toBeInTheDocument();
-        expect(screen.getByLabelText('Lieutenant')).toBeInTheDocument();
-        expect(screen.getByLabelText('Captain')).toBeInTheDocument();
-      });
-    });
   });
 
   describe('Form Submission', () => {

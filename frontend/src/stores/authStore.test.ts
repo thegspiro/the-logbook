@@ -94,9 +94,8 @@ describe('authStore', () => {
   // ---- login ----
 
   describe('login', () => {
-    it('stores tokens in localStorage and calls loadUser on success', async () => {
+    it('stores session flag in localStorage and calls loadUser on success', async () => {
       mockLogin.mockResolvedValue(fakeTokenResponse);
-      mockDecodeJwt.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -104,8 +103,8 @@ describe('authStore', () => {
       });
 
       expect(mockLogin).toHaveBeenCalledWith({ username: 'testuser', password: 'password123' });
-      expect(localStorage.getItem('access_token')).toBe('fake-access-token');
-      expect(localStorage.getItem('refresh_token')).toBe('fake-refresh-token');
+      // SEC: Tokens are now in httpOnly cookies — only a session flag is stored
+      expect(localStorage.getItem('has_session')).toBe('1');
       expect(mockGetCurrentUser).toHaveBeenCalled();
 
       const state = getState();
@@ -134,9 +133,8 @@ describe('authStore', () => {
   // ---- register ----
 
   describe('register', () => {
-    it('stores tokens and loads user on success', async () => {
+    it('stores session flag and loads user on success', async () => {
       mockRegister.mockResolvedValue(fakeTokenResponse);
-      mockDecodeJwt.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -150,7 +148,8 @@ describe('authStore', () => {
       });
 
       expect(mockRegister).toHaveBeenCalled();
-      expect(localStorage.getItem('access_token')).toBe('fake-access-token');
+      // SEC: Tokens are now in httpOnly cookies — only a session flag is stored
+      expect(localStorage.getItem('has_session')).toBe('1');
       expect(getState().isAuthenticated).toBe(true);
     });
 
@@ -227,20 +226,23 @@ describe('authStore', () => {
       expect(getState().user).toBeNull();
     });
 
-    it('clears tokens and returns early when token is expired', async () => {
-      localStorage.setItem('access_token', 'expired-token');
-      localStorage.setItem('refresh_token', 'refresh');
+    it('cleans up legacy tokens and attempts session via cookie', async () => {
+      // Legacy tokens in localStorage get cleaned up and replaced with has_session
+      localStorage.setItem('access_token', 'legacy-token');
+      localStorage.setItem('refresh_token', 'legacy-refresh');
 
-      // exp in the past
-      mockDecodeJwt.mockReturnValue({ exp: Math.floor(Date.now() / 1000) - 3600 });
+      // The cookie-based session may or may not be valid; simulate failure
+      mockGetCurrentUser.mockRejectedValue(new Error('Unauthorized'));
 
       await act(async () => {
         await getState().loadUser();
       });
 
+      // Legacy tokens should be cleaned up
       expect(localStorage.getItem('access_token')).toBeNull();
       expect(localStorage.getItem('refresh_token')).toBeNull();
-      expect(mockGetCurrentUser).not.toHaveBeenCalled();
+      // Store attempted the API call via cookie (not the legacy JWT)
+      expect(mockGetCurrentUser).toHaveBeenCalled();
       expect(getState().isAuthenticated).toBe(false);
     });
 

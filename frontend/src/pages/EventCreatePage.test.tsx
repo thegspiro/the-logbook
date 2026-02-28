@@ -19,6 +19,7 @@ function makeApiError(message: string, status = 400) {
 vi.mock('../services/api', () => ({
   eventService: {
     createEvent: vi.fn(),
+    getVisibleEventTypes: vi.fn().mockResolvedValue([]),
   },
   roleService: {
     getRoles: vi.fn().mockResolvedValue([]),
@@ -52,11 +53,10 @@ describe('EventCreatePage', () => {
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Create Event');
     });
 
-    it('should display breadcrumb navigation', () => {
+    it('should display back to events link', () => {
       renderWithRouter(<EventCreatePage />);
 
-      expect(screen.getByText('Events')).toBeInTheDocument();
-      expect(screen.getByText('Create Event', { selector: 'li' })).toBeInTheDocument();
+      expect(screen.getByText('Back to Events')).toBeInTheDocument();
     });
 
     it('should display the EventForm component', () => {

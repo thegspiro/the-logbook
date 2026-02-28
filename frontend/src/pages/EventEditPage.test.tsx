@@ -20,6 +20,7 @@ vi.mock('../services/api', () => ({
   eventService: {
     getEvent: vi.fn(),
     updateEvent: vi.fn(),
+    getVisibleEventTypes: vi.fn().mockResolvedValue([]),
   },
   roleService: {
     getRoles: vi.fn().mockResolvedValue([]),
@@ -116,15 +117,14 @@ describe('EventEditPage', () => {
       });
     });
 
-    it('should display breadcrumb with event title', async () => {
+    it('should display back to event link', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
 
       renderWithRouter(<EventEditPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Events')).toBeInTheDocument();
-        expect(screen.getByText('Existing Event')).toBeInTheDocument();
-        expect(screen.getByText('Edit')).toBeInTheDocument();
+        // The component uses a "Back to Event" link instead of breadcrumbs
+        expect(screen.getByText(/Back to Event/i)).toBeInTheDocument();
       });
     });
 
@@ -231,14 +231,14 @@ describe('EventEditPage', () => {
       });
     });
 
-    it('should have proper breadcrumb navigation', async () => {
+    it('should have proper back navigation', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
 
       renderWithRouter(<EventEditPage />);
 
       await waitFor(() => {
-        const breadcrumb = screen.getByRole('navigation', { name: /breadcrumb/i });
-        expect(breadcrumb).toBeInTheDocument();
+        // The component uses a back link instead of breadcrumb navigation
+        expect(screen.getByText(/Back to Event/i)).toBeInTheDocument();
       });
     });
   });

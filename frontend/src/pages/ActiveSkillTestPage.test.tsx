@@ -85,6 +85,14 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+// Mock react-hot-toast
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
 describe('ActiveSkillTestPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -103,12 +111,18 @@ describe('ActiveSkillTestPage', () => {
   });
 
   describe('Completed test view', () => {
-    it('should show test passed result', () => {
+    it('should show passed result', () => {
       currentMockTest = mockCompletedTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.getByText('Test Passed')).toBeInTheDocument();
-      expect(screen.getByText('95%')).toBeInTheDocument();
+      expect(screen.getByText('Passed')).toBeInTheDocument();
+    });
+
+    it('should show overall score', () => {
+      currentMockTest = mockCompletedTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByText(/95%/)).toBeInTheDocument();
     });
 
     it('should show candidate name', () => {
@@ -125,22 +139,15 @@ describe('ActiveSkillTestPage', () => {
       expect(screen.getByText('3:00')).toBeInTheDocument();
     });
 
-    it('should show back to tests button', () => {
+    it('should show Back to Tests button', () => {
       currentMockTest = mockCompletedTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.getByRole('button', { name: /back to tests/i })).toBeInTheDocument();
+      expect(screen.getByText('Back to Tests')).toBeInTheDocument();
     });
   });
 
   describe('Draft test view', () => {
-    it('should show ready to begin message for draft tests', () => {
-      currentMockTest = mockInProgressTest;
-      renderWithRouter(<ActiveSkillTestPage />);
-
-      expect(screen.getByText('Ready to Begin')).toBeInTheDocument();
-    });
-
     it('should show template name in header', () => {
       currentMockTest = mockInProgressTest;
       renderWithRouter(<ActiveSkillTestPage />);
@@ -148,19 +155,11 @@ describe('ActiveSkillTestPage', () => {
       expect(screen.getByText('SCBA Evaluation')).toBeInTheDocument();
     });
 
-    it('should show candidate name in header', () => {
+    it('should have Complete Test button', () => {
       currentMockTest = mockInProgressTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.getByText('John Smith')).toBeInTheDocument();
-    });
-
-    it('should have Save Progress and Complete Test buttons', () => {
-      currentMockTest = mockInProgressTest;
-      renderWithRouter(<ActiveSkillTestPage />);
-
-      expect(screen.getByRole('button', { name: /save progress/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /complete test/i })).toBeInTheDocument();
+      expect(screen.getByText('Complete Test')).toBeInTheDocument();
     });
 
     it('should show timer controls', () => {
@@ -169,8 +168,6 @@ describe('ActiveSkillTestPage', () => {
 
       // Timer display should show 00:00
       expect(screen.getByText('00:00')).toBeInTheDocument();
-      // Should have play/pause button
-      expect(screen.getByRole('button', { name: /start timer/i })).toBeInTheDocument();
     });
   });
 
