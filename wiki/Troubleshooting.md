@@ -29,6 +29,12 @@ This guide covers common issues and their solutions for The Logbook deployment.
 23. [Elections Detail & Voting Issues](#elections-detail--voting-issues)
 24. [Shift Pattern & Calendar Issues](#shift-pattern--calendar-issues)
 25. [Organization Settings Issues](#organization-settings-issues)
+26. [Brute-Force & Rate Limiting](#brute-force--rate-limiting)
+27. [Navigation & Module Enablement](#navigation--module-enablement)
+28. [Frontend Cache Refresh](#frontend-cache-refresh)
+29. [Scheduling Module Refactor](#scheduling-module-refactor)
+30. [Security Alerts & Audit Logs](#security-alerts--audit-logs)
+31. [Accessibility & Theme Contrast](#accessibility--theme-contrast)
 
 ---
 
@@ -1692,3 +1698,87 @@ docker-compose up -d
 ### Problem: Non-critical criteria showing as "FAIL"
 
 **Status (Fixed 2026-02-28):** Non-critical criteria that are unchecked now display "Not Completed" instead of "FAIL".
+
+---
+
+## Brute-Force & Rate Limiting
+
+### Problem: "Too many attempts" on login page
+
+**Cause:** Client-side rate limiting enforces a cooldown after rapid login submissions. Backend also applies IP-based and per-user lockout after repeated failures.
+
+**Fix:** Wait for the countdown timer (30 seconds client-side). Backend lockout lasts 30 minutes. Contact admin if persistent.
+
+### Problem: Forgot password rate limited
+
+**Fix:** The forgot-password page also enforces rate limiting. Wait for the displayed countdown before retrying.
+
+---
+
+## Navigation & Module Enablement
+
+### Problem: Disabled modules visible in navigation
+
+**Status (Fixed 2026-02-28):** SideNavigation and TopNavigation now dynamically check module enablement settings. Clear browser cache if stale items remain.
+
+### Problem: TopNavigation out of sync with SideNavigation
+
+**Status (Fixed 2026-02-28):** Both navigations synced. Both show same pages based on permissions and module settings.
+
+### Problem: Logo click goes to wrong page
+
+**Status (Fixed 2026-02-28):** Logo now navigates to Dashboard.
+
+---
+
+## Frontend Cache Refresh
+
+### Problem: Users see old version after deployment
+
+**Status (Improved 2026-02-28):** `useAppUpdate` hook proactively detects new versions via build timestamps. `UpdateNotification` bar prompts users to refresh. Fallback: `Ctrl+Shift+R`.
+
+---
+
+## Scheduling Module Refactor
+
+### Problem: Scheduling API imports broken after update
+
+**Cause:** Scheduling API moved from `services/api.ts` to `modules/scheduling/services/api.ts`.
+
+**Fix:** Update imports to use the new path.
+
+### Problem: Scheduling state not updating
+
+**Cause:** State moved from component-level to a dedicated Zustand store (`schedulingStore`).
+
+**Fix:** Use `useSchedulingStore()` hook and call store actions on mount.
+
+---
+
+## Security Alerts & Audit Logs
+
+### Problem: Security alerts not appearing
+
+**Cause:** New `security_alerts` table requires migration.
+
+**Fix:** Run `alembic upgrade head` and restart backend.
+
+### Problem: Audit log export returns empty
+
+**Fix:** Pass `start_date` and `end_date` query params. Requires `security.manage` permission.
+
+### Problem: Audit integrity check fails after archival
+
+**Fix:** Use the `rehash_chain` endpoint to rebuild the hash chain.
+
+---
+
+## Accessibility & Theme Contrast
+
+### Problem: Poor contrast in dark mode
+
+**Status (Fixed 2026-02-28):** Comprehensive audit fixed contrast across QR pages, forms, onboarding, error boundary, pipeline pages, and skill test pages.
+
+### Problem: Mobile layout issues
+
+**Status (Improved 2026-02-28):** Responsiveness improved across 17+ pages. Use landscape for tables, ensure zoom is 100%.

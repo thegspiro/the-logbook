@@ -6,6 +6,16 @@ The Logbook is designed with security as a core principle, implementing industry
 
 ### Recent Security Updates (2026-02-28)
 
+- **Brute-force protection**: Progressive rate limiting on login with IP-based and per-user lockout, exponential backoff, frontend rate limiting on login/forgot-password pages
+- **IDOR fixes**: Organization-scoped validation on documents and training endpoints prevents cross-org data access
+- **Open redirect prevention**: API response interceptor validates redirect URLs against allowed origins
+- **Security alert persistence**: New `SecurityAlert` database model stores alerts with severity, type, source IP, and resolution status
+- **Audit log export**: New endpoint for exporting audit logs with date range filters
+- **Audit archival**: Scheduled task archives old audit entries while maintaining hash chain integrity; `rehash_chain` endpoint rebuilds the chain
+- **Audit deletion logging**: All audit log deletions are themselves logged for accountability
+- **Hardened file logs**: Secure permissions and restricted access paths for file-based log rotation
+- **HIPAA cache exclusions expanded**: `/admin-hours/`, `/facilities/`, `/organizations/`, `/documents/`, `/training/` added to `UNCACHEABLE_PREFIXES`
+- **Shared API client factory**: Module API services use `createApiClient()` with consistent interceptors, eliminating ~300 lines of duplicated security config
 - **Encryption at rest**: AES-256 encryption for sensitive database fields (emergency contacts, medical information, PII) using `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables
 - **Docker hardening**: Read-only root filesystems, `no-new-privileges` security option, dropped capabilities, explicit tmpfs mounts
 - **Content Security Policy**: Tightened CSP with strict `script-src` and `style-src` policies; removed `upgrade-insecure-requests` directive

@@ -120,18 +120,26 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
-### February 2026 (Feb 28) - Member ID Card, Skills Testing Enhancements, Shift Presets & Security Hardening
+### February 2026 (Feb 28) — Scheduling Refactor, Security Hardening, Mobile, Accessibility & Code Quality
 
-- **Digital Member ID Card**: New `/member-id` page with QR code, Code128 barcode, print-optimized styles for wallet-sized cards, barcode scanner, and keyboard shortcuts
-- **Skills Testing enhancements**: Statement criteria type, practice mode, test visibility controls, point-based scoring, post-completion review screen, test record deletion, non-critical criteria display fix, UTC timezone fix
-- **Dashboard improvements**: Shifts split into "My Upcoming Shifts" and "Open Shifts" sections; shift signup error extraction fix
-- **Fire department shift pattern presets**: Built-in patterns (24/48, 48/96, Kelly Schedule, California 3-Platoon, ABCAB) plus custom pattern builder with 30-day preview
-- **Admin hours improvements**: Prominent clock-out card, pagination, filters, bulk approve, CSV export, integration into Dashboard, Reports, Member Profile, and Department Overview
-- **Security hardening**: AES-256 encryption at rest, Docker hardening (read-only filesystem, no-new-privileges), CSP tightening, Redis ACL, XSS fix in email templates
-- **HIPAA language corrections**: Replaced self-declared compliance claims with accurate language across the codebase
-- **Dynamic import fix**: `lazyWithRetry()` utility for handling chunk load failures after deployments
-- **Platform analytics fix**: camelCase serialization on response schemas
-- **Vehicle linking**: Shift templates linked to actual department vehicles; auto-default shift officer from Officer position
+- **Scheduling module refactor**: Extracted from monolithic page into proper module architecture with dedicated Zustand store, API service, settings panel, notifications panel, and tests
+- **Shared API client factory**: `createApiClient()` eliminates ~300 lines of duplicated axios setup across module services
+- **Brute-force protection**: Progressive rate limiting on login (IP-based + per-user lockout), frontend rate limiting on login/forgot-password pages
+- **IDOR & open redirect fixes**: Organization-scoped validation on documents/training endpoints; redirect URL validation in API interceptor
+- **Security alert persistence**: Alerts stored in database with acknowledge/resolve workflow; audit log export, archival, and deletion logging; `rehash_chain` endpoint
+- **Mobile responsiveness**: Improved across 17+ pages (Dashboard, Settings, Apparatus, Members, Inventory, Scheduling, Pipeline, Pagination)
+- **Frontend cache refresh detection**: `useAppUpdate` hook + `UpdateNotification` component for proactive version detection after deployments
+- **Design accessibility audit**: Color contrast fixes across light/dark/high-contrast themes; new `useMediaQuery` hook; improved ARIA on modals, forms, and navigation
+- **Navigation module enablement**: SideNavigation and TopNavigation dynamically respect module enablement settings; synced page lists
+- **132 test failures → 0**: Fixed all pre-existing test failures across 14 test files
+- **Data integrity**: Enum synchronization, election schemas, scheduling schemas, training model relationships
+- **Backend formatting**: Black formatting across 35 files; missing imports fixed
+- **Digital Member ID Card**: QR code, Code128 barcode, print-optimized wallet card, barcode scanner, rank/member-since display, org logo fix
+- **Skills Testing enhancements**: Statement criteria, practice mode, test visibility, point-based scoring, post-completion review, test deletion
+- **Fire department shift pattern presets**: 24/48, 48/96, Kelly Schedule, California 3-Platoon, ABCAB plus custom builder
+- **Admin hours improvements**: Clock-out card, pagination, filters, bulk approve, CSV export, Dashboard/Reports/Profile integration
+- **Security hardening**: AES-256 encryption at rest, Docker hardening, CSP tightening, Redis ACL, XSS fix
+- **Dynamic import fix**: `lazyWithRetry()` for chunk load failures after deployments
 
 ### February 2026 (Feb 27) - Admin Hours, Elections Enhancements, Scheduling Hardening & Code Quality
 

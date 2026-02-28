@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-28 (added Member ID Card, skills testing enhancements, dashboard shift split, shift pattern presets, admin hours improvements, security hardening, dynamic import fix, platform analytics fix; plus all previous updates)
+**Last Updated**: 2026-02-28 (added scheduling module refactor, brute-force protection, IDOR/open-redirect fixes, security alert persistence, audit log export/archival, mobile responsiveness, cache-refresh detection, navigation module enablement, design accessibility audit, 132 test failures fixed, shared API client factory, Member ID Card improvements; plus all previous updates)
 
 ---
 
@@ -44,7 +44,13 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 30. [Member ID Card Issues](#member-id-card-issues)
 31. [Dynamic Import / Chunk Load Issues](#dynamic-import--chunk-load-issues)
 32. [Platform Analytics Issues](#platform-analytics-issues)
-33. [Getting Help](#getting-help)
+33. [Brute-Force & Rate Limiting Issues](#brute-force--rate-limiting-issues)
+34. [Navigation & Module Enablement Issues](#navigation--module-enablement-issues)
+35. [Frontend Cache Refresh Issues](#frontend-cache-refresh-issues)
+36. [Scheduling Module Refactor Issues](#scheduling-module-refactor-issues)
+37. [Security Alert & Audit Issues](#security-alert--audit-issues)
+38. [Accessibility & Theme Issues](#accessibility--theme-issues)
+39. [Getting Help](#getting-help)
 
 ---
 
@@ -3291,6 +3297,153 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 3. Backend analytics service encounters null values from empty tables
 
 **Fix**: Ensure there is usage activity (logins, page views, etc.) for data to appear. The analytics service is now null-safe and will show zero counts instead of crashing on empty data.
+
+---
+
+## Brute-Force & Rate Limiting Issues
+
+### Problem: Login shows "Too many attempts" even after waiting
+
+**Cause**: The frontend enforces client-side rate limiting on the login and forgot-password pages. After multiple rapid submissions, a cooldown timer prevents further attempts.
+
+**Fix**: Wait for the countdown timer to reach zero. The default cooldown is 30 seconds after 5 rapid attempts. The timer is displayed on the login form.
+
+**If the issue persists**: The backend also enforces IP-based and per-user rate limiting. If your IP has been temporarily locked out (30-minute lockout after exceeding the threshold), wait for the lockout period to expire or contact your administrator.
+
+---
+
+### Problem: "Account temporarily locked" error on login
+
+**Cause**: Progressive rate limiting on the backend detected too many failed login attempts for this account.
+
+**Fix**:
+1. Wait 30 minutes for the automatic lockout to expire
+2. Ensure you are using the correct credentials
+3. If you've forgotten your password, use the "Forgot Password" flow (also rate-limited, but separate from login)
+4. Contact your administrator if the lockout persists — they can review security alerts in the Security Monitoring dashboard
+
+---
+
+## Navigation & Module Enablement Issues
+
+### Problem: Navigation shows pages for disabled modules
+
+**Status (Fixed)**: SideNavigation and TopNavigation now dynamically check module enablement settings from the organization configuration. Menu items for disabled modules are hidden automatically.
+
+**If you still see stale navigation**: Clear your browser cache and reload. The navigation state is fetched from the API on each page load.
+
+---
+
+### Problem: TopNavigation missing pages that appear in SideNavigation
+
+**Status (Fixed)**: TopNavigation has been synced with SideNavigation. Both now show the same set of pages based on the user's permissions and module enablement.
+
+---
+
+### Problem: Logo click navigates to wrong page
+
+**Status (Fixed)**: The logo in both navigation components now correctly navigates to the Dashboard (`/dashboard`).
+
+---
+
+## Frontend Cache Refresh Issues
+
+### Problem: App shows old version after deployment
+
+**Status (Improved)**: A proactive cache-refresh detection system has been added. The `useAppUpdate` hook periodically checks if a newer version has been deployed by comparing build timestamps. When a new version is detected, an `UpdateNotification` bar appears prompting the user to refresh.
+
+**If the notification doesn't appear**: Hard refresh with `Ctrl+Shift+R` or clear the browser cache. For PWA installs, close and reopen the app.
+
+**For administrators**: The frontend nginx config now includes an `X-App-Version` header. Vite injects a `BUILD_TIMESTAMP` meta tag into `index.html` at build time.
+
+---
+
+## Scheduling Module Refactor Issues
+
+### Problem: Scheduling API calls failing after update
+
+**Cause**: The scheduling module's API service has been moved from `frontend/src/services/api.ts` to `frontend/src/modules/scheduling/services/api.ts`. If you have custom code that imports scheduling functions from the global API service, update your imports.
+
+**Fix**: Update imports to use the new module-scoped service:
+```typescript
+// Before
+import { schedulingService } from '@/services/api';
+
+// After
+import { schedulingService } from '@/modules/scheduling/services/api';
+```
+
+---
+
+### Problem: Scheduling store state not updating
+
+**Cause**: The scheduling module now uses a dedicated Zustand store (`schedulingStore.ts`) instead of local component state.
+
+**Fix**: Ensure components use the store via `useSchedulingStore()` hook. Check that the store is being initialized correctly by verifying that `fetchShifts`, `fetchTemplates`, or `fetchPatterns` actions are called on mount.
+
+---
+
+## Security Alert & Audit Issues
+
+### Problem: Security alerts not appearing in the dashboard
+
+**Cause**: Security alerts are now persisted to the database (new `security_alerts` table). If the migration hasn't been run, alerts won't be stored.
+
+**Fix**:
+```bash
+cd backend
+alembic upgrade head
+docker-compose restart backend
+```
+
+---
+
+### Problem: Audit log export returns empty
+
+**Cause**: The new audit log export endpoint requires date range parameters and appropriate permissions.
+
+**Fix**: Ensure you are passing `start_date` and `end_date` query parameters and that you have `security.manage` permission.
+
+---
+
+### Problem: Audit log integrity check fails after archival
+
+**Cause**: After audit archival (which moves old entries to cold storage), the hash chain may need to be rebuilt.
+
+**Fix**: Use the `rehash_chain` endpoint to rebuild the hash chain:
+```bash
+curl -X POST http://YOUR-IP:3001/api/v1/security/audit-log/rehash-chain \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+---
+
+## Accessibility & Theme Issues
+
+### Problem: Poor contrast in dark mode on certain pages
+
+**Status (Fixed)**: A comprehensive accessibility audit was performed across all pages in light, dark, and high-contrast themes. Color contrast issues have been fixed on:
+- QR code pages (event QR, self-check-in)
+- Onboarding pages (organization setup, progress indicator)
+- Form field renderer (all input types)
+- Error boundary page
+- Pipeline pages (create pipeline, data whitelist)
+- Skill test active page
+- Documents page
+- Expiring certs tab
+
+**If you notice remaining contrast issues**: Check that your browser is not applying its own dark mode override. The app uses the `class` strategy for dark mode, controlled via **My Account > Appearance**.
+
+---
+
+### Problem: Layout breaks on mobile devices
+
+**Status (Improved)**: Mobile responsiveness has been improved across 17+ pages and components including the Dashboard, Settings, Apparatus List, Member Profile, Inventory, Scheduling Reports, Prospective Pipeline, Pagination, Admin Hours, and more.
+
+**Tips**:
+- Use landscape orientation for complex tables
+- Check that browser zoom is at 100%
+- Clear cache if layout appears stuck on an old version
 
 ---
 

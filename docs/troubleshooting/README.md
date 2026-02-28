@@ -2868,6 +2868,67 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 
 ---
 
+## Brute-Force & Rate Limiting Issues (2026-02-28)
+
+### Problem: "Too many attempts" on login page
+**Cause:** Client-side and server-side rate limiting. Frontend enforces a cooldown after rapid submissions; backend locks IPs/users after repeated failures.
+**Fix:** Wait for the cooldown timer (30s client-side, 30min server-side lockout). Contact admin if persistent.
+
+### Problem: Forgot password page shows rate limit error
+**Fix:** The forgot-password page also enforces rate limiting. Wait for the displayed countdown timer before retrying.
+
+---
+
+## Navigation & Module Enablement Issues (2026-02-28)
+
+### Problem: Disabled modules still appear in navigation
+**Status (Fixed):** Both SideNavigation and TopNavigation now dynamically check module enablement settings. Clear browser cache if stale items remain.
+
+### Problem: TopNavigation missing pages
+**Status (Fixed):** TopNavigation synced with SideNavigation. Both show the same pages based on permissions and module settings.
+
+---
+
+## Frontend Cache Refresh Issues (2026-02-28)
+
+### Problem: Users don't see new version after deployment
+**Status (Improved):** `useAppUpdate` hook now proactively detects new versions via build timestamps. An `UpdateNotification` bar prompts users to refresh. Fallback: `Ctrl+Shift+R`.
+
+---
+
+## Scheduling Module Architecture (2026-02-28)
+
+### Problem: Scheduling API imports broken after refactor
+**Cause:** Scheduling API moved from `services/api.ts` to `modules/scheduling/services/api.ts`.
+**Fix:** Update imports to use the new module-scoped service path.
+
+### Problem: Scheduling state not updating
+**Cause:** State moved from component-level to a dedicated Zustand store.
+**Fix:** Use `useSchedulingStore()` hook and ensure store actions (`fetchShifts`, etc.) are called on mount.
+
+---
+
+## Security Alert & Audit Issues (2026-02-28)
+
+### Problem: Security alerts not persisting
+**Cause:** New `security_alerts` database table requires migration.
+**Fix:** `alembic upgrade head` then restart backend.
+
+### Problem: Audit log integrity check fails after archival
+**Fix:** Use the `rehash_chain` API endpoint to rebuild the hash chain after audit archival.
+
+---
+
+## Accessibility & Theme Issues (2026-02-28)
+
+### Problem: Poor contrast in dark mode
+**Status (Fixed):** Comprehensive accessibility audit fixed contrast across QR pages, forms, onboarding, error boundary, and more.
+
+### Problem: Mobile layout issues
+**Status (Improved):** Responsiveness improved across 17+ pages. Use landscape for tables, ensure zoom is 100%.
+
+---
+
 **Most Common Fix:** 90% of issues are resolved by:
 1. Updating `frontend/.env` with correct `VITE_API_URL`
 2. Running `docker-compose build --no-cache frontend`

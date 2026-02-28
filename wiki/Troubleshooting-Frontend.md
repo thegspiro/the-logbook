@@ -237,4 +237,94 @@ If ESLint reports new warnings after adding code, fix them before committing. Th
 
 ---
 
+## Mobile Responsiveness Improvements (2026-02-28)
+
+Mobile responsiveness has been improved across 17+ pages and components:
+
+- Pagination collapses to prev/next on small screens
+- Settings page uses responsive grid
+- Apparatus list toggles card/table layout
+- Member profile sections stack vertically
+- Dashboard cards reflow for small viewports
+- Inventory tables scroll horizontally
+- Pipeline views adapt to screen width
+- Global CSS adds `scrollbar-gutter: stable`
+
+If layout appears broken, clear cache and hard refresh.
+
+---
+
+## Navigation Module Enablement (2026-02-28)
+
+### Problem: Disabled modules visible in navigation
+
+**Status (Fixed):** SideNavigation and TopNavigation now dynamically check org module enablement settings. Menu items for disabled modules are hidden.
+
+### Problem: TopNavigation out of sync with SideNavigation
+
+**Status (Fixed):** Both navigations now render the same page set based on permissions and module enablement.
+
+---
+
+## Frontend Cache Refresh Detection (2026-02-28)
+
+### Problem: Users see stale app version after deployment
+
+**Status (Improved):** A proactive version detection system has been added:
+- `useAppUpdate` hook checks for new versions via build timestamp in HTML `<meta>` tag
+- `UpdateNotification` component shows a refresh prompt when a new version is detected
+- Nginx sends `X-App-Version` header
+- Vite build plugin injects `BUILD_TIMESTAMP` at build time
+
+If the notification doesn't appear, hard refresh with `Ctrl+Shift+R`.
+
+---
+
+## Brute-Force Rate Limiting on Login (2026-02-28)
+
+### Problem: Login page shows "Too many attempts" countdown
+
+**Cause:** Client-side rate limiting prevents rapid-fire login attempts. After 5 rapid submissions, a 30-second cooldown activates.
+
+**Fix:** Wait for the countdown to expire. The backend also enforces IP-based and per-user rate limiting with a 30-minute lockout.
+
+---
+
+## Scheduling Module Refactor (2026-02-28)
+
+### Problem: Scheduling imports broken after update
+
+**Cause:** The scheduling API service moved from `services/api.ts` to `modules/scheduling/services/api.ts`.
+
+**Fix:** Update imports:
+```typescript
+import { schedulingService } from '@/modules/scheduling/services/api';
+```
+
+### Problem: Scheduling component state not updating
+
+**Cause:** State moved from local component state to a dedicated Zustand store (`schedulingStore`).
+
+**Fix:** Use `useSchedulingStore()` and ensure store actions are called on component mount.
+
+---
+
+## Accessibility & Theme Fixes (2026-02-28)
+
+### Contrast issues in dark mode
+
+**Status (Fixed):** Comprehensive audit fixed color contrast across:
+- QR code pages (event QR, self-check-in)
+- Onboarding pages
+- Form field renderer
+- Error boundary
+- Pipeline pages
+- Skill test active page
+
+### New `useMediaQuery` hook
+
+A new `useMediaQuery` hook replaces inline `window.matchMedia` calls for responsive behavior in components.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

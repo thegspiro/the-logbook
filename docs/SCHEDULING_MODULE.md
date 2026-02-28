@@ -29,13 +29,27 @@ The Scheduling module manages the full shift lifecycle for fire departments and 
 
 ### Frontend
 
+The scheduling frontend uses a modular architecture:
+
 ```
+frontend/src/modules/scheduling/
+├── index.ts                        # Barrel export (routes, components, types)
+├── services/
+│   └── api.ts                      # Module-scoped API service (uses createApiClient)
+├── store/
+│   ├── schedulingStore.ts          # Zustand store for scheduling state
+│   └── schedulingStore.test.ts     # Store unit tests
+├── components/
+│   ├── ShiftSettingsPanel.tsx       # Scheduling configuration panel
+│   └── SchedulingNotificationsPanel.tsx  # Notification management
+
 frontend/src/pages/
-├── SchedulingPage.tsx              # Main 6-tab hub
+├── SchedulingPage.tsx              # Main 7-tab hub (slim orchestrator)
 ├── scheduling/
 │   ├── MyShiftsTab.tsx             # Personal shift view, confirm/decline, swap/time-off requests
 │   ├── OpenShiftsTab.tsx           # Browse & sign up for upcoming shifts
 │   ├── RequestsTab.tsx             # Combined swap + time-off request management
+│   ├── PatternsTab.tsx             # Shift pattern management
 │   └── ShiftDetailPanel.tsx        # Slide-out panel: crew roster, signup, calls
 ├── ShiftTemplatesPage.tsx          # Templates & patterns management (admin)
 ├── SchedulingReportsPage.tsx       # Reports: hours, coverage, call volume, availability
@@ -52,6 +66,7 @@ backend/app/
 ├── models/training.py              # Shift, ShiftAssignment, ShiftTemplate, ShiftPattern,
 │                                   # ShiftAttendance, ShiftCall, BasicApparatus models
 ├── schemas/scheduling.py           # Pydantic schemas for all scheduling operations
+├── services/scheduling_service.py  # Business logic for scheduling operations
 ├── api/v1/endpoints/scheduling.py  # All scheduling REST endpoints
 └── alembic/versions/
     ├── 20260122_0015_*.py          # Initial shift tables
@@ -60,7 +75,7 @@ backend/app/
 
 ### Services (Frontend API)
 
-All scheduling API calls go through `schedulingService` in `frontend/src/services/api.ts`.
+Scheduling API calls go through the module-scoped service in `frontend/src/modules/scheduling/services/api.ts`, which uses the shared `createApiClient()` factory for consistent interceptors (auth refresh, CSRF, caching).
 
 ---
 
@@ -526,4 +541,26 @@ Dashboard changed from `getMyShifts()` (user-assigned only) to `getShifts()` to 
 
 ---
 
-*Last Updated: February 27, 2026*
+## Architecture Refactor (2026-02-28)
+
+The scheduling module was refactored from a monolithic 1,200-line `SchedulingPage.tsx` into a proper modular architecture:
+
+### What Changed
+- **SchedulingPage** slimmed from ~1,200 lines to a thin orchestrator that delegates to the Zustand store and sub-components
+- **Dedicated Zustand store** (`schedulingStore.ts`): Centralized state for shifts, templates, patterns, members, and apparatus with typed async actions
+- **Module-scoped API service** (`modules/scheduling/services/api.ts`): All 20+ scheduling endpoints moved from the global `services/api.ts` into a dedicated client using `createApiClient()`
+- **ShiftSettingsPanel**: Configuration panel for notification preferences, shift rules, and coverage settings (new Settings tab)
+- **SchedulingNotificationsPanel**: Notification management for shift reminders and scheduling alerts
+- **InlineConfirmAction** (`components/ux/InlineConfirmAction.tsx`): New reusable UX component for inline "Are you sure?" confirmations before destructive actions, with comprehensive tests
+- **Scheduling store tests**: Unit tests covering store initialization, async actions, and state transitions
+- **Backend service extraction**: `SchedulingService` class consolidates business logic previously scattered across endpoint handlers
+
+### Migration Notes
+If you have custom code importing scheduling functions from `@/services/api`, update to:
+```typescript
+import { schedulingService } from '@/modules/scheduling/services/api';
+```
+
+---
+
+*Last Updated: February 28, 2026*

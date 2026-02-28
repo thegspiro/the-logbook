@@ -36,10 +36,12 @@ Navigate to **Shift Scheduling** in the sidebar. The scheduling page is organize
 | **Requests** | Time-off and swap requests |
 | **Shift Templates** | Reusable shift configurations |
 | **Reports** | Hours, coverage, and compliance reports |
-| **Settings** | Scheduling configuration |
+| **Settings** | Notification preferences, shift rules, and coverage settings |
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Scheduling page showing the tab bar at the top with all seven tabs, and the Schedule (calendar) tab active showing a monthly calendar view with color-coded shifts]_
+
+> **Note:** The scheduling module uses a dedicated state store and API service. All scheduling data (shifts, templates, patterns, members) is managed centrally and updates in real time across all tabs.
 
 ---
 
@@ -513,6 +515,9 @@ FF Schmidt was on a 2-week Leave of Absence (April 1-14), so his requirement was
 | Platoon rotation seems off by a day | Check the "Starting Platoon" setting when generating the pattern. If the wrong platoon is set for day 1, the entire rotation shifts. |
 | Minimum staffing warning on a fully staffed shift | Verify all assigned members have confirmed their assignment. Pending assignments may not count toward the staffing total depending on your department's settings. |
 | Shift hours not appearing in Training compliance | Attendance must be recorded (check-in and check-out). Shifts without attendance data contribute zero hours to training requirements. |
+| Scheduling data not updating across tabs | The module uses a centralized Zustand store. Try refreshing the page. If the issue persists, clear browser cache. |
+| Settings tab not showing | The Settings tab requires `scheduling.manage` permission. Contact your administrator. |
+| "Too many attempts" on shift signup | Rate limiting may be active. Wait a few seconds and try again. |
 
 ---
 
