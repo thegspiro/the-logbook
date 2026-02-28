@@ -13,7 +13,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
@@ -97,7 +97,11 @@ class RateLimiter:
                 self.requests.pop(key, None)
 
         # Clean old requests outside window
-        self.requests[key] = [req_time for req_time in self.requests[key] if current_time - req_time < window_seconds]
+        self.requests[key] = [
+            req_time
+            for req_time in self.requests[key]
+            if current_time - req_time < window_seconds
+        ]
 
         # Check rate limit
         if len(self.requests[key]) >= max_requests:
@@ -231,7 +235,9 @@ class InputSanitizer:
         username = username.strip()
 
         if not re.match(r"^[a-zA-Z0-9_-]{3,32}$", username):
-            raise ValueError("Username must be 3-32 characters (letters, numbers, underscore, hyphen only)")
+            raise ValueError(
+                "Username must be 3-32 characters (letters, numbers, underscore, hyphen only)"
+            )
 
         return username
 
@@ -293,17 +299,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Add security headers to all responses
     """
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         response = await call_next(request)
 
         # Prevent caching of API responses containing sensitive data
         if request.url.path.startswith("/api/"):
-            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate"
+            response.headers["Cache-Control"] = (
+                "no-store, no-cache, must-revalidate, proxy-revalidate"
+            )
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
 
         # Strict Transport Security (HSTS)
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
 
         # Prevent MIME type sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -318,7 +330,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
         # Permissions Policy
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=()"
+        )
 
         # Content Security Policy
         # SEC: 'unsafe-inline' is limited to style-src only because Tailwind
@@ -487,8 +501,12 @@ async def verify_csrf_token(request: Request) -> None:
         # The login response should set the csrf_token cookie.
         return
 
-    if not request_token or not CSRFProtection.validate_token(request_token, cookie_token):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token")
+    if not request_token or not CSRFProtection.validate_token(
+        request_token, cookie_token
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token"
+        )
 
 
 # ============================================
@@ -532,7 +550,9 @@ class SecurityAuditLogger:
         logger.warning(f"[SECURITY AUDIT] {log_entry}")
 
     @staticmethod
-    async def log_failed_login(username: str, ip_address: str, user_agent: Optional[str], reason: str) -> None:
+    async def log_failed_login(
+        username: str, ip_address: str, user_agent: Optional[str], reason: str
+    ) -> None:
         """Log failed login attempt"""
         await SecurityAuditLogger.log_event(
             event_type="FAILED_LOGIN",
@@ -544,7 +564,9 @@ class SecurityAuditLogger:
         )
 
     @staticmethod
-    async def log_successful_login(user_id: str, username: str, ip_address: str, user_agent: Optional[str]) -> None:
+    async def log_successful_login(
+        user_id: str, username: str, ip_address: str, user_agent: Optional[str]
+    ) -> None:
         """Log successful login"""
         await SecurityAuditLogger.log_event(
             event_type="SUCCESSFUL_LOGIN",
@@ -556,7 +578,9 @@ class SecurityAuditLogger:
         )
 
     @staticmethod
-    async def log_password_change(user_id: str, ip_address: str, user_agent: Optional[str]) -> None:
+    async def log_password_change(
+        user_id: str, ip_address: str, user_agent: Optional[str]
+    ) -> None:
         """Log password change"""
         await SecurityAuditLogger.log_event(
             event_type="PASSWORD_CHANGE",
@@ -647,7 +671,9 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         self.enabled = enabled
         self.log_blocked_attempts = log_blocked_attempts
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         """Process request and check IP/country restrictions."""
 
         # Skip if disabled
@@ -722,7 +748,9 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         except Exception:
             return set()
 
-    async def _log_blocked_attempt(self, request: Request, client_ip: str, reason: str) -> None:
+    async def _log_blocked_attempt(
+        self, request: Request, client_ip: str, reason: str
+    ) -> None:
         """Log blocked access attempt to database."""
         try:
             pass
@@ -789,7 +817,9 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
     the request.
     """
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         """Log request IP, geo info, and request duration."""
         from loguru import logger
 
@@ -835,7 +865,8 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if path not in ("/health", "/health/detailed"):
             logger.info(
-                f"{request.method} {path} → {response.status_code} " f"({duration_ms:.0f}ms) [rid={request_id}]"
+                f"{request.method} {path} → {response.status_code} "
+                f"({duration_ms:.0f}ms) [rid={request_id}]"
             )
 
         return response
@@ -874,7 +905,9 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
         "/api/v1/reports",
     }
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         """Process request through security monitoring."""
         from loguru import logger
 
@@ -909,7 +942,9 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
                 body = await request.body()
                 if body:
                     try:
-                        request_data["body"] = body.decode("utf-8")[:10000]  # Limit size
+                        request_data["body"] = body.decode("utf-8")[
+                            :10000
+                        ]  # Limit size
                     except UnicodeDecodeError:
                         pass  # Binary data, skip
 
@@ -1027,12 +1062,16 @@ async def run_periodic_security_checks() -> Dict[str, Any]:
             from sqlalchemy import text
 
             log_status = await db.execute(
-                text("SELECT MIN(id), MAX(id), COUNT(*) FROM audit_logs WHERE created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)")
+                text(
+                    "SELECT MIN(id), MAX(id), COUNT(*) FROM audit_logs WHERE created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)"
+                )
             )
             row = log_status.fetchone()
             if row and row[2] > 100:  # At least 100 logs
                 try:
-                    checkpoint = await audit_logger.create_checkpoint(db, row[0], row[1])
+                    checkpoint = await audit_logger.create_checkpoint(
+                        db, row[0], row[1]
+                    )
                     results["checks"]["checkpoint_created"] = {
                         "id": checkpoint.id,
                         "entries": checkpoint.total_entries,
@@ -1041,7 +1080,9 @@ async def run_periodic_security_checks() -> Dict[str, Any]:
                 except Exception as e:
                     logger.warning(f"Could not create checkpoint: {e}")
 
-            results["overall_status"] = "healthy" if integrity["verified"] else "critical"
+            results["overall_status"] = (
+                "healthy" if integrity["verified"] else "critical"
+            )
 
     except Exception as e:
         logger.error(f"Periodic security check failed: {e}")

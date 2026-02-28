@@ -47,9 +47,7 @@ class AdminHoursService:
         )
         if not include_inactive:
             query = query.where(AdminHoursCategory.is_active.is_(True))
-        query = query.order_by(
-            AdminHoursCategory.sort_order, AdminHoursCategory.name
-        )
+        query = query.order_by(AdminHoursCategory.sort_order, AdminHoursCategory.name)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -106,9 +104,7 @@ class AdminHoursService:
         await self.db.refresh(category, ["created_at", "updated_at"])
         return category
 
-    async def delete_category(
-        self, category_id: str, organization_id: str
-    ) -> None:
+    async def delete_category(self, category_id: str, organization_id: str) -> None:
         """Soft-delete a category by deactivating it."""
         category = await self.get_category(category_id, organization_id)
         if not category:
@@ -135,9 +131,7 @@ class AdminHoursService:
     # QR Code Data
     # =========================================================================
 
-    async def get_qr_data(
-        self, category_id: str, organization_id: str
-    ) -> Dict:
+    async def get_qr_data(self, category_id: str, organization_id: str) -> Dict:
         """Get data for QR code display page."""
         category = await self.get_category(category_id, organization_id)
         if not category:
@@ -201,9 +195,7 @@ class AdminHoursService:
         logger.info("User %s clocked in to category %s", user_id, category.name)
         return entry
 
-    async def clock_out(
-        self, entry_id: str, user_id: str
-    ) -> AdminHoursEntry:
+    async def clock_out(self, entry_id: str, user_id: str) -> AdminHoursEntry:
         """Clock out a user from an active admin hours session."""
         result = await self.db.execute(
             select(AdminHoursEntry).where(
@@ -222,17 +214,13 @@ class AdminHoursService:
         entry.duration_minutes = int(duration.total_seconds() / 60)
 
         # Determine status based on category approval settings
-        category = await self.get_category(
-            entry.category_id, entry.organization_id
-        )
+        category = await self.get_category(entry.category_id, entry.organization_id)
         entry.status = self._determine_post_clockout_status(
             category, entry.duration_minutes
         )
 
         await self.db.flush()
-        logger.info(
-            "User %s clocked out: %d minutes", user_id, entry.duration_minutes
-        )
+        logger.info("User %s clocked out: %d minutes", user_id, entry.duration_minutes)
         return entry
 
     async def clock_out_by_category(
@@ -252,18 +240,14 @@ class AdminHoursService:
 
         return await self.clock_out(entry.id, user_id)
 
-    async def get_active_session(
-        self, user_id: str
-    ) -> Optional[Dict]:
+    async def get_active_session(self, user_id: str) -> Optional[Dict]:
         """Get the user's current active session with category info."""
         entry = await self._get_active_session(user_id)
         if not entry:
             return None
 
         category = await self.db.execute(
-            select(AdminHoursCategory).where(
-                AdminHoursCategory.id == entry.category_id
-            )
+            select(AdminHoursCategory).where(AdminHoursCategory.id == entry.category_id)
         )
         cat = category.scalar_one_or_none()
 
@@ -285,9 +269,7 @@ class AdminHoursService:
             "max_session_minutes": max_minutes,
         }
 
-    async def _get_active_session(
-        self, user_id: str
-    ) -> Optional[AdminHoursEntry]:
+    async def _get_active_session(self, user_id: str) -> Optional[AdminHoursEntry]:
         """Internal: get the active entry for a user."""
         result = await self.db.execute(
             select(AdminHoursEntry).where(
@@ -332,9 +314,7 @@ class AdminHoursService:
             raise ValueError("Duration must be at least 1 minute")
 
         # Check for overlapping entries
-        overlap = await self._check_overlap(
-            user_id, clock_in_at, clock_out_at
-        )
+        overlap = await self._check_overlap(user_id, clock_in_at, clock_out_at)
         if overlap:
             raise ValueError(
                 "This time range overlaps with an existing entry. "
@@ -398,9 +378,7 @@ class AdminHoursService:
             .outerjoin(Approver, AdminHoursEntry.approved_by == Approver.id)
             .where(base_where)
         )
-        count_query = (
-            select(func.count(AdminHoursEntry.id)).where(base_where)
-        )
+        count_query = select(func.count(AdminHoursEntry.id)).where(base_where)
 
         if status_filter:
             query = query.where(AdminHoursEntry.status == status_filter)
@@ -469,9 +447,7 @@ class AdminHoursService:
             .outerjoin(Approver, AdminHoursEntry.approved_by == Approver.id)
             .where(base_where)
         )
-        count_query = (
-            select(func.count(AdminHoursEntry.id)).where(base_where)
-        )
+        count_query = select(func.count(AdminHoursEntry.id)).where(base_where)
 
         if status_filter:
             query = query.where(AdminHoursEntry.status == status_filter)
@@ -555,9 +531,7 @@ class AdminHoursService:
             raise ValueError("Action must be 'approve' or 'reject'")
 
         await self.db.flush()
-        logger.info(
-            "Entry %s %sd by %s", entry_id, action, approver_id
-        )
+        logger.info("Entry %s %sd by %s", entry_id, action, approver_id)
         return entry
 
     # =========================================================================
@@ -578,23 +552,21 @@ class AdminHoursService:
         """
         base_filter = and_(
             AdminHoursEntry.organization_id == organization_id,
-            AdminHoursEntry.status.in_([
-                AdminHoursEntryStatus.APPROVED,
-                AdminHoursEntryStatus.PENDING,
-            ]),
+            AdminHoursEntry.status.in_(
+                [
+                    AdminHoursEntryStatus.APPROVED,
+                    AdminHoursEntryStatus.PENDING,
+                ]
+            ),
             AdminHoursEntry.duration_minutes.isnot(None),
         )
 
         if user_id:
             base_filter = and_(base_filter, AdminHoursEntry.user_id == user_id)
         if start_date:
-            base_filter = and_(
-                base_filter, AdminHoursEntry.clock_in_at >= start_date
-            )
+            base_filter = and_(base_filter, AdminHoursEntry.clock_in_at >= start_date)
         if end_date:
-            base_filter = and_(
-                base_filter, AdminHoursEntry.clock_in_at <= end_date
-            )
+            base_filter = and_(base_filter, AdminHoursEntry.clock_in_at <= end_date)
 
         # Total
         total_result = await self.db.execute(
@@ -699,9 +671,7 @@ class AdminHoursService:
                 approved_count += 1
 
         await self.db.flush()
-        logger.info(
-            "Bulk approved %d entries by %s", approved_count, approver_id
-        )
+        logger.info("Bulk approved %d entries by %s", approved_count, approver_id)
         return approved_count
 
     # =========================================================================
@@ -771,10 +741,20 @@ class AdminHoursService:
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "Member", "Category", "Date", "Clock In", "Clock Out",
-            "Duration (hours)", "Method", "Status", "Approved By", "Description",
-        ])
+        writer.writerow(
+            [
+                "Member",
+                "Category",
+                "Date",
+                "Clock In",
+                "Clock Out",
+                "Duration (hours)",
+                "Method",
+                "Status",
+                "Approved By",
+                "Description",
+            ]
+        )
 
         for row in rows:
             entry = row[0]
@@ -787,27 +767,39 @@ class AdminHoursService:
             duration_hours = (
                 round(entry.duration_minutes / 60, 2) if entry.duration_minutes else ""
             )
-            clock_in = entry.clock_in_at.strftime("%Y-%m-%d %H:%M") if entry.clock_in_at else ""
-            clock_out = entry.clock_out_at.strftime("%Y-%m-%d %H:%M") if entry.clock_out_at else ""
-            date_str = entry.clock_in_at.strftime("%Y-%m-%d") if entry.clock_in_at else ""
+            clock_in = (
+                entry.clock_in_at.strftime("%Y-%m-%d %H:%M")
+                if entry.clock_in_at
+                else ""
+            )
+            clock_out = (
+                entry.clock_out_at.strftime("%Y-%m-%d %H:%M")
+                if entry.clock_out_at
+                else ""
+            )
+            date_str = (
+                entry.clock_in_at.strftime("%Y-%m-%d") if entry.clock_in_at else ""
+            )
             approver_name = (
                 f"{approver_first} {approver_last}"
                 if approver_first and approver_last
                 else ""
             )
 
-            writer.writerow([
-                f"{user_first} {user_last}",
-                cat_name,
-                date_str,
-                clock_in,
-                clock_out,
-                duration_hours,
-                entry.entry_method.value if entry.entry_method else "manual",
-                entry.status.value if entry.status else "",
-                approver_name,
-                entry.description or "",
-            ])
+            writer.writerow(
+                [
+                    f"{user_first} {user_last}",
+                    cat_name,
+                    date_str,
+                    clock_in,
+                    clock_out,
+                    duration_hours,
+                    entry.entry_method.value if entry.entry_method else "manual",
+                    entry.status.value if entry.status else "",
+                    approver_name,
+                    entry.description or "",
+                ]
+            )
 
         return output.getvalue()
 
@@ -918,7 +910,9 @@ class AdminHoursService:
             "clock_out_at": entry.clock_out_at,
             "duration_minutes": entry.duration_minutes,
             "description": entry.description,
-            "entry_method": entry.entry_method.value if entry.entry_method else "manual",
+            "entry_method": (
+                entry.entry_method.value if entry.entry_method else "manual"
+            ),
             "status": entry.status.value if entry.status else "pending",
             "approved_by": entry.approved_by,
             "approved_at": entry.approved_at,

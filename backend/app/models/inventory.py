@@ -306,7 +306,9 @@ class InventoryItem(Base):
 
     # Position restriction — only members holding one of these corporate
     # positions (by slug) can request this item.  NULL / empty = no restriction.
-    restricted_to_positions = Column(JSON, nullable=True)  # e.g. ["president", "safety_officer"]
+    restricted_to_positions = Column(
+        JSON, nullable=True
+    )  # e.g. ["president", "safety_officer"]
 
     # Additional Data
     notes = Column(Text)
@@ -1351,12 +1353,12 @@ class NFPAInspectionDetail(Base):
     )
 
     # Relationships
-    maintenance_record = relationship("MaintenanceRecord", foreign_keys=[maintenance_record_id])
+    maintenance_record = relationship(
+        "MaintenanceRecord", foreign_keys=[maintenance_record_id]
+    )
 
     __table_args__ = (
-        Index(
-            "idx_nfpa_inspection_org_level", "organization_id", "inspection_level"
-        ),
+        Index("idx_nfpa_inspection_org_level", "organization_id", "inspection_level"),
     )
 
 

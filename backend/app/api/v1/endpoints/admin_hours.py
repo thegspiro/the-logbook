@@ -501,9 +501,7 @@ async def get_pending_count(
 ):
     """Get the count of entries pending review."""
     service = AdminHoursService(db)
-    count = await service.get_pending_count(
-        str(current_user.organization_id)
-    )
+    count = await service.get_pending_count(str(current_user.organization_id))
     return {"count": count}
 
 

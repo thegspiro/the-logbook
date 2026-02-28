@@ -73,7 +73,9 @@ async def list_courses(
 
     **Authentication required**
     """
-    query = select(TrainingCourse).where(TrainingCourse.organization_id == current_user.organization_id)
+    query = select(TrainingCourse).where(
+        TrainingCourse.organization_id == current_user.organization_id
+    )
 
     if active_only:
         query = query.where(TrainingCourse.active == True)  # noqa: E712
@@ -134,7 +136,9 @@ async def get_course(
     course = result.scalar_one_or_none()
 
     if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Course not found"
+        )
 
     return course
 
@@ -162,7 +166,9 @@ async def update_course(
     course = result.scalar_one_or_none()
 
     if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Course not found"
+        )
 
     # Update fields
     for field, value in course_update.model_dump(exclude_unset=True).items():
@@ -191,7 +197,9 @@ async def list_records(
 
     **Authentication required**
     """
-    query = select(TrainingRecord).where(TrainingRecord.organization_id == current_user.organization_id)
+    query = select(TrainingRecord).where(
+        TrainingRecord.organization_id == current_user.organization_id
+    )
 
     if user_id:
         query = query.where(TrainingRecord.user_id == str(user_id))
@@ -231,9 +239,15 @@ async def create_record(
 
     # Auto-calculate expiration_date from the course's expiration_months
     # when not explicitly provided but completion_date and course_id are set
-    if not record_data.get("expiration_date") and record_data.get("course_id") and record_data.get("completion_date"):
+    if (
+        not record_data.get("expiration_date")
+        and record_data.get("course_id")
+        and record_data.get("completion_date")
+    ):
         course_result = await db.execute(
-            select(TrainingCourse).where(TrainingCourse.id == str(record_data["course_id"]))
+            select(TrainingCourse).where(
+                TrainingCourse.id == str(record_data["course_id"])
+            )
         )
         course = course_result.scalar_one_or_none()
         if course and course.expiration_months:
@@ -247,7 +261,9 @@ async def create_record(
 
     # Auto-populate rank/station from member's current profile if not explicitly set.
     # SECURITY: Validate user belongs to the current user's organization.
-    if not record_data.get("rank_at_completion") or not record_data.get("station_at_completion"):
+    if not record_data.get("rank_at_completion") or not record_data.get(
+        "station_at_completion"
+    ):
         member_result = await db.execute(
             select(User)
             .where(User.id == str(record_data["user_id"]))
@@ -423,7 +439,9 @@ async def create_records_bulk(
             and record_data.get("completion_date")
         ):
             course_result = await db.execute(
-                select(TrainingCourse).where(TrainingCourse.id == str(record_data["course_id"]))
+                select(TrainingCourse).where(
+                    TrainingCourse.id == str(record_data["course_id"])
+                )
             )
             course_obj = course_result.scalar_one_or_none()
             if course_obj and course_obj.expiration_months:
@@ -498,7 +516,9 @@ async def update_record(
     record = result.scalar_one_or_none()
 
     if not record:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+        )
 
     # Update fields
     update_fields = record_update.model_dump(exclude_unset=True)
@@ -513,7 +533,10 @@ async def update_record(
         "fields_updated": list(update_fields.keys()),
     }
     # Detect completion
-    if "status" in update_fields and update_fields["status"] == TrainingStatus.COMPLETED.value:
+    if (
+        "status" in update_fields
+        and update_fields["status"] == TrainingStatus.COMPLETED.value
+    ):
         event_data["completion_recorded"] = True
     await log_audit_event(
         db=db,
@@ -542,7 +565,9 @@ async def list_categories(
 
     **Authentication required**
     """
-    query = select(TrainingCategory).where(TrainingCategory.organization_id == current_user.organization_id)
+    query = select(TrainingCategory).where(
+        TrainingCategory.organization_id == current_user.organization_id
+    )
 
     if active_only:
         query = query.where(TrainingCategory.active == True)  # noqa: E712
@@ -603,7 +628,9 @@ async def get_category(
     category = result.scalar_one_or_none()
 
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+        )
 
     return category
 
@@ -631,7 +658,9 @@ async def update_category(
     category = result.scalar_one_or_none()
 
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+        )
 
     # Update fields
     for field, value in category_update.model_dump(exclude_unset=True).items():
@@ -665,7 +694,9 @@ async def delete_category(
     category = result.scalar_one_or_none()
 
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+        )
 
     # Soft delete
     category.active = False
@@ -687,7 +718,9 @@ async def list_requirements(
 
     **Authentication required**
     """
-    query = select(TrainingRequirement).where(TrainingRequirement.organization_id == current_user.organization_id)
+    query = select(TrainingRequirement).where(
+        TrainingRequirement.organization_id == current_user.organization_id
+    )
 
     if active_only:
         query = query.where(TrainingRequirement.active == True)  # noqa: E712
@@ -732,7 +765,9 @@ async def create_requirement(
     return new_requirement
 
 
-@router.patch("/requirements/{requirement_id}", response_model=TrainingRequirementResponse)
+@router.patch(
+    "/requirements/{requirement_id}", response_model=TrainingRequirementResponse
+)
 async def update_requirement(
     requirement_id: UUID,
     requirement_update: TrainingRequirementUpdate,
@@ -755,7 +790,9 @@ async def update_requirement(
     requirement = result.scalar_one_or_none()
 
     if not requirement:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
+        )
 
     # Update fields
     for field, value in requirement_update.model_dump(exclude_unset=True).items():
@@ -789,7 +826,9 @@ async def delete_requirement(
     requirement = result.scalar_one_or_none()
 
     if not requirement:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
+        )
 
     await db.delete(requirement)
     await db.commit()
@@ -838,7 +877,9 @@ async def get_compliance_summary(
 
     # Get user stats for hours and cert counts
     training_service = TrainingService(db)
-    stats = await training_service.get_user_training_stats(user_id=user_id, organization_id=org_id)
+    stats = await training_service.get_user_training_stats(
+        user_id=user_id, organization_id=org_id
+    )
 
     # Load user with roles for requirement applicability filtering.
     # SECURITY: Verify user belongs to the same organization to prevent
@@ -870,7 +911,9 @@ async def get_compliance_summary(
     for req in all_requirements:
         if req.applies_to_all:
             requirements.append(req)
-        elif req.required_roles and any(rid in user_role_ids for rid in req.required_roles):
+        elif req.required_roles and any(
+            rid in user_role_ids for rid in req.required_roles
+        ):
             requirements.append(req)
 
     # Pre-fetch all completed records for the user (no date filter —
@@ -890,7 +933,9 @@ async def get_compliance_summary(
     requirements_total = len(requirements)
 
     for req in requirements:
-        status_val, _, _ = _evaluate_member_requirement(req, member_records, today, waivers=waivers)
+        status_val, _, _ = _evaluate_member_requirement(
+            req, member_records, today, waivers=waivers
+        )
         if status_val == "completed":
             requirements_met += 1
 
@@ -898,10 +943,14 @@ async def get_compliance_summary(
     certs_expiring_soon = stats.expiring_soon
     certs_expired = stats.expired
 
-    if certs_expired > 0 or (requirements_total > 0 and requirements_met < requirements_total * 0.5):
+    if certs_expired > 0 or (
+        requirements_total > 0 and requirements_met < requirements_total * 0.5
+    ):
         compliance_status = "red"
         compliance_label = "Non-Compliant"
-    elif certs_expiring_soon > 0 or (requirements_total > 0 and requirements_met < requirements_total):
+    elif certs_expiring_soon > 0 or (
+        requirements_total > 0 and requirements_met < requirements_total
+    ):
         compliance_status = "yellow"
         compliance_label = "At Risk"
     else:
@@ -944,7 +993,9 @@ async def generate_user_report(
     return report
 
 
-@router.get("/requirements/progress/{user_id}", response_model=List[RequirementProgress])
+@router.get(
+    "/requirements/progress/{user_id}", response_model=List[RequirementProgress]
+)
 async def get_requirements_progress(
     user_id: UUID,
     year: Optional[int] = Query(None, description="Year for requirements"),
@@ -988,8 +1039,12 @@ async def get_expiring_certifications(
 
 @router.get("/competency-matrix")
 async def get_competency_matrix(
-    requirement_ids: Optional[str] = Query(None, description="Comma-separated requirement IDs to filter"),
-    user_ids: Optional[str] = Query(None, description="Comma-separated user IDs to filter"),
+    requirement_ids: Optional[str] = Query(
+        None, description="Comma-separated requirement IDs to filter"
+    ),
+    user_ids: Optional[str] = Query(
+        None, description="Comma-separated user IDs to filter"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -1105,7 +1160,9 @@ async def check_evaluator_permission(
     )
     skill = result.scalar_one_or_none()
     if not skill:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill evaluation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill evaluation not found"
+        )
 
     allowed = skill.allowed_evaluators
     is_authorized = False
@@ -1114,7 +1171,11 @@ async def check_evaluator_permission(
     if allowed is None:
         # Default: any user with training.manage permission
         # Check user roles for the permission
-        user_result = await db.execute(select(User).where(User.id == current_user.id).options(selectinload(User.roles)))
+        user_result = await db.execute(
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.roles))
+        )
         user_with_roles = user_result.scalar_one_or_none()
         if user_with_roles:
             user_perms = set()
@@ -1130,7 +1191,11 @@ async def check_evaluator_permission(
     elif allowed.get("type") == "roles":
         required_roles = set(allowed.get("roles", []))
         # Load user roles
-        user_result = await db.execute(select(User).where(User.id == current_user.id).options(selectinload(User.roles)))
+        user_result = await db.execute(
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.roles))
+        )
         user = user_result.scalar_one_or_none()
         if user:
             user_roles = {r.slug for r in user.roles}
@@ -1144,7 +1209,11 @@ async def check_evaluator_permission(
     elif allowed.get("type") == "specific_users":
         allowed_ids = set(allowed.get("user_ids", []))
         is_authorized = str(current_user.id) in allowed_ids
-        reason = "Authorized as designated evaluator" if is_authorized else "Not in designated evaluators list"
+        reason = (
+            "Authorized as designated evaluator"
+            if is_authorized
+            else "Not in designated evaluators list"
+        )
 
     return {
         "skill_id": skill_id,
@@ -1175,7 +1244,9 @@ async def enroll_member_in_program(
 
     # Verify user exists in org
     user_result = await db.execute(
-        select(User).where(User.id == str(user_id)).where(User.organization_id == str(current_user.organization_id))
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
     )
     member = user_result.scalar_one_or_none()
     if not member:
@@ -1323,14 +1394,24 @@ async def parse_historical_import(
         ]
     )
     col_name = find_col(["name", "member_name", "full_name", "member", "employee_name"])
-    col_course = find_col(["course_name", "course", "training", "training_name", "class", "class_name"])
+    col_course = find_col(
+        ["course_name", "course", "training", "training_name", "class", "class_name"]
+    )
     col_course_code = find_col(["course_code", "code", "class_code"])
     col_type = find_col(["training_type", "type", "category"])
-    col_date = find_col(["completion_date", "date_completed", "date", "completed", "completed_date"])
-    col_expiration = find_col(["expiration_date", "expires", "expiry", "expiry_date", "cert_expiration"])
-    col_hours = find_col(["hours_completed", "hours", "duration", "credit_hours", "total_hours"])
+    col_date = find_col(
+        ["completion_date", "date_completed", "date", "completed", "completed_date"]
+    )
+    col_expiration = find_col(
+        ["expiration_date", "expires", "expiry", "expiry_date", "cert_expiration"]
+    )
+    col_hours = find_col(
+        ["hours_completed", "hours", "duration", "credit_hours", "total_hours"]
+    )
     col_credit = find_col(["credit_hours", "credits", "ceu", "ce_hours"])
-    col_cert = find_col(["certification_number", "cert_number", "cert_no", "certificate"])
+    col_cert = find_col(
+        ["certification_number", "cert_number", "cert_no", "certificate"]
+    )
     col_agency = find_col(["issuing_agency", "agency", "issuer", "issued_by"])
     col_instructor = find_col(["instructor", "trainer", "taught_by"])
     col_location = find_col(["location", "venue", "training_location", "site"])
@@ -1360,7 +1441,9 @@ async def parse_historical_import(
 
     # Pre-load org members and build lookup maps
     members_result = await db.execute(
-        select(User).where(User.organization_id == current_user.organization_id).where(User.status != "archived")
+        select(User)
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.status != "archived")
     )
     members = members_result.scalars().all()
 
@@ -1399,7 +1482,11 @@ async def parse_historical_import(
 
         # Extract match fields
         email_val = (raw_row.get(col_email) or "").strip().lower() if col_email else ""
-        membership_val = (raw_row.get(col_membership) or "").strip().lower() if col_membership else ""
+        membership_val = (
+            (raw_row.get(col_membership) or "").strip().lower()
+            if col_membership
+            else ""
+        )
 
         # Extract name for display (optional column)
         name_val = (raw_row.get(col_name) or "").strip() if col_name else ""
@@ -1429,7 +1516,10 @@ async def parse_historical_import(
             if key and key in lookup:
                 user = lookup[key]
                 user_id = str(user.id)
-                matched_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+                matched_name = (
+                    f"{user.first_name or ''} {user.last_name or ''}".strip()
+                    or user.username
+                )
                 member_matched = True
                 return True
             return False
@@ -1447,7 +1537,9 @@ async def parse_historical_import(
         # Match course
         course_matched = False
         matched_course_id = None
-        course_code_val = (raw_row.get(col_course_code) or "").strip() if col_course_code else None
+        course_code_val = (
+            (raw_row.get(col_course_code) or "").strip() if col_course_code else None
+        )
         course_lower = course_val.lower()
 
         if course_code_val and course_code_val.lower() in course_code_map:
@@ -1528,15 +1620,27 @@ async def parse_historical_import(
                 course_code=course_code_val,
                 course_matched=course_matched,
                 matched_course_id=matched_course_id,
-                training_type=((raw_row.get(col_type) or "").strip() if col_type else None),
+                training_type=(
+                    (raw_row.get(col_type) or "").strip() if col_type else None
+                ),
                 completion_date=completion,
                 expiration_date=expiration,
                 hours_completed=hours,
                 credit_hours=credit,
-                certification_number=((raw_row.get(col_cert) or "").strip() if col_cert else None),
-                issuing_agency=((raw_row.get(col_agency) or "").strip() if col_agency else None),
-                instructor=((raw_row.get(col_instructor) or "").strip() if col_instructor else None),
-                location=((raw_row.get(col_location) or "").strip() if col_location else None),
+                certification_number=(
+                    (raw_row.get(col_cert) or "").strip() if col_cert else None
+                ),
+                issuing_agency=(
+                    (raw_row.get(col_agency) or "").strip() if col_agency else None
+                ),
+                instructor=(
+                    (raw_row.get(col_instructor) or "").strip()
+                    if col_instructor
+                    else None
+                ),
+                location=(
+                    (raw_row.get(col_location) or "").strip() if col_location else None
+                ),
                 score=score,
                 passed=passed_val,
                 notes=(raw_row.get(col_notes) or "").strip() if col_notes else None,
@@ -1825,7 +1929,9 @@ async def get_compliance_matrix(
 
         pct = (completed_count / len(requirements) * 100) if requirements else 0
         member_name = (
-            f"{member.last_name}, {member.first_name}" if member.last_name else member.first_name or member.username
+            f"{member.last_name}, {member.first_name}"
+            if member.last_name
+            else member.first_name or member.username
         )
         matrix.append(
             MemberComplianceRow(
@@ -1889,16 +1995,26 @@ async def get_expiring_certifications_detailed(
             "member_name": (
                 f"{users_map[r.user_id].last_name}, {users_map[r.user_id].first_name}"
                 if r.user_id in users_map and users_map[r.user_id].last_name
-                else (users_map[r.user_id].username if r.user_id in users_map else "Unknown")
+                else (
+                    users_map[r.user_id].username
+                    if r.user_id in users_map
+                    else "Unknown"
+                )
             ),
             "requirement_id": r.course_id or r.id,
             "requirement_name": r.course_name or "Certification",
             "expiry_date": r.expiration_date.isoformat() if r.expiration_date else None,
-            "days_until_expiry": ((r.expiration_date - today).days if r.expiration_date else 0),
+            "days_until_expiry": (
+                (r.expiration_date - today).days if r.expiration_date else 0
+            ),
             "status": (
                 "expired"
                 if r.expiration_date and r.expiration_date < today
-                else ("expiring_soon" if r.expiration_date and r.expiration_date <= cutoff_date else "current")
+                else (
+                    "expiring_soon"
+                    if r.expiration_date and r.expiration_date <= cutoff_date
+                    else "current"
+                )
             ),
         }
         for r in records
@@ -1942,7 +2058,9 @@ async def import_training_csv(
 
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames:
-        raise HTTPException(status_code=400, detail="CSV file is empty or has no headers")
+        raise HTTPException(
+            status_code=400, detail="CSV file is empty or has no headers"
+        )
 
     lower_fields = [f.strip().lower() for f in reader.fieldnames]
     required = {
@@ -1964,7 +2082,9 @@ async def import_training_csv(
 
     # Pre-load all org users keyed by lowercase email for fast lookup
     result = await db.execute(
-        select(User).where(User.organization_id == current_user.organization_id).where(User.deleted_at.is_(None))
+        select(User)
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.deleted_at.is_(None))
     )
     org_users = {u.email.lower(): u for u in result.scalars().all() if u.email}
 
@@ -1980,7 +2100,9 @@ async def import_training_csv(
 
             user = org_users.get(email)
             if not user:
-                failures.append({"row": row_num, "error": f"No member found with email: {email}"})
+                failures.append(
+                    {"row": row_num, "error": f"No member found with email: {email}"}
+                )
                 continue
 
             course_name = (row.get(col_map.get("coursename", ""), "") or "").strip()
@@ -1988,7 +2110,9 @@ async def import_training_csv(
                 failures.append({"row": row_num, "error": "Missing courseName"})
                 continue
 
-            training_type = (row.get(col_map.get("trainingtype", ""), "") or "").strip().lower()
+            training_type = (
+                (row.get(col_map.get("trainingtype", ""), "") or "").strip().lower()
+            )
             if training_type not in VALID_TRAINING_TYPES:
                 failures.append(
                     {
@@ -1998,7 +2122,9 @@ async def import_training_csv(
                 )
                 continue
 
-            completion_str = (row.get(col_map.get("completiondate", ""), "") or "").strip()
+            completion_str = (
+                row.get(col_map.get("completiondate", ""), "") or ""
+            ).strip()
             if not completion_str:
                 failures.append({"row": row_num, "error": "Missing completionDate"})
                 continue
@@ -2031,14 +2157,24 @@ async def import_training_csv(
                 continue
 
             # Optional fields
-            course_code = (row.get(col_map.get("coursecode", ""), "") or "").strip() or None
-            instructor = (row.get(col_map.get("instructor", ""), "") or "").strip() or None
+            course_code = (
+                row.get(col_map.get("coursecode", ""), "") or ""
+            ).strip() or None
+            instructor = (
+                row.get(col_map.get("instructor", ""), "") or ""
+            ).strip() or None
             location = (row.get(col_map.get("location", ""), "") or "").strip() or None
-            cert_number = (row.get(col_map.get("certificationnumber", ""), "") or "").strip() or None
-            issuing_agency = (row.get(col_map.get("issuingagency", ""), "") or "").strip() or None
+            cert_number = (
+                row.get(col_map.get("certificationnumber", ""), "") or ""
+            ).strip() or None
+            issuing_agency = (
+                row.get(col_map.get("issuingagency", ""), "") or ""
+            ).strip() or None
             notes = (row.get(col_map.get("notes", ""), "") or "").strip() or None
 
-            status_str = (row.get(col_map.get("status", ""), "") or "").strip().lower() or "completed"
+            status_str = (
+                row.get(col_map.get("status", ""), "") or ""
+            ).strip().lower() or "completed"
             if status_str not in VALID_STATUSES:
                 status_str = "completed"
 

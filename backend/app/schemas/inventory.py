@@ -18,7 +18,14 @@ from pydantic import BaseModel, ConfigDict, Field
 # ============================================
 
 ItemTypeLiteral = Literal[
-    "uniform", "ppe", "tool", "equipment", "vehicle", "electronics", "consumable", "other"
+    "uniform",
+    "ppe",
+    "tool",
+    "equipment",
+    "vehicle",
+    "electronics",
+    "consumable",
+    "other",
 ]
 
 ItemConditionLiteral = Literal[
@@ -29,14 +36,28 @@ ItemConditionLiteral = Literal[
 ReturnConditionLiteral = Literal["excellent", "good", "fair", "poor", "damaged"]
 
 ItemStatusLiteral = Literal[
-    "available", "assigned", "checked_out", "in_maintenance", "lost", "stolen", "retired"
+    "available",
+    "assigned",
+    "checked_out",
+    "in_maintenance",
+    "lost",
+    "stolen",
+    "retired",
 ]
 
 MaintenanceTypeLiteral = Literal[
-    "inspection", "repair", "cleaning", "testing", "calibration",
-    "replacement", "preventive",
-    "routine_inspection", "advanced_inspection", "independent_inspection",
-    "advanced_cleaning", "decontamination",
+    "inspection",
+    "repair",
+    "cleaning",
+    "testing",
+    "calibration",
+    "replacement",
+    "preventive",
+    "routine_inspection",
+    "advanced_inspection",
+    "independent_inspection",
+    "advanced_cleaning",
+    "decontamination",
 ]
 
 AssignmentTypeLiteral = Literal["permanent", "temporary"]
@@ -73,8 +94,14 @@ WriteOffStatusLiteral = Literal["pending", "approved", "denied"]
 NFPAInspectionLevelLiteral = Literal["routine", "advanced", "independent"]
 ContaminationLevelLiteral = Literal["none", "light", "moderate", "heavy", "gross"]
 ExposureTypeLiteral = Literal[
-    "structure_fire", "vehicle_fire", "wildland_fire",
-    "hazmat", "bloodborne_pathogen", "chemical", "smoke", "other",
+    "structure_fire",
+    "vehicle_fire",
+    "wildland_fire",
+    "hazmat",
+    "bloodborne_pathogen",
+    "chemical",
+    "smoke",
+    "other",
 ]
 EnsembleRoleLiteral = Literal["coat", "pants", "helmet", "gloves", "boots", "hood"]
 NFPARecommendationLiteral = Literal["pass", "repair", "advanced_cleaning", "retire"]
@@ -806,7 +833,9 @@ class BatchReturnItem(BaseModel):
     item_id: Optional[UUID] = Field(
         default=None, description="Item ID for direct lookup (bypasses code search)"
     )
-    return_condition: ReturnConditionLiteral = Field(default="good", description="Condition at return")
+    return_condition: ReturnConditionLiteral = Field(
+        default="good", description="Condition at return"
+    )
     damage_notes: Optional[str] = None
     quantity: int = Field(
         default=1, ge=1, description="Quantity returned (for pool items)"

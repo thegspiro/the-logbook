@@ -7,12 +7,13 @@ Endpoints for logging and retrieving application errors.
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.error_log import ErrorLog
 from app.models.user import User
@@ -159,24 +160,50 @@ async def get_error_stats(
 
 @router.delete("")
 async def clear_errors(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.export")),
 ):
     """Clear all error logs for the organization"""
+    # Count how many will be deleted for audit trail
+    count_result = await db.execute(
+        select(func.count()).select_from(ErrorLog).where(
+            ErrorLog.organization_id == str(current_user.organization_id)
+        )
+    )
+    deleted_count = count_result.scalar() or 0
+
     await db.execute(
         delete(ErrorLog).where(
             ErrorLog.organization_id == str(current_user.organization_id)
         )
     )
+
+    # Audit-log the deletion before committing
+    await log_audit_event(
+        db=db,
+        event_type="error_logs_cleared",
+        event_category="security",
+        severity="warning",
+        event_data={
+            "cleared_by": current_user.username,
+            "organization_id": str(current_user.organization_id),
+            "entries_deleted": deleted_count,
+        },
+        user_id=str(current_user.id),
+        ip_address=request.client.host if request.client else None,
+    )
+
     await db.commit()
-    return {"status": "cleared"}
+    return {"status": "cleared", "entries_deleted": deleted_count}
 
 
 @router.get("/export")
 async def export_errors(
+    request: Request,
     event_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("audit.view")),
+    current_user: User = Depends(require_permission("audit.export")),
 ):
     """Export error logs"""
     filters = [ErrorLog.organization_id == str(current_user.organization_id)]
@@ -190,6 +217,21 @@ async def export_errors(
         .limit(1000)
     )
     errors = result.scalars().all()
+
+    await log_audit_event(
+        db=db,
+        event_type="error_logs_exported",
+        event_category="security",
+        severity="info",
+        event_data={
+            "exported_by": current_user.username,
+            "entries_exported": len(errors),
+            "event_id_filter": event_id,
+        },
+        user_id=str(current_user.id),
+        ip_address=request.client.host if request.client else None,
+    )
+
     return [
         {
             "id": e.id,

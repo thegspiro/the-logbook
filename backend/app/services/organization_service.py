@@ -123,9 +123,7 @@ class OrganizationService:
             # fallback again — single source of truth going forward.
             if org is not None:
                 new_settings = dict(settings_dict)
-                new_settings["modules"] = {
-                    f: getattr(migrated, f) for f in field_names
-                }
+                new_settings["modules"] = {f: getattr(migrated, f) for f in field_names}
                 new_settings["modules"]["_user_configured"] = True
                 org.settings = new_settings
                 flag_modified(org, "settings")
@@ -164,25 +162,41 @@ class OrganizationService:
 
         # Parse email service settings
         email_service = settings_dict.get("email_service", {})
-        email_settings = EmailServiceSettings(**{
-            k: email_service[k] for k in email_service
-            if k in EmailServiceSettings.model_fields
-        }) if email_service else EmailServiceSettings()
+        email_settings = (
+            EmailServiceSettings(
+                **{
+                    k: email_service[k]
+                    for k in email_service
+                    if k in EmailServiceSettings.model_fields
+                }
+            )
+            if email_service
+            else EmailServiceSettings()
+        )
 
         # Parse file storage settings
         file_storage = settings_dict.get("file_storage", {})
-        file_storage_settings = FileStorageSettings(**{
-            k: file_storage[k] for k in file_storage
-            if k in FileStorageSettings.model_fields
-        }) if file_storage else FileStorageSettings()
+        file_storage_settings = (
+            FileStorageSettings(
+                **{
+                    k: file_storage[k]
+                    for k in file_storage
+                    if k in FileStorageSettings.model_fields
+                }
+            )
+            if file_storage
+            else FileStorageSettings()
+        )
 
         # Parse auth settings
         from app.schemas.organization import AuthSettings
+
         auth = settings_dict.get("auth", {})
-        auth_settings = AuthSettings(**{
-            k: auth[k] for k in auth
-            if k in AuthSettings.model_fields
-        }) if auth else AuthSettings()
+        auth_settings = (
+            AuthSettings(**{k: auth[k] for k in auth if k in AuthSettings.model_fields})
+            if auth
+            else AuthSettings()
+        )
 
         # Parse module settings (auto-migrates from onboarding if needed)
         module_settings = await self._resolve_module_settings(settings_dict, org=org)

@@ -677,7 +677,9 @@ async def close_election(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    election, error = await service.close_election(election_id, current_user.organization_id)
+    election, error = await service.close_election(
+        election_id, current_user.organization_id
+    )
 
     if error:
         status_code = (

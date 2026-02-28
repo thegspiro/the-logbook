@@ -72,18 +72,22 @@ def _redact(value: Optional[str]) -> Optional[str]:
 
 # SEC: Fields that contain secrets and must be encrypted at rest.
 # Used by encrypt_settings_secrets / decrypt_settings_secrets in the service layer.
-_EMAIL_SECRET_FIELDS = frozenset({
-    "google_client_secret",
-    "google_app_password",
-    "microsoft_client_secret",
-    "smtp_password",
-})
+_EMAIL_SECRET_FIELDS = frozenset(
+    {
+        "google_client_secret",
+        "google_app_password",
+        "microsoft_client_secret",
+        "smtp_password",
+    }
+)
 
-_FILE_STORAGE_SECRET_FIELDS = frozenset({
-    "google_drive_client_secret",
-    "onedrive_client_secret",
-    "s3_secret_access_key",
-})
+_FILE_STORAGE_SECRET_FIELDS = frozenset(
+    {
+        "google_drive_client_secret",
+        "onedrive_client_secret",
+        "s3_secret_access_key",
+    }
+)
 
 # Prefix that marks a value as already encrypted (avoids double-encryption)
 _ENC_PREFIX = "enc:"
@@ -150,7 +154,7 @@ def decrypt_settings_secrets(settings_dict: dict) -> dict:
                 continue
             if val.startswith(_ENC_PREFIX):
                 try:
-                    section[field] = decrypt_data(val[len(_ENC_PREFIX):])
+                    section[field] = decrypt_data(val[len(_ENC_PREFIX) :])
                 except Exception:
                     # Decryption failed — return raw value so the admin can
                     # see there's a problem rather than silently swallowing it
@@ -173,18 +177,28 @@ class EmailServiceSettings(BaseModel):
     )
     # Gmail / Google Workspace
     google_client_id: Optional[str] = Field(None, description="Google OAuth Client ID")
-    google_client_secret: Optional[str] = Field(None, description="Google OAuth Client Secret")
+    google_client_secret: Optional[str] = Field(
+        None, description="Google OAuth Client Secret"
+    )
     google_app_password: Optional[str] = Field(None, description="Google App Password")
     # Microsoft 365
-    microsoft_tenant_id: Optional[str] = Field(None, description="Microsoft 365 Tenant ID")
-    microsoft_client_id: Optional[str] = Field(None, description="Microsoft 365 Client ID")
-    microsoft_client_secret: Optional[str] = Field(None, description="Microsoft 365 Client Secret")
+    microsoft_tenant_id: Optional[str] = Field(
+        None, description="Microsoft 365 Tenant ID"
+    )
+    microsoft_client_id: Optional[str] = Field(
+        None, description="Microsoft 365 Client ID"
+    )
+    microsoft_client_secret: Optional[str] = Field(
+        None, description="Microsoft 365 Client Secret"
+    )
     # Self-hosted SMTP
     smtp_host: Optional[str] = Field(None, description="SMTP server hostname")
     smtp_port: int = Field(default=587, description="SMTP server port")
     smtp_user: Optional[str] = Field(None, description="SMTP username")
     smtp_password: Optional[str] = Field(None, description="SMTP password")
-    smtp_encryption: str = Field(default="tls", description="SMTP encryption: tls, ssl, none")
+    smtp_encryption: str = Field(
+        default="tls", description="SMTP encryption: tls, ssl, none"
+    )
     # Common
     from_email: Optional[str] = Field(None, description="From email address")
     from_name: Optional[str] = Field(None, description="From name")
@@ -192,12 +206,14 @@ class EmailServiceSettings(BaseModel):
 
     def redacted(self) -> "EmailServiceSettings":
         """Return a copy with secret fields replaced by redaction markers."""
-        return self.model_copy(update={
-            "google_client_secret": _redact(self.google_client_secret),
-            "google_app_password": _redact(self.google_app_password),
-            "microsoft_client_secret": _redact(self.microsoft_client_secret),
-            "smtp_password": _redact(self.smtp_password),
-        })
+        return self.model_copy(
+            update={
+                "google_client_secret": _redact(self.google_client_secret),
+                "google_app_password": _redact(self.google_app_password),
+                "microsoft_client_secret": _redact(self.microsoft_client_secret),
+                "smtp_password": _redact(self.smtp_password),
+            }
+        )
 
 
 class FileStorageSettings(BaseModel):
@@ -208,30 +224,50 @@ class FileStorageSettings(BaseModel):
         description="File storage platform: googledrive, onedrive, s3, local, other",
     )
     # Google Drive
-    google_drive_client_id: Optional[str] = Field(None, description="Google Drive OAuth Client ID")
-    google_drive_client_secret: Optional[str] = Field(None, description="Google Drive OAuth Client Secret")
-    google_drive_folder_id: Optional[str] = Field(None, description="Google Drive root folder ID")
+    google_drive_client_id: Optional[str] = Field(
+        None, description="Google Drive OAuth Client ID"
+    )
+    google_drive_client_secret: Optional[str] = Field(
+        None, description="Google Drive OAuth Client Secret"
+    )
+    google_drive_folder_id: Optional[str] = Field(
+        None, description="Google Drive root folder ID"
+    )
     # OneDrive / SharePoint
-    onedrive_tenant_id: Optional[str] = Field(None, description="Microsoft 365 Tenant ID")
-    onedrive_client_id: Optional[str] = Field(None, description="OneDrive OAuth Client ID")
-    onedrive_client_secret: Optional[str] = Field(None, description="OneDrive OAuth Client Secret")
+    onedrive_tenant_id: Optional[str] = Field(
+        None, description="Microsoft 365 Tenant ID"
+    )
+    onedrive_client_id: Optional[str] = Field(
+        None, description="OneDrive OAuth Client ID"
+    )
+    onedrive_client_secret: Optional[str] = Field(
+        None, description="OneDrive OAuth Client Secret"
+    )
     sharepoint_site_url: Optional[str] = Field(None, description="SharePoint site URL")
     # Amazon S3
     s3_access_key_id: Optional[str] = Field(None, description="AWS S3 Access Key ID")
-    s3_secret_access_key: Optional[str] = Field(None, description="AWS S3 Secret Access Key")
+    s3_secret_access_key: Optional[str] = Field(
+        None, description="AWS S3 Secret Access Key"
+    )
     s3_bucket_name: Optional[str] = Field(None, description="S3 bucket name")
     s3_region: Optional[str] = Field(None, description="AWS region")
-    s3_endpoint_url: Optional[str] = Field(None, description="Custom S3 endpoint (for MinIO)")
+    s3_endpoint_url: Optional[str] = Field(
+        None, description="Custom S3 endpoint (for MinIO)"
+    )
     # Local storage
-    local_storage_path: Optional[str] = Field(None, description="Local file storage path")
+    local_storage_path: Optional[str] = Field(
+        None, description="Local file storage path"
+    )
 
     def redacted(self) -> "FileStorageSettings":
         """Return a copy with secret fields replaced by redaction markers."""
-        return self.model_copy(update={
-            "google_drive_client_secret": _redact(self.google_drive_client_secret),
-            "onedrive_client_secret": _redact(self.onedrive_client_secret),
-            "s3_secret_access_key": _redact(self.s3_secret_access_key),
-        })
+        return self.model_copy(
+            update={
+                "google_drive_client_secret": _redact(self.google_drive_client_secret),
+                "onedrive_client_secret": _redact(self.onedrive_client_secret),
+                "s3_secret_access_key": _redact(self.s3_secret_access_key),
+            }
+        )
 
 
 class MemberDropNotificationSettings(BaseModel):
@@ -435,15 +471,27 @@ class AuthSettings(BaseModel):
     )
     # Google OAuth
     google_client_id: Optional[str] = Field(None, description="Google OAuth Client ID")
-    google_client_secret: Optional[str] = Field(None, description="Google OAuth Client Secret")
+    google_client_secret: Optional[str] = Field(
+        None, description="Google OAuth Client Secret"
+    )
     # Microsoft Azure AD
-    microsoft_tenant_id: Optional[str] = Field(None, description="Microsoft Azure AD Tenant ID")
-    microsoft_client_id: Optional[str] = Field(None, description="Microsoft Azure AD Client ID")
-    microsoft_client_secret: Optional[str] = Field(None, description="Microsoft Azure AD Client Secret")
+    microsoft_tenant_id: Optional[str] = Field(
+        None, description="Microsoft Azure AD Tenant ID"
+    )
+    microsoft_client_id: Optional[str] = Field(
+        None, description="Microsoft Azure AD Client ID"
+    )
+    microsoft_client_secret: Optional[str] = Field(
+        None, description="Microsoft Azure AD Client Secret"
+    )
     # Authentik SSO
     authentik_url: Optional[str] = Field(None, description="Authentik server URL")
-    authentik_client_id: Optional[str] = Field(None, description="Authentik OAuth Client ID")
-    authentik_client_secret: Optional[str] = Field(None, description="Authentik OAuth Client Secret")
+    authentik_client_id: Optional[str] = Field(
+        None, description="Authentik OAuth Client ID"
+    )
+    authentik_client_secret: Optional[str] = Field(
+        None, description="Authentik OAuth Client Secret"
+    )
 
     def is_local_auth(self) -> bool:
         """Check if local password authentication is enabled"""
@@ -479,21 +527,13 @@ class ModuleSettings(BaseModel):
         default=False,
         description="Facilities Management module (maintenance, inspections, systems)",
     )
-    incidents: bool = Field(
-        default=False, description="Incidents & Reports module"
-    )
-    hr_payroll: bool = Field(
-        default=False, description="HR & Payroll module"
-    )
-    grants: bool = Field(
-        default=False, description="Grants & Fundraising module"
-    )
+    incidents: bool = Field(default=False, description="Incidents & Reports module")
+    hr_payroll: bool = Field(default=False, description="HR & Payroll module")
+    grants: bool = Field(default=False, description="Grants & Fundraising module")
     prospective_members: bool = Field(
         default=False, description="Prospective Members Pipeline module"
     )
-    public_info: bool = Field(
-        default=False, description="Public Information module"
-    )
+    public_info: bool = Field(default=False, description="Public Information module")
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
@@ -650,10 +690,12 @@ class OrganizationSettingsResponse(BaseModel):
 
     def redacted(self) -> "OrganizationSettingsResponse":
         """Return a copy with secret fields in nested settings replaced by redaction markers."""
-        return self.model_copy(update={
-            "email_service": self.email_service.redacted(),
-            "file_storage": self.file_storage.redacted(),
-        })
+        return self.model_copy(
+            update={
+                "email_service": self.email_service.redacted(),
+                "file_storage": self.file_storage.redacted(),
+            }
+        )
 
 
 class EnabledModulesResponse(BaseModel):
