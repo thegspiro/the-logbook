@@ -663,6 +663,30 @@ class OrganizationSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class MailingAddressUpdate(BaseModel):
+    """Schema for updating organization mailing address"""
+
+    line1: Optional[str] = Field(None, max_length=255)
+    line2: Optional[str] = Field(None, max_length=255)
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    zip: Optional[str] = Field(None, max_length=20)
+
+
+class OrganizationProfileUpdate(BaseModel):
+    """Schema for updating organization profile details (name, contact, branding)"""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    timezone: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=30)
+    email: Optional[str] = Field(None, max_length=255)
+    website: Optional[str] = Field(None, max_length=500)
+    county: Optional[str] = Field(None, max_length=100)
+    founded_year: Optional[int] = Field(None, ge=1600, le=2100)
+    logo: Optional[str] = None
+    mailing_address: Optional[MailingAddressUpdate] = None
+
+
 class OrganizationResponse(OrganizationBase):
     """Schema for organization response"""
 

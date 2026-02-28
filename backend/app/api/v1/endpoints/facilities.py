@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
@@ -157,6 +158,16 @@ async def create_facility_type(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="facilities.type_created",
+        event_category="administration",
+        severity="info",
+        event_data={"type_name": type_data.name},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return facility_type
 
 
@@ -192,6 +203,16 @@ async def update_facility_type(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Facility type not found"
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="facilities.type_updated",
+        event_category="administration",
+        severity="info",
+        event_data={"type_id": type_id, "fields_changed": list(type_data.model_dump(exclude_unset=True).keys())},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return facility_type
 

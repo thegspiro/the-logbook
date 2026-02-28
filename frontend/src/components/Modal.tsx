@@ -55,8 +55,15 @@ export const Modal: React.FC<ModalProps> = ({
     // Store the currently focused element
     previousFocusRef.current = document.activeElement as HTMLElement;
 
-    // Focus the modal
-    modalRef.current?.focus();
+    // Focus the first focusable child, or fall back to the modal container
+    const firstFocusable = modalRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (firstFocusable) {
+      firstFocusable.focus();
+    } else {
+      modalRef.current?.focus();
+    }
 
     // Handle escape key
     const handleEscape = (e: KeyboardEvent) => {

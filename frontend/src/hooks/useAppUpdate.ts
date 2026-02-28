@@ -119,7 +119,7 @@ export function useAppUpdate(): AppUpdateState {
     // as dismissed — the ref will be compared on the next check.
     dismissedBuildRef.current = 'dismissed';
     // Re-fetch once to capture the exact build ID that was dismissed
-    fetch('/version.json', { cache: 'no-store' })
+    void fetch('/version.json', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d: unknown) => {
         if (

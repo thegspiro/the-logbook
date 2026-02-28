@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
 import { clearCache } from '../utils/apiCache';
-import axios from 'axios';
+import { authService } from '../services/api';
 
 const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'scroll', 'touchstart'] as const;
 const WARNING_SECONDS = 60;
@@ -79,11 +79,11 @@ export function useIdleTimer() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // Fetch session timeout from backend
-    axios
-      .get('/api/v1/auth/session-settings', { withCredentials: true })
-      .then((res: { data?: { session_timeout_minutes?: number } }) => {
-        const minutes = res.data?.session_timeout_minutes ?? DEFAULT_TIMEOUT_MINUTES;
+    // Fetch session timeout from backend (uses shared axios instance with CSRF/auth interceptors)
+    void authService
+      .getSessionSettings()
+      .then((data) => {
+        const minutes = data.session_timeout_minutes ?? DEFAULT_TIMEOUT_MINUTES;
         timeoutMsRef.current = minutes * 60 * 1000;
         resetTimers();
       })

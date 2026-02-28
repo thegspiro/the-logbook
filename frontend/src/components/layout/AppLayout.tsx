@@ -9,6 +9,16 @@ import { useIdleTimer } from '../../hooks/useIdleTimer';
 import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
 import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 
+/** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS */
+function isValidLogoUrl(url: string): boolean {
+  return (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('/') ||
+    url.startsWith('data:image/')
+  );
+}
+
 interface AppLayoutProps {
   children?: React.ReactNode;
 }
@@ -39,19 +49,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     if (savedDepartmentName) {
       setDepartmentName(savedDepartmentName);
     }
-    if (savedLogo) {
+    if (savedLogo && isValidLogoUrl(savedLogo)) {
       setLogoPreview(savedLogo);
     }
 
     // If localStorage is empty (first visit), fetch branding from backend
     if (!savedDepartmentName) {
-      axios.get<{ name?: string; logo?: string }>('/api/v1/auth/branding').then((response) => {
+      void axios.get<{ name?: string; logo?: string }>('/api/v1/auth/branding').then((response) => {
         const { name, logo } = response.data;
         if (name) {
           setDepartmentName(name);
           localStorage.setItem('departmentName', name);
         }
-        if (logo) {
+        if (logo && isValidLogoUrl(logo)) {
           setLogoPreview(logo);
           localStorage.setItem('logoData', logo);
         }

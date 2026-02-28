@@ -46,6 +46,7 @@ from app.schemas.user import (
     UserUpdate,
     UserWithRolesResponse,
 )
+from app.core.utils import safe_error_detail
 from app.services.organization_service import OrganizationService
 from app.services.user_service import UserService
 
@@ -1319,7 +1320,7 @@ async def upload_photo(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unable to process image: {str(e)}",
+            detail=safe_error_detail(e),
         )
 
     # Store as base64 data URI
