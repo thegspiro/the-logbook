@@ -80,21 +80,23 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(["Settings"]);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
-  const [facilitiesModuleEnabled, setFacilitiesModuleEnabled] = useState(false);
-  const [apparatusModuleEnabled, setApparatusModuleEnabled] = useState(false);
+  const [enabledModules, setEnabledModules] = useState<Set<string> | null>(null);
 
-  // Check if the full Facilities and Apparatus modules are enabled for this organization
+  // Load enabled modules for this organization to control nav visibility
   useEffect(() => {
     organizationService
       .getEnabledModules()
       .then((res) => {
-        setFacilitiesModuleEnabled(res.enabled_modules.includes("facilities"));
-        setApparatusModuleEnabled(res.enabled_modules.includes("apparatus"));
+        setEnabledModules(new Set(res.enabled_modules));
       })
       .catch(() => {
-        /* default to false */
+        /* default to null = show all */
       });
   }, []);
+
+  /** Show a module's nav items? null (loading/error) → show all; otherwise check the set */
+  const isModuleOn = (key: string) =>
+    enabledModules === null || enabledModules.has(key);
 
   // Auto-expand parent menu when navigating to a child route
   useEffect(() => {
@@ -156,75 +158,111 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     { label: "Members", path: "/members", icon: Users },
     { label: "Events", path: "/events", icon: Calendar },
     { label: "Documents", path: "/documents", icon: FileText },
-    {
-      label: "Training",
-      path: "#",
-      icon: GraduationCap,
-      subItems: [
-        {
-          label: "My Training",
-          path: "/training/my-training",
-          icon: GraduationCap,
-        },
-        {
-          label: "Submit Training",
-          path: "/training/submit",
-          icon: ClipboardList,
-        },
-        { label: "Course Library", path: "/training/courses", icon: BookOpen },
-        { label: "Programs", path: "/training/programs", icon: Layers },
-        {
-          label: "Skills Testing",
-          path: "/training/skills-testing",
-          icon: ClipboardCheck,
-        },
-      ],
-    },
+    ...(isModuleOn("training")
+      ? [
+          {
+            label: "Training",
+            path: "#",
+            icon: GraduationCap,
+            subItems: [
+              {
+                label: "My Training",
+                path: "/training/my-training",
+                icon: GraduationCap,
+              },
+              {
+                label: "Submit Training",
+                path: "/training/submit",
+                icon: ClipboardList,
+              },
+              {
+                label: "Course Library",
+                path: "/training/courses",
+                icon: BookOpen,
+              },
+              { label: "Programs", path: "/training/programs", icon: Layers },
+              {
+                label: "Skills Testing",
+                path: "/training/skills-testing",
+                icon: ClipboardCheck,
+              },
+            ],
+          } as NavItem,
+        ]
+      : []),
     {
       label: "Admin Hours",
       path: "/admin-hours",
       icon: ClipboardCheck,
     },
-    {
-      label: "Shift Scheduling",
-      path: "/scheduling",
-      icon: Clock,
-    },
+    ...(isModuleOn("scheduling")
+      ? [
+          {
+            label: "Shift Scheduling",
+            path: "/scheduling",
+            icon: Clock,
+          } as NavItem,
+        ]
+      : []),
     {
       label: "Operations",
       path: "#",
       icon: Package,
       subItems: [
-        {
-          label: "My Equipment",
-          path: "/inventory/my-equipment",
-          icon: Package,
-        },
-        { label: "Inventory", path: "/inventory", icon: Package },
+        ...(isModuleOn("inventory")
+          ? [
+              {
+                label: "My Equipment",
+                path: "/inventory/my-equipment",
+                icon: Package,
+              },
+              { label: "Inventory", path: "/inventory", icon: Package },
+            ]
+          : []),
         // Full apparatus module or lightweight version
-        ...(apparatusModuleEnabled
+        ...(isModuleOn("apparatus")
           ? [{ label: "Apparatus", path: "/apparatus", icon: Truck }]
           : [{ label: "Apparatus", path: "/apparatus-basic", icon: Truck }]),
-        ...(facilitiesModuleEnabled
+        ...(isModuleOn("facilities")
           ? [{ label: "Facilities", path: "/facilities", icon: Building2 }]
           : []),
       ],
     },
     // When Facilities module is off, show a lightweight Locations page
-    ...(facilitiesModuleEnabled
+    ...(isModuleOn("facilities")
       ? []
       : [{ label: "Locations", path: "/locations", icon: MapPin } as NavItem]),
-    {
-      label: "Governance",
-      path: "#",
-      icon: Vote,
-      subItems: [
-        { label: "Elections", path: "/elections", icon: Vote },
-        { label: "Minutes", path: "/minutes", icon: ClipboardList },
-        { label: "Action Items", path: "/action-items", icon: AlertTriangle },
-      ],
-    },
-    { label: "Notifications", path: "/notifications", icon: Bell },
+    ...(isModuleOn("elections") || isModuleOn("minutes")
+      ? [
+          {
+            label: "Governance",
+            path: "#",
+            icon: Vote,
+            subItems: [
+              ...(isModuleOn("elections")
+                ? [{ label: "Elections", path: "/elections", icon: Vote }]
+                : []),
+              ...(isModuleOn("minutes")
+                ? [
+                    {
+                      label: "Minutes",
+                      path: "/minutes",
+                      icon: ClipboardList,
+                    },
+                    {
+                      label: "Action Items",
+                      path: "/action-items",
+                      icon: AlertTriangle,
+                    },
+                  ]
+                : []),
+            ],
+          } as NavItem,
+        ]
+      : []),
+    ...(isModuleOn("notifications")
+      ? [{ label: "Notifications", path: "/notifications", icon: Bell } as NavItem]
+      : []),
 
     // ── Personal settings (always visible) ──
     { label: "My Account", path: "/account", icon: UserCog },
@@ -259,18 +297,22 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             icon: Users,
             permission: "members.manage",
             subItems: [
-              {
-                label: "Prospective",
-                path: "/prospective-members",
-                icon: UserPlus,
-                permission: "prospective_members.manage",
-              },
-              {
-                label: "Pipeline Settings",
-                path: "/prospective-members/settings",
-                icon: Settings,
-                permission: "prospective_members.manage",
-              },
+              ...(isModuleOn("prospective_members")
+                ? [
+                    {
+                      label: "Prospective",
+                      path: "/prospective-members",
+                      icon: UserPlus,
+                      permission: "prospective_members.manage",
+                    },
+                    {
+                      label: "Pipeline Settings",
+                      path: "/prospective-members/settings",
+                      icon: Settings,
+                      permission: "prospective_members.manage",
+                    },
+                  ]
+                : []),
               {
                 label: "Member Management",
                 path: "/members/admin",
@@ -297,35 +339,65 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             icon: Calendar,
             permission: "events.manage",
           } as NavItem,
-          {
-            label: "Training Admin",
-            path: "/training/admin",
-            icon: GraduationCap,
-            permission: "training.manage",
-          } as NavItem,
-          {
-            label: "Inventory Admin",
-            path: "/inventory/admin",
-            icon: Package,
-            permission: "inventory.manage",
-          } as NavItem,
+          ...(isModuleOn("training")
+            ? [
+                {
+                  label: "Training Admin",
+                  path: "/training/admin",
+                  icon: GraduationCap,
+                  permission: "training.manage",
+                } as NavItem,
+              ]
+            : []),
+          ...(isModuleOn("inventory")
+            ? [
+                {
+                  label: "Inventory Admin",
+                  path: "/inventory/admin",
+                  icon: Package,
+                  permission: "inventory.manage",
+                } as NavItem,
+              ]
+            : []),
           {
             label: "Admin Hours",
             path: "/admin-hours/manage",
             icon: ClipboardCheck,
             permission: "admin_hours.manage",
           } as NavItem,
-          {
-            label: "Forms & Comms",
-            path: "#",
-            icon: FormInput,
-            permission: "settings.manage",
-            subItems: [
-              { label: "Forms", path: "/forms", icon: FormInput },
-              { label: "Integrations", path: "/integrations", icon: Plug },
-            ],
-          } as NavItem,
-          { label: "Reports", path: "/reports", icon: BarChart3 } as NavItem,
+          ...(isModuleOn("forms") || isModuleOn("integrations")
+            ? [
+                {
+                  label: "Forms & Comms",
+                  path: "#",
+                  icon: FormInput,
+                  permission: "settings.manage",
+                  subItems: [
+                    ...(isModuleOn("forms")
+                      ? [{ label: "Forms", path: "/forms", icon: FormInput }]
+                      : []),
+                    ...(isModuleOn("integrations")
+                      ? [
+                          {
+                            label: "Integrations",
+                            path: "/integrations",
+                            icon: Plug,
+                          },
+                        ]
+                      : []),
+                  ],
+                } as NavItem,
+              ]
+            : []),
+          ...(isModuleOn("reports")
+            ? [
+                {
+                  label: "Reports",
+                  path: "/reports",
+                  icon: BarChart3,
+                } as NavItem,
+              ]
+            : []),
           {
             label: "Organization Settings",
             path: "/settings",
@@ -339,12 +411,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 icon: Shield,
                 permission: "positions.manage_permissions",
               },
-              {
-                label: "Public Portal",
-                path: "/admin/public-portal",
-                icon: Globe,
-                permission: "settings.manage",
-              },
+              ...(isModuleOn("public_info")
+                ? [
+                    {
+                      label: "Public Portal",
+                      path: "/admin/public-portal",
+                      icon: Globe,
+                      permission: "settings.manage",
+                    },
+                  ]
+                : []),
               {
                 label: "Platform Analytics",
                 path: "/admin/platform-analytics",

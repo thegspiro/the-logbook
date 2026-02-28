@@ -41,17 +41,19 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [facilitiesModuleEnabled, setFacilitiesModuleEnabled] = useState(false);
-  const [apparatusModuleEnabled, setApparatusModuleEnabled] = useState(false);
+  const [enabledModules, setEnabledModules] = useState<Set<string> | null>(null);
 
+  // Load enabled modules for this organization to control nav visibility
   useEffect(() => {
     organizationService.getEnabledModules()
       .then(res => {
-        setFacilitiesModuleEnabled(res.enabled_modules.includes('facilities'));
-        setApparatusModuleEnabled(res.enabled_modules.includes('apparatus'));
+        setEnabledModules(new Set(res.enabled_modules));
       })
-      .catch(() => { /* default to false */ });
+      .catch(() => { /* default to null = show all */ });
   }, []);
+
+  /** Show a module's nav items? null (loading/error) → show all; otherwise check the set */
+  const isModuleOn = (key: string) => enabledModules === null || enabledModules.has(key);
 
   const cycleTheme = () => {
     const order = ['light', 'dark', 'system', 'high-contrast'] as const;
@@ -84,7 +86,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
-    {
+    ...(isModuleOn('training') ? [{
       label: 'Training',
       path: '/training/my-training',
       subItems: [
@@ -94,31 +96,35 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Programs', path: '/training/programs' },
         { label: 'Skills Testing', path: '/training/skills-testing' },
       ],
-    },
+    } as NavItem] : []),
     { label: 'Admin Hours', path: '/admin-hours' },
-    { label: 'Shift Scheduling', path: '/scheduling' },
+    ...(isModuleOn('scheduling') ? [{ label: 'Shift Scheduling', path: '/scheduling' } as NavItem] : []),
     {
       label: 'Operations',
       path: '/inventory',
       subItems: [
-        { label: 'My Equipment', path: '/inventory/my-equipment' },
-        { label: 'Inventory', path: '/inventory' },
-        ...(apparatusModuleEnabled
+        ...(isModuleOn('inventory') ? [
+          { label: 'My Equipment', path: '/inventory/my-equipment' },
+          { label: 'Inventory', path: '/inventory' },
+        ] : []),
+        ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus' }]
           : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
-        ...(facilitiesModuleEnabled ? [{ label: 'Facilities', path: '/facilities' }] : []),
+        ...(isModuleOn('facilities') ? [{ label: 'Facilities', path: '/facilities' }] : []),
       ],
     },
-    ...(facilitiesModuleEnabled ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
-    {
+    ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
+    ...((isModuleOn('elections') || isModuleOn('minutes')) ? [{
       label: 'Governance',
       path: '/elections',
       subItems: [
-        { label: 'Elections', path: '/elections' },
-        { label: 'Minutes', path: '/minutes' },
-        { label: 'Action Items', path: '/action-items' },
+        ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections' }] : []),
+        ...(isModuleOn('minutes') ? [
+          { label: 'Minutes', path: '/minutes' },
+          { label: 'Action Items', path: '/action-items' },
+        ] : []),
       ],
-    },
+    } as NavItem] : []),
 
     // ── Administration (only for admins) ──
     ...(hasAnyAdminPermission ? [{
@@ -127,24 +133,26 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       subItems: [
         { label: 'Department Setup', path: '/setup', permission: 'settings.manage' },
         DIV,
-        { label: 'Prospective Members', path: '/prospective-members', permission: 'prospective_members.manage' },
-        { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
+        ...(isModuleOn('prospective_members') ? [
+          { label: 'Prospective Members', path: '/prospective-members', permission: 'prospective_members.manage' },
+          { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
+        ] : []),
         { label: 'Member Management', path: '/members/admin', permission: 'members.manage' },
         { label: 'Scan Member ID', path: '/members/scan', permission: 'members.manage' },
         { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
         DIV,
         { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
-        { label: 'Training Admin', path: '/training/admin', permission: 'training.manage' },
-        { label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' },
+        ...(isModuleOn('training') ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }] : []),
+        ...(isModuleOn('inventory') ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }] : []),
         { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
         DIV,
-        { label: 'Forms', path: '/forms', permission: 'settings.manage' },
-        { label: 'Integrations', path: '/integrations', permission: 'settings.manage' },
-        { label: 'Reports', path: '/reports' },
+        ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'settings.manage' }] : []),
+        ...(isModuleOn('integrations') ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }] : []),
+        ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports' }] : []),
         DIV,
         { label: 'Organization', path: '/settings', permission: 'settings.manage' },
         { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
-        { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
+        ...(isModuleOn('public_info') ? [{ label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' }] : []),
         { label: 'Platform Analytics', path: '/admin/platform-analytics', permission: 'settings.manage' },
         { label: 'QR Code Analytics', path: '/admin/analytics', permission: 'analytics.view' },
         { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
