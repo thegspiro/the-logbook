@@ -292,15 +292,15 @@ export const UserSettingsPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-theme-surface-border mb-6">
-        <nav className="flex space-x-6" aria-label="Settings tabs">
+      <div className="border-b border-theme-surface-border mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <nav className="flex space-x-4 sm:space-x-6 overflow-x-auto scrollbar-thin" aria-label="Settings tabs">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 pb-4 px-1 border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                className={`flex items-center space-x-2 pb-4 px-1 border-b-2 whitespace-nowrap transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                   activeTab === tab.id
                     ? 'border-red-500 text-theme-text-primary'
                     : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'
@@ -316,7 +316,7 @@ export const UserSettingsPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-4 sm:p-6">
         {/* Account Tab */}
         {activeTab === 'account' && (
           <div className="space-y-6">

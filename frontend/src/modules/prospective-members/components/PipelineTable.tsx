@@ -284,14 +284,14 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
           <table className="w-full">
             <thead>
               <tr className="border-b border-theme-surface-border">
-                <th className="w-10 p-3">
-                  <button onClick={toggleAll} className="text-theme-text-muted hover:text-theme-text-primary">
+                <th className="w-14 p-3">
+                  <button onClick={toggleAll} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary">
                     {allSelected ? (
-                      <CheckSquare className="w-4 h-4 text-red-700 dark:text-red-400" />
+                      <CheckSquare className="w-5 h-5 text-red-700 dark:text-red-400" />
                     ) : someSelected ? (
-                      <CheckSquare className="w-4 h-4 text-red-700 dark:text-red-400/50" />
+                      <CheckSquare className="w-5 h-5 text-red-700 dark:text-red-400/50" />
                     ) : (
-                      <Square className="w-4 h-4" />
+                      <Square className="w-5 h-5" />
                     )}
                   </button>
                 </th>
@@ -327,12 +327,12 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => toggleOne(applicant.id)}
-                          className="text-theme-text-muted hover:text-theme-text-primary"
+                          className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary"
                         >
                           {isSelected ? (
-                            <CheckSquare className="w-4 h-4 text-red-700 dark:text-red-400" />
+                            <CheckSquare className="w-5 h-5 text-red-700 dark:text-red-400" />
                           ) : (
-                            <Square className="w-4 h-4" />
+                            <Square className="w-5 h-5" />
                           )}
                         </button>
                       </td>
@@ -402,7 +402,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                               actionMenuId === applicant.id ? null : applicant.id
                             )
                           }
-                          className="p-1 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                          className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary transition-colors"
                         >
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
@@ -520,11 +520,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
             <p className="text-sm text-theme-text-muted">
               Page {currentPage} of {totalPages} ({totalApplicants} total)
             </p>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <button
                 onClick={() => onPageChange(currentPage - 1)}
                 disabled={currentPage <= 1}
-                className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -532,7 +532,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                 <button
                   key={p}
                   onClick={() => onPageChange(p)}
-                  className={`w-8 h-8 text-sm rounded ${
+                  className={`min-w-[36px] h-9 sm:min-w-[40px] sm:h-10 text-sm rounded ${
                     p === currentPage
                       ? 'bg-red-600 text-white'
                       : 'text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary'
@@ -544,7 +544,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
               <button
                 onClick={() => onPageChange(currentPage + 1)}
                 disabled={currentPage >= totalPages}
-                className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>

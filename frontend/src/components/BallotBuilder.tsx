@@ -318,7 +318,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-theme-text-primary">Item Type</label>
                 <select

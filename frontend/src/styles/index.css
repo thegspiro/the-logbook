@@ -378,10 +378,10 @@
     @apply px-6 py-3 text-base rounded-lg;
   }
   .btn-icon {
-    @apply p-2 rounded-lg min-w-[36px] min-h-[36px] inline-flex items-center justify-center;
+    @apply p-2 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center;
   }
   .btn-icon-sm {
-    @apply p-1.5 rounded-md min-w-[28px] min-h-[28px] inline-flex items-center justify-center;
+    @apply p-1.5 rounded-md min-w-[36px] min-h-[36px] inline-flex items-center justify-center;
   }
 
   /* --- Stat Cards --- */
@@ -563,6 +563,16 @@ body {
 option {
   background-color: #fff;
   color: #111;
+}
+
+/* PWA safe area insets for devices with notches (iPhone X+, etc.) */
+@supports (padding: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 /* Mobile touch optimizations */

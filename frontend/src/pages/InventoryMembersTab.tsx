@@ -264,7 +264,7 @@ const InventoryMembersTab: React.FC = () => {
       ) : (
         /* Member list */
         <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
-          <table className="w-full min-w-[480px]">
+          <table className="w-full sm:min-w-[480px]">
             <thead className="bg-theme-input-bg border-b border-theme-surface-border">
               <tr>
                 <th className="w-8 px-2 sm:px-4 py-3" />

@@ -1627,7 +1627,7 @@ const InventoryPage: React.FC = () => {
                         <h3 className={`text-sm font-semibold ${colorClass} mb-3 flex items-center gap-2`}>
                           {icon} {title} ({sectionItems.length})
                         </h3>
-                        <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+                        <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">

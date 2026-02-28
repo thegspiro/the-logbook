@@ -1716,8 +1716,32 @@ export const SettingsPage: React.FC = () => {
         </div>
 
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Sidebar */}
-          <nav className="md:w-56 flex-shrink-0" aria-label="Settings sections">
+          {/* Mobile: horizontal scrollable tabs */}
+          <nav className="md:hidden -mx-4 px-4 border-b border-theme-surface-border" aria-label="Settings sections">
+            <div className="flex overflow-x-auto scrollbar-thin scroll-smooth gap-1 pb-2">
+              {SECTIONS.map(({ key, label, icon: Icon }) => {
+                const isActive = activeSection === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => switchSection(key)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      isActive
+                        ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
+                        : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                    }`}
+                    aria-current={isActive ? 'page' : undefined}
+                  >
+                    <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+          {/* Desktop: sidebar */}
+          <nav className="hidden md:block md:w-56 flex-shrink-0" aria-label="Settings sections">
             <div className="md:sticky md:top-24 space-y-1">
               {SECTIONS.map(({ key, label, icon: Icon, description }) => {
                 const isActive = activeSection === key;
@@ -1735,7 +1759,7 @@ export const SettingsPage: React.FC = () => {
                     <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{label}</p>
-                      <p className={`text-xs ${isActive ? 'text-blue-600/70 dark:text-blue-400/70' : 'text-theme-text-muted'} hidden md:block`}>
+                      <p className={`text-xs ${isActive ? 'text-blue-600/70 dark:text-blue-400/70' : 'text-theme-text-muted'}`}>
                         {description}
                       </p>
                     </div>
@@ -1747,7 +1771,7 @@ export const SettingsPage: React.FC = () => {
 
           {/* Content panel */}
           <main className="flex-1 min-w-0">
-            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 sm:p-6">
               {renderContent()}
             </div>
           </main>
