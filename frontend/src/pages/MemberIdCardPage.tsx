@@ -213,11 +213,6 @@ export const MemberIdCardPage: React.FC = () => {
                 <h2 className="text-lg font-bold text-theme-text-primary truncate print:text-black">
                   {displayName}
                 </h2>
-                {member.rank && (
-                  <p className="text-sm text-theme-text-secondary capitalize mt-0.5 print:text-gray-600">
-                    {member.rank.replace(/_/g, " ")}
-                  </p>
-                )}
                 {member.station && (
                   <p className="text-sm text-theme-text-muted mt-0.5 print:text-gray-500">
                     {member.station}
@@ -230,6 +225,32 @@ export const MemberIdCardPage: React.FC = () => {
                 </span>
               </div>
             </div>
+
+            {/* Rank & Member Since */}
+            {(member.rank || member.hire_date) && (
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {member.rank && (
+                  <div className="bg-theme-surface-hover rounded-lg px-3 py-2 text-center print:bg-gray-50 print:border print:border-gray-200">
+                    <p className="text-xs text-theme-text-muted uppercase tracking-wider print:text-gray-500">
+                      Rank
+                    </p>
+                    <p className="text-sm font-semibold text-theme-text-primary capitalize print:text-black">
+                      {member.rank.replace(/_/g, " ")}
+                    </p>
+                  </div>
+                )}
+                {member.hire_date && (
+                  <div className="bg-theme-surface-hover rounded-lg px-3 py-2 text-center print:bg-gray-50 print:border print:border-gray-200">
+                    <p className="text-xs text-theme-text-muted uppercase tracking-wider print:text-gray-500">
+                      Member Since
+                    </p>
+                    <p className="text-sm font-semibold text-theme-text-primary print:text-black">
+                      {new Date(member.hire_date).getFullYear()}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Membership Number + Barcode */}
             {member.membership_number && (
