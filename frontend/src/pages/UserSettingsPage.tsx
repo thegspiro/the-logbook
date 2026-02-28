@@ -7,19 +7,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Palette, AlertTriangle } from 'lucide-react';
+import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Palette, AlertTriangle, Heart, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useTheme } from '../contexts/ThemeContext';
 import { validatePasswordStrength } from '../utils/passwordValidation';
 import type { PasswordChangeData } from '../types/auth';
-import type { UserProfileUpdate } from '../types/user';
+import type { UserProfileUpdate, EmergencyContact } from '../types/user';
 import type { UserWithRoles } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useRanks } from '../hooks/useRanks';
 
-type TabType = 'account' | 'password' | 'appearance' | 'notifications';
+type TabType = 'account' | 'password' | 'emergency' | 'appearance' | 'notifications';
 
 export const UserSettingsPage: React.FC = () => {
   const { user, loadUser } = useAuthStore();
@@ -54,6 +54,11 @@ export const UserSettingsPage: React.FC = () => {
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [_loadingPreferences, setLoadingPreferences] = useState(false);
 
+  // Emergency contacts state
+  const [contactsForm, setContactsForm] = useState<EmergencyContact[]>([]);
+  const [savingContacts, setSavingContacts] = useState(false);
+  const [contactsError, setContactsError] = useState<string | null>(null);
+
   // Load user profile
   useEffect(() => {
     if (!user?.id) return;
@@ -77,6 +82,11 @@ export const UserSettingsPage: React.FC = () => {
           address_zip: data.address_zip || '',
           address_country: data.address_country || 'USA',
         });
+        setContactsForm(
+          data.emergency_contacts?.length
+            ? data.emergency_contacts.map((ec: EmergencyContact) => ({ ...ec }))
+            : [],
+        );
       } catch {
         // Profile load failure is non-critical for other tabs
       } finally {
@@ -193,6 +203,56 @@ export const UserSettingsPage: React.FC = () => {
     }
   };
 
+  // Emergency contacts handlers
+  const handleAddContact = () => {
+    setContactsForm((prev) => [
+      ...prev,
+      { name: '', relationship: '', phone: '', email: '', is_primary: prev.length === 0 },
+    ]);
+  };
+
+  const handleRemoveContact = (index: number) => {
+    setContactsForm((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleContactChange = (
+    index: number,
+    field: keyof EmergencyContact,
+    value: string | boolean,
+  ) => {
+    setContactsForm((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)),
+    );
+  };
+
+  const handleSaveEmergencyContacts = async () => {
+    if (!user?.id) return;
+    // Validate at least name and phone for each contact
+    const valid = contactsForm.every((c) => c.name.trim() && c.phone.trim());
+    if (!valid) {
+      setContactsError('Each emergency contact must have a name and phone number.');
+      return;
+    }
+    try {
+      setSavingContacts(true);
+      setContactsError(null);
+      const updated = await userService.updateUserProfile(user.id, {
+        emergency_contacts: contactsForm,
+      });
+      setProfile(updated);
+      setContactsForm(
+        updated.emergency_contacts?.length
+          ? updated.emergency_contacts.map((ec: EmergencyContact) => ({ ...ec }))
+          : [],
+      );
+      toast.success('Emergency contacts updated successfully!');
+    } catch (err: unknown) {
+      setContactsError(getErrorMessage(err, 'Unable to update emergency contacts.'));
+    } finally {
+      setSavingContacts(false);
+    }
+  };
+
   const themeOptions = [
     {
       value: 'light' as const,
@@ -217,6 +277,7 @@ export const UserSettingsPage: React.FC = () => {
   const tabs = [
     { id: 'account' as TabType, label: 'Account', icon: User },
     { id: 'password' as TabType, label: 'Password', icon: Lock },
+    { id: 'emergency' as TabType, label: 'Emergency Contacts', icon: Heart },
     { id: 'appearance' as TabType, label: 'Appearance', icon: Palette },
     { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },
   ];
@@ -624,6 +685,160 @@ export const UserSettingsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Emergency Contacts Tab */}
+        {activeTab === 'emergency' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Emergency Contacts</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
+                Add emergency contacts so your department can reach someone on your behalf if needed
+              </p>
+            </div>
+
+            {loadingProfile ? (
+              <div className="flex justify-center items-center h-32">
+                <div className="text-theme-text-muted">Loading contacts...</div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {contactsForm.length === 0 ? (
+                  <div className="text-center py-8 border border-dashed border-theme-surface-border rounded-lg">
+                    <Heart className="w-10 h-10 text-theme-text-muted mx-auto mb-3" aria-hidden="true" />
+                    <p className="text-sm text-theme-text-muted mb-4">No emergency contacts on file.</p>
+                    <button
+                      onClick={handleAddContact}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" aria-hidden="true" />
+                      Add Emergency Contact
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {contactsForm.map((ec, i) => (
+                      <div
+                        key={i}
+                        className="border border-theme-surface-border rounded-lg p-4 space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-theme-text-secondary">
+                            Contact {i + 1}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <label className="flex items-center gap-1.5 text-sm text-theme-text-secondary cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={ec.is_primary}
+                                onChange={(e) =>
+                                  handleContactChange(i, 'is_primary', e.target.checked)
+                                }
+                                className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
+                              />
+                              Primary
+                            </label>
+                            <button
+                              onClick={() => handleRemoveContact(i)}
+                              className="text-red-500 hover:text-red-400 p-1 rounded transition-colors"
+                              aria-label={`Remove contact ${i + 1}`}
+                            >
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label htmlFor={`contact-name-${i}`} className="block text-sm font-medium text-theme-text-secondary mb-1">
+                              Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              id={`contact-name-${i}`}
+                              type="text"
+                              placeholder="Full name"
+                              value={ec.name}
+                              onChange={(e) => handleContactChange(i, 'name', e.target.value)}
+                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                              disabled={savingContacts}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`contact-relationship-${i}`} className="block text-sm font-medium text-theme-text-secondary mb-1">
+                              Relationship
+                            </label>
+                            <input
+                              id={`contact-relationship-${i}`}
+                              type="text"
+                              placeholder="e.g., Spouse, Parent"
+                              value={ec.relationship}
+                              onChange={(e) => handleContactChange(i, 'relationship', e.target.value)}
+                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                              disabled={savingContacts}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label htmlFor={`contact-phone-${i}`} className="block text-sm font-medium text-theme-text-secondary mb-1">
+                              Phone <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              id={`contact-phone-${i}`}
+                              type="tel"
+                              placeholder="Phone number"
+                              value={ec.phone}
+                              onChange={(e) => handleContactChange(i, 'phone', e.target.value)}
+                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                              disabled={savingContacts}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`contact-email-${i}`} className="block text-sm font-medium text-theme-text-secondary mb-1">
+                              Email
+                            </label>
+                            <input
+                              id={`contact-email-${i}`}
+                              type="email"
+                              placeholder="Email address"
+                              value={ec.email || ''}
+                              onChange={(e) => handleContactChange(i, 'email', e.target.value)}
+                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                              disabled={savingContacts}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <button
+                      onClick={handleAddContact}
+                      className="w-full px-3 py-2.5 text-sm font-medium text-theme-text-secondary border border-dashed border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" aria-hidden="true" />
+                      Add Another Contact
+                    </button>
+
+                    {contactsError && (
+                      <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-md">
+                        <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                        <p className="text-sm text-red-600 dark:text-red-400">{contactsError}</p>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t border-theme-surface-border">
+                      <button
+                        onClick={() => { void handleSaveEmergencyContacts(); }}
+                        disabled={savingContacts}
+                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {savingContacts ? 'Saving...' : 'Save Emergency Contacts'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 

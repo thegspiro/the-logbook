@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   Home,
   Users,
@@ -426,8 +426,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         role="banner"
       >
         <div className="flex items-center justify-between h-16 px-4">
-          <a
-            href="/dashboard"
+          <Link
+            to="/dashboard"
             className="flex items-center focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg"
           >
             {logoPreview ? (
@@ -451,7 +451,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 {departmentName}
               </span>
             </div>
-          </a>
+          </Link>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -497,8 +497,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             {collapsed ? (
               <>
                 <div className="flex items-center justify-center">
-                  <a
-                    href="/dashboard"
+                  <Link
+                    to="/dashboard"
                     className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg"
                   >
                     {logoPreview ? (
@@ -517,7 +517,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                         <Home className="w-6 h-6 text-white" />
                       </div>
                     )}
-                  </a>
+                  </Link>
                 </div>
                 <button
                   onClick={() => setCollapsed(false)}
@@ -532,8 +532,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               </>
             ) : (
               <div className="flex items-center justify-between">
-                <a
-                  href="/dashboard"
+                <Link
+                  to="/dashboard"
                   className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg"
                 >
                   {logoPreview ? (
@@ -558,7 +558,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                     </span>
                     <p className="text-theme-text-muted text-xs">Dashboard</p>
                   </div>
-                </a>
+                </Link>
                 <button
                   onClick={() => setCollapsed(true)}
                   className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
