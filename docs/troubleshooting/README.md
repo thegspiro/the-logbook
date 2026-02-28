@@ -2831,6 +2831,43 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 
 ---
 
+## Member ID Card Issues (2026-02-28)
+
+### Problem: QR code not scanning
+**Fix:** Increase screen brightness or print the card (`Ctrl+P`). The QR code encodes the member's UUID.
+
+### Problem: Barcode scanner not finding member
+**Fix:** Open the scanner page from the Member ID Card page. Ensure the member's account is active.
+
+---
+
+## Dynamic Import / Chunk Load Issues (2026-02-28)
+
+### Problem: Blank page or "Loading chunk failed" after deployment
+**Status (Fixed):** All lazy-loaded pages use `lazyWithRetry()` which retries chunk loads with cache-busting. User workaround: `Ctrl+Shift+R`.
+
+---
+
+## Platform Analytics Issues (2026-02-28)
+
+### Problem: Dashboard shows empty data
+**Status (Fixed):** Response schemas now use camelCase serialization. Pull latest changes.
+
+---
+
+## Skills Testing Updates (2026-02-28)
+
+### Problem: Completed test times show UTC
+**Status (Fixed):** All timestamps display in local timezone. Pull latest.
+
+### Problem: Non-critical criteria show "FAIL"
+**Status (Fixed):** Now displays "Not Completed" for non-critical unchecked criteria.
+
+### Problem: Cannot delete test record
+**Fix:** Requires `training.manage` permission. Contact your training officer.
+
+---
+
 **Most Common Fix:** 90% of issues are resolved by:
 1. Updating `frontend/.env` with correct `VITE_API_URL`
 2. Running `docker-compose build --no-cache frontend`

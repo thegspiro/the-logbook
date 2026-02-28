@@ -24,7 +24,7 @@ Templates are the reusable definitions of a skills test. They are the digital eq
 | **Registry Code** | Links to `TrainingRequirement.registry_code` (e.g., "NREMT", "NFPA 1001") |
 | **Certification Level** | EMR, EMT, AEMT, Paramedic, Firefighter I/II, etc. |
 | **Category** | Links to existing `TrainingCategory` (EMS, Fire, Hazmat, etc.) |
-| **Time Limit** | Optional maximum duration in minutes (e.g., 10 minutes for NREMT trauma) |
+| **Time Limit** | Optional maximum duration in **minutes** (e.g., 10 for NREMT trauma). Changed from seconds to minutes as of 2026-02-28 for more intuitive configuration |
 | **Total Possible Points** | Auto-calculated from step point values |
 | **Passing Score** | Minimum points to pass (if no critical criteria are triggered) |
 | **Passing Percentage** | Alternative: minimum percentage to pass |
@@ -56,8 +56,15 @@ Each section contains individual scored steps. These are the line items on the N
 | **Required** | Whether this step must be attempted (vs. optional/conditional) |
 | **Conditional On** | Optional: step only appears if a prior step had a specific outcome |
 | **Examiner Prompt** | Optional prompt text the examiner reads when the candidate reaches this step |
-| **Scoring Type** | `binary` (done/not done), `partial` (0 to max points), or `scaled` (rubric-based) |
+| **Scoring Type** | `binary` (done/not done), `partial` (0 to max points), `scaled` (rubric-based), or `statement` (open-ended text response) |
+| **Point Value** | Configurable point value for weighted scoring (default 1). Enables point-based scoring where criteria can carry different weights |
 | **Rubric** | For `scaled` scoring: criteria descriptions for each point level |
+
+> **Note on Scoring Types (updated 2026-02-28):**
+> - `binary`: Simple pass/fail (done / not done) — most common
+> - `partial`: Award 0 to max points with a slider or increment buttons
+> - `scaled`: Select from a rubric with predefined score levels
+> - `statement`: Open-ended text box for the candidate to describe their response (e.g., "Describe the patient's chief complaint"). Can be marked as required or optional, and scored or informational
 
 ### 1.4 Critical Criteria (Auto-Fail Conditions)
 
@@ -151,6 +158,46 @@ When the test concludes:
 3. **Examiner signature**: Digital signature capture or PIN confirmation
 4. **Submit**: Locks the evaluation as final; creates/updates the linked `TrainingRecord`
 5. **Save as draft**: Allow saving incomplete evaluations to resume later (e.g., if interrupted)
+
+### 2.6 Post-Completion Review (Added 2026-02-28)
+
+After the test is completed and scores are calculated, the examiner sees a **post-completion review screen** before the test is finalized:
+
+- **Section-by-section review**: Each section displayed with all criteria, scores, and any examiner notes
+- **Section notes**: Text field per section for the examiner to add feedback specific to that portion of the evaluation
+- **Overall notes**: Final comments about the candidate's performance
+- **Score summary**: Running total, percentage, pass/fail determination, and critical criteria status
+- **Auto-stopped timer**: The clock automatically stops when the test is completed, preventing inflated elapsed times
+- **Full detail view**: Completed tests show the complete section-by-section detail (replacing the previous summary-only view)
+
+### 2.7 Practice Mode (Added 2026-02-28)
+
+Tests can be administered in **practice mode** for training purposes without affecting official records:
+
+- **Practice flag**: When creating a test, toggle "Practice Mode" on. Practice tests are clearly badged throughout the UI
+- **Non-graded**: Practice test results do not count toward training compliance or certification requirements
+- **Post-practice flow**: After completing a practice test, the candidate/examiner can:
+  - **Email results**: Send the practice results summary to the candidate via email
+  - **Discard results**: Delete the practice test record entirely
+  - **Retake**: Start a new test with the same template and candidate
+- **Visibility**: Practice tests appear in the test list with a "Practice" badge and can be filtered separately
+
+### 2.8 Test Visibility Controls (Added 2026-02-28)
+
+Training officers can control which test results are visible to candidates:
+
+- **Visibility toggle**: Per-test toggle on the tests list to show/hide results from the candidate
+- **Default visibility**: Configurable default (visible or hidden) for new tests
+- **Officer-only view**: Tests marked as hidden are visible to training officers but not to the candidate member
+- **Bulk visibility**: Officers can toggle visibility for multiple tests at once
+
+### 2.9 Test Record Deletion (Added 2026-02-28)
+
+Training officers with `training.manage` permission can permanently delete test records:
+
+- **Confirmation dialog**: Requires explicit confirmation before deletion
+- **Audit trail**: Deletion is logged via `log_audit_event` for accountability
+- **Cascade**: Deleting a test removes all associated section results, criteria scores, and notes
 
 ---
 

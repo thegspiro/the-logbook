@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-27 (added Admin Hours module, scheduling shift pattern fixes, election fixes, centralized backend logging, QR code fixes, organization settings; plus all previous updates)
+**Last Updated**: 2026-02-28 (added Member ID Card, skills testing enhancements, dashboard shift split, shift pattern presets, admin hours improvements, security hardening, dynamic import fix, platform analytics fix; plus all previous updates)
 
 ---
 
@@ -41,7 +41,10 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 27. [Elections Module — Voting & Detail Page Issues](#elections-module--voting--detail-page-issues)
 28. [Backend Logging & Observability](#backend-logging--observability)
 29. [Organization Settings Issues](#organization-settings-issues)
-30. [Getting Help](#getting-help)
+30. [Member ID Card Issues](#member-id-card-issues)
+31. [Dynamic Import / Chunk Load Issues](#dynamic-import--chunk-load-issues)
+32. [Platform Analytics Issues](#platform-analytics-issues)
+33. [Getting Help](#getting-help)
 
 ---
 
@@ -2605,13 +2608,42 @@ If any required criterion fails, the result is **FAIL** regardless of the score.
 
 **How Scoring Works**: The score is calculated as:
 ```
-percentage = (total criteria passed across all sections / total criteria across all sections) × 100
+percentage = (total points earned across all sections / total possible points across all sections) × 100
 ```
 
+**Note**: As of 2026-02-28, scoring uses **point-based calculation**. Each criterion has a configurable point value (default 1). The percentage is calculated from total points, not simple criterion count.
+
 **Troubleshooting**:
-1. Check the template's section/criteria structure — ensure all criteria are defined correctly
-2. View the test detail to see the per-section breakdown
+1. Check the template's section/criteria structure — ensure all criteria and point values are defined correctly
+2. View the test detail to see the per-section point breakdown
 3. Verify the template's passing percentage matches expectations
+4. Remember that non-critical criteria that are unchecked show as "Not Completed" (not "FAIL")
+
+#### Statement Criteria Not Saving Text
+
+**Cause**: Statement criteria require text input from the candidate. If the text field appears but the response isn't saved, ensure the criterion type is set to `statement` in the template builder.
+
+**Fix**: Edit the template, navigate to the section containing the criterion, and verify its type is `statement`. Save and republish the template.
+
+#### Practice Test Results Appearing in Official Records
+
+**Cause**: This should not happen. Practice tests are tagged with a `practice` flag and are excluded from official compliance calculations.
+
+**Fix**: If a practice test result is incorrectly counted toward compliance, verify the test was created in practice mode. Training officers can delete incorrectly categorized test records from the test detail page.
+
+#### Cannot Delete a Test Record
+
+**Causes**:
+1. You don't have the `training.manage` permission
+2. The test belongs to a different organization
+
+**Fix**: Only training officers/admins with `training.manage` permission can delete test records. Contact your training officer if you need a record removed.
+
+#### Completed Test Times Show UTC Instead of Local Time
+
+**Cause**: This was a bug where test completion timestamps were displayed in raw UTC format.
+
+**Fix Applied**: As of 2026-02-28, all completed test timestamps are displayed in the user's local timezone using the standard date formatting utilities. Pull latest changes and hard-refresh.
 
 ### Summary Dashboard Issues
 
@@ -3186,6 +3218,79 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 1. Enable the new auth provider as an **additional** option first (if supported)
 2. Verify key admin accounts can authenticate via the new provider
 3. Only then disable the old provider
+
+---
+
+## Member ID Card Issues
+
+### Problem: QR Code Not Scanning
+
+**Causes**:
+1. Screen brightness too low for scanner to read
+2. QR code too small on screen
+
+**Fix**:
+- Increase screen brightness to maximum
+- Zoom in on the QR code or use the print feature (`Ctrl+P`) to produce a physical card at standard ID card dimensions
+- The QR code encodes the member's UUID — ensure your scanner application supports URL or text QR codes
+
+### Problem: Barcode Scanner Not Finding Member
+
+**Causes**:
+1. The barcode scanner page is not open
+2. The scanned barcode doesn't match any member in the current organization
+
+**Fix**:
+- Navigate to the barcode scanner page from the Member ID Card page
+- Verify the member's account is active and belongs to your organization
+- The barcode uses Code128 encoding of the member's UUID
+
+### Problem: Print Layout Not Matching ID Card Dimensions
+
+**Fix**: The print stylesheet is optimized for standard ID card size. Ensure your browser print dialog has:
+- Paper size: auto or custom (3.375" × 2.125")
+- Margins: None or Minimum
+- Background graphics: Enabled (for department branding colors)
+
+---
+
+## Dynamic Import / Chunk Load Issues
+
+### Problem: Page Shows Blank or "Loading chunk failed" After Deployment
+
+**Symptom**: After a new deployment, users see a blank page, a loading spinner that never resolves, or a console error: `Loading chunk XXXX failed`.
+
+**Cause**: When a new version is deployed, Vite generates JS/CSS files with new content hashes. Users with cached `index.html` still reference old asset filenames that no longer exist on the server.
+
+**Fix Applied**: As of 2026-02-28, all lazy-loaded route pages use `lazyWithRetry()` instead of bare `React.lazy()`. This utility:
+1. Catches chunk load failures
+2. Retries the import up to 3 times with cache-busting query parameters
+3. Forces a page reload as a last resort
+
+**User workaround**: Hard refresh (`Ctrl+Shift+R`) or clear browser cache.
+
+**Server-side prevention**: The nginx configuration sends `Cache-Control: no-cache` for `index.html` so browsers always fetch fresh asset references on page load.
+
+---
+
+## Platform Analytics Issues
+
+### Problem: Platform Analytics Dashboard Shows Empty or Error State
+
+**Symptom**: IT admins navigate to Platform Analytics and see empty cards or a generic error message.
+
+**Cause**: The backend response schemas for platform analytics were missing `alias_generator=to_camel` configuration, returning `snake_case` field names while the frontend expected `camelCase`.
+
+**Fix Applied**: As of 2026-02-28, all platform analytics response schemas use `ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)`. Pull latest changes.
+
+### Problem: Analytics Data Not Populating
+
+**Causes**:
+1. No usage data exists yet (new deployment)
+2. The user doesn't have IT admin / `platform.admin` permissions
+3. Backend analytics service encounters null values from empty tables
+
+**Fix**: Ensure there is usage activity (logins, page views, etc.) for data to appear. The analytics service is now null-safe and will show zero counts instead of crashing on empty data.
 
 ---
 
@@ -4593,6 +4698,13 @@ docker-compose up -d
 ---
 
 ## Version History
+
+**v2.2** - 2026-02-28
+- Added Member ID Card troubleshooting section (QR code scanning, barcode scanner, print layout)
+- Added Dynamic Import / Chunk Load Issues section (lazyWithRetry, deployment asset caching)
+- Added Platform Analytics Issues section (camelCase serialization, empty data)
+- Updated Skills Testing section with statement criteria, practice mode, test deletion, and UTC timezone fix entries
+- Updated scoring documentation to reflect point-based scoring system
 
 **v2.1** - 2026-02-24
 - Added Docker Compose profile issues section (MinIO required variable error)

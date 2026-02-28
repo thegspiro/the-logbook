@@ -78,10 +78,10 @@ Fill in the basic information:
 | **Description** | Purpose and scope | "NREMT psychomotor exam for trauma patient assessment" |
 | **Passing Percentage** | Minimum score to pass (0–100) | 70 |
 | **Require All Critical** | If enabled, failing any required criterion = automatic fail | Enabled |
-| **Time Limit** | Optional time limit in seconds | 600 (10 minutes) |
+| **Time Limit** | Optional time limit in minutes | 10 |
 
 > **Screenshot placeholder:**
-> _[Screenshot of the Create Template form showing the metadata fields: name input, category dropdown, description textarea, passing percentage slider set to 70%, "Require All Critical" toggle switch (on), and time limit input showing 600 seconds]_
+> _[Screenshot of the Create Template form showing the metadata fields: name input, category dropdown, description textarea, passing percentage slider set to 70%, "Require All Critical" toggle switch (on), and time limit input showing 10 minutes]_
 
 ### Step 2: Define Sections and Criteria
 
@@ -95,12 +95,16 @@ Add sections to organize the evaluation, then add criteria (scored items) within
 **Adding criteria to a section:**
 1. Within a section, click **Add Criterion**.
 2. Enter the step description (e.g., "Determines scene/situation safety").
-3. Check **Required** if this is a critical criterion — failing a required criterion triggers automatic fail when "Require All Critical" is enabled on the template.
+3. Select the **criterion type**:
+   - **Binary** (default) — Simple pass/fail checkbox
+   - **Statement** — Open-ended text box for descriptive responses (e.g., "Describe the patient's chief complaint")
+4. Set the **point value** (default 1) for weighted scoring. Higher-value criteria carry more weight in the overall score.
+5. Check **Required** if this is a critical criterion — failing a required criterion triggers automatic fail when "Require All Critical" is enabled on the template.
 
 > **Screenshot placeholder:**
-> _[Screenshot of the template builder showing two sections ("Scene Size-Up" and "Primary Survey") expanded with criteria listed under each. Each criterion row shows: description text, a "Required" checkbox (some checked with a red asterisk), and drag handles for reordering. An "Add Criterion" button appears at the bottom of each section]_
+> _[Screenshot of the template builder showing two sections ("Scene Size-Up" and "Primary Survey") expanded with criteria listed under each. Each criterion row shows: description text, a type indicator, point value, a "Required" checkbox (some checked with a red asterisk), and drag handles for reordering. An "Add Criterion" button appears at the bottom of each section]_
 
-> **Hint:** Required (critical) criteria are the digital equivalent of the "Critical Criteria" section at the bottom of NREMT skill sheets. If a candidate triggers any of these, the result is an automatic FAIL regardless of their point score.
+> **Hint:** Required (critical) criteria are the digital equivalent of the "Critical Criteria" section at the bottom of NREMT skill sheets. If a candidate triggers any of these, the result is an automatic FAIL regardless of their point score. Non-critical criteria that are unchecked display as "Not Completed" (not "FAIL").
 
 ### Step 3: Save as Draft
 
@@ -171,9 +175,9 @@ Each section displays its criteria as a checklist. The examiner:
 ### Running Score
 
 As the examiner scores criteria, the interface displays:
-- **Section score** — criteria passed / total criteria in each section
-- **Overall running score** — total criteria passed / total criteria across all sections
-- **Percentage** — running percentage updated in real-time
+- **Section score** — points earned / total possible points in each section
+- **Overall running score** — total points earned / total possible points across all sections
+- **Percentage** — running percentage updated in real-time (based on points, not simple criterion count)
 
 ### Critical Criteria
 
@@ -190,11 +194,16 @@ If "Require All Critical" is enabled on the template:
 
 When the candidate finishes the procedure:
 
-1. Click **Complete Test**.
-2. The system automatically calculates:
-   - **Total score** — percentage of criteria passed
+1. Click **Complete Test**. The timer automatically stops.
+2. The system shows a **post-completion review screen** where the examiner can:
+   - Review each section's criteria and scores
+   - Add **section-level notes** with feedback for specific areas
+   - Add overall performance notes
+   - Verify the scoring before finalizing
+3. The system automatically calculates:
+   - **Total score** — percentage based on points earned vs. total possible points
    - **Critical criteria check** — whether all required criteria were met (if applicable)
-   - **Elapsed time** — total time from start to completion
+   - **Elapsed time** — total time from start to completion (auto-stopped)
    - **Pass/Fail result** — based on both the score threshold and critical criteria
 
 ### Result Determination
@@ -277,7 +286,7 @@ Lt. Santos navigates to **Training Admin > Skills Testing > Templates** and clic
 - **Description:** NREMT psychomotor evaluation for trauma patient assessment and management. Candidate must demonstrate a systematic approach to assessing and managing a trauma patient, including scene size-up, primary survey, secondary assessment, and reassessment.
 - **Passing Percentage:** 70
 - **Require All Critical:** Enabled
-- **Time Limit:** 600 seconds (10 minutes)
+- **Time Limit:** 10 minutes
 
 **Section 1: Scene Size-Up**
 | # | Criterion | Required |
@@ -435,6 +444,45 @@ Even though 80% exceeds the 70% threshold, the candidate fails because "Require 
 
 ---
 
+## Practice Mode
+
+Tests can be administered in **practice mode** for training purposes without affecting official records or compliance:
+
+1. When creating a new test, toggle **Practice Mode** on.
+2. The test is clearly marked with a "Practice" badge throughout the scoring interface.
+3. Practice tests do **not** count toward training compliance or certification requirements.
+4. After completing a practice test, the examiner can:
+   - **Email results** — Send the results summary to the candidate for self-study
+   - **Discard results** — Delete the practice test record entirely
+   - **Retake** — Start a new test with the same template and candidate
+
+> Practice mode is useful for study sessions, departmental skills labs, and letting candidates self-assess before an official evaluation.
+
+---
+
+## Test Visibility Controls
+
+Training officers can control which test results are visible to the candidate member:
+
+- **Visibility toggle**: On the tests list, each test has a toggle to show/hide results from the candidate
+- **Hidden tests**: Tests marked as hidden are visible to training officers but the candidate cannot see their results
+- **Use case**: Officers may want to review results internally before sharing with the candidate, or keep certain evaluations officer-only
+
+---
+
+## Test Record Deletion
+
+Training officers with `training.manage` permission can permanently delete test records:
+
+1. Navigate to the test detail page.
+2. Click the **Delete** button.
+3. Confirm the deletion in the confirmation dialog.
+4. The test and all associated scores are permanently removed.
+
+> **Note:** Deletion is logged in the audit trail for accountability. Use this for incorrectly created tests, duplicate entries, or practice tests that should be removed.
+
+---
+
 ## Permissions
 
 | Action | Required Permission |
@@ -443,6 +491,8 @@ Even though 80% exceeds the 70% threshold, the candidate fails because "Require 
 | Duplicate templates | `training.manage` |
 | Archive templates | `training.manage` |
 | Create and administer tests | Authenticated (any member) |
+| Delete test records | `training.manage` |
+| Toggle test visibility | `training.manage` |
 | View test results | Authenticated (own results) or `training.manage` (all results) |
 | View summary dashboard | `training.manage` |
 
@@ -470,8 +520,13 @@ Skills tests integrate with the broader training compliance system:
 | Test shows FAIL but score is above passing percentage | Check if "Require All Critical" is enabled. If any required criterion was not passed, the result is an automatic FAIL regardless of the score. |
 | Candidate doesn't appear in the dropdown | The candidate must be an active member of your organization. Check their account status. |
 | Template shows "archived" — can I still view old tests? | Yes. Historical test results always reference the template version they were administered under. Archived templates just can't be used for new tests. |
-| Score calculation seems wrong | The score is calculated as: (criteria passed in sections / total criteria) × 100. Check that all sections and their criteria are correct on the template. |
+| Score calculation seems wrong | The score is calculated as: (total points earned / total possible points) × 100. Each criterion has a configurable point value. Check that all sections, criteria, and point values are correct. |
 | Summary dashboard shows 0% pass rate | The pass rate only includes completed tests. If all tests are still in progress or cancelled, the rate will show 0%. |
+| Non-critical criteria showing as "FAIL" | Fixed: Non-critical criteria that are unchecked now display "Not Completed" instead of "FAIL". Pull latest changes. |
+| Completed test times show UTC instead of local time | Fixed: All timestamps now display in the user's local timezone. Pull latest changes and hard-refresh. |
+| Practice test results appearing in compliance | Practice tests are excluded from compliance calculations. If incorrectly categorized, training officers can delete the test record. |
+| Cannot delete a test record | Only users with `training.manage` permission can delete tests. Contact your training officer. |
+| Statement criterion text not saving | Ensure the criterion type is set to `statement` in the template builder. Save and republish the template. |
 
 ---
 

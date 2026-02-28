@@ -62,8 +62,9 @@ docker-compose up -d
 - **[Training Programs](Module-Training)** - Training & certification tracking
 - **[Elections & Voting](Module-Elections)** - Election management system
 - **[Event Management](Module-Events)** - QR code check-in system
-- **[Scheduling](Module-Scheduling)** - Shift scheduling, signup, swaps, templates & reports
-- **[Admin Hours](Module-Admin-Hours)** - Administrative hours tracking with QR code clock-in/clock-out
+- **[Scheduling](Module-Scheduling)** - Shift scheduling, signup, swaps, templates, pattern presets & reports
+- **[Admin Hours](Module-Admin-Hours)** - Administrative hours tracking with QR code clock-in/clock-out, bulk approve, CSV export
+- **[Member ID Card](../docs/MEMBER_ID_CARD.md)** - Digital member identification with QR code, barcode, and print support
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
 - **[Inventory](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
 - **[Compliance](Module-Compliance)** - Compliance tracking
@@ -118,6 +119,19 @@ docker-compose up -d
 ---
 
 ## 📊 Latest Updates
+
+### February 2026 (Feb 28) - Member ID Card, Skills Testing Enhancements, Shift Presets & Security Hardening
+
+- **Digital Member ID Card**: New `/member-id` page with QR code, Code128 barcode, print-optimized styles for wallet-sized cards, barcode scanner, and keyboard shortcuts
+- **Skills Testing enhancements**: Statement criteria type, practice mode, test visibility controls, point-based scoring, post-completion review screen, test record deletion, non-critical criteria display fix, UTC timezone fix
+- **Dashboard improvements**: Shifts split into "My Upcoming Shifts" and "Open Shifts" sections; shift signup error extraction fix
+- **Fire department shift pattern presets**: Built-in patterns (24/48, 48/96, Kelly Schedule, California 3-Platoon, ABCAB) plus custom pattern builder with 30-day preview
+- **Admin hours improvements**: Prominent clock-out card, pagination, filters, bulk approve, CSV export, integration into Dashboard, Reports, Member Profile, and Department Overview
+- **Security hardening**: AES-256 encryption at rest, Docker hardening (read-only filesystem, no-new-privileges), CSP tightening, Redis ACL, XSS fix in email templates
+- **HIPAA language corrections**: Replaced self-declared compliance claims with accurate language across the codebase
+- **Dynamic import fix**: `lazyWithRetry()` utility for handling chunk load failures after deployments
+- **Platform analytics fix**: camelCase serialization on response schemas
+- **Vehicle linking**: Shift templates linked to actual department vehicles; auto-default shift officer from Officer position
 
 ### February 2026 (Feb 27) - Admin Hours, Elections Enhancements, Scheduling Hardening & Code Quality
 

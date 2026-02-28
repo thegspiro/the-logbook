@@ -1644,3 +1644,51 @@ docker-compose up -d
 ### Problem: Switching storage provider loses files
 
 **Important:** Provider switches do not auto-migrate files. Back up existing files before switching, then re-upload to the new provider.
+
+---
+
+## Member ID Card Issues (Added 2026-02-28)
+
+### Problem: QR code not scanning on member ID card
+
+**Fix:** Increase screen brightness to maximum. For best results, use `Ctrl+P` to print the card at standard ID card dimensions for physical scanning.
+
+### Problem: Barcode scanner doesn't find member
+
+**Fix:** Navigate to the barcode scanner page from the Member ID Card page. The barcode uses Code128 encoding of the member's UUID. Ensure the member's account is active.
+
+### Problem: Print layout doesn't match card dimensions
+
+**Fix:** In the browser print dialog, set margins to "None" and enable "Background graphics" for department branding colors.
+
+---
+
+## Dynamic Import Issues (Added 2026-02-28)
+
+### Problem: Blank page or "Loading chunk failed" after deployment
+
+**Status (Fixed 2026-02-28):** All lazy-loaded route pages now use `lazyWithRetry()` which retries chunk loads up to 3 times with cache-busting. User workaround: hard refresh (`Ctrl+Shift+R`).
+
+---
+
+## Platform Analytics Issues (Added 2026-02-28)
+
+### Problem: Platform Analytics dashboard shows empty data
+
+**Status (Fixed 2026-02-28):** Response schemas were missing camelCase serialization. Pull latest changes. Also ensure there is usage activity for data to populate.
+
+---
+
+## Skills Testing Updates (Added 2026-02-28)
+
+### Problem: Practice test results appearing in compliance records
+
+**Fix:** Practice tests are flagged and excluded from compliance. If incorrectly categorized, training officers can delete the test record from the test detail page.
+
+### Problem: Completed test times show UTC instead of local time
+
+**Status (Fixed 2026-02-28):** All test timestamps now display in the user's local timezone. Pull latest changes.
+
+### Problem: Non-critical criteria showing as "FAIL"
+
+**Status (Fixed 2026-02-28):** Non-critical criteria that are unchecked now display "Not Completed" instead of "FAIL".

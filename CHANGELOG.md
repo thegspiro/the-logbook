@@ -7,6 +7,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Digital Member ID Card (2026-02-28)
+
+#### New Feature: Member Identification Cards with QR Code and Barcode
+A new page at `/member-id` that displays a digital member ID card for each member, suitable for on-screen display, printing, and scanning.
+
+- **QR code**: Encodes the member's unique ID for quick lookup via phone camera or QR scanner
+- **Barcode**: Code128 barcode for compatibility with handheld barcode scanners
+- **Barcode scanner support**: Built-in scanner page that reads barcodes and navigates to the member's profile
+- **Print-optimized styles**: Dedicated `@media print` stylesheet produces a wallet-sized card with department logo, member photo, name, rank, badge number, and membership type
+- **Keyboard shortcuts**: `Ctrl+P` to print, `Esc` to close the scanner
+- **Responsive layout**: Card renders at ID card proportions on mobile and desktop
+
+### Skills Testing Enhancements (2026-02-28)
+
+#### Statement Criteria Type
+- **New criterion type: `statement`** — Allows open-ended text-box responses on skill sheets (e.g., "Describe the patient's chief complaint"). Evaluators can require or optionally score statement responses
+- **Global time limit units changed from seconds to minutes** for more intuitive configuration
+
+#### Test Visibility Controls
+- **Admin-controlled visibility**: Training officers can toggle which completed tests are visible to the candidate member vs. visible only to officers
+- **Visibility column** on the tests list with toggle switch for officers
+
+#### Practice Mode
+- **Non-graded practice tests**: Members can take tests in practice mode without affecting their official records
+- **Practice test UX flow**: Reordered start page, email results option, discard results, and retake flow
+- **Practice badge**: Clear visual indicator distinguishing practice tests from official evaluations
+
+#### Point-Based Scoring
+- **Weighted scoring**: Criteria can now carry variable point values (not just binary pass/fail), enabling more nuanced skill evaluation
+- **Section point subtotals**: Each section displays points earned vs. points possible
+- **Overall percentage**: Calculated from total points rather than simple criterion count
+
+#### Post-Completion Review & Detail View
+- **Post-completion review screen**: After completing a test, examiners see a full review with section-by-section notes before finalizing
+- **Full detail view for completed tests**: Replaces the previous summary-only view with expandable section details, individual criterion scores, and examiner notes
+- **Auto-stop clock**: Timer automatically stops when the test is completed, preventing inflated elapsed times
+- **UTC timezone fix**: Completed test times now display in the user's local timezone instead of raw UTC
+
+#### Test Management
+- **Delete test records**: Training officers can now permanently delete test records (with confirmation dialog)
+- **Non-critical criteria display fix**: Criteria not marked as critical no longer show "FAIL" status when unchecked — they display as "Not Completed" to avoid confusion
+
+#### Skills Testing Navigation
+- Admin sidebar now includes direct links to Skills Testing sub-pages
+- Regular users see a "My Skills Tests" link under Training
+
+### Dashboard Improvements (2026-02-28)
+
+- **Split shift display**: Dashboard now shows two separate sections — "My Upcoming Shifts" (assigned to you) and "Open Shifts" (available for signup), replacing the previous single list
+- **Shift signup error extraction**: Error messages from failed shift signups now correctly extract and display the server-provided detail instead of showing generic errors
+- **Vehicle linking on templates**: Shift templates can now be linked to actual department vehicles (from the Apparatus module), replacing the previous free-text vehicle field
+
+### Fire Department Shift Pattern Presets (2026-02-28)
+
+#### New Feature: Built-In Shift Rotation Patterns
+Pre-configured shift patterns commonly used by fire departments, selectable via a presets dropdown in the pattern creation form:
+
+| Preset | Pattern | Description |
+|--------|---------|-------------|
+| **24/48** | 1 on / 2 off | Most common US fire department rotation |
+| **48/96** | 2 on / 4 off | Common in Western US departments |
+| **Kelly Schedule** | 24 on / 24 off / 24 on / 24 off / 24 on / 96 off | 9-day cycle, three platoons |
+| **California 3-Platoon** | 24 on / 24 off / 24 on / 48 off | Modified Kelly for 3 platoons |
+| **ABCAB** | 3 days with varying on/off | 5-day rotation used by some departments |
+
+- **Custom pattern builder**: For departments with non-standard rotations, a custom builder allows defining arbitrary on/off day sequences with visual preview
+- **Pattern preview calendar**: Shows a 30-day preview of the generated schedule before committing
+
+### Admin Hours Improvements (2026-02-28)
+
+- **Prominent clock-out card**: Active session banner replaced with a full-width card showing elapsed time, category, and a prominent "Clock Out" button — harder to miss than the previous slim banner
+- **Pagination**: Entries list supports pagination for departments with high volume
+- **Filters**: Filter entries by status (pending/approved/rejected), category, member, and date range
+- **Bulk approve**: Select multiple pending entries and approve them in one action
+- **CSV export**: Export filtered admin hours data to CSV for external reporting
+- **Validation improvements**: Better error messages for overlapping sessions and invalid date ranges
+- **Dashboard integration**: Admin hours summary widget on the main Dashboard page
+- **Reports integration**: Admin hours data included in the Reports page
+- **Member Profile integration**: Individual member's admin hours visible on their profile page
+- **Department Overview integration**: Aggregate admin hours statistics in the Department Overview
+
+### Security Hardening (2026-02-28)
+
+#### Encryption at Rest
+- **AES-256 encryption** for sensitive database fields using `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables
+- Encrypted fields include emergency contacts, medical information, and other PII
+
+#### Docker Hardening
+- **Read-only root filesystems** on application containers with explicit tmpfs mounts for writable paths
+- **`no-new-privileges`** security option on all containers
+- **Dropped capabilities** — containers run with minimal Linux capabilities
+
+#### Network & Infrastructure
+- **Content Security Policy tightening**: Removed overly permissive directives, added strict `script-src` and `style-src` policies
+- **Redis ACL restrictions**: Redis now uses ACL-based authentication instead of simple password, limiting command access
+- **Redis bind to container network**: No longer listens on all interfaces
+- **Removed `upgrade-insecure-requests`** CSP directive from frontend nginx config (caused issues in mixed HTTP/HTTPS environments)
+
+#### Vulnerability Fixes
+- **XSS fix in email sending**: User-supplied values in email templates are now HTML-escaped before rendering
+- **Critical vulnerability patches**: Security audit across frontend, backend, and infrastructure addressing injection vectors, missing input validation, and unsafe deserialization
+
+### HIPAA Language Corrections (2026-02-28)
+
+- Replaced self-declared "HIPAA compliant" claims with accurate language: "features aligned to HIPAA requirements" and "HIPAA compliance requires external review and cannot be self-declared"
+- Updated across codebase: README, wiki, security documentation, frontend UI text, and marketing copy
+
+### Dynamic Import Fix — lazyWithRetry (2026-02-28)
+
+- **New utility: `lazyWithRetry()`** (`utils/lazyWithRetry.ts`) wraps `React.lazy()` with retry logic for chunk load failures after deployments
+- When a deployment changes asset hashes, users with cached `index.html` get 404 errors on JS chunks. `lazyWithRetry` catches these failures and retries the import up to 3 times with cache-busting query parameters
+- All lazy-loaded route-level pages now use `lazyWithRetry()` instead of bare `React.lazy()`
+
+### Platform Analytics Fix (2026-02-28)
+
+- **camelCase serialization**: Platform analytics response schemas now use `alias_generator=to_camel` and `populate_by_name=True`, matching the frontend's expected field names
+- Fixes the Platform Analytics dashboard for IT admins showing empty/error state
+
+### Bug Fixes (2026-02-28)
+
+- **Auto-default shift officer**: When creating a shift, if a member is assigned the "Officer" position, they are automatically set as the shift officer
+- **Scheduling module hardening**: Added type safety, error message sanitization via `safe_error_detail()`, input validation, and shift conflict detection
+- **Runtime error fixes**: Null-safe analytics access, eager-load timestamps on models, safe stats object access — prevents crashes on pages with missing data
+- **AdminSummary type fix**: Fixed type mismatch between backend response and frontend interface that caused build failure
+- **ResponseValidationError fix**: Added `db.refresh()` after `db.flush()` to ensure SQLAlchemy populates computed columns before Pydantic serialization
+- **Fix Invalid Date display**: `formatTime()` and `formatDate()` now handle bare time strings (e.g., "08:00:00") and null values without producing "Invalid Date"
+- **Docker Compose env fix**: Optional service environment variables (MinIO, Elasticsearch, Mailhog) now use `:-` default syntax instead of `:?` required syntax, preventing startup failures when optional profiles are inactive
+
 ### Admin Hours Logging Module (2026-02-27)
 
 #### New Feature: Administrative Hours Tracking with QR Code Clock-In/Clock-Out

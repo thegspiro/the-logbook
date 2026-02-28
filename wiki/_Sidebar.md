@@ -34,6 +34,7 @@
 - [Public Programs](Public-Programs)
 - [Scheduling](Module-Scheduling)
 - [Admin Hours](Module-Admin-Hours)
+- [Member ID Card](../docs/MEMBER_ID_CARD.md)
 - [Apparatus](Module-Apparatus)
 - [Inventory](Module-Inventory)
 - [Compliance](Module-Compliance)
