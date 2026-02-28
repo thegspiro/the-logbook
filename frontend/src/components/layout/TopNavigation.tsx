@@ -70,6 +70,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     checkPermission('events.manage') ||
     checkPermission('training.manage') ||
     checkPermission('inventory.manage') ||
+    checkPermission('admin_hours.manage') ||
     checkPermission('positions.manage_permissions') ||
     checkPermission('settings.manage') ||
     checkPermission('analytics.view');
@@ -91,8 +92,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Submit Training', path: '/training/submit' },
         { label: 'Course Library', path: '/training/courses' },
         { label: 'Programs', path: '/training/programs' },
+        { label: 'Skills Testing', path: '/training/skills-testing' },
       ],
     },
+    { label: 'Admin Hours', path: '/admin-hours' },
     { label: 'Shift Scheduling', path: '/scheduling' },
     {
       label: 'Operations',
@@ -127,10 +130,13 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Prospective Members', path: '/prospective-members', permission: 'prospective_members.manage' },
         { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
         { label: 'Member Management', path: '/members/admin', permission: 'members.manage' },
+        { label: 'Scan Member ID', path: '/members/scan', permission: 'members.manage' },
+        { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
         DIV,
         { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
         { label: 'Training Admin', path: '/training/admin', permission: 'training.manage' },
         { label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' },
+        { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
         DIV,
         { label: 'Forms', path: '/forms', permission: 'settings.manage' },
         { label: 'Integrations', path: '/integrations', permission: 'settings.manage' },
