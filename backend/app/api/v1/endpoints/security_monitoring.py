@@ -106,6 +106,7 @@ async def get_security_alerts(
         limit=limit,
         threat_level=threat_level_enum,
         alert_type=alert_type_enum,
+        db=db,
     )
 
     return {"alerts": alerts, "total": len(alerts)}
@@ -121,7 +122,9 @@ async def acknowledge_alert(
     """
     Acknowledge a security alert
     """
-    success = security_monitor.acknowledge_alert(alert_id)
+    success = await security_monitor.acknowledge_alert(
+        alert_id, db, username=current_user.username
+    )
 
     if not success:
         raise HTTPException(
@@ -155,7 +158,9 @@ async def resolve_alert(
     """
     Mark a security alert as resolved
     """
-    success = security_monitor.resolve_alert(alert_id)
+    success = await security_monitor.resolve_alert(
+        alert_id, db, username=current_user.username
+    )
 
     if not success:
         raise HTTPException(
@@ -276,6 +281,53 @@ async def create_audit_checkpoint(
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+@router.post("/audit-log/rehash")
+async def rehash_audit_chain(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("audit.export")),
+):
+    """
+    Recompute the audit log hash chain
+
+    This is a recovery operation that recalculates all hashes in the chain
+    without modifying the underlying log data. Use when hash chain integrity
+    verification fails due to a bug in hash computation (not tampering).
+
+    Requires audit.export permission. The operation is itself audit-logged.
+    """
+    try:
+        count = await audit_logger.rehash_chain(db)
+
+        await log_audit_event(
+            db=db,
+            event_type="audit_chain_rehashed",
+            event_category="security",
+            severity="critical",
+            event_data={
+                "rehashed_by": current_user.username,
+                "entries_rehashed": count,
+            },
+            user_id=str(current_user.id),
+            ip_address=request.client.host if request.client else None,
+        )
+
+        await db.commit()
+
+        return {
+            "status": "completed",
+            "entries_rehashed": count,
+            "message": (
+                f"Rehashed {count} audit log entries"
+                if count > 0
+                else "All hashes are already correct"
+            ),
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.get("/audit-log/entries")
@@ -486,10 +538,12 @@ async def get_data_exfiltration_status(
     exfil_alerts = await security_monitor.get_recent_alerts(
         limit=20,
         alert_type=AlertType.DATA_EXFILTRATION,
+        db=db,
     )
     external_alerts = await security_monitor.get_recent_alerts(
         limit=20,
         alert_type=AlertType.EXTERNAL_DATA_TRANSFER,
+        db=db,
     )
 
     return {

@@ -5,7 +5,7 @@ Comprehensive security monitoring with:
 - Data exfiltration detection
 - Intrusion detection and anomaly monitoring
 - Log integrity protection
-- Security alerts and notifications
+- Security alerts and notifications (persisted to DB)
 - Session hijacking detection
 - Brute force detection
 """
@@ -19,12 +19,14 @@ from enum import Enum
 from ipaddress import ip_address, ip_network
 from typing import Any, Dict, List, Optional, Tuple
 
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event, verify_audit_log_integrity
 from app.core.constants import AUDIT_EVENT_LOGIN_FAILED
 from app.models.audit import AuditLog
+from app.models.security_alert import SecurityAlertRecord
 
 
 class ThreatLevel(str, Enum):
@@ -147,6 +149,46 @@ class SecurityMonitoringService:
             ],
         }
 
+    async def _add_alert(
+        self,
+        db: AsyncSession,
+        alert: SecurityAlert,
+    ) -> None:
+        """Add alert to in-memory cache and persist to database."""
+        self.alerts.append(alert)
+        try:
+            from app.models.security_alert import (
+                AlertType as DBAlertType,
+                ThreatLevel as DBThreatLevel,
+            )
+
+            # Serialize details — convert non-serializable types
+            serializable_details = {}
+            for k, v in alert.details.items():
+                if isinstance(v, datetime):
+                    serializable_details[k] = v.isoformat()
+                elif isinstance(v, Enum):
+                    serializable_details[k] = v.value
+                else:
+                    serializable_details[k] = v
+
+            record = SecurityAlertRecord(
+                id=alert.id,
+                alert_type=DBAlertType(alert.alert_type.value),
+                threat_level=DBThreatLevel(alert.threat_level.value),
+                timestamp=alert.timestamp,
+                description=alert.description,
+                source_ip=alert.source_ip,
+                user_id=alert.user_id,
+                details=serializable_details,
+                acknowledged=alert.acknowledged,
+                resolved=alert.resolved,
+            )
+            db.add(record)
+            await db.flush()
+        except Exception as e:
+            logger.warning(f"Failed to persist security alert {alert.id}: {e}")
+
     async def analyze_request(
         self,
         db: AsyncSession,
@@ -215,7 +257,7 @@ class SecurityMonitoringService:
                         ip_address=request_data.get("ip_address"),
                     )
 
-                    self.alerts.append(alert)
+                    await self._add_alert(db, alert)
                     return alert
 
         return None
@@ -253,7 +295,7 @@ class SecurityMonitoringService:
                     "threshold": self.thresholds.api_calls_per_minute,
                 },
             )
-            self.alerts.append(alert)
+            await self._add_alert(db, alert)
             return alert
 
         return None
@@ -319,7 +361,7 @@ class SecurityMonitoringService:
                 user_id=user_id,
             )
 
-            self.alerts.append(alert)
+            await self._add_alert(db, alert)
             return alert
 
         # Check per-user threshold
@@ -351,7 +393,7 @@ class SecurityMonitoringService:
                     user_id=user_id,
                 )
 
-                self.alerts.append(alert)
+                await self._add_alert(db, alert)
                 return alert
 
         return None
@@ -409,7 +451,7 @@ class SecurityMonitoringService:
                         session_id=session_id,
                     )
 
-                    self.alerts.append(alert)
+                    await self._add_alert(db, alert)
                     return alert
 
         # Track this request
@@ -522,7 +564,7 @@ class SecurityMonitoringService:
                 ip_address=ip_address,
                 user_id=user_id,
             )
-            self.alerts.append(alert)
+            await self._add_alert(db, alert)
 
         # Return highest severity
         if alerts:
@@ -590,7 +632,7 @@ class SecurityMonitoringService:
                 },
             )
 
-            self.alerts.append(alert)
+            await self._add_alert(db, alert)
 
         return result
 
@@ -639,7 +681,7 @@ class SecurityMonitoringService:
                 user_id=user_id,
             )
 
-            self.alerts.append(alert)
+            await self._add_alert(db, alert)
             return alert
 
         return None
@@ -654,14 +696,43 @@ class SecurityMonitoringService:
         now = datetime.now(timezone.utc)
         hour_ago = now - timedelta(hours=1)
 
-        # Count recent alerts by severity
-        recent_alerts = [a for a in self.alerts if a.timestamp > hour_ago]
-        alerts_by_severity = defaultdict(int)
-        alerts_by_type = defaultdict(int)
+        # Count recent alerts from DB
+        recent_count_result = await db.execute(
+            select(func.count(SecurityAlertRecord.id)).where(
+                SecurityAlertRecord.timestamp > hour_ago
+            )
+        )
+        total_last_hour = recent_count_result.scalar() or 0
 
-        for alert in recent_alerts:
-            alerts_by_severity[alert.threat_level.value] += 1
-            alerts_by_type[alert.alert_type.value] += 1
+        # Alerts by severity from DB
+        severity_result = await db.execute(
+            select(SecurityAlertRecord.threat_level, func.count())
+            .where(SecurityAlertRecord.timestamp > hour_ago)
+            .group_by(SecurityAlertRecord.threat_level)
+        )
+        alerts_by_severity = {
+            level.value if hasattr(level, "value") else level: count
+            for level, count in severity_result.all()
+        }
+
+        # Alerts by type from DB
+        type_result = await db.execute(
+            select(SecurityAlertRecord.alert_type, func.count())
+            .where(SecurityAlertRecord.timestamp > hour_ago)
+            .group_by(SecurityAlertRecord.alert_type)
+        )
+        alerts_by_type = {
+            atype.value if hasattr(atype, "value") else atype: count
+            for atype, count in type_result.all()
+        }
+
+        # Unacknowledged count from DB
+        unack_result = await db.execute(
+            select(func.count(SecurityAlertRecord.id)).where(
+                SecurityAlertRecord.acknowledged == False  # noqa: E712
+            )
+        )
+        unacknowledged = unack_result.scalar() or 0
 
         # Verify log integrity
         integrity_result = await self.verify_log_integrity(db)
@@ -680,7 +751,7 @@ class SecurityMonitoringService:
         return {
             "status": (
                 "healthy"
-                if integrity_result["verified"] and not recent_alerts
+                if integrity_result["verified"] and total_last_hour == 0
                 else "alert"
             ),
             "timestamp": now.isoformat(),
@@ -690,10 +761,10 @@ class SecurityMonitoringService:
                 "errors": len(integrity_result.get("errors", [])),
             },
             "alerts": {
-                "total_last_hour": len(recent_alerts),
-                "by_severity": dict(alerts_by_severity),
-                "by_type": dict(alerts_by_type),
-                "unacknowledged": len([a for a in self.alerts if not a.acknowledged]),
+                "total_last_hour": total_last_hour,
+                "by_severity": alerts_by_severity,
+                "by_type": alerts_by_type,
+                "unacknowledged": unacknowledged,
             },
             "metrics": {
                 "failed_logins_last_hour": failed_logins_hour,
@@ -717,10 +788,51 @@ class SecurityMonitoringService:
         limit: int = 50,
         threat_level: Optional[ThreatLevel] = None,
         alert_type: Optional[AlertType] = None,
+        db: Optional[AsyncSession] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Get recent security alerts
+        Get recent security alerts from the database.
+        Falls back to in-memory list if no db session is provided.
         """
+        if db is not None:
+            from app.models.security_alert import (
+                AlertType as DBAlertType,
+                ThreatLevel as DBThreatLevel,
+            )
+
+            query = select(SecurityAlertRecord).order_by(
+                SecurityAlertRecord.timestamp.desc()
+            )
+            if threat_level:
+                query = query.where(
+                    SecurityAlertRecord.threat_level == DBThreatLevel(threat_level.value)
+                )
+            if alert_type:
+                query = query.where(
+                    SecurityAlertRecord.alert_type == DBAlertType(alert_type.value)
+                )
+            query = query.limit(limit)
+
+            result = await db.execute(query)
+            records = result.scalars().all()
+
+            return [
+                {
+                    "id": r.id,
+                    "alert_type": r.alert_type.value if hasattr(r.alert_type, "value") else r.alert_type,
+                    "threat_level": r.threat_level.value if hasattr(r.threat_level, "value") else r.threat_level,
+                    "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+                    "description": r.description,
+                    "source_ip": r.source_ip,
+                    "user_id": r.user_id,
+                    "details": r.details or {},
+                    "acknowledged": r.acknowledged,
+                    "resolved": r.resolved,
+                }
+                for r in records
+            ]
+
+        # Fallback to in-memory list
         alerts = self.alerts.copy()
 
         if threat_level:
@@ -729,7 +841,6 @@ class SecurityMonitoringService:
         if alert_type:
             alerts = [a for a in alerts if a.alert_type == alert_type]
 
-        # Sort by timestamp descending
         alerts.sort(key=lambda a: a.timestamp, reverse=True)
 
         return [
@@ -748,24 +859,56 @@ class SecurityMonitoringService:
             for a in alerts[:limit]
         ]
 
-    def acknowledge_alert(self, alert_id: str) -> bool:
+    async def acknowledge_alert(
+        self,
+        alert_id: str,
+        db: AsyncSession,
+        username: Optional[str] = None,
+    ) -> bool:
         """
-        Acknowledge a security alert
+        Acknowledge a security alert (persisted to DB)
         """
-        for alert in self.alerts:
-            if alert.id == alert_id:
-                alert.acknowledged = True
-                return True
+        result = await db.execute(
+            select(SecurityAlertRecord).where(SecurityAlertRecord.id == alert_id)
+        )
+        record = result.scalar_one_or_none()
+        if record:
+            record.acknowledged = True
+            record.acknowledged_by = username
+            record.acknowledged_at = datetime.now(timezone.utc)
+            await db.flush()
+            # Also update in-memory cache
+            for alert in self.alerts:
+                if alert.id == alert_id:
+                    alert.acknowledged = True
+                    break
+            return True
         return False
 
-    def resolve_alert(self, alert_id: str) -> bool:
+    async def resolve_alert(
+        self,
+        alert_id: str,
+        db: AsyncSession,
+        username: Optional[str] = None,
+    ) -> bool:
         """
-        Mark a security alert as resolved
+        Mark a security alert as resolved (persisted to DB)
         """
-        for alert in self.alerts:
-            if alert.id == alert_id:
-                alert.resolved = True
-                return True
+        result = await db.execute(
+            select(SecurityAlertRecord).where(SecurityAlertRecord.id == alert_id)
+        )
+        record = result.scalar_one_or_none()
+        if record:
+            record.resolved = True
+            record.resolved_by = username
+            record.resolved_at = datetime.now(timezone.utc)
+            await db.flush()
+            # Also update in-memory cache
+            for alert in self.alerts:
+                if alert.id == alert_id:
+                    alert.resolved = True
+                    break
+            return True
         return False
 
 
