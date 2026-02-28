@@ -66,6 +66,9 @@ from app.models.ip_security import (
     IPException, BlockedAccessAttempt, CountryBlockRule, IPExceptionAuditLog
 )
 
+# Security Alerts
+from app.models.security_alert import SecurityAlertRecord  # noqa: F401
+
 # Operational Ranks
 from app.models.operational_rank import OperationalRank  # noqa: F401
 
