@@ -1,7 +1,7 @@
 """Add required_membership_types column to training_requirements
 
-Revision ID: 20260227_0200
-Revises: 20260227_0100
+Revision ID: 20260227_0250
+Revises: 20260227_0200
 Create Date: 2026-02-27
 
 Adds a JSON column to store which membership types (e.g. active,
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260227_0200"
-down_revision = "20260227_0100"
+revision = "20260227_0250"
+down_revision = "20260227_0200"
 branch_labels = None
 depends_on = None
 
