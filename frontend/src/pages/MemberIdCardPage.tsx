@@ -231,30 +231,21 @@ export const MemberIdCardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Membership Number */}
+            {/* Membership Number + Barcode */}
             {member.membership_number && (
-              <div className="bg-theme-surface-hover rounded-lg px-4 py-2 mb-4 text-center print:bg-gray-50 print:border print:border-gray-200">
+              <div
+                className="bg-theme-surface-hover rounded-lg px-4 py-2 mb-4 text-center print:bg-gray-50 print:border print:border-gray-200"
+                data-testid="barcode-container"
+              >
                 <p className="text-xs text-theme-text-muted uppercase tracking-wider print:text-gray-500">
                   Membership #
                 </p>
                 <p className="text-lg font-mono font-bold text-theme-text-primary tracking-wide print:text-black">
                   {member.membership_number}
                 </p>
-              </div>
-            )}
-
-            {/* Code128 Barcode — ideal for USB barcode scanners */}
-            {member.membership_number && (
-              <div
-                className="flex flex-col items-center mb-4"
-                data-testid="barcode-container"
-              >
-                <div className="bg-white p-2 rounded">
-                  <svg ref={barcodeRef} data-testid="barcode" />
+                <div className="mt-1">
+                  <svg ref={barcodeRef} data-testid="barcode" className="mx-auto" />
                 </div>
-                <p className="text-[10px] text-theme-text-muted mt-1 print:text-gray-400">
-                  Code 128
-                </p>
               </div>
             )}
 

@@ -261,7 +261,6 @@ describe("MemberIdCardPage", () => {
       await waitFor(() => {
         expect(screen.getByTestId("barcode-container")).toBeInTheDocument();
         expect(screen.getByTestId("barcode")).toBeInTheDocument();
-        expect(screen.getByText("Code 128")).toBeInTheDocument();
       });
     });
 
