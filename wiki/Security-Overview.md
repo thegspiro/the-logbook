@@ -4,6 +4,15 @@
 
 The Logbook is designed with security as a core principle, implementing industry-standard security practices with features aligned to HIPAA requirements, Section 508 accessibility, and general security best practices. Note: HIPAA compliance requires external review and cannot be self-declared.
 
+### Recent Security Updates (2026-02-28)
+
+- **Encryption at rest**: AES-256 encryption for sensitive database fields (emergency contacts, medical information, PII) using `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables
+- **Docker hardening**: Read-only root filesystems, `no-new-privileges` security option, dropped capabilities, explicit tmpfs mounts
+- **Content Security Policy**: Tightened CSP with strict `script-src` and `style-src` policies; removed `upgrade-insecure-requests` directive
+- **Redis ACL**: Redis now uses ACL-based authentication with restricted command access, bound to container network only
+- **XSS fix**: User-supplied values in email templates are HTML-escaped before rendering
+- **HIPAA language**: Replaced self-declared "HIPAA compliant" claims with accurate language throughout the codebase
+
 ## Table of Contents
 
 1. [Security Features](#security-features)

@@ -14,7 +14,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, database, and member management issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-27 with admin hours module, scheduling shift pattern fixes, elections fixes, centralized backend logging, QR code fixes, organization settings, plus all previous updates
+   - **Updated**: 2026-02-28 with member ID card, skills testing enhancements, dashboard shift split, shift pattern presets, admin hours improvements, security hardening, dynamic import fix, platform analytics fix, plus all previous updates
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application
@@ -86,11 +86,13 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - Form retrieval and submission without authentication
     - Rate limiting, security notes, integration examples
 
-10. **[SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md)** (New 2026-02-25)
+10. **[SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md)** (Updated 2026-02-28)
     - Skills Testing feature requirements specification
     - NREMT-style psychomotor evaluation system
-    - Skill sheet templates, sections, steps, critical criteria
-    - Test session workflow, timer, scoring, pass/fail
+    - Skill sheet templates, sections, steps, critical criteria, statement criteria
+    - Test session workflow, timer, scoring, pass/fail, practice mode
+    - Test visibility controls, post-completion review, test deletion
+    - Point-based scoring with configurable criterion weights
     - Data model, integration points, API endpoints, implementation phases
 
 10. **[TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md)** (Updated 2026-02-14)
@@ -458,7 +460,7 @@ docker-compose ps
 
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
-| SKILLS_TESTING_FEATURE.md | 1.0 | 2026-02-25 | Current |
+| SKILLS_TESTING_FEATURE.md | 1.1 | 2026-02-28 | Current — added statement criteria, practice mode, visibility controls, post-completion review, test deletion, point-based scoring |
 | TROUBLESHOOTING.md | 2.1 | 2026-02-26 | Current |
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |

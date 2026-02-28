@@ -15,8 +15,11 @@ The Scheduling module manages the full shift lifecycle for fire departments and 
 - **Template colors on calendar** — shifts inherit color from their template for visual organization
 - **Swap and time-off requests** with admin approval workflow
 - **Shift templates and patterns** for recurring schedules (daily, weekly, platoon, custom)
+- **Fire department shift pattern presets** — Built-in patterns (24/48, 48/96, Kelly Schedule, California 3-Platoon, ABCAB) and custom pattern builder
 - **Shift generation** from patterns for bulk schedule creation with correct weekday mapping
 - **Apparatus connection** linking shifts to vehicles (vehicle type dropdown on Standard and Specialty templates)
+- **Vehicle linking on templates** — Templates linked to actual department vehicles from the Apparatus module
+- **Auto-default shift officer** — When a member is assigned the "Officer" position, they are automatically set as the shift officer
 - **Scheduling reports** (member hours, coverage, call volume, availability)
 - **Training integration** via shift completion reports and observations
 
@@ -395,6 +398,50 @@ Creates:
 - Index: `idx_basic_apparatus_org` on organization_id
 
 **Revision chain:** `20260218_0100` → `20260218_0200`
+
+---
+
+## Shift Pattern Presets (Added 2026-02-28)
+
+The pattern creation form includes a **presets dropdown** with fire department shift rotations commonly used across the US:
+
+| Preset | On/Off Pattern | Cycle Length | Description |
+|--------|---------------|-------------|-------------|
+| **24/48** | 1 on / 2 off | 3 days | Most common US fire department rotation |
+| **48/96** | 2 on / 4 off | 6 days | Common in Western US departments |
+| **Kelly Schedule** | 24 on / 24 off / 24 on / 24 off / 24 on / 96 off | 9 days | Three-platoon rotation |
+| **California 3-Platoon** | 24 on / 24 off / 24 on / 48 off | 4 days | Modified Kelly for 3 platoons |
+| **ABCAB** | Variable on/off | 5 days | Five-day rotation used by some departments |
+
+### Custom Pattern Builder
+
+For non-standard rotations, the **custom pattern builder** allows:
+
+- Defining arbitrary sequences of on/off days
+- Visual preview showing 30 days of the generated schedule
+- Assigning members to the rotation
+- Linking to a shift template for auto-populated shift details
+
+### Auto-Default Shift Officer (Added 2026-02-28)
+
+When creating or editing a shift, if a member is assigned the **Officer** position in the crew assignments, the system automatically sets that member as the shift officer. This eliminates the need to separately select the shift officer from the dropdown when it matches the assigned officer.
+
+### Dashboard Shift Display (Updated 2026-02-28)
+
+The main Dashboard now displays shifts in two separate sections:
+
+- **My Upcoming Shifts** — Shifts you are assigned to, with date, time, position, and apparatus
+- **Open Shifts** — Available shifts you can sign up for, with a quick-signup button
+
+This replaces the previous single shift list that mixed assigned and open shifts together.
+
+### Vehicle Linking on Templates (Added 2026-02-28)
+
+Shift templates can now be linked to actual department vehicles from the Apparatus module (or Basic Apparatus if the full module is disabled). When a template is linked to a vehicle:
+
+- The vehicle name and type display on shifts created from that template
+- Calendar cards show the vehicle designation
+- Shift creation pre-fills the apparatus field from the template
 
 ---
 

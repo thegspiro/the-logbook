@@ -12,8 +12,16 @@ The Admin Hours module tracks administrative work hours for department members v
 - **Auto-Approve Thresholds** — Entries below a configurable duration threshold are auto-approved; longer entries require review
 - **Approval Workflow** — Admins review, approve, or reject pending entries from the management dashboard
 - **Personal Hours Log** — Members view their own hours, active sessions, and submission history
+- **Prominent Clock-Out Card** — Active sessions display a full-width card with elapsed time and prominent clock-out button (replaces the previous slim banner)
 - **Summary Dashboard** — Admin view of total hours, pending reviews, entries by category, and per-member breakdowns
 - **Printable QR Codes** — Generate and print QR codes per category for posting at work locations
+- **Pagination & Filters** — Filter entries by status, category, member, and date range with paginated results
+- **Bulk Approve** — Select multiple pending entries and approve them in one action
+- **CSV Export** — Export filtered admin hours data to CSV for external reporting
+- **Dashboard Integration** — Admin hours summary widget on the main Dashboard page
+- **Reports Integration** — Admin hours data included in the Reports page
+- **Member Profile Integration** — Individual member's admin hours visible on their profile page
+- **Department Overview Integration** — Aggregate admin hours statistics in the Department Overview
 
 ---
 

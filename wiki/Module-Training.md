@@ -84,8 +84,14 @@ The Training module includes a **Skills Testing** sub-module for conducting stru
 ### Key Capabilities
 
 - **Skill Sheet Templates** — Reusable evaluation definitions with sections, criteria, scoring configuration, versioning, and lifecycle (draft → published → archived)
+- **Statement Criteria** — Open-ended text-box criterion type for descriptive responses (e.g., "Describe the patient's chief complaint")
 - **Critical Criteria** — Required criteria that trigger automatic failure, mirroring NREMT auto-fail rules
+- **Point-Based Scoring** — Criteria with configurable point values for weighted scoring. Section point subtotals and overall percentage calculated from total points
 - **Test Administration** — Examiner selects template + candidate, scores criteria in real time, system calculates pass/fail
+- **Practice Mode** — Non-graded practice tests with email results, discard, and retake flow
+- **Test Visibility Controls** — Admin-controlled visibility toggle per test to show/hide results from candidates
+- **Post-Completion Review** — Section-by-section review screen with notes before finalizing, auto-stop clock
+- **Test Record Deletion** — Training officers can permanently delete test records with audit logging
 - **Scoring Engine** — Automatic section scores, overall percentage, critical criteria compliance, elapsed time
 - **Summary Dashboard** — Department-wide statistics (pass rate, average score, tests this month)
 
@@ -104,6 +110,7 @@ POST   /api/v1/training/skills-testing/tests                  # Create test
 GET    /api/v1/training/skills-testing/tests/{id}             # Get test detail
 PUT    /api/v1/training/skills-testing/tests/{id}             # Update test (save progress)
 POST   /api/v1/training/skills-testing/tests/{id}/complete    # Complete test & calculate results
+DELETE /api/v1/training/skills-testing/tests/{id}             # Delete test record (training.manage)
 GET    /api/v1/training/skills-testing/summary                # Department-wide statistics
 ```
 

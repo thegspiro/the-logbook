@@ -17,7 +17,10 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **Time-Off Requests** — Request time off with admin approve/deny (date range validation enforced)
 - **Shift Templates** — Reusable shift configurations with vehicle type selector for Standard and Specialty categories
 - **Shift Patterns** — Daily, weekly, platoon, and custom patterns for bulk generation (JS weekday convention)
+- **Shift Pattern Presets** — Built-in fire department rotations (24/48, 48/96, Kelly Schedule, California 3-Platoon, ABCAB) plus custom pattern builder
 - **Bulk Shift Generation** — Generate multiple shifts from templates and patterns, with duplicate check by date + start_time
+- **Vehicle Linking on Templates** — Templates linked to actual department vehicles from the Apparatus module
+- **Auto-Default Shift Officer** — Assigning the "Officer" position automatically sets that member as the shift officer
 - **Apparatus Connection** — Link shifts to vehicles from the apparatus dropdown
 - **Shift Completion Reports** — Officers file reports that auto-credit training programs
 - **Leave of Absence Integration** — Members on leave excluded from scheduling
@@ -65,7 +68,16 @@ GET    /api/v1/scheduling/apparatus          # List basic apparatus
 
 ---
 
-## Recent Improvements (2026-02-27)
+## Recent Improvements (2026-02-28)
+
+- **Fire department shift pattern presets**: Built-in patterns (24/48, 48/96, Kelly Schedule, California 3-Platoon, ABCAB) plus custom pattern builder with 30-day preview
+- **Vehicle linking on templates**: Shift templates can be linked to actual department vehicles from the Apparatus module
+- **Auto-default shift officer**: Assigning the "Officer" position automatically sets that member as the shift officer
+- **Dashboard shift split**: Dashboard now shows "My Upcoming Shifts" and "Open Shifts" as separate sections
+- **Scheduling module hardening**: Type safety, error sanitization, input validation, and conflict detection
+- **Shift signup error fix**: Error messages from failed signups now correctly display server-provided details
+
+### Previous Improvements (2026-02-27)
 
 - **Shift conflict detection**: Backend prevents duplicate assignment and overlapping time conflicts with `UniqueConstraint(shift_id, user_id)`
 - **Data enrichment**: All shift responses now populate `shift_officer_name`, `attendee_count`, `user_name` on assignments, and embedded shift data on `my-assignments`

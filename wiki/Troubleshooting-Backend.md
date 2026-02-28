@@ -248,4 +248,26 @@ If you see duplicate log lines, remove any custom `logging.basicConfig()` or `lo
 
 ---
 
+## Platform Analytics API Errors (2026-02-28)
+
+### Problem: Platform Analytics returns snake_case fields
+
+**Status (Fixed):** Platform analytics response schemas were missing `alias_generator=to_camel` configuration. The frontend expected camelCase field names but received snake_case, causing empty/error state on the dashboard. Pull latest changes.
+
+### Problem: Analytics crashes on empty data
+
+**Status (Fixed):** The analytics service now handles null values from empty database tables safely, returning zero counts instead of throwing errors.
+
+---
+
+## ResponseValidationError on Create (2026-02-28)
+
+### Problem: `ResponseValidationError` after creating a resource
+
+**Cause:** After `db.flush()`, SQLAlchemy may not populate server-side computed columns (defaults, triggers). When Pydantic tries to serialize the response, required fields are `None`.
+
+**Status (Fixed):** Added `db.refresh()` after `db.flush()` to ensure all computed columns are populated before Pydantic serialization.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)

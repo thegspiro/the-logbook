@@ -213,4 +213,28 @@ If ESLint reports new warnings after adding code, fix them before committing. Th
 
 ---
 
+## Dynamic Import / Chunk Load Errors (2026-02-28)
+
+### Problem: "Loading chunk failed" or blank page after deployment
+
+**Cause:** After a deployment, Vite generates new JS/CSS files with different content hashes. Users with cached `index.html` still reference old filenames that no longer exist.
+
+**Status (Fixed):** All lazy-loaded route pages now use `lazyWithRetry()` (in `utils/lazyWithRetry.ts`) which retries chunk loads up to 3 times with cache-busting query parameters. If retries fail, it forces a page reload.
+
+**User workaround:** Hard refresh (`Ctrl+Shift+R`) or clear browser cache.
+
+---
+
+## Skills Testing Display Updates (2026-02-28)
+
+### Non-critical criteria showing "FAIL"
+
+**Status (Fixed):** Non-critical criteria that are unchecked now display "Not Completed" instead of "FAIL" to avoid confusion.
+
+### Completed test times show UTC
+
+**Status (Fixed):** All test timestamps now display in the user's local timezone using standard date formatting utilities.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)
