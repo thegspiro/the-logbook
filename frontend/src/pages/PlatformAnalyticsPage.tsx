@@ -239,18 +239,22 @@ const colorMap: Record<string, string> = {
   purple: 'text-purple-600',
 };
 
-const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, sublabel, value, color }) => (
-  <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
-    <div className="flex items-center gap-2 mb-1">
-      <Icon className="w-4 h-4 text-theme-text-muted" />
-      <span className="text-theme-text-muted text-sm font-medium">{label}</span>
+const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, sublabel, value, color }) => {
+  const displayValue = typeof value === 'number' ? (value ?? 0).toLocaleString() : (value ?? '—');
+
+  return (
+    <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className="w-4 h-4 text-theme-text-muted" />
+        <span className="text-theme-text-muted text-sm font-medium">{label}</span>
+      </div>
+      {sublabel && <p className="text-xs text-theme-text-muted mb-1">{sublabel}</p>}
+      <div className={`text-3xl font-bold ${color ? colorMap[color] ?? 'text-theme-text-primary' : 'text-theme-text-primary'}`}>
+        {displayValue}
+      </div>
     </div>
-    {sublabel && <p className="text-xs text-theme-text-muted mb-1">{sublabel}</p>}
-    <div className={`text-3xl font-bold ${color ? colorMap[color] ?? 'text-theme-text-primary' : 'text-theme-text-primary'}`}>
-      {value}
-    </div>
-  </div>
-);
+  );
+};
 
 interface ModuleCardProps {
   module: ModuleUsage;
@@ -279,7 +283,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
         </span>
       </div>
       <div className="text-2xl font-bold text-theme-text-primary mb-1">
-        {module.recordCount.toLocaleString()}
+        {(module.recordCount ?? 0).toLocaleString()}
       </div>
       <p className="text-xs text-theme-text-muted">records</p>
       <div className="flex items-center gap-1 mt-2 text-xs text-theme-text-muted">
