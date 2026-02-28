@@ -4,34 +4,52 @@
  * Allows users to request a password reset link via email.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Mail, CheckCircle } from 'lucide-react';
 import { authService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+
+/** Cooldown between successive reset requests (in seconds). */
+const RESET_COOLDOWN_SECONDS = 60;
 
 export const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Cooldown countdown
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => {
+      setCooldown((prev) => Math.max(0, prev - 1));
+    }, 1_000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (cooldown > 0) return;
+
     setIsLoading(true);
 
     try {
       await authService.requestPasswordReset({ email });
       setSuccess(true);
+      setCooldown(RESET_COOLDOWN_SECONDS);
     } catch (err: unknown) {
       setError(
         getErrorMessage(err, 'Failed to send reset email. Please try again or contact your administrator.')
       );
+      setCooldown(RESET_COOLDOWN_SECONDS);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [email, cooldown]);
 
   if (success) {
     return (
@@ -117,7 +135,7 @@ export const ForgotPasswordPage: React.FC = () => {
             <div>
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || cooldown > 0}
                 className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isLoading ? (
@@ -128,6 +146,8 @@ export const ForgotPasswordPage: React.FC = () => {
                     </svg>
                     Sending Reset Link...
                   </>
+                ) : cooldown > 0 ? (
+                  `Wait ${cooldown}s`
                 ) : (
                   'Send Reset Link'
                 )}

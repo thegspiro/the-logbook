@@ -18,13 +18,14 @@ interface OrgBranding {
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isLoading, isAuthenticated, error, clearError } = useAuthStore();
+  const { login, isLoading, isAuthenticated, error, clearError, lockedUntil } = useAuthStore();
 
   const [formData, setFormData] = useState({
     username: '',
     password: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
   const [branding, setBranding] = useState<OrgBranding>({ name: null, logo: null });
   const [oauthConfig, setOAuthConfig] = useState<OAuthConfig>({
     googleEnabled: false,
@@ -37,6 +38,21 @@ export const LoginPage: React.FC = () => {
       navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, navigate]);
+
+  // Countdown timer for client-side lockout
+  useEffect(() => {
+    if (!lockedUntil || Date.now() >= lockedUntil) {
+      setLockoutRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((lockedUntil - Date.now()) / 1_000));
+      setLockoutRemaining(remaining);
+    };
+    tick();
+    const id = setInterval(tick, 1_000);
+    return () => clearInterval(id);
+  }, [lockedUntil]);
 
   // Load branding and OAuth configuration on mount
   useEffect(() => {
@@ -259,10 +275,18 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
+          {lockoutRemaining > 0 && (
+            <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4" role="alert" aria-live="polite">
+              <p className="text-sm font-medium text-yellow-800">
+                Too many failed attempts. Please wait {lockoutRemaining} second{lockoutRemaining !== 1 ? 's' : ''} before trying again.
+              </p>
+            </div>
+          )}
+
           <div>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || lockoutRemaining > 0}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
@@ -273,6 +297,8 @@ export const LoginPage: React.FC = () => {
                   </svg>
                   Signing in...
                 </>
+              ) : lockoutRemaining > 0 ? (
+                `Wait ${lockoutRemaining}s`
               ) : (
                 'Sign in'
               )}

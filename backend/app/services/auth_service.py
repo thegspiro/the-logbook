@@ -113,22 +113,16 @@ class AuthService:
             logger.warning("Authentication failed for login attempt")
             return None, "Incorrect username or password"
 
-        # Check if account is locked
+        # Check if account is locked — use the same generic message as
+        # "user not found" to prevent username enumeration (SEC-14).
         locked_until = (
             user.locked_until.replace(tzinfo=timezone.utc)
             if user.locked_until and user.locked_until.tzinfo is None
             else user.locked_until
         )
         if locked_until and locked_until > datetime.now(timezone.utc):
-            remaining = (
-                int((locked_until - datetime.now(timezone.utc)).total_seconds() / 60)
-                + 1
-            )
             logger.warning(f"Authentication failed: account locked - {username}")
-            return (
-                None,
-                f"Account is temporarily locked. Try again in {remaining} minutes.",
-            )
+            return None, "Incorrect username or password"
 
         # Verify password
         password_valid, rehashed = verify_password(password, user.password_hash)
@@ -147,19 +141,10 @@ class AuthService:
             await self.db.commit()
             logger.warning("Authentication failed: invalid credentials")
 
-            remaining_attempts = 5 - user.failed_login_attempts
-            if remaining_attempts <= 0:
-                return (
-                    None,
-                    "Account is temporarily locked due to too many failed attempts. Try again in 30 minutes.",
-                )
-            elif remaining_attempts <= 2:
-                return (
-                    None,
-                    f"Incorrect username or password. {remaining_attempts} attempt{'s' if remaining_attempts > 1 else ''} remaining before account is locked.",
-                )
-            else:
-                return None, "Incorrect username or password"
+            # Use a single generic message regardless of remaining attempts
+            # to prevent attackers from distinguishing between valid and invalid
+            # usernames based on error message variations (SEC-14).
+            return None, "Incorrect username or password"
 
         # Transparently upgrade hash if argon2 parameters have changed
         if rehashed:
