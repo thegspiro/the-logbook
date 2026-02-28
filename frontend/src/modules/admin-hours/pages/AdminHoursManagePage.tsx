@@ -244,35 +244,30 @@ const AdminHoursManagePage: React.FC = () => {
   };
 
   const handleExportCSV = () => {
-    const token = localStorage.getItem('access_token');
     const url = adminHoursEntryService.getExportUrl({
       status: allStatusFilter || undefined,
       categoryId: allCategoryFilter || undefined,
     });
-    // Open in a new tab; auth is via cookie/token
+    // Fetch with httpOnly cookie auth (credentials: 'include')
     const a = document.createElement('a');
-    a.href = url;
-    if (token) {
-      // For bearer-auth APIs, fetch with token instead
-      void (async () => {
-        try {
-          const response = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          a.href = blobUrl;
-          a.download = 'admin_hours_export.csv';
-          a.click();
-          URL.revokeObjectURL(blobUrl);
-        } catch {
-          toast.error('Failed to export CSV');
+    void (async () => {
+      try {
+        const response = await fetch(url, {
+          credentials: 'include', // Send httpOnly cookies automatically
+        });
+        if (!response.ok) {
+          throw new Error(`Export failed: ${response.status}`);
         }
-      })();
-      return;
-    }
-    a.download = 'admin_hours_export.csv';
-    a.click();
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        a.href = blobUrl;
+        a.download = 'admin_hours_export.csv';
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+      } catch {
+        toast.error('Failed to export CSV');
+      }
+    })();
   };
 
   const pendingTotalPages = Math.ceil(allEntriesTotal / PAGE_SIZE);

@@ -27,12 +27,40 @@ class RateLimiter:
     """
     In-memory rate limiter for API endpoints
 
-    In production, use Redis for distributed rate limiting
+    In production, use Redis for distributed rate limiting.
+
+    Includes periodic eviction of stale entries to prevent unbounded
+    memory growth under sustained traffic.
     """
+
+    # Maximum number of tracked keys before forced eviction
+    _MAX_KEYS = 10_000
 
     def __init__(self):
         self.requests: Dict[str, List[float]] = defaultdict(list)
         self.lockouts: Dict[str, float] = {}
+        self._last_eviction: float = 0.0
+
+    def _evict_stale(self, now: float, window_seconds: int) -> None:
+        """Remove entries that have no recent requests and expired lockouts."""
+        # Only run eviction at most once per minute to avoid overhead
+        if now - self._last_eviction < 60:
+            return
+        self._last_eviction = now
+
+        # Evict expired lockouts
+        expired_lockouts = [k for k, v in self.lockouts.items() if now >= v]
+        for k in expired_lockouts:
+            del self.lockouts[k]
+
+        # Evict request entries with no recent activity
+        stale_keys = [
+            k
+            for k, timestamps in self.requests.items()
+            if not timestamps or (now - timestamps[-1]) > window_seconds
+        ]
+        for k in stale_keys:
+            del self.requests[k]
 
     def is_rate_limited(
         self,
@@ -55,6 +83,12 @@ class RateLimiter:
         """
         current_time = time.time()
 
+        # Periodic eviction to bound memory usage
+        if len(self.requests) + len(self.lockouts) > self._MAX_KEYS:
+            self._evict_stale(current_time, window_seconds)
+        else:
+            self._evict_stale(current_time, window_seconds)
+
         # Check if currently locked out
         if key in self.lockouts:
             if current_time < self.lockouts[key]:
@@ -63,7 +97,7 @@ class RateLimiter:
             else:
                 # Lockout expired
                 del self.lockouts[key]
-                self.requests[key] = []
+                self.requests.pop(key, None)
 
         # Clean old requests outside window
         self.requests[key] = [req_time for req_time in self.requests[key] if current_time - req_time < window_seconds]
@@ -78,8 +112,6 @@ class RateLimiter:
             )
 
         # Record this request
-        if key not in self.requests:
-            self.requests[key] = []
         self.requests[key].append(current_time)
 
         return False, None

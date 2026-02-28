@@ -520,14 +520,11 @@ class SecureApiClient {
     data.password = '';
     data.password_confirm = '';
 
-    // Store tokens using the same keys the main app auth flow expects
-    // ('access_token' and 'refresh_token') so the user is seamlessly
-    // authenticated after onboarding without needing to login again.
+    // Auth tokens are stored in httpOnly cookies by the backend response.
+    // We only set the lightweight `has_session` flag so the frontend knows
+    // to attempt session validation on next page load.
     if (response.data?.access_token) {
-      localStorage.setItem('access_token', response.data.access_token);
-    }
-    if (response.data?.refresh_token) {
-      localStorage.setItem('refresh_token', response.data.refresh_token);
+      localStorage.setItem('has_session', '1');
     }
 
     return response;

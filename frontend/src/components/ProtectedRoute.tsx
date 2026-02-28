@@ -16,11 +16,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const location = useLocation();
   const { isAuthenticated, isLoading, user, loadUser, checkPermission, hasRole } = useAuthStore();
 
-  // Check if there's a stored token that hasn't been validated yet.
+  // Check if there's an active session that hasn't been validated yet.
   // Without this, the first render sees isLoading=false + isAuthenticated=false
   // and immediately redirects to /login before loadUser() in the useEffect
-  // gets a chance to validate the token.
-  const hasStoredToken = !!localStorage.getItem('access_token');
+  // gets a chance to validate the token via httpOnly cookie.
+  // NOTE: We check `has_session` (a lightweight flag), NOT `access_token`.
+  // Actual auth tokens live in httpOnly cookies and are never in localStorage.
+  const hasStoredToken = !!localStorage.getItem('has_session');
 
   useEffect(() => {
     // Try to load user from token on mount
