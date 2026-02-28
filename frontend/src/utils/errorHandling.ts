@@ -58,11 +58,11 @@ export function toAppError(error: unknown): AppError {
     };
   }
 
-  // Standard Error object
+  // Standard Error object — omit stack to avoid leaking file paths or PHI in query params
   if (error instanceof Error) {
     return {
       message: error.message,
-      details: { name: error.name, stack: error.stack },
+      details: { name: error.name },
     };
   }
 

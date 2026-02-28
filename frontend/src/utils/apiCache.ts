@@ -20,6 +20,9 @@ const FRESH_TTL_MS = 30_000; // 30 seconds
 /** How long a cached response can be served while revalidating in background. */
 const STALE_TTL_MS = 90_000; // 90 seconds (kept short to limit authorization-revocation gap)
 
+/** Maximum number of entries before the oldest are evicted. */
+const MAX_CACHE_ENTRIES = 200;
+
 /**
  * URL prefixes for endpoints that must NEVER be cached.
  * These carry PII, PHI, credentials, or security-sensitive data
@@ -99,10 +102,25 @@ export function getCached(key: string): CacheLookupResult | null {
 }
 
 /**
- * Store a response in the cache.
+ * Store a response in the cache, evicting the oldest entries if the
+ * cache exceeds MAX_CACHE_ENTRIES.
  */
 export function setCache(key: string, data: unknown): void {
+  // Delete first so re-insertion moves the key to the end (Map preserves insertion order)
+  cache.delete(key);
   cache.set(key, { data, timestamp: Date.now() });
+
+  // Evict oldest entries when over the limit
+  if (cache.size > MAX_CACHE_ENTRIES) {
+    const excess = cache.size - MAX_CACHE_ENTRIES;
+    const iter = cache.keys();
+    for (let i = 0; i < excess; i++) {
+      const oldest = iter.next();
+      if (!oldest.done) {
+        cache.delete(oldest.value);
+      }
+    }
+  }
 }
 
 /**

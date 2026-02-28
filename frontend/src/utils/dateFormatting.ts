@@ -10,16 +10,28 @@
  */
 
 /**
+ * Parse a date string or Date object, returning null if the value is
+ * falsy or results in an invalid Date.
+ */
+const parseDate = (value: string | Date | undefined | null): Date | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return null;
+  return date;
+};
+
+/**
  * Format a date string to localized date
  * @param dateString - ISO date string or Date object
  * @param timezone - Optional IANA timezone (e.g., "America/New_York")
  * @returns Formatted date string (e.g., "1/15/2024")
  */
 export const formatDate = (dateString?: string | Date | null, timezone?: string): string => {
-  if (!dateString) return 'N/A';
+  const date = parseDate(dateString);
+  if (!date) return 'N/A';
   const opts: Intl.DateTimeFormatOptions = {};
   if (timezone) opts.timeZone = timezone;
-  return new Date(dateString).toLocaleDateString('en-US', opts);
+  return date.toLocaleDateString('en-US', opts);
 };
 
 /**
@@ -29,7 +41,8 @@ export const formatDate = (dateString?: string | Date | null, timezone?: string)
  * @returns Formatted date-time string (e.g., "Monday, January 15, 2024, 2:30 PM")
  */
 export const formatDateTime = (dateString?: string | Date | null, timezone?: string): string => {
-  if (!dateString) return 'N/A';
+  const date = parseDate(dateString);
+  if (!date) return 'N/A';
   const opts: Intl.DateTimeFormatOptions = {
     weekday: 'long',
     month: 'long',
@@ -39,7 +52,7 @@ export const formatDateTime = (dateString?: string | Date | null, timezone?: str
     minute: '2-digit',
   };
   if (timezone) opts.timeZone = timezone;
-  return new Date(dateString).toLocaleString('en-US', opts);
+  return date.toLocaleString('en-US', opts);
 };
 
 /**
@@ -49,7 +62,8 @@ export const formatDateTime = (dateString?: string | Date | null, timezone?: str
  * @returns Formatted date-time string (e.g., "Jan 15, 2:30 PM")
  */
 export const formatShortDateTime = (dateString?: string | Date | null, timezone?: string): string => {
-  if (!dateString) return 'N/A';
+  const date = parseDate(dateString);
+  if (!date) return 'N/A';
   const opts: Intl.DateTimeFormatOptions = {
     month: 'short',
     day: 'numeric',
@@ -57,7 +71,7 @@ export const formatShortDateTime = (dateString?: string | Date | null, timezone?
     minute: '2-digit',
   };
   if (timezone) opts.timeZone = timezone;
-  return new Date(dateString).toLocaleString('en-US', opts);
+  return date.toLocaleString('en-US', opts);
 };
 
 /**
@@ -67,13 +81,14 @@ export const formatShortDateTime = (dateString?: string | Date | null, timezone?
  * @returns Formatted time string (e.g., "2:30 PM")
  */
 export const formatTime = (dateString?: string | Date | null, timezone?: string): string => {
-  if (!dateString) return 'N/A';
+  const date = parseDate(dateString);
+  if (!date) return 'N/A';
   const opts: Intl.DateTimeFormatOptions = {
     hour: 'numeric',
     minute: '2-digit',
   };
   if (timezone) opts.timeZone = timezone;
-  return new Date(dateString).toLocaleTimeString('en-US', opts);
+  return date.toLocaleTimeString('en-US', opts);
 };
 
 /**
@@ -84,8 +99,8 @@ export const formatTime = (dateString?: string | Date | null, timezone?: string)
  * @returns Formatted string for datetime-local input (e.g., "2024-01-15T14:30")
  */
 export const formatForDateTimeInput = (dateString?: string | Date | null, timezone?: string): string => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
+  const date = parseDate(dateString);
+  if (!date) return '';
   const formatOpts: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: '2-digit',
@@ -204,10 +219,11 @@ export const toLocalDateString = (date: Date, timezone?: string): string => {
 /**
  * Calculate days until a date
  * @param dateString - ISO date string or Date object
- * @returns Number of days until the date (negative if past)
+ * @returns Number of days until the date (negative if past), or NaN if the date is invalid
  */
 export const daysUntil = (dateString: string | Date): number => {
-  const targetDate = new Date(dateString);
+  const targetDate = parseDate(dateString);
+  if (!targetDate) return NaN;
   const today = new Date();
   const diffTime = targetDate.getTime() - today.getTime();
   return Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -217,31 +233,36 @@ export const daysUntil = (dateString: string | Date): number => {
  * Calculate duration between two dates in minutes
  * @param startDate - Start date
  * @param endDate - End date
- * @returns Duration in minutes
+ * @returns Duration in minutes, or NaN if either date is invalid
  */
 export const calculateDurationMinutes = (
   startDate: string | Date,
   endDate: string | Date
 ): number => {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+  if (!start || !end) return NaN;
   return Math.round((end.getTime() - start.getTime()) / 60000);
 };
 
 /**
  * Check if a date is in the past
  * @param dateString - ISO date string or Date object
- * @returns True if the date is in the past
+ * @returns True if the date is in the past, false if in the future or invalid
  */
 export const isPastDate = (dateString: string | Date): boolean => {
-  return new Date(dateString) < new Date();
+  const date = parseDate(dateString);
+  if (!date) return false;
+  return date < new Date();
 };
 
 /**
  * Check if a date is in the future
  * @param dateString - ISO date string or Date object
- * @returns True if the date is in the future
+ * @returns True if the date is in the future, false if in the past or invalid
  */
 export const isFutureDate = (dateString: string | Date): boolean => {
-  return new Date(dateString) > new Date();
+  const date = parseDate(dateString);
+  if (!date) return false;
+  return date > new Date();
 };

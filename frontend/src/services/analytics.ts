@@ -131,7 +131,7 @@ class AnalyticsService {
     userId: string | undefined,
     metadata: Record<string, unknown>
   ): void {
-    analyticsApiService.trackEvent({
+    void analyticsApiService.trackEvent({
       event_type: eventType,
       event_id: eventId,
       user_id: userId,

@@ -183,7 +183,7 @@ api.interceptors.request.use(
         if (!cached.fresh && !isRevalidating(key)) {
           markRevalidating(key);
           const bgConfig = { ...config, _skipCache: true, adapter: undefined };
-          api.request(bgConfig)
+          void api.request(bgConfig)
             .then((res) => setCache(key, res.data))
             .catch(() => { /* background revalidation failure is non-critical */ })
             .finally(() => clearRevalidating(key));
@@ -852,6 +852,14 @@ export const authService = {
   getMicrosoftOAuthUrl(): string {
     const baseUrl = api.defaults.baseURL || '';
     return `${baseUrl}/auth/oauth/microsoft`;
+  },
+
+  /**
+   * Get session settings (timeout configuration)
+   */
+  async getSessionSettings(): Promise<{ session_timeout_minutes?: number }> {
+    const response = await api.get<{ session_timeout_minutes?: number }>('/auth/session-settings');
+    return response.data;
   },
 };
 

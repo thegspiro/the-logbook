@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { eventService } from '../services/api';
 import type { Event } from '../types/event';
+import { getErrorMessage } from '../utils/errorHandling';
 
 export const useEvent = (eventId: string | undefined) => {
   const [event, setEvent] = useState<Event | null>(null);
@@ -28,10 +29,7 @@ export const useEvent = (eventId: string | undefined) => {
       }
     } catch (err: unknown) {
       if (signal?.aborted) return;
-      const errorMessage =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to load event';
-      setError(errorMessage);
+      setError(getErrorMessage(err, 'Failed to load event'));
     } finally {
       if (!signal?.aborted) {
         setLoading(false);

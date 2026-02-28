@@ -31,7 +31,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
         aria-label="Loading"
       />
       {message && (
-        <p className={`mt-4 text-lg ${fullScreen ? 'text-theme-text-secondary' : 'text-theme-text-secondary'}`} aria-live="polite">
+        <p className="mt-4 text-lg text-theme-text-secondary" aria-live="polite">
           {message}
         </p>
       )}

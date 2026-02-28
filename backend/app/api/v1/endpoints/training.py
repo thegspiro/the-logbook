@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.training import (
     TrainingCategory,
     TrainingCourse,
@@ -463,7 +464,7 @@ async def create_records_bulk(
             created_ids.append(str(new_record.id))
             created += 1
         except Exception as e:
-            errors.append(f"Row {idx + 1}: {str(e)}")
+            errors.append(f"Row {idx + 1}: {safe_error_detail(e)}")
             failed += 1
 
     await db.commit()
@@ -1783,7 +1784,7 @@ async def confirm_historical_import(
             imported += 1
         except Exception as e:
             failed += 1
-            errors.append(f"Row {row.row_number}: {str(e)[:100]}")
+            errors.append(f"Row {row.row_number}: {safe_error_detail(e)}")
 
     await db.commit()
 
@@ -2225,7 +2226,7 @@ async def import_training_csv(
             successes += 1
 
         except Exception as e:
-            failures.append({"row": row_num, "error": str(e)})
+            failures.append({"row": row_num, "error": safe_error_detail(e)})
 
     if successes > 0:
         await db.commit()

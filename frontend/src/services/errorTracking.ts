@@ -158,7 +158,7 @@ class ErrorTrackingService {
     }
 
     // Persist to backend
-    errorLogsService.logError({
+    void errorLogsService.logError({
       error_type: errorType,
       error_message: errorMessage,
       user_message: mapping.userMessage,

@@ -190,8 +190,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         isLoading: false,
       });
-    } catch {
-      // Not authenticated or session expired — clear session flag.
+    } catch (err: unknown) {
+      // Clear session state regardless of error type
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
@@ -200,6 +200,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: false,
         isLoading: false,
       });
+
+      // 401/403 are expected when the session has expired or user is not
+      // authenticated — silently handle them. Any other error is unexpected
+      // and should be logged so it surfaces in dev tools.
+      const appError = toAppError(err);
+      if (appError.status !== 401 && appError.status !== 403) {
+        console.error('loadUser failed with unexpected error:', appError.message);
+      }
     }
   },
 
