@@ -68,13 +68,18 @@ def setup_logging(
         "logs",
     )
     try:
-        os.makedirs(_logs_dir, exist_ok=True)
+        os.makedirs(_logs_dir, mode=0o750, exist_ok=True)
+        _log_path = os.path.join(_logs_dir, "app.log")
         logger.add(
-            os.path.join(_logs_dir, "app.log"),
+            _log_path,
             rotation="500 MB",
-            retention="10 days",
+            retention="30 days",
+            compression="gz",
             level="INFO",
         )
+        # Restrict log file permissions to owner read/write only
+        if os.path.exists(_log_path):
+            os.chmod(_log_path, 0o640)
     except OSError:
         logger.debug("Could not set up file logging – stdout only")
 
