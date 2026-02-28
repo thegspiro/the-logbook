@@ -77,6 +77,7 @@ const mockMember = {
   station: "Station 1",
   status: "active",
   photo_url: null,
+  hire_date: "2018-06-15",
   roles: [{ id: "r1", name: "Firefighter", is_system: false }],
 };
 
@@ -182,6 +183,7 @@ describe("MemberIdCardPage", () => {
       renderWithRouter(<MemberIdCardPage />);
 
       await waitFor(() => {
+        expect(screen.getByText("Rank")).toBeInTheDocument();
         expect(screen.getByText("firefighter")).toBeInTheDocument();
       });
     });
@@ -191,6 +193,15 @@ describe("MemberIdCardPage", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Station 1")).toBeInTheDocument();
+      });
+    });
+
+    it("should display member since year from hire date", async () => {
+      renderWithRouter(<MemberIdCardPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Member Since")).toBeInTheDocument();
+        expect(screen.getByText("2018")).toBeInTheDocument();
       });
     });
 
@@ -375,7 +386,22 @@ describe("MemberIdCardPage", () => {
 
       await waitFor(() => {
         expect(screen.getByText("John Doe")).toBeInTheDocument();
-        expect(screen.queryByText("firefighter")).not.toBeInTheDocument();
+        expect(screen.queryByText("Rank")).not.toBeInTheDocument();
+      });
+    });
+
+    it("should handle member without hire date", async () => {
+      const memberNoHireDate = { ...mockMember, hire_date: undefined };
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue(
+        memberNoHireDate as never,
+      );
+      vi.mocked(organizationService.getProfile).mockResolvedValue(mockOrg);
+
+      renderWithRouter(<MemberIdCardPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
+        expect(screen.queryByText("Member Since")).not.toBeInTheDocument();
       });
     });
 
