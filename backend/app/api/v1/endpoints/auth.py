@@ -6,6 +6,7 @@ Endpoints for user authentication, registration, and session management.
 
 from typing import Optional
 
+from loguru import logger
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -17,6 +18,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -258,11 +260,18 @@ async def login(
     """
     auth_service = AuthService(db)
 
-    # Authenticate user
-    user, auth_error = await auth_service.authenticate_user(
-        username=credentials.username,
-        password=credentials.password,
-    )
+    try:
+        # Authenticate user
+        user, auth_error = await auth_service.authenticate_user(
+            username=credentials.username,
+            password=credentials.password,
+        )
+    except OperationalError as exc:
+        logger.error(f"Database connection error during login: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service temporarily unavailable. Please try again in a few moments.",
+        )
 
     if not user:
         raise HTTPException(
@@ -278,12 +287,19 @@ async def login(
             detail="Account is inactive. Please contact an administrator.",
         )
 
-    # Create tokens
-    access_token, refresh_token = await auth_service.create_user_tokens(
-        user=user,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
+    try:
+        # Create tokens
+        access_token, refresh_token = await auth_service.create_user_tokens(
+            user=user,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+    except OperationalError as exc:
+        logger.error(f"Database connection error during token creation: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service temporarily unavailable. Please try again in a few moments.",
+        )
 
     body = TokenResponse(
         access_token=access_token,
@@ -324,7 +340,14 @@ async def refresh_token(
 
     auth_service = AuthService(db)
 
-    new_access_token, new_refresh_token = await auth_service.refresh_access_token(rt)
+    try:
+        new_access_token, new_refresh_token = await auth_service.refresh_access_token(rt)
+    except OperationalError as exc:
+        logger.error(f"Database connection error during token refresh: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service temporarily unavailable. Please try again in a few moments.",
+        )
 
     if not new_access_token:
         raise HTTPException(

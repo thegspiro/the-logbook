@@ -1479,11 +1479,16 @@ async def health_check():
             "Database schema is inconsistent. " "Run 'docker compose down -v' then 'docker compose up --build' to fix."
         )
 
-    # Check database
+    # Check database — actually ping MySQL instead of just checking
+    # whether the engine object exists in memory.
     try:
+        from sqlalchemy import text
+
         from app.core.database import database_manager
 
         if database_manager.is_connected:
+            async with database_manager.session_factory() as session:
+                await session.execute(text("SELECT 1"))
             health_status["checks"]["database"] = "connected"
         else:
             health_status["checks"]["database"] = "disconnected"
