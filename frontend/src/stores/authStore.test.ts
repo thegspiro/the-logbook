@@ -57,6 +57,8 @@ describe('authStore', () => {
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      loginAttempts: 0,
+      lockedUntil: null,
     });
 
     // Clear all mocks
@@ -75,6 +77,8 @@ describe('authStore', () => {
       expect(state.isAuthenticated).toBe(false);
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
+      expect(state.loginAttempts).toBe(0);
+      expect(state.lockedUntil).toBeNull();
     });
   });
 
@@ -98,6 +102,8 @@ describe('authStore', () => {
       expect(state.user).not.toBeNull();
       expect(state.user?.username).toBe('testuser');
       expect(state.isLoading).toBe(false);
+      expect(state.loginAttempts).toBe(0);
+      expect(state.lockedUntil).toBeNull();
     });
 
     it('does not store tokens in localStorage', async () => {
@@ -125,6 +131,54 @@ describe('authStore', () => {
       expect(state.isLoading).toBe(false);
       expect(state.error).toBe('Invalid credentials');
       expect(state.isAuthenticated).toBe(false);
+      expect(state.loginAttempts).toBe(1);
+    });
+
+    it('enforces client-side lockout after reaching threshold', async () => {
+      // Simulate 5 failed attempts to trigger lockout
+      mockLogin.mockRejectedValue(new Error('Invalid credentials'));
+
+      for (let i = 0; i < 5; i++) {
+        await expect(
+          act(async () => {
+            await getState().login({ username: 'bad', password: 'wrong' });
+          }),
+        ).rejects.toBeDefined();
+      }
+
+      expect(getState().loginAttempts).toBe(5);
+      expect(getState().lockedUntil).not.toBeNull();
+
+      // Next call should be blocked by client-side lockout (no throw, just sets error)
+      await act(async () => {
+        await getState().login({ username: 'bad', password: 'wrong' });
+      });
+
+      expect(mockLogin).toHaveBeenCalledTimes(5); // NOT called again
+      expect(getState().error).toMatch(/wait/i);
+    });
+
+    it('resets lockout counters on successful login', async () => {
+      // First: a few failed attempts
+      mockLogin.mockRejectedValue(new Error('Invalid credentials'));
+      await expect(
+        act(async () => {
+          await getState().login({ username: 'bad', password: 'wrong' });
+        }),
+      ).rejects.toBeDefined();
+
+      expect(getState().loginAttempts).toBe(1);
+
+      // Now: successful login
+      mockLogin.mockResolvedValue(undefined);
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().login({ username: 'good', password: 'right' });
+      });
+
+      expect(getState().loginAttempts).toBe(0);
+      expect(getState().lockedUntil).toBeNull();
     });
   });
 

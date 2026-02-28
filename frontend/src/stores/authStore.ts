@@ -15,11 +15,24 @@ import { authService } from '../services/api';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
 
+/** Number of failed attempts before client-side lockout kicks in. */
+const LOGIN_LOCKOUT_THRESHOLD = 5;
+
+/** Base delay in ms for exponential backoff (doubles each attempt beyond threshold). */
+const LOGIN_BACKOFF_BASE_MS = 2_000;
+
+/** Maximum client-side lockout duration in ms (5 minutes). */
+const LOGIN_MAX_LOCKOUT_MS = 5 * 60 * 1_000;
+
 interface AuthState {
   user: CurrentUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+
+  // Brute-force tracking (client-side defense-in-depth)
+  loginAttempts: number;
+  lockedUntil: number | null; // epoch ms
 
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
@@ -37,8 +50,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   isLoading: false,
   error: null,
+  loginAttempts: 0,
+  lockedUntil: null,
 
   login: async (credentials: LoginCredentials) => {
+    // Client-side lockout check (defense-in-depth; backend enforces the real limit)
+    const { lockedUntil } = get();
+    if (lockedUntil && Date.now() < lockedUntil) {
+      const remainingSec = Math.ceil((lockedUntil - Date.now()) / 1_000);
+      set({
+        error: `Too many failed attempts. Please wait ${remainingSec} seconds before trying again.`,
+      });
+      return;
+    }
+
     set({ isLoading: true, error: null });
 
     try {
@@ -50,11 +75,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       await get().loadUser();
 
-      set({ isLoading: false });
+      // Reset brute-force counters on successful login
+      set({ isLoading: false, loginAttempts: 0, lockedUntil: null });
     } catch (err: unknown) {
       const appError = toAppError(err);
+
+      // Track failed attempts for client-side progressive lockout
+      const attempts = get().loginAttempts + 1;
+      let newLockedUntil: number | null = null;
+
+      if (attempts >= LOGIN_LOCKOUT_THRESHOLD) {
+        const backoffMs = Math.min(
+          LOGIN_BACKOFF_BASE_MS * Math.pow(2, attempts - LOGIN_LOCKOUT_THRESHOLD),
+          LOGIN_MAX_LOCKOUT_MS,
+        );
+        newLockedUntil = Date.now() + backoffMs;
+      }
+
+      // If the backend returned a Retry-After header (429), honour it
+      const rawRetryAfter = appError.status === 429
+        ? appError.details?.retryAfter
+        : undefined;
+      const retryAfter = typeof rawRetryAfter === 'number'
+        ? rawRetryAfter
+        : parseInt(typeof rawRetryAfter === 'string' ? rawRetryAfter : '0', 10);
+      if (retryAfter > 0) {
+        newLockedUntil = Date.now() + retryAfter * 1_000;
+      }
+
       set({
         isLoading: false,
+        loginAttempts: attempts,
+        lockedUntil: newLockedUntil,
         error: getErrorMessage(err, 'Login failed. Please try again.'),
       });
       throw Object.assign(new Error(appError.message), appError);

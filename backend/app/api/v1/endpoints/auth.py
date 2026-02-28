@@ -24,7 +24,12 @@ from app.api.dependencies import get_current_active_user, get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.permissions import get_rank_default_permissions
-from app.core.security_middleware import check_rate_limit
+from app.core.security_middleware import (
+    rate_limit_login,
+    rate_limit_password_reset,
+    rate_limit_register,
+    rate_limit_token_refresh,
+)
 from app.models.user import Organization, User
 from app.schemas.auth import (
     CurrentUser,
@@ -157,7 +162,7 @@ async def get_oauth_config(
     "/register",
     response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(check_rate_limit)],
+    dependencies=[rate_limit_register()],
 )
 async def register(
     user_data: UserRegister,
@@ -239,7 +244,7 @@ async def register(
 
 
 @router.post(
-    "/login", response_model=TokenResponse, dependencies=[Depends(check_rate_limit)]
+    "/login", response_model=TokenResponse, dependencies=[rate_limit_login()]
 )
 async def login(
     credentials: UserLogin,
@@ -294,7 +299,7 @@ async def login(
     return response
 
 
-@router.post("/refresh", response_model=dict, dependencies=[Depends(check_rate_limit)])
+@router.post("/refresh", response_model=dict, dependencies=[rate_limit_token_refresh()])
 async def refresh_token(
     token_data: Optional[TokenRefresh] = None,
     refresh_token_cookie: Optional[str] = Cookie(None, alias="refresh_token"),
@@ -472,7 +477,7 @@ async def get_session_settings(
     }
 
 
-@router.post("/change-password", dependencies=[Depends(check_rate_limit)])
+@router.post("/change-password", dependencies=[rate_limit_login()])
 async def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_active_user),
@@ -516,7 +521,7 @@ async def check_authentication(
     }
 
 
-@router.post("/forgot-password", dependencies=[Depends(check_rate_limit)])
+@router.post("/forgot-password", dependencies=[rate_limit_password_reset()])
 async def forgot_password(
     reset_request: PasswordResetRequest,
     request: Request,
@@ -651,7 +656,7 @@ async def forgot_password(
     }
 
 
-@router.post("/reset-password", dependencies=[Depends(check_rate_limit)])
+@router.post("/reset-password", dependencies=[rate_limit_password_reset()])
 async def reset_password(
     reset_data: PasswordReset,
     request: Request,
@@ -700,7 +705,7 @@ async def reset_password(
     }
 
 
-@router.post("/validate-reset-token", dependencies=[Depends(check_rate_limit)])
+@router.post("/validate-reset-token", dependencies=[rate_limit_password_reset()])
 async def validate_reset_token(
     token_data: dict,
     db: AsyncSession = Depends(get_db),

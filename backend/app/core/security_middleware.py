@@ -354,26 +354,106 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # ============================================
 
 
-async def check_rate_limit(request: Request, max_requests: int = 5, window_seconds: int = 60) -> None:
+async def check_rate_limit(
+    request: Request,
+    max_requests: int = 5,
+    window_seconds: int = 60,
+    lockout_seconds: int = 1800,
+) -> None:
     """
-    Dependency to check rate limits
+    Dependency to check rate limits.
+
+    Tries Redis-backed distributed rate limiting first (for multi-instance
+    deployments).  Falls back to the in-memory ``rate_limiter`` when Redis
+    is unavailable.
 
     Usage:
         @router.post("/endpoint", dependencies=[Depends(check_rate_limit)])
     """
-    # Get client IP
     client_ip = request.client.host if request.client else "unknown"
 
-    # Check rate limit
+    # Try Redis-backed sliding-window rate limiting first
+    try:
+        from app.core.security import is_rate_limited as redis_rate_limited
+        from app.core.cache import cache_manager
+
+        if cache_manager.is_connected and cache_manager.redis_client:
+            exceeded = await redis_rate_limited(
+                key=f"auth:{client_ip}",
+                limit=max_requests,
+                window_seconds=window_seconds,
+                fail_closed=False,  # Fall back to in-memory on error
+            )
+            if exceeded:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many requests. Please try again later.",
+                    headers={"Retry-After": str(window_seconds)},
+                )
+            return
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # Redis unavailable — fall through to in-memory limiter
+
+    # Fallback: in-memory rate limiter
     is_limited, reason = rate_limiter.is_rate_limited(
-        key=client_ip, max_requests=max_requests, window_seconds=window_seconds
+        key=client_ip,
+        max_requests=max_requests,
+        window_seconds=window_seconds,
+        lockout_seconds=lockout_seconds,
     )
 
     if is_limited:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=reason or "Too many requests",
+            detail=reason or "Too many requests. Please try again later.",
+            headers={"Retry-After": str(lockout_seconds)},
         )
+
+
+def rate_limit_login():
+    """Stricter rate limit for login: 5 attempts per 60 seconds."""
+
+    async def _dependency(request: Request) -> None:
+        await check_rate_limit(
+            request, max_requests=5, window_seconds=60, lockout_seconds=1800
+        )
+
+    return Depends(_dependency)
+
+
+def rate_limit_register():
+    """Stricter rate limit for registration: 3 attempts per 60 seconds."""
+
+    async def _dependency(request: Request) -> None:
+        await check_rate_limit(
+            request, max_requests=3, window_seconds=60, lockout_seconds=1800
+        )
+
+    return Depends(_dependency)
+
+
+def rate_limit_password_reset():
+    """Strict rate limit for password reset: 3 attempts per 5 minutes."""
+
+    async def _dependency(request: Request) -> None:
+        await check_rate_limit(
+            request, max_requests=3, window_seconds=300, lockout_seconds=1800
+        )
+
+    return Depends(_dependency)
+
+
+def rate_limit_token_refresh():
+    """More lenient rate limit for token refresh: 10 per 60 seconds."""
+
+    async def _dependency(request: Request) -> None:
+        await check_rate_limit(
+            request, max_requests=10, window_seconds=60, lockout_seconds=600
+        )
+
+    return Depends(_dependency)
 
 
 # ============================================
