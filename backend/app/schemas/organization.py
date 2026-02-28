@@ -499,41 +499,48 @@ class AuthSettings(BaseModel):
 
 
 class ModuleSettings(BaseModel):
-    """Settings for module enablement across the organization"""
+    """Settings for module enablement across the organization.
+
+    Standard modules default to True so that new organizations have a
+    fully-functional app out of the box.  Niche / premium modules
+    default to False and can be opted-in via Settings > Modules.
+    """
 
     # Essential modules are always enabled
     # members, events, documents, roles, settings
 
-    # Configurable modules - can be enabled/disabled
+    # ── Standard modules (enabled by default) ──
     training: bool = Field(
-        default=False, description="Training & Certifications module"
+        default=True, description="Training & Certifications module"
     )
-    inventory: bool = Field(default=False, description="Equipment & Inventory module")
-    scheduling: bool = Field(default=False, description="Scheduling & Shifts module")
-    apparatus: bool = Field(default=False, description="Apparatus Management module")
+    inventory: bool = Field(default=True, description="Equipment & Inventory module")
+    scheduling: bool = Field(default=True, description="Scheduling & Shifts module")
+    apparatus: bool = Field(default=True, description="Apparatus Management module")
+    minutes: bool = Field(default=True, description="Meeting Minutes module")
+    reports: bool = Field(default=True, description="Reports & Analytics module")
+    notifications: bool = Field(default=True, description="Email Notifications module")
+    forms: bool = Field(default=True, description="Custom Forms module")
+    integrations: bool = Field(
+        default=True, description="External Integrations module"
+    )
+    facilities: bool = Field(
+        default=True,
+        description="Facilities Management module (maintenance, inspections, systems)",
+    )
+    prospective_members: bool = Field(
+        default=True, description="Prospective Members Pipeline module"
+    )
+    public_info: bool = Field(default=True, description="Public Information module")
+
+    # ── Niche / premium modules (disabled by default) ──
     communications: bool = Field(
         default=False, description="Communications module (announcements, messaging)"
     )
     elections: bool = Field(default=False, description="Elections & Voting module")
-    minutes: bool = Field(default=False, description="Meeting Minutes module")
-    reports: bool = Field(default=False, description="Reports & Analytics module")
-    notifications: bool = Field(default=False, description="Email Notifications module")
     mobile: bool = Field(default=False, description="Mobile App Access module")
-    forms: bool = Field(default=False, description="Custom Forms module")
-    integrations: bool = Field(
-        default=False, description="External Integrations module"
-    )
-    facilities: bool = Field(
-        default=False,
-        description="Facilities Management module (maintenance, inspections, systems)",
-    )
     incidents: bool = Field(default=False, description="Incidents & Reports module")
     hr_payroll: bool = Field(default=False, description="HR & Payroll module")
     grants: bool = Field(default=False, description="Grants & Fundraising module")
-    prospective_members: bool = Field(
-        default=False, description="Prospective Members Pipeline module"
-    )
-    public_info: bool = Field(default=False, description="Public Information module")
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""

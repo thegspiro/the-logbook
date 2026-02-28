@@ -4,8 +4,11 @@ Organization Service
 Business logic for organization-related operations.
 """
 
+import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -131,7 +134,7 @@ class OrganizationService:
 
             return migrated
 
-        # No data anywhere — return all False
+        # No data anywhere — return defaults (standard modules enabled)
         return ModuleSettings()
 
     async def get_organization_settings(
@@ -307,8 +310,22 @@ class OrganizationService:
         settings_dict = org.settings or {}
         module_settings = await self._resolve_module_settings(settings_dict, org=org)
 
+        enabled = module_settings.get_enabled_modules()
+
+        # Safeguard: if NO configurable modules are enabled (only essential
+        # ones remain), something is likely misconfigured.  Log a warning so
+        # operators can investigate.
+        configurable_fields = list(ModuleSettings.model_fields.keys())
+        if not any(getattr(module_settings, f) for f in configurable_fields):
+            logger.warning(
+                "All configurable modules are disabled for org %s — "
+                "users will see a minimal navigation.  Check the "
+                "organization's module settings.",
+                organization_id,
+            )
+
         return EnabledModulesResponse(
-            enabled_modules=module_settings.get_enabled_modules(),
+            enabled_modules=enabled,
             module_settings=module_settings,
         )
 

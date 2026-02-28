@@ -172,7 +172,7 @@ export const AVAILABLE_MODULES: Module[] = [
   },
 
   // ============================================
-  // RECOMMENDED MODULES (Enabled by Default)
+  // STANDARD MODULES (Enabled by Default)
   // ============================================
   {
     id: 'apparatus',
@@ -216,37 +216,13 @@ export const AVAILABLE_MODULES: Module[] = [
     ],
   },
   {
-    id: 'communications',
-    name: 'Communications',
-    description: 'Internal messaging, announcements, and notifications',
-    longDescription:
-      'Keep everyone informed with department-wide announcements, direct messaging, and customizable notifications for important events.',
-    category: 'recommended',
-    enabled: true,
-    canDisable: true,
-    icon: 'MessageSquare',
-    route: '/communications',
-    features: [
-      'Department announcements',
-      'Direct messaging',
-      'Group discussions',
-      'Emergency notifications',
-      'Email integration',
-      'Mobile push notifications',
-    ],
-  },
-
-  // ============================================
-  // OPTIONAL MODULES (Disabled by Default)
-  // ============================================
-  {
     id: 'training',
     name: 'Training & Certification',
     description: 'Course management, certification tracking, and compliance monitoring',
     longDescription:
       'Comprehensive training management system. Schedule courses, track certifications, monitor compliance, and maintain training records for all members.',
-    category: 'optional',
-    enabled: false,
+    category: 'recommended',
+    enabled: true,
     canDisable: true,
     icon: 'GraduationCap',
     route: '/training',
@@ -257,6 +233,94 @@ export const AVAILABLE_MODULES: Module[] = [
       'Compliance monitoring',
       'Instructor assignments',
       'Training materials library',
+    ],
+  },
+  {
+    id: 'facilities',
+    name: 'Facilities Management',
+    description: 'Building management, maintenance, inspections, and compliance',
+    longDescription:
+      'Full facility and building management for organizations with a dedicated facilities officer. Track maintenance schedules, inspections, building systems, rooms, utility accounts, capital projects, and compliance checklists across all stations and buildings.',
+    category: 'recommended',
+    enabled: true,
+    canDisable: true,
+    icon: 'Building2',
+    route: '/facilities',
+    features: [
+      'Facility and station management',
+      'Maintenance work orders and scheduling',
+      'Inspection tracking and compliance',
+      'Building systems inventory',
+      'Room and space management',
+      'Capital project tracking',
+    ],
+    requiresSetup: false,
+    setupDescription: 'When disabled, a simplified Locations page provides basic station, address, and room data for events, forms, and QR check-in.',
+  },
+  {
+    id: 'prospective-members',
+    name: 'Prospective Members Pipeline',
+    description: 'Applicant-to-member pipeline with configurable stages',
+    longDescription:
+      'Manage the full prospective member pipeline from application to membership conversion. Configure pipeline stages (form submission, document upload, election/vote, manual approval), track applicants through kanban or table views, and automatically convert successful applicants to administrative or probationary members.',
+    category: 'recommended',
+    enabled: true,
+    canDisable: true,
+    icon: 'UserPlus',
+    route: '/prospective-members',
+    features: [
+      'Configurable pipeline stages',
+      'Kanban and table views',
+      'Drag-and-drop stage management',
+      'Document upload requirements',
+      'Election/vote integration',
+      'Automatic member conversion',
+    ],
+  },
+  {
+    id: 'public-info',
+    name: 'Public Information',
+    description: 'Public-facing pages, community outreach, and fire safety education',
+    longDescription:
+      'Create a public-facing presence for your department. Share community information, safety tips, and department news with the public.',
+    category: 'recommended',
+    enabled: true,
+    canDisable: true,
+    icon: 'Globe',
+    route: '/public',
+    features: [
+      'Public website pages',
+      'Fire safety education resources',
+      'Community event calendar',
+      'News and press releases',
+      'Contact forms',
+      'Social media integration',
+    ],
+    requiresSetup: true,
+    setupDescription: 'Requires domain configuration',
+  },
+
+  // ============================================
+  // ADDITIONAL MODULES (Disabled by Default)
+  // ============================================
+  {
+    id: 'communications',
+    name: 'Communications',
+    description: 'Internal messaging, announcements, and notifications',
+    longDescription:
+      'Keep everyone informed with department-wide announcements, direct messaging, and customizable notifications for important events.',
+    category: 'optional',
+    enabled: false,
+    canDisable: true,
+    icon: 'MessageSquare',
+    route: '/communications',
+    features: [
+      'Department announcements',
+      'Direct messaging',
+      'Group discussions',
+      'Emergency notifications',
+      'Email integration',
+      'Mobile push notifications',
     ],
   },
   {
@@ -322,67 +386,38 @@ export const AVAILABLE_MODULES: Module[] = [
     ],
   },
   {
-    id: 'facilities',
-    name: 'Facilities Management',
-    description: 'Building management, maintenance, inspections, and compliance',
+    id: 'elections',
+    name: 'Elections & Voting',
+    description: 'Ballot creation, voting management, and election results',
     longDescription:
-      'Full facility and building management for organizations with a dedicated facilities officer. Track maintenance schedules, inspections, building systems, rooms, utility accounts, capital projects, and compliance checklists across all stations and buildings.',
+      'Run department elections with secure ballot creation, anonymous voting, and automated result tallying.',
     category: 'optional',
     enabled: false,
     canDisable: true,
-    icon: 'Building2',
-    route: '/facilities',
+    icon: 'Vote',
+    route: '/elections',
     features: [
-      'Facility and station management',
-      'Maintenance work orders and scheduling',
-      'Inspection tracking and compliance',
-      'Building systems inventory',
-      'Room and space management',
-      'Capital project tracking',
-    ],
-    requiresSetup: false,
-    setupDescription: 'When disabled, a simplified Locations page provides basic station, address, and room data for events, forms, and QR check-in.',
-  },
-  {
-    id: 'prospective-members',
-    name: 'Prospective Members Pipeline',
-    description: 'Applicant-to-member pipeline with configurable stages',
-    longDescription:
-      'Manage the full prospective member pipeline from application to membership conversion. Configure pipeline stages (form submission, document upload, election/vote, manual approval), track applicants through kanban or table views, and automatically convert successful applicants to administrative or probationary members.',
-    category: 'optional',
-    enabled: false,
-    canDisable: true,
-    icon: 'UserPlus',
-    route: '/prospective-members',
-    features: [
-      'Configurable pipeline stages',
-      'Kanban and table views',
-      'Drag-and-drop stage management',
-      'Document upload requirements',
-      'Election/vote integration',
-      'Automatic member conversion',
+      'Ballot creation and management',
+      'Anonymous voting',
+      'Result tallying and reporting',
+      'Election scheduling',
     ],
   },
   {
-    id: 'public-info',
-    name: 'Public Information',
-    description: 'Public-facing pages, community outreach, and fire safety education',
+    id: 'mobile',
+    name: 'Mobile App Access',
+    description: 'Mobile-optimized access and push notifications',
     longDescription:
-      'Create a public-facing presence for your department. Share community information, safety tips, and department news with the public.',
+      'Enable mobile-optimized access and push notification support for members on the go.',
     category: 'optional',
     enabled: false,
     canDisable: true,
-    icon: 'Globe',
-    route: '/public',
+    icon: 'Smartphone',
+    route: '/mobile',
     features: [
-      'Public website pages',
-      'Fire safety education resources',
-      'Community event calendar',
-      'News and press releases',
-      'Contact forms',
-      'Social media integration',
+      'Mobile-optimized interface',
+      'Push notifications',
+      'Offline access',
     ],
-    requiresSetup: true,
-    setupDescription: 'Requires domain configuration',
   },
 ];

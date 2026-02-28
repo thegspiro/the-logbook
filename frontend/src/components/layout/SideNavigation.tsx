@@ -82,16 +82,28 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
   const [enabledModules, setEnabledModules] = useState<Set<string> | null>(null);
 
+  // Essential modules that are always present in the response — if the
+  // response contains ONLY these, the org likely has no module config yet
+  // and we should show everything rather than hiding all optional modules.
+  const ESSENTIAL_ONLY = new Set(["members", "events", "documents", "roles", "settings"]);
+
   // Load enabled modules for this organization to control nav visibility
   useEffect(() => {
     organizationService
       .getEnabledModules()
       .then((res) => {
-        setEnabledModules(new Set(res.enabled_modules));
+        const modules = new Set(res.enabled_modules);
+        // Safeguard: if response has no configurable modules enabled
+        // (only essential ones), treat as unconfigured and show all.
+        const hasConfigurable = res.enabled_modules.some(
+          (m) => !ESSENTIAL_ONLY.has(m),
+        );
+        setEnabledModules(hasConfigurable ? modules : null);
       })
       .catch(() => {
         /* default to null = show all */
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Show a module's nav items? null (loading/error) → show all; otherwise check the set */
