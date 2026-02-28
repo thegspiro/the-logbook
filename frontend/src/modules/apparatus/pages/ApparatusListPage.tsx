@@ -102,29 +102,30 @@ export const ApparatusListPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg via-red-900 to-theme-bg">
       {/* Header */}
-      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
+      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-4 sm:px-6 py-4">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="bg-red-600 rounded-lg p-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="bg-red-600 rounded-lg p-2 flex-shrink-0">
                 <Truck className="w-6 h-6 text-theme-text-primary" />
               </div>
-              <div>
-                <h1 className="text-theme-text-primary text-xl font-bold">Apparatus Management</h1>
-                <p className="text-theme-text-muted text-sm">Manage your fleet vehicles and equipment</p>
+              <div className="min-w-0">
+                <h1 className="text-theme-text-primary text-lg sm:text-xl font-bold truncate">Apparatus Management</h1>
+                <p className="text-theme-text-muted text-sm hidden sm:block">Manage your fleet vehicles and equipment</p>
               </div>
             </div>
             <button
               onClick={() => navigate('/dashboard')}
-              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm"
+              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm flex-shrink-0"
             >
-              ← Back to Dashboard
+              <span className="hidden sm:inline">← Back to Dashboard</span>
+              <span className="sm:hidden">← Back</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Error Display */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center justify-between">
@@ -318,27 +319,27 @@ export const ApparatusListPage: React.FC = () => {
                 <table className="w-full">
                   <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Unit
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
                         Type
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
                         Vehicle
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-tertiary">
                         <Gauge className="w-4 h-4 inline mr-1" />
                         Mileage
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-tertiary">
                         <Clock className="w-4 h-4 inline mr-1" />
                         Hours
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -355,25 +356,25 @@ export const ApparatusListPage: React.FC = () => {
                             apparatus.isArchived ? 'opacity-60' : ''
                           }`}
                         >
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold">
+                              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0">
                                 {apparatus.unitNumber.substring(0, 2)}
                               </div>
-                              <div className="ml-3">
-                                <div className="text-theme-text-primary font-medium">
+                              <div className="ml-3 min-w-0">
+                                <div className="text-theme-text-primary font-medium truncate">
                                   {apparatus.unitNumber}
                                 </div>
                                 {apparatus.name && (
-                                  <div className="text-theme-text-muted text-sm">{apparatus.name}</div>
+                                  <div className="text-theme-text-muted text-sm truncate">{apparatus.name}</div>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-secondary">
                             {apparatusType && <ApparatusTypeBadge type={apparatusType} />}
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-3 sm:px-6 py-4 table-col-secondary">
                             <div className="text-theme-text-primary text-sm">
                               {apparatus.year && apparatus.make && apparatus.model
                                 ? `${apparatus.year} ${apparatus.make} ${apparatus.model}`
@@ -382,42 +383,42 @@ export const ApparatusListPage: React.FC = () => {
                                 : '-'}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                             {status && <StatusBadge status={status} />}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-tertiary">
                             <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentMileage
                                 ? apparatus.currentMileage.toLocaleString()
                                 : '-'}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-tertiary">
                             <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentHours
                                 ? apparatus.currentHours.toLocaleString()
                                 : '-'}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <div className="flex items-center justify-end space-x-2">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end space-x-1 sm:space-x-2">
                               <button
                                 onClick={() => navigate(`/apparatus/${apparatus.id}`)}
-                                className="p-2 text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
+                                className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
                                 title="View Details"
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => navigate(`/apparatus/${apparatus.id}/edit`)}
-                                className="p-2 text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
+                                className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
                                 title="Edit"
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => navigate(`/apparatus/${apparatus.id}`)}
-                                className="p-2 text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
+                                className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
                                 title="View Details"
                               >
                                 <Wrench className="w-4 h-4" />
@@ -425,7 +426,7 @@ export const ApparatusListPage: React.FC = () => {
                               {!apparatus.isArchived && (
                                 <button
                                   onClick={() => navigate(`/apparatus/${apparatus.id}`)}
-                                  className="p-2 text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary rounded transition-colors"
+                                  className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary rounded transition-colors"
                                   title="Archive"
                                 >
                                   <Archive className="w-4 h-4" />
@@ -443,15 +444,15 @@ export const ApparatusListPage: React.FC = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between">
+              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <p className="text-theme-text-muted text-sm">
                   Showing page {currentPage} of {totalPages} ({totalApparatus} total)
                 </p>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1 sm:space-x-2">
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="p-2 rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
@@ -470,7 +471,7 @@ export const ApparatusListPage: React.FC = () => {
                       <button
                         key={pageNum}
                         onClick={() => handlePageChange(pageNum)}
-                        className={`w-10 h-10 rounded-lg transition-colors ${
+                        className={`min-w-[40px] h-10 rounded-lg transition-colors text-sm font-medium ${
                           currentPage === pageNum
                             ? 'bg-red-600 text-white'
                             : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -483,7 +484,7 @@ export const ApparatusListPage: React.FC = () => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>

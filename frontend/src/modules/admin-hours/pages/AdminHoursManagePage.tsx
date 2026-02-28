@@ -683,7 +683,7 @@ const AdminHoursManagePage: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="bg-theme-surface rounded-lg shadow-md overflow-hidden">
+              <div className="bg-theme-surface rounded-lg shadow-md overflow-hidden overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-theme-surface-border">

@@ -1024,7 +1024,7 @@ export const SchedulingReportsPage: React.FC = () => {
 
                       {/* Expanded member list */}
                       {isExpanded && (
-                        <div className="border-t border-theme-surface-border">
+                        <div className="border-t border-theme-surface-border overflow-x-auto">
                           {filteredMembers.length === 0 ? (
                             <div className="p-4 text-center text-theme-text-muted text-sm">
                               {complianceFilter === 'non-compliant' ? 'All members are compliant!' : 'No members found'}

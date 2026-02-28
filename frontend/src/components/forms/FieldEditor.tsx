@@ -237,7 +237,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
           {/* Field Type Selector */}
           <div role="radiogroup" aria-label="Field Type">
             <label className="block text-sm font-medium text-theme-text-secondary mb-2">Field Type</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               {FIELD_TYPES.map((ft) => (
                 <button
                   key={ft.value}

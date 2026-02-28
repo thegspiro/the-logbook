@@ -257,12 +257,12 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     }
   },
 
-  deleteTest: async (id) => {
+  deleteTest: async (id: string) => {
     set({ error: null });
     try {
       await skillsTestingService.deleteTest(id);
-      set((state) => ({
-        tests: state.tests.filter((t) => t.id !== id),
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.filter((t: SkillTestListItem) => t.id !== id),
         currentTest: state.currentTest?.id === id ? null : state.currentTest,
       }));
     } catch (err: unknown) {
@@ -271,12 +271,12 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     }
   },
 
-  discardPracticeTest: async (id) => {
+  discardPracticeTest: async (id: string) => {
     set({ error: null });
     try {
       await skillsTestingService.discardPracticeTest(id);
-      set((state) => ({
-        tests: state.tests.filter((t) => t.id !== id),
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.filter((t: SkillTestListItem) => t.id !== id),
         currentTest: state.currentTest?.id === id ? null : state.currentTest,
       }));
     } catch (err: unknown) {
@@ -285,7 +285,7 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     }
   },
 
-  emailTestResults: async (id) => {
+  emailTestResults: async (id: string) => {
     set({ error: null });
     try {
       const { message } = await skillsTestingService.emailTestResults(id);
@@ -298,9 +298,9 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   },
 
   // Active test session actions
-  setActiveSectionIndex: (index) => set({ activeSectionIndex: index }),
+  setActiveSectionIndex: (index: number) => set({ activeSectionIndex: index }),
 
-  updateCriterionResult: (sectionId, criterionId, result, sectionName?, criterionLabel?) => {
+  updateCriterionResult: (sectionId: string, criterionId: string, result: Partial<CriterionResult>, sectionName?: string, criterionLabel?: string) => {
     const { currentTest } = get();
     if (!currentTest) return;
 
@@ -343,8 +343,8 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     });
   },
 
-  setActiveTestTimer: (seconds) => set({ activeTestTimer: seconds }),
-  setActiveTestRunning: (running) => set({ activeTestRunning: running }),
+  setActiveTestTimer: (seconds: number) => set({ activeTestTimer: seconds }),
+  setActiveTestRunning: (running: boolean) => set({ activeTestRunning: running }),
 
   // Summary
   loadSummary: async () => {

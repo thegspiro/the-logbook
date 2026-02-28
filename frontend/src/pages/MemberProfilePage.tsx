@@ -877,7 +877,7 @@ export const MemberProfilePage: React.FC = () => {
                     View Details
                   </Link>
                 </div>
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
                     <p className="text-2xl font-bold text-theme-text-primary">
                       {adminHoursSummary.totalHours.toFixed(1)}
@@ -1259,7 +1259,7 @@ export const MemberProfilePage: React.FC = () => {
                       className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                       <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
                         City
@@ -1293,7 +1293,7 @@ export const MemberProfilePage: React.FC = () => {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                       <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
                         ZIP
@@ -1439,7 +1439,7 @@ export const MemberProfilePage: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <input
                           type="text"
                           placeholder="Name *"
@@ -1463,7 +1463,7 @@ export const MemberProfilePage: React.FC = () => {
                           className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <input
                           type="tel"
                           placeholder="Phone *"

@@ -350,9 +350,9 @@ export const EventDetailPage: React.FC = () => {
           Back to Events
         </Link>
 
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-theme-text-primary">{event.title}</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-theme-text-primary break-words">{event.title}</h1>
             <div className="mt-2 flex items-center space-x-2">
               <EventTypeBadge type={event.event_type} size="sm" />
               {event.is_cancelled && (

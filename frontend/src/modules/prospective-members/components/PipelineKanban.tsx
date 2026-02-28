@@ -130,7 +130,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
   };
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4 min-h-[500px]">
+    <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 min-h-[300px] sm:min-h-[400px] -mx-4 px-4 sm:mx-0 sm:px-0">
       {sortedStages.map((stage) => {
         const Icon = STAGE_TYPE_ICONS[stage.stage_type];
         const headerColor = STAGE_HEADER_COLORS[stage.stage_type];
@@ -143,7 +143,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
             onDragOver={(e) => handleDragOver(e, stage.id)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => { void handleDrop(e, stage.id); }}
-            className={`flex-shrink-0 w-72 bg-theme-input-bg rounded-lg border transition-all ${
+            className={`flex-shrink-0 w-64 sm:w-72 bg-theme-input-bg rounded-lg border transition-all ${
               isDropTarget
                 ? 'border-red-500 bg-red-500/5'
                 : 'border-theme-surface-border'
