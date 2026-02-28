@@ -249,7 +249,7 @@ const ScoreCriterion: React.FC<{
             value={currentScore}
             onChange={(e) => handleScoreChange(Number(e.target.value))}
             className="w-full h-3 rounded-lg appearance-none cursor-pointer accent-red-600"
-            style={{ background: `linear-gradient(to right, ${isCritical ? (isPassing ? '#16a34a' : '#dc2626') : '#2563eb'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)` }}
+            style={{ background: `linear-gradient(to right, ${isCritical ? (isPassing ? 'var(--status-passed)' : 'var(--status-failed)') : 'var(--accent-blue)'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)` }}
           />
           <div className="flex justify-between text-xs text-theme-text-muted">
             <span>0</span>
@@ -1152,7 +1152,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           </div>
 
           {/* Test details grid */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
             <div className="bg-theme-surface rounded-xl p-3 border border-theme-surface-border">
               <div className="flex items-center gap-1.5 mb-1">
                 <User className="w-3 h-3 text-theme-text-muted" />
@@ -1231,7 +1231,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                 <Mail className="w-5 h-5" />
                 {emailing ? 'Sending...' : 'Email Results to Candidate'}
               </button>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   onClick={() => void handleRetake()}
                   className="flex items-center justify-center gap-2 py-3 bg-theme-surface border-2 border-blue-500/50 hover:border-blue-500 text-blue-600 dark:text-blue-400 rounded-xl font-medium transition-colors"
@@ -1296,7 +1296,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         {/* Review Content */}
         <div className="flex-1 px-4 py-4 overflow-y-auto">
           {/* Summary stats */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
             <div className="bg-theme-surface rounded-xl p-4 border border-theme-surface-border text-center">
               <p className="text-xs text-theme-text-muted">Candidate</p>
               <p className="font-bold text-theme-text-primary text-sm mt-1">{currentTest.candidate_name}</p>

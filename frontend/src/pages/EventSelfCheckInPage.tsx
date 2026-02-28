@@ -99,8 +99,8 @@ const EventSelfCheckInPage: React.FC = () => {
       <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
         <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
-              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 dark:bg-red-500/20 rounded-full mb-4">
+              <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
@@ -125,8 +125,8 @@ const EventSelfCheckInPage: React.FC = () => {
         <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center">
             {/* Info Icon */}
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-6">
-              <svg className="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 dark:bg-blue-500/20 rounded-full mb-6">
+              <svg className="w-12 h-12 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -134,10 +134,10 @@ const EventSelfCheckInPage: React.FC = () => {
             <h2 className="text-3xl font-bold text-theme-text-primary mb-2">Already Checked In</h2>
             <p className="text-xl text-theme-text-secondary mb-8">You're already checked in to this event</p>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-left mb-8">
-              <h3 className="text-2xl font-semibold text-blue-900 mb-4">{qrData?.event_name}</h3>
+            <div className="alert-info p-6 text-left mb-8">
+              <h3 className="text-2xl font-semibold text-theme-alert-info-title mb-4">{qrData?.event_name}</h3>
 
-              <div className="space-y-2 text-blue-800">
+              <div className="space-y-2 text-theme-alert-info-text">
                 <p>
                   <span className="font-medium">Checked In At:</span>{' '}
                   {checkInData.checked_in_at && formatTime(checkInData.checked_in_at, tz)}
@@ -191,8 +191,8 @@ const EventSelfCheckInPage: React.FC = () => {
         <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center">
             {/* Success Icon */}
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
-              <svg className="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 dark:bg-green-500/20 rounded-full mb-6">
+              <svg className="w-12 h-12 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             </div>
@@ -204,10 +204,10 @@ const EventSelfCheckInPage: React.FC = () => {
               {isCheckOut ? "You've been checked out of:" : "You've been checked in to:"}
             </p>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-left mb-8">
-              <h3 className="text-2xl font-semibold text-blue-900 mb-4">{qrData?.event_name}</h3>
+            <div className="alert-info p-6 text-left mb-8">
+              <h3 className="text-2xl font-semibold text-theme-alert-info-title mb-4">{qrData?.event_name}</h3>
 
-              <div className="space-y-2 text-blue-800">
+              <div className="space-y-2 text-theme-alert-info-text">
                 {qrData?.event_type === 'training' && (
                   <div className="flex items-center mb-3">
                     <svg className="h-5 w-5 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,8 +292,8 @@ const EventSelfCheckInPage: React.FC = () => {
       <div className="bg-theme-surface rounded-lg shadow-md p-8">
         {/* Event Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-            <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-500/20 rounded-full mb-4">
+            <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>

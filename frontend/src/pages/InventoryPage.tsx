@@ -954,7 +954,7 @@ const InventoryPage: React.FC = () => {
 
         {/* Summary Stats */}
         {summary && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8" role="region" aria-label="Inventory statistics">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8" role="region" aria-label="Inventory statistics">
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Items</p>
               <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary.total_items}</p>
@@ -1712,7 +1712,7 @@ const InventoryPage: React.FC = () => {
                     <h3 className="text-lg font-medium text-theme-text-primary mb-1">Log Maintenance</h3>
                     <p className="text-theme-text-muted text-sm mb-4">{maintenanceItem.name}{maintenanceItem.serial_number ? ` (SN: ${maintenanceItem.serial_number})` : ''}</p>
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label htmlFor="maint-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Type *</label>
                           <select id="maint-type" value={maintenanceForm.maintenance_type || 'inspection'} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, maintenance_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">

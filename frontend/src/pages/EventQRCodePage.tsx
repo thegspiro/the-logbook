@@ -71,11 +71,11 @@ const EventQRCodePage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
-          <p className="text-red-400">{error}</p>
+          <p className="text-red-700 dark:text-red-400">{error}</p>
         </div>
         <Link
           to={eventId ? `/events/${eventId}` : '/events'}
-          className="text-blue-600 hover:text-blue-400"
+          className="text-blue-700 dark:text-blue-400 hover:text-blue-500"
         >
           &larr; {eventId ? 'Back to Event' : 'Back to Events'}
         </Link>
@@ -87,11 +87,11 @@ const EventQRCodePage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
-          <p className="text-yellow-300">No QR code data available</p>
+          <p className="text-yellow-700 dark:text-yellow-300">No QR code data available</p>
         </div>
         <Link
           to={eventId ? `/events/${eventId}` : '/events'}
-          className="text-blue-600 hover:text-blue-400"
+          className="text-blue-700 dark:text-blue-400 hover:text-blue-500"
         >
           &larr; {eventId ? 'Back to Event' : 'Back to Events'}
         </Link>
@@ -107,7 +107,7 @@ const EventQRCodePage: React.FC = () => {
       <div className="mb-6">
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 hover:text-blue-400 mb-4 inline-block"
+          className="text-blue-700 dark:text-blue-400 hover:text-blue-500 mb-4 inline-block"
         >
           &larr; Back to Event
         </Link>
@@ -167,7 +167,7 @@ const EventQRCodePage: React.FC = () => {
             {/* QR Code */}
             {checkInUrl && (
               <div className="flex justify-center mb-6">
-                <div className="bg-white p-8 rounded-lg border-4 border-theme-surface-border">
+                <div className="qr-container">
                   <QRCodeSVG
                     value={checkInUrl}
                     size={300}
@@ -179,9 +179,9 @@ const EventQRCodePage: React.FC = () => {
             )}
 
             {/* Instructions */}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-left">
-              <h4 className="font-semibold text-blue-300 mb-2">Instructions:</h4>
-              <ol className="list-decimal list-inside space-y-1 text-blue-300">
+            <div className="alert-info text-left">
+              <h4 className="font-semibold text-theme-alert-info-title mb-2">Instructions:</h4>
+              <ol className="list-decimal list-inside space-y-1 text-theme-alert-info-text">
                 <li>Display this QR code at the event venue</li>
                 <li>Members scan the code with their phone camera</li>
                 <li>Members will be prompted to log in if not already logged in</li>
@@ -204,15 +204,15 @@ const EventQRCodePage: React.FC = () => {
               QR Code Check-In Window
             </h3>
 
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6">
-              <p className="text-yellow-300 mb-2">
+            <div className="alert-warning mb-6">
+              <p className="text-theme-alert-warning-text mb-2">
                 Check-in is only available during the following time window:
               </p>
-              <p className="font-semibold text-yellow-300">
+              <p className="font-semibold text-theme-alert-warning-title">
                 {formatShortDateTime(qrData.check_in_start, tz)} - {formatShortDateTime(qrData.check_in_end, tz)}
               </p>
               {qrData.actual_end_time && (
-                <p className="text-sm text-yellow-300 mt-2">
+                <p className="text-sm text-theme-alert-warning-text mt-2">
                   Note: Event was ended early by event manager
                 </p>
               )}
@@ -221,7 +221,7 @@ const EventQRCodePage: React.FC = () => {
             {/* Still show the QR code (greyed out) so the page is ready when the window opens */}
             {checkInUrl && (
               <div className="flex justify-center mb-4">
-                <div className="bg-white p-8 rounded-lg border-4 border-theme-surface-border opacity-40">
+                <div className="qr-container opacity-40">
                   <QRCodeSVG
                     value={checkInUrl}
                     size={250}

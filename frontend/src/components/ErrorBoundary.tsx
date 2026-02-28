@@ -96,9 +96,9 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="max-w-2xl w-full bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-8">
             <div className="text-center">
               {/* Error Icon */}
-              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-500/20 mb-4">
                 <svg
-                  className="h-8 w-8 text-red-600"
+                  className="h-8 w-8 text-red-600 dark:text-red-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"

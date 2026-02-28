@@ -619,7 +619,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               {/* Event Type */}
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1.5">Event Type</label>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   {EVENT_TYPES.map(et => {
                     const ETIcon = et.icon;
                     const isSelected = formData.event_type === et.value;
@@ -652,7 +652,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                 <p className="text-xs text-theme-text-muted mb-2">
                   Start from a pre-built template, then customize. Or build from scratch below.
                 </p>
-                <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
                   {EVENT_TEMPLATE_STARTERS
                     .filter(s => !formData.event_type || s.eventType === formData.event_type)
                     .map((starter, i) => {
@@ -1621,7 +1621,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                     <p className="text-sm text-theme-text-muted mb-3">{template.description}</p>
                   )}
 
-                  <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                     <div className="bg-theme-surface rounded-lg p-2">
                       <p className="text-xs text-theme-text-muted flex items-center gap-1">
                         <Clock className="w-3 h-3" aria-hidden="true" />

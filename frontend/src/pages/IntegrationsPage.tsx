@@ -22,37 +22,37 @@ import { getErrorMessage } from '../utils/errorHandling';
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
   'google-calendar': {
     icon: <Calendar className="w-6 h-6" />,
-    color: 'text-blue-700',
+    color: 'text-blue-700 dark:text-blue-400',
     bgColor: 'bg-blue-500/10',
     features: ['Event sync', 'Two-way sync', 'Auto-create events'],
   },
   'outlook': {
     icon: <Calendar className="w-6 h-6" />,
-    color: 'text-sky-700',
+    color: 'text-sky-700 dark:text-sky-400',
     bgColor: 'bg-sky-500/10',
     features: ['Calendar sync', 'Email notifications', 'Contact sync'],
   },
   'slack': {
     icon: <MessageSquare className="w-6 h-6" />,
-    color: 'text-purple-700',
+    color: 'text-purple-700 dark:text-purple-400',
     bgColor: 'bg-purple-500/10',
     features: ['Event alerts', 'Training reminders', 'Custom channels'],
   },
   'discord': {
     icon: <MessageSquare className="w-6 h-6" />,
-    color: 'text-indigo-700',
+    color: 'text-indigo-700 dark:text-indigo-400',
     bgColor: 'bg-indigo-500/10',
     features: ['Webhook notifications', 'Event reminders', 'Duty alerts'],
   },
   'csv-import': {
     icon: <Database className="w-6 h-6" />,
-    color: 'text-emerald-700',
+    color: 'text-emerald-700 dark:text-emerald-400',
     bgColor: 'bg-emerald-500/10',
     features: ['Member import', 'Training export', 'Inventory export'],
   },
   'ical': {
     icon: <Link className="w-6 h-6" />,
-    color: 'text-orange-700',
+    color: 'text-orange-700 dark:text-orange-400',
     bgColor: 'bg-orange-500/10',
     features: ['Calendar feed URL', 'Auto-updates', 'Filtered feeds'],
   },
@@ -169,11 +169,11 @@ const IntegrationsPage: React.FC = () => {
           </div>
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Connected</p>
-            <p className="text-green-700 text-2xl font-bold mt-1">{connectedCount}</p>
+            <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{connectedCount}</p>
           </div>
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Ready to Connect</p>
-            <p className="text-indigo-700 text-2xl font-bold mt-1">{availableCount}</p>
+            <p className="text-indigo-700 dark:text-indigo-400 text-2xl font-bold mt-1">{availableCount}</p>
           </div>
         </div>
 
@@ -229,7 +229,7 @@ const IntegrationsPage: React.FC = () => {
                     </div>
                   </div>
                   {integration.status === 'connected' && (
-                    <span className="flex items-center space-x-1 px-2 py-0.5 text-xs bg-green-500/10 text-green-700 border border-green-500/30 rounded">
+                    <span className="flex items-center space-x-1 px-2 py-0.5 text-xs bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30 rounded">
                       <Wifi className="w-3 h-3" />
                       <span>Connected</span>
                     </span>
@@ -300,7 +300,7 @@ const IntegrationsPage: React.FC = () => {
                       <h4 className="text-theme-text-primary text-sm font-medium">Features included:</h4>
                       {ui.features.map((feature) => (
                         <div key={feature} className="flex items-center space-x-2">
-                          <Check className="w-4 h-4 text-green-700" />
+                          <Check className="w-4 h-4 text-green-700 dark:text-green-400" />
                           <span className="text-theme-text-secondary text-sm">{feature}</span>
                         </div>
                       ))}

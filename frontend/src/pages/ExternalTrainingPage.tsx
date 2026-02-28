@@ -304,7 +304,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   aria-label="Enable auto-sync"
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    className={`toggle-knob-sm ${
                       formData.auto_sync_enabled ? 'translate-x-6' : 'translate-x-1'
                     }`}
                     aria-hidden="true"
@@ -432,7 +432,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
         <p className="text-sm text-theme-text-muted mb-4">{provider.description}</p>
       )}
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div className="bg-theme-surface-secondary rounded-lg p-3">
           <p className="text-xs text-theme-text-muted">Last Sync</p>
           <p className="text-sm text-theme-text-primary">
@@ -703,7 +703,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                 aria-label="Enable auto-sync"
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  className={`toggle-knob-sm ${
                     formData.auto_sync_enabled ? 'translate-x-6' : 'translate-x-1'
                   }`}
                   aria-hidden="true"

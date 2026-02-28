@@ -690,7 +690,7 @@ const EventsSettingsTab: React.FC = () => {
                 }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  className={`toggle-knob-sm ${
                     settings.request_pipeline.public_progress_visible ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
@@ -865,7 +865,7 @@ const EventsSettingsTab: React.FC = () => {
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      className={`toggle-knob-sm ${
                         config.enabled ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />

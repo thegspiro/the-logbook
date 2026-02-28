@@ -485,7 +485,7 @@ export const StorageAreasPage: React.FC = () => {
             {formError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">{formError}</div>
             )}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="sa-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
                 <input id="sa-name" type="text" required value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Rack A, Shelf 3" />
@@ -496,7 +496,7 @@ export const StorageAreasPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="sa-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Type *</label>
                 <select id="sa-type" value={form.storage_type || 'rack'} onChange={(e) => setForm({ ...form, storage_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">

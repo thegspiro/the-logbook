@@ -791,9 +791,9 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
         </button>
       )}
       {showQR && kioskUrl && (
-        <div className="mt-3 flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-theme-surface-border">
+        <div className="mt-3 flex flex-col items-center gap-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-theme-surface-border">
           <QRCodeSVG value={kioskUrl} size={140} level="H" includeMargin />
-          <p className="text-[10px] text-gray-500 font-mono break-all text-center">{kioskUrl}</p>
+          <p className="text-[10px] text-theme-text-muted font-mono break-all text-center">{kioskUrl}</p>
         </div>
       )}
     </div>
@@ -1342,7 +1342,7 @@ export default function LocationsPage() {
                   placeholder="e.g., Main Hall, Bunk Room A, Training Room" className={inputCls}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Room Number</label>
                   <input type="text" value={roomForm.room_number} onChange={e => setRoomForm(p => ({...p, room_number: e.target.value}))}

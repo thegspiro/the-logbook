@@ -512,7 +512,7 @@ const ImportMembers: React.FC = () => {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
                 <p className="text-green-700 dark:text-green-400 text-2xl font-bold">{importResult.success}</p>
                 <p className="text-green-700 dark:text-green-300 text-sm">Successful</p>

@@ -160,7 +160,7 @@ const ReviewPanel: React.FC<{
             {showOverrides ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
           {showOverrides && (
-            <div className="grid grid-cols-2 gap-3 mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
               <div>
                 <label className="text-xs text-theme-text-muted">Hours</label>
                 <input

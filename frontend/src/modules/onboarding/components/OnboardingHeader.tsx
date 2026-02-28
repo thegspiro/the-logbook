@@ -29,7 +29,7 @@ const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
     <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
       <div className="max-w-7xl mx-auto flex items-center">
         {logoPreview ? (
-          <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
+          <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center overflow-hidden mr-4">
             <img
               src={logoPreview}
               alt={`${departmentName} logo`}
