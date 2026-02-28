@@ -192,9 +192,7 @@ async def update_email_settings(
     """
     org_service = OrganizationService(db)
 
-    settings_dict = {
-        "email_service": email_settings.model_dump(exclude_unset=False)
-    }
+    settings_dict = {"email_service": email_settings.model_dump(exclude_unset=False)}
 
     try:
         await org_service.update_organization_settings(
@@ -241,9 +239,7 @@ async def update_file_storage_settings(
     """
     org_service = OrganizationService(db)
 
-    settings_dict = {
-        "file_storage": storage_settings.model_dump(exclude_unset=False)
-    }
+    settings_dict = {"file_storage": storage_settings.model_dump(exclude_unset=False)}
 
     try:
         await org_service.update_organization_settings(
@@ -289,9 +285,7 @@ async def update_auth_settings(
     """
     org_service = OrganizationService(db)
 
-    settings_dict = {
-        "auth": auth_settings.model_dump(exclude_unset=False)
-    }
+    settings_dict = {"auth": auth_settings.model_dump(exclude_unset=False)}
 
     try:
         await org_service.update_organization_settings(
@@ -508,7 +502,12 @@ async def get_setup_checklist(
     from app.models.inventory import InventoryCategory
     from app.models.location import Location
     from app.models.membership_pipeline import MembershipPipeline
-    from app.models.training import BasicApparatus, ShiftTemplate, TrainingCourse, TrainingRequirement
+    from app.models.training import (
+        BasicApparatus,
+        ShiftTemplate,
+        TrainingCourse,
+        TrainingRequirement,
+    )
 
     org_id = str(current_user.organization_id)
 

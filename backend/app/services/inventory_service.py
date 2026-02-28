@@ -1463,7 +1463,11 @@ class InventoryService:
 
         # Total value (multiply per-unit value by quantity for accurate totals)
         value_result = await self.db.execute(
-            select(func.coalesce(func.sum(InventoryItem.current_value * InventoryItem.quantity), 0))
+            select(
+                func.coalesce(
+                    func.sum(InventoryItem.current_value * InventoryItem.quantity), 0
+                )
+            )
             .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active == True)  # noqa: E712
         )
@@ -2769,35 +2773,67 @@ class InventoryService:
         for a in asgn_result.scalars().all():
             user_name = ""
             if a.user:
-                user_name = f"{a.user.first_name or ''} {a.user.last_name or ''}".strip() or a.user.username or ""
-            events.append({
-                "type": "assignment",
-                "id": a.id,
-                "date": a.assigned_at.isoformat() if a.assigned_at else a.created_at.isoformat(),
-                "summary": f"Assigned to {user_name}" if a.is_active else f"Returned by {user_name}",
-                "details": {
-                    "user_name": user_name,
-                    "assignment_type": a.assignment_type.value if hasattr(a.assignment_type, "value") else a.assignment_type,
-                    "reason": a.reason,
-                    "is_active": a.is_active,
-                    "returned_at": a.returned_at.isoformat() if a.returned_at else None,
-                    "return_condition": a.return_condition.value if a.return_condition and hasattr(a.return_condition, "value") else a.return_condition,
-                    "return_notes": a.return_notes,
-                },
-            })
-            # If returned, add a separate return event
-            if a.returned_at:
-                events.append({
-                    "type": "return",
-                    "id": f"{a.id}_return",
-                    "date": a.returned_at.isoformat(),
-                    "summary": f"Returned by {user_name}",
+                user_name = (
+                    f"{a.user.first_name or ''} {a.user.last_name or ''}".strip()
+                    or a.user.username
+                    or ""
+                )
+            events.append(
+                {
+                    "type": "assignment",
+                    "id": a.id,
+                    "date": (
+                        a.assigned_at.isoformat()
+                        if a.assigned_at
+                        else a.created_at.isoformat()
+                    ),
+                    "summary": (
+                        f"Assigned to {user_name}"
+                        if a.is_active
+                        else f"Returned by {user_name}"
+                    ),
                     "details": {
                         "user_name": user_name,
-                        "return_condition": a.return_condition.value if a.return_condition and hasattr(a.return_condition, "value") else a.return_condition,
+                        "assignment_type": (
+                            a.assignment_type.value
+                            if hasattr(a.assignment_type, "value")
+                            else a.assignment_type
+                        ),
+                        "reason": a.reason,
+                        "is_active": a.is_active,
+                        "returned_at": (
+                            a.returned_at.isoformat() if a.returned_at else None
+                        ),
+                        "return_condition": (
+                            a.return_condition.value
+                            if a.return_condition
+                            and hasattr(a.return_condition, "value")
+                            else a.return_condition
+                        ),
                         "return_notes": a.return_notes,
                     },
-                })
+                }
+            )
+            # If returned, add a separate return event
+            if a.returned_at:
+                events.append(
+                    {
+                        "type": "return",
+                        "id": f"{a.id}_return",
+                        "date": a.returned_at.isoformat(),
+                        "summary": f"Returned by {user_name}",
+                        "details": {
+                            "user_name": user_name,
+                            "return_condition": (
+                                a.return_condition.value
+                                if a.return_condition
+                                and hasattr(a.return_condition, "value")
+                                else a.return_condition
+                            ),
+                            "return_notes": a.return_notes,
+                        },
+                    }
+                )
 
         # --- Checkouts ---
         co_result = await self.db.execute(
@@ -2812,32 +2848,53 @@ class InventoryService:
         for c in co_result.scalars().all():
             user_name = ""
             if c.user:
-                user_name = f"{c.user.first_name or ''} {c.user.last_name or ''}".strip() or c.user.username or ""
-            events.append({
-                "type": "checkout",
-                "id": c.id,
-                "date": c.checked_out_at.isoformat() if c.checked_out_at else c.created_at.isoformat(),
-                "summary": f"Checked out by {user_name}",
-                "details": {
-                    "user_name": user_name,
-                    "reason": c.checkout_reason,
-                    "expected_return": c.expected_return_at.isoformat() if c.expected_return_at else None,
-                    "is_returned": c.is_returned,
-                    "is_overdue": c.is_overdue,
-                },
-            })
-            if c.checked_in_at:
-                events.append({
-                    "type": "checkin",
-                    "id": f"{c.id}_checkin",
-                    "date": c.checked_in_at.isoformat(),
-                    "summary": f"Checked in by {user_name}",
+                user_name = (
+                    f"{c.user.first_name or ''} {c.user.last_name or ''}".strip()
+                    or c.user.username
+                    or ""
+                )
+            events.append(
+                {
+                    "type": "checkout",
+                    "id": c.id,
+                    "date": (
+                        c.checked_out_at.isoformat()
+                        if c.checked_out_at
+                        else c.created_at.isoformat()
+                    ),
+                    "summary": f"Checked out by {user_name}",
                     "details": {
                         "user_name": user_name,
-                        "return_condition": c.return_condition.value if c.return_condition and hasattr(c.return_condition, "value") else c.return_condition,
-                        "damage_notes": c.damage_notes,
+                        "reason": c.checkout_reason,
+                        "expected_return": (
+                            c.expected_return_at.isoformat()
+                            if c.expected_return_at
+                            else None
+                        ),
+                        "is_returned": c.is_returned,
+                        "is_overdue": c.is_overdue,
                     },
-                })
+                }
+            )
+            if c.checked_in_at:
+                events.append(
+                    {
+                        "type": "checkin",
+                        "id": f"{c.id}_checkin",
+                        "date": c.checked_in_at.isoformat(),
+                        "summary": f"Checked in by {user_name}",
+                        "details": {
+                            "user_name": user_name,
+                            "return_condition": (
+                                c.return_condition.value
+                                if c.return_condition
+                                and hasattr(c.return_condition, "value")
+                                else c.return_condition
+                            ),
+                            "damage_notes": c.damage_notes,
+                        },
+                    }
+                )
 
         # --- Pool issuances ---
         iss_result = await self.db.execute(
@@ -2852,32 +2909,49 @@ class InventoryService:
         for i in iss_result.scalars().all():
             user_name = ""
             if i.user:
-                user_name = f"{i.user.first_name or ''} {i.user.last_name or ''}".strip() or i.user.username or ""
-            events.append({
-                "type": "issuance",
-                "id": i.id,
-                "date": i.issued_at.isoformat() if i.issued_at else i.created_at.isoformat(),
-                "summary": f"Issued {i.quantity} to {user_name}",
-                "details": {
-                    "user_name": user_name,
-                    "quantity": i.quantity,
-                    "reason": i.reason,
-                    "is_returned": i.is_returned,
-                },
-            })
-            if i.returned_at:
-                events.append({
-                    "type": "issuance_return",
-                    "id": f"{i.id}_return",
-                    "date": i.returned_at.isoformat(),
-                    "summary": f"{user_name} returned {i.quantity}",
+                user_name = (
+                    f"{i.user.first_name or ''} {i.user.last_name or ''}".strip()
+                    or i.user.username
+                    or ""
+                )
+            events.append(
+                {
+                    "type": "issuance",
+                    "id": i.id,
+                    "date": (
+                        i.issued_at.isoformat()
+                        if i.issued_at
+                        else i.created_at.isoformat()
+                    ),
+                    "summary": f"Issued {i.quantity} to {user_name}",
                     "details": {
                         "user_name": user_name,
                         "quantity": i.quantity,
-                        "return_condition": i.return_condition.value if i.return_condition and hasattr(i.return_condition, "value") else i.return_condition,
-                        "return_notes": i.return_notes,
+                        "reason": i.reason,
+                        "is_returned": i.is_returned,
                     },
-                })
+                }
+            )
+            if i.returned_at:
+                events.append(
+                    {
+                        "type": "issuance_return",
+                        "id": f"{i.id}_return",
+                        "date": i.returned_at.isoformat(),
+                        "summary": f"{user_name} returned {i.quantity}",
+                        "details": {
+                            "user_name": user_name,
+                            "quantity": i.quantity,
+                            "return_condition": (
+                                i.return_condition.value
+                                if i.return_condition
+                                and hasattr(i.return_condition, "value")
+                                else i.return_condition
+                            ),
+                            "return_notes": i.return_notes,
+                        },
+                    }
+                )
 
         # --- Maintenance records ---
         maint_result = await self.db.execute(
@@ -2889,23 +2963,37 @@ class InventoryService:
             .order_by(MaintenanceRecord.created_at.desc())
         )
         for m in maint_result.scalars().all():
-            mtype = m.maintenance_type.value if hasattr(m.maintenance_type, "value") else m.maintenance_type
-            events.append({
-                "type": "maintenance",
-                "id": m.id,
-                "date": (m.completed_date or m.scheduled_date or m.created_at).isoformat()
-                if (m.completed_date or m.scheduled_date)
-                else m.created_at.isoformat(),
-                "summary": f"{mtype.replace('_', ' ').title()}{' — completed' if m.is_completed else ' — scheduled'}",
-                "details": {
-                    "maintenance_type": mtype,
-                    "description": m.description,
-                    "is_completed": m.is_completed,
-                    "passed": m.passed,
-                    "condition_after": m.condition_after.value if m.condition_after and hasattr(m.condition_after, "value") else m.condition_after,
-                    "notes": m.notes,
-                },
-            })
+            mtype = (
+                m.maintenance_type.value
+                if hasattr(m.maintenance_type, "value")
+                else m.maintenance_type
+            )
+            events.append(
+                {
+                    "type": "maintenance",
+                    "id": m.id,
+                    "date": (
+                        (
+                            m.completed_date or m.scheduled_date or m.created_at
+                        ).isoformat()
+                        if (m.completed_date or m.scheduled_date)
+                        else m.created_at.isoformat()
+                    ),
+                    "summary": f"{mtype.replace('_', ' ').title()}{' — completed' if m.is_completed else ' — scheduled'}",
+                    "details": {
+                        "maintenance_type": mtype,
+                        "description": m.description,
+                        "is_completed": m.is_completed,
+                        "passed": m.passed,
+                        "condition_after": (
+                            m.condition_after.value
+                            if m.condition_after and hasattr(m.condition_after, "value")
+                            else m.condition_after
+                        ),
+                        "notes": m.notes,
+                    },
+                }
+            )
 
         # Sort all events by date descending
         events.sort(key=lambda e: e["date"], reverse=True)

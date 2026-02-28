@@ -243,9 +243,7 @@ async def register(
     return response
 
 
-@router.post(
-    "/login", response_model=TokenResponse, dependencies=[rate_limit_login()]
-)
+@router.post("/login", response_model=TokenResponse, dependencies=[rate_limit_login()])
 async def login(
     credentials: UserLogin,
     request: Request,

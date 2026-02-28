@@ -275,7 +275,9 @@ async def delete_shift(
     service = SchedulingService(db)
     success, error = await service.delete_shift(shift_id, current_user.organization_id)
     if not success:
-        raise HTTPException(status_code=400, detail=_safe_detail("Unable to delete shift.", error))
+        raise HTTPException(
+            status_code=400, detail=_safe_detail("Unable to delete shift.", error)
+        )
 
 
 # ============================================
@@ -444,7 +446,9 @@ async def create_call(
         current_user.organization_id, shift_id, call_data
     )
     if error:
-        raise HTTPException(status_code=400, detail=_safe_detail("Unable to create call.", error))
+        raise HTTPException(
+            status_code=400, detail=_safe_detail("Unable to create call.", error)
+        )
     return result
 
 
@@ -488,7 +492,9 @@ async def update_call(
         call_id, current_user.organization_id, update_data
     )
     if error:
-        raise HTTPException(status_code=400, detail=_safe_detail("Unable to update call.", error))
+        raise HTTPException(
+            status_code=400, detail=_safe_detail("Unable to update call.", error)
+        )
     return result
 
 
@@ -504,7 +510,9 @@ async def delete_call(
         call_id, current_user.organization_id
     )
     if not success:
-        raise HTTPException(status_code=400, detail=_safe_detail("Unable to delete call.", error))
+        raise HTTPException(
+            status_code=400, detail=_safe_detail("Unable to delete call.", error)
+        )
 
 
 # ============================================
@@ -874,7 +882,8 @@ async def create_swap_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=_safe_detail("Unable to create swap request.", error)
+            status_code=400,
+            detail=_safe_detail("Unable to create swap request.", error),
         )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]
@@ -917,7 +926,8 @@ async def review_swap_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=_safe_detail("Unable to review swap request.", error)
+            status_code=400,
+            detail=_safe_detail("Unable to review swap request.", error),
         )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]
@@ -938,7 +948,8 @@ async def cancel_swap_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=_safe_detail("Unable to cancel swap request.", error)
+            status_code=400,
+            detail=_safe_detail("Unable to cancel swap request.", error),
         )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]
@@ -996,7 +1007,8 @@ async def create_time_off_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=_safe_detail("Unable to create time-off request.", error)
+            status_code=400,
+            detail=_safe_detail("Unable to create time-off request.", error),
         )
     enriched = await service.enrich_time_off_requests([result])
     return enriched[0]
@@ -1037,7 +1049,8 @@ async def review_time_off_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=_safe_detail("Unable to review time-off request.", error)
+            status_code=400,
+            detail=_safe_detail("Unable to review time-off request.", error),
         )
     enriched = await service.enrich_time_off_requests([result])
     return enriched[0]
@@ -1056,7 +1069,8 @@ async def cancel_time_off_request(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=_safe_detail("Unable to cancel time-off request.", error)
+            status_code=400,
+            detail=_safe_detail("Unable to cancel time-off request.", error),
         )
     enriched = await service.enrich_time_off_requests([result])
     return enriched[0]
@@ -1322,7 +1336,9 @@ async def withdraw_from_shift(
         UUID(user_assignment.id), current_user.organization_id
     )
     if not success:
-        raise HTTPException(status_code=400, detail=_safe_detail("Unable to withdraw.", error))
+        raise HTTPException(
+            status_code=400, detail=_safe_detail("Unable to withdraw.", error)
+        )
 
 
 # ============================================
@@ -1366,7 +1382,11 @@ async def list_apparatus_options(
 
         result = await db.execute(
             select(FullApparatus, ApparatusType.name.label("type_name"))
-            .join(ApparatusType, FullApparatus.apparatus_type_id == ApparatusType.id, isouter=True)
+            .join(
+                ApparatusType,
+                FullApparatus.apparatus_type_id == ApparatusType.id,
+                isouter=True,
+            )
             .where(FullApparatus.organization_id == org_id)
             .where(FullApparatus.is_archived.is_(False))
             .order_by(FullApparatus.unit_number)

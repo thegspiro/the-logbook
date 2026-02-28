@@ -781,9 +781,7 @@ class FormsService:
                     )
                     results["event_registration"] = result
                 elif integration.integration_type == IntegrationType.EVENT_REQUEST:
-                    result = await self._process_event_request(
-                        submission, integration
-                    )
+                    result = await self._process_event_request(submission, integration)
                     results["event_request"] = result
             except Exception as e:
                 results[integration.integration_type] = {
@@ -1013,8 +1011,14 @@ class FormsService:
                 description=mapped_data.get("description", "Submitted via form"),
                 date_flexibility=mapped_data.get("date_flexibility", "flexible"),
                 preferred_timeframe=mapped_data.get("preferred_timeframe"),
-                preferred_time_of_day=mapped_data.get("preferred_time_of_day", "flexible"),
-                audience_size=int(mapped_data["audience_size"]) if mapped_data.get("audience_size") else None,
+                preferred_time_of_day=mapped_data.get(
+                    "preferred_time_of_day", "flexible"
+                ),
+                audience_size=(
+                    int(mapped_data["audience_size"])
+                    if mapped_data.get("audience_size")
+                    else None
+                ),
                 age_group=mapped_data.get("age_group"),
                 venue_preference=mapped_data.get("venue_preference", "their_location"),
                 venue_address=mapped_data.get("venue_address"),
