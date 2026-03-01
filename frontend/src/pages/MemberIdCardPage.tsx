@@ -234,7 +234,7 @@ export const MemberIdCardPage: React.FC = () => {
                     <p className="text-xs text-theme-text-muted uppercase tracking-wider print:text-gray-500">
                       Rank
                     </p>
-                    <p className="text-sm font-semibold text-theme-text-primary capitalize print:text-black">
+                    <p className="text-sm font-semibold text-theme-text-primary print:text-black">
                       {member.rank.replace(/_/g, " ")}
                     </p>
                   </div>
