@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import { formatRelativeTime } from "../hooks/useRelativeTime";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { PullToRefreshIndicator } from "../components/PullToRefreshIndicator";
 import {
   Bell,
   Calendar,
@@ -390,8 +392,31 @@ const Dashboard: React.FC = () => {
 
   const totalHours = hours.training + hours.standby + hours.administrative;
 
+  const refreshDashboard = useCallback(async () => {
+    await Promise.all([
+      loadNotifications(),
+      loadMyShifts(),
+      loadOpenShifts(),
+      loadDeptMessages(),
+      loadHours(),
+      loadTrainingProgress(),
+      loadInventorySummary(),
+      ...(isAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
+    ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
+
+  const { pulling, refreshing, pullDistance } = usePullToRefresh({
+    onRefresh: refreshDashboard,
+  });
+
   return (
     <div className="min-h-screen flex flex-col">
+      <PullToRefreshIndicator
+        pulling={pulling}
+        refreshing={refreshing}
+        pullDistance={pullDistance}
+      />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full">
         {/* Welcome Header */}
         <div className="mb-6 sm:mb-8">

@@ -203,6 +203,9 @@ class OnboardingService:
 
         self.db.add(status)
         await self.db.flush()
+        await self.db.refresh(
+            status, attribute_names=["created_at", "updated_at", "setup_started_at"]
+        )
 
         return status
 
@@ -690,6 +693,8 @@ class OnboardingService:
                     user.positions.append(member_role)
 
             await self.db.flush()
+            # Refresh server-computed updated_at to prevent MissingGreenlet
+            await self.db.refresh(user, attribute_names=["updated_at"])
             created_users.append(user)
 
         return created_users
@@ -789,6 +794,9 @@ class OnboardingService:
             event_data={"organization_id": organization_id, "email": email},
         )
 
+        # Refresh server-computed updated_at to prevent MissingGreenlet
+        # if the caller serializes this user object.
+        await self.db.refresh(user, attribute_names=["updated_at"])
         return user
 
     async def configure_modules(self, enabled_modules: List[str]) -> Dict[str, bool]:
@@ -962,6 +970,9 @@ class OnboardingService:
             },
         )
 
+        # Refresh server-computed updated_at to prevent MissingGreenlet
+        # if the caller serializes this status object.
+        await self.db.refresh(status, attribute_names=["updated_at"])
         return status
 
     async def _mark_step_completed(

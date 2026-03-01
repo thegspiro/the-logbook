@@ -308,8 +308,8 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     permissions: {
       viewDescription: 'Access the platform from mobile devices',
       manageDescription: 'Configure mobile-specific features and settings',
-      view: ['Use mobile app', 'Receive push notifications', 'Access mobile features'],
-      manage: ['Configure mobile settings', 'Manage push notifications', 'Set mobile policies'],
+      view: ['Use mobile app', 'Receive in-app notifications', 'Access mobile features'],
+      manage: ['Configure mobile settings', 'Manage notification preferences', 'Set mobile policies'],
       defaultManagePositions: ['it_manager', 'communications_officer'],
     },
   },
