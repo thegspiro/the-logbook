@@ -676,7 +676,7 @@ const EventRequestsTab: React.FC = () => {
                                 }}
                                 defaultValue=""
                                 disabled={actionLoading}
-                                className="mt-2 w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                                className="mt-2 w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                               >
                                 <option value="" disabled>Select a coordinator...</option>
                                 {members.map((m) => (
@@ -822,7 +822,7 @@ const EventRequestsTab: React.FC = () => {
                                 <select
                                   value={selectedTemplateId}
                                   onChange={(e) => setSelectedTemplateId(e.target.value)}
-                                  className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                                  className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                   <option value="">Choose a template...</option>
                                   {emailTemplates.map((tpl) => (
@@ -907,7 +907,7 @@ const EventRequestsTab: React.FC = () => {
                                     type="text"
                                     value={declineReason}
                                     onChange={(e) => setDeclineReason(e.target.value)}
-                                    className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                                    className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="Reason for declining..."
                                   />
                                   <button
@@ -943,7 +943,7 @@ const EventRequestsTab: React.FC = () => {
                                         type="datetime-local"
                                         value={scheduleDate}
                                         onChange={(e) => setScheduleDate(e.target.value)}
-                                        className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                                       />
                                     </div>
                                     <div>
@@ -954,7 +954,7 @@ const EventRequestsTab: React.FC = () => {
                                         type="datetime-local"
                                         value={scheduleEndDate}
                                         onChange={(e) => setScheduleEndDate(e.target.value)}
-                                        className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                                       />
                                     </div>
                                   </div>
@@ -965,7 +965,7 @@ const EventRequestsTab: React.FC = () => {
                                     <select
                                       value={scheduleLocationId}
                                       onChange={(e) => setScheduleLocationId(e.target.value)}
-                                      className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                      className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
                                       <option value="">Off-site or none</option>
                                       {locations.map((loc) => (
@@ -980,7 +980,7 @@ const EventRequestsTab: React.FC = () => {
                                     value={scheduleNotes}
                                     onChange={(e) => setScheduleNotes(e.target.value)}
                                     placeholder="Notes (optional)"
-                                    className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   />
                                   <div className="flex gap-2">
                                     <button
@@ -1013,7 +1013,7 @@ const EventRequestsTab: React.FC = () => {
                                     value={postponeReason}
                                     onChange={(e) => setPostponeReason(e.target.value)}
                                     placeholder="Reason for postponing (optional)"
-                                    className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                    className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   />
                                   <div>
                                     <label className="block text-xs font-medium text-theme-text-muted mb-1">
@@ -1023,7 +1023,7 @@ const EventRequestsTab: React.FC = () => {
                                       type="datetime-local"
                                       value={postponeNewDate}
                                       onChange={(e) => setPostponeNewDate(e.target.value)}
-                                      className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                      className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                   </div>
                                   <div className="flex gap-2">
@@ -1130,7 +1130,7 @@ const EventRequestsTab: React.FC = () => {
                                   }
                                 }}
                                 placeholder="Add a comment..."
-                                className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                                className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
                               <button
                                 type="button"

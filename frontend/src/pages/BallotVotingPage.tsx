@@ -311,7 +311,7 @@ export const BallotVotingPage: React.FC = () => {
                           name={`item-${item.id}`}
                           checked={itemChoice?.choice === 'deny'}
                           onChange={() => updateChoice(item.id, 'deny')}
-                          className="w-4 h-4 text-red-600 focus:ring-red-500"
+                          className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                         />
                         <span className="font-medium text-theme-text-primary">Deny</span>
                       </label>
@@ -368,7 +368,7 @@ export const BallotVotingPage: React.FC = () => {
                           onChange={(e) => updateWriteInName(item.id, e.target.value)}
                           placeholder="Enter name or option..."
                           aria-label="Enter name or option"
-                          className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-theme-surface-border rounded-md shadow-sm py-2 px-3 focus:ring-purple-500 focus:border-purple-500 text-sm bg-theme-input-bg text-theme-text-primary"
+                          className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-theme-surface-border rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 text-sm bg-theme-input-bg text-theme-text-primary"
                           autoFocus
                         />
                       )}

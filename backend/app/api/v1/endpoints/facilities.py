@@ -209,7 +209,10 @@ async def update_facility_type(
         event_type="facilities.type_updated",
         event_category="administration",
         severity="info",
-        event_data={"type_id": type_id, "fields_changed": list(type_data.model_dump(exclude_unset=True).keys())},
+        event_data={
+            "type_id": type_id,
+            "fields_changed": list(type_data.model_dump(exclude_unset=True).keys()),
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )

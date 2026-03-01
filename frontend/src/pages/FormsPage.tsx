@@ -1267,7 +1267,7 @@ const FormsPage: React.FC = () => {
                               e.target.value === 'membership' ? 'membership_interest' : 'equipment_assignment'
                             );
                           }}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="membership">Membership</option>
                           <option value="inventory">Inventory</option>
@@ -1279,7 +1279,7 @@ const FormsPage: React.FC = () => {
                           id="integration-type"
                           value={integrationType}
                           onChange={(e) => setIntegrationType(e.target.value)}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           {integrationTarget === 'membership' ? (
                             <option value="membership_interest">Membership Interest (captures prospective member data)</option>

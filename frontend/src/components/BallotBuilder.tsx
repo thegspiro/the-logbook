@@ -247,7 +247,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 type="text"
                 value={templateNameInput}
                 onChange={(e) => setTemplateNameInput(e.target.value)}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-red-500 focus:border-red-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder={
                   selectedTemplate.type === BallotItemType.MEMBERSHIP_APPROVAL
                     ? 'e.g., John Smith'

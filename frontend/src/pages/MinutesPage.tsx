@@ -243,7 +243,7 @@ const MinutesPage: React.FC = () => {
               placeholder="Search meeting minutes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
@@ -252,7 +252,7 @@ const MinutesPage: React.FC = () => {
               id="type-filter"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Types</option>
               {MEETING_TYPES.map(t => (
@@ -535,7 +535,7 @@ const MinutesPage: React.FC = () => {
                       required
                       value={minutesForm.title}
                       onChange={(e) => setMinutesForm({ ...minutesForm, title: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., Regular Business Meeting - February 2026"
                     />
                   </div>
@@ -547,7 +547,7 @@ const MinutesPage: React.FC = () => {
                         id="meeting-type"
                         value={minutesForm.meetingType}
                         onChange={(e) => setMinutesForm({ ...minutesForm, meetingType: e.target.value as MeetingType })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         {MEETING_TYPES.map(t => (
                           <option key={t.value} value={t.value}>{t.label}</option>
@@ -561,7 +561,7 @@ const MinutesPage: React.FC = () => {
                         type="text"
                         value={minutesForm.calledBy}
                         onChange={(e) => setMinutesForm({ ...minutesForm, calledBy: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="e.g., Chief Johnson"
                       />
                     </div>
@@ -575,7 +575,7 @@ const MinutesPage: React.FC = () => {
                         type="date"
                         value={minutesForm.meetingDate}
                         onChange={(e) => setMinutesForm({ ...minutesForm, meetingDate: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                     <div>
@@ -586,7 +586,7 @@ const MinutesPage: React.FC = () => {
                         step="900"
                         value={minutesForm.meetingTime}
                         onChange={(e) => setMinutesForm({ ...minutesForm, meetingTime: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   </div>
@@ -598,7 +598,7 @@ const MinutesPage: React.FC = () => {
                       type="text"
                       value={minutesForm.location}
                       onChange={(e) => setMinutesForm({ ...minutesForm, location: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., Station 1 Meeting Room"
                     />
                   </div>
@@ -610,7 +610,7 @@ const MinutesPage: React.FC = () => {
                       rows={4}
                       value={minutesForm.notes}
                       onChange={(e) => setMinutesForm({ ...minutesForm, notes: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Meeting opened at... Roll call taken... Old business..."
                     />
                   </div>

@@ -502,7 +502,7 @@ export const ElectionDetailPage: React.FC = () => {
                 <>
                   <button
                     onClick={() => setShowSendEmailModal(true)}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                    className="btn-primary"
                   >
                     {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                   </button>
@@ -790,7 +790,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setVoidVoteId(e.target.value)}
                     placeholder="Vote ID (UUID)"
                     aria-label="Vote ID (UUID)"
-                    className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-sm text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-sm text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                   <input
                     type="text"
@@ -798,7 +798,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setVoidVoteReason(e.target.value)}
                     placeholder="Reason for voiding"
                     aria-label="Reason for voiding"
-                    className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-sm text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-sm text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                   <button
                     onClick={() => { void handleVoidVote(); }}
@@ -1027,7 +1027,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setEmailSubject(e.target.value)}
                     placeholder={`Vote Now: ${election.title}`}
                     aria-label="Custom subject line"
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -1042,7 +1042,7 @@ export const ElectionDetailPage: React.FC = () => {
                     rows={3}
                     placeholder="Include any additional instructions or context for voters..."
                     aria-label="Additional message"
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -1065,7 +1065,7 @@ export const ElectionDetailPage: React.FC = () => {
                   type="button"
                   onClick={() => { void handleSendBallotEmails(); }}
                   disabled={isSendingEmails}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                  className="btn-primary disabled:opacity-50"
                 >
                   {isSendingEmails ? 'Sending...' : 'Send Ballots'}
                 </button>
@@ -1155,7 +1155,7 @@ export const ElectionDetailPage: React.FC = () => {
                       onChange={(e) => setDeleteReason(e.target.value)}
                       rows={4}
                       placeholder="Provide a detailed reason why this active election must be deleted..."
-                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       required
                       aria-required="true"
                     />
@@ -1548,7 +1548,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setRollbackReason(e.target.value)}
                     rows={4}
                     placeholder="Example: Vote counting error discovered, need to recount all ballots..."
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-orange-500 focus:border-orange-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     required
                     aria-required="true"
                   />

@@ -923,7 +923,9 @@ async def update_organization_profile(
         event_type="organization.profile_updated",
         event_category="administration",
         severity="info",
-        event_data={"fields_changed": list(updates.model_dump(exclude_unset=True).keys())},
+        event_data={
+            "fields_changed": list(updates.model_dump(exclude_unset=True).keys())
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )

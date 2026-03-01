@@ -1604,8 +1604,8 @@ class SchedulingService:
                         f"{'s' if cancelled_count != 1 else ''} auto-cancelled)"
                     )
                     time_off.reviewer_notes = (
-                        (time_off.reviewer_notes or "") + conflict_note
-                    )
+                        time_off.reviewer_notes or ""
+                    ) + conflict_note
 
             await self.db.commit()
             await self.db.refresh(time_off)
