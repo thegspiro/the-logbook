@@ -31,6 +31,7 @@ from app.schemas.admin_hours import (
     AdminHoursClockOutResponse,
     AdminHoursClosedStaleResponse,
     AdminHoursEntryCreate,
+    AdminHoursEntryEdit,
     AdminHoursEntryResponse,
     AdminHoursPaginatedEntries,
     AdminHoursQRData,
@@ -515,6 +516,83 @@ async def list_all_entries(
         limit=limit,
     )
     return {"entries": entries, "total": total, "skip": skip, "limit": limit}
+
+
+# =============================================================================
+# Edit Pending Entry
+# =============================================================================
+
+
+@router.patch(
+    "/entries/{entry_id}",
+    response_model=AdminHoursEntryResponse,
+)
+async def edit_entry(
+    entry_id: str,
+    data: AdminHoursEntryEdit,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Edit a pending admin hours entry (adjust times, description, or category)."""
+    service = AdminHoursService(db)
+    try:
+        entry = await service.edit_pending_entry(
+            entry_id=entry_id,
+            organization_id=str(current_user.organization_id),
+            admin_id=str(current_user.id),
+            clock_in_at=data.clock_in_at,
+            clock_out_at=data.clock_out_at,
+            description=data.description,
+            category_id=data.category_id,
+        )
+        category = await service.get_category(
+            entry.category_id, str(current_user.organization_id)
+        )
+
+        # Get user name
+        user_result = await db.execute(select(User).where(User.id == entry.user_id))
+        user = user_result.scalar_one_or_none()
+        user_name = f"{user.first_name} {user.last_name}" if user else "Unknown"
+
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.entry_edited",
+            event_category="administration",
+            severity="info",
+            event_data={
+                "entry_id": entry_id,
+                "user_id": entry.user_id,
+                "user_name": user_name,
+                "fields_changed": list(data.model_dump(exclude_unset=True).keys()),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return {
+            "id": entry.id,
+            "organization_id": entry.organization_id,
+            "user_id": entry.user_id,
+            "category_id": entry.category_id,
+            "clock_in_at": entry.clock_in_at,
+            "clock_out_at": entry.clock_out_at,
+            "duration_minutes": entry.duration_minutes,
+            "description": entry.description,
+            "entry_method": entry.entry_method.value,
+            "status": entry.status.value,
+            "approved_by": entry.approved_by,
+            "approved_at": entry.approved_at,
+            "rejection_reason": entry.rejection_reason,
+            "created_at": entry.created_at,
+            "updated_at": entry.updated_at,
+            "category_name": category.name if category else None,
+            "category_color": category.color if category else None,
+            "user_name": user_name,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================

@@ -9,6 +9,7 @@ import type {
   AdminHoursCategoryUpdate,
   AdminHoursEntry,
   AdminHoursEntryCreate,
+  AdminHoursEntryEdit,
   AdminHoursClockInResponse,
   AdminHoursClockOutResponse,
   AdminHoursActiveSession,
@@ -129,6 +130,11 @@ export const adminHoursEntryService = {
         limit: params?.limit ?? 50,
       },
     });
+    return response.data;
+  },
+
+  async editEntry(entryId: string, data: AdminHoursEntryEdit): Promise<AdminHoursEntry> {
+    const response = await api.patch<AdminHoursEntry>(`/admin-hours/entries/${entryId}`, data);
     return response.data;
   },
 

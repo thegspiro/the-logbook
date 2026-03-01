@@ -609,6 +609,73 @@ class AdminHoursService:
         return entries, total
 
     # =========================================================================
+    # Edit Pending Entry (Admin)
+    # =========================================================================
+
+    async def edit_pending_entry(
+        self,
+        entry_id: str,
+        organization_id: str,
+        admin_id: str,
+        clock_in_at: Optional[datetime] = None,
+        clock_out_at: Optional[datetime] = None,
+        description: Optional[str] = None,
+        category_id: Optional[str] = None,
+    ) -> AdminHoursEntry:
+        """Edit a pending entry's times, description, or category.
+
+        Only pending entries can be edited. Duration is recalculated
+        from the (possibly updated) clock-in and clock-out times.
+        """
+        result = await self.db.execute(
+            select(AdminHoursEntry).where(
+                AdminHoursEntry.id == entry_id,
+                AdminHoursEntry.organization_id == organization_id,
+                AdminHoursEntry.status == AdminHoursEntryStatus.PENDING,
+            )
+        )
+        entry = result.scalar_one_or_none()
+        if not entry:
+            raise ValueError("Pending entry not found")
+
+        if category_id is not None:
+            category = await self.get_category(category_id, organization_id)
+            if not category:
+                raise ValueError("Category not found")
+            if not category.is_active:
+                raise ValueError("Category is no longer active")
+            entry.category_id = category_id
+
+        if clock_in_at is not None:
+            entry.clock_in_at = clock_in_at
+
+        if clock_out_at is not None:
+            entry.clock_out_at = clock_out_at
+
+        if description is not None:
+            entry.description = description
+
+        # Validate and recalculate duration
+        if entry.clock_out_at and entry.clock_in_at:
+            if entry.clock_out_at <= entry.clock_in_at:
+                raise ValueError("Clock-out time must be after clock-in time")
+            duration = entry.clock_out_at - entry.clock_in_at
+            entry.duration_minutes = int(duration.total_seconds() / 60)
+            if entry.duration_minutes < 1:
+                raise ValueError("Duration must be at least 1 minute")
+
+        await self.db.flush()
+        await self.db.refresh(entry, ["created_at", "updated_at"])
+
+        logger.info(
+            "Admin %s edited pending entry %s (user %s)",
+            admin_id,
+            entry_id,
+            entry.user_id,
+        )
+        return entry
+
+    # =========================================================================
     # Approval
     # =========================================================================
 

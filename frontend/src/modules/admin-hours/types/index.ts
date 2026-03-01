@@ -67,6 +67,13 @@ export interface AdminHoursEntryCreate {
   description?: string;
 }
 
+export interface AdminHoursEntryEdit {
+  clock_in_at?: string;
+  clock_out_at?: string;
+  description?: string;
+  category_id?: string;
+}
+
 export interface AdminHoursPaginatedEntries {
   entries: AdminHoursEntry[];
   total: number;

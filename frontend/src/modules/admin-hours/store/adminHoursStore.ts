@@ -9,6 +9,7 @@ import type {
   AdminHoursCategoryCreate,
   AdminHoursCategoryUpdate,
   AdminHoursEntry,
+  AdminHoursEntryEdit,
   AdminHoursActiveSession,
   AdminHoursActiveSessionAdmin,
   AdminHoursSummary,
@@ -73,6 +74,7 @@ interface AdminHoursState {
     skip?: number;
     limit?: number;
   }) => Promise<void>;
+  editEntry: (entryId: string, data: AdminHoursEntryEdit) => Promise<void>;
   reviewEntry: (entryId: string, action: 'approve' | 'reject', reason?: string) => Promise<void>;
   bulkApprove: (entryIds: string[]) => Promise<number>;
   fetchSummary: (params?: { userId?: string; startDate?: string; endDate?: string }) => Promise<void>;
@@ -229,6 +231,17 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
         error: error instanceof Error ? error.message : 'Failed to load entries',
         entriesLoading: false,
       });
+    }
+  },
+
+  editEntry: async (entryId, data) => {
+    set({ error: null });
+    try {
+      await adminHoursEntryService.editEntry(entryId, data);
+      await get().fetchAllEntries({ status: 'pending' });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to update entry' });
+      throw error;
     }
   },
 
