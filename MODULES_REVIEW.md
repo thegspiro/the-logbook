@@ -31,10 +31,13 @@ This review is organized into three tiers:
 
 **Improvements:**
 - **No tests** -- zero frontend and zero backend test coverage. The clock-in/clock-out flow is business-critical and needs tests
+- **`AdminHoursManagePage.tsx` is 1,150+ lines** -- a massive monolith containing category management, entry review, active session management, summary display, and bulk operations all in one component. Each tab (categories, active sessions, pending, all entries, summary) should be extracted into separate components
 - **No reusable components** -- the `components/index.ts` is an empty placeholder. Common UI (clock display timer, hours summary card, entry status badge) should be extracted from pages into reusable components
 - **Routes are eagerly loaded** -- should use `lazyWithRetry()` like other modules
 - **Error handling uses raw `instanceof Error`** instead of the project standard `toAppError()` / `getErrorMessage()` from `utils/errorHandling.ts`
+- **Hardcoded `PAGE_SIZE = 20`** instead of using `DEFAULT_PAGE_SIZE` from `constants/config.ts`
 - **Missing QR code page permissions** -- `AdminHoursQRCodePage` should likely be permission-gated with `admin_hours.manage`
+- **`AdminHoursClockInPage.tsx`** uses `eslint-disable-next-line react-hooks/exhaustive-deps` to suppress a legitimate `useEffect` dependency warning
 
 ### 1.2 apparatus
 
@@ -48,6 +51,9 @@ This review is organized into three tiers:
 
 **Improvements:**
 - **No tests** -- zero frontend and zero backend test coverage
+- **`ApparatusDetailPage.tsx` is 756 lines** -- tab content (maintenance, fuel, operators, equipment, documents) should be extracted into separate components
+- **Manual auth check in `ApparatusDetailPage`** -- checks `localStorage.getItem('has_session')` and redirects to `/login`, duplicating `ProtectedRoute` functionality. This should be removed
+- **Hardcoded gradient background** (`bg-gradient-to-br from-slate-900 via-red-900 to-slate-900`) appears multiple times instead of using theme CSS variables
 - **Routes are eagerly loaded** -- should use `lazyWithRetry()`
 - **Error handling pattern** -- same `instanceof Error` issue as admin-hours; should use `toAppError()`
 - **Missing CRUD actions in store** -- the store has fetch actions but no create/update/delete. These operations are likely handled directly in page components, breaking the store-as-single-source-of-truth pattern
@@ -102,10 +108,12 @@ This review is organized into three tiers:
 **Improvements:**
 - **Zero frontend tests** despite being the largest module (~30 source files). The multi-step wizard flow with auto-save, session management, and validation is the most critical path to test
 - **Routes are eagerly loaded** -- 12+ page components all imported synchronously
-- **4 markdown documentation files** (`README.md`, `SECURITY_BEST_PRACTICES.md`, `SECURITY_INTEGRATION.md`, `SECURITY_WARNINGS.md`) checked into the module. Per CLAUDE.md conventions, documentation files should not be created unless explicitly requested. These add maintenance burden and may drift out of sync
+- **Custom `SecureApiClient` uses raw `fetch()` instead of axios** -- a major consistency issue. The class manages its own session ID in `localStorage`, CSRF tokens in `localStorage` (inconsistent with the project's double-submit cookie pattern), and has its own error handling. Should be migrated to `createApiClient()`
+- **Multiple `any` types** across the module: `services/api-client.ts` uses `data as T` assertions, `utils/storage.ts` has 3 `any` occurrences, `security-init.ts` has 2, `hooks/useApiRequest.ts` has 1, and `components/ErrorAlert.tsx` has an `@typescript-eslint/no-explicit-any` suppression
+- **Security concern:** `createSystemOwner` tries to "clear password from memory" by setting `data.password = ''`, but JavaScript strings are immutable -- the original value may persist in memory until garbage collected
+- **4 markdown documentation files** (`README.md`, `SECURITY_BEST_PRACTICES.md`, `SECURITY_INTEGRATION.md`, `SECURITY_WARNINGS.md`) checked into the module. These add maintenance burden and may drift out of sync
 - **Deprecated page** -- `DepartmentInfo.tsx` is noted as deprecated but still present. Should be removed
 - **`PlaceholderPages.tsx`** contains stub components -- these should either be implemented or removed
-- **API client** uses a custom `api-client.ts` instead of the standard `createApiClient.ts` utility from `utils/`. Should be unified
 - **`ProgressIndicator` and `ProgressIndicatorEnhanced`** -- two progress indicator components exist. The non-enhanced one should be removed if superseded
 
 ### 1.6 prospective-members
@@ -121,6 +129,9 @@ This review is organized into three tiers:
 
 **Improvements:**
 - **No tests** at all -- neither frontend nor backend. The pipeline advancement logic (including auto-creating election packages on election_vote stages) is complex and business-critical
+- **Blanket ESLint disable in `services/api.ts`** -- disables 6 TypeScript safety rules (`@typescript-eslint/no-explicit-any`, `no-unsafe-argument`, `no-unsafe-assignment`, `no-unsafe-call`, `no-unsafe-member-access`, `no-unsafe-return`) for ~720 lines. The backend-to-frontend mapping functions (`mapStepToStage`, `mapPipelineResponse`, `mapProspectToApplicant`, etc.) all use `any` parameter types. These should define proper intermediate types for backend response shapes
+- **Types file contains utility functions** (`getEffectiveTimeoutDays`, `isSafeUrl`, `getInitials`, `isValidEmail`) that belong in a `utils/` directory, not alongside type definitions
+- **Hardcoded computed values** -- `mapProspectListToApplicantList` hardcodes `days_in_stage: 0`, `days_in_pipeline: 0`, `days_since_activity: 0` instead of computing from backend data
 - **Routes are eagerly loaded** -- should use `lazyWithRetry()`
 - **Store is very large** (~665 lines) -- consider splitting into sub-stores (pipelineStore, applicantStore, inactivityStore) using Zustand's slice pattern
 - **Repetitive error handling** -- every action has the same `instanceof Error ? error.message : 'Failed to...'` pattern. This should use a shared helper
@@ -141,7 +152,8 @@ This review is organized into three tiers:
 - **Inconsistent state management pattern** -- uses React hooks with `useState`/`useEffect`/`useCallback` instead of Zustand stores, which is inconsistent with every other module. While the hook approach works, it means state isn't shared between components and is refetched on every mount
 - **No tests** at all
 - **Security-sensitive module without adequate testing** -- this module manages API keys, access logs, and data whitelists. It particularly needs tests
-- **`useAccessLogs` has a dependency issue** -- the `filters` object is passed as a `useCallback` dependency. If the parent re-renders with a new object reference (even with the same values), it will trigger an infinite refetch loop. Needs `useMemo` on the filters or a deep comparison
+- **`useAccessLogs` has a dependency bug** -- the `filters` object is passed as a `useCallback` dependency. If the parent re-renders with a new object reference (even with the same values), it will trigger an infinite refetch loop. Needs `useMemo` on the filters or a deep comparison
+- **Hardcoded light-mode colors** in warning banner (`bg-yellow-50`, `text-yellow-800`) that won't adapt to dark mode; should use theme CSS variables
 - **Name mismatch with module registry** -- registered as `public-info` (route `/public`) in `AVAILABLE_MODULES` but implemented as `public-portal` (route `/admin/public-portal`). These represent different concepts that need reconciliation
 - **No pages barrel export** -- `pages/PublicPortalAdmin.tsx` is imported directly in `App.tsx`
 
@@ -155,6 +167,10 @@ This review is organized into three tiers:
 - Backend has excellent test coverage (3 test files with comprehensive integration tests)
 
 **Improvements:**
+- **50+ `Record<string, unknown>` usages in `services/api.ts`** -- functions like `createShift(data: Record<string, unknown>)`, `updateShift(shiftId: string, data: Record<string, unknown>)`, `createCall(shiftId: string, data: Record<string, unknown>)` all lack proper type definitions. This essentially defeats TypeScript's type system for the entire service layer. This is the worst type safety of any module
+- **Duplicated axios interceptor logic** -- `services/api.ts` creates its own axios instance with copy-pasted CSRF and auth refresh interceptors (~50 lines) instead of using `createApiClient()`. Also declares a duplicate `InternalAxiosRequestConfig._retry` module augmentation that could conflict
+- **`ShiftSettingsPanel.tsx` is 932 lines** -- the positions editor, apparatus type defaults editor, resource type defaults editor, and department defaults should each be separate components
+- **`ShiftSettingsPanel` saves settings to `localStorage`** instead of persisting to the backend API, meaning settings are browser-local and lost on device switch
 - **No `routes.tsx`** -- the scheduling route is defined inline in `App.tsx` and the page lives in the top-level `pages/SchedulingPage.tsx`, not inside the module
 - **No `pages/` directory** -- the main scheduling page should live inside the module
 - **Types exported from `services/api.ts`** instead of a dedicated `types/` directory. This conflates service layer with type definitions
@@ -184,7 +200,39 @@ Only 2 of 6 module route files use `lazyWithRetry()` (communications, membership
 
 **Recommendation:** Standardize all module route files to use `lazyWithRetry()` for page imports. Only critical pages (Dashboard, Login) should be eagerly loaded.
 
-### 2.4 Inconsistent error handling in stores
+### 2.4 Critical type safety violations
+
+Two modules have severe TypeScript safety issues that undermine the project's strict mode configuration:
+
+**Scheduling service** (`modules/scheduling/services/api.ts`): 50+ functions use `Record<string, unknown>` for both input parameters and return types. This means callers get zero type checking on the data they pass to create/update endpoints. Every mutation function (createShift, updateShift, createCall, etc.) accepts untyped data.
+
+**Prospective-members service** (`modules/prospective-members/services/api.ts`): A blanket `eslint-disable` disables 6 TypeScript safety rules for ~720 lines of the backend-to-frontend mapping layer. All mapping functions use `any` as parameter types.
+
+Both modules need proper typed interfaces for their API request/response shapes.
+
+### 2.5 Monolithic page components
+
+Three components far exceed reasonable size and should be decomposed:
+
+| Component | Lines | Module | Contains |
+|-----------|-------|--------|----------|
+| `AdminHoursManagePage.tsx` | 1,150+ | admin-hours | 5 tab panels (categories, active sessions, pending, all entries, summary) |
+| `ShiftSettingsPanel.tsx` | 932 | scheduling | 4 editors (positions, apparatus defaults, resource defaults, department defaults) |
+| `ApparatusDetailPage.tsx` | 756 | apparatus | 5 tab panels (maintenance, fuel, operators, equipment, documents) |
+
+Each tab or editor section should be extracted into its own component file.
+
+### 2.6 Inconsistent API client patterns
+
+Three different patterns are used to create API clients:
+
+1. **`createApiClient()` factory** (correct pattern) -- used by admin-hours, apparatus, communications, prospective-members, public-portal
+2. **Custom `SecureApiClient` with raw `fetch()`** -- used only by onboarding, bypassing axios entirely and managing its own CSRF/session handling
+3. **Manual axios instance with copy-pasted interceptors** -- used only by scheduling, duplicating ~50 lines from `createApiClient.ts`
+
+Both deviations should be migrated to `createApiClient()` for consistency and to avoid duplicated security logic.
+
+### 2.7 Inconsistent error handling in stores
 
 Every store uses `error instanceof Error ? error.message : 'Failed to...'` instead of the project's `toAppError()` / `getErrorMessage()` utilities from `utils/errorHandling.ts`. This is repeated 50+ times across all stores.
 
@@ -196,7 +244,7 @@ export const handleStoreError = (err: unknown, fallback: string) => getErrorMess
 ```
 Refactor all stores to use it, reducing boilerplate and ensuring consistent error normalization.
 
-### 2.5 Test coverage is critically low
+### 2.8 Test coverage is critically low
 
 | Module | Frontend Tests | Backend Tests |
 |--------|---------------|---------------|
@@ -219,7 +267,7 @@ Refactor all stores to use it, reducing boilerplate and ensuring consistent erro
 5. **apparatus** -- moderate complexity, zero tests
 6. **membership** -- store has a scalability bug (client-side pagination), needs tests to support refactoring
 
-### 2.6 Backend feature flags not enforced on frontend
+### 2.9 Backend feature flags not enforced on frontend
 
 The backend has `MODULE_*_ENABLED` feature flags (e.g., `MODULE_TRAINING_ENABLED`, `MODULE_ELECTIONS_ENABLED`), but the frontend doesn't consume these flags to conditionally render module routes or navigation items. A disabled module's routes are still accessible in the frontend.
 
@@ -299,13 +347,17 @@ The backend has `meetings_service.py`, `minute_service.py`, and `quorum_service.
 
 ## 4. Recommended Iteration Roadmap
 
-### Phase 1: Structural consolidation (low risk, high impact)
+### Phase 1: Structural consolidation and critical fixes (low risk, high impact)
 
-1. **Standardize module boilerplate** -- add missing `index.ts`, `routes.tsx`, and types directories to `public-portal` and `scheduling`
-2. **Migrate inline routes out of App.tsx** -- start with Events and Training (the two largest)
-3. **Standardize lazy loading** -- convert all module route files to use `lazyWithRetry()`
-4. **Fix module registry** -- update `AVAILABLE_MODULES` to match reality
-5. **Unify error handling** -- replace `instanceof Error` pattern with `toAppError()` across all stores
+1. **Fix type safety violations** -- replace 50+ `Record<string, unknown>` in scheduling service with proper interfaces; add typed backend response interfaces to prospective-members service to remove blanket ESLint disable
+2. **Decompose monolithic components** -- split `AdminHoursManagePage` (1,150 lines), `ShiftSettingsPanel` (932 lines), and `ApparatusDetailPage` (756 lines) into tab/section components
+3. **Unify API clients** -- migrate onboarding's custom `SecureApiClient` and scheduling's manual axios instance to use `createApiClient()`
+4. **Standardize module boilerplate** -- add missing `index.ts`, `routes.tsx`, and types directories to `public-portal` and `scheduling`
+5. **Migrate inline routes out of App.tsx** -- start with Events and Training (the two largest)
+6. **Standardize lazy loading** -- convert all module route files to use `lazyWithRetry()`
+7. **Fix module registry** -- update `AVAILABLE_MODULES` to match reality
+8. **Unify error handling** -- replace `instanceof Error` pattern with `toAppError()` across all stores
+9. **Fix bugs** -- `useAccessLogs` infinite refetch loop, apparatus manual auth check, scheduling localStorage settings
 
 ### Phase 2: Test coverage (medium effort, critical for quality)
 
