@@ -22,6 +22,7 @@ import { userService, organizationService } from "../services/api";
 import type { OrganizationProfile } from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { getErrorMessage } from "../utils/errorHandling";
+import { useRanks } from "../hooks/useRanks";
 import type { UserWithRoles } from "../types/role";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -43,6 +44,7 @@ function getStatusColor(status: string): string {
 export const MemberIdCardPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user: currentUser } = useAuthStore();
+  const { formatRank } = useRanks();
   const barcodeRef = useRef<SVGSVGElement>(null);
 
   const [member, setMember] = useState<UserWithRoles | null>(null);
@@ -235,7 +237,7 @@ export const MemberIdCardPage: React.FC = () => {
                       Rank
                     </p>
                     <p className="text-sm font-semibold text-theme-text-primary print:text-black">
-                      {member.rank.replace(/_/g, " ")}
+                      {formatRank(member.rank)}
                     </p>
                   </div>
                 )}
