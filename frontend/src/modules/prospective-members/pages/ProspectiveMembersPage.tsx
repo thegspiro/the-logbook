@@ -36,7 +36,7 @@ import { ApplicantDetailDrawer } from '../components/ApplicantDetailDrawer';
 import { ConversionModal } from '../components/ConversionModal';
 import { applicantService } from '../services/api';
 import type { ApplicantListItem, Applicant, ApplicantStatus } from '../types';
-import { isValidEmail, getInitials } from '../types';
+import { isValidEmail, getInitials } from '../utils';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 export const ProspectiveMembersPage: React.FC = () => {

@@ -7,7 +7,7 @@
 import React from 'react';
 import { Clock, Mail, Phone, ArrowRight, AlertTriangle } from 'lucide-react';
 import type { ApplicantListItem, ApplicantStatus, InactivityAlertLevel } from '../types';
-import { getInitials } from '../types';
+import { getInitials } from '../utils';
 
 interface ApplicantCardProps {
   applicant: ApplicantListItem;

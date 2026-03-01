@@ -41,7 +41,7 @@ import type {
   StageType,
   StageHistoryEntry,
 } from '../types';
-import { isSafeUrl, getInitials } from '../types';
+import { isSafeUrl, getInitials } from '../utils';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
