@@ -12,6 +12,7 @@ import type {
   AdminHoursClockInResponse,
   AdminHoursClockOutResponse,
   AdminHoursActiveSession,
+  AdminHoursActiveSessionAdmin,
   AdminHoursSummary,
   AdminHoursQRData,
   AdminHoursPaginatedEntries,
@@ -185,6 +186,16 @@ export const adminHoursEntryService = {
 
   async closeStaleSessions(): Promise<{ closedCount: number }> {
     const response = await api.post<{ closedCount: number }>('/admin-hours/close-stale-sessions');
+    return response.data;
+  },
+
+  async listActiveSessions(): Promise<AdminHoursActiveSessionAdmin[]> {
+    const response = await api.get<AdminHoursActiveSessionAdmin[]>('/admin-hours/active-sessions');
+    return response.data;
+  },
+
+  async forceClockOut(entryId: string): Promise<AdminHoursEntry> {
+    const response = await api.post<AdminHoursEntry>(`/admin-hours/entries/${entryId}/force-clock-out`);
     return response.data;
   },
 };

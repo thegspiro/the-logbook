@@ -197,6 +197,31 @@ class AdminHoursBulkApproveResponse(BaseModel):
     approved_count: int
 
 
+class AdminHoursClosedStaleResponse(BaseModel):
+    """Response from closing stale sessions"""
+
+    model_config = _RESPONSE_CONFIG
+
+    closed_count: int
+
+
+class AdminHoursActiveSessionAdmin(BaseModel):
+    """Active session details for admin view (includes user info)"""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    category_id: str
+    category_name: str
+    category_color: Optional[str] = None
+    user_id: str
+    user_name: str
+    clock_in_at: datetime
+    elapsed_minutes: int
+    max_session_minutes: Optional[int] = None
+    description: Optional[str] = None
+
+
 class AdminHoursQRData(BaseModel):
     """Data returned for QR code display page"""
 

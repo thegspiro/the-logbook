@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -19,6 +20,7 @@ from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.admin_hours import (
     AdminHoursActiveSession,
+    AdminHoursActiveSessionAdmin,
     AdminHoursApprovalAction,
     AdminHoursBulkApproveRequest,
     AdminHoursBulkApproveResponse,
@@ -27,6 +29,7 @@ from app.schemas.admin_hours import (
     AdminHoursCategoryUpdate,
     AdminHoursClockInResponse,
     AdminHoursClockOutResponse,
+    AdminHoursClosedStaleResponse,
     AdminHoursEntryCreate,
     AdminHoursEntryResponse,
     AdminHoursPaginatedEntries,
@@ -310,6 +313,93 @@ async def get_active_session(
 
 
 # =============================================================================
+# Active Sessions (Admin)
+# =============================================================================
+
+
+@router.get(
+    "/active-sessions",
+    response_model=List[AdminHoursActiveSessionAdmin],
+)
+async def list_active_sessions(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """List all currently active sessions across the organization."""
+    service = AdminHoursService(db)
+    sessions = await service.list_active_sessions(
+        str(current_user.organization_id),
+    )
+    return sessions
+
+
+@router.post(
+    "/entries/{entry_id}/force-clock-out",
+    response_model=AdminHoursEntryResponse,
+)
+async def force_clock_out(
+    entry_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Force-end an active session on behalf of a user who cannot clock out."""
+    service = AdminHoursService(db)
+    try:
+        entry = await service.admin_force_clock_out(
+            entry_id=entry_id,
+            organization_id=str(current_user.organization_id),
+            admin_id=str(current_user.id),
+        )
+        category = await service.get_category(
+            entry.category_id, str(current_user.organization_id)
+        )
+        # Get user info for the response
+        user_result = await db.execute(select(User).where(User.id == entry.user_id))
+        user = user_result.scalar_one_or_none()
+        user_name = f"{user.first_name} {user.last_name}" if user else "Unknown"
+
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.force_clock_out",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "entry_id": entry_id,
+                "user_id": entry.user_id,
+                "user_name": user_name,
+                "duration_minutes": entry.duration_minutes,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return {
+            "id": entry.id,
+            "organization_id": entry.organization_id,
+            "user_id": entry.user_id,
+            "category_id": entry.category_id,
+            "clock_in_at": entry.clock_in_at,
+            "clock_out_at": entry.clock_out_at,
+            "duration_minutes": entry.duration_minutes,
+            "description": entry.description,
+            "entry_method": entry.entry_method.value,
+            "status": entry.status.value,
+            "approved_by": entry.approved_by,
+            "approved_at": entry.approved_at,
+            "rejection_reason": entry.rejection_reason,
+            "created_at": entry.created_at,
+            "updated_at": entry.updated_at,
+            "category_name": category.name if category else None,
+            "category_color": category.color if category else None,
+            "user_name": user_name,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# =============================================================================
 # Manual Entry
 # =============================================================================
 
@@ -572,7 +662,10 @@ async def export_entries(
 # =============================================================================
 
 
-@router.post("/close-stale-sessions")
+@router.post(
+    "/close-stale-sessions",
+    response_model=AdminHoursClosedStaleResponse,
+)
 async def close_stale_sessions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("admin_hours.manage")),

@@ -104,6 +104,19 @@ export interface AdminHoursActiveSession {
   maxSessionMinutes: number | null;
 }
 
+export interface AdminHoursActiveSessionAdmin {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  categoryColor: string | null;
+  userId: string;
+  userName: string;
+  clockInAt: string;
+  elapsedMinutes: number;
+  maxSessionMinutes: number | null;
+  description: string | null;
+}
+
 export interface AdminHoursSummary {
   totalHours: number;
   totalEntries: number;

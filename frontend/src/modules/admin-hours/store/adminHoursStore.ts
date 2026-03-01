@@ -10,6 +10,7 @@ import type {
   AdminHoursCategoryUpdate,
   AdminHoursEntry,
   AdminHoursActiveSession,
+  AdminHoursActiveSessionAdmin,
   AdminHoursSummary,
 } from '../types';
 
@@ -25,9 +26,13 @@ interface AdminHoursState {
   allEntriesTotal: number;
   entriesLoading: boolean;
 
-  // Active session
+  // Active session (personal)
   activeSession: AdminHoursActiveSession | null;
   activeSessionLoading: boolean;
+
+  // Active sessions (admin view - all org)
+  activeSessions: AdminHoursActiveSessionAdmin[];
+  activeSessionsLoading: boolean;
 
   // Summary
   summary: AdminHoursSummary | null;
@@ -73,6 +78,10 @@ interface AdminHoursState {
   fetchSummary: (params?: { userId?: string; startDate?: string; endDate?: string }) => Promise<void>;
   fetchPendingCount: () => Promise<void>;
 
+  // Active sessions (admin)
+  fetchActiveSessions: () => Promise<void>;
+  forceClockOut: (entryId: string) => Promise<void>;
+
   clearError: () => void;
 }
 
@@ -86,6 +95,8 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
   entriesLoading: false,
   activeSession: null,
   activeSessionLoading: false,
+  activeSessions: [],
+  activeSessionsLoading: false,
   summary: null,
   pendingCount: 0,
   error: null,
@@ -262,6 +273,35 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       set({ pendingCount: count });
     } catch {
       // silently fail - badge count is non-critical
+    }
+  },
+
+  // =========================================================================
+  // Active Sessions (Admin)
+  // =========================================================================
+
+  fetchActiveSessions: async () => {
+    set({ activeSessionsLoading: true });
+    try {
+      const sessions = await adminHoursEntryService.listActiveSessions();
+      set({ activeSessions: sessions, activeSessionsLoading: false });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to load active sessions',
+        activeSessionsLoading: false,
+      });
+    }
+  },
+
+  forceClockOut: async (entryId) => {
+    set({ error: null });
+    try {
+      await adminHoursEntryService.forceClockOut(entryId);
+      await get().fetchActiveSessions();
+      await get().fetchPendingCount();
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to end session' });
+      throw error;
     }
   },
 

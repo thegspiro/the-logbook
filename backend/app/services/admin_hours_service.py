@@ -280,6 +280,111 @@ class AdminHoursService:
         return result.scalar_one_or_none()
 
     # =========================================================================
+    # Active Sessions (Admin)
+    # =========================================================================
+
+    async def list_active_sessions(
+        self,
+        organization_id: str,
+    ) -> List[Dict]:
+        """List all currently active sessions across the organization (admin view).
+
+        Returns session info with user name, category details, and elapsed time.
+        """
+        now = datetime.now(timezone.utc)
+
+        result = await self.db.execute(
+            select(
+                AdminHoursEntry,
+                AdminHoursCategory.name,
+                AdminHoursCategory.color,
+                AdminHoursCategory.max_hours_per_session,
+                User.first_name,
+                User.last_name,
+            )
+            .join(
+                AdminHoursCategory,
+                AdminHoursEntry.category_id == AdminHoursCategory.id,
+            )
+            .join(User, AdminHoursEntry.user_id == User.id)
+            .where(
+                AdminHoursEntry.organization_id == organization_id,
+                AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
+            )
+            .order_by(AdminHoursEntry.clock_in_at.asc())
+        )
+        rows = result.all()
+
+        sessions = []
+        for entry, cat_name, cat_color, max_hours, first_name, last_name in rows:
+            elapsed = now - entry.clock_in_at
+            elapsed_minutes = int(elapsed.total_seconds() / 60)
+
+            max_minutes: Optional[int] = None
+            if max_hours is not None:
+                max_minutes = int(max_hours * 60)
+
+            sessions.append(
+                {
+                    "id": entry.id,
+                    "category_id": entry.category_id,
+                    "category_name": cat_name,
+                    "category_color": cat_color,
+                    "user_id": entry.user_id,
+                    "user_name": f"{first_name} {last_name}",
+                    "clock_in_at": entry.clock_in_at,
+                    "elapsed_minutes": elapsed_minutes,
+                    "max_session_minutes": max_minutes,
+                    "description": entry.description,
+                }
+            )
+        return sessions
+
+    async def admin_force_clock_out(
+        self,
+        entry_id: str,
+        organization_id: str,
+        admin_id: str,
+    ) -> AdminHoursEntry:
+        """Force-end an active session on behalf of a user (admin action).
+
+        The session is clocked out at the current time. The resulting entry
+        goes to pending status for review since it was force-ended.
+        """
+        result = await self.db.execute(
+            select(AdminHoursEntry).where(
+                AdminHoursEntry.id == entry_id,
+                AdminHoursEntry.organization_id == organization_id,
+                AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
+            )
+        )
+        entry = result.scalar_one_or_none()
+        if not entry:
+            raise ValueError("Active session not found")
+
+        now = datetime.now(timezone.utc)
+        entry.clock_out_at = now
+        duration = now - entry.clock_in_at
+        entry.duration_minutes = int(duration.total_seconds() / 60)
+
+        # Force-ended sessions go to pending for review
+        entry.description = (
+            f"{entry.description + ' — ' if entry.description else ''}"
+            f"Session ended by admin"
+        )
+        entry.status = AdminHoursEntryStatus.PENDING
+        await self.db.flush()
+
+        logger.info(
+            "Admin %s force-clocked-out session %s for user %s (%d min)",
+            admin_id,
+            entry_id,
+            entry.user_id,
+            entry.duration_minutes,
+        )
+        return entry
+
+    # =========================================================================
     # Manual Entry
     # =========================================================================
 
