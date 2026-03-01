@@ -73,16 +73,10 @@ export const ApparatusDetailPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
 
-    // Check authentication via session flag (tokens are in httpOnly cookies)
-    if (!localStorage.getItem('has_session')) {
-      navigate('/login');
-      return;
-    }
-
     void fetchTypes();
     void fetchStatuses();
     void fetchApparatus(id);
-  }, [id, navigate, fetchApparatus, fetchTypes, fetchStatuses]);
+  }, [id, fetchApparatus, fetchTypes, fetchStatuses]);
 
   // Load tab-specific data
   useEffect(() => {

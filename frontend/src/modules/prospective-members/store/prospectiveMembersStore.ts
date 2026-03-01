@@ -18,6 +18,7 @@ import type {
   ElectionPackageUpdate,
 } from '../types';
 import { pipelineService, applicantService } from '../services/api';
+import { handleStoreError } from '../../../utils/storeHelpers';
 import { StageType } from '../../../constants/enums';
 
 export type PipelineTab = 'active' | 'inactive' | 'withdrawn';
@@ -179,10 +180,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ pipelines, isLoadingPipelines: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to fetch pipelines',
+          error: handleStoreError(error, 'Failed to fetch pipelines'),
           isLoadingPipelines: false,
         });
       }
@@ -195,10 +193,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ currentPipeline: pipeline, isLoadingPipeline: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to fetch pipeline',
+          error: handleStoreError(error, 'Failed to fetch pipeline'),
           isLoadingPipeline: false,
         });
       }
@@ -211,10 +206,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ pipelineStats: stats, isLoadingStats: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to fetch pipeline stats',
+          error: handleStoreError(error, 'Failed to fetch pipeline stats'),
           isLoadingStats: false,
         });
       }
@@ -247,10 +239,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to fetch applicants',
+          error: handleStoreError(error, 'Failed to fetch applicants'),
           isLoading: false,
         });
       }
@@ -267,10 +256,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to fetch applicant',
+          error: handleStoreError(error, 'Failed to fetch applicant'),
           isLoadingApplicant: false,
         });
       }
@@ -313,10 +299,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ isAdvancing: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to advance applicant',
+          error: handleStoreError(error, 'Failed to advance applicant'),
           isAdvancing: false,
         });
       }
@@ -334,10 +317,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ isAdvancing: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to complete step',
+          error: handleStoreError(error, 'Failed to complete step'),
           isAdvancing: false,
         });
       }
@@ -355,10 +335,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ isRejecting: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to reject applicant',
+          error: handleStoreError(error, 'Failed to reject applicant'),
           isRejecting: false,
         });
         throw error;
@@ -377,10 +354,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ isHolding: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to put applicant on hold',
+          error: handleStoreError(error, 'Failed to put applicant on hold'),
           isHolding: false,
         });
         throw error;
@@ -399,10 +373,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ isResuming: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to resume applicant',
+          error: handleStoreError(error, 'Failed to resume applicant'),
           isResuming: false,
         });
         throw error;
@@ -426,10 +397,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ isWithdrawing: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to withdraw applicant',
+          error: handleStoreError(error, 'Failed to withdraw applicant'),
           isWithdrawing: false,
         });
         throw error;
@@ -455,10 +423,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ isReactivating: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to reactivate applicant',
+          error: handleStoreError(error, 'Failed to reactivate applicant'),
           isReactivating: false,
         });
       }
@@ -486,10 +451,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to fetch inactive applicants',
+          error: handleStoreError(error, 'Failed to fetch inactive applicants'),
           isLoadingInactive: false,
         });
       }
@@ -517,10 +479,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to fetch withdrawn applicants',
+          error: handleStoreError(error, 'Failed to fetch withdrawn applicants'),
           isLoadingWithdrawn: false,
         });
       }
@@ -541,10 +500,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ isPurging: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to purge inactive applicants',
+          error: handleStoreError(error, 'Failed to purge inactive applicants'),
           isPurging: false,
         });
       }
@@ -563,10 +519,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ currentPipeline: updated });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to update inactivity settings',
+          error: handleStoreError(error, 'Failed to update inactivity settings'),
         });
         throw error;
       }
@@ -580,10 +533,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ currentElectionPackage: pkg, isLoadingElectionPackage: false });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to fetch election package',
+          error: handleStoreError(error, 'Failed to fetch election package'),
           isLoadingElectionPackage: false,
         });
       }
@@ -596,10 +546,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ currentElectionPackage: updated });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to update election package',
+          error: handleStoreError(error, 'Failed to update election package'),
         });
         throw error;
       }
@@ -614,10 +561,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({ currentElectionPackage: updated });
       } catch (error) {
         set({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to submit election package',
+          error: handleStoreError(error, 'Failed to submit election package'),
         });
         throw error;
       }

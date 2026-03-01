@@ -20,6 +20,7 @@ import {
   apparatusStatusService,
   apparatusMaintenanceService,
 } from '../services/api';
+import { handleStoreError } from '../../../utils/storeHelpers';
 
 interface ApparatusState {
   // Data
@@ -108,7 +109,7 @@ export const useApparatusStore = create<ApparatusState>((set, get) => ({
       });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to fetch apparatus list',
+        error: handleStoreError(error, 'Failed to fetch apparatus list'),
         isLoading: false,
       });
     }
@@ -122,7 +123,7 @@ export const useApparatusStore = create<ApparatusState>((set, get) => ({
       set({ currentApparatus: apparatus, isLoading: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to fetch apparatus',
+        error: handleStoreError(error, 'Failed to fetch apparatus'),
         isLoading: false,
       });
     }
@@ -136,7 +137,7 @@ export const useApparatusStore = create<ApparatusState>((set, get) => ({
       set({ types, isLoadingTypes: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to fetch apparatus types',
+        error: handleStoreError(error, 'Failed to fetch apparatus types'),
         isLoadingTypes: false,
       });
     }
@@ -150,7 +151,7 @@ export const useApparatusStore = create<ApparatusState>((set, get) => ({
       set({ statuses, isLoadingStatuses: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to fetch apparatus statuses',
+        error: handleStoreError(error, 'Failed to fetch apparatus statuses'),
         isLoadingStatuses: false,
       });
     }
@@ -164,7 +165,7 @@ export const useApparatusStore = create<ApparatusState>((set, get) => ({
       set({ fleetSummary: summary, isLoadingSummary: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to fetch fleet summary',
+        error: handleStoreError(error, 'Failed to fetch fleet summary'),
         isLoadingSummary: false,
       });
     }
@@ -176,7 +177,7 @@ export const useApparatusStore = create<ApparatusState>((set, get) => ({
       set({ maintenanceDue });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to fetch maintenance due',
+        error: handleStoreError(error, 'Failed to fetch maintenance due'),
       });
     }
   },
