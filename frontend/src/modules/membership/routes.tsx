@@ -22,7 +22,7 @@
  *   /members/import → /members/admin?tab=import
  */
 
-import React from "react";
+import React, { Suspense } from "react";
 import { Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "../../components/ProtectedRoute";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
@@ -74,21 +74,23 @@ export const getMembershipRoutes = () => {
   return (
     <React.Fragment>
       {/* Member-facing */}
-      <Route path="/members" element={<Members />} />
-      <Route path="/members/scan" element={<MemberScanPage />} />
-      <Route path="/members/:userId" element={<MemberProfilePage />} />
+      <Route path="/members" element={<Suspense fallback={null}><Members /></Suspense>} />
+      <Route path="/members/scan" element={<Suspense fallback={null}><MemberScanPage /></Suspense>} />
+      <Route path="/members/:userId" element={<Suspense fallback={null}><MemberProfilePage /></Suspense>} />
       <Route
         path="/members/:userId/training"
-        element={<MemberTrainingHistoryPage />}
+        element={<Suspense fallback={null}><MemberTrainingHistoryPage /></Suspense>}
       />
-      <Route path="/members/:userId/id-card" element={<MemberIdCardPage />} />
+      <Route path="/members/:userId/id-card" element={<Suspense fallback={null}><MemberIdCardPage /></Suspense>} />
 
       {/* Admin Hub */}
       <Route
         path="/members/admin"
         element={
           <ProtectedRoute requiredPermission="members.manage">
-            <MembersAdminHub />
+            <Suspense fallback={null}>
+              <MembersAdminHub />
+            </Suspense>
           </ProtectedRoute>
         }
       />
@@ -98,7 +100,9 @@ export const getMembershipRoutes = () => {
         path="/members/admin/edit/:userId"
         element={
           <ProtectedRoute requiredPermission="members.manage">
-            <MemberAdminEditPage />
+            <Suspense fallback={null}>
+              <MemberAdminEditPage />
+            </Suspense>
           </ProtectedRoute>
         }
       />
@@ -106,7 +110,9 @@ export const getMembershipRoutes = () => {
         path="/members/admin/history/:userId"
         element={
           <ProtectedRoute requiredPermission="members.manage">
-            <MemberAuditHistoryPage />
+            <Suspense fallback={null}>
+              <MemberAuditHistoryPage />
+            </Suspense>
           </ProtectedRoute>
         }
       />
@@ -116,7 +122,9 @@ export const getMembershipRoutes = () => {
         path="/members/admin/waivers"
         element={
           <ProtectedRoute requiredPermission="members.manage">
-            <WaiverManagementPage />
+            <Suspense fallback={null}>
+              <WaiverManagementPage />
+            </Suspense>
           </ProtectedRoute>
         }
       />

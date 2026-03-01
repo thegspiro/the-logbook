@@ -24,6 +24,7 @@ import type {
   Applicant,
   ApplicantCreate,
   ApplicantUpdate,
+  ApplicantListItem,
   ApplicantListFilters,
   PaginatedApplicantList,
   AdvanceStageRequest,
@@ -37,13 +38,25 @@ import type {
   ElectionPackage,
   ElectionPackageCreate,
   ElectionPackageUpdate,
+  StageHistoryEntry,
+  BackendStepResponse,
+  BackendPipelineResponse,
+  BackendPipelineListResponse,
+  BackendProspectResponse,
+  BackendProspectListResponse,
+  BackendElectionPackageResponse,
+  BackendPipelineStatsResponse,
+  BackendDocumentResponse,
+  BackendStepCreatePayload,
+  BackendStepUpdatePayload,
+  BackendStepProgressResponse,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS } from '../types';
 
 const api = createApiClient();
 
 // =============================================================================
-// Backend ↔ Frontend Mapping Helpers
+// Backend <-> Frontend Mapping Helpers
 // =============================================================================
 
 /** Map frontend stage_type to backend step_type + action_type */
@@ -91,10 +104,8 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
   }
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
-
 /** Map a backend pipeline step response to a frontend PipelineStage */
-function mapStepToStage(step: any): PipelineStage {
+function mapStepToStage(step: BackendStepResponse): PipelineStage {
   const stageType = mapStepTypeToFrontend(step.step_type, step.action_type);
   return {
     id: step.id,
@@ -113,16 +124,17 @@ function mapStepToStage(step: any): PipelineStage {
 }
 
 /** Map a backend pipeline response to a frontend Pipeline */
-function mapPipelineResponse(data: any): Pipeline {
+function mapPipelineResponse(data: BackendPipelineResponse): Pipeline {
+  const inactivityConfig = data.inactivity_config && Object.keys(data.inactivity_config).length > 0
+    ? (data.inactivity_config as unknown as InactivityConfig)
+    : DEFAULT_INACTIVITY_CONFIG;
   return {
     id: data.id,
     organization_id: data.organization_id,
     name: data.name,
     description: data.description ?? undefined,
     is_active: data.is_active ?? !data.is_template,
-    inactivity_config: data.inactivity_config && Object.keys(data.inactivity_config).length > 0
-      ? data.inactivity_config
-      : DEFAULT_INACTIVITY_CONFIG,
+    inactivity_config: inactivityConfig,
     public_status_enabled: data.public_status_enabled ?? false,
     stages: (data.steps || []).map(mapStepToStage),
     applicant_count: data.prospect_count ?? 0,
@@ -132,7 +144,7 @@ function mapPipelineResponse(data: any): Pipeline {
 }
 
 /** Map a backend pipeline list response to a frontend PipelineListItem */
-function mapPipelineListItem(data: any): PipelineListItem {
+function mapPipelineListItem(data: BackendPipelineListResponse): PipelineListItem {
   return {
     id: data.id,
     name: data.name,
@@ -145,11 +157,13 @@ function mapPipelineListItem(data: any): PipelineListItem {
 }
 
 /** Map a frontend PipelineStageCreate to a backend step create payload */
-function mapStageCreateToBackend(stage: PipelineStageCreate): any {
+function mapStageCreateToBackend(stage: PipelineStageCreate): BackendStepCreatePayload {
+  const { step_type, action_type } = mapStageTypeToBackend(stage.stage_type);
   return {
     name: stage.name,
     description: stage.description,
-    ...mapStageTypeToBackend(stage.stage_type),
+    step_type,
+    action_type,
     sort_order: stage.sort_order,
     required: stage.is_required ?? true,
     notify_prospect_on_completion: stage.notify_prospect_on_completion ?? false,
@@ -158,8 +172,8 @@ function mapStageCreateToBackend(stage: PipelineStageCreate): any {
 }
 
 /** Map a frontend PipelineStageUpdate to a backend step update payload */
-function mapStageUpdateToBackend(stage: PipelineStageUpdate): any {
-  const payload: any = {};
+function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdatePayload {
+  const payload: BackendStepUpdatePayload = {};
   if (stage.name !== undefined) payload.name = stage.name;
   if (stage.description !== undefined) payload.description = stage.description;
   if (stage.stage_type !== undefined) {
@@ -174,50 +188,81 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): any {
   return payload;
 }
 
-/** Map a backend prospect response to a frontend Applicant-like shape */
-function mapProspectToApplicant(data: any): any {
-  return {
-    ...data,
-    current_stage_id: data.current_step_id,
-    current_stage_name: data.current_step?.name ?? data.current_step_name,
-    current_stage_type: data.current_step?.step_type
-      ? mapStepTypeToFrontend(data.current_step.step_type, data.current_step.action_type)
-      : undefined,
-    stage_history: (data.step_progress || []).map((sp: any) => ({
+/** Extract a plain string status from a backend status value that may be a string or object. */
+function extractStatus(status: string | { value: string }): string {
+  if (typeof status === 'object' && status !== null) {
+    return status.value ?? String(status);
+  }
+  return status;
+}
+
+/** Map a backend prospect response to a frontend Applicant */
+function mapProspectToApplicant(data: BackendProspectResponse): Applicant {
+  const stageHistory: StageHistoryEntry[] = (data.step_progress || []).map(
+    (sp: BackendStepProgressResponse) => ({
       id: sp.id,
       stage_id: sp.step_id,
       stage_name: sp.step?.name ?? '',
       stage_type: sp.step?.step_type
         ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
-        : 'manual_approval',
+        : 'manual_approval' as StageType,
       entered_at: sp.created_at,
-      completed_at: sp.completed_at,
-      completed_by: sp.completed_by,
-      notes: sp.notes,
+      completed_at: sp.completed_at ?? undefined,
+      completed_by: sp.completed_by ?? undefined,
+      notes: sp.notes ?? undefined,
       artifacts: [],
-    })),
-    stage_entered_at: data.created_at,
-    target_membership_type: 'probationary',
-    status_token: data.status_token,
-    status: typeof data.status === 'object' ? data.status.value ?? data.status : data.status,
-    last_activity_at: data.updated_at,
-  };
-}
+    }),
+  );
 
-/** Map a backend prospect list item to a frontend ApplicantListItem-like shape */
-function mapProspectListToApplicantList(data: any): any {
   return {
     id: data.id,
-    pipeline_id: data.pipeline_id,
+    pipeline_id: data.pipeline_id ?? '',
+    pipeline_name: data.pipeline_name ?? undefined,
     first_name: data.first_name,
     last_name: data.last_name,
     email: data.email,
-    phone: data.phone,
-    current_stage_id: data.current_step_id,
-    current_stage_name: data.current_step_name,
+    phone: data.phone ?? undefined,
+    date_of_birth: data.date_of_birth ?? undefined,
+    address: data.address_street
+      ? {
+          street: data.address_street ?? undefined,
+          city: data.address_city ?? undefined,
+          state: data.address_state ?? undefined,
+          zip_code: data.address_zip ?? undefined,
+        }
+      : undefined,
+    current_stage_id: data.current_step_id ?? '',
+    current_stage_name: data.current_step?.name ?? undefined,
+    current_stage_type: data.current_step?.step_type
+      ? mapStepTypeToFrontend(data.current_step.step_type, data.current_step.action_type)
+      : undefined,
+    stage_history: stageHistory,
     stage_entered_at: data.created_at,
     target_membership_type: 'probationary',
-    status: typeof data.status === 'object' ? data.status.value ?? data.status : data.status,
+    form_submission_id: data.form_submission_id ?? undefined,
+    status_token: data.status_token ?? undefined,
+    status: extractStatus(data.status) as Applicant['status'],
+    notes: data.notes ?? undefined,
+    last_activity_at: data.updated_at,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  };
+}
+
+/** Map a backend prospect list item to a frontend ApplicantListItem */
+function mapProspectListToApplicantList(data: BackendProspectListResponse): ApplicantListItem {
+  return {
+    id: data.id,
+    pipeline_id: data.pipeline_id ?? '',
+    first_name: data.first_name,
+    last_name: data.last_name,
+    email: data.email,
+    phone: data.phone ?? undefined,
+    current_stage_id: data.current_step_id ?? '',
+    current_stage_name: data.current_step_name ?? undefined,
+    stage_entered_at: data.created_at,
+    target_membership_type: 'probationary',
+    status: extractStatus(data.status) as ApplicantListItem['status'],
     days_in_stage: 0,
     days_in_pipeline: 0,
     last_activity_at: data.created_at,
@@ -228,31 +273,69 @@ function mapProspectListToApplicantList(data: any): any {
 }
 
 /** Map a backend election package response to a frontend ElectionPackage */
-function mapElectionPackageResponse(data: any): ElectionPackage {
-  const snapshot = data.applicant_snapshot || {};
-  const config = data.package_config || {};
+function mapElectionPackageResponse(data: BackendElectionPackageResponse): ElectionPackage {
+  const snapshot = data.applicant_snapshot ?? {};
+  const config = data.package_config ?? {};
   return {
     id: data.id,
     applicant_id: data.prospect_id,
     pipeline_id: data.pipeline_id ?? '',
     stage_id: data.step_id ?? '',
-    applicant_name: `${snapshot.first_name || ''} ${snapshot.last_name || ''}`.trim(),
+    applicant_name: `${snapshot.first_name ?? ''} ${snapshot.last_name ?? ''}`.trim(),
     applicant_email: snapshot.email,
     applicant_phone: snapshot.phone,
     target_membership_type: 'probationary',
-    coordinator_notes: data.coordinator_notes,
+    coordinator_notes: data.coordinator_notes ?? undefined,
     supporting_statement: config.supporting_statement,
     documents: config.documents,
     stage_summary: config.stage_summary,
     custom_fields: config.custom_fields,
     recommended_ballot_item: config.recommended_ballot_item,
     status: data.status,
-    election_id: data.election_id,
+    election_id: data.election_id ?? undefined,
     candidate_id: config.candidate_id,
     created_at: data.created_at,
     updated_at: data.updated_at,
     submitted_at: config.submitted_at,
     submitted_by: config.submitted_by,
+  };
+}
+
+/** Map a backend pipeline stats response to a frontend PipelineStats */
+function mapPipelineStatsResponse(data: BackendPipelineStatsResponse): PipelineStats {
+  return {
+    pipeline_id: data.pipeline_id,
+    total_applicants: data.total_prospects ?? 0,
+    active_applicants: data.active_count ?? 0,
+    converted_count: data.transferred_count ?? 0,
+    rejected_count: data.rejected_count ?? 0,
+    withdrawn_count: data.withdrawn_count ?? 0,
+    on_hold_count: 0,
+    inactive_count: 0,
+    warning_count: 0,
+    avg_days_to_convert: data.avg_days_to_transfer ?? 0,
+    by_stage: (data.by_step || []).map((s) => ({
+      stage_id: s.stage_id,
+      stage_name: s.stage_name,
+      count: s.count,
+    })),
+    conversion_rate: data.conversion_rate ?? 0,
+  };
+}
+
+/** Map a backend document response to a frontend ApplicantDocument */
+function mapDocumentResponse(doc: BackendDocumentResponse, applicantId: string): ApplicantDocument {
+  return {
+    id: doc.id,
+    applicant_id: doc.prospect_id,
+    stage_id: doc.step_id ?? '',
+    document_type: doc.document_type,
+    file_name: doc.file_name,
+    file_url: `/api/v1/prospective-members/prospects/${applicantId}/documents/${doc.id}/download`,
+    file_size: doc.file_size,
+    mime_type: doc.mime_type ?? '',
+    uploaded_by: doc.uploaded_by ?? '',
+    uploaded_at: doc.created_at,
   };
 }
 
@@ -262,12 +345,12 @@ function mapElectionPackageResponse(data: any): ElectionPackage {
 
 export const pipelineService = {
   async getPipelines(): Promise<PipelineListItem[]> {
-    const response = await api.get('/prospective-members/pipelines');
+    const response = await api.get<BackendPipelineListResponse[]>('/prospective-members/pipelines');
     return response.data.map(mapPipelineListItem);
   },
 
   async getPipeline(pipelineId: string): Promise<Pipeline> {
-    const response = await api.get(`/prospective-members/pipelines/${pipelineId}`);
+    const response = await api.get<BackendPipelineResponse>(`/prospective-members/pipelines/${pipelineId}`);
     return mapPipelineResponse(response.data);
   },
 
@@ -278,7 +361,7 @@ export const pipelineService = {
       is_active: data.is_active ?? true,
       inactivity_config: data.inactivity_config,
     };
-    const response = await api.post('/prospective-members/pipelines', payload);
+    const response = await api.post<BackendPipelineResponse>('/prospective-members/pipelines', payload);
     return mapPipelineResponse(response.data);
   },
 
@@ -289,7 +372,7 @@ export const pipelineService = {
     if (data.is_active !== undefined) payload.is_active = data.is_active;
     if (data.inactivity_config !== undefined) payload.inactivity_config = data.inactivity_config;
 
-    const response = await api.put(
+    const response = await api.put<BackendPipelineResponse>(
       `/prospective-members/pipelines/${pipelineId}`,
       payload
     );
@@ -301,32 +384,14 @@ export const pipelineService = {
   },
 
   async getPipelineStats(pipelineId: string): Promise<PipelineStats> {
-    const response = await api.get(`/prospective-members/pipelines/${pipelineId}/stats`);
-    const d = response.data;
-    return {
-      pipeline_id: d.pipeline_id,
-      total_applicants: d.total_prospects ?? 0,
-      active_applicants: d.active_count ?? 0,
-      converted_count: d.transferred_count ?? 0,
-      rejected_count: d.rejected_count ?? 0,
-      withdrawn_count: d.withdrawn_count ?? 0,
-      on_hold_count: 0,
-      inactive_count: 0,
-      warning_count: 0,
-      avg_days_to_convert: d.avg_days_to_transfer ?? 0,
-      by_stage: (d.by_step || []).map((s: { stage_id: string; stage_name: string; count: number }) => ({
-        stage_id: s.stage_id,
-        stage_name: s.stage_name,
-        count: s.count,
-      })),
-      conversion_rate: d.conversion_rate ?? 0,
-    };
+    const response = await api.get<BackendPipelineStatsResponse>(`/prospective-members/pipelines/${pipelineId}/stats`);
+    return mapPipelineStatsResponse(response.data);
   },
 
   // Stage management (backend calls these "steps")
   async addStage(pipelineId: string, data: PipelineStageCreate): Promise<PipelineStage> {
     const payload = mapStageCreateToBackend(data);
-    const response = await api.post(
+    const response = await api.post<BackendStepResponse>(
       `/prospective-members/pipelines/${pipelineId}/steps`,
       payload
     );
@@ -340,7 +405,7 @@ export const pipelineService = {
   ): Promise<PipelineStage> {
     const payload = mapStageUpdateToBackend(data);
     // Backend uses PUT, not PATCH
-    const response = await api.put(
+    const response = await api.put<BackendStepResponse>(
       `/prospective-members/pipelines/${pipelineId}/steps/${stageId}`,
       payload
     );
@@ -356,7 +421,7 @@ export const pipelineService = {
     stageIds: string[]
   ): Promise<PipelineStage[]> {
     // Backend uses PUT and expects step_ids, not stage_ids
-    const response = await api.put(
+    const response = await api.put<BackendStepResponse[]>(
       `/prospective-members/pipelines/${pipelineId}/steps/reorder`,
       { step_ids: stageIds }
     );
@@ -367,7 +432,7 @@ export const pipelineService = {
     pipelineId: string,
     config: InactivityConfig
   ): Promise<Pipeline> {
-    const response = await api.put(
+    const response = await api.put<BackendPipelineResponse>(
       `/prospective-members/pipelines/${pipelineId}`,
       { inactivity_config: config }
     );
@@ -378,6 +443,14 @@ export const pipelineService = {
 // =============================================================================
 // Applicant Service (backend calls these "prospects")
 // =============================================================================
+
+/** Shape of the paginated prospect list from the backend. */
+interface BackendPaginatedProspectList {
+  items: BackendProspectListResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
 
 export const applicantService = {
   async getApplicants(params?: {
@@ -390,7 +463,7 @@ export const applicantService = {
     const offset = (page - 1) * pageSize;
 
     // Backend uses /prospects with limit/offset, not /applicants with page/page_size
-    const response = await api.get(
+    const response = await api.get<BackendPaginatedProspectList | BackendProspectListResponse[]>(
       '/prospective-members/prospects',
       {
         params: {
@@ -403,10 +476,22 @@ export const applicantService = {
       }
     );
 
-    // Backend returns { items, total, limit, offset }
+    // Backend returns { items, total, limit, offset } or a bare array
     const data = response.data;
-    const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
-    const total = data?.total ?? items.length;
+    let items: BackendProspectListResponse[];
+    let total: number;
+
+    if (Array.isArray(data)) {
+      items = data;
+      total = data.length;
+    } else if (data && 'items' in data && Array.isArray(data.items)) {
+      items = data.items;
+      total = data.total ?? items.length;
+    } else {
+      items = [];
+      total = 0;
+    }
+
     const mappedItems = items.map(mapProspectListToApplicantList);
     return {
       items: mappedItems,
@@ -418,7 +503,7 @@ export const applicantService = {
   },
 
   async getApplicant(applicantId: string): Promise<Applicant> {
-    const response = await api.get(
+    const response = await api.get<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}`
     );
     return mapProspectToApplicant(response.data);
@@ -441,7 +526,7 @@ export const applicantService = {
       payload.address_state = data.address.state;
       payload.address_zip = data.address.zip_code;
     }
-    const response = await api.post(
+    const response = await api.post<BackendProspectResponse>(
       '/prospective-members/prospects',
       payload
     );
@@ -468,7 +553,7 @@ export const applicantService = {
       payload.address_zip = data.address.zip_code;
     }
     // Backend uses PUT, not PATCH
-    const response = await api.put(
+    const response = await api.put<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}`,
       payload
     );
@@ -484,19 +569,26 @@ export const applicantService = {
     const params: Record<string, string> = { email };
     if (firstName) params.first_name = firstName;
     if (lastName) params.last_name = lastName;
-    const response = await api.post('/prospective-members/prospects/check-existing', null, { params });
+    const response = await api.post<{ has_matches: boolean; match_count: number; matches: Array<{ status: string; match_type: string }> }>(
+      '/prospective-members/prospects/check-existing',
+      null,
+      { params }
+    );
     return response.data;
   },
 
   async getActivity(applicantId: string, limit?: number): Promise<Array<{ id: string; prospect_id: string; action: string; details: Record<string, unknown>; performed_by: string; performer_name: string; created_at: string }>> {
     const params: Record<string, unknown> = {};
     if (limit) params.limit = limit;
-    const response = await api.get(`/prospective-members/prospects/${applicantId}/activity`, { params });
+    const response = await api.get<Array<{ id: string; prospect_id: string; action: string; details: Record<string, unknown>; performed_by: string; performer_name: string; created_at: string }>>(
+      `/prospective-members/prospects/${applicantId}/activity`,
+      { params }
+    );
     return response.data;
   },
 
   async completeStep(applicantId: string, stepId: string, notes?: string): Promise<Applicant> {
-    const response = await api.post(
+    const response = await api.post<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}/complete-step`,
       { step_id: stepId, notes }
     );
@@ -507,7 +599,7 @@ export const applicantService = {
     applicantId: string,
     data?: AdvanceStageRequest
   ): Promise<Applicant> {
-    const response = await api.post(
+    const response = await api.post<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}/advance`,
       data ? { notes: data.notes } : {}
     );
@@ -519,7 +611,7 @@ export const applicantService = {
     reason?: string
   ): Promise<Applicant> {
     // Backend doesn't have a dedicated reject endpoint; use update with status
-    const response = await api.put(
+    const response = await api.put<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}`,
       { status: 'rejected', notes: reason }
     );
@@ -530,7 +622,7 @@ export const applicantService = {
     applicantId: string,
     reason?: string
   ): Promise<Applicant> {
-    const response = await api.put(
+    const response = await api.put<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}`,
       { status: 'on_hold', notes: reason }
     );
@@ -541,7 +633,7 @@ export const applicantService = {
     applicantId: string,
     data?: WithdrawApplicantRequest
   ): Promise<Applicant> {
-    const response = await api.put(
+    const response = await api.put<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}`,
       { status: 'withdrawn', notes: data?.reason }
     );
@@ -550,7 +642,7 @@ export const applicantService = {
 
   async resumeApplicant(applicantId: string): Promise<Applicant> {
     // Resume by setting status back to active
-    const response = await api.put(
+    const response = await api.put<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}`,
       { status: 'active' }
     );
@@ -561,7 +653,7 @@ export const applicantService = {
     applicantId: string,
     data?: ReactivateApplicantRequest
   ): Promise<Applicant> {
-    const response = await api.put(
+    const response = await api.put<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}`,
       { status: 'active', notes: data?.notes }
     );
@@ -606,7 +698,7 @@ export const applicantService = {
     pipelineId: string,
     data: PurgeInactiveRequest
   ): Promise<PurgeInactiveResponse> {
-    const response = await api.post(
+    const response = await api.post<{ purged_count: number; message: string }>(
       `/prospective-members/pipelines/${pipelineId}/purge-inactive`,
       {
         prospect_ids: data.applicant_ids,
@@ -636,7 +728,7 @@ export const applicantService = {
     if (data.rank) payload.rank = data.rank;
     if (data.station) payload.station = data.station;
     if (data.emergency_contacts?.length) payload.emergency_contacts = data.emergency_contacts;
-    const response = await api.post(
+    const response = await api.post<{ user_id: string; message?: string }>(
       `/prospective-members/prospects/${applicantId}/transfer`,
       payload
     );
@@ -649,21 +741,11 @@ export const applicantService = {
   },
 
   async getDocuments(applicantId: string): Promise<ApplicantDocument[]> {
-    const response = await api.get(
+    const response = await api.get<BackendDocumentResponse[]>(
       `/prospective-members/prospects/${applicantId}/documents`
     );
-    return (response.data || []).map((d: Record<string, unknown>) => ({
-      id: d.id as string,
-      applicant_id: d.prospect_id as string,
-      stage_id: d.step_id as string,
-      document_type: d.document_type as string,
-      file_name: d.file_name as string,
-      file_url: `/api/v1/prospective-members/prospects/${applicantId}/documents/${d.id as string}/download`,
-      file_size: d.file_size as number,
-      mime_type: d.mime_type as string,
-      uploaded_by: d.uploaded_by as string,
-      uploaded_at: d.created_at as string,
-    }));
+    const docs: BackendDocumentResponse[] = response.data || [];
+    return docs.map((d) => mapDocumentResponse(d, applicantId));
   },
 
   async uploadDocument(
@@ -683,7 +765,7 @@ export const applicantService = {
     }
 
     // For now, record the document metadata (actual file storage TBD)
-    const response = await api.post(
+    const response = await api.post<BackendDocumentResponse>(
       `/prospective-members/prospects/${applicantId}/documents`,
       null,
       {
@@ -697,19 +779,7 @@ export const applicantService = {
         },
       }
     );
-    const d = response.data;
-    return {
-      id: d.id,
-      applicant_id: d.prospect_id,
-      stage_id: d.step_id,
-      document_type: d.document_type,
-      file_name: d.file_name,
-      file_url: `/api/v1/prospective-members/prospects/${applicantId}/documents/${d.id}/download`,
-      file_size: d.file_size,
-      mime_type: d.mime_type,
-      uploaded_by: d.uploaded_by,
-      uploaded_at: d.created_at,
-    };
+    return mapDocumentResponse(response.data, applicantId);
   },
 
   async deleteDocument(
@@ -723,7 +793,7 @@ export const applicantService = {
 
   async getElectionPackage(applicantId: string): Promise<ElectionPackage | null> {
     try {
-      const response = await api.get(
+      const response = await api.get<BackendElectionPackageResponse>(
         `/prospective-members/prospects/${applicantId}/election-package`
       );
       return mapElectionPackageResponse(response.data);
@@ -737,7 +807,7 @@ export const applicantService = {
     applicantId: string,
     data: ElectionPackageCreate
   ): Promise<ElectionPackage> {
-    const response = await api.post(
+    const response = await api.post<BackendElectionPackageResponse>(
       `/prospective-members/prospects/${applicantId}/election-package`,
       {
         prospect_id: applicantId,
@@ -765,7 +835,7 @@ export const applicantService = {
     if (data.custom_fields !== undefined) configUpdates.custom_fields = data.custom_fields;
     if (Object.keys(configUpdates).length > 0) payload.package_config = configUpdates;
 
-    const response = await api.put(
+    const response = await api.put<BackendElectionPackageResponse>(
       `/prospective-members/prospects/${applicantId}/election-package`,
       payload
     );
@@ -792,7 +862,16 @@ export const publicStatusService = {
     stage_timeline: { stage_name: string; status: string; completed_at?: string }[];
     applied_at?: string;
   }> {
-    const response = await axios.get(`/api/public/v1/application-status/${token}`);
+    const response = await axios.get<{
+      first_name: string;
+      last_name: string;
+      status: string;
+      current_stage_name?: string;
+      pipeline_name?: string;
+      total_stages: number;
+      stage_timeline: { stage_name: string; status: string; completed_at?: string }[];
+      applied_at?: string;
+    }>(`/api/public/v1/application-status/${token}`);
     return response.data;
   },
 };
@@ -801,7 +880,7 @@ export const electionPackageService = {
   async getPendingPackages(pipelineId?: string): Promise<ElectionPackage[]> {
     const params: Record<string, string> = { status: 'ready' };
     if (pipelineId) params.pipeline_id = pipelineId;
-    const response = await api.get('/prospective-members/election-packages', { params });
+    const response = await api.get<BackendElectionPackageResponse[]>('/prospective-members/election-packages', { params });
     return (response.data || []).map(mapElectionPackageResponse);
   },
 
@@ -809,7 +888,7 @@ export const electionPackageService = {
     pipeline_id?: string;
     status?: string;
   }): Promise<ElectionPackage[]> {
-    const response = await api.get('/prospective-members/election-packages', {
+    const response = await api.get<BackendElectionPackageResponse[]>('/prospective-members/election-packages', {
       params: {
         pipeline_id: params?.pipeline_id,
         status: params?.status,

@@ -31,6 +31,20 @@ import {
 } from "./modules/prospective-members";
 import { getAdminHoursRoutes } from "./modules/admin-hours";
 import { getCommunicationsRoutes } from "./modules/communications";
+import { getPublicPortalRoutes } from "./modules/public-portal";
+import { getSchedulingRoutes } from "./modules/scheduling";
+import { getEventsRoutes } from "./modules/events";
+import { getTrainingRoutes } from "./modules/training";
+import { getInventoryRoutes } from "./modules/inventory";
+import {
+  getElectionsRoutes,
+  getElectionsPublicRoutes,
+} from "./modules/elections";
+import { getMinutesRoutes } from "./modules/minutes";
+import {
+  getFacilitiesRoutes,
+  getFacilitiesPublicRoutes,
+} from "./modules/facilities";
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -59,64 +73,8 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 
 // Lazy-loaded pages - loaded on demand for better initial load performance
-// Events Module
-const EventsPage = lazyWithRetry(() =>
-  import("./pages/EventsPage").then((m) => ({ default: m.EventsPage })),
-);
-const EventDetailPage = lazyWithRetry(() =>
-  import("./pages/EventDetailPage").then((m) => ({
-    default: m.EventDetailPage,
-  })),
-);
-const EventQRCodePage = lazyWithRetry(() => import("./pages/EventQRCodePage"));
-const EventSelfCheckInPage = lazyWithRetry(
-  () => import("./pages/EventSelfCheckInPage"),
-);
-const EventCheckInMonitoringPage = lazyWithRetry(
-  () => import("./pages/EventCheckInMonitoringPage"),
-);
-const EventEditPage = lazyWithRetry(() =>
-  import("./pages/EventEditPage").then((m) => ({ default: m.EventEditPage })),
-);
-const EventsAdminHub = lazyWithRetry(() =>
-  import("./pages/EventsAdminHub").then((m) => ({ default: m.EventsAdminHub })),
-);
 
-// Training Module
-const TrainingAdminPage = lazyWithRetry(() =>
-  import("./pages/TrainingAdminPage").then((m) => ({
-    default: m.TrainingAdminPage,
-  })),
-);
-const TrainingProgramsPage = lazyWithRetry(
-  () => import("./pages/TrainingProgramsPage"),
-);
-const PipelineDetailPage = lazyWithRetry(
-  () => import("./pages/PipelineDetailPage"),
-);
-const CourseLibraryPage = lazyWithRetry(
-  () => import("./pages/CourseLibraryPage"),
-);
-const SubmitTrainingPage = lazyWithRetry(
-  () => import("./pages/SubmitTrainingPage"),
-);
-const MyTrainingPage = lazyWithRetry(() => import("./pages/MyTrainingPage"));
-
-// Skills Testing Module
-const SkillsTestingPage = lazyWithRetry(() =>
-  import("./pages/SkillsTestingPage").then((m) => ({
-    default: m.SkillsTestingPage,
-  })),
-);
-const SkillTemplateBuilderPage = lazyWithRetry(
-  () => import("./pages/SkillTemplateBuilderPage"),
-);
-const StartSkillTestPage = lazyWithRetry(
-  () => import("./pages/StartSkillTestPage"),
-);
-const ActiveSkillTestPage = lazyWithRetry(
-  () => import("./pages/ActiveSkillTestPage"),
-);
+// Training + Skills Testing moved to modules/training/routes.tsx
 
 // Admin/Monitoring
 const ErrorMonitoringPage = lazyWithRetry(
@@ -128,65 +86,20 @@ const AnalyticsDashboardPage = lazyWithRetry(
 const PlatformAnalyticsPage = lazyWithRetry(
   () => import("./pages/PlatformAnalyticsPage"),
 );
-const PublicPortalAdmin = lazyWithRetry(
-  () => import("./modules/public-portal/pages/PublicPortalAdmin"),
-);
+// PublicPortalAdmin moved to modules/public-portal/routes.tsx
 
 // Documents Module
 const DocumentsPage = lazyWithRetry(() => import("./pages/DocumentsPage"));
 
-// Inventory Module
-const InventoryPage = lazyWithRetry(() => import("./pages/InventoryPage"));
-const InventoryAdminHub = lazyWithRetry(() =>
-  import("./pages/InventoryAdminHub").then((m) => ({
-    default: m.InventoryAdminHub,
-  })),
-);
-const InventoryCheckoutsPage = lazyWithRetry(
-  () => import("./pages/InventoryCheckoutsPage"),
-);
-const MyEquipmentPage = lazyWithRetry(() => import("./pages/MyEquipmentPage"));
-const StorageAreasPage = lazyWithRetry(
-  () => import("./pages/StorageAreasPage"),
-);
+// Inventory moved to modules/inventory/routes.tsx
 
-// Scheduling Module
-const SchedulingPage = lazyWithRetry(() => import("./pages/SchedulingPage"));
+// SchedulingPage moved to modules/scheduling/routes.tsx
 
-// Facilities Module
-const FacilitiesPage = lazyWithRetry(() => import("./pages/FacilitiesPage"));
+// Facilities, Locations, Kiosk moved to modules/facilities/routes.tsx
 
-// Locations (lightweight alternative when Facilities module is off)
-const LocationsPage = lazyWithRetry(() => import("./pages/LocationsPage"));
+// Elections, BallotVoting moved to modules/elections/routes.tsx
 
-// Public Location Kiosk Display (no auth required — for tablets in rooms)
-const LocationKioskPage = lazyWithRetry(
-  () => import("./pages/LocationKioskPage"),
-);
-
-// Apparatus Basic (lightweight alternative when Apparatus module is off)
-const ApparatusBasicPage = lazyWithRetry(
-  () => import("./pages/ApparatusBasicPage"),
-);
-
-// Elections Module
-const ElectionsPage = lazyWithRetry(() =>
-  import("./pages/ElectionsPage").then((m) => ({ default: m.ElectionsPage })),
-);
-const ElectionDetailPage = lazyWithRetry(() =>
-  import("./pages/ElectionDetailPage").then((m) => ({
-    default: m.ElectionDetailPage,
-  })),
-);
-const BallotVotingPage = lazyWithRetry(
-  () => import("./pages/BallotVotingPage"),
-);
-
-// Minutes Module
-const MinutesPage = lazyWithRetry(() => import("./pages/MinutesPage"));
-const MinutesDetailPage = lazyWithRetry(
-  () => import("./pages/MinutesDetailPage"),
-);
+// Minutes moved to modules/minutes/routes.tsx
 
 // Action Items (unified cross-module)
 const ActionItemsPage = lazyWithRetry(() => import("./pages/ActionItemsPage"));
@@ -288,256 +201,29 @@ function App() {
                   {/* Main Dashboard */}
                   <Route path="/dashboard" element={<Dashboard />} />
 
-                  {/* Events Module - Member-facing */}
-                  <Route path="/events" element={<EventsPage />} />
-                  <Route path="/events/:id" element={<EventDetailPage />} />
-                  <Route
-                    path="/events/:id/qr-code"
-                    element={<EventQRCodePage />}
-                  />
-                  <Route
-                    path="/events/:id/check-in"
-                    element={<EventSelfCheckInPage />}
-                  />
-
-                  {/* Events Module - Admin Hub */}
-                  <Route
-                    path="/events/admin"
-                    element={
-                      <ProtectedRoute requiredPermission="events.manage">
-                        <EventsAdminHub />
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  {/* Events Module - Per-event admin (stays as separate routes) */}
-                  <Route
-                    path="/events/:id/edit"
-                    element={
-                      <ProtectedRoute requiredPermission="events.manage">
-                        <EventEditPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/events/:id/monitoring"
-                    element={
-                      <ProtectedRoute requiredPermission="events.manage">
-                        <EventCheckInMonitoringPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/events/:id/analytics"
-                    element={
-                      <ProtectedRoute requiredPermission="analytics.view">
-                        <AnalyticsDashboardPage />
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  {/* Events Module - Legacy redirect */}
-                  <Route
-                    path="/events/new"
-                    element={<Navigate to="/events/admin?tab=create" replace />}
-                  />
+                  {/* Events Module */}
+                  {getEventsRoutes()}
 
                   {/* Documents Module */}
                   <Route path="/documents" element={<DocumentsPage />} />
 
-                  {/* Training Module - Member-facing */}
-                  <Route path="/training" element={<MyTrainingPage />} />
-                  <Route
-                    path="/training/my-training"
-                    element={<MyTrainingPage />}
-                  />
-                  <Route
-                    path="/training/submit"
-                    element={<SubmitTrainingPage />}
-                  />
-                  <Route
-                    path="/training/courses"
-                    element={<CourseLibraryPage />}
-                  />
-                  <Route
-                    path="/training/programs"
-                    element={<TrainingProgramsPage />}
-                  />
-                  <Route
-                    path="/training/programs/:programId"
-                    element={<PipelineDetailPage />}
-                  />
-
-                  {/* Training Module - Admin Hub */}
-                  <Route
-                    path="/training/admin"
-                    element={
-                      <ProtectedRoute requiredPermission="training.manage">
-                        <TrainingAdminPage />
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  {/* Training Module - Legacy redirects to admin hub sub-pages */}
-                  <Route
-                    path="/training/officer"
-                    element={
-                      <Navigate
-                        to="/training/admin?page=dashboard&tab=overview"
-                        replace
-                      />
-                    }
-                  />
-                  <Route
-                    path="/training/submissions"
-                    element={
-                      <Navigate
-                        to="/training/admin?page=records&tab=submissions"
-                        replace
-                      />
-                    }
-                  />
-                  <Route
-                    path="/training/requirements"
-                    element={
-                      <Navigate
-                        to="/training/admin?page=setup&tab=requirements"
-                        replace
-                      />
-                    }
-                  />
-                  <Route
-                    path="/training/sessions/new"
-                    element={
-                      <Navigate
-                        to="/training/admin?page=records&tab=sessions"
-                        replace
-                      />
-                    }
-                  />
-                  <Route
-                    path="/training/programs/new"
-                    element={
-                      <Navigate
-                        to="/training/admin?page=setup&tab=pipelines"
-                        replace
-                      />
-                    }
-                  />
-                  <Route
-                    path="/training/shift-reports"
-                    element={
-                      <Navigate
-                        to="/training/admin?page=records&tab=shift-reports"
-                        replace
-                      />
-                    }
-                  />
-                  <Route
-                    path="/training/integrations"
-                    element={
-                      <Navigate
-                        to="/training/admin?page=setup&tab=integrations"
-                        replace
-                      />
-                    }
-                  />
-
-                  {/* Skills Testing Module — member-facing (available to all authenticated users) */}
-                  <Route
-                    path="/training/skills-testing"
-                    element={<SkillsTestingPage />}
-                  />
-                  <Route
-                    path="/training/skills-testing/templates/new"
-                    element={
-                      <ProtectedRoute requiredPermission="training.manage">
-                        <SkillTemplateBuilderPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/training/skills-testing/templates/:id"
-                    element={
-                      <ProtectedRoute requiredPermission="training.manage">
-                        <SkillTemplateBuilderPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/training/skills-testing/templates/:id/edit"
-                    element={
-                      <ProtectedRoute requiredPermission="training.manage">
-                        <SkillTemplateBuilderPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/training/skills-testing/test/new"
-                    element={<StartSkillTestPage />}
-                  />
-                  <Route
-                    path="/training/skills-testing/test/:testId"
-                    element={<ActiveSkillTestPage />}
-                  />
-                  <Route
-                    path="/training/skills-testing/test/:testId/active"
-                    element={<ActiveSkillTestPage />}
-                  />
+                  {/* Training Module (includes Skills Testing) */}
+                  {getTrainingRoutes()}
 
                   {/* Inventory Module */}
-                  <Route path="/inventory" element={<InventoryPage />} />
-                  <Route
-                    path="/inventory/my-equipment"
-                    element={<MyEquipmentPage />}
-                  />
-                  <Route
-                    path="/inventory/admin"
-                    element={
-                      <ProtectedRoute requiredPermission="inventory.manage">
-                        <InventoryAdminHub />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/inventory/checkouts"
-                    element={
-                      <ProtectedRoute requiredPermission="inventory.manage">
-                        <InventoryCheckoutsPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/inventory/storage-areas"
-                    element={<StorageAreasPage />}
-                  />
+                  {getInventoryRoutes()}
 
                   {/* Scheduling Module */}
-                  <Route path="/scheduling" element={<SchedulingPage />} />
+                  {getSchedulingRoutes()}
 
-                  {/* Facilities Module (full) / Locations (lightweight) */}
-                  <Route path="/facilities" element={<FacilitiesPage />} />
-                  <Route path="/locations" element={<LocationsPage />} />
-
-                  {/* Apparatus Basic (lightweight alternative when Apparatus module is off) */}
-                  <Route
-                    path="/apparatus-basic"
-                    element={<ApparatusBasicPage />}
-                  />
+                  {/* Facilities Module (full) / Locations (lightweight) / Apparatus Basic */}
+                  {getFacilitiesRoutes()}
 
                   {/* Elections Module */}
-                  <Route path="/elections" element={<ElectionsPage />} />
-                  <Route
-                    path="/elections/:electionId"
-                    element={<ElectionDetailPage />}
-                  />
+                  {getElectionsRoutes()}
 
                   {/* Minutes Module */}
-                  <Route path="/minutes" element={<MinutesPage />} />
-                  <Route
-                    path="/minutes/:minutesId"
-                    element={<MinutesDetailPage />}
-                  />
+                  {getMinutesRoutes()}
 
                   {/* Action Items (unified) */}
                   <Route path="/action-items" element={<ActionItemsPage />} />
@@ -585,14 +271,8 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/admin/public-portal"
-                    element={
-                      <ProtectedRoute requiredPermission="settings.manage">
-                        <PublicPortalAdmin />
-                      </ProtectedRoute>
-                    }
-                  />
+                  {/* Public Portal Module */}
+                  {getPublicPortalRoutes()}
                   <Route
                     path="/admin/platform-analytics"
                     element={
@@ -652,10 +332,10 @@ function App() {
                 />
 
                 {/* Public Ballot Voting Page (token-based, no auth required) */}
-                <Route path="/ballot" element={<BallotVotingPage />} />
+                {getElectionsPublicRoutes()}
 
                 {/* Public Location Kiosk Display (no auth required — for tablets in rooms) */}
-                <Route path="/display/:code" element={<LocationKioskPage />} />
+                {getFacilitiesPublicRoutes()}
 
                 {/* Login Page */}
                 <Route path="/login" element={<LoginPage />} />

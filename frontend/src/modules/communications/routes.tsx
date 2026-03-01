@@ -4,7 +4,7 @@
  * Defines route components for the communications module.
  */
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Route } from 'react-router-dom';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
@@ -20,7 +20,9 @@ export const getCommunicationsRoutes = () => {
         path="/communications/email-templates"
         element={
           <ProtectedRoute requiredPermission="settings.manage">
-            <EmailTemplatesPage />
+            <Suspense fallback={null}>
+              <EmailTemplatesPage />
+            </Suspense>
           </ProtectedRoute>
         }
       />

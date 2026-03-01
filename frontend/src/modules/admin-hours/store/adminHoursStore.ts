@@ -3,6 +3,7 @@
  */
 
 import { create } from 'zustand';
+import { handleStoreError } from '../../../utils/storeHelpers';
 import { adminHoursCategoryService, adminHoursClockService, adminHoursEntryService } from '../services/api';
 import type {
   AdminHoursCategory,
@@ -114,7 +115,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       set({ categories, categoriesLoading: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to load categories',
+        error: handleStoreError(error, 'Failed to load categories'),
         categoriesLoading: false,
       });
     }
@@ -127,7 +128,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       await get().fetchCategories(true);
       return category;
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to create category';
+      const msg = handleStoreError(error, 'Failed to create category');
       set({ error: msg });
       throw error;
     }
@@ -139,7 +140,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       await adminHoursCategoryService.update(id, data);
       await get().fetchCategories(true);
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to update category' });
+      set({ error: handleStoreError(error, 'Failed to update category') });
       throw error;
     }
   },
@@ -150,7 +151,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       await adminHoursCategoryService.delete(id);
       await get().fetchCategories(true);
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to delete category' });
+      set({ error: handleStoreError(error, 'Failed to delete category') });
       throw error;
     }
   },
@@ -165,7 +166,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       await adminHoursClockService.clockIn(categoryId);
       await get().fetchActiveSession();
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to clock in' });
+      set({ error: handleStoreError(error, 'Failed to clock in') });
       throw error;
     }
   },
@@ -177,7 +178,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       set({ activeSession: null });
       await get().fetchMyEntries();
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to clock out' });
+      set({ error: handleStoreError(error, 'Failed to clock out') });
       throw error;
     }
   },
@@ -189,7 +190,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       set({ activeSession: null });
       await get().fetchMyEntries();
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to clock out' });
+      set({ error: handleStoreError(error, 'Failed to clock out') });
       throw error;
     }
   },
@@ -215,7 +216,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       set({ myEntries: result.entries, myEntriesTotal: result.total, entriesLoading: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to load entries',
+        error: handleStoreError(error, 'Failed to load entries'),
         entriesLoading: false,
       });
     }
@@ -228,7 +229,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       set({ allEntries: result.entries, allEntriesTotal: result.total, entriesLoading: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to load entries',
+        error: handleStoreError(error, 'Failed to load entries'),
         entriesLoading: false,
       });
     }
@@ -240,7 +241,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       await adminHoursEntryService.editEntry(entryId, data);
       await get().fetchAllEntries({ status: 'pending' });
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to update entry' });
+      set({ error: handleStoreError(error, 'Failed to update entry') });
       throw error;
     }
   },
@@ -252,7 +253,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       await get().fetchAllEntries({ status: 'pending' });
       await get().fetchPendingCount();
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to review entry' });
+      set({ error: handleStoreError(error, 'Failed to review entry') });
       throw error;
     }
   },
@@ -265,7 +266,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       await get().fetchPendingCount();
       return result.approvedCount;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to bulk approve' });
+      set({ error: handleStoreError(error, 'Failed to bulk approve') });
       throw error;
     }
   },
@@ -276,7 +277,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       const summary = await adminHoursEntryService.getSummary(params);
       set({ summary });
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to load summary' });
+      set({ error: handleStoreError(error, 'Failed to load summary') });
     }
   },
 
@@ -300,7 +301,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       set({ activeSessions: sessions, activeSessionsLoading: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to load active sessions',
+        error: handleStoreError(error, 'Failed to load active sessions'),
         activeSessionsLoading: false,
       });
     }
@@ -313,7 +314,7 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       await get().fetchActiveSessions();
       await get().fetchPendingCount();
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to end session' });
+      set({ error: handleStoreError(error, 'Failed to end session') });
       throw error;
     }
   },

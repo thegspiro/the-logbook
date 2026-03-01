@@ -69,42 +69,6 @@ export const DEFAULT_INACTIVITY_CONFIG: InactivityConfig = {
   purge_days_after_inactive: 365,
 };
 
-/**
- * Compute effective timeout days from an InactivityConfig.
- * Returns null if the timeout is disabled ('never').
- */
-export function getEffectiveTimeoutDays(config: InactivityConfig): number | null {
-  if (config.timeout_preset === 'never') return null;
-  if (config.timeout_preset === 'custom') {
-    const days = config.custom_timeout_days;
-    if (days == null || days <= 0 || !Number.isFinite(days)) return null;
-    return days;
-  }
-  return TIMEOUT_PRESET_DAYS[config.timeout_preset];
-}
-
-/** Validate that a URL uses a safe protocol (http/https only). */
-export function isSafeUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, window.location.origin);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-/** Safe initials extraction that handles empty strings. */
-export function getInitials(firstName: string, lastName: string): string {
-  const f = firstName?.trim();
-  const l = lastName?.trim();
-  return `${f ? f[0] : '?'}${l ? l[0] : '?'}`.toUpperCase();
-}
-
-/** Basic email format validation. */
-export function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
 /** Allowed file upload constraints. */
 export const FILE_UPLOAD_LIMITS = {
   maxSizeBytes: 10 * 1024 * 1024, // 10 MB
@@ -607,4 +571,213 @@ export interface ElectionPackageUpdate {
   supporting_statement?: string;
   custom_fields?: Record<string, string>;
   status?: ElectionPackageStatus;
+}
+
+// =============================================================================
+// Backend Response Types (used by services/api.ts mapping layer)
+// =============================================================================
+
+/**
+ * Backend pipeline step response — the backend uses "steps" where the
+ * frontend uses "stages". These types mirror the Pydantic schemas in
+ * backend/app/schemas/membership_pipeline.py.
+ */
+export interface BackendStepResponse {
+  id: string;
+  pipeline_id: string;
+  name: string;
+  description: string | null;
+  step_type: string;
+  action_type: string | null;
+  is_first_step: boolean;
+  is_final_step: boolean;
+  sort_order: number;
+  email_template_id: string | null;
+  required: boolean;
+  config: Record<string, unknown> | null;
+  inactivity_timeout_days: number | null;
+  notify_prospect_on_completion: boolean;
+  public_visible: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Backend pipeline response (PipelineResponse schema). */
+export interface BackendPipelineResponse {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  is_template: boolean;
+  is_default: boolean;
+  is_active: boolean;
+  auto_transfer_on_approval: boolean;
+  inactivity_config: Record<string, unknown> | null;
+  public_status_enabled: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  steps: BackendStepResponse[];
+  prospect_count: number | null;
+}
+
+/** Backend pipeline list response (PipelineListResponse schema). */
+export interface BackendPipelineListResponse {
+  id: string;
+  name: string;
+  description: string | null;
+  is_template: boolean;
+  is_default: boolean;
+  is_active: boolean;
+  auto_transfer_on_approval: boolean;
+  step_count: number | null;
+  prospect_count: number | null;
+  created_at: string;
+}
+
+/** Backend step progress record (StepProgressResponse schema). */
+export interface BackendStepProgressResponse {
+  id: string;
+  prospect_id: string;
+  step_id: string;
+  status: string;
+  completed_at: string | null;
+  completed_by: string | null;
+  notes: string | null;
+  action_result: Record<string, unknown> | null;
+  step: BackendStepResponse | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Backend prospect response (ProspectResponse schema). */
+export interface BackendProspectResponse {
+  id: string;
+  organization_id: string;
+  pipeline_id: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string | null;
+  mobile: string | null;
+  date_of_birth: string | null;
+  address_street: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  interest_reason: string | null;
+  referral_source: string | null;
+  referred_by: string | null;
+  notes: string | null;
+  current_step_id: string | null;
+  status: string | { value: string };
+  metadata: Record<string, unknown> | null;
+  form_submission_id: string | null;
+  status_token: string | null;
+  transferred_user_id: string | null;
+  transferred_at: string | null;
+  created_at: string;
+  updated_at: string;
+  current_step: BackendStepResponse | null;
+  step_progress: BackendStepProgressResponse[] | null;
+  pipeline_name: string | null;
+}
+
+/** Backend prospect list item response (ProspectListResponse schema). */
+export interface BackendProspectListResponse {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string | null;
+  status: string | { value: string };
+  pipeline_id: string | null;
+  pipeline_name: string | null;
+  current_step_id: string | null;
+  current_step_name: string | null;
+  created_at: string;
+}
+
+/** Backend election package response (ElectionPackageResponse schema). */
+export interface BackendElectionPackageResponse {
+  id: string;
+  prospect_id: string;
+  pipeline_id: string | null;
+  step_id: string | null;
+  election_id: string | null;
+  status: ElectionPackageStatus;
+  applicant_snapshot: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+  } | null;
+  coordinator_notes: string | null;
+  package_config: {
+    supporting_statement?: string;
+    documents?: { name: string; url: string }[];
+    stage_summary?: { stage_name: string; completed_at?: string }[];
+    custom_fields?: Record<string, string>;
+    recommended_ballot_item?: ElectionPackage['recommended_ballot_item'];
+    candidate_id?: string;
+    submitted_at?: string;
+    submitted_by?: string;
+  } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Backend pipeline stats response (PipelineStatsResponse schema). */
+export interface BackendPipelineStatsResponse {
+  pipeline_id: string;
+  total_prospects: number;
+  active_count: number;
+  approved_count: number;
+  rejected_count: number;
+  withdrawn_count: number;
+  transferred_count: number;
+  by_step: {
+    stage_id: string;
+    stage_name: string;
+    count: number;
+  }[];
+  avg_days_to_transfer: number | null;
+  conversion_rate: number | null;
+}
+
+/** Backend document response (ProspectDocumentResponse schema). */
+export interface BackendDocumentResponse {
+  id: string;
+  prospect_id: string;
+  step_id: string | null;
+  document_type: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
+/** Payload shape sent to backend when creating a step. */
+export interface BackendStepCreatePayload {
+  name: string;
+  description?: string;
+  step_type: string;
+  action_type?: string;
+  sort_order: number;
+  required: boolean;
+  notify_prospect_on_completion: boolean;
+  public_visible: boolean;
+}
+
+/** Payload shape sent to backend when updating a step. */
+export interface BackendStepUpdatePayload {
+  name?: string;
+  description?: string;
+  step_type?: string;
+  action_type?: string;
+  sort_order?: number;
+  required?: boolean;
+  notify_prospect_on_completion?: boolean;
+  public_visible?: boolean;
 }

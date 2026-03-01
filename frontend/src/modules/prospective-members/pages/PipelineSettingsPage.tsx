@@ -35,8 +35,8 @@ import type {
 import {
   DEFAULT_INACTIVITY_CONFIG,
   TIMEOUT_PRESET_LABELS,
-  getEffectiveTimeoutDays,
 } from '../types';
+import { getEffectiveTimeoutDays } from '../utils';
 
 export const PipelineSettingsPage: React.FC = () => {
   const navigate = useNavigate();

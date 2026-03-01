@@ -2,7 +2,7 @@
  * React hooks for Public Portal functionality
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import * as api from '../services/publicPortalApi';
@@ -157,11 +157,21 @@ export const useAccessLogs = (filters: AccessLogFilters = {}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Stabilize filters reference to prevent infinite refetch loops.
+  // JSON.stringify produces a stable dependency key so the callback
+  // only changes when the filter *values* actually change.
+  const filtersKey = JSON.stringify(filters);
+  const filtersRef = useRef(filters);
+  useMemo(() => {
+    filtersRef.current = filters;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
+
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await api.getAccessLogs(filters);
+      const data = await api.getAccessLogs(filtersRef.current);
       setLogs(data);
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to load access logs');
@@ -170,7 +180,8 @@ export const useAccessLogs = (filters: AccessLogFilters = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   useEffect(() => {
     void fetchLogs();

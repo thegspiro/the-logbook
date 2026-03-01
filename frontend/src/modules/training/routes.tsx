@@ -1,0 +1,187 @@
+/**
+ * Training Module Routes
+ *
+ * This function returns route elements for the training module,
+ * including member-facing pages, admin hub, skills testing,
+ * and legacy redirects to the unified admin hub.
+ *
+ * To disable the training module, simply remove or comment out
+ * the call to getTrainingRoutes() in App.tsx.
+ */
+
+import React, { Suspense } from 'react';
+import { Route, Navigate } from 'react-router-dom';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
+import { lazyWithRetry } from '../../utils/lazyWithRetry';
+
+// Training Module - Member-facing
+const MyTrainingPage = lazyWithRetry(() => import('../../pages/MyTrainingPage'));
+const SubmitTrainingPage = lazyWithRetry(
+  () => import('../../pages/SubmitTrainingPage'),
+);
+const CourseLibraryPage = lazyWithRetry(
+  () => import('../../pages/CourseLibraryPage'),
+);
+const TrainingProgramsPage = lazyWithRetry(
+  () => import('../../pages/TrainingProgramsPage'),
+);
+const PipelineDetailPage = lazyWithRetry(
+  () => import('../../pages/PipelineDetailPage'),
+);
+
+// Training Module - Admin
+const TrainingAdminPage = lazyWithRetry(() =>
+  import('../../pages/TrainingAdminPage').then((m) => ({
+    default: m.TrainingAdminPage,
+  })),
+);
+
+// Skills Testing Module
+const SkillsTestingPage = lazyWithRetry(() =>
+  import('../../pages/SkillsTestingPage').then((m) => ({
+    default: m.SkillsTestingPage,
+  })),
+);
+const SkillTemplateBuilderPage = lazyWithRetry(
+  () => import('../../pages/SkillTemplateBuilderPage'),
+);
+const StartSkillTestPage = lazyWithRetry(
+  () => import('../../pages/StartSkillTestPage'),
+);
+const ActiveSkillTestPage = lazyWithRetry(
+  () => import('../../pages/ActiveSkillTestPage'),
+);
+
+export const getTrainingRoutes = () => {
+  return (
+    <React.Fragment>
+      {/* Training Module - Member-facing */}
+      <Route path="/training" element={<MyTrainingPage />} />
+      <Route path="/training/my-training" element={<MyTrainingPage />} />
+      <Route path="/training/submit" element={<SubmitTrainingPage />} />
+      <Route path="/training/courses" element={<CourseLibraryPage />} />
+      <Route path="/training/programs" element={<TrainingProgramsPage />} />
+      <Route
+        path="/training/programs/:programId"
+        element={<PipelineDetailPage />}
+      />
+
+      {/* Training Module - Admin Hub */}
+      <Route
+        path="/training/admin"
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <TrainingAdminPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Training Module - Legacy redirects to admin hub sub-pages */}
+      <Route
+        path="/training/officer"
+        element={
+          <Navigate
+            to="/training/admin?page=dashboard&tab=overview"
+            replace
+          />
+        }
+      />
+      <Route
+        path="/training/submissions"
+        element={
+          <Navigate
+            to="/training/admin?page=records&tab=submissions"
+            replace
+          />
+        }
+      />
+      <Route
+        path="/training/requirements"
+        element={
+          <Navigate
+            to="/training/admin?page=setup&tab=requirements"
+            replace
+          />
+        }
+      />
+      <Route
+        path="/training/sessions/new"
+        element={
+          <Navigate
+            to="/training/admin?page=records&tab=sessions"
+            replace
+          />
+        }
+      />
+      <Route
+        path="/training/programs/new"
+        element={
+          <Navigate
+            to="/training/admin?page=setup&tab=pipelines"
+            replace
+          />
+        }
+      />
+      <Route
+        path="/training/shift-reports"
+        element={
+          <Navigate
+            to="/training/admin?page=records&tab=shift-reports"
+            replace
+          />
+        }
+      />
+      <Route
+        path="/training/integrations"
+        element={
+          <Navigate
+            to="/training/admin?page=setup&tab=integrations"
+            replace
+          />
+        }
+      />
+
+      {/* Skills Testing Module - Member-facing */}
+      <Route
+        path="/training/skills-testing"
+        element={<SkillsTestingPage />}
+      />
+      <Route
+        path="/training/skills-testing/templates/new"
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <SkillTemplateBuilderPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/training/skills-testing/templates/:id"
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <SkillTemplateBuilderPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/training/skills-testing/templates/:id/edit"
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <SkillTemplateBuilderPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/training/skills-testing/test/new"
+        element={<StartSkillTestPage />}
+      />
+      <Route
+        path="/training/skills-testing/test/:testId"
+        element={<ActiveSkillTestPage />}
+      />
+      <Route
+        path="/training/skills-testing/test/:testId/active"
+        element={<ActiveSkillTestPage />}
+      />
+    </React.Fragment>
+  );
+};

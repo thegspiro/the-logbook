@@ -9,6 +9,7 @@ import { userService } from '../../../services/api';
 import type { User, ContactInfoSettings } from '../types';
 import type { MemberStats } from '../../../types/member';
 import { UserStatus } from '../../../constants/enums';
+import { handleStoreError } from '../../../utils/storeHelpers';
 
 interface MembershipState {
   // Data
@@ -129,10 +130,7 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
       });
     } catch (error) {
       set({
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to fetch members',
+        error: handleStoreError(error, 'Failed to fetch members'),
         isLoading: false,
       });
     }
@@ -145,10 +143,7 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
       set({ currentMember: member, isLoadingMember: false });
     } catch (error) {
       set({
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to fetch member',
+        error: handleStoreError(error, 'Failed to fetch member'),
         isLoadingMember: false,
       });
     }
