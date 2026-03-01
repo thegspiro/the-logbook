@@ -46,6 +46,12 @@ from app.models.document import (
 from app.models.election import Candidate, Election, ElectionStatus, Vote, VotingToken
 from app.models.email_template import EmailAttachment, EmailTemplate, EmailTemplateType
 from app.models.error_log import ErrorLog
+from app.models.event_request import (
+    EventRequest,
+    EventRequestActivity,
+    EventRequestEmailTemplate,
+    EventRequestStatus,
+)
 from app.models.event import (
     CheckInWindowType,
     Event,
@@ -164,6 +170,7 @@ from app.models.public_portal import (
     PublicPortalConfig,
     PublicPortalDataWhitelist,
 )
+from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
 from app.models.skills_testing import SkillTemplate, SkillTest
 from app.models.training import (
     ExternalCategoryMapping,
@@ -320,6 +327,11 @@ __all__ = [
     "EventType",
     "RSVPStatus",
     "CheckInWindowType",
+    # Event request models
+    "EventRequest",
+    "EventRequestActivity",
+    "EventRequestEmailTemplate",
+    "EventRequestStatus",
     # Training models
     "TrainingCategory",
     "TrainingCourse",
@@ -343,6 +355,10 @@ __all__ = [
     "Shift",
     "ShiftAttendance",
     "ShiftCall",
+    # Security alert models
+    "SecurityAlertRecord",
+    "AlertType",
+    "ThreatLevel",
     # Skills testing models
     "SkillTemplate",
     "SkillTest",

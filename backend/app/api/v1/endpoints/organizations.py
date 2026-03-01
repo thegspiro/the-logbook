@@ -23,6 +23,7 @@ from app.schemas.organization import (
     MembershipIdSettings,
     ModuleSettingsUpdate,
     OrganizationProfileUpdate,
+    OrganizationSettings,
     OrganizationSettingsResponse,
     OrganizationSettingsUpdate,
     SetupChecklistItem,
@@ -48,9 +49,14 @@ async def get_organization_settings(
     org_service = OrganizationService(db)
     settings = await org_service.get_organization_settings(current_user.organization_id)
 
+    # Convert internal model to response schema so we can call .redacted()
+    response = OrganizationSettingsResponse.model_validate(
+        settings, from_attributes=True
+    )
+
     # SEC: Redact secrets (OAuth client secrets, SMTP passwords, etc.)
     # before returning to the client to prevent credential exfiltration.
-    redacted = settings.redacted()
+    redacted = response.redacted()
 
     # Return as dict so FastAPI's response_model validation preserves
     # extra fields (e.g. station_mode).  Pydantic V2 drops __pydantic_extra__
@@ -109,9 +115,12 @@ async def update_organization_settings(
             username=current_user.username,
         )
 
-        # SEC: Redact secrets before returning to the client.
+        # Convert internal model to response schema and redact secrets.
         # Return as dict to preserve extra fields (see GET /settings comment).
-        return updated_settings.redacted().model_dump()
+        response = OrganizationSettingsResponse.model_validate(
+            updated_settings, from_attributes=True
+        )
+        return response.redacted().model_dump()
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)

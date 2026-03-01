@@ -745,9 +745,9 @@ class TestAlembicMigrationChain:
 
             # Extract revision and down_revision
             import re
-            rev_match = re.search(r"^revision\s*[:=]\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE)
-            down_match = re.search(r"^down_revision\s*[:=]\s*['\"]([^'\"]*)['\"]", content, re.MULTILINE)
-            down_none_match = re.search(r"^down_revision\s*[:=]\s*None", content, re.MULTILINE)
+            rev_match = re.search(r"^revision(?:\s*:\s*\w+)?\s*=\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE)
+            down_match = re.search(r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*['\"]([^'\"]*)['\"]", content, re.MULTILINE)
+            down_none_match = re.search(r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*None", content, re.MULTILINE)
 
             if rev_match:
                 revision = rev_match.group(1)

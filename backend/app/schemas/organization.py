@@ -89,6 +89,14 @@ _FILE_STORAGE_SECRET_FIELDS = frozenset(
     }
 )
 
+_AUTH_SECRET_FIELDS = frozenset(
+    {
+        "google_client_secret",
+        "microsoft_client_secret",
+        "authentik_client_secret",
+    }
+)
+
 # Prefix that marks a value as already encrypted (avoids double-encryption)
 _ENC_PREFIX = "enc:"
 
@@ -110,6 +118,7 @@ def encrypt_settings_secrets(settings_dict: dict) -> dict:
     for section_key, secret_fields in [
         ("email_service", _EMAIL_SECRET_FIELDS),
         ("file_storage", _FILE_STORAGE_SECRET_FIELDS),
+        ("auth", _AUTH_SECRET_FIELDS),
     ]:
         section = result.get(section_key)
         if not isinstance(section, dict):
@@ -143,6 +152,7 @@ def decrypt_settings_secrets(settings_dict: dict) -> dict:
     for section_key, secret_fields in [
         ("email_service", _EMAIL_SECRET_FIELDS),
         ("file_storage", _FILE_STORAGE_SECRET_FIELDS),
+        ("auth", _AUTH_SECRET_FIELDS),
     ]:
         section = result.get(section_key)
         if not isinstance(section, dict):
@@ -497,6 +507,16 @@ class AuthSettings(BaseModel):
         """Check if local password authentication is enabled"""
         return self.provider == "local"
 
+    def redacted(self) -> "AuthSettings":
+        """Return a copy with secret fields replaced by redaction markers."""
+        return self.model_copy(
+            update={
+                "google_client_secret": _redact(self.google_client_secret),
+                "microsoft_client_secret": _redact(self.microsoft_client_secret),
+                "authentik_client_secret": _redact(self.authentik_client_secret),
+            }
+        )
+
 
 class ModuleSettings(BaseModel):
     """Settings for module enablement across the organization.
@@ -721,6 +741,7 @@ class OrganizationSettingsResponse(BaseModel):
             update={
                 "email_service": self.email_service.redacted(),
                 "file_storage": self.file_storage.redacted(),
+                "auth": self.auth.redacted(),
             }
         )
 

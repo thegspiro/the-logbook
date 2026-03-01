@@ -60,8 +60,8 @@ class TestTableRegistration:
     REQUIRED_TABLES = [
         "organizations",
         "users",
-        "roles",
-        "user_roles",
+        "positions",
+        "user_positions",
         "sessions",
         "audit_logs",
         "audit_log_checkpoints",
@@ -775,6 +775,7 @@ class TestSchemaCrossReferences:
             "onboarding_status",       # System singleton
             "onboarding_checklist",    # System-wide checklist
             "onboarding_sessions",     # Temporary session storage
+            "security_alerts",         # Append-only, references user by string ID
         }
 
         # Build a set of tables that are referenced by FKs
