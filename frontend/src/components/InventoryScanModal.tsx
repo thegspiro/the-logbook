@@ -498,7 +498,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
             <div className="flex justify-end">
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="btn-primary"
               >
                 Done
               </button>
@@ -611,7 +611,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                   <button
                     type="submit"
                     disabled={!manualCode.trim() || lookupLoading}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    className="btn-primary disabled:cursor-not-allowed text-sm"
                   >
                     {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
                   </button>
@@ -749,7 +749,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 <button
                   onClick={confirmAndSubmit}
                   disabled={submitting}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm"
+                  className="btn-primary flex gap-2 items-center text-sm"
                 >
                   {submitting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -780,7 +780,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 <button onClick={() => setShowConfirm(false)} className="px-3 py-1.5 border border-theme-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-secondary text-sm">
                   Cancel
                 </button>
-                <button onClick={() => { void handleSubmit(); }} className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+                <button onClick={() => { void handleSubmit(); }} className="btn-primary px-3 py-1.5 text-sm">
                   Confirm
                 </button>
               </div>

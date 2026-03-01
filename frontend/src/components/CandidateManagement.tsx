@@ -235,7 +235,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
               setMemberSearch('');
               setError(null);
             }}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+            className="btn-info rounded-md text-sm"
           >
             {showAddForm ? 'Cancel' : '+ Add Candidate'}
           </button>
@@ -250,7 +250,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
       {/* Add Candidate Form */}
       {showAddForm && (
-        <div className="mb-6 p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+        <div className="card-secondary mb-6 p-4">
           <h4 className="text-sm font-semibold text-theme-text-primary mb-3">Add New Candidate</h4>
           <div className="space-y-3">
             {/* Member Search */}
@@ -366,7 +366,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 type="button"
                 onClick={() => { void handleAdd(); }}
                 disabled={submitting || !formData.name.trim()}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="btn-info rounded-md text-sm"
               >
                 {submitting ? 'Adding...' : 'Add Candidate'}
               </button>
@@ -425,7 +425,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                             type="button"
                             onClick={() => { void handleEdit(candidate.id); }}
                             disabled={submitting}
-                            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                            className="btn-info rounded px-3 py-1 text-sm"
                           >
                             Save
                           </button>

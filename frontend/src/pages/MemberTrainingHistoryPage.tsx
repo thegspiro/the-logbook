@@ -222,7 +222,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6">
+        <div className="card mb-6 p-4">
           <div className="flex flex-wrap gap-4 items-center">
             {/* Search */}
             <div className="flex-1 min-w-[200px]">
@@ -231,7 +231,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 placeholder="Search courses..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input dark:placeholder-slate-400 placeholder-slate-500"
               />
             </div>
 
@@ -270,7 +270,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         </div>
 
         {/* Training Records List */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
+        <div className="card overflow-hidden">
           {filteredTrainings.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-theme-text-muted">No training records found.</p>
@@ -406,7 +406,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
   };
 
   return (
-    <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+    <div className="card p-4">
       <p className="text-theme-text-muted text-xs uppercase font-medium">{label}</p>
       <p className={`text-2xl font-bold mt-1 ${color ? colorClasses[color] : 'text-theme-text-primary'}`}>
         {value}

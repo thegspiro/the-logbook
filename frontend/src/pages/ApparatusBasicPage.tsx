@@ -214,7 +214,7 @@ export default function ApparatusBasicPage() {
           </p>
         </div>
         <button onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+          className="btn-primary flex gap-2 items-center py-2.5"
         >
           <Plus className="w-4 h-4" /> Add Apparatus
         </button>
@@ -233,7 +233,7 @@ export default function ApparatusBasicPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
         <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search apparatus..."
-          className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+          className="form-input pl-10 placeholder-theme-text-muted pr-4 py-2.5"
         />
       </div>
 
@@ -248,7 +248,7 @@ export default function ApparatusBasicPage() {
             Add your department's vehicles to start building shift assignments with crew positions.
           </p>
           <button onClick={openCreate}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            className="btn-primary gap-2 inline-flex items-center py-2.5"
           >
             <Plus className="w-4 h-4" /> Add First Apparatus
           </button>
@@ -393,7 +393,7 @@ export default function ApparatusBasicPage() {
             <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">Cancel</button>
               <button onClick={() => { void handleSave(); }} disabled={isSaving || !form.unit_number.trim() || !form.name.trim()}
-                className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="btn-primary flex gap-2 items-center px-5"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {editing ? 'Update' : 'Add Apparatus'}

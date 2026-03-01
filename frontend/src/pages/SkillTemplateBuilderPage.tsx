@@ -567,7 +567,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               {isEditing && (
                 <button
                   onClick={() => void handlePublish()}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+                  className="btn-success flex font-medium gap-2 items-center"
                 >
                   <Send className="w-4 h-4" />
                   Publish
@@ -739,7 +739,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           <button
             onClick={() => void handleSave()}
             disabled={isSaving}
-            className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
+            className="btn-primary flex font-medium gap-2 items-center px-6"
           >
             <Save className="w-4 h-4" />
             {isSaving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Template'}

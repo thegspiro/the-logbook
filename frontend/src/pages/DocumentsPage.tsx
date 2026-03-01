@@ -292,19 +292,19 @@ const DocumentsPage: React.FC = () => {
         {/* Summary Stats */}
         {summary && (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Documents</p>
               <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary.total_documents}</p>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Folders</p>
               <p className="text-amber-700 dark:text-amber-400 text-2xl font-bold mt-1">{summary.total_folders}</p>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Size</p>
               <p className="text-blue-700 dark:text-blue-400 text-2xl font-bold mt-1">{formatFileSize(summary.total_size_bytes)}</p>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">This Month</p>
               <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary.documents_this_month}</p>
             </div>
@@ -312,7 +312,7 @@ const DocumentsPage: React.FC = () => {
         )}
 
         {/* Search & View Toggle */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6" role="search" aria-label="Search documents">
+        <div className="card mb-6 p-4" role="search" aria-label="Search documents">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="relative flex-1 w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
@@ -323,7 +323,7 @@ const DocumentsPage: React.FC = () => {
                 placeholder={selectedFolder ? 'Search documents in this folder...' : 'Select a folder to browse documents...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="form-input focus:ring-amber-500 pl-10 placeholder-theme-text-muted pr-4"
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -368,7 +368,7 @@ const DocumentsPage: React.FC = () => {
                   <button
                     key={folder.id}
                     onClick={() => handleFolderSelect(folder.id)}
-                    className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border text-left hover:bg-theme-surface-hover hover:border-amber-500/30 transition-all group"
+                    className="stat-card group hover:bg-theme-surface-hover hover:border-amber-500/30 text-left transition-all"
                   >
                     <div className="flex items-start space-x-3">
                       <FolderOpen className={`w-8 h-8 ${folder.color || 'text-amber-400'} group-hover:scale-110 transition-transform`} />
@@ -382,7 +382,7 @@ const DocumentsPage: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border text-center">
+              <div className="card p-8 text-center">
                 <FolderOpen className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
                 <p className="text-theme-text-secondary">No folders yet. Create a folder to get started.</p>
               </div>
@@ -394,7 +394,7 @@ const DocumentsPage: React.FC = () => {
         {selectedFolder && (
           <>
             {documentsLoading ? (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+              <div className="card p-12 text-center">
                 <Loader2 className="w-10 h-10 text-amber-400 animate-spin mx-auto mb-4" />
                 <p className="text-theme-text-secondary text-sm">Loading documents...</p>
               </div>
@@ -404,7 +404,7 @@ const DocumentsPage: React.FC = () => {
                   {filteredDocuments.map((doc) => (
                     <div
                       key={doc.id}
-                      className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:bg-theme-surface-hover transition-all group"
+                      className="stat-card group hover:bg-theme-surface-hover transition-all"
                     >
                       <div className="flex items-start space-x-3">
                         <File className="w-8 h-8 text-amber-400 flex-shrink-0" />
@@ -441,7 +441,7 @@ const DocumentsPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
+                <div className="card overflow-hidden overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-theme-surface-border">
@@ -491,7 +491,7 @@ const DocumentsPage: React.FC = () => {
                 </div>
               )
             ) : (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+              <div className="card p-12 text-center">
                 <FolderOpen className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Documents in This Folder</h3>
                 <p className="text-theme-text-secondary mb-6">
@@ -513,7 +513,7 @@ const DocumentsPage: React.FC = () => {
 
         {/* Empty State - No folder selected and no folders exist */}
         {!selectedFolder && folders.length === 0 && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+          <div className="card p-12 text-center">
             <FolderOpen className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Documents Yet</h3>
             <p className="text-theme-text-secondary mb-6">
@@ -574,7 +574,7 @@ const DocumentsPage: React.FC = () => {
                         type="text"
                         value={uploadForm.name}
                         onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="form-input focus:ring-amber-500"
                         placeholder="Optional - defaults to file name"
                       />
                     </div>
@@ -586,7 +586,7 @@ const DocumentsPage: React.FC = () => {
                         rows={2}
                         value={uploadForm.description}
                         onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="form-input focus:ring-amber-500"
                         placeholder="Optional description"
                       />
                     </div>
@@ -597,7 +597,7 @@ const DocumentsPage: React.FC = () => {
                         id="upload-folder"
                         value={uploadForm.folder}
                         onChange={(e) => setUploadForm({ ...uploadForm, folder: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="form-input focus:ring-amber-500"
                       >
                         {folders.map((f) => (
                           <option key={f.id} value={f.id}>{f.name}</option>
@@ -659,7 +659,7 @@ const DocumentsPage: React.FC = () => {
                         required
                         value={folderForm.name}
                         onChange={(e) => setFolderForm({ ...folderForm, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="form-input focus:ring-amber-500"
                         placeholder="e.g., Safety Bulletins"
                       />
                     </div>
@@ -670,7 +670,7 @@ const DocumentsPage: React.FC = () => {
                         rows={2}
                         value={folderForm.description}
                         onChange={(e) => setFolderForm({ ...folderForm, description: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="form-input focus:ring-amber-500"
                       />
                     </div>
                   </div>
@@ -729,7 +729,7 @@ const DocumentsPage: React.FC = () => {
                   <button
                     onClick={() => { void handleDeleteDocument(deleteConfirm); }}
                     disabled={actionLoading}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
+                    className="btn-primary inline-flex items-center space-x-2"
                   >
                     {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                     <span>Delete</span>

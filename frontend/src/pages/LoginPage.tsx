@@ -287,7 +287,7 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading || lockoutRemaining > 0}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary disabled:cursor-not-allowed flex font-medium group justify-center relative rounded-md text-sm w-full"
             >
               {isLoading ? (
                 <>

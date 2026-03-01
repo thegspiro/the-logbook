@@ -649,7 +649,7 @@ export const ReportsPage: React.FC = () => {
       </div>
 
       {/* Date Range Picker */}
-      <div className="mb-6 bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
+      <div className="card-secondary mb-6 p-4">
         <div className="flex items-center space-x-2 mb-3">
           <CalendarIcon className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
           <span className="text-sm font-medium text-theme-text-secondary">Reporting Period</span>
@@ -723,11 +723,11 @@ export const ReportsPage: React.FC = () => {
           return (
             <div
               key={report.id}
-              className={`bg-theme-surface-secondary backdrop-blur-sm border border-theme-surface-border rounded-lg p-6 transition-all ${
-                report.available
-                  ? 'hover:bg-theme-surface hover:border-theme-surface-border cursor-pointer'
-                  : 'opacity-60 cursor-not-allowed'
-              }`}
+              className={`card-secondary backdrop-blur-sm p-6 transition-all ${
+ report.available
+ ? 'hover:bg-theme-surface hover:border-theme-surface-border cursor-pointer'
+ : 'opacity-60 cursor-not-allowed'
+ }`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="w-12 h-12 bg-red-600/20 rounded-lg flex items-center justify-center">
@@ -748,7 +748,7 @@ export const ReportsPage: React.FC = () => {
               {report.available && (
                 <button
                   disabled={isGenerating}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-70 disabled:cursor-wait text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="btn-primary disabled:cursor-wait disabled:opacity-70 flex font-medium items-center justify-center space-x-2 text-sm w-full"
                   onClick={() => { void handleGenerateReport(report); }}
                 >
                   {isGenerating ? (

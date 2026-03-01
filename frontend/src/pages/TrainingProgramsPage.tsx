@@ -103,7 +103,7 @@ const TrainingProgramsPage: React.FC = () => {
           {activeTab === 'programs' && (
             <button
               onClick={() => navigate('/training/programs/new')}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              className="btn-primary flex items-center space-x-2"
             >
               <Plus className="w-5 h-5" aria-hidden="true" />
               <span>New Pipeline</span>
@@ -168,7 +168,7 @@ const TrainingProgramsPage: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={`Search ${activeTab}...`}
-              className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input pl-10 pr-4"
             />
           </div>
         </div>
@@ -192,7 +192,7 @@ const TrainingProgramsPage: React.FC = () => {
                     {!searchTerm && activeTab === 'programs' && (
                       <button
                         onClick={() => navigate('/training/programs/new')}
-                        className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        className="btn-primary mt-4"
                       >
                         Create Your First Pipeline
                       </button>

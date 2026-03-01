@@ -417,7 +417,7 @@ export const MembersAdminPage: React.FC = () => {
         {canCreateMembers && (
           <Link
             to="/admin/members/add"
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring"
+            className="btn-primary font-medium inline-flex items-center rounded-md text-sm"
           >
             <svg
               className="-ml-1 mr-2 h-5 w-5"
@@ -681,7 +681,7 @@ export const MembersAdminPage: React.FC = () => {
             <button
               onClick={() => { void handleSaveProfile(); }}
               disabled={savingProfile}
-              className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+              className="btn-info focus:ring-offset-[var(--ring-offset-bg)] font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
             >
               {savingProfile ? 'Saving...' : 'Save Changes'}
             </button>
@@ -812,7 +812,7 @@ export const MembersAdminPage: React.FC = () => {
             <button
               onClick={() => { void handleResetPassword(); }}
               disabled={savingReset || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
-              className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+              className="btn-warning focus:ring-offset-[var(--ring-offset-bg)] font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
             >
               {savingReset ? 'Resetting...' : 'Reset Password'}
             </button>
@@ -861,7 +861,7 @@ export const MembersAdminPage: React.FC = () => {
               type="checkbox"
               checked={resetForceChange}
               onChange={(e) => setResetForceChange(e.target.checked)}
-              className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+              className="form-checkbox border-theme-surface-border"
               disabled={savingReset}
             />
             <span className="text-sm text-theme-text-secondary">
@@ -885,7 +885,7 @@ export const MembersAdminPage: React.FC = () => {
             <button
               onClick={() => { void handleSaveRoles(); }}
               disabled={saving}
-              className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+              className="btn-info focus:ring-offset-[var(--ring-offset-bg)] font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
@@ -913,7 +913,7 @@ export const MembersAdminPage: React.FC = () => {
                 type="checkbox"
                 checked={selectedRoleIds.includes(role.id)}
                 onChange={() => handleToggleRole(role.id)}
-                className="mt-1 h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                className="form-checkbox border-theme-surface-border mt-1"
               />
               <div className="ml-3">
                 <div className="flex items-center gap-2">
@@ -945,7 +945,7 @@ export const MembersAdminPage: React.FC = () => {
             <button
               onClick={() => { void handleSaveMembers(); }}
               disabled={saving}
-              className="w-full sm:w-auto sm:ml-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-[var(--ring-offset-bg)] disabled:opacity-50"
+              className="btn-info focus:ring-offset-[var(--ring-offset-bg)] font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
@@ -973,7 +973,7 @@ export const MembersAdminPage: React.FC = () => {
                 type="checkbox"
                 checked={selectedUserIds.includes(user.id)}
                 onChange={() => handleToggleUser(user.id)}
-                className="mt-1 h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                className="form-checkbox border-theme-surface-border mt-1"
               />
               <div className="ml-3 flex items-center gap-2">
                 <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">

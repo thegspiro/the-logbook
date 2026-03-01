@@ -383,7 +383,7 @@ const ImportMembers: React.FC = () => {
           <div className="mt-4 pt-4 border-t border-blue-500/30">
             <button
               onClick={downloadTemplate}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              className="btn-info flex items-center space-x-2"
             >
               <Download className="w-4 h-4" />
               <span>Download CSV Template</span>
@@ -392,7 +392,7 @@ const ImportMembers: React.FC = () => {
         </div>
 
         {/* File Upload */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border mb-8">
+        <div className="card mb-8 p-8">
           <h2 className="text-theme-text-primary font-bold mb-4">Step 1: Upload CSV File</h2>
 
           <div
@@ -444,7 +444,7 @@ const ImportMembers: React.FC = () => {
 
         {/* Preview */}
         {previewData.length > 0 && !importResult && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border mb-8">
+          <div className="card mb-8 p-8">
             <h2 className="text-theme-text-primary font-bold mb-4">Step 2: Preview Data</h2>
             <p className="text-theme-text-secondary text-sm mb-4">
               Showing first {previewData.length} members from the file
@@ -503,7 +503,7 @@ const ImportMembers: React.FC = () => {
 
         {/* Import Results */}
         {importResult && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border">
+          <div className="card p-8">
             <div className="text-center mb-6">
               <CheckCircle className="w-16 h-16 text-green-700 dark:text-green-400 mx-auto mb-4" />
               <h2 className="text-theme-text-primary text-2xl font-bold mb-2">Import Complete!</h2>
@@ -539,7 +539,7 @@ const ImportMembers: React.FC = () => {
             <div className="flex items-center justify-center space-x-3">
               <button
                 onClick={() => navigate('/members')}
-                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                className="btn-info flex items-center px-6 py-3 space-x-2"
               >
                 <span>View Members</span>
                 <ArrowRight className="w-4 h-4" />

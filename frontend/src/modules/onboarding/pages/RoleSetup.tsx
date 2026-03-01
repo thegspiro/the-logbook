@@ -757,7 +757,7 @@ const PositionSetup: React.FC = () => {
           </div>
 
           {/* Stats Bar */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6 flex items-center justify-between flex-wrap gap-4">
+          <div className="card flex flex-wrap gap-4 items-center justify-between mb-6 p-4">
             <div className="flex items-center space-x-4">
               <div className="text-theme-text-primary">
                 <span className="text-2xl font-bold">{selectedCount}</span>
@@ -792,7 +792,7 @@ const PositionSetup: React.FC = () => {
               <h2 className="text-theme-text-primary font-bold text-lg mb-4">Available Position Templates</h2>
 
               {Object.entries(positionTemplates).map(([categoryId, category]) => (
-                <div key={categoryId} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border overflow-hidden">
+                <div key={categoryId} className="card-secondary overflow-hidden">
                   <button
                     onClick={() => toggleCategory(categoryId)}
                     className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-theme-surface-hover transition-colors"
@@ -988,7 +988,7 @@ const PositionSetup: React.FC = () => {
           </div>
 
           {/* Progress */}
-          <div className="mt-8 bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="card mt-8 p-6">
             <ProgressIndicator currentStep={9} totalSteps={10} />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
@@ -1020,7 +1020,7 @@ const PositionSetup: React.FC = () => {
                   placeholder="e.g., Social Media Manager"
                   required
                   aria-required="true"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
 
@@ -1034,7 +1034,7 @@ const PositionSetup: React.FC = () => {
                   value={customPositionDescription}
                   onChange={(e) => setCustomPositionDescription(e.target.value)}
                   placeholder="Brief description of this position"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
             </div>

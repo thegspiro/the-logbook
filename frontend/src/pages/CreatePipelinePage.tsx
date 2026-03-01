@@ -254,7 +254,7 @@ const StepInfo: React.FC<{
         id="is-template"
         checked={data.is_template}
         onChange={(e) => onChange('is_template', e.target.checked)}
-        className="w-4 h-4 text-red-500 bg-theme-input-bg border-theme-input-border rounded focus:ring-theme-focus-ring"
+        className="form-checkbox"
       />
       <label htmlFor="is-template" className="text-sm text-theme-text-secondary">
         Save as template (can be cloned for future use)
@@ -278,7 +278,7 @@ const StepPhases: React.FC<{
       </div>
       <button
         onClick={onAdd}
-        className="flex items-center space-x-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+        className="btn-primary flex items-center px-3 space-x-1 text-sm"
       >
         <Plus className="w-4 h-4" />
         <span>Add Phase</span>
@@ -286,13 +286,13 @@ const StepPhases: React.FC<{
     </div>
 
     {phases.length === 0 ? (
-      <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-dashed border-theme-surface-border">
+      <div className="card-secondary border-dashed py-12 text-center">
         <Layers className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
         <p className="text-theme-text-muted mb-2">No phases defined yet</p>
         <p className="text-theme-text-muted text-sm mb-4">Add phases to structure your training pipeline</p>
         <button
           onClick={onAdd}
-          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+          className="btn-primary text-sm"
         >
           Add First Phase
         </button>
@@ -367,7 +367,7 @@ const StepPhases: React.FC<{
                         type="checkbox"
                         checked={phase.requires_manual_advancement}
                         onChange={(e) => onUpdate(phase.id, 'requires_manual_advancement', e.target.checked)}
-                        className="w-4 h-4 text-red-500 bg-theme-input-bg border-theme-input-border rounded"
+                        className="form-checkbox"
                       />
                       <span>Require officer approval to advance</span>
                     </label>
@@ -395,7 +395,7 @@ const StepRequirements: React.FC<{
     </div>
 
     {phases.length === 0 ? (
-      <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-dashed border-theme-surface-border">
+      <div className="card-secondary border-dashed py-12 text-center">
         <ListChecks className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
         <p className="text-theme-text-muted">Add phases first before defining requirements.</p>
       </div>
@@ -594,7 +594,7 @@ const StepMilestones: React.FC<{
     </div>
 
     {phases.length === 0 ? (
-      <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-dashed border-theme-surface-border">
+      <div className="card-secondary border-dashed py-12 text-center">
         <Flag className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
         <p className="text-theme-text-muted">Add phases first before defining milestones.</p>
       </div>
@@ -1091,7 +1091,7 @@ const CreatePipelinePage: React.FC = () => {
         </div>
 
         {/* Step content */}
-        <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-6 mb-6">
+        <div className="card-secondary mb-6 p-6">
           {error && (
             <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded mb-4">
               {error}
@@ -1143,7 +1143,7 @@ const CreatePipelinePage: React.FC = () => {
             <button
               onClick={() => { void handleSubmit(); }}
               disabled={isSubmitting || !info.name.trim()}
-              className="flex items-center space-x-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              className="btn-primary flex items-center px-6 space-x-2"
             >
               {isSubmitting ? (
                 <>
@@ -1161,7 +1161,7 @@ const CreatePipelinePage: React.FC = () => {
             <button
               onClick={goNext}
               disabled={!canGoNext()}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              className="btn-primary flex items-center space-x-2"
             >
               <span>Next</span>
               <ArrowRight className="w-4 h-4" />

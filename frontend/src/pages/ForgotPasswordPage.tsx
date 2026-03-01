@@ -55,7 +55,7 @@ export const ForgotPasswordPage: React.FC = () => {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
-          <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-8 text-center">
+          <div className="card p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-500/20 mb-4">
               <CheckCircle className="h-10 w-10 text-green-700 dark:text-green-400" aria-hidden="true" />
             </div>
@@ -92,7 +92,7 @@ export const ForgotPasswordPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-8">
+        <div className="card p-8">
           <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
             {error && (
               <div className="rounded-md bg-red-500/20 border border-red-500/50 p-4" role="alert" aria-live="polite">
@@ -136,7 +136,7 @@ export const ForgotPasswordPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading || cooldown > 0}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="btn-primary disabled:cursor-not-allowed flex font-medium justify-center rounded-md text-sm w-full"
               >
                 {isLoading ? (
                   <>

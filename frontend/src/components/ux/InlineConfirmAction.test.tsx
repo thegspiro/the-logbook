@@ -61,7 +61,6 @@ describe('InlineConfirmAction', () => {
   });
 
   it('should show loading spinner when loading=true', async () => {
-    const user = userEvent.setup();
     render(<InlineConfirmAction {...defaultProps} loading={true} isOpen={true} />);
 
     // Yes button should be disabled with a spinner
@@ -84,7 +83,6 @@ describe('InlineConfirmAction', () => {
   });
 
   it('should use amber variant styling', async () => {
-    const user = userEvent.setup();
     render(<InlineConfirmAction {...defaultProps} variant="amber" isOpen={true} />);
 
     const label = screen.getByText('Remove?');

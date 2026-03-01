@@ -214,7 +214,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
               placeholder="Search by item or member name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input pl-10 placeholder-theme-text-muted pr-4"
             />
           </div>
         </div>
@@ -222,7 +222,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
         {/* Content */}
         <div role="tabpanel">
           {filteredList.length === 0 ? (
-            <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-8 text-center">
+            <div className="card-secondary p-8 text-center">
               <Package className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-lg font-semibold text-theme-text-primary mb-2">
                 {activeTab === 'active' ? 'No Active Checkouts' : 'No Overdue Checkouts'}
@@ -234,7 +234,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border overflow-hidden">
+            <div className="card-secondary overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -284,7 +284,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => openCheckInModal(checkout.checkout_id, checkout.item_name)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+                              className="btn-info flex gap-1.5 items-center px-3 py-1.5 text-xs"
                             >
                               <ArrowDownToLine className="w-3.5 h-3.5" aria-hidden="true" />
                               Check In
@@ -339,7 +339,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                         id="return-condition"
                         value={returnCondition}
                         onChange={(e) => setReturnCondition(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input"
                       >
                         <option value="new">New</option>
                         <option value="good">Good</option>
@@ -359,7 +359,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                         value={damageNotes}
                         onChange={(e) => setDamageNotes(e.target.value)}
                         placeholder="Describe any damage or issues..."
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input"
                       />
                     </div>
                   </div>
@@ -375,7 +375,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                   <button
                     onClick={() => { void handleCheckIn(); }}
                     disabled={submitting}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 inline-flex items-center space-x-2"
+                    className="btn-info inline-flex items-center space-x-2"
                   >
                     {submitting && <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />}
                     <span>{submitting ? 'Checking In...' : 'Check In'}</span>
@@ -414,7 +414,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                       value={extendDate}
                       min={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setExtendDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="form-input focus:ring-emerald-500"
                     />
                   </div>
                 </div>

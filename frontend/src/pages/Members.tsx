@@ -282,30 +282,30 @@ const Members: React.FC = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Members</p>
             <p className="text-theme-text-primary text-2xl font-bold mt-1">{stats.total}</p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Active</p>
             <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{stats.active}</p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Inactive</p>
             <p className="text-theme-text-muted text-2xl font-bold mt-1">{stats.inactive}</p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">On Leave</p>
             <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">{stats.onLeave}</p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Retired</p>
             <p className="text-blue-700 dark:text-blue-400 text-2xl font-bold mt-1">{stats.retired}</p>
           </div>
         </div>
 
         {/* Actions Bar */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6">
+        <div className="card mb-6 p-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Search */}
             <div className="relative flex-1 w-full md:max-w-md">
@@ -315,7 +315,7 @@ const Members: React.FC = () => {
                 placeholder="Search by name, membership number, or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input pl-10 placeholder-theme-text-muted pr-4"
               />
             </div>
 
@@ -347,7 +347,7 @@ const Members: React.FC = () => {
               </button>
               <button
                 onClick={() => navigate('/members/add')}
-                className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex-1 md:flex-none"
+                className="btn-info flex flex-1 items-center justify-center md:flex-none px-3 sm:px-4 space-x-2"
               >
                 <UserPlus className="w-4 h-4" />
                 <span className="hidden sm:inline">Add Member</span>
@@ -397,7 +397,7 @@ const Members: React.FC = () => {
             {paginatedMembers.map((member) => (
               <div
                 key={member.id}
-                className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-4"
+                className="card p-4"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center min-w-0 flex-1">
@@ -491,7 +491,7 @@ const Members: React.FC = () => {
           )}
 
           {/* Desktop table view */}
-          <div className="hidden md:block bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
+          <div className="card hidden md:block overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-theme-input-bg border-b border-theme-surface-border">

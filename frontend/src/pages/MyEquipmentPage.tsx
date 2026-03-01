@@ -210,7 +210,7 @@ const MyEquipmentPage: React.FC = () => {
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-8 text-center">
             <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <p className="text-red-700 dark:text-red-300">{error}</p>
-            <button onClick={() => { void loadData(); }} className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg">Retry</button>
+            <button onClick={() => { void loadData(); }} className="btn-primary mt-4">Retry</button>
           </div>
         </main>
       </div>
@@ -336,7 +336,7 @@ const MyEquipmentPage: React.FC = () => {
                             <div className="flex items-center gap-1.5">
                               <button
                                 onClick={() => setCheckInModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name })}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+                                className="btn-info flex gap-1.5 items-center px-3 py-1.5 text-xs"
                               >
                                 <ArrowDownToLine className="w-3.5 h-3.5" /> Return
                               </button>
@@ -469,7 +469,7 @@ const MyEquipmentPage: React.FC = () => {
                           onChange={(e) => handleItemSearchChange(e.target.value)}
                           onFocus={() => { if (itemResults.length > 0) setShowDropdown(true); }}
                           onBlur={() => { setTimeout(() => setShowDropdown(false), 200); }}
-                          className="w-full pl-9 pr-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="form-input focus:ring-emerald-500 pl-9 pr-3"
                           placeholder="Search inventory items..."
                         />
                         {searchingItems && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted animate-spin" />}
@@ -503,7 +503,7 @@ const MyEquipmentPage: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label htmlFor="req-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Request Type</label>
-                        <select id="req-type" value={requestForm.request_type} onChange={(e) => setRequestForm({ ...requestForm, request_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <select id="req-type" value={requestForm.request_type} onChange={(e) => setRequestForm({ ...requestForm, request_type: e.target.value })} className="form-input focus:ring-emerald-500">
                           <option value="checkout">Checkout</option>
                           <option value="issuance">Issuance</option>
                           <option value="purchase">Purchase</option>
@@ -511,7 +511,7 @@ const MyEquipmentPage: React.FC = () => {
                       </div>
                       <div>
                         <label htmlFor="req-priority" className="block text-sm font-medium text-theme-text-secondary mb-1">Priority</label>
-                        <select id="req-priority" value={requestForm.priority} onChange={(e) => setRequestForm({ ...requestForm, priority: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <select id="req-priority" value={requestForm.priority} onChange={(e) => setRequestForm({ ...requestForm, priority: e.target.value })} className="form-input focus:ring-emerald-500">
                           <option value="low">Low</option>
                           <option value="normal">Normal</option>
                           <option value="high">High</option>
@@ -520,11 +520,11 @@ const MyEquipmentPage: React.FC = () => {
                     </div>
                     <div>
                       <label htmlFor="req-quantity" className="block text-sm font-medium text-theme-text-secondary mb-1">Quantity</label>
-                      <input id="req-quantity" type="number" min="1" value={requestForm.quantity} onChange={(e) => setRequestForm({ ...requestForm, quantity: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                      <input id="req-quantity" type="number" min="1" value={requestForm.quantity} onChange={(e) => setRequestForm({ ...requestForm, quantity: parseInt(e.target.value) || 1 })} className="form-input focus:ring-emerald-500" />
                     </div>
                     <div>
                       <label htmlFor="req-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason (optional)</label>
-                      <textarea id="req-reason" rows={2} value={requestForm.reason} onChange={(e) => setRequestForm({ ...requestForm, reason: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Why do you need this?" />
+                      <textarea id="req-reason" rows={2} value={requestForm.reason} onChange={(e) => setRequestForm({ ...requestForm, reason: e.target.value })} className="form-input focus:ring-emerald-500" placeholder="Why do you need this?" />
                     </div>
                   </div>
                 </div>
@@ -550,7 +550,7 @@ const MyEquipmentPage: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="my-return-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Return Condition *</label>
-                      <select id="my-return-condition" value={returnCondition} onChange={(e) => setReturnCondition(e.target.value)} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring">
+                      <select id="my-return-condition" value={returnCondition} onChange={(e) => setReturnCondition(e.target.value)} className="form-input">
                         <option value="excellent">Excellent</option>
                         <option value="good">Good</option>
                         <option value="fair">Fair</option>
@@ -560,13 +560,13 @@ const MyEquipmentPage: React.FC = () => {
                     </div>
                     <div>
                       <label htmlFor="my-damage-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes (optional)</label>
-                      <textarea id="my-damage-notes" rows={3} value={damageNotes} onChange={(e) => setDamageNotes(e.target.value)} placeholder="Describe any damage or issues..." className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring" />
+                      <textarea id="my-damage-notes" rows={3} value={damageNotes} onChange={(e) => setDamageNotes(e.target.value)} placeholder="Describe any damage or issues..." className="form-input" />
                     </div>
                   </div>
                 </div>
                 <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={() => { void handleCheckIn(); }} disabled={submitting} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleCheckIn(); }} disabled={submitting} className="btn-info">
                     {submitting ? 'Returning...' : 'Return Item'}
                   </button>
                 </div>
@@ -595,7 +595,7 @@ const MyEquipmentPage: React.FC = () => {
                       value={extendDate}
                       min={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setExtendDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="form-input focus:ring-emerald-500"
                     />
                   </div>
                 </div>

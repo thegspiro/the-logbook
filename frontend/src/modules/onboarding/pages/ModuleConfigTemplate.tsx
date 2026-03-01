@@ -172,7 +172,7 @@ const ModuleConfigTemplate: React.FC = () => {
         </div>
 
         {/* Position Selection */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-6">
+        <div className="card mb-6 p-6">
           <h3 className="text-theme-text-primary font-bold text-lg mb-2">Who Can Manage {moduleName}?</h3>
           <p className="text-theme-text-muted text-sm mb-4">
             Select which positions should have management permissions. The System Owner (IT Manager) always has full access.

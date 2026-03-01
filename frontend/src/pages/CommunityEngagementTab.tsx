@@ -65,7 +65,7 @@ const CommunityEngagementTab: React.FC = () => {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-5">
+        <div className="card-secondary p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-blue-500/20 rounded-lg">
               <Calendar className="h-5 w-5 text-blue-400" />
@@ -76,7 +76,7 @@ const CommunityEngagementTab: React.FC = () => {
           <p className="text-xs text-theme-text-muted mt-1">Total events held</p>
         </div>
 
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-5">
+        <div className="card-secondary p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-green-500/20 rounded-lg">
               <Users className="h-5 w-5 text-green-400" />
@@ -87,7 +87,7 @@ const CommunityEngagementTab: React.FC = () => {
           <p className="text-xs text-theme-text-muted mt-1">Members who checked in</p>
         </div>
 
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-5">
+        <div className="card-secondary p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-purple-500/20 rounded-lg">
               <Globe className="h-5 w-5 text-purple-400" />
@@ -98,7 +98,7 @@ const CommunityEngagementTab: React.FC = () => {
           <p className="text-xs text-theme-text-muted mt-1">Community participants</p>
         </div>
 
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-5">
+        <div className="card-secondary p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-cyan-500/20 rounded-lg">
               <TrendingUp className="h-5 w-5 text-cyan-400" />
@@ -111,7 +111,7 @@ const CommunityEngagementTab: React.FC = () => {
       </div>
 
       {/* Summary section */}
-      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-6">
+      <div className="card-secondary p-6">
         <h3 className="text-md font-medium text-theme-text-primary mb-4">Engagement Summary</h3>
         <div className="space-y-3">
           <div className="flex justify-between items-center">

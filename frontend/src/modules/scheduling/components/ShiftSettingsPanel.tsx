@@ -15,10 +15,8 @@ import {
   Plus,
   X,
   AlertCircle,
-  Bell,
-  Loader2,
 } from "lucide-react";
-import type { ShiftTemplateRecord, BasicApparatusRecord } from "../services/api";
+import type { ShiftTemplateRecord } from "../services/api";
 import { SchedulingNotificationsPanel } from "./SchedulingNotificationsPanel";
 
 // ─── Built-in position options ───────────────────────────────────────────────
@@ -718,7 +716,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   defaultDurationHours: parseFloat(e.target.value) || 12,
                 }))
               }
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="form-input focus:ring-violet-500"
               min="1"
               max="48"
               step="0.5"
@@ -737,7 +735,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   defaultMinStaffing: parseInt(e.target.value, 10) || 1,
                 }))
               }
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="form-input focus:ring-violet-500"
               min="1"
               max="50"
             />
@@ -756,7 +754,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     parseInt(e.target.value, 10) || 48,
                 }))
               }
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="form-input focus:ring-violet-500"
               min="1"
               max="168"
             />

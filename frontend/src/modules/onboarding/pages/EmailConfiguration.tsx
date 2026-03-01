@@ -285,7 +285,7 @@ const EmailConfiguration: React.FC = () => {
                       value={config.googleClientId || ''}
                       onChange={(e) => handleInputChange('googleClientId', e.target.value)}
                       placeholder="123456789-abc.apps.googleusercontent.com"
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input placeholder-theme-text-muted py-3"
                     />
                   </div>
 
@@ -298,7 +298,7 @@ const EmailConfiguration: React.FC = () => {
                       value={config.googleClientSecret || ''}
                       onChange={(e) => handleInputChange('googleClientSecret', e.target.value)}
                       placeholder="GOCSPX-xxxxxxxxxxxxx"
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input placeholder-theme-text-muted py-3"
                     />
                   </div>
                 </div>
@@ -333,7 +333,7 @@ const EmailConfiguration: React.FC = () => {
                     value={config.fromEmail || ''}
                     onChange={(e) => handleInputChange('fromEmail', e.target.value)}
                     placeholder="notifications@yourdomain.com"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input placeholder-theme-text-muted py-3"
                   />
                 </div>
 
@@ -346,7 +346,7 @@ const EmailConfiguration: React.FC = () => {
                     value={config.googleAppPassword || ''}
                     onChange={(e) => handleInputChange('googleAppPassword', e.target.value)}
                     placeholder="xxxx xxxx xxxx xxxx"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input placeholder-theme-text-muted py-3"
                   />
                 </div>
 
@@ -400,7 +400,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.microsoftTenantId || ''}
                   onChange={(e) => handleInputChange('microsoftTenantId', e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
 
@@ -413,7 +413,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.microsoftClientId || ''}
                   onChange={(e) => handleInputChange('microsoftClientId', e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
 
@@ -426,7 +426,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.microsoftClientSecret || ''}
                   onChange={(e) => handleInputChange('microsoftClientSecret', e.target.value)}
                   placeholder="Client secret value"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
             </div>
@@ -465,7 +465,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.smtpHost || ''}
                   onChange={(e) => handleInputChange('smtpHost', e.target.value)}
                   placeholder="mail.yourdomain.com"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
 
@@ -479,7 +479,7 @@ const EmailConfiguration: React.FC = () => {
                     value={config.smtpPort || ''}
                     onChange={(e) => handleInputChange('smtpPort', e.target.value)}
                     placeholder="587"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input placeholder-theme-text-muted py-3"
                   />
                 </div>
 
@@ -490,7 +490,7 @@ const EmailConfiguration: React.FC = () => {
                   <select
                     value={config.smtpEncryption || 'tls'}
                     onChange={(e) => handleInputChange('smtpEncryption', e.target.value as 'tls' | 'ssl' | 'none')}
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input py-3"
                   >
                     <option value="tls">TLS (STARTTLS)</option>
                     <option value="ssl">SSL</option>
@@ -508,7 +508,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.smtpUsername || ''}
                   onChange={(e) => handleInputChange('smtpUsername', e.target.value)}
                   placeholder="notifications@yourdomain.com"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
 
@@ -521,7 +521,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.smtpPassword || ''}
                   onChange={(e) => handleInputChange('smtpPassword', e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
             </div>
@@ -569,7 +569,7 @@ const EmailConfiguration: React.FC = () => {
           </div>
 
           {/* Configuration Form */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border space-y-6">
+          <div className="card p-8 space-y-6">
             {/* Common Fields */}
             <div>
               <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
@@ -580,7 +580,7 @@ const EmailConfiguration: React.FC = () => {
                 value={config.fromEmail || ''}
                 onChange={(e) => handleInputChange('fromEmail', e.target.value)}
                 placeholder="notifications@yourdomain.com"
-                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input placeholder-theme-text-muted py-3"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Email address that notifications will be sent from
@@ -596,7 +596,7 @@ const EmailConfiguration: React.FC = () => {
                 value={config.fromName || ''}
                 onChange={(e) => handleInputChange('fromName', e.target.value)}
                 placeholder={departmentName}
-                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input placeholder-theme-text-muted py-3"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Display name for outgoing emails (defaults to department name)

@@ -156,7 +156,7 @@ const ModuleOverview: React.FC = () => {
           </div>
 
           {/* Stats Banner */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6 flex items-center justify-between">
+          <div className="card flex items-center justify-between mb-6 p-4">
             <div className="flex items-center space-x-4">
               <div className="text-theme-text-primary">
                 <span className="text-2xl font-bold">{enabledCount}</span>
@@ -217,7 +217,7 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                        className="btn-primary font-medium w-full"
                       >
                         Configure Now
                       </button>
@@ -259,7 +259,7 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
-                    className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border hover:border-blue-500/50 transition-all"
+                    className="card hover:border-blue-500/50 p-6 transition-all"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center space-x-3">
@@ -277,7 +277,7 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                        className="btn-info font-medium w-full"
                       >
                         Configure Now
                       </button>
@@ -319,7 +319,7 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
-                    className="bg-theme-surface-secondary backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-theme-surface-hover transition-all"
+                    className="card-secondary backdrop-blur-sm hover:border-theme-surface-hover p-5 transition-all"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center space-x-2">
@@ -352,7 +352,7 @@ const ModuleOverview: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="card p-6">
             <ProgressIndicator currentStep={10} totalSteps={10} />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>

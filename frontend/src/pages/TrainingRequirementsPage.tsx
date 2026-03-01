@@ -215,14 +215,14 @@ const TrainingRequirementsPage: React.FC = () => {
             </button>
             <button
               onClick={() => setShowTemplateModal(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
+              className="btn-info flex font-medium items-center space-x-2"
             >
               <Copy className="w-5 h-5" aria-hidden="true" />
               <span>Use Template</span>
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
+              className="btn-success flex font-medium items-center space-x-2"
             >
               <Plus className="w-5 h-5" aria-hidden="true" />
               <span>Create Requirement</span>
@@ -231,7 +231,7 @@ const TrainingRequirementsPage: React.FC = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6" role="search" aria-label="Search and filter requirements">
+        <div className="card mb-6 p-4" role="search" aria-label="Search and filter requirements">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1">
@@ -244,7 +244,7 @@ const TrainingRequirementsPage: React.FC = () => {
                   placeholder="Search requirements..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+                  className="form-input focus:border-transparent pl-10 placeholder-theme-text-muted pr-4"
                 />
               </div>
             </div>
@@ -271,7 +271,7 @@ const TrainingRequirementsPage: React.FC = () => {
         {/* Requirements List */}
         <div className="space-y-4">
           {filteredRequirements.length === 0 ? (
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+            <div className="card p-12 text-center">
               <FileText className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-theme-text-primary text-xl font-semibold mb-2">No Requirements Found</h3>
               <p className="text-theme-text-muted mb-6">
@@ -279,7 +279,7 @@ const TrainingRequirementsPage: React.FC = () => {
               </p>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                className="btn-success font-medium px-6 py-3"
               >
                 Create First Requirement
               </button>
@@ -397,7 +397,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
   };
 
   return (
-    <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
+    <div className="card overflow-hidden">
       {/* Header */}
       <div className="p-6">
         <div className="flex items-start justify-between">
@@ -730,7 +730,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input placeholder-theme-text-muted"
                 placeholder="e.g., Annual Training Hours"
                 required
                 aria-required="true"
@@ -743,7 +743,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 id="req-description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input placeholder-theme-text-muted"
                 placeholder="Describe the requirement..."
                 rows={3}
               />
@@ -775,7 +775,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     ...(autoDueDateType ? { due_date_type: autoDueDateType } : {}),
                   });
                 }}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input"
                 required
                 aria-required="true"
               >
@@ -796,7 +796,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   id="req-training-type"
                   value={formData.training_type}
                   onChange={(e) => setFormData({ ...formData, training_type: e.target.value })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="">Any Type</option>
                   <option value="certification">Certification</option>
@@ -815,7 +815,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="number"
                   value={formData.required_hours || ''}
                   onChange={(e) => setFormData({ ...formData, required_hours: e.target.value ? Number(e.target.value) : undefined })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted"
                   placeholder="e.g., 36"
                   min="0"
                   step="0.5"
@@ -867,7 +867,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="number"
                   value={formData.rolling_period_months}
                   onChange={(e) => setFormData({ ...formData, rolling_period_months: Number(e.target.value) })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   min="1"
                   max="120"
                 />
@@ -886,7 +886,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     id="req-period-start-month"
                     value={formData.period_start_month}
                     onChange={(e) => setFormData({ ...formData, period_start_month: Number(e.target.value) })}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input"
                   >
                     {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
                       <option key={idx} value={idx + 1}>{month}</option>
@@ -900,7 +900,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     type="number"
                     value={formData.period_start_day}
                     onChange={(e) => setFormData({ ...formData, period_start_day: Number(e.target.value) })}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input"
                     min="1"
                     max="31"
                   />
@@ -917,7 +917,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="date"
                   value={formData.due_date}
                   onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
             )}
@@ -931,7 +931,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     id="req-frequency"
                     value={formData.frequency}
                     onChange={(e) => setFormData({ ...formData, frequency: e.target.value as RequirementFrequency })}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input"
                   >
                     <option value="annual">Annual</option>
                     <option value="biannual">Biannual (Every 2 Years)</option>
@@ -948,7 +948,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     type="number"
                     value={formData.year || ''}
                     onChange={(e) => setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input placeholder-theme-text-muted"
                     placeholder="e.g., 2026"
                     min="2020"
                     max="2100"
@@ -1065,7 +1065,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
             </div>
@@ -1083,7 +1083,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="btn-success"
             >
               {saving ? 'Saving...' : (requirement ? 'Update Requirement' : 'Create Requirement')}
             </button>
@@ -1173,7 +1173,7 @@ const TemplateModal: React.FC<{
             <button
               key={idx}
               onClick={() => onSelect(template)}
-              className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border hover:bg-theme-surface-hover transition-colors text-left"
+              className="card hover:bg-theme-surface-hover p-4 text-left transition-colors"
             >
               <h4 className="text-theme-text-primary font-semibold mb-2">{template.name}</h4>
               <p className="text-theme-text-muted text-sm mb-3">{template.description}</p>

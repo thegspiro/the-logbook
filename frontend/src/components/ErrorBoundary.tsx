@@ -93,7 +93,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
-          <div className="max-w-2xl w-full bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-8">
+          <div className="card max-w-2xl p-8 w-full">
             <div className="text-center">
               {/* Error Icon */}
               <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-500/20 mb-4">
@@ -146,7 +146,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
                   onClick={this.handleRetry}
-                  className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring transition-colors"
+                  className="btn-primary font-medium inline-flex items-center justify-center px-6 py-3 rounded-md text-base"
                 >
                   <svg
                     className="mr-2 h-5 w-5"

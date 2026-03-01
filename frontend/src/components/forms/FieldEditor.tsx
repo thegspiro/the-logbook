@@ -335,7 +335,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                     value={width}
                     onChange={(e) => setWidth(e.target.value)}
                     aria-label="Field width"
-                    className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-sm"
+                    className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
                   >
                     {WIDTH_OPTIONS.map((w) => (
                       <option key={w.value} value={w.value}>{w.label}</option>
@@ -355,7 +355,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                       value={minLength ?? ''}
                       onChange={(e) => setMinLength(e.target.value ? Number(e.target.value) : undefined)}
                       min={0}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                      className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
                     />
                   </div>
                   <div className="flex-1">
@@ -366,7 +366,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                       value={maxLength ?? ''}
                       onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : undefined)}
                       min={0}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                      className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
                     />
                   </div>
                 </div>
@@ -382,7 +382,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                       type="number"
                       value={minValue ?? ''}
                       onChange={(e) => setMinValue(e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                      className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
                       placeholder="No minimum"
                     />
                   </div>
@@ -393,7 +393,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                       type="number"
                       value={maxValue ?? ''}
                       onChange={(e) => setMaxValue(e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                      className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
                       placeholder="No maximum"
                     />
                   </div>
@@ -415,7 +415,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                           onChange={(e) => updateOption(i, 'label', e.target.value)}
                           placeholder="Option label"
                           aria-label={`Option ${i + 1} label`}
-                          className="flex-1 px-3 py-1.5 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                          className="card-secondary flex-1 focus:border-pink-500 focus:ring-2 focus:ring-pink-500 placeholder-theme-text-muted px-3 py-1.5 text-sm text-theme-text-primary"
                         />
                         <input
                           type="text"
@@ -423,7 +423,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                           onChange={(e) => updateOption(i, 'value', e.target.value)}
                           placeholder="value"
                           aria-label={`Option ${i + 1} value`}
-                          className="w-28 px-3 py-1.5 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                          className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 placeholder-theme-text-muted px-3 py-1.5 text-sm text-theme-text-primary w-28"
                         />
                         <button
                           type="button"
@@ -475,7 +475,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                         setConditionValue('');
                       }
                     }}
-                    className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                    className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
                   >
                     <option value="">No condition (always show)</option>
                     {conditionTargets.map((f) => (
@@ -496,7 +496,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                           setConditionValue('');
                         }
                       }}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                      className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
                     >
                       {CONDITION_OPERATORS.map((op) => (
                         <option key={op.value} value={op.value}>{op.label}</option>
@@ -514,7 +514,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                         id="condition-value"
                         value={conditionValue}
                         onChange={(e) => setConditionValue(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                        className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
                       >
                         <option value="">Select a value...</option>
                         {selectedConditionField.options.map((opt) => (
@@ -528,7 +528,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                         value={conditionValue}
                         onChange={(e) => setConditionValue(e.target.value)}
                         placeholder="e.g., yes"
-                        className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                        className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 placeholder-theme-text-muted px-3 py-2 text-sm text-theme-text-primary w-full"
                       />
                     )}
                   </div>

@@ -133,7 +133,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
               setError(null);
               if (showAddForm) resetForm();
             }}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+            className="btn-info rounded-md text-sm"
           >
             {showAddForm ? 'Cancel' : '+ Add Override'}
           </button>
@@ -148,7 +148,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
 
       {/* Add Override Form */}
       {showAddForm && canManage && (
-        <div className="mb-6 p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+        <div className="card-secondary mb-6 p-4">
           <h4 className="text-sm font-semibold text-theme-text-primary mb-3">Add Voter Override</h4>
           <div className="space-y-3">
             <div>
@@ -194,7 +194,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 type="button"
                 onClick={() => { void handleAdd(); }}
                 disabled={submitting || !userId.trim() || reason.trim().length < 10}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="btn-info rounded-md text-sm"
               >
                 {submitting ? 'Adding...' : 'Add Override'}
               </button>
@@ -218,7 +218,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
           {overrides.map((override) => (
             <div
               key={override.user_id}
-              className="p-4 rounded-lg border border-theme-surface-border bg-theme-surface-secondary"
+              className="card-secondary p-4"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
@@ -247,7 +247,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                         <button
                           type="button"
                           onClick={() => { void handleRemove(override.user_id); }}
-                          className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                          className="btn-primary rounded px-2 py-1 text-xs"
                         >
                           Confirm
                         </button>

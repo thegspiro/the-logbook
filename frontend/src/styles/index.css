@@ -45,8 +45,11 @@
   --accent-purple: #7e22ce;               /* purple-700 – 7.3:1 on #fff */
 
   /* Muted accent backgrounds */
+  --accent-red-muted: #fef2f2;            /* red-50 */
   --accent-green-muted: #f0fdf4;          /* green-50 */
+  --accent-blue-muted: #eff6ff;           /* blue-50 */
   --accent-orange-muted: #fff7ed;         /* orange-50 */
+  --accent-purple-muted: #faf5ff;         /* purple-50 */
 
   /* Focus ring */
   --focus-ring: #3b82f6;                  /* blue-500 */
@@ -141,8 +144,11 @@
   --accent-purple: #c084fc;             /* purple-400 – 6.2:1 on #0f172a */
 
   /* Muted accent backgrounds */
+  --accent-red-muted: rgba(239, 68, 68, 0.1);
   --accent-green-muted: rgba(34, 197, 94, 0.1);
+  --accent-blue-muted: rgba(59, 130, 246, 0.1);
   --accent-orange-muted: rgba(249, 115, 22, 0.1);
+  --accent-purple-muted: rgba(168, 85, 247, 0.1);
 
   /* Focus ring */
   --focus-ring: #60a5fa;                 /* blue-400 */
@@ -237,8 +243,11 @@
   --accent-purple: #d98fff;
 
   /* Muted accent backgrounds */
+  --accent-red-muted: rgba(255, 107, 107, 0.15);
   --accent-green-muted: rgba(105, 255, 105, 0.15);
+  --accent-blue-muted: rgba(107, 181, 255, 0.15);
   --accent-orange-muted: rgba(255, 179, 71, 0.15);
+  --accent-purple-muted: rgba(217, 143, 255, 0.15);
 
   /* Focus ring */
   --focus-ring: #ffff00;
@@ -357,13 +366,28 @@
 
   /* --- Buttons --- */
   .btn-primary {
-    @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700
+    @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors
            focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
   }
 
   .btn-secondary {
     @apply px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg
-           hover:bg-theme-surface-hover border border-theme-surface-border
+           hover:bg-theme-surface-hover border border-theme-surface-border transition-colors
+           focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+  }
+
+  .btn-success {
+    @apply px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors
+           focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+  }
+
+  .btn-info {
+    @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors
+           focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+  }
+
+  .btn-warning {
+    @apply px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors
            focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
   }
 

@@ -303,7 +303,7 @@ const FormBuilder = ({
 
       {/* Empty state */}
       {sortedFields.length === 0 && (
-        <div className="bg-theme-surface-secondary border border-dashed border-theme-surface-border rounded-lg p-8 text-center">
+        <div className="card-secondary border-dashed p-8 text-center">
           <Plus className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
           <p className="text-theme-text-muted text-sm">No fields yet. Click "Add Field" to start building your form.</p>
         </div>
@@ -315,7 +315,7 @@ const FormBuilder = ({
           {sortedFields.map((field, idx) => (
             <div
               key={field.id}
-              className="group bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-4 py-3 flex items-center gap-3 hover:border-theme-surface-border transition-colors"
+              className="card-secondary flex gap-3 group hover:border-theme-surface-border items-center px-4 py-3 transition-colors"
             >
               {/* Drag handle */}
               <div className="text-theme-text-muted flex-shrink-0 cursor-grab">
@@ -391,7 +391,7 @@ const FormBuilder = ({
 
       {/* Preview mode */}
       {sortedFields.length > 0 && previewMode && (
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-6">
+        <div className="card-secondary p-6">
           <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-4">Preview</p>
           <div className="space-y-4">
             {sortedFields.map((field) => {
@@ -410,7 +410,7 @@ const FormBuilder = ({
                     {field.required && <span className="text-red-700 dark:text-red-400 ml-1">*</span>}
                   </label>
                   {field.help_text && <p className="text-xs text-theme-text-muted mb-1">{field.help_text}</p>}
-                  <div className="px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-muted text-sm">
+                  <div className="card-secondary px-3 py-2 text-sm text-theme-text-muted">
                     {field.placeholder || field.field_type}
                   </div>
                 </div>

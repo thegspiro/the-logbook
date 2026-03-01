@@ -235,7 +235,7 @@ export const RequestsTab: React.FC = () => {
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-red-500">Cancel?</span>
                           <button onClick={() => { void handleCancel('swap', req.id); }}
-                            className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm cancellation"
+                            className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm cancellation"
                           >Yes</button>
                           <button onClick={() => setConfirmingCancel(null)}
                             className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Keep request"
@@ -309,7 +309,7 @@ export const RequestsTab: React.FC = () => {
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-red-500">Cancel?</span>
                           <button onClick={() => { void handleCancel('timeoff', req.id); }}
-                            className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm cancellation"
+                            className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm cancellation"
                           >Yes</button>
                           <button onClick={() => setConfirmingCancel(null)}
                             className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Keep request"
@@ -336,19 +336,19 @@ export const RequestsTab: React.FC = () => {
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Reviewer Notes (optional)</label>
               <textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)}
                 rows={3} placeholder="Add reviewer notes"
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                className="form-input focus:ring-violet-500 placeholder-theme-text-muted py-2.5 resize-none"
               />
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setReviewing(null)} className="px-4 py-2 text-theme-text-secondary">Cancel</button>
               <button onClick={() => { void handleReview('denied'); }} disabled={submittingReview}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="btn-primary gap-1.5 inline-flex items-center"
               >
                 {reviewAction === 'denied' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                 Deny
               </button>
               <button onClick={() => { void handleReview('approved'); }} disabled={submittingReview}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="btn-success gap-1.5 inline-flex items-center"
               >
                 {reviewAction === 'approved' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                 Approve

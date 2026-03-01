@@ -439,7 +439,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                       type="button"
                       onClick={() => { void handleSubmitVote(position); }}
                       disabled={submitting}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                      className="btn-info px-6 rounded-md"
                     >
                       {submitting
                         ? 'Submitting...'

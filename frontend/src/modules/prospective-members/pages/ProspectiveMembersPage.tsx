@@ -248,7 +248,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            className="btn-primary flex gap-2 items-center px-3 sm:px-4 text-sm"
           >
             <UserPlus className="w-4 h-4" />
             <span className="hidden sm:inline">Add Applicant</span>
@@ -546,7 +546,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               </p>
               <button
                 onClick={() => navigate('/prospective-members/settings')}
-                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                className="btn-primary px-6"
               >
                 Configure Pipeline
               </button>
@@ -615,7 +615,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <button
                   onClick={() => setShowPurgeConfirm(true)}
                   disabled={isPurging}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  className="btn-primary flex gap-1.5 items-center px-3 py-1.5 text-sm"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   Purge Selected
@@ -950,7 +950,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   })();
                 }}
                 disabled={isPurging}
-                className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="btn-primary flex gap-2 items-center px-6"
               >
                 {isPurging && <Loader2 className="w-4 h-4 animate-spin" />}
                 Permanently Delete
@@ -1063,7 +1063,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               <button
                 onClick={() => { void handleCreateApplicant(); }}
                 disabled={isCreating}
-                className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="btn-primary flex gap-2 items-center px-6"
               >
                 {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
                 Add to Pipeline

@@ -54,7 +54,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
 
   if (!results) {
     return (
-      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
+      <div className="card-secondary p-4">
         <p className="text-sm text-theme-text-secondary">No results available</p>
       </div>
     );

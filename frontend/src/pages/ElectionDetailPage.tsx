@@ -492,7 +492,7 @@ export const ElectionDetailPage: React.FC = () => {
               {election.status === ElectionStatus.DRAFT && (
                 <button
                   onClick={() => { void handleOpenElection(); }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                  className="btn-success rounded-md"
                 >
                   Open Election
                 </button>
@@ -517,7 +517,7 @@ export const ElectionDetailPage: React.FC = () => {
                   </button>
                   <button
                     onClick={() => { void handleCloseElection(); }}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                    className="btn-primary rounded-md"
                   >
                     Close Election
                   </button>
@@ -540,8 +540,8 @@ export const ElectionDetailPage: React.FC = () => {
                   disabled={updatingVisibility}
                   className={`px-4 py-2 rounded-md ${
                     election.results_visible_immediately
-                      ? 'bg-yellow-600 text-white hover:bg-yellow-700'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                      ? 'btn-warning'
+                      : 'btn-info'
                   } disabled:opacity-50`}
                 >
                   {updatingVisibility
@@ -713,7 +713,7 @@ export const ElectionDetailPage: React.FC = () => {
                   <button
                     onClick={() => { void handleRunIntegrityCheck(); }}
                     disabled={loadingIntegrity}
-                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    className="btn-info px-3 py-1.5 rounded-md text-sm"
                   >
                     {loadingIntegrity ? 'Checking...' : integrityResult ? 'Re-run Check' : 'Run Check'}
                   </button>
@@ -803,7 +803,7 @@ export const ElectionDetailPage: React.FC = () => {
                   <button
                     onClick={() => { void handleVoidVote(); }}
                     disabled={isVoidingVote || !voidVoteId.trim() || !voidVoteReason.trim()}
-                    className="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
+                    className="btn-primary rounded-md text-sm whitespace-nowrap"
                   >
                     {isVoidingVote ? 'Voiding...' : 'Void Vote'}
                   </button>

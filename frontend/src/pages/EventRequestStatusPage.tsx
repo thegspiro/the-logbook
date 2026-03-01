@@ -355,7 +355,7 @@ const EventRequestStatusPage: React.FC = () => {
                       type="button"
                       onClick={() => void handleCancel()}
                       disabled={cancelling}
-                      className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors"
+                      className="btn-primary font-medium text-sm"
                     >
                       {cancelling ? 'Cancelling...' : 'Yes, Cancel Request'}
                     </button>

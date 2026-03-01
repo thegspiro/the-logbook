@@ -51,7 +51,7 @@ const getStatusColor = (status: string) => {
 const StatCard: React.FC<{ icon: React.ElementType; label: string; value: string | number; color?: string }> = ({
   icon: Icon, label, value, color = 'text-theme-text-primary',
 }) => (
-  <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
+  <div className="card-secondary p-4">
     <div className="flex items-center space-x-2 mb-1">
       <Icon className="w-4 h-4 text-theme-text-muted" />
       <span className="text-xs text-theme-text-muted">{label}</span>
@@ -67,7 +67,7 @@ const Section: React.FC<{ title: string; icon: React.ElementType; children: Reac
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg overflow-hidden">
+    <div className="card-secondary overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
@@ -212,7 +212,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
               <select
                 value={getStringValue('report_review_role') || 'training_officer'}
                 onChange={(e) => setDraft({ ...draft, report_review_role: e.target.value })}
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input text-sm"
               >
                 {REVIEW_ROLE_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -235,7 +235,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
               value={getStringValue('rating_label') || 'Performance Rating'}
               onChange={(e) => setDraft({ ...draft, rating_label: e.target.value })}
               placeholder="Performance Rating"
-              className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input text-sm"
             />
           </div>
 
@@ -252,7 +252,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                 }
                 setDraft(newDraft);
               }}
-              className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input text-sm"
             >
               {RATING_SCALE_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -294,7 +294,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
           <button
             onClick={() => { void handleSave(); }}
             disabled={saving}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            className="btn-primary disabled:opacity-60 font-medium text-sm"
           >
             {saving ? 'Saving...' : `Save ${Object.keys(draft).length} Change${Object.keys(draft).length > 1 ? 's' : ''}`}
           </button>
@@ -389,7 +389,7 @@ const MyTrainingPage: React.FC = () => {
           <div className="flex items-center space-x-3">
             <button
               onClick={() => navigate('/training/submit')}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+              className="btn-primary flex font-medium items-center space-x-2 text-sm"
             >
               <Send className="w-4 h-4" />
               <span>Submit Training</span>
@@ -769,13 +769,13 @@ const MyTrainingPage: React.FC = () => {
 
           {/* Empty State (only for detailed sections, stats always show above) */}
           {!data.training_records?.length && !data.enrollments?.length && !data.shift_reports?.length && !data.submissions?.length && !data.certifications?.length && (
-            <div className="text-center py-8 bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
+            <div className="card-secondary py-8 text-center">
               <p className="text-theme-text-muted mb-4">
                 No detailed training records yet. Submit external training to get started.
               </p>
               <button
                 onClick={() => navigate('/training/submit')}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                className="btn-primary font-medium text-sm"
               >
                 Submit External Training
               </button>

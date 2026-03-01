@@ -434,7 +434,7 @@ const Dashboard: React.FC = () => {
                 onClick={() => {
                   void install();
                 }}
-                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium"
+                className="btn-info font-medium px-3 py-1.5 rounded-md text-xs"
               >
                 Install
               </button>
@@ -499,7 +499,7 @@ const Dashboard: React.FC = () => {
               role="region"
               aria-label="Department overview"
             >
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
+              <div className="card p-3 sm:p-5">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-theme-text-secondary text-xs font-medium uppercase">
@@ -520,7 +520,7 @@ const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
+              <div className="card p-3 sm:p-5">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-theme-text-secondary text-xs font-medium uppercase">
@@ -541,7 +541,7 @@ const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
+              <div className="card p-3 sm:p-5">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-theme-text-secondary text-xs font-medium uppercase">
@@ -561,7 +561,7 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div
-                className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors"
+                className="card cursor-pointer hover:border-red-500/50 p-3 sm:p-5 transition-colors"
                 onClick={() => navigate("/action-items")}
               >
                 <div className="flex items-center justify-between">
@@ -591,7 +591,7 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div
-                className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors"
+                className="card cursor-pointer hover:border-red-500/50 p-3 sm:p-5 transition-colors"
                 onClick={() => navigate("/admin-hours/manage")}
               >
                 <div className="flex items-center justify-between">
@@ -625,7 +625,7 @@ const Dashboard: React.FC = () => {
           role="region"
           aria-label="Hours summary"
         >
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
+          <div className="card p-3 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">
@@ -644,7 +644,7 @@ const Dashboard: React.FC = () => {
             <p className="text-theme-text-muted text-xs mt-2">This month</p>
           </div>
 
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
+          <div className="card p-3 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">
@@ -663,7 +663,7 @@ const Dashboard: React.FC = () => {
             <p className="text-theme-text-muted text-xs mt-2">Training hours</p>
           </div>
 
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border">
+          <div className="card p-3 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">
@@ -683,7 +683,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div
-            className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-5 border border-theme-surface-border cursor-pointer hover:border-purple-500/40 transition-colors"
+            className="card cursor-pointer hover:border-purple-500/40 p-3 sm:p-5 transition-colors"
             onClick={() => navigate("/admin-hours")}
             role="button"
             tabIndex={0}
@@ -822,7 +822,7 @@ const Dashboard: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
           {/* Notifications */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border">
+          <div className="card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <Bell className="w-5 h-5 text-red-400" />
@@ -901,7 +901,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* My Upcoming Shifts */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border">
+          <div className="card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <Calendar className="w-5 h-5 text-blue-400" />
@@ -963,7 +963,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Open Shifts */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
+        <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
               <CalendarPlus className="w-5 h-5 text-green-400" />
@@ -1021,7 +1021,7 @@ const Dashboard: React.FC = () => {
                     <button
                       onClick={() => void handleSignup(shift.id)}
                       disabled={signingUpShiftId === shift.id}
-                      className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
+                      className="btn-success disabled:cursor-not-allowed flex font-medium items-center px-3 py-1.5 space-x-1 text-xs"
                     >
                       {signingUpShiftId === shift.id ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1087,7 +1087,7 @@ const Dashboard: React.FC = () => {
 
         {/* Quick Access: My ID Card */}
         {currentUser?.id && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
+          <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <CreditCard className="w-5 h-5 text-blue-500" />
@@ -1107,7 +1107,7 @@ const Dashboard: React.FC = () => {
             </p>
             <button
               onClick={() => navigate(`/members/${currentUser.id}/id-card`)}
-              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+              className="btn-info mt-4 text-sm"
             >
               Open My ID Card
             </button>
@@ -1116,7 +1116,7 @@ const Dashboard: React.FC = () => {
 
         {/* Quick Access: Meeting Minutes */}
         {checkPermission("meetings.manage") && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
+          <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <ClipboardList className="w-5 h-5 text-cyan-500" />
@@ -1153,7 +1153,7 @@ const Dashboard: React.FC = () => {
 
         {/* Training Progress */}
         {!loadingTraining && enrollments.length > 0 && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
+          <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <GraduationCap className="w-5 h-5 text-red-500" />
@@ -1291,7 +1291,7 @@ const Dashboard: React.FC = () => {
         {!loadingInventory &&
           inventorySummary &&
           inventorySummary.total_items > 0 && (
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
+            <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                   <Package className="w-5 h-5 text-emerald-500" />

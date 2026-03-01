@@ -370,7 +370,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
                 <button
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  className="btn-info font-medium rounded-md text-sm"
                 >
                   {loadingMore ? 'Loading...' : 'Load More'}
                 </button>

@@ -175,7 +175,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 setShowCustomForm(false);
                 setSelectedTemplate(null);
               }}
-              className="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
+              className="btn-primary rounded-md text-sm"
             >
               {showTemplates ? 'Cancel' : 'Use Template'}
             </button>
@@ -186,7 +186,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 setShowTemplates(false);
                 setSelectedTemplate(null);
               }}
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+              className="btn-info rounded-md text-sm"
             >
               {showCustomForm ? 'Cancel' : '+ Custom Item'}
             </button>
@@ -282,7 +282,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 type="button"
                 onClick={() => { void handleApplyTemplate(); }}
                 disabled={saving || !templateNameInput.trim()}
-                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                className="btn-primary rounded-md text-sm"
               >
                 {saving ? 'Adding...' : 'Add to Ballot'}
               </button>
@@ -293,7 +293,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
 
       {/* Custom Item Form */}
       {showCustomForm && (
-        <div className="mb-6 p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+        <div className="card-secondary mb-6 p-4">
           <h4 className="text-sm font-semibold text-theme-text-primary mb-3">Add Custom Ballot Item</h4>
           <div className="space-y-3">
             <div>
@@ -392,7 +392,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 type="button"
                 onClick={() => { void handleAddCustom(); }}
                 disabled={saving || !customForm.title?.trim()}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="btn-info rounded-md text-sm"
               >
                 {saving ? 'Adding...' : 'Add Item'}
               </button>
@@ -416,7 +416,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
           {ballotItems.map((item, index) => (
             <div
               key={item.id}
-              className="p-4 rounded-lg border border-theme-surface-border bg-theme-surface-secondary hover:bg-theme-surface-hover transition-shadow"
+              className="card-secondary hover:bg-theme-surface-hover p-4 transition-shadow"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">

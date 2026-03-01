@@ -130,7 +130,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
       {/* Variable helper */}
       {template.available_variables.length > 0 && (
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
+        <div className="card-secondary">
           <button
             onClick={() => setShowVariables(!showVariables)}
             className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"

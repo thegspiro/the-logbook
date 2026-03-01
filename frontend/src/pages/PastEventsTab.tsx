@@ -127,7 +127,7 @@ const PastEventsTab: React.FC = () => {
             <Link
               key={event.id}
               to={`/events/${event.id}`}
-              className="block bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border hover:border-red-300 hover:shadow-md transition-all"
+              className="card block hover:border-red-300 hover:shadow-md transition-all"
             >
               <div className="p-5">
                 <div className="flex items-start justify-between">

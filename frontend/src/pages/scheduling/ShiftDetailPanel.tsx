@@ -373,7 +373,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-red-500">Decline?</span>
               <button onClick={() => { void handleDecline(assignment.id); }} disabled={declining}
-                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50" aria-label="Confirm decline"
+                className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
               >{declining ? '...' : 'Yes'}</button>
               <button onClick={() => setConfirmingDecline(null)}
                 className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
@@ -391,7 +391,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-red-500">Remove?</span>
               <button onClick={() => { void handleRemove(assignment.id); }} disabled={removing}
-                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50" aria-label="Confirm removal"
+                className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm removal"
               >{removing ? '...' : 'Yes'}</button>
               <button onClick={() => setConfirmingRemove(null)}
                 className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel removal"
@@ -451,7 +451,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               <div className="flex items-center gap-2 justify-end">
                 <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
                 <button onClick={() => { void handleDelete(); }} disabled={deleting}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+                  className="btn-primary flex gap-1 items-center px-3 py-1.5 text-sm"
                 >
                   {deleting && <Loader2 className="w-3 h-3 animate-spin" />}
                   Delete Shift
@@ -635,7 +635,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs text-red-500">Decline?</span>
                               <button onClick={() => { void handleDecline(assignment.id); }}
-                                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm decline"
+                                className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
                               >Yes</button>
                               <button onClick={() => setConfirmingDecline(null)}
                                 className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
@@ -653,7 +653,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs text-red-500">Remove?</span>
                               <button onClick={() => { void handleRemove(assignment.id); }}
-                                className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm removal"
+                                className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm removal"
                               >Yes</button>
                               <button onClick={() => setConfirmingRemove(null)}
                                 className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel removal"

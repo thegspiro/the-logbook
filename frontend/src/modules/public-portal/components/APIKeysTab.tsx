@@ -150,7 +150,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="btn-info rounded-md"
             >
               {isSubmitting ? 'Creating...' : 'Create API Key'}
             </button>
@@ -216,7 +216,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
             </code>
             <button
               onClick={copyToClipboard}
-              className="ml-4 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex-shrink-0"
+              className="btn-info rounded ml-4 px-3 py-1 text-sm flex-shrink-0"
               aria-label={copied ? 'Copied to clipboard' : 'Copy API key to clipboard'}
             >
               {copied ? (
@@ -303,7 +303,7 @@ const RevokeConfirmModal: React.FC<RevokeConfirmModalProps> = ({
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            className="btn-primary rounded-md"
           >
             Revoke Key
           </button>
@@ -370,7 +370,7 @@ export const APIKeysTab: React.FC = () => {
         </div>
         <button
           onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+          className="btn-info flex items-center rounded-md"
         >
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -391,7 +391,7 @@ export const APIKeysTab: React.FC = () => {
           </p>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="btn-info mt-4 rounded-md"
           >
             Create First API Key
           </button>

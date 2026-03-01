@@ -288,7 +288,7 @@ export const ApparatusFormPage: React.FC = () => {
       <main className="max-w-5xl mx-auto px-6 py-8">
         <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-8">
           {/* Basic Information */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary font-bold mb-6">Basic Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
@@ -300,9 +300,9 @@ export const ApparatusFormPage: React.FC = () => {
                   name="unitNumber"
                   value={formData.unitNumber}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
-                    errors.unitNumber ? 'border-red-500' : 'border-theme-input-border'
-                  }`}
+                  className={`form-input ${
+ errors.unitNumber ? 'border-red-500' : 'border-theme-input-border'
+ }`}
                   placeholder="E-1"
                 />
                 {errors.unitNumber && (
@@ -316,7 +316,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="Old Reliable"
                 />
               </div>
@@ -328,9 +328,9 @@ export const ApparatusFormPage: React.FC = () => {
                   name="apparatusTypeId"
                   value={formData.apparatusTypeId}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
-                    errors.apparatusTypeId ? 'border-red-500' : 'border-theme-input-border'
-                  }`}
+                  className={`form-input ${
+ errors.apparatusTypeId ? 'border-red-500' : 'border-theme-input-border'
+ }`}
                 >
                   <option value="">Select Type</option>
                   {types.map((type) => (
@@ -351,9 +351,9 @@ export const ApparatusFormPage: React.FC = () => {
                   name="statusId"
                   value={formData.statusId}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
-                    errors.statusId ? 'border-red-500' : 'border-theme-input-border'
-                  }`}
+                  className={`form-input ${
+ errors.statusId ? 'border-red-500' : 'border-theme-input-border'
+ }`}
                 >
                   <option value="">Select Status</option>
                   {statuses.filter(s => !s.isArchivedStatus).map((status) => (
@@ -373,7 +373,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="vin"
                   value={formData.vin}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring font-mono"
+                  className="form-input font-mono"
                   placeholder="1HGCM82633A123456"
                 />
               </div>
@@ -384,7 +384,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="radioId"
                   value={formData.radioId}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="E1"
                 />
               </div>
@@ -392,7 +392,7 @@ export const ApparatusFormPage: React.FC = () => {
           </div>
 
           {/* Vehicle Details */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary font-bold mb-6">Vehicle Details</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div>
@@ -402,7 +402,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="year"
                   value={formData.year ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="2024"
                   min="1900"
                   max="2100"
@@ -415,7 +415,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="make"
                   value={formData.make}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="Pierce"
                 />
               </div>
@@ -426,7 +426,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="model"
                   value={formData.model}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="Enforcer"
                 />
               </div>
@@ -437,7 +437,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="bodyManufacturer"
                   value={formData.bodyManufacturer}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="Pierce"
                 />
               </div>
@@ -448,7 +448,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="licensePlate"
                   value={formData.licensePlate}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -458,7 +458,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="licenseState"
                   value={formData.licenseState}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="NY"
                   maxLength={2}
                 />
@@ -470,7 +470,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="color"
                   value={formData.color}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="Red"
                 />
               </div>
@@ -481,14 +481,14 @@ export const ApparatusFormPage: React.FC = () => {
                   name="assetTag"
                   value={formData.assetTag}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
             </div>
           </div>
 
           {/* Specifications */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary font-bold mb-6">Specifications</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div>
@@ -497,7 +497,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="fuelType"
                   value={formData.fuelType ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="">Select Fuel Type</option>
                   {fuelTypes.map((ft) => (
@@ -514,7 +514,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="fuelCapacityGallons"
                   value={formData.fuelCapacityGallons ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -524,7 +524,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="seatingCapacity"
                   value={formData.seatingCapacity ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -534,7 +534,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="gvwr"
                   value={formData.gvwr ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -544,7 +544,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="pumpCapacityGpm"
                   value={formData.pumpCapacityGpm ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -554,7 +554,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="tankCapacityGallons"
                   value={formData.tankCapacityGallons ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -564,7 +564,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="foamCapacityGallons"
                   value={formData.foamCapacityGallons ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -574,14 +574,14 @@ export const ApparatusFormPage: React.FC = () => {
                   name="ladderLengthFeet"
                   value={formData.ladderLengthFeet ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
             </div>
           </div>
 
           {/* Usage Tracking */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary font-bold mb-6">Usage Tracking</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -591,7 +591,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="currentMileage"
                   value={formData.currentMileage ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -601,14 +601,14 @@ export const ApparatusFormPage: React.FC = () => {
                   name="currentHours"
                   value={formData.currentHours ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
             </div>
           </div>
 
           {/* Purchase Information */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary font-bold mb-6">Purchase Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div>
@@ -618,7 +618,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="purchaseDate"
                   value={formData.purchaseDate}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -628,7 +628,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="purchasePrice"
                   value={formData.purchasePrice ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   step="0.01"
                 />
               </div>
@@ -639,7 +639,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="purchaseVendor"
                   value={formData.purchaseVendor}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -649,7 +649,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="inServiceDate"
                   value={formData.inServiceDate}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
             </div>
@@ -663,7 +663,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="isFinanced"
                   checked={formData.isFinanced}
                   onChange={handleChange}
-                  className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+                  className="form-checkbox"
                 />
                 <label htmlFor="isFinanced" className="ml-2 text-theme-text-secondary">
                   This vehicle is financed
@@ -678,7 +678,7 @@ export const ApparatusFormPage: React.FC = () => {
                       name="financingCompany"
                       value={formData.financingCompany}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input"
                     />
                   </div>
                   <div>
@@ -688,7 +688,7 @@ export const ApparatusFormPage: React.FC = () => {
                       name="monthlyPayment"
                       value={formData.monthlyPayment ?? ''}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input"
                       step="0.01"
                     />
                   </div>
@@ -699,7 +699,7 @@ export const ApparatusFormPage: React.FC = () => {
                       name="financingEndDate"
                       value={formData.financingEndDate}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input"
                     />
                   </div>
                 </div>
@@ -708,7 +708,7 @@ export const ApparatusFormPage: React.FC = () => {
           </div>
 
           {/* Important Dates */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary font-bold mb-6">Important Dates</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div>
@@ -718,7 +718,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="registrationExpiration"
                   value={formData.registrationExpiration}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -728,7 +728,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="inspectionExpiration"
                   value={formData.inspectionExpiration}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -738,7 +738,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="insuranceExpiration"
                   value={formData.insuranceExpiration}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -748,14 +748,14 @@ export const ApparatusFormPage: React.FC = () => {
                   name="warrantyExpiration"
                   value={formData.warrantyExpiration}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
             </div>
           </div>
 
           {/* Settings */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary font-bold mb-6">Settings</h2>
             <div className="flex items-center">
               <input
@@ -764,7 +764,7 @@ export const ApparatusFormPage: React.FC = () => {
                 name="nfpaTrackingEnabled"
                 checked={formData.nfpaTrackingEnabled}
                 onChange={handleChange}
-                className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+                className="form-checkbox"
               />
               <label htmlFor="nfpaTrackingEnabled" className="ml-2 text-theme-text-secondary">
                 Enable NFPA compliance tracking
@@ -773,7 +773,7 @@ export const ApparatusFormPage: React.FC = () => {
           </div>
 
           {/* Notes */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary font-bold mb-6">Notes</h2>
             <div className="space-y-4">
               <div>
@@ -783,7 +783,7 @@ export const ApparatusFormPage: React.FC = () => {
                   value={formData.description}
                   onChange={handleChange}
                   rows={3}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="Brief description of this apparatus..."
                 />
               </div>
@@ -794,7 +794,7 @@ export const ApparatusFormPage: React.FC = () => {
                   value={formData.notes}
                   onChange={handleChange}
                   rows={3}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                   placeholder="Any additional notes..."
                 />
               </div>
@@ -813,7 +813,7 @@ export const ApparatusFormPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex items-center space-x-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary disabled:cursor-not-allowed flex items-center px-6 py-3 space-x-2"
             >
               {isSubmitting ? (
                 <>

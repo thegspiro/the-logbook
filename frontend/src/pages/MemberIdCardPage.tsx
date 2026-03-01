@@ -301,7 +301,7 @@ export const MemberIdCardPage: React.FC = () => {
       <div className="mt-6 print:hidden">
         <button
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+          className="btn-info font-medium gap-2 inline-flex items-center px-5 text-sm transition"
         >
           <Printer className="h-4 w-4" />
           Print ID Card

@@ -108,7 +108,7 @@ const EventSelfCheckInPage: React.FC = () => {
             <p className="text-theme-text-secondary mb-6">{error}</p>
             <Link
               to="/events"
-              className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              className="btn-info inline-block px-6 transition"
             >
               View All Events
             </Link>
@@ -161,7 +161,7 @@ const EventSelfCheckInPage: React.FC = () => {
               <button
                 onClick={() => { void handleCheckOut(); }}
                 disabled={checkingIn}
-                className="w-full px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-lg hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed"
+                className="btn-primary disabled:bg-gray-400 disabled:cursor-not-allowed disabled:text-gray-200 font-semibold px-8 py-4 text-lg transition w-full"
               >
                 {checkingIn ? 'Checking Out...' : 'Check Out of This Event'}
               </button>
@@ -270,7 +270,7 @@ const EventSelfCheckInPage: React.FC = () => {
             <div className="space-y-3">
               <Link
                 to={`/events/${eventId}`}
-                className="block w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                className="btn-info block font-medium px-6 py-3 transition w-full"
               >
                 View Event Details
               </Link>
@@ -345,7 +345,7 @@ const EventSelfCheckInPage: React.FC = () => {
             <button
               onClick={() => { void handleCheckIn(); }}
               disabled={checkingIn}
-              className="w-full px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed"
+              className="btn-success disabled:bg-gray-400 disabled:cursor-not-allowed disabled:text-gray-200 font-semibold px-8 py-4 text-lg transition w-full"
             >
               {checkingIn ? 'Checking In...' : 'Check In to This Event'}
             </button>

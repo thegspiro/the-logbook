@@ -21,7 +21,7 @@ export const FileStorageConfigPlaceholder: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-theme-surface backdrop-blur-sm rounded-lg p-8 text-center border border-theme-surface-border">
+      <div className="card max-w-2xl p-8 text-center w-full">
         <div className="text-green-400 text-5xl mb-4">{'\u2713'}</div>
         <h2 className="text-3xl font-bold text-theme-text-primary mb-4">
           File Storage Selected
@@ -58,7 +58,7 @@ export const SecurityCheckPlaceholder: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-theme-surface backdrop-blur-sm rounded-lg p-8 text-center border border-theme-surface-border">
+      <div className="card max-w-2xl p-8 text-center w-full">
         <div className="text-blue-400 text-5xl mb-4">{'\uD83D\uDD12'}</div>
         <h2 className="text-3xl font-bold text-theme-text-primary mb-4">
           Security Configuration

@@ -373,7 +373,7 @@ export const EventDetailPage: React.FC = () => {
               {canRSVP && (
                 <button
                   onClick={() => setShowRSVPModal(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                  className="btn-primary font-medium inline-flex items-center rounded-md text-sm"
                 >
                   {event.user_rsvp_status ? 'Update RSVP' : 'RSVP Now'}
                 </button>
@@ -911,7 +911,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
                   >
                     {submitting ? 'Submitting...' : 'Submit RSVP'}
                   </button>
@@ -990,7 +990,7 @@ export const EventDetailPage: React.FC = () => {
                         type="checkbox"
                         checked={sendCancelNotifications}
                         onChange={(e) => setSendCancelNotifications(e.target.checked)}
-                        className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                        className="form-checkbox border-theme-surface-border"
                       />
                       <span className="ml-2 text-sm text-theme-text-secondary">
                         Send cancellation notifications to all RSVPs
@@ -1003,7 +1003,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={submitting || cancelReason.length < 10}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
                   >
                     {submitting ? 'Cancelling...' : 'Cancel Event'}
                   </button>
@@ -1130,7 +1130,7 @@ export const EventDetailPage: React.FC = () => {
                                   void handleCheckIn(member.id);
                                   void fetchEligibleMembers();
                                 }}
-                                className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                                className="btn-primary font-medium inline-flex items-center px-3 py-1.5 rounded-md text-sm"
                               >
                                 Check In
                               </button>
@@ -1251,7 +1251,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
                   >
                     {submitting ? 'Saving...' : 'Save Times'}
                   </button>
@@ -1344,7 +1344,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
                   >
                     {submitting ? 'Saving...' : 'Save Times'}
                   </button>
@@ -1406,7 +1406,7 @@ export const EventDetailPage: React.FC = () => {
                   type="button"
                   disabled={submitting}
                   onClick={() => { void handleDeleteEvent(); }}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                  className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
                 >
                   {submitting ? 'Deleting...' : 'Delete Permanently'}
                 </button>

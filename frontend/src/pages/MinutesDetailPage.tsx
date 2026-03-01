@@ -502,7 +502,7 @@ export const MinutesDetailPage: React.FC = () => {
             {(minutes.status === 'draft' || minutes.status === 'rejected') && (
               <button
                 onClick={() => { void handleSubmit(); }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="btn-info rounded-md"
               >
                 Submit for Approval
               </button>
@@ -511,13 +511,13 @@ export const MinutesDetailPage: React.FC = () => {
               <>
                 <button
                   onClick={() => { void handleApprove(); }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                  className="btn-success rounded-md"
                 >
                   Approve Minutes
                 </button>
                 <button
                   onClick={() => setShowRejectModal(true)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                  className="btn-primary rounded-md"
                 >
                   Reject Minutes
                 </button>
@@ -615,7 +615,7 @@ export const MinutesDetailPage: React.FC = () => {
 
         {/* Add Section Form */}
         {showAddSection && (
-          <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4 flex items-end gap-3" role="form" aria-label="Add new section">
+          <div className="card-secondary flex gap-3 items-end p-4" role="form" aria-label="Add new section">
             <div className="flex-1">
               <label htmlFor="new-section-title" className="block text-sm font-medium text-theme-text-secondary mb-1">Section Title</label>
               <input
@@ -772,7 +772,7 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {showMotionForm && (
-          <div className="border border-theme-surface-border rounded-lg p-4 mb-4 bg-theme-surface-secondary space-y-3" role="form" aria-label="Add motion">
+          <div className="card-secondary mb-4 p-4 space-y-3" role="form" aria-label="Add motion">
             <label htmlFor="motion-text" className="sr-only">Motion text</label>
             <textarea
               id="motion-text"
@@ -931,7 +931,7 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {showActionForm && (
-          <div className="border border-theme-surface-border rounded-lg p-4 mb-4 bg-theme-surface-secondary space-y-3" role="form" aria-label="Add action item">
+          <div className="card-secondary mb-4 p-4 space-y-3" role="form" aria-label="Add action item">
             <label htmlFor="action-description" className="sr-only">Action item description</label>
             <textarea
               id="action-description"
@@ -1138,7 +1138,7 @@ export const MinutesDetailPage: React.FC = () => {
                 <button
                   onClick={() => { void handleReject(); }}
                   disabled={rejectReason.trim().length < 10}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                  className="btn-primary rounded-md"
                 >
                   Reject
                 </button>

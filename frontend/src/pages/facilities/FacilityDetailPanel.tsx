@@ -286,7 +286,7 @@ export default function FacilityDetailPanel({
           <div><label className={labelCls}>Notes</label><textarea value={editData.notes as string} onChange={e => setEditData(p => ({...p, notes: e.target.value}))} rows={2} className={inputCls + ' resize-none'} /></div>
           <div className="flex items-center gap-3 pt-2">
             <button onClick={() => { void handleSave(); }} disabled={isSaving}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              className="btn-primary flex gap-2 items-center text-sm"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Changes
             </button>
@@ -341,7 +341,7 @@ export default function FacilityDetailPanel({
                 <input type="number" value={newRoom.square_footage} onChange={e => setNewRoom(p => ({...p, square_footage: e.target.value}))} placeholder="Sq ft" className={inputCls} />
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { void handleAddRoom(); }} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs transition-colors">Add</button>
+                <button onClick={() => { void handleAddRoom(); }} className="btn-primary px-3 py-1.5 text-xs">Add</button>
                 <button onClick={() => setShowAddRoom(false)} className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors">Cancel</button>
               </div>
             </div>

@@ -130,7 +130,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
         <button
           type="button"
           onClick={() => { void fetchAuthorizations(); }}
-          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="btn-info rounded-md text-sm"
         >
           Retry
         </button>
@@ -149,7 +149,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
           <button
             type="button"
             onClick={() => { setShowForm(!showForm); setFormData(emptyForm); }}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+            className="btn-info rounded-md text-sm"
           >
             {showForm ? 'Cancel' : '+ Add Authorization'}
           </button>
@@ -169,7 +169,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
 
       {/* Add Authorization Form */}
       {showForm && canManage && (
-        <div className="mb-6 p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+        <div className="card-secondary mb-6 p-4">
           <h4 className="text-sm font-semibold text-theme-text-primary mb-3">New Proxy Authorization</h4>
           <div className="space-y-3">
             <div>
@@ -234,7 +234,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                 type="button"
                 onClick={() => { void handleAdd(); }}
                 disabled={submitting || !formData.delegating_user_id.trim() || !formData.proxy_user_id.trim() || !formData.reason.trim()}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="btn-info rounded-md text-sm"
               >
                 {submitting ? 'Adding...' : 'Add Authorization'}
               </button>
@@ -256,7 +256,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
           {activeAuthorizations.map((auth) => (
             <div
               key={auth.id}
-              className="p-4 rounded-lg border border-theme-surface-border bg-theme-surface-secondary"
+              className="card-secondary p-4"
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1 min-w-0">
@@ -308,7 +308,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
               {revokedAuthorizations.map((auth) => (
                 <div
                   key={auth.id}
-                  className="p-4 rounded-lg border border-theme-surface-border bg-theme-surface-secondary opacity-50"
+                  className="card-secondary opacity-50 p-4"
                 >
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-theme-text-muted">

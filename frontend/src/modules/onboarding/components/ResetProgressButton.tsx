@@ -169,7 +169,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
               <button
                 onClick={() => { void handleReset(); }}
                 disabled={isResetting}
-                className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="btn-primary disabled:cursor-not-allowed flex flex-1 font-medium items-center justify-center py-3"
               >
                 {isResetting ? (
                   <>

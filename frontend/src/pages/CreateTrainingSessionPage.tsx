@@ -160,7 +160,7 @@ const CreateTrainingSessionPage: React.FC = () => {
         </div>
 
         {/* Progress Steps */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-8">
+        <div className="card mb-8 p-6">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => {
               const Icon = step.icon;
@@ -203,7 +203,7 @@ const CreateTrainingSessionPage: React.FC = () => {
         </div>
 
         {/* Form Content */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border space-y-8">
+        <div className="card p-8 space-y-8">
           {/* Step 1: Event Details */}
           {currentStep === 1 && (
             <div className="space-y-6">
@@ -219,7 +219,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   value={formData.title}
                   onChange={(e) => updateField('title', e.target.value)}
                   placeholder="e.g., CPR/AED Renewal Training"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
 
@@ -233,7 +233,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   onChange={(e) => updateField('description', e.target.value)}
                   placeholder="Training objectives, topics covered, etc."
                   rows={4}
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted py-3"
                 />
               </div>
 
@@ -248,7 +248,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     step="900"
                     value={formatForDateTimeInput(formData.start_datetime, tz)}
                     onChange={(e) => updateField('start_datetime', e.target.value)}
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input py-3"
                   />
                 </div>
                 <div>
@@ -260,7 +260,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     step="900"
                     value={formatForDateTimeInput(formData.end_datetime, tz)}
                     onChange={(e) => updateField('end_datetime', e.target.value)}
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input py-3"
                   />
                 </div>
               </div>
@@ -291,7 +291,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                             updateField('location', undefined);
                           }
                         }}
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input py-3"
                       >
                         <option value="">-- Select a location --</option>
                         {locations.map((loc) => (
@@ -307,7 +307,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.location || ''}
                         onChange={(e) => updateField('location', e.target.value)}
                         placeholder="e.g., Station 1 Training Room"
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input placeholder-theme-text-muted py-3"
                       />
                     )}
                   </div>
@@ -321,7 +321,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.location || ''}
                         onChange={(e) => updateField('location', e.target.value)}
                         placeholder="e.g., City Hall — 123 Main St"
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input placeholder-theme-text-muted py-3"
                       />
                     ) : (
                       <input
@@ -329,7 +329,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.location_details || ''}
                         onChange={(e) => updateField('location_details', e.target.value)}
                         placeholder="Additional directions or room info"
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input placeholder-theme-text-muted py-3"
                       />
                     )}
                   </div>
@@ -364,7 +364,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     id="requires_rsvp"
                     checked={formData.requires_rsvp}
                     onChange={(e) => updateField('requires_rsvp', e.target.checked)}
-                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+                    className="form-checkbox"
                   />
                   <label htmlFor="requires_rsvp" className="text-theme-text-secondary text-sm">
                     Require RSVP
@@ -376,7 +376,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     id="is_mandatory"
                     checked={formData.is_mandatory}
                     onChange={(e) => updateField('is_mandatory', e.target.checked)}
-                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+                    className="form-checkbox"
                   />
                   <label htmlFor="is_mandatory" className="text-theme-text-secondary text-sm">
                     Mandatory Training
@@ -395,7 +395,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       step="900"
                       value={formatForDateTimeInput(formData.rsvp_deadline, tz)}
                       onChange={(e) => updateField('rsvp_deadline', e.target.value)}
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input py-3"
                     />
                   </div>
                   <div>
@@ -407,7 +407,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       value={formData.max_attendees || ''}
                       onChange={(e) => updateField('max_attendees', parseInt(e.target.value) || undefined)}
                       placeholder="Unlimited"
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input placeholder-theme-text-muted py-3"
                     />
                   </div>
                 </div>
@@ -459,7 +459,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   <select
                     value={formData.course_id}
                     onChange={(e) => updateField('course_id', e.target.value)}
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input py-3"
                   >
                     <option value="">Select a course...</option>
                     {availableCourses.map((course) => (
@@ -482,7 +482,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.course_name}
                         onChange={(e) => updateField('course_name', e.target.value)}
                         placeholder="e.g., CPR/AED for Healthcare Providers"
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input placeholder-theme-text-muted py-3"
                       />
                     </div>
                     <div>
@@ -494,7 +494,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.course_code}
                         onChange={(e) => updateField('course_code', e.target.value)}
                         placeholder="e.g., CPR-HCP"
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input placeholder-theme-text-muted py-3"
                       />
                     </div>
                   </div>
@@ -507,7 +507,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       <select
                         value={formData.training_type}
                         onChange={(e) => updateField('training_type', e.target.value as TrainingType)}
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input py-3"
                       >
                         <option value="certification">Certification</option>
                         <option value="continuing_education">Continuing Education</option>
@@ -527,7 +527,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.credit_hours}
                         onChange={(e) => updateField('credit_hours', parseFloat(e.target.value) || 0)}
                         placeholder="0"
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input placeholder-theme-text-muted py-3"
                       />
                     </div>
                   </div>
@@ -543,7 +543,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         const member = members.find(m => m.id === e.target.value);
                         updateField('instructor', member ? `${member.first_name} ${member.last_name}` : '');
                       }}
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input py-3"
                     >
                       <option value="">Select instructor...</option>
                       {members.map(m => (
@@ -561,7 +561,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     <select
                       value={apparatusId}
                       onChange={(e) => setApparatusId(e.target.value)}
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input py-3"
                     >
                       <option value="">No apparatus</option>
                       {apparatusList.map(a => (
@@ -583,7 +583,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     id="issues_certification"
                     checked={formData.issues_certification}
                     onChange={(e) => updateField('issues_certification', e.target.checked)}
-                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+                    className="form-checkbox"
                   />
                   <label htmlFor="issues_certification" className="text-theme-text-primary font-semibold">
                     This training issues a certification
@@ -602,7 +602,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                           value={formData.issuing_agency}
                           onChange={(e) => updateField('issuing_agency', e.target.value)}
                           placeholder="e.g., American Heart Association"
-                          className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="form-input placeholder-theme-text-muted py-3"
                         />
                       </div>
                       <div>
@@ -614,7 +614,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                           value={formData.certification_number_prefix}
                           onChange={(e) => updateField('certification_number_prefix', e.target.value)}
                           placeholder="e.g., AHA-CPR-"
-                          className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="form-input placeholder-theme-text-muted py-3"
                         />
                       </div>
                     </div>
@@ -627,7 +627,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.expiration_months || ''}
                         onChange={(e) => updateField('expiration_months', parseInt(e.target.value) || undefined)}
                         placeholder="e.g., 24 (for 2 years)"
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input placeholder-theme-text-muted py-3"
                       />
                     </div>
                   </div>
@@ -661,7 +661,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     id="auto_create_records"
                     checked={formData.auto_create_records}
                     onChange={(e) => updateField('auto_create_records', e.target.checked)}
-                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring mt-1"
+                    className="form-checkbox mt-1"
                   />
                   <div>
                     <label htmlFor="auto_create_records" className="text-theme-text-primary font-semibold block">
@@ -679,7 +679,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     id="require_completion_confirmation"
                     checked={formData.require_completion_confirmation}
                     onChange={(e) => updateField('require_completion_confirmation', e.target.checked)}
-                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring mt-1"
+                    className="form-checkbox mt-1"
                   />
                   <div>
                     <label htmlFor="require_completion_confirmation" className="text-theme-text-primary font-semibold block">
@@ -762,7 +762,7 @@ const CreateTrainingSessionPage: React.FC = () => {
             {currentStep < 4 ? (
               <button
                 onClick={() => setCurrentStep(currentStep + 1)}
-                className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                className="btn-primary font-medium px-6 py-3"
               >
                 Next
               </button>
@@ -770,7 +770,7 @@ const CreateTrainingSessionPage: React.FC = () => {
               <button
                 onClick={() => { void handleSubmit(); }}
                 disabled={saving}
-                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                className="btn-success disabled:cursor-not-allowed flex font-medium items-center px-6 py-3 space-x-2"
               >
                 {saving ? (
                   <>

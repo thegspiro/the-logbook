@@ -103,7 +103,7 @@ export const AccessLogsTab: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
+      <div className="card-secondary p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* IP Address Filter */}
           <div>

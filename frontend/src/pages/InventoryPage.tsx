@@ -814,7 +814,7 @@ const InventoryPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+          <div className="card p-12 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p className="text-theme-text-secondary" role="status" aria-live="polite">Loading inventory...</p>
           </div>
@@ -955,24 +955,24 @@ const InventoryPage: React.FC = () => {
         {/* Summary Stats */}
         {summary && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8" role="region" aria-label="Inventory statistics">
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Items</p>
               <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary.total_items}</p>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Value</p>
               <p className="text-emerald-700 dark:text-emerald-400 text-2xl font-bold mt-1">
                 ${summary.total_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </p>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Active Checkouts</p>
               <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">{summary.active_checkouts}</p>
               {summary.overdue_checkouts > 0 && (
                 <p className="text-red-700 dark:text-red-400 text-xs mt-1">{summary.overdue_checkouts} overdue</p>
               )}
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Maintenance Due</p>
               <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">{summary.maintenance_due_count}</p>
             </div>
@@ -1041,14 +1041,14 @@ const InventoryPage: React.FC = () => {
                     <button
                       onClick={() => { void handleReviewWriteOff(wo.id, 'approved'); }}
                       disabled={submitting}
-                      className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50"
+                      className="btn-success p-1.5"
                       title="Approve write-off"
                     >
                       <Check className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => { setReviewingWriteOff(wo); setWriteOffReviewNotes(''); }}
-                      className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+                      className="btn-primary p-1.5"
                       title="Deny (with notes)"
                     >
                       <XCircle className="w-4 h-4" />
@@ -1073,12 +1073,12 @@ const InventoryPage: React.FC = () => {
                   </p>
                   <div>
                     <label htmlFor="wo-deny-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason for denial</label>
-                    <textarea id="wo-deny-notes" rows={3} value={writeOffReviewNotes} onChange={(e) => setWriteOffReviewNotes(e.target.value)} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring" placeholder="Explain why this write-off is being denied..." />
+                    <textarea id="wo-deny-notes" rows={3} value={writeOffReviewNotes} onChange={(e) => setWriteOffReviewNotes(e.target.value)} className="form-input" placeholder="Explain why this write-off is being denied..." />
                   </div>
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setReviewingWriteOff(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={() => { void handleReviewWriteOff(reviewingWriteOff.id, 'denied'); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleReviewWriteOff(reviewingWriteOff.id, 'denied'); }} disabled={submitting} className="btn-primary">
                     {submitting ? 'Denying...' : 'Deny Write-Off'}
                   </button>
                 </div>
@@ -1112,14 +1112,14 @@ const InventoryPage: React.FC = () => {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       onClick={() => setShowApproveConfirm(req)}
-                      className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg"
+                      className="btn-success p-1.5"
                       title="Approve"
                     >
                       <Check className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => { setReviewingRequest(req); setReviewNotes(''); }}
-                      className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+                      className="btn-primary p-1.5"
                       title="Deny (with notes)"
                     >
                       <XCircle className="w-4 h-4" />
@@ -1142,12 +1142,12 @@ const InventoryPage: React.FC = () => {
                   <p className="text-theme-text-secondary text-sm mb-4">{reviewingRequest.item_name} requested by {reviewingRequest.requester_name || 'Unknown'}</p>
                   <div>
                     <label htmlFor="deny-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason for denial (optional)</label>
-                    <textarea id="deny-notes" rows={3} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring" placeholder="Explain why this request is being denied..." />
+                    <textarea id="deny-notes" rows={3} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} className="form-input" placeholder="Explain why this request is being denied..." />
                   </div>
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setReviewingRequest(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={() => { void handleReviewRequest(reviewingRequest.id, 'denied'); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleReviewRequest(reviewingRequest.id, 'denied'); }} disabled={submitting} className="btn-primary">
                     {submitting ? 'Denying...' : 'Deny Request'}
                   </button>
                 </div>
@@ -1177,7 +1177,7 @@ const InventoryPage: React.FC = () => {
                       void handleReviewRequest(reqId, 'approved');
                     }}
                     disabled={submitting}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    className="btn-success"
                   >
                     {submitting ? 'Approving...' : 'Approve Request'}
                   </button>
@@ -1237,7 +1237,7 @@ const InventoryPage: React.FC = () => {
         {activeTab === 'items' && (
           <>
             {/* Search & Filters */}
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6" role="search" aria-label="Search and filter inventory">
+            <div className="card mb-6 p-4" role="search" aria-label="Search and filter inventory">
               <div className="flex flex-col md:flex-row items-center gap-4">
                 <div className="relative flex-1 w-full md:max-w-md">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
@@ -1248,7 +1248,7 @@ const InventoryPage: React.FC = () => {
                     placeholder="Search by name, size, color, serial #, barcode..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="form-input focus:ring-emerald-500 pl-10 placeholder-theme-text-muted pr-4"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1342,7 +1342,7 @@ const InventoryPage: React.FC = () => {
               </div>
             )}
             {items.length === 0 && !filterLoading ? (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+              <div className="card p-12 text-center">
                 <Package className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Items Found</h3>
                 <p className="text-theme-text-secondary mb-6">
@@ -1360,7 +1360,7 @@ const InventoryPage: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
+              <div className="card overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full" aria-label="Inventory items list">
                     <thead className="bg-theme-input-bg border-b border-theme-surface-border">
@@ -1539,7 +1539,7 @@ const InventoryPage: React.FC = () => {
         {activeTab === 'categories' && (
           <>
             {categories.length === 0 ? (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+              <div className="card p-12 text-center">
                 <Tag className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Categories</h3>
                 <p className="text-theme-text-secondary mb-6">
@@ -1557,7 +1557,7 @@ const InventoryPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {categories.map((cat) => (
-                  <div key={cat.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+                  <div key={cat.id} className="stat-card">
                     <div className="flex items-start justify-between mb-3">
                       <h3 className="text-theme-text-primary font-semibold text-lg">{cat.name}</h3>
                       <div className="flex items-center gap-2">
@@ -1715,7 +1715,7 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label htmlFor="maint-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Type *</label>
-                          <select id="maint-type" value={maintenanceForm.maintenance_type || 'inspection'} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, maintenance_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          <select id="maint-type" value={maintenanceForm.maintenance_type || 'inspection'} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, maintenance_type: e.target.value })} className="form-input focus:ring-emerald-500">
                             <option value="inspection">Inspection</option>
                             <option value="repair">Repair</option>
                             <option value="cleaning">Cleaning</option>
@@ -1727,7 +1727,7 @@ const InventoryPage: React.FC = () => {
                         </div>
                         <div>
                           <label htmlFor="maint-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Condition After</label>
-                          <select id="maint-condition" value={maintenanceForm.condition_after || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, condition_after: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          <select id="maint-condition" value={maintenanceForm.condition_after || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, condition_after: e.target.value })} className="form-input focus:ring-emerald-500">
                             <option value="">No change</option>
                             {CONDITION_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                           </select>
@@ -1735,15 +1735,15 @@ const InventoryPage: React.FC = () => {
                       </div>
                       <div>
                         <label htmlFor="maint-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
-                        <textarea id="maint-description" rows={2} value={maintenanceForm.description || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="What was done?" />
+                        <textarea id="maint-description" rows={2} value={maintenanceForm.description || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })} className="form-input focus:ring-emerald-500" placeholder="What was done?" />
                       </div>
                       <div>
                         <label htmlFor="maint-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
-                        <textarea id="maint-notes" rows={2} value={maintenanceForm.notes || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, notes: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Any additional notes..." />
+                        <textarea id="maint-notes" rows={2} value={maintenanceForm.notes || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, notes: e.target.value })} className="form-input focus:ring-emerald-500" placeholder="Any additional notes..." />
                       </div>
                       <div>
                         <label htmlFor="maint-next-due" className="block text-sm font-medium text-theme-text-secondary mb-1">Next Due Date</label>
-                        <input id="maint-next-due" type="date" value={maintenanceForm.next_due_date || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, next_due_date: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        <input id="maint-next-due" type="date" value={maintenanceForm.next_due_date || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, next_due_date: e.target.value })} className="form-input focus:ring-emerald-500" />
                       </div>
                       <div className="flex items-center gap-2">
                         <input id="maint-completed" type="checkbox" checked={maintenanceForm.is_completed || false} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, is_completed: e.target.checked })} className="rounded border-theme-input-border text-emerald-600 focus:ring-emerald-500" />
@@ -1817,7 +1817,7 @@ const InventoryPage: React.FC = () => {
                           id="item-name"
                           type="text" required aria-required="true" value={itemForm.name}
                           onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="form-input focus:ring-emerald-500"
                         />
                       </div>
 
@@ -1828,7 +1828,7 @@ const InventoryPage: React.FC = () => {
                             id="item-category"
                             value={itemForm.category_id}
                             onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="form-input focus:ring-emerald-500"
                           >
                             <option value="">No Category</option>
                             {categories.map(c => (
@@ -1844,7 +1844,7 @@ const InventoryPage: React.FC = () => {
                             id="item-tracking-type"
                             value={itemForm.tracking_type}
                             onChange={(e) => setItemForm({ ...itemForm, tracking_type: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="form-input focus:ring-emerald-500"
                           >
                             <option value="individual">Individual (unique, serialized item)</option>
                             <option value="pool">Pool (bulk stock issued by quantity)</option>
@@ -1868,7 +1868,7 @@ const InventoryPage: React.FC = () => {
                           id="item-description"
                           rows={2} value={itemForm.description}
                           onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="form-input focus:ring-emerald-500"
                         />
                       </div>
 
@@ -1904,7 +1904,7 @@ const InventoryPage: React.FC = () => {
                               id="item-serial-number"
                               type="text" value={itemForm.serial_number}
                               onChange={(e) => setItemForm({ ...itemForm, serial_number: e.target.value })}
-                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="form-input focus:ring-emerald-500"
                               placeholder="e.g., SN-12345"
                             />
                           </div>
@@ -1914,7 +1914,7 @@ const InventoryPage: React.FC = () => {
                               id="item-asset-tag"
                               type="text" value={itemForm.asset_tag}
                               onChange={(e) => setItemForm({ ...itemForm, asset_tag: e.target.value })}
-                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="form-input focus:ring-emerald-500"
                               placeholder="e.g., AT-001"
                             />
                           </div>
@@ -1924,7 +1924,7 @@ const InventoryPage: React.FC = () => {
                               id="item-barcode"
                               type="text" value={itemForm.barcode}
                               onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })}
-                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="form-input focus:ring-emerald-500"
                               placeholder="Auto-generated if blank"
                             />
                             {!itemForm.barcode && (
@@ -1942,7 +1942,7 @@ const InventoryPage: React.FC = () => {
                             id="item-manufacturer"
                             type="text" value={itemForm.manufacturer}
                             onChange={(e) => setItemForm({ ...itemForm, manufacturer: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="form-input focus:ring-emerald-500"
                           />
                         </div>
                         <div>
@@ -1951,7 +1951,7 @@ const InventoryPage: React.FC = () => {
                             id="item-model-number"
                             type="text" value={itemForm.model_number}
                             onChange={(e) => setItemForm({ ...itemForm, model_number: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="form-input focus:ring-emerald-500"
                           />
                         </div>
                       </div>
@@ -1964,7 +1964,7 @@ const InventoryPage: React.FC = () => {
                             id="item-size"
                             type="text" value={itemForm.size}
                             onChange={(e) => setItemForm({ ...itemForm, size: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="form-input focus:ring-emerald-500"
                             placeholder="e.g., Large, 10.5"
                           />
                         </div>
@@ -1974,7 +1974,7 @@ const InventoryPage: React.FC = () => {
                             id="item-color"
                             type="text" value={itemForm.color}
                             onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="form-input focus:ring-emerald-500"
                             placeholder="e.g., Black"
                           />
                         </div>
@@ -1985,7 +1985,7 @@ const InventoryPage: React.FC = () => {
                               id="item-unit-of-measure"
                               type="text" value={itemForm.unit_of_measure}
                               onChange={(e) => setItemForm({ ...itemForm, unit_of_measure: e.target.value })}
-                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="form-input focus:ring-emerald-500"
                               placeholder="e.g., pair, box, each"
                             />
                           </div>
@@ -2008,7 +2008,7 @@ const InventoryPage: React.FC = () => {
                                   station: selectedRoom?.building || itemForm.station,
                                 });
                               }}
-                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="form-input focus:ring-emerald-500"
                             >
                               <option value="">Select a room</option>
                               {rooms.map(r => (
@@ -2030,7 +2030,7 @@ const InventoryPage: React.FC = () => {
                               id="item-storage-area"
                               value={itemForm.storage_area_id || ''}
                               onChange={(e) => setItemForm({ ...itemForm, storage_area_id: e.target.value })}
-                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="form-input focus:ring-emerald-500"
                             >
                               <option value="">Select storage area</option>
                               {storageAreas.map(sa => (
@@ -2044,7 +2044,7 @@ const InventoryPage: React.FC = () => {
                               id="item-storage-area"
                               type="text" value={itemForm.storage_location}
                               onChange={(e) => setItemForm({ ...itemForm, storage_location: e.target.value })}
-                              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="form-input focus:ring-emerald-500"
                               placeholder="e.g., Shelf 5, Closet B, Room 201"
                             />
                           )}
@@ -2059,7 +2059,7 @@ const InventoryPage: React.FC = () => {
                             id="item-condition"
                             value={itemForm.condition}
                             onChange={(e) => setItemForm({ ...itemForm, condition: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="form-input focus:ring-emerald-500"
                           >
                             {CONDITION_OPTIONS.map(c => (
                               <option key={c.value} value={c.value}>{c.label}</option>
@@ -2072,7 +2072,7 @@ const InventoryPage: React.FC = () => {
                             id="item-status"
                             value={itemForm.status}
                             onChange={(e) => setItemForm({ ...itemForm, status: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="form-input focus:ring-emerald-500"
                           >
                             {STATUS_OPTIONS.map(s => (
                               <option key={s.value} value={s.value}>{s.label}</option>
@@ -2087,7 +2087,7 @@ const InventoryPage: React.FC = () => {
                             id="item-quantity"
                             type="number" min="1" value={itemForm.quantity}
                             onChange={(e) => setItemForm({ ...itemForm, quantity: parseInt(e.target.value) || 1 })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="form-input focus:ring-emerald-500"
                           />
                         </div>
                       </div>
@@ -2107,7 +2107,7 @@ const InventoryPage: React.FC = () => {
                                 type="number" min="0" step="0.01"
                                 value={itemForm.purchase_price ?? ''}
                                 onChange={(e) => setItemForm({ ...itemForm, purchase_price: e.target.value ? parseFloat(e.target.value) : undefined })}
-                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="form-input focus:ring-emerald-500"
                                 placeholder="0.00"
                               />
                             </div>
@@ -2117,7 +2117,7 @@ const InventoryPage: React.FC = () => {
                                 id="item-purchase-date"
                                 type="date" value={itemForm.purchase_date}
                                 onChange={(e) => setItemForm({ ...itemForm, purchase_date: e.target.value })}
-                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="form-input focus:ring-emerald-500"
                               />
                             </div>
                             <div>
@@ -2126,7 +2126,7 @@ const InventoryPage: React.FC = () => {
                                 id="item-vendor"
                                 type="text" value={itemForm.vendor}
                                 onChange={(e) => setItemForm({ ...itemForm, vendor: e.target.value })}
-                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="form-input focus:ring-emerald-500"
                               />
                             </div>
                           </div>
@@ -2137,7 +2137,7 @@ const InventoryPage: React.FC = () => {
                                 id="item-warranty-expiration"
                                 type="date" value={itemForm.warranty_expiration}
                                 onChange={(e) => setItemForm({ ...itemForm, warranty_expiration: e.target.value })}
-                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="form-input focus:ring-emerald-500"
                               />
                             </div>
                             <div>
@@ -2147,7 +2147,7 @@ const InventoryPage: React.FC = () => {
                                 type="number" min="0"
                                 value={itemForm.inspection_interval_days ?? ''}
                                 onChange={(e) => setItemForm({ ...itemForm, inspection_interval_days: e.target.value ? parseInt(e.target.value) : undefined })}
-                                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="form-input focus:ring-emerald-500"
                                 placeholder="e.g., 365"
                               />
                             </div>
@@ -2162,7 +2162,7 @@ const InventoryPage: React.FC = () => {
                           id="item-notes"
                           rows={2} value={itemForm.notes}
                           onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="form-input focus:ring-emerald-500"
                         />
                       </div>
                     </div>
@@ -2222,7 +2222,7 @@ const InventoryPage: React.FC = () => {
                           id="category-name"
                           type="text" required aria-required="true" value={categoryForm.name}
                           onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="form-input focus:ring-emerald-500"
                           placeholder="e.g., Bunker Gear, SCBA, Radios"
                         />
                       </div>
@@ -2232,7 +2232,7 @@ const InventoryPage: React.FC = () => {
                           id="category-item-type"
                           value={categoryForm.item_type} required aria-required="true"
                           onChange={(e) => setCategoryForm({ ...categoryForm, item_type: e.target.value })}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="form-input focus:ring-emerald-500"
                         >
                           {ITEM_TYPES.map(t => (
                             <option key={t.value} value={t.value}>{t.label}</option>
@@ -2245,7 +2245,7 @@ const InventoryPage: React.FC = () => {
                           id="category-description"
                           rows={2} value={categoryForm.description}
                           onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="form-input focus:ring-emerald-500"
                         />
                       </div>
                       <div className="space-y-2">
@@ -2288,7 +2288,7 @@ const InventoryPage: React.FC = () => {
                           id="category-low-stock"
                           type="number" min="0" value={categoryForm.low_stock_threshold || ''}
                           onChange={(e) => setCategoryForm({ ...categoryForm, low_stock_threshold: e.target.value ? parseInt(e.target.value) : undefined })}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="form-input focus:ring-emerald-500"
                           placeholder="Optional - alert when stock falls below"
                         />
                       </div>
@@ -2361,23 +2361,23 @@ const InventoryPage: React.FC = () => {
                       {/* Basic Info */}
                       <div>
                         <label htmlFor="edit-item-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
-                        <input id="edit-item-name" type="text" required value={editForm.name || ''} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        <input id="edit-item-name" type="text" required value={editForm.name || ''} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="form-input focus:ring-emerald-500" />
                       </div>
                       <div>
                         <label htmlFor="edit-item-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
-                        <textarea id="edit-item-description" rows={2} value={editForm.description || ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        <textarea id="edit-item-description" rows={2} value={editForm.description || ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} className="form-input focus:ring-emerald-500" />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label htmlFor="edit-item-category" className="block text-sm font-medium text-theme-text-secondary mb-1">Category</label>
-                          <select id="edit-item-category" value={editForm.category_id || ''} onChange={(e) => setEditForm({ ...editForm, category_id: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          <select id="edit-item-category" value={editForm.category_id || ''} onChange={(e) => setEditForm({ ...editForm, category_id: e.target.value })} className="form-input focus:ring-emerald-500">
                             <option value="">No Category</option>
                             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         </div>
                         <div>
                           <label htmlFor="edit-item-tracking-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Tracking Type</label>
-                          <select id="edit-item-tracking-type" value={editForm.tracking_type || 'individual'} onChange={(e) => setEditForm({ ...editForm, tracking_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          <select id="edit-item-tracking-type" value={editForm.tracking_type || 'individual'} onChange={(e) => setEditForm({ ...editForm, tracking_type: e.target.value })} className="form-input focus:ring-emerald-500">
                             <option value="individual">Individual</option>
                             <option value="pool">Pool</option>
                           </select>
@@ -2392,17 +2392,17 @@ const InventoryPage: React.FC = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div>
                             <label htmlFor="edit-item-serial" className="block text-sm font-medium text-theme-text-secondary mb-1">Serial Number</label>
-                            <input id="edit-item-serial" type="text" value={editForm.serial_number || ''} onChange={(e) => setEditForm({ ...editForm, serial_number: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                            <input id="edit-item-serial" type="text" value={editForm.serial_number || ''} onChange={(e) => setEditForm({ ...editForm, serial_number: e.target.value })} className="form-input focus:ring-emerald-500" />
                           </div>
                           <div>
                             <label htmlFor="edit-item-asset-tag" className="block text-sm font-medium text-theme-text-secondary mb-1">Asset Tag</label>
-                            <input id="edit-item-asset-tag" type="text" value={editForm.asset_tag || ''} onChange={(e) => setEditForm({ ...editForm, asset_tag: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                            <input id="edit-item-asset-tag" type="text" value={editForm.asset_tag || ''} onChange={(e) => setEditForm({ ...editForm, asset_tag: e.target.value })} className="form-input focus:ring-emerald-500" />
                           </div>
                           <div>
                             <label htmlFor="edit-item-barcode" className="block text-sm font-medium text-theme-text-secondary mb-1 flex items-center gap-1">
                               <Barcode className="w-3.5 h-3.5" aria-hidden="true" /> Barcode
                             </label>
-                            <input id="edit-item-barcode" type="text" value={editForm.barcode || ''} onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono" placeholder={editForm.asset_tag || editForm.serial_number || 'No barcode assigned'} />
+                            <input id="edit-item-barcode" type="text" value={editForm.barcode || ''} onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })} className="form-input focus:ring-emerald-500 font-mono" placeholder={editForm.asset_tag || editForm.serial_number || 'No barcode assigned'} />
                             {!editForm.barcode && (editForm.asset_tag || editForm.serial_number) && (
                               <p className="text-xs text-theme-text-muted mt-1">Label will use {editForm.asset_tag ? 'asset tag' : 'serial number'} if barcode is blank.</p>
                             )}
@@ -2414,11 +2414,11 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label htmlFor="edit-item-manufacturer" className="block text-sm font-medium text-theme-text-secondary mb-1">Manufacturer</label>
-                          <input id="edit-item-manufacturer" type="text" value={editForm.manufacturer || ''} onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          <input id="edit-item-manufacturer" type="text" value={editForm.manufacturer || ''} onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })} className="form-input focus:ring-emerald-500" />
                         </div>
                         <div>
                           <label htmlFor="edit-item-model" className="block text-sm font-medium text-theme-text-secondary mb-1">Model Number</label>
-                          <input id="edit-item-model" type="text" value={editForm.model_number || ''} onChange={(e) => setEditForm({ ...editForm, model_number: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          <input id="edit-item-model" type="text" value={editForm.model_number || ''} onChange={(e) => setEditForm({ ...editForm, model_number: e.target.value })} className="form-input focus:ring-emerald-500" />
                         </div>
                       </div>
 
@@ -2426,16 +2426,16 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                           <label htmlFor="edit-item-size" className="block text-sm font-medium text-theme-text-secondary mb-1">Size</label>
-                          <input id="edit-item-size" type="text" value={editForm.size || ''} onChange={(e) => setEditForm({ ...editForm, size: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Large, 10.5" />
+                          <input id="edit-item-size" type="text" value={editForm.size || ''} onChange={(e) => setEditForm({ ...editForm, size: e.target.value })} className="form-input focus:ring-emerald-500" placeholder="e.g., Large, 10.5" />
                         </div>
                         <div>
                           <label htmlFor="edit-item-color" className="block text-sm font-medium text-theme-text-secondary mb-1">Color</label>
-                          <input id="edit-item-color" type="text" value={editForm.color || ''} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          <input id="edit-item-color" type="text" value={editForm.color || ''} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })} className="form-input focus:ring-emerald-500" />
                         </div>
                         {editForm.tracking_type === 'pool' && (
                           <div>
                             <label htmlFor="edit-item-uom" className="block text-sm font-medium text-theme-text-secondary mb-1">Unit of Measure</label>
-                            <input id="edit-item-uom" type="text" value={editForm.unit_of_measure || ''} onChange={(e) => setEditForm({ ...editForm, unit_of_measure: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., pair, box, each" />
+                            <input id="edit-item-uom" type="text" value={editForm.unit_of_measure || ''} onChange={(e) => setEditForm({ ...editForm, unit_of_measure: e.target.value })} className="form-input focus:ring-emerald-500" placeholder="e.g., pair, box, each" />
                           </div>
                         )}
                       </div>
@@ -2448,7 +2448,7 @@ const InventoryPage: React.FC = () => {
                             <select id="edit-item-room" value={editForm.location_id || ''} onChange={(e) => {
                               const selectedRoom = rooms.find(r => r.id === e.target.value);
                               setEditForm({ ...editForm, location_id: e.target.value, station: selectedRoom?.building || editForm.station });
-                            }} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            }} className="form-input focus:ring-emerald-500">
                               <option value="">Select a room</option>
                               {rooms.map(r => (
                                 <option key={r.id} value={r.id}>
@@ -2465,7 +2465,7 @@ const InventoryPage: React.FC = () => {
                         <div>
                           <label htmlFor="edit-item-storage-area" className="block text-sm font-medium text-theme-text-secondary mb-1">Storage Area</label>
                           {storageAreas.length > 0 ? (
-                            <select id="edit-item-storage-area" value={editForm.storage_area_id || ''} onChange={(e) => setEditForm({ ...editForm, storage_area_id: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <select id="edit-item-storage-area" value={editForm.storage_area_id || ''} onChange={(e) => setEditForm({ ...editForm, storage_area_id: e.target.value })} className="form-input focus:ring-emerald-500">
                               <option value="">Select storage area</option>
                               {storageAreas.map(sa => (
                                 <option key={sa.id} value={sa.id}>
@@ -2474,7 +2474,7 @@ const InventoryPage: React.FC = () => {
                               ))}
                             </select>
                           ) : (
-                            <input id="edit-item-storage-area" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Shelf 5, Closet B, Room 201" />
+                            <input id="edit-item-storage-area" type="text" value={editForm.storage_location || ''} onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })} className="form-input focus:ring-emerald-500" placeholder="e.g., Shelf 5, Closet B, Room 201" />
                           )}
                         </div>
                       </div>
@@ -2483,13 +2483,13 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                           <label htmlFor="edit-item-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Condition</label>
-                          <select id="edit-item-condition" value={editForm.condition || 'good'} onChange={(e) => setEditForm({ ...editForm, condition: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          <select id="edit-item-condition" value={editForm.condition || 'good'} onChange={(e) => setEditForm({ ...editForm, condition: e.target.value })} className="form-input focus:ring-emerald-500">
                             {CONDITION_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                           </select>
                         </div>
                         <div>
                           <label htmlFor="edit-item-status" className="block text-sm font-medium text-theme-text-secondary mb-1">Status</label>
-                          <select id="edit-item-status" value={editForm.status || 'available'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          <select id="edit-item-status" value={editForm.status || 'available'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="form-input focus:ring-emerald-500">
                             {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                           </select>
                         </div>
@@ -2497,7 +2497,7 @@ const InventoryPage: React.FC = () => {
                           <label htmlFor="edit-item-quantity" className="block text-sm font-medium text-theme-text-secondary mb-1">
                             {editForm.tracking_type === 'pool' ? 'Total Stock' : 'Quantity'}
                           </label>
-                          <input id="edit-item-quantity" type="number" min="1" value={editForm.quantity ?? 1} onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                          <input id="edit-item-quantity" type="number" min="1" value={editForm.quantity ?? 1} onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value) || 1 })} className="form-input focus:ring-emerald-500" />
                         </div>
                       </div>
 
@@ -2511,25 +2511,25 @@ const InventoryPage: React.FC = () => {
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
                               <label htmlFor="edit-item-purchase-price" className="block text-sm font-medium text-theme-text-secondary mb-1">Purchase Price</label>
-                              <input id="edit-item-purchase-price" type="number" min="0" step="0.01" value={editForm.purchase_price ?? ''} onChange={(e) => setEditForm({ ...editForm, purchase_price: e.target.value ? parseFloat(e.target.value) : undefined })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="0.00" />
+                              <input id="edit-item-purchase-price" type="number" min="0" step="0.01" value={editForm.purchase_price ?? ''} onChange={(e) => setEditForm({ ...editForm, purchase_price: e.target.value ? parseFloat(e.target.value) : undefined })} className="form-input focus:ring-emerald-500" placeholder="0.00" />
                             </div>
                             <div>
                               <label htmlFor="edit-item-purchase-date" className="block text-sm font-medium text-theme-text-secondary mb-1">Purchase Date</label>
-                              <input id="edit-item-purchase-date" type="date" value={editForm.purchase_date || ''} onChange={(e) => setEditForm({ ...editForm, purchase_date: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                              <input id="edit-item-purchase-date" type="date" value={editForm.purchase_date || ''} onChange={(e) => setEditForm({ ...editForm, purchase_date: e.target.value })} className="form-input focus:ring-emerald-500" />
                             </div>
                             <div>
                               <label htmlFor="edit-item-vendor" className="block text-sm font-medium text-theme-text-secondary mb-1">Vendor</label>
-                              <input id="edit-item-vendor" type="text" value={editForm.vendor || ''} onChange={(e) => setEditForm({ ...editForm, vendor: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                              <input id="edit-item-vendor" type="text" value={editForm.vendor || ''} onChange={(e) => setEditForm({ ...editForm, vendor: e.target.value })} className="form-input focus:ring-emerald-500" />
                             </div>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <label htmlFor="edit-item-warranty" className="block text-sm font-medium text-theme-text-secondary mb-1">Warranty Expiration</label>
-                              <input id="edit-item-warranty" type="date" value={editForm.warranty_expiration || ''} onChange={(e) => setEditForm({ ...editForm, warranty_expiration: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                              <input id="edit-item-warranty" type="date" value={editForm.warranty_expiration || ''} onChange={(e) => setEditForm({ ...editForm, warranty_expiration: e.target.value })} className="form-input focus:ring-emerald-500" />
                             </div>
                             <div>
                               <label htmlFor="edit-item-inspection-interval" className="block text-sm font-medium text-theme-text-secondary mb-1">Inspection Interval (days)</label>
-                              <input id="edit-item-inspection-interval" type="number" min="0" value={editForm.inspection_interval_days ?? ''} onChange={(e) => setEditForm({ ...editForm, inspection_interval_days: e.target.value ? parseInt(e.target.value) : undefined })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., 365" />
+                              <input id="edit-item-inspection-interval" type="number" min="0" value={editForm.inspection_interval_days ?? ''} onChange={(e) => setEditForm({ ...editForm, inspection_interval_days: e.target.value ? parseInt(e.target.value) : undefined })} className="form-input focus:ring-emerald-500" placeholder="e.g., 365" />
                             </div>
                           </div>
                         </div>
@@ -2538,7 +2538,7 @@ const InventoryPage: React.FC = () => {
                       {/* Rank Restriction */}
                       <div>
                         <label htmlFor="edit-item-min-rank" className="block text-sm font-medium text-theme-text-secondary mb-1">Minimum Rank to Request</label>
-                        <select id="edit-item-min-rank" value={editForm.min_rank_order ?? ''} onChange={(e) => setEditForm({ ...editForm, min_rank_order: e.target.value === '' ? null : Number(e.target.value) })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <select id="edit-item-min-rank" value={editForm.min_rank_order ?? ''} onChange={(e) => setEditForm({ ...editForm, min_rank_order: e.target.value === '' ? null : Number(e.target.value) })} className="form-input focus:ring-emerald-500">
                           <option value="">No restriction (all members)</option>
                           {ranks.map(r => <option key={r.id} value={r.sort_order}>{r.display_name} and above</option>)}
                         </select>
@@ -2577,7 +2577,7 @@ const InventoryPage: React.FC = () => {
                       {/* Notes */}
                       <div>
                         <label htmlFor="edit-item-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
-                        <textarea id="edit-item-notes" rows={2} value={editForm.notes || ''} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        <textarea id="edit-item-notes" rows={2} value={editForm.notes || ''} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} className="form-input focus:ring-emerald-500" />
                       </div>
                     </div>
                   </div>
@@ -2628,12 +2628,12 @@ const InventoryPage: React.FC = () => {
                   </p>
                   <div>
                     <label htmlFor="retire-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Retirement Notes (optional)</label>
-                    <textarea id="retire-notes" rows={2} value={retireNotes} onChange={(e) => setRetireNotes(e.target.value)} placeholder="Reason for retirement..." className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring" />
+                    <textarea id="retire-notes" rows={2} value={retireNotes} onChange={(e) => setRetireNotes(e.target.value)} placeholder="Reason for retirement..." className="form-input" />
                   </div>
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => { setShowRetireConfirm(null); setRetireNotes(''); }} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={() => { void handleRetireItem(); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleRetireItem(); }} disabled={submitting} className="btn-primary">
                     {submitting ? 'Retiring...' : 'Retire Item'}
                   </button>
                 </div>
@@ -2651,7 +2651,7 @@ const InventoryPage: React.FC = () => {
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4">Change Status ({selectedItemIds.size} items)</h3>
                   <div>
                     <label htmlFor="bulk-status-select" className="block text-sm font-medium text-theme-text-secondary mb-1">New Status</label>
-                    <select id="bulk-status-select" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <select id="bulk-status-select" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} className="form-input focus:ring-emerald-500">
                       <option value="">Select status...</option>
                       {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
@@ -2687,7 +2687,7 @@ const InventoryPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                   <button onClick={() => setShowBulkRetireModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                  <button onClick={() => { void handleBulkRetire(); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => { void handleBulkRetire(); }} disabled={submitting} className="btn-primary">
                     {submitting ? 'Retiring...' : 'Retire All'}
                   </button>
                 </div>
@@ -2718,17 +2718,17 @@ const InventoryPage: React.FC = () => {
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="edit-category-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
-                        <input id="edit-category-name" type="text" required value={editCategoryForm.name || ''} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, name: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        <input id="edit-category-name" type="text" required value={editCategoryForm.name || ''} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, name: e.target.value })} className="form-input focus:ring-emerald-500" />
                       </div>
                       <div>
                         <label htmlFor="edit-category-item-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Item Type *</label>
-                        <select id="edit-category-item-type" value={editCategoryForm.item_type || 'equipment'} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, item_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <select id="edit-category-item-type" value={editCategoryForm.item_type || 'equipment'} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, item_type: e.target.value })} className="form-input focus:ring-emerald-500">
                           {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                         </select>
                       </div>
                       <div>
                         <label htmlFor="edit-category-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
-                        <textarea id="edit-category-description" rows={2} value={editCategoryForm.description || ''} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, description: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        <textarea id="edit-category-description" rows={2} value={editCategoryForm.description || ''} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, description: e.target.value })} className="form-input focus:ring-emerald-500" />
                       </div>
                       <div className="space-y-2">
                         <label className="flex items-center space-x-2">
@@ -2750,7 +2750,7 @@ const InventoryPage: React.FC = () => {
                       </div>
                       <div>
                         <label htmlFor="edit-category-low-stock" className="block text-sm font-medium text-theme-text-secondary mb-1">Low Stock Threshold</label>
-                        <input id="edit-category-low-stock" type="number" min="0" value={editCategoryForm.low_stock_threshold || ''} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, low_stock_threshold: e.target.value ? parseInt(e.target.value) : undefined })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Alert when stock falls below" />
+                        <input id="edit-category-low-stock" type="number" min="0" value={editCategoryForm.low_stock_threshold || ''} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, low_stock_threshold: e.target.value ? parseInt(e.target.value) : undefined })} className="form-input focus:ring-emerald-500" placeholder="Alert when stock falls below" />
                       </div>
                     </div>
                   </div>
@@ -2778,18 +2778,18 @@ const InventoryPage: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="pool-issue-member" className="block text-sm font-medium text-theme-text-secondary mb-1">Member *</label>
-                      <select id="pool-issue-member" value={poolIssueForm.member_id} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, member_id: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring">
+                      <select id="pool-issue-member" value={poolIssueForm.member_id} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, member_id: e.target.value })} className="form-input">
                         <option value="">Select member...</option>
                         {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <label htmlFor="pool-issue-quantity" className="block text-sm font-medium text-theme-text-secondary mb-1">Quantity</label>
-                      <input id="pool-issue-quantity" type="number" min="1" max={poolIssueItem.quantity - poolIssueItem.quantity_issued} value={poolIssueForm.quantity} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, quantity: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring" />
+                      <input id="pool-issue-quantity" type="number" min="1" max={poolIssueItem.quantity - poolIssueItem.quantity_issued} value={poolIssueForm.quantity} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, quantity: parseInt(e.target.value) || 1 })} className="form-input" />
                     </div>
                     <div>
                       <label htmlFor="pool-issue-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason (optional)</label>
-                      <input id="pool-issue-reason" type="text" value={poolIssueForm.reason} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, reason: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring" placeholder="e.g., Initial issue, replacement" />
+                      <input id="pool-issue-reason" type="text" value={poolIssueForm.reason} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, reason: e.target.value })} className="form-input" placeholder="e.g., Initial issue, replacement" />
                     </div>
                   </div>
                 </div>
@@ -2827,7 +2827,7 @@ const InventoryPage: React.FC = () => {
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="wo-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
-                        <select id="wo-reason" value={writeOffForm.reason} onChange={(e) => setWriteOffForm({ ...writeOffForm, reason: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring">
+                        <select id="wo-reason" value={writeOffForm.reason} onChange={(e) => setWriteOffForm({ ...writeOffForm, reason: e.target.value })} className="form-input">
                           <option value="lost">Lost</option>
                           <option value="stolen">Stolen</option>
                           <option value="damaged_beyond_repair">Damaged Beyond Repair</option>
@@ -2837,13 +2837,13 @@ const InventoryPage: React.FC = () => {
                       </div>
                       <div>
                         <label htmlFor="wo-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
-                        <textarea id="wo-description" rows={3} required value={writeOffForm.description} onChange={(e) => setWriteOffForm({ ...writeOffForm, description: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring" placeholder="Describe the circumstances..." />
+                        <textarea id="wo-description" rows={3} required value={writeOffForm.description} onChange={(e) => setWriteOffForm({ ...writeOffForm, description: e.target.value })} className="form-input" placeholder="Describe the circumstances..." />
                       </div>
                     </div>
                   </div>
                   <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
                     <button type="button" onClick={() => setShowWriteOffModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-                    <button type="submit" disabled={submitting || !writeOffForm.description.trim()} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    <button type="submit" disabled={submitting || !writeOffForm.description.trim()} className="btn-primary">
                       {submitting ? 'Submitting...' : 'Submit Write-Off Request'}
                     </button>
                   </div>

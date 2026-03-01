@@ -648,7 +648,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
           </button>
           <button
             onClick={handleSave}
-            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            className="btn-primary px-6"
           >
             {editingStage ? 'Update Stage' : 'Add Stage'}
           </button>

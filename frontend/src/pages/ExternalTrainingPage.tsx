@@ -352,7 +352,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+                  className="btn-primary px-6"
                 >
                   {isSubmitting ? 'Creating...' : 'Create Provider'}
                 </button>
@@ -474,7 +474,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
         <button
           onClick={() => onSync(provider.id)}
           disabled={isSyncing}
-          className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg disabled:opacity-50"
+          className="btn-primary flex gap-2 items-center px-3 text-sm"
         >
           {isSyncing ? (
             <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -743,7 +743,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+              className="btn-primary px-6"
             >
               {isSubmitting ? 'Saving...' : 'Save Changes'}
             </button>
@@ -1045,7 +1045,7 @@ const ExternalTrainingPage: React.FC = () => {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+            className="btn-primary flex gap-2 items-center"
           >
             <Plus className="w-5 h-5" aria-hidden="true" />
             Add Provider
@@ -1112,7 +1112,7 @@ const ExternalTrainingPage: React.FC = () => {
                 </p>
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+                  className="btn-primary gap-2 inline-flex items-center"
                 >
                   <Plus className="w-5 h-5" aria-hidden="true" />
                   Add Provider
