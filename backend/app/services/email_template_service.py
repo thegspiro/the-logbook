@@ -1025,6 +1025,202 @@ DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
 )
 
 
+# Default ballot notification email
+DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
+    <div class="header" style="background-color: #4f46e5;">
+        <h1>{{election_title}}</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>A ballot is now available for your review and vote.</p>
+
+        <div class="details">
+            <p><strong>Election:</strong> {{election_title}}</p>
+            <p><strong>Meeting Date:</strong> {{meeting_date}}</p>
+        </div>
+
+        {{#custom_message}}
+        <p>{{custom_message}}</p>
+        {{/custom_message}}
+
+        <p style="text-align: center;">
+            <a href="{{ballot_url}}" class="button">Vote Now</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from your department.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_BALLOT_NOTIFICATION_TEXT = """Ballot Available: {{election_title}}
+
+Hello {{recipient_name}},
+
+A ballot is now available for your review and vote.
+
+Election: {{election_title}}
+Meeting Date: {{meeting_date}}
+
+{{custom_message}}
+
+Vote here: {{ballot_url}}
+
+---
+This is an automated message from your department.
+Please do not reply to this email."""
+
+DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
+
+
+# Default event cancellation email
+DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
+    <div class="header" style="background-color: #dc2626;">
+        <h1>Event Cancelled</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>The following event has been cancelled:</p>
+
+        <div class="details">
+            <p><strong>Event:</strong> {{event_title}}</p>
+            <p><strong>Original Date:</strong> {{event_date}}</p>
+            <p><strong>Reason:</strong> {{reason}}</p>
+        </div>
+
+        <p>Please update your calendar accordingly. If you have questions, contact your department leadership.</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_EVENT_CANCELLATION_TEXT = """Event Cancelled
+
+Hello {{recipient_name}},
+
+The following event has been cancelled:
+
+Event: {{event_title}}
+Original Date: {{event_date}}
+Reason: {{reason}}
+
+Please update your calendar accordingly.
+
+---
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
+
+DEFAULT_EVENT_CANCELLATION_SUBJECT = (
+    "Event Cancelled: {{event_title}} — {{organization_name}}"
+)
+
+
+# Default event reminder email
+DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
+    <div class="header">
+        <h1>Event Reminder</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>This is a reminder about an upcoming event:</p>
+
+        <div class="details">
+            <p><strong>Event:</strong> {{event_title}}</p>
+            <p><strong>Type:</strong> {{event_type}}</p>
+            <p><strong>Start:</strong> {{event_start}}</p>
+            <p><strong>End:</strong> {{event_end}}</p>
+            <p><strong>Location:</strong> {{location_name}}</p>
+            <p>{{location_details}}</p>
+        </div>
+
+        <p style="text-align: center;">
+            <a href="{{event_url}}" class="button">View Event</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated reminder.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_EVENT_REMINDER_TEXT = """Event Reminder
+
+Hello {{recipient_name}},
+
+This is a reminder about an upcoming event:
+
+Event: {{event_title}}
+Type: {{event_type}}
+Start: {{event_start}}
+End: {{event_end}}
+Location: {{location_name}}
+{{location_details}}
+
+View event: {{event_url}}
+
+---
+This is an automated reminder.
+Please do not reply to this email."""
+
+DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
+
+
+# Default training approval email
+DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
+    <div class="header" style="background-color: #7c3aed;">
+        <h1>Training Approval Needed</h1>
+    </div>
+    <div class="content">
+        <p>Hello,</p>
+
+        <p>A training event has been submitted and requires your approval:</p>
+
+        <div class="details">
+            <p><strong>Course:</strong> {{course_name}}</p>
+            <p><strong>Event:</strong> {{event_title}}</p>
+            <p><strong>Date:</strong> {{event_date}}</p>
+            <p><strong>Attendees:</strong> {{attendee_count}}</p>
+            <p><strong>Submitted by:</strong> {{submitter_name}}</p>
+            <p><strong>Approval Deadline:</strong> {{approval_deadline}}</p>
+        </div>
+
+        <p style="text-align: center;">
+            <a href="{{approval_url}}" class="button">Review &amp; Approve</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_TRAINING_APPROVAL_TEXT = """Training Approval Needed
+
+A training event has been submitted and requires your approval:
+
+Course: {{course_name}}
+Event: {{event_title}}
+Date: {{event_date}}
+Attendees: {{attendee_count}}
+Submitted by: {{submitter_name}}
+Approval Deadline: {{approval_deadline}}
+
+Review and approve: {{approval_url}}
+
+---
+This is an automated message.
+Please do not reply to this email."""
+
+DEFAULT_TRAINING_APPROVAL_SUBJECT = (
+    "Training Approval Needed: {{course_name}} — {{event_date}}"
+)
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -1251,6 +1447,110 @@ class EmailTemplateService:
             created.append(template)
             logger.info(
                 f"Created default password reset email template for org {organization_id}"
+            )
+
+        # Check for event cancellation template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.EVENT_CANCELLATION,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.EVENT_CANCELLATION,
+                name="Event Cancellation",
+                subject=DEFAULT_EVENT_CANCELLATION_SUBJECT,
+                html_body=DEFAULT_EVENT_CANCELLATION_HTML,
+                text_body=DEFAULT_EVENT_CANCELLATION_TEXT,
+                description=(
+                    "Sent to attendees when an event is cancelled. "
+                    "Includes the event name, original date, and cancellation reason."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default event cancellation email template for org {organization_id}"
+            )
+
+        # Check for event reminder template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.EVENT_REMINDER,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.EVENT_REMINDER,
+                name="Event Reminder",
+                subject=DEFAULT_EVENT_REMINDER_SUBJECT,
+                html_body=DEFAULT_EVENT_REMINDER_HTML,
+                text_body=DEFAULT_EVENT_REMINDER_TEXT,
+                description=(
+                    "Sent to attendees as a reminder before an upcoming event. "
+                    "Includes event details, time, and location."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default event reminder email template for org {organization_id}"
+            )
+
+        # Check for training approval template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.TRAINING_APPROVAL,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.TRAINING_APPROVAL,
+                name="Training Approval Request",
+                subject=DEFAULT_TRAINING_APPROVAL_SUBJECT,
+                html_body=DEFAULT_TRAINING_APPROVAL_HTML,
+                text_body=DEFAULT_TRAINING_APPROVAL_TEXT,
+                description=(
+                    "Sent to approvers when a training event is submitted for approval. "
+                    "Includes course details, attendee count, and approval deadline."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default training approval email template for org {organization_id}"
+            )
+
+        # Check for ballot notification template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.BALLOT_NOTIFICATION,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.BALLOT_NOTIFICATION,
+                name="Ballot Notification",
+                subject=DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
+                html_body=DEFAULT_BALLOT_NOTIFICATION_HTML,
+                text_body=DEFAULT_BALLOT_NOTIFICATION_TEXT,
+                description=(
+                    "Sent to eligible voters when a ballot is available. "
+                    "Includes the election title, meeting date, and a link to vote."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default ballot notification email template for org {organization_id}"
             )
 
         # Check for member dropped template
