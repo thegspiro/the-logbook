@@ -805,7 +805,8 @@ class SecurityMonitoringService:
             )
             if threat_level:
                 query = query.where(
-                    SecurityAlertRecord.threat_level == DBThreatLevel(threat_level.value)
+                    SecurityAlertRecord.threat_level
+                    == DBThreatLevel(threat_level.value)
                 )
             if alert_type:
                 query = query.where(
@@ -819,8 +820,16 @@ class SecurityMonitoringService:
             return [
                 {
                     "id": r.id,
-                    "alert_type": r.alert_type.value if hasattr(r.alert_type, "value") else r.alert_type,
-                    "threat_level": r.threat_level.value if hasattr(r.threat_level, "value") else r.threat_level,
+                    "alert_type": (
+                        r.alert_type.value
+                        if hasattr(r.alert_type, "value")
+                        else r.alert_type
+                    ),
+                    "threat_level": (
+                        r.threat_level.value
+                        if hasattr(r.threat_level, "value")
+                        else r.threat_level
+                    ),
                     "timestamp": r.timestamp.isoformat() if r.timestamp else None,
                     "description": r.description,
                     "source_ip": r.source_ip,

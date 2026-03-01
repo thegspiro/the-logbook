@@ -116,7 +116,10 @@ async def update_category(
             event_type="admin_hours.category_updated",
             event_category="administration",
             severity="info",
-            event_data={"category_id": category_id, "fields_changed": list(data.model_dump(exclude_unset=True).keys())},
+            event_data={
+                "category_id": category_id,
+                "fields_changed": list(data.model_dump(exclude_unset=True).keys()),
+            },
             user_id=str(current_user.id),
             username=current_user.username,
         )

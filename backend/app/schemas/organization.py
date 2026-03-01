@@ -510,9 +510,7 @@ class ModuleSettings(BaseModel):
     # members, events, documents, roles, settings
 
     # ── Standard modules (enabled by default) ──
-    training: bool = Field(
-        default=True, description="Training & Certifications module"
-    )
+    training: bool = Field(default=True, description="Training & Certifications module")
     inventory: bool = Field(default=True, description="Equipment & Inventory module")
     scheduling: bool = Field(default=True, description="Scheduling & Shifts module")
     apparatus: bool = Field(default=True, description="Apparatus Management module")
@@ -520,9 +518,7 @@ class ModuleSettings(BaseModel):
     reports: bool = Field(default=True, description="Reports & Analytics module")
     notifications: bool = Field(default=True, description="Email Notifications module")
     forms: bool = Field(default=True, description="Custom Forms module")
-    integrations: bool = Field(
-        default=True, description="External Integrations module"
-    )
+    integrations: bool = Field(default=True, description="External Integrations module")
     facilities: bool = Field(
         default=True,
         description="Facilities Management module (maintenance, inspections, systems)",

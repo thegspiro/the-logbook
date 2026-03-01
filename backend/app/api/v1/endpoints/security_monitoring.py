@@ -396,7 +396,11 @@ async def get_audit_log_entries(
                 "timestamp": log.timestamp.isoformat() if log.timestamp else None,
                 "event_type": log.event_type,
                 "event_category": log.event_category,
-                "severity": log.severity.value if hasattr(log.severity, "value") else log.severity,
+                "severity": (
+                    log.severity.value
+                    if hasattr(log.severity, "value")
+                    else log.severity
+                ),
                 "user_id": log.user_id,
                 "username": log.username,
                 "ip_address": log.ip_address,
@@ -476,7 +480,11 @@ async def export_audit_logs(
                 "timestamp_nanos": log.timestamp_nanos,
                 "event_type": log.event_type,
                 "event_category": log.event_category,
-                "severity": log.severity.value if hasattr(log.severity, "value") else log.severity,
+                "severity": (
+                    log.severity.value
+                    if hasattr(log.severity, "value")
+                    else log.severity
+                ),
                 "user_id": log.user_id,
                 "username": log.username,
                 "session_id": log.session_id,
