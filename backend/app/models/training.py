@@ -2367,7 +2367,7 @@ class ShiftPattern(Base):
 
     name = Column(String(200), nullable=False)
     description = Column(Text)
-    pattern_type = Column(Enum(PatternType), nullable=False, default=PatternType.WEEKLY)
+    pattern_type = Column(Enum(PatternType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=PatternType.WEEKLY)
 
     # Pattern definition
     template_id = Column(
