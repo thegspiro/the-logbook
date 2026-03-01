@@ -130,13 +130,20 @@ async def preview_email_template(
     ),
 ):
     """
-    Preview a rendered email template with sample data.
+    Preview a rendered email template with sample or live data.
 
     Accepts optional override fields (subject, html_body, css_styles) so the
     admin can preview unsaved edits. If not provided, uses the stored template.
+
+    Live data sources:
+    - Organization name/logo are always pulled from the real org record.
+    - If ``member_id`` is set, the selected member's name/email replaces
+      static sample values in the preview context.
     """
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
+
+    from app.models.user import Organization
 
     result = await db.execute(
         select(EmailTemplate)
@@ -159,6 +166,45 @@ async def preview_email_template(
     template_type_key = template.template_type.value if hasattr(template.template_type, "value") else str(template.template_type)
     context = {**SAMPLE_CONTEXT.get(template_type_key, {}), **preview_data.context}
 
+    # --- Inject live organization data ---
+    org_result = await db.execute(
+        select(Organization).where(
+            Organization.id == current_user.organization_id
+        )
+    )
+    organization = org_result.scalar_one_or_none()
+    if organization:
+        context["organization_name"] = organization.name or context.get(
+            "organization_name", ""
+        )
+        context["organization_logo"] = getattr(organization, "logo", None) or ""
+
+    # --- Inject live member data if member_id provided ---
+    if preview_data.member_id:
+        member_result = await db.execute(
+            select(User).where(
+                User.id == preview_data.member_id,
+                User.organization_id == current_user.organization_id,
+            )
+        )
+        member = member_result.scalar_one_or_none()
+        if member:
+            first = getattr(member, "first_name", "") or ""
+            last = getattr(member, "last_name", "") or ""
+            full = getattr(member, "full_name", None) or f"{first} {last}".strip()
+            # Populate all common name/email variables used across templates
+            context["first_name"] = first
+            context["last_name"] = last
+            context["full_name"] = full
+            context["recipient_name"] = full
+            context["member_name"] = full
+            context["coordinator_name"] = full
+            context["contact_name"] = full
+            context["user_name"] = full
+            context["username"] = getattr(member, "username", "") or ""
+            if getattr(member, "email", None):
+                context["user_email"] = member.email
+
     # Apply overrides for preview if provided
     preview_template = EmailTemplate(
         subject=preview_data.subject or template.subject,
@@ -168,7 +214,7 @@ async def preview_email_template(
     )
 
     subject, html_body, text_body = service.render(
-        preview_template, context
+        preview_template, context, organization=organization
     )
 
     return EmailTemplatePreviewResponse(

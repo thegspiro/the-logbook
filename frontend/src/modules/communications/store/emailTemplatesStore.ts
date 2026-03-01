@@ -32,6 +32,7 @@ interface EmailTemplatesState {
     templateId: string,
     context?: Record<string, unknown>,
     overrides?: { subject?: string; html_body?: string; css_styles?: string },
+    memberId?: string,
   ) => Promise<void>;
   clearPreview: () => void;
   clearError: () => void;
@@ -77,10 +78,10 @@ export const useEmailTemplatesStore = create<EmailTemplatesState>((set) => ({
     }
   },
 
-  previewTemplate: async (templateId, context, overrides) => {
+  previewTemplate: async (templateId, context, overrides, memberId) => {
     set({ isPreviewing: true, error: null });
     try {
-      const preview = await emailTemplatesService.previewTemplate(templateId, context, overrides);
+      const preview = await emailTemplatesService.previewTemplate(templateId, context, overrides, memberId);
       set({ preview, isPreviewing: false });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to preview template';

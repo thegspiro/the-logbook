@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../../../components/ux';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
-import { emailTemplatesService } from '../../../services/api';
+import { emailTemplatesService, userService } from '../../../services/api';
 import { TemplateList } from '../components/TemplateList';
 import { TemplateEditor } from '../components/TemplateEditor';
 import { TemplatePreview } from '../components/TemplatePreview';
@@ -29,6 +29,14 @@ import ScheduleEmailForm from '../components/ScheduleEmailForm';
 import ScheduledEmailList from '../components/ScheduledEmailList';
 import type { EmailTemplateUpdate, EmailAttachment } from '../types';
 import toast from 'react-hot-toast';
+
+interface PreviewMember {
+  id: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+}
 
 /**
  * No client-side sample context needed — the backend preview endpoint
@@ -57,9 +65,31 @@ const EmailTemplatesPage: React.FC = () => {
   const [, setIsDirty] = useState(false);
   const [activeTab, setActiveTab] = useState<'templates' | 'scheduled'>('templates');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [members, setMembers] = useState<PreviewMember[]>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [previewMemberId, setPreviewMemberId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void fetchTemplates();
+    // Fetch org members for the preview dropdown
+    setIsLoadingMembers(true);
+    void userService
+      .getUsers()
+      .then((users) => {
+        setMembers(
+          users.map((u) => ({
+            id: u.id,
+            full_name: u.full_name,
+            first_name: u.first_name,
+            last_name: u.last_name,
+            email: u.email,
+          })),
+        );
+      })
+      .catch(() => {
+        // Non-critical — member dropdown will just be empty
+      })
+      .finally(() => setIsLoadingMembers(false));
   }, [fetchTemplates]);
 
   // Auto-select first template when loaded
@@ -83,16 +113,21 @@ const EmailTemplatesPage: React.FC = () => {
     [selectedTemplate, updateTemplate],
   );
 
-  const handlePreview = useCallback(() => {
-    if (!selectedTemplate) return;
-    // Empty context — backend merges per-type sample data automatically
-    void previewTemplate(selectedTemplate.id);
-  }, [selectedTemplate, previewTemplate]);
+  const handlePreview = useCallback(
+    (memberId?: string) => {
+      if (!selectedTemplate) return;
+      const mid = memberId !== undefined ? memberId : previewMemberId;
+      if (mid !== undefined) setPreviewMemberId(mid);
+      // Empty context — backend merges per-type sample data + live org + member
+      void previewTemplate(selectedTemplate.id, undefined, undefined, mid || undefined);
+    },
+    [selectedTemplate, previewTemplate, previewMemberId],
+  );
 
   // Auto-load preview when selecting a template
   useEffect(() => {
     if (selectedTemplate) {
-      void previewTemplate(selectedTemplate.id);
+      void previewTemplate(selectedTemplate.id, undefined, undefined, previewMemberId || undefined);
     }
     // Only trigger on template selection change
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -380,6 +415,8 @@ const EmailTemplatesPage: React.FC = () => {
                 preview={preview}
                 isPreviewing={isPreviewing}
                 onRefresh={handlePreview}
+                members={members}
+                isLoadingMembers={isLoadingMembers}
               />
             </div>
           </div>
