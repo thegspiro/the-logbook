@@ -15,7 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
-from app.models.email_template import EmailAttachment, EmailTemplate
+from app.models.email_template import (
+    EmailAttachment,
+    EmailTemplate,
+    EmailTemplateType,
+    ScheduledEmail,
+    ScheduledEmailStatus,
+)
 from app.models.user import User
 from app.schemas.email_template import (
     EmailAttachmentResponse,
@@ -23,6 +29,9 @@ from app.schemas.email_template import (
     EmailTemplatePreviewResponse,
     EmailTemplateResponse,
     EmailTemplateUpdate,
+    ScheduledEmailCreate,
+    ScheduledEmailResponse,
+    ScheduledEmailUpdate,
 )
 from app.services.email_template_service import SAMPLE_CONTEXT, EmailTemplateService
 
@@ -319,3 +328,171 @@ async def delete_attachment(
     logger.info(
         f"Attachment deleted: {attachment.filename} from template {template_id}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Scheduled Emails
+# ---------------------------------------------------------------------------
+
+
+@router.post("/schedule", response_model=ScheduledEmailResponse)
+async def schedule_email(
+    body: ScheduledEmailCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """Schedule an email to be sent at a specific date/time."""
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
+
+    from app.core.utils import generate_uuid
+
+    if body.scheduled_at.tzinfo is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="scheduled_at must include timezone info (UTC recommended)",
+        )
+
+    if body.scheduled_at <= _dt.now(_tz.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="scheduled_at must be in the future",
+        )
+
+    # Validate template_type
+    try:
+        ttype = EmailTemplateType(body.template_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid template_type: {body.template_type}",
+        )
+
+    scheduled = ScheduledEmail(
+        id=generate_uuid(),
+        organization_id=current_user.organization_id,
+        template_id=body.template_id,
+        template_type=ttype,
+        to_emails=body.to_emails,
+        cc_emails=body.cc_emails,
+        context=body.context,
+        scheduled_at=body.scheduled_at,
+        status=ScheduledEmailStatus.PENDING,
+        created_by=current_user.id,
+    )
+    db.add(scheduled)
+    await db.commit()
+    await db.refresh(scheduled)
+
+    logger.info(
+        f"Scheduled email created id={scheduled.id} "
+        f"type={body.template_type} at={body.scheduled_at}"
+    )
+    return scheduled
+
+
+@router.get("/scheduled", response_model=List[ScheduledEmailResponse])
+async def list_scheduled_emails(
+    status_filter: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """List scheduled emails for the current organization."""
+    from sqlalchemy import select
+
+    q = (
+        select(ScheduledEmail)
+        .where(ScheduledEmail.organization_id == current_user.organization_id)
+        .order_by(ScheduledEmail.scheduled_at.desc())
+    )
+    if status_filter:
+        try:
+            s = ScheduledEmailStatus(status_filter)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status: {status_filter}",
+            )
+        q = q.where(ScheduledEmail.status == s)
+
+    result = await db.execute(q)
+    return list(result.scalars().all())
+
+
+@router.patch("/scheduled/{scheduled_id}", response_model=ScheduledEmailResponse)
+async def update_scheduled_email(
+    scheduled_id: str,
+    body: ScheduledEmailUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """Update or reschedule a pending scheduled email."""
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(ScheduledEmail).where(
+            ScheduledEmail.id == scheduled_id,
+            ScheduledEmail.organization_id == current_user.organization_id,
+        )
+    )
+    scheduled = result.scalar_one_or_none()
+    if not scheduled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scheduled email not found",
+        )
+
+    if scheduled.status != ScheduledEmailStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only pending emails can be updated",
+        )
+
+    if body.scheduled_at is not None:
+        scheduled.scheduled_at = body.scheduled_at
+    if body.status == "cancelled":
+        scheduled.status = ScheduledEmailStatus.CANCELLED
+
+    await db.commit()
+    await db.refresh(scheduled)
+    return scheduled
+
+
+@router.delete("/scheduled/{scheduled_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_scheduled_email(
+    scheduled_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """Cancel (delete) a pending scheduled email."""
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(ScheduledEmail).where(
+            ScheduledEmail.id == scheduled_id,
+            ScheduledEmail.organization_id == current_user.organization_id,
+        )
+    )
+    scheduled = result.scalar_one_or_none()
+    if not scheduled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scheduled email not found",
+        )
+
+    if scheduled.status == ScheduledEmailStatus.SENT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete an already-sent email",
+        )
+
+    await db.delete(scheduled)
+    await db.commit()

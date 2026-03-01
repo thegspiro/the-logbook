@@ -3904,6 +3904,63 @@ export const emailTemplatesService = {
 };
 
 // ============================================
+// Scheduled Emails
+// ============================================
+
+export interface ScheduledEmail {
+  id: string;
+  organization_id: string;
+  template_id?: string;
+  template_type: string;
+  to_emails: string[];
+  cc_emails?: string[];
+  context: Record<string, unknown>;
+  scheduled_at: string;
+  status: 'pending' | 'sent' | 'failed' | 'cancelled';
+  sent_at?: string;
+  error_message?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduledEmailCreate {
+  template_type: string;
+  template_id?: string;
+  to_emails: string[];
+  cc_emails?: string[];
+  context: Record<string, unknown>;
+  scheduled_at: string;
+}
+
+export interface ScheduledEmailUpdate {
+  scheduled_at?: string;
+  status?: 'cancelled';
+}
+
+export const scheduledEmailsService = {
+  async create(data: ScheduledEmailCreate): Promise<ScheduledEmail> {
+    const response = await api.post<ScheduledEmail>('/email-templates/schedule', data);
+    return response.data;
+  },
+
+  async list(statusFilter?: string): Promise<ScheduledEmail[]> {
+    const params = statusFilter ? { status_filter: statusFilter } : {};
+    const response = await api.get<ScheduledEmail[]>('/email-templates/scheduled', { params });
+    return response.data;
+  },
+
+  async update(id: string, data: ScheduledEmailUpdate): Promise<ScheduledEmail> {
+    const response = await api.patch<ScheduledEmail>(`/email-templates/scheduled/${id}`, data);
+    return response.data;
+  },
+
+  async cancel(id: string): Promise<void> {
+    await api.delete(`/email-templates/scheduled/${id}`);
+  },
+};
+
+// ============================================
 // Locations Service
 // ============================================
 

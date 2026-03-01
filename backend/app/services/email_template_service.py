@@ -19,6 +19,8 @@ from app.models.email_template import EmailTemplate, EmailTemplateType
 DEFAULT_CSS = """
 body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+.logo { text-align: center; padding: 16px 0 0 0; }
+.logo img { max-height: 80px; max-width: 200px; }
 .header { background-color: #dc2626; color: white; padding: 20px; text-align: center; }
 .header h1 { margin: 0; font-size: 24px; }
 .content { padding: 20px; background-color: #f9fafb; }
@@ -27,6 +29,15 @@ body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0;
 .details { background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #e5e7eb; }
 .footer { padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }
 """
+
+# Variables available to ALL template types (injected automatically)
+GLOBAL_VARIABLES: List[Dict[str, str]] = [
+    {"name": "organization_name", "description": "Organization name"},
+    {
+        "name": "organization_logo",
+        "description": "Organization logo URL (use in an <img> tag)",
+    },
+]
 
 # Variable definitions per template type
 TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
@@ -116,6 +127,9 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "meeting_date", "description": "Date of the meeting"},
         {"name": "custom_message", "description": "Custom message from secretary"},
         {"name": "ballot_url", "description": "Link to the voting page"},
+        {"name": "voting_opens", "description": "Date and time voting opens"},
+        {"name": "voting_closes", "description": "Date and time voting closes"},
+        {"name": "positions", "description": "Positions being voted on (comma-separated)"},
     ],
     "cert_expiration": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -203,12 +217,14 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "username": "jdoe",
         "temp_password": "TempPass123!",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
         "login_url": "https://example.com/login",
     },
     "password_reset": {
         "first_name": "John",
         "reset_url": "https://example.com/reset-password?token=sample-token",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
         "expiry_minutes": "30",
     },
     "event_reminder": {
@@ -220,12 +236,15 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "location_name": "Main Station \u2014 Meeting Room A",
         "location_details": "123 Main St, Anytown, USA",
         "event_url": "https://example.com/events/123",
+        "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
     "event_cancellation": {
         "recipient_name": "John Doe",
         "event_title": "Monthly Business Meeting",
         "event_date": "March 15, 2026",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
         "reason": "Inclement weather",
     },
     "training_approval": {
@@ -236,6 +255,8 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "approval_deadline": "March 18, 2026",
         "submitter_name": "Jane Smith",
         "approval_url": "https://example.com/training/approve/123",
+        "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
     "ballot_notification": {
         "recipient_name": "John Doe",
@@ -243,10 +264,16 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "meeting_date": "April 1, 2026 at 07:00 PM",
         "custom_message": "Please review the candidates before voting.",
         "ballot_url": "https://example.com/ballot?token=sample-token",
+        "voting_opens": "March 28, 2026 at 08:00 AM",
+        "voting_closes": "April 1, 2026 at 05:00 PM",
+        "positions": "Captain, Lieutenant",
+        "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
     "member_dropped": {
         "member_name": "John Doe",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
         "drop_type_display": "Voluntary Separation",
         "reason": "Relocation",
         "effective_date": "March 31, 2026",
@@ -259,6 +286,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     "inventory_change": {
         "first_name": "John",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
         "change_date": "March 1, 2026",
         "items_issued_html": (
             "<h3>Items Issued</h3>"
@@ -285,6 +313,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "expiration_date": "April 15, 2026",
         "days_remaining": "45",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
         "renewal_url": "https://example.com/training/certifications",
     },
     "post_event_validation": {
@@ -294,6 +323,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "attendee_count": "24",
         "validation_url": "https://example.com/events/123/validate",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
     "post_shift_validation": {
         "recipient_name": "Capt. Mike Davis",
@@ -302,10 +332,12 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "attendee_count": "6",
         "validation_url": "https://example.com/scheduling/shifts/456/validate",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
     "property_return_reminder": {
         "member_name": "John Doe",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
         "item_count": "3",
         "total_value": "1,200.00",
         "days_since_drop": "30",
@@ -317,6 +349,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "days_inactive": "21",
         "pipeline_stage": "Application Review",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
         "prospect_url": "https://example.com/prospective-members/789",
     },
     "election_rollback": {
@@ -325,6 +358,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "performer_name": "Secretary Robert Johnson",
         "reason": "Ballots were distributed to ineligible members",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
     "election_deleted": {
         "recipient_name": "Lt. Jane Smith",
@@ -332,11 +366,13 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "performer_name": "Secretary Robert Johnson",
         "reason": "Election created in error — new election will be scheduled",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
     "member_archived": {
         "member_name": "John Doe",
         "previous_status": "Dropped",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
     "event_request_status": {
         "contact_name": "John Doe",
@@ -345,6 +381,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "decline_reason": "",
         "message": "Your event has been approved and added to the calendar.",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
     "it_password_notification": {
         "user_name": "John Doe",
@@ -352,6 +389,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "request_time": "March 1, 2026 at 02:30 PM",
         "ip_address": "192.168.1.100",
         "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
     },
 }
 
@@ -1027,6 +1065,7 @@ DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
 
 # Default ballot notification email
 DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header" style="background-color: #4f46e5;">
         <h1>{{election_title}}</h1>
     </div>
@@ -1038,6 +1077,9 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
         <div class="details">
             <p><strong>Election:</strong> {{election_title}}</p>
             <p><strong>Meeting Date:</strong> {{meeting_date}}</p>
+            <p><strong>Positions:</strong> {{positions}}</p>
+            <p><strong>Voting Opens:</strong> {{voting_opens}}</p>
+            <p><strong>Voting Closes:</strong> {{voting_closes}}</p>
         </div>
 
         {{#custom_message}}
@@ -1049,7 +1091,7 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
         </p>
     </div>
     <div class="footer">
-        <p>This is an automated message from your department.</p>
+        <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
     </div>
 </div>"""
@@ -1062,13 +1104,16 @@ A ballot is now available for your review and vote.
 
 Election: {{election_title}}
 Meeting Date: {{meeting_date}}
+Positions: {{positions}}
+Voting Opens: {{voting_opens}}
+Voting Closes: {{voting_closes}}
 
 {{custom_message}}
 
 Vote here: {{ballot_url}}
 
 ---
-This is an automated message from your department.
+This is an automated message from {{organization_name}}.
 Please do not reply to this email."""
 
 DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
@@ -1284,7 +1329,8 @@ class EmailTemplateService:
             css_styles=css_styles or DEFAULT_CSS,
             description=description,
             allow_attachments=allow_attachments,
-            available_variables=TEMPLATE_VARIABLES.get(template_type.value, []),
+            available_variables=GLOBAL_VARIABLES
+            + TEMPLATE_VARIABLES.get(template_type.value, []),
             created_by=created_by,
             updated_by=created_by,
         )
@@ -1350,6 +1396,7 @@ class EmailTemplateService:
         self,
         template: EmailTemplate,
         context: Dict[str, Any],
+        organization: Optional[Any] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """
         Render a template with the given context variables.
@@ -1357,12 +1404,34 @@ class EmailTemplateService:
         Returns (subject, html_body, text_body) with variables replaced.
         Variables use {{variable_name}} syntax.
         CSS styles are injected into the HTML wrapper.
+
+        If ``organization`` is provided, ``organization_name``,
+        ``organization_logo``, and ``organization_logo_img`` are
+        auto-injected into the context (without overwriting values
+        already supplied by the caller).
         """
-        subject = self._replace_variables(template.subject, context)
-        html_body = self._replace_variables(template.html_body, context)
+        ctx = dict(context)
+        if organization:
+            ctx.setdefault("organization_name", getattr(organization, "name", ""))
+            logo = getattr(organization, "logo", None) or ""
+            ctx.setdefault("organization_logo", logo)
+        # Build a ready-to-use <img> tag so templates can just insert it
+        logo_val = ctx.get("organization_logo", "")
+        if logo_val:
+            import html as _h
+
+            ctx.setdefault(
+                "organization_logo_img",
+                f'<img src="{_h.escape(str(logo_val))}" alt="Logo" class="logo" style="max-height:80px;max-width:200px;" />',
+            )
+        else:
+            ctx.setdefault("organization_logo_img", "")
+
+        subject = self._replace_variables(template.subject, ctx)
+        html_body = self._replace_variables(template.html_body, ctx)
         text_body = None
         if template.text_body:
-            text_body = self._replace_variables(template.text_body, context)
+            text_body = self._replace_variables(template.text_body, ctx)
 
         # Wrap HTML body with full document structure and CSS
         css = template.css_styles or DEFAULT_CSS

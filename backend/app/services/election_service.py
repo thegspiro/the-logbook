@@ -2702,6 +2702,11 @@ Best regards,
                 meeting_date=election.meeting_date,
                 custom_message=message,
                 cc_emails=[cc_email] if cc_email else None,
+                start_date=election.start_date,
+                end_date=election.end_date,
+                positions=election.positions,
+                db=self.db,
+                organization_id=str(organization_id),
             )
 
             if sent:
