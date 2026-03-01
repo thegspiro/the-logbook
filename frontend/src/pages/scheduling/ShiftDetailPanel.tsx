@@ -15,12 +15,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
-  Loader2, Phone, ChevronDown, ChevronUp, Pencil, Trash2, Save,
+  Loader2, Phone, ChevronDown, ChevronUp, Pencil, Trash2, Save, Palette, FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
+import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import type { Assignment, ShiftCall } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -47,6 +48,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
+  const { apparatus: apparatusList, loadApparatus } = useSchedulingStore();
 
   const [shift, setShift] = useState(initialShift);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -54,10 +56,26 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [loading, setLoading] = useState(true);
   const [showCalls, setShowCalls] = useState(false);
 
+  /** Extract HH:MM from an ISO datetime or time string. */
+  const toTimeValue = (v?: string): string => {
+    if (!v) return '';
+    // If it contains 'T', it's an ISO datetime — extract the time portion
+    if (v.includes('T')) {
+      const timePart = v.split('T')[1];
+      return timePart ? timePart.slice(0, 5) : '';
+    }
+    // Already HH:MM or HH:MM:SS
+    return v.slice(0, 5);
+  };
+
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     shift_date: shift.shift_date,
+    start_time: toTimeValue(shift.start_time),
+    end_time: toTimeValue(shift.end_time),
+    apparatus_id: shift.apparatus_id || '',
+    color: shift.color || '',
     notes: shift.notes || '',
     shift_officer_id: shift.shift_officer_id || '',
   });
@@ -81,6 +99,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Inline position editing
   const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
   const [updatingPosition, setUpdatingPosition] = useState(false);
+
+  // Inline assignment notes editing
+  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+  const [editingNotesValue, setEditingNotesValue] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
 
   // Assign state (admin) — with member search
   const [showAssignForm, setShowAssignForm] = useState(false);
@@ -163,6 +186,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     };
     void loadMembers();
   }, [showAssignForm, isEditing]);
+
+  // Load apparatus list when editing
+  useEffect(() => {
+    if (isEditing) void loadApparatus();
+  }, [isEditing, loadApparatus]);
 
   const filteredMembers = useMemo(() => {
     if (!memberSearch) return memberOptions;
@@ -258,6 +286,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     }
   };
 
+  const handleSaveAssignmentNotes = async (assignmentId: string) => {
+    setSavingNotes(true);
+    try {
+      await schedulingService.updateAssignment(assignmentId, { notes: editingNotesValue || null });
+      toast.success('Notes updated');
+      setEditingNotesId(null);
+      await refreshAssignments();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to update notes'));
+    } finally {
+      setSavingNotes(false);
+    }
+  };
+
   const handleAssign = async () => {
     if (!assignForm.user_id) { toast.error('Select a member'); return; }
     setAssigning(true);
@@ -283,11 +325,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const handleSaveEdit = async () => {
     setSaving(true);
     try {
-      const updated = await schedulingService.updateShift(shift.id, {
+      const payload: Record<string, unknown> = {
         shift_date: editForm.shift_date,
         notes: editForm.notes || null,
         shift_officer_id: editForm.shift_officer_id || null,
-      });
+        apparatus_id: editForm.apparatus_id || null,
+        color: editForm.color || null,
+      };
+      if (editForm.start_time) {
+        payload.start_time = `${editForm.shift_date}T${editForm.start_time}:00`;
+      }
+      if (editForm.end_time) {
+        payload.end_time = `${editForm.shift_date}T${editForm.end_time}:00`;
+      }
+      const updated = await schedulingService.updateShift(shift.id, payload);
       setShift(updated);
       setIsEditing(false);
       toast.success('Shift updated');
@@ -318,6 +369,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (editingPositionId) setEditingPositionId(null);
+        else if (editingNotesId) setEditingNotesId(null);
         else if (confirmingDecline) setConfirmingDecline(null);
         else if (confirmingRemove) setConfirmingRemove(null);
         else onClose();
@@ -325,7 +377,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, editingPositionId, confirmingDecline, confirmingRemove]);
+  }, [onClose, editingPositionId, editingNotesId, confirmingDecline, confirmingRemove]);
 
   const isUserAssigned = assignments.some(a => a.user_id === user?.id);
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
@@ -444,7 +496,38 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               >No</button>
             </div>
           )}
+          {canManage && !isPast && editingNotesId !== assignment.id && (
+            <button
+              onClick={() => { setEditingNotesId(assignment.id); setEditingNotesValue(assignment.notes || ''); }}
+              className={`p-1.5 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${assignment.notes ? 'text-violet-500 hover:bg-violet-500/10' : 'text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10'}`}
+              aria-label="Edit notes" title={assignment.notes ? 'Edit notes' : 'Add notes'}
+            >
+              <FileText className="w-4 h-4" />
+            </button>
+          )}
         </div>
+        {/* Assignment notes display */}
+        {assignment.notes && editingNotesId !== assignment.id && (
+          <p className="text-xs text-theme-text-muted mt-1.5 pl-11">{assignment.notes}</p>
+        )}
+        {/* Inline notes editor */}
+        {editingNotesId === assignment.id && (
+          <div className="mt-2 pl-11 flex items-center gap-2">
+            <input type="text" value={editingNotesValue}
+              onChange={e => setEditingNotesValue(e.target.value)}
+              placeholder="Assignment notes..."
+              className="flex-1 text-xs bg-theme-input-bg border border-theme-input-border rounded px-2 py-1 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') void handleSaveAssignmentNotes(assignment.id); }}
+            />
+            <button onClick={() => { void handleSaveAssignmentNotes(assignment.id); }} disabled={savingNotes}
+              className="px-2 py-1 text-xs bg-violet-600 text-white rounded hover:bg-violet-700 disabled:opacity-50"
+            >{savingNotes ? '...' : 'Save'}</button>
+            <button onClick={() => setEditingNotesId(null)}
+              className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary"
+            >Cancel</button>
+          </div>
+        )}
       </div>
     );
   };
@@ -468,7 +551,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="flex items-center gap-1 flex-shrink-0">
               {canManage && !isPast && (
                 <>
-                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '' }); setIsEditing(!isEditing); }}
+                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '' }); setIsEditing(!isEditing); }}
                     className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
                   >
                     <Pencil className="w-4 h-4" />
@@ -518,6 +601,56 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   onChange={e => setEditForm(p => ({...p, shift_date: e.target.value}))}
                   className={inputCls}
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Start Time</label>
+                  <input type="time" value={editForm.start_time}
+                    onChange={e => setEditForm(p => ({...p, start_time: e.target.value}))}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">End Time</label>
+                  <input type="time" value={editForm.end_time}
+                    onChange={e => setEditForm(p => ({...p, end_time: e.target.value}))}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+              {apparatusList.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">
+                    <span className="flex items-center gap-1"><Truck className="w-3 h-3" /> Apparatus</span>
+                  </label>
+                  <select
+                    value={editForm.apparatus_id}
+                    onChange={e => setEditForm(p => ({...p, apparatus_id: e.target.value}))}
+                    className={inputCls}
+                  >
+                    <option value="">No specific apparatus</option>
+                    {apparatusList.map(a => (
+                      <option key={a.id} value={a.id}>{a.unit_number} — {a.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-theme-text-secondary mb-1">
+                  <span className="flex items-center gap-1"><Palette className="w-3 h-3" /> Color</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={editForm.color || '#8b5cf6'}
+                    onChange={e => setEditForm(p => ({...p, color: e.target.value}))}
+                    className="w-8 h-8 rounded border border-theme-input-border cursor-pointer bg-transparent p-0"
+                  />
+                  <span className="text-xs text-theme-text-muted">{editForm.color || 'Default'}</span>
+                  {editForm.color && (
+                    <button type="button" onClick={() => setEditForm(p => ({...p, color: ''}))}
+                      className="text-xs text-theme-text-muted hover:text-theme-text-primary"
+                    >Clear</button>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-theme-text-secondary mb-1">Notes</label>
