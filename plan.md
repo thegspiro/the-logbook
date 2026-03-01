@@ -1,145 +1,91 @@
-# Plan: Platform Analytics Dashboard
+# Plan: Logo in Templates, Email Scheduling, and Election Template Variables
 
-## Overview
-Add a new **Platform Analytics** page at `/admin/platform-analytics` accessible to IT admins (`settings.manage` permission). This gives a bird's-eye view of platform adoption, user engagement, module usage, and system health — standard KPIs for intranet/SaaS platforms, tailored for fire department operations.
+## 1. Add organization logo as a global template variable
 
-The existing **QR Code Analytics** page remains untouched.
+The Organization model already stores a `logo` field (base64 data URL or external URL) in `user.py:167`. No email template currently references it.
 
-## Data Points (informed by industry standards)
+### Changes:
 
-Based on intranet analytics best practices and fire department software standards:
+**`backend/app/services/email_template_service.py`**
+- Add `organization_logo` and `organization_name` to every template type in `TEMPLATE_AVAILABLE_VARIABLES` (they're universal — every email comes from an org)
+- Add sample values to every type in `SAMPLE_CONTEXT`
+- Update `DEFAULT_CSS` to add a `.logo` style (centered, max-height constrained)
+- Update every `DEFAULT_*_HTML` constant to include an optional logo `<img>` above the header `<h1>` — use a conditional pattern like `{{organization_logo}}` that the admin can remove if they don't want it
+- Update `render()` to accept an optional `organization` parameter and auto-inject `organization_logo` + `organization_name` into the context
 
-### Section 1: User Adoption & Activity
-| Metric | Source | Why it matters |
-|--------|--------|----------------|
-| Total users | `users` table count | Platform scale |
-| Active users (logged in last 30 days) | `users.last_login_at` | Adoption rate — intranet benchmark is 75-80% weekly |
-| Inactive users (no login in 30+ days) | Derived | Identifies disengaged members |
-| New users (created last 30 days) | `users.created_at` | Growth trend |
-| Login trend (daily logins, past 30 days) | `users.last_login_at` grouped by date | Engagement over time |
-| Adoption rate % | `(active / total) * 100` | Key intranet KPI |
+**`backend/app/services/email_service.py`**
+- In every send method that uses the template-first pattern (`send_welcome_email`, `send_password_reset_email`): add `organization_logo` to the context dict from `self.organization.logo`
+- In `send_ballot_notification()` (and other inline-only methods): wire up the template-first + fallback pattern (like `send_welcome_email` already has), and include `organization_logo` in the context
 
-### Section 2: Module Usage
-| Metric | Source | Why it matters |
-|--------|--------|----------------|
-| Module name + enabled status | `config.py` feature flags | Shows which modules are turned on |
-| Record count per module | Count rows in each module's table | Shows actual usage vs just "enabled" |
-| Last activity date per module | Most recent `created_at` in each table | Is the module actively being used? |
+**No model/schema/migration changes** needed — the logo already lives on the Organization model.
 
-Modules to track: Events, Training, Scheduling, Inventory, Meetings, Elections, Forms, Documents, Apparatus
+## 2. Add email scheduling (send at specific date/time)
 
-### Section 3: Operational Activity
-| Metric | Source | Why it matters |
-|--------|--------|----------------|
-| Total events | `events` table count | Core platform activity |
-| Events last 30 days | `events.created_at` filtered | Recent activity volume |
-| Total check-ins | `event_attendance` count | Engagement with events |
-| Training hours (last 30 days) | Training records | Compliance tracking — key for fire depts |
-| Forms submitted (last 30 days) | `form_submissions` count | Content engagement |
+No email scheduling exists today — all emails send immediately. We'll add a `ScheduledEmail` model and a scheduled task to process the queue.
 
-### Section 4: System Health
-| Metric | Source | Why it matters |
-|--------|--------|----------------|
-| Errors last 7 days | `error_logs` count | System reliability |
-| Error trend (daily, past 7 days) | `error_logs.created_at` grouped | Spotting regressions |
-| Top error types | `error_logs.error_type` grouped | Prioritize fixes |
+### Backend changes:
 
-### Section 5: Content & Documents
-| Metric | Source | Why it matters |
-|--------|--------|----------------|
-| Total documents | `documents` table count | Content volume |
-| Documents uploaded (last 30 days) | `documents.created_at` filtered | Content freshness |
+**`backend/app/models/email_template.py`** — New `ScheduledEmail` model:
+- `id` (String PK)
+- `organization_id` (FK)
+- `template_id` (FK to email_templates, nullable for ad-hoc)
+- `template_type` (EmailTemplateType)
+- `to_emails` (JSON list)
+- `cc_emails` (JSON list, nullable)
+- `context` (JSON dict of template variables)
+- `scheduled_at` (DateTime, timezone-aware)
+- `status` (Enum: pending / sent / failed / cancelled)
+- `sent_at` (DateTime, nullable)
+- `error_message` (Text, nullable)
+- `created_by` (FK), `created_at`, `updated_at`
 
----
+**`backend/app/schemas/email_template.py`** — New schemas:
+- `ScheduledEmailCreate` — to_emails, template_type or template_id, context, scheduled_at
+- `ScheduledEmailResponse` — full read view
+- `ScheduledEmailUpdate` — reschedule or cancel
 
-## Backend Changes
+**`backend/app/api/v1/endpoints/email_templates.py`** — New endpoints:
+- `POST /email-templates/schedule` — schedule an email
+- `GET /email-templates/scheduled` — list scheduled emails for the org
+- `PATCH /email-templates/scheduled/{id}` — update/reschedule
+- `DELETE /email-templates/scheduled/{id}` — cancel
 
-### 1. New Pydantic schema
-**File:** `backend/app/schemas/platform_analytics.py` (new)
+**`backend/app/services/email_template_service.py`** — New `process_scheduled_emails()` method:
+- Called by the scheduled task system
+- Queries `ScheduledEmail` where `scheduled_at <= now()` and `status = 'pending'`
+- For each: loads the template, renders with context, sends via EmailService, updates status to sent/failed
 
-```python
-class DailyCount(BaseModel):
-    date: str           # YYYY-MM-DD
-    count: int
+**`backend/app/services/scheduled_tasks.py`** — Register `process_scheduled_emails` task (runs every 5 min)
 
-class ModuleUsage(BaseModel):
-    name: str           # e.g. "Training", "Events"
-    enabled: bool
-    record_count: int
-    last_activity: Optional[datetime]
+**`backend/alembic/versions/`** — New migration for the `scheduled_emails` table
 
-class PlatformAnalyticsResponse(BaseModel):
-    # User Adoption
-    total_users: int
-    active_users: int
-    inactive_users: int
-    new_users_last_30_days: int
-    adoption_rate: float          # percentage
-    login_trend: list[DailyCount] # past 30 days
+### Frontend changes:
 
-    # Module Usage
-    modules: list[ModuleUsage]
+**`frontend/src/modules/communications/`**:
+- New `ScheduledEmailForm` component with date/time picker and template selector
+- New `ScheduledEmailList` component showing pending/sent/failed scheduled emails
+- Store methods and API service calls for CRUD
+- Add a "Scheduled" tab or section in the communications page
+- Types for the new schemas
 
-    # Operational Activity
-    total_events: int
-    events_last_30_days: int
-    total_check_ins: int
-    training_hours_last_30_days: float
-    forms_submitted_last_30_days: int
+## 3. Add election open/close variables to ballot template
 
-    # System Health
-    errors_last_7_days: int
-    error_trend: list[DailyCount]
-    top_error_types: dict[str, int]  # type -> count
+The Election model has `start_date` (voting opens) and `end_date` (voting closes) plus `positions` (JSON list). These should be template variables.
 
-    # Content
-    total_documents: int
-    documents_last_30_days: int
+### Changes:
 
-    generated_at: datetime
-```
+**`backend/app/services/email_template_service.py`**
+- Add to `TEMPLATE_AVAILABLE_VARIABLES["ballot_notification"]`:
+  - `voting_opens` — "Date and time voting opens"
+  - `voting_closes` — "Date and time voting closes"
+  - `positions` — "Positions being voted on (comma-separated)"
+- Add matching sample values to `SAMPLE_CONTEXT["ballot_notification"]`
+- Update `DEFAULT_BALLOT_NOTIFICATION_HTML` and `_TEXT` to display the new variables
 
-### 2. New endpoint: `GET /api/v1/platform-analytics`
-**File:** `backend/app/api/v1/endpoints/platform_analytics.py` (new)
+**`backend/app/services/email_service.py`** — Update `send_ballot_notification()`:
+- Add `start_date`, `end_date` (both `Optional[datetime]`) and `positions` (`Optional[List[str]]`) params
+- Format with `self._format_local_dt()` and include in both the inline HTML and the context dict
+- Wire up the template-first + fallback pattern (currently inline-only)
 
-- **Permission:** `settings.manage`
-- Queries each model independently with isolated try/catch per section
-- Returns all-zero defaults if a module's table isn't available
-
-### 3. Register in API router
-**File:** `backend/app/api/v1/api.py` — add the new router with prefix `/platform-analytics`
-
----
-
-## Frontend Changes
-
-### 4. New page: `PlatformAnalyticsPage.tsx`
-**File:** `frontend/src/pages/PlatformAnalyticsPage.tsx` (new)
-
-Layout (following existing dashboard patterns):
-
-1. **Header** — "Platform Analytics" title + last-refreshed timestamp + Export button
-2. **Adoption cards** — 4 stat cards: Total Users, Active Users, Adoption Rate %, New Members
-3. **Login trend chart** — 30-day bar chart of daily logins
-4. **Module usage grid** — Cards per module showing enabled/disabled, record count, last activity
-5. **Operational stats** — Events, Check-ins, Training Hours, Forms submitted
-6. **System health** — Error count + 7-day trend + top error types
-7. **Content stats** — Document counts
-
-Auto-refresh every 60 seconds. Export data as JSON.
-
-### 5. Frontend API service
-**File:** `frontend/src/services/api.ts` — add `platformAnalyticsService` with `getAnalytics()` method
-
-### 6. Route + Navigation
-- **`App.tsx`**: Add lazy import + route at `/admin/platform-analytics` with `settings.manage`
-- **`SideNavigation.tsx`**: Add "Platform Analytics" in Organization Settings (above QR Code Analytics), using `BarChart3` icon
-- **`TopNavigation.tsx`**: Same
-- **`routePrefetch.ts`**: Add prefetch entry
-
----
-
-## What stays the same
-- The existing **QR Code Analytics** page (`/admin/analytics`) is untouched
-- No changes to existing endpoints, models, or services
-- No new database tables needed — all queries use existing tables
+**`backend/app/services/election_service.py`** — Update the call at ~line 2697:
+- Pass `election.start_date`, `election.end_date`, and `election.positions` to `send_ballot_notification()`

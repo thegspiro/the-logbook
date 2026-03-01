@@ -16,6 +16,8 @@ import {
   Paperclip,
   Trash2,
   Upload,
+  CalendarClock,
+  Plus,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../../../components/ux';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
@@ -23,6 +25,8 @@ import { emailTemplatesService } from '../../../services/api';
 import { TemplateList } from '../components/TemplateList';
 import { TemplateEditor } from '../components/TemplateEditor';
 import { TemplatePreview } from '../components/TemplatePreview';
+import ScheduleEmailForm from '../components/ScheduleEmailForm';
+import ScheduledEmailList from '../components/ScheduledEmailList';
 import type { EmailTemplateUpdate, EmailAttachment } from '../types';
 import toast from 'react-hot-toast';
 
@@ -51,6 +55,8 @@ const EmailTemplatesPage: React.FC = () => {
   const [isTogglingActive, setIsTogglingActive] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [, setIsDirty] = useState(false);
+  const [activeTab, setActiveTab] = useState<'templates' | 'scheduled'>('templates');
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
 
   useEffect(() => {
     void fetchTemplates();
@@ -174,6 +180,32 @@ const EmailTemplatesPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Tab Bar */}
+        <div className="mb-6 flex items-center gap-1 border-b border-theme-surface-border">
+          <button
+            onClick={() => setActiveTab('templates')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'templates'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-theme-text-secondary hover:text-theme-text-primary'
+            }`}
+          >
+            <Mail className="h-4 w-4" />
+            Templates
+          </button>
+          <button
+            onClick={() => setActiveTab('scheduled')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'scheduled'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-theme-text-secondary hover:text-theme-text-primary'
+            }`}
+          >
+            <CalendarClock className="h-4 w-4" />
+            Scheduled
+          </button>
+        </div>
+
         {/* Error Banner */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start space-x-3">
@@ -190,8 +222,35 @@ const EmailTemplatesPage: React.FC = () => {
           </div>
         )}
 
-        {/* Main Layout: Template List | Editor | Preview */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Scheduled Emails Tab */}
+        {activeTab === 'scheduled' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-theme-text-primary">
+                Scheduled Emails
+              </h2>
+              <button
+                onClick={() => setShowScheduleForm(!showScheduleForm)}
+                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                Schedule Email
+              </button>
+            </div>
+
+            {showScheduleForm && (
+              <ScheduleEmailForm
+                templates={templates}
+                onClose={() => setShowScheduleForm(false)}
+              />
+            )}
+
+            <ScheduledEmailList />
+          </div>
+        )}
+
+        {/* Templates Tab: Main Layout: Template List | Editor | Preview */}
+        {activeTab === 'templates' && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Template list sidebar */}
           <div className="lg:col-span-3">
             <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 lg:sticky lg:top-6">
@@ -324,7 +383,7 @@ const EmailTemplatesPage: React.FC = () => {
               />
             </div>
           </div>
-        </div>
+        </div>}
       </main>
     </div>
   );

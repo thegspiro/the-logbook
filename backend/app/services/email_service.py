@@ -209,6 +209,11 @@ class EmailService:
         meeting_date: Optional[datetime],
         custom_message: Optional[str] = None,
         cc_emails: Optional[List[str]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        positions: Optional[List[str]] = None,
+        db: Any = None,
+        organization_id: Optional[str] = None,
     ) -> bool:
         """
         Send a ballot notification email
@@ -220,87 +225,87 @@ class EmailService:
             ballot_url: URL to the voting page
             meeting_date: Date of the meeting
             custom_message: Optional custom message from secretary
+            cc_emails: Optional CC recipient list
+            start_date: When voting opens (UTC)
+            end_date: When voting closes (UTC)
+            positions: List of positions being voted on
+            db: Optional async database session (for loading templates)
+            organization_id: Optional org ID (for loading templates)
 
         Returns:
             True if sent successfully
         """
-        subject = f"Ballot Available: {election_title}"
+        org_name = ""
+        if self.organization:
+            org_name = getattr(self.organization, "name", "")
+        org_logo = ""
+        if self.organization:
+            org_logo = getattr(self.organization, "logo", None) or ""
 
-        # HTML-escape user-controlled values
-        esc = self._esc
-        e_election_title = esc(election_title)
-        e_recipient_name = esc(recipient_name)
-        e_custom_message = esc(custom_message) if custom_message else ""
-        e_ballot_url = esc(ballot_url) if ballot_url else ""
+        context = {
+            "recipient_name": recipient_name,
+            "election_title": election_title,
+            "ballot_url": ballot_url or "",
+            "meeting_date": self._format_local_dt(meeting_date) if meeting_date else "",
+            "custom_message": custom_message or "",
+            "voting_opens": self._format_local_dt(start_date) if start_date else "",
+            "voting_closes": self._format_local_dt(end_date) if end_date else "",
+            "positions": ", ".join(positions) if positions else "",
+            "organization_name": org_name,
+            "organization_logo": org_logo,
+        }
 
-        # Build email body
-        html_body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #dc2626; color: white; padding: 20px; text-align: center; }}
-        .content {{ padding: 20px; background-color: #f9fafb; }}
-        .button {{ display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
-        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>{e_election_title}</h1>
-        </div>
-        <div class="content">
-            <p>Hello {e_recipient_name},</p>
+        subject = None
+        html_body = None
+        text_body = None
 
-            <p>A ballot is now available for your review and vote.</p>
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
 
-            {'<p><strong>Meeting Date:</strong> ' + self._format_local_dt(meeting_date) + '</p>' if meeting_date else ''}
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.BALLOT_NOTIFICATION
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context, organization=self.organization
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load ballot notification template, using default: {e}"
+                )
 
-            {f'<p>{e_custom_message}</p>' if e_custom_message else ''}
+        # Fall back to inline default if no template loaded
+        if not subject:
+            import re
 
-            {f'<p style="text-align: center;"><a href="{e_ballot_url}" class="button">Vote Now</a></p>' if e_ballot_url else ''}
+            from app.services.email_template_service import (
+                DEFAULT_BALLOT_NOTIFICATION_HTML,
+                DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
+                DEFAULT_BALLOT_NOTIFICATION_TEXT,
+                DEFAULT_CSS,
+            )
 
-            <p>Please review the ballot items and cast your vote before the voting period closes.</p>
+            # Build logo img tag for inline fallback
+            logo_img = ""
+            if org_logo:
+                logo_img = f'<img src="{self._esc(org_logo)}" alt="Logo" style="max-height:80px;max-width:200px;" />'
+            context["organization_logo_img"] = logo_img
 
-            <p>If you have any questions, please contact the organization secretary.</p>
+            def _replace(text: str) -> str:
+                def replacer(match):
+                    var = match.group(1).strip()
+                    value = str(context.get(var, match.group(0)))
+                    return _html.escape(value)
 
-            <p>Thank you for your participation!</p>
-        </div>
-        <div class="footer">
-            <p>This is an automated message from {self._smtp_config['from_name']}</p>
-            <p>Please do not reply to this email.</p>
-        </div>
-    </div>
-</body>
-</html>
-"""
+                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
 
-        text_body = f"""
-{election_title}
-
-Hello {recipient_name},
-
-A ballot is now available for your review and vote.
-
-{"Meeting Date: " + self._format_local_dt(meeting_date) if meeting_date else ''}
-
-{custom_message if custom_message else ''}
-
-{f"Vote Now: {ballot_url}" if ballot_url else ''}
-
-Please review the ballot items and cast your vote before the voting period closes.
-
-If you have any questions, please contact the organization secretary.
-
-Thank you for your participation!
-
----
-This is an automated message from {self._smtp_config['from_name']}
-Please do not reply to this email.
-"""
+            subject = _replace(DEFAULT_BALLOT_NOTIFICATION_SUBJECT)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_BALLOT_NOTIFICATION_HTML)}</body></html>"
+            text_body = _replace(DEFAULT_BALLOT_NOTIFICATION_TEXT)
 
         success_count, failure_count = await self.send_email(
             to_emails=[to_email],
@@ -477,6 +482,10 @@ Please do not reply to this email.
         Returns:
             True if sent successfully
         """
+        org_logo = ""
+        if self.organization:
+            org_logo = getattr(self.organization, "logo", None) or ""
+
         context = {
             "first_name": first_name,
             "last_name": last_name,
@@ -484,6 +493,7 @@ Please do not reply to this email.
             "username": username,
             "temp_password": temp_password,
             "organization_name": organization_name,
+            "organization_logo": org_logo,
             "login_url": login_url,
         }
 
@@ -503,7 +513,7 @@ Please do not reply to this email.
                 )
                 if template:
                     subject, html_body, text_body = template_service.render(
-                        template, context
+                        template, context, organization=self.organization
                     )
                     # Gather stored attachment paths if template has attachments
                     if template.allow_attachments and template.attachments:
@@ -577,10 +587,15 @@ Please do not reply to this email.
         Returns:
             True if sent successfully
         """
+        org_logo = ""
+        if self.organization:
+            org_logo = getattr(self.organization, "logo", None) or ""
+
         context = {
             "first_name": first_name,
             "reset_url": reset_url,
             "organization_name": organization_name,
+            "organization_logo": org_logo,
             "expiry_minutes": str(expiry_minutes),
             # Keep legacy key for existing custom templates that reference it
             "expiry_hours": str(expiry_minutes),
@@ -602,7 +617,7 @@ Please do not reply to this email.
                 )
                 if template:
                     subject, html_body, text_body = template_service.render(
-                        template, context
+                        template, context, organization=self.organization
                     )
             except Exception as e:
                 logger.warning(

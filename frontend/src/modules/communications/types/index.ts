@@ -10,4 +10,7 @@ export type {
   EmailTemplateUpdate,
   EmailTemplatePreview,
   TemplateVariable,
+  ScheduledEmail,
+  ScheduledEmailCreate,
+  ScheduledEmailUpdate,
 } from '../../../services/api';

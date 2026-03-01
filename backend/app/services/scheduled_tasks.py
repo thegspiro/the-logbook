@@ -111,6 +111,12 @@ SCHEDULE = {
         "recommended_time": "Sunday 02:00",
         "cron": "0 2 * * 0",
     },
+    "scheduled_emails": {
+        "description": "Process pending scheduled emails that are due to be sent",
+        "frequency": "every 5 minutes",
+        "recommended_time": "*/5 * * * *",
+        "cron": "*/5 * * * *",
+    },
 }
 
 
@@ -1109,6 +1115,98 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
     return results
 
 
+async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
+    """Process pending scheduled emails that are due to be sent."""
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
+
+    from sqlalchemy.orm import selectinload
+
+    from app.models.email_template import (
+        ScheduledEmail,
+        ScheduledEmailStatus,
+    )
+    from app.services.email_service import EmailService
+    from app.services.email_template_service import EmailTemplateService
+
+    now = _dt.now(_tz.utc)
+    result = await db.execute(
+        select(ScheduledEmail)
+        .where(
+            ScheduledEmail.status == ScheduledEmailStatus.PENDING,
+            ScheduledEmail.scheduled_at <= now,
+        )
+        .options(selectinload(ScheduledEmail.organization))
+        .limit(100)
+    )
+    pending = list(result.scalars().all())
+
+    sent = 0
+    failed = 0
+    for item in pending:
+        try:
+            org = item.organization
+            email_svc = EmailService(org)
+            template_svc = EmailTemplateService(db)
+
+            template = None
+            if item.template_id:
+                from app.models.email_template import EmailTemplate
+
+                t_result = await db.execute(
+                    select(EmailTemplate)
+                    .where(EmailTemplate.id == item.template_id)
+                    .options(selectinload(EmailTemplate.attachments))
+                )
+                template = t_result.scalar_one_or_none()
+
+            if not template:
+                template = await template_svc.get_template(
+                    item.organization_id, item.template_type
+                )
+
+            if not template:
+                item.status = ScheduledEmailStatus.FAILED
+                item.error_message = (
+                    f"No template found for type {item.template_type.value}"
+                )
+                failed += 1
+                continue
+
+            subject, html_body, text_body = template_svc.render(
+                template, item.context or {}, organization=org
+            )
+
+            success_count, _ = await email_svc.send_email(
+                to_emails=item.to_emails,
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                cc_emails=item.cc_emails,
+            )
+
+            if success_count > 0:
+                item.status = ScheduledEmailStatus.SENT
+                item.sent_at = now
+                sent += 1
+            else:
+                item.status = ScheduledEmailStatus.FAILED
+                item.error_message = "Email delivery failed"
+                failed += 1
+
+        except Exception as e:
+            logger.error(f"Failed to send scheduled email {item.id}: {e}")
+            item.status = ScheduledEmailStatus.FAILED
+            item.error_message = str(e)[:500]
+            failed += 1
+
+    if pending:
+        await db.commit()
+
+    logger.info(f"Scheduled emails processed: {sent} sent, {failed} failed")
+    return {"sent": sent, "failed": failed, "total_processed": len(pending)}
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -1121,4 +1219,5 @@ TASK_RUNNERS = {
     "post_event_validation": run_post_event_validation,
     "post_shift_validation": run_post_shift_validation,
     "audit_log_archival": run_audit_log_archival,
+    "scheduled_emails": run_scheduled_emails,
 }

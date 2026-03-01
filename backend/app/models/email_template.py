@@ -138,3 +138,88 @@ class EmailAttachment(Base):
 
     def __repr__(self):
         return f"<EmailAttachment {self.filename}>"
+
+
+class ScheduledEmailStatus(str, enum.Enum):
+    """Status of a scheduled email"""
+
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ScheduledEmail(Base):
+    """
+    An email scheduled to be sent at a future date/time.
+
+    Processed by the ``process_scheduled_emails`` scheduled task which
+    runs every 5 minutes.
+    """
+
+    __tablename__ = "scheduled_emails"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Which template to use (nullable — caller may supply raw context)
+    template_id = Column(
+        String(36),
+        ForeignKey("email_templates.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    template_type = Column(
+        SQLEnum(EmailTemplateType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+
+    # Recipients
+    to_emails = Column(JSON, nullable=False)  # List[str]
+    cc_emails = Column(JSON, nullable=True)  # Optional List[str]
+
+    # Template variables to render with
+    context = Column(JSON, nullable=False, default=dict)
+
+    # When to send (timezone-aware, UTC)
+    scheduled_at = Column(DateTime(timezone=True), nullable=False)
+
+    # Delivery tracking
+    status = Column(
+        SQLEnum(
+            ScheduledEmailStatus,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=ScheduledEmailStatus.PENDING,
+    )
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    # Audit
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    organization = relationship("Organization")
+    template = relationship("EmailTemplate")
+
+    __table_args__ = (
+        Index("idx_scheduled_email_status", "status", "scheduled_at"),
+        Index("idx_scheduled_email_org", "organization_id", "status"),
+    )
+
+    def __repr__(self):
+        return f"<ScheduledEmail {self.id} status={self.status.value}>"

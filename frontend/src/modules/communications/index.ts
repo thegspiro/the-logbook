@@ -9,9 +9,16 @@ export { getCommunicationsRoutes } from './routes';
 
 // Store
 export { useEmailTemplatesStore } from './store/emailTemplatesStore';
+export { useScheduledEmailsStore } from './store/scheduledEmailsStore';
 
 // Components
-export { TemplateList, TemplateEditor, TemplatePreview } from './components';
+export {
+  TemplateList,
+  TemplateEditor,
+  TemplatePreview,
+  ScheduleEmailForm,
+  ScheduledEmailList,
+} from './components';
 
 // Types
 export type {
@@ -20,4 +27,7 @@ export type {
   EmailTemplateUpdate,
   EmailTemplatePreview,
   TemplateVariable,
+  ScheduledEmail,
+  ScheduledEmailCreate,
+  ScheduledEmailUpdate,
 } from './types';

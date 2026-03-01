@@ -87,3 +87,51 @@ class EmailTemplatePreviewResponse(BaseModel):
     subject: str
     html_body: str
     text_body: Optional[str] = None
+
+
+# --- Scheduled Email schemas ---
+
+
+class ScheduledEmailCreate(BaseModel):
+    """Request schema for scheduling an email"""
+
+    template_type: str = Field(..., description="Email template type to use")
+    template_id: Optional[str] = Field(
+        None, description="Specific template ID (optional)"
+    )
+    to_emails: List[str] = Field(..., min_length=1)
+    cc_emails: Optional[List[str]] = None
+    context: Dict[str, Any] = Field(default_factory=dict)
+    scheduled_at: datetime = Field(
+        ..., description="When to send the email (UTC datetime)"
+    )
+
+
+class ScheduledEmailUpdate(BaseModel):
+    """Request schema for updating a scheduled email"""
+
+    scheduled_at: Optional[datetime] = None
+    status: Optional[str] = Field(
+        None, description="Set to 'cancelled' to cancel"
+    )
+
+
+class ScheduledEmailResponse(BaseModel):
+    """Response schema for a scheduled email"""
+
+    id: str
+    organization_id: str
+    template_id: Optional[str] = None
+    template_type: str
+    to_emails: List[str]
+    cc_emails: Optional[List[str]] = None
+    context: Dict[str, Any] = {}
+    scheduled_at: datetime
+    status: str
+    sent_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
