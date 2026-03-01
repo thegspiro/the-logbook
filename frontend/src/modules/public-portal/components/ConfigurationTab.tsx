@@ -104,7 +104,7 @@ const ConfigurationTab: React.FC = () => {
               onChange={(e) => setNewOrigin(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAddOrigin()}
               placeholder="https://example.com"
-              className="flex-1 px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="flex-1 px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
             />
             <button
               onClick={handleAddOrigin}
@@ -137,7 +137,7 @@ const ConfigurationTab: React.FC = () => {
             onChange={(e) => setDefaultRateLimit(parseInt(e.target.value, 10))}
             min={1}
             max={100000}
-            className="w-full px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
           />
           <p className="mt-1 text-xs text-theme-text-muted">
             Recommended: 1000 for public websites, 10000 for high-traffic sites
@@ -162,7 +162,7 @@ const ConfigurationTab: React.FC = () => {
             onChange={(e) => setCacheTTL(parseInt(e.target.value, 10))}
             min={0}
             max={3600}
-            className="w-full px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
           />
           <p className="mt-1 text-xs text-theme-text-muted">
             Recommended: 300 seconds (5 minutes). Set to 0 to disable caching.

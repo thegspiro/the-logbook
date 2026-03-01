@@ -102,7 +102,7 @@ const CriterionEditor: React.FC<{
               value={criterion.label}
               onChange={(e) => onChange({ ...criterion, label: e.target.value })}
               placeholder="e.g., Dons SCBA within 60 seconds"
-              className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+              className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
             />
           </div>
 
@@ -112,7 +112,7 @@ const CriterionEditor: React.FC<{
             <select
               value={criterion.type}
               onChange={(e) => onChange({ ...criterion, type: e.target.value as CriterionType })}
-              className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+              className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
             >
               {CRITERION_TYPE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -131,7 +131,7 @@ const CriterionEditor: React.FC<{
                   value={criterion.max_score ?? ''}
                   onChange={(e) => onChange({ ...criterion, max_score: e.target.value ? Number(e.target.value) : undefined })}
                   placeholder="3"
-                  className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                  className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
                 />
               </div>
               <div className="lg:col-span-2">
@@ -145,7 +145,7 @@ const CriterionEditor: React.FC<{
                   value={criterion.passing_score ?? ''}
                   onChange={(e) => onChange({ ...criterion, passing_score: e.target.value ? Number(e.target.value) : undefined })}
                   placeholder="2"
-                  className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                  className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
                 />
               </div>
             </>
@@ -160,7 +160,7 @@ const CriterionEditor: React.FC<{
                 value={criterion.time_limit_seconds ?? ''}
                 onChange={(e) => onChange({ ...criterion, time_limit_seconds: e.target.value ? Number(e.target.value) : undefined })}
                 placeholder="60"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
               />
             </div>
           )}
@@ -179,7 +179,7 @@ const CriterionEditor: React.FC<{
                 }}
                 rows={3}
                 placeholder="Check airway&#10;Assess breathing&#10;Check pulse"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
               />
             </div>
           )}
@@ -192,7 +192,7 @@ const CriterionEditor: React.FC<{
                 onChange={(e) => onChange({ ...criterion, statement_text: e.target.value || undefined })}
                 rows={3}
                 placeholder="Enter the statement the evaluator must read or announce..."
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
               />
             </div>
           )}
@@ -204,7 +204,7 @@ const CriterionEditor: React.FC<{
                 type="checkbox"
                 checked={criterion.required}
                 onChange={(e) => onChange({ ...criterion, required: e.target.checked })}
-                className="rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                className="rounded border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
               />
               <div>
                 <span className="text-sm text-theme-text-primary">Critical</span>
@@ -222,7 +222,7 @@ const CriterionEditor: React.FC<{
             value={criterion.description ?? ''}
             onChange={(e) => onChange({ ...criterion, description: e.target.value || undefined })}
             placeholder="Optional notes"
-            className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+            className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
           />
         </div>
 
@@ -282,14 +282,14 @@ const SectionEditor: React.FC<{
             value={section.name}
             onChange={(e) => onChange({ ...section, name: e.target.value })}
             placeholder="Section name (e.g., SCBA Operations)"
-            className="flex-1 px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500/50"
+            className="flex-1 px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm font-medium focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
           />
           <input
             type="text"
             value={section.description ?? ''}
             onChange={(e) => onChange({ ...section, description: e.target.value || undefined })}
             placeholder="Description (optional)"
-            className="hidden lg:block flex-1 px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+            className="hidden lg:block flex-1 px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
           />
         </div>
 
@@ -613,7 +613,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., SCBA Proficiency Evaluation"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
               />
             </div>
             <div>
@@ -623,7 +623,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="e.g., Fire Operations, EMS, Hazmat"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
               />
             </div>
             <div className="md:col-span-2">
@@ -631,7 +631,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               <select
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value)}
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
               >
                 <option value="all_members">All Members</option>
                 <option value="officers_only">Officers Only</option>
@@ -648,7 +648,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
                 placeholder="Brief description of the evaluation..."
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
               />
             </div>
             <div>
@@ -660,7 +660,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={timeLimitMinutes ?? ''}
                 onChange={(e) => setTimeLimitMinutes(e.target.value ? Number(e.target.value) : undefined)}
                 placeholder="e.g., 30"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
               />
             </div>
             <div>
@@ -672,7 +672,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={passingPercentage ?? ''}
                 onChange={(e) => setPassingPercentage(e.target.value ? Number(e.target.value) : undefined)}
                 placeholder="e.g., 70"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
               />
             </div>
             <div>
@@ -682,7 +682,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="e.g., NFPA 1001, Probationary"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
               />
             </div>
             <div className="flex items-end">
@@ -691,7 +691,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                   type="checkbox"
                   checked={requireAllCritical}
                   onChange={(e) => setRequireAllCritical(e.target.checked)}
-                  className="rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                  className="rounded border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
                 />
                 <span className="text-sm text-theme-text-primary">Require all critical criteria to pass</span>
               </label>

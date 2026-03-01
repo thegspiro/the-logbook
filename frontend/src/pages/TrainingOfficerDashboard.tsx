@@ -313,7 +313,7 @@ const TrainingOfficerDashboard: React.FC = () => {
                       type="checkbox"
                       checked={enabledWidgets[widget.id as keyof typeof enabledWidgets]}
                       onChange={() => toggleWidget(widget.id as keyof typeof enabledWidgets)}
-                      className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
+                      className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
                     />
                     <Icon className="w-5 h-5 text-theme-text-muted" />
                     <span className="text-theme-text-secondary text-sm">{widget.title}</span>

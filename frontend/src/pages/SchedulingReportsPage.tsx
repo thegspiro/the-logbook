@@ -114,7 +114,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
           type="date"
           value={startDate}
           onChange={(e) => onStartChange(e.target.value)}
-          className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+          className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
           required
         />
       </div>
@@ -127,7 +127,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
           type="date"
           value={endDate}
           onChange={(e) => onEndChange(e.target.value)}
-          className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+          className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
           required
         />
       </div>
@@ -638,7 +638,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   id="call-group-by"
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value)}
-                  className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                  className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                 >
                   <option value="day">Day</option>
                   <option value="week">Week</option>
@@ -857,7 +857,7 @@ export const SchedulingReportsPage: React.FC = () => {
                 type="date"
                 value={complianceRefDate}
                 onChange={(e) => setComplianceRefDate(e.target.value)}
-                className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               />
             </div>
             <button

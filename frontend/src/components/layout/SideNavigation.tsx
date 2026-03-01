@@ -518,7 +518,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         <div className="flex items-center justify-between h-16 px-4">
           <Link
             to="/dashboard"
-            className="flex items-center focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg"
+            className="flex items-center focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
           >
             {logoPreview ? (
               <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
@@ -544,7 +544,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           </Link>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             aria-expanded={mobileMenuOpen}
             aria-controls="side-navigation"
             aria-label={
@@ -589,7 +589,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 <div className="flex items-center justify-center">
                   <Link
                     to="/dashboard"
-                    className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg"
+                    className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                   >
                     {logoPreview ? (
                       <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -611,7 +611,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 </div>
                 <button
                   onClick={() => setCollapsed(false)}
-                  className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   aria-label="Expand navigation"
                 >
                   <ChevronRight
@@ -624,7 +624,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               <div className="flex items-center justify-between">
                 <Link
                   to="/dashboard"
-                  className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg"
+                  className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                 >
                   {logoPreview ? (
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -651,7 +651,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 </Link>
                 <button
                   onClick={() => setCollapsed(true)}
-                  className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                   aria-label="Collapse navigation"
                 >
                   <ChevronRight
@@ -739,7 +739,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       aria-controls={
                         hasSubItems ? `submenu-${item.label}` : undefined
                       }
-                      className={`w-full flex items-center rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                      className={`w-full flex items-center rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                         collapsed ? "justify-center p-3" : "px-4 py-3"
                       } ${
                         parentActive && !hasSubItems
@@ -792,7 +792,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                                 onMouseEnter={() => prefetchRoute(subItem.path)}
                                 onFocus={() => prefetchRoute(subItem.path)}
                                 aria-current={subActive ? "page" : undefined}
-                                className={`w-full flex items-center px-4 py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                                className={`w-full flex items-center px-4 py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                                   subActive
                                     ? "bg-red-600 text-white"
                                     : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
@@ -819,7 +819,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           <div className="p-4 border-t border-theme-surface-border space-y-1">
             <button
               onClick={cycleTheme}
-              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
+              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                 collapsed ? "justify-center p-3" : "px-4 py-3"
               }`}
               title={collapsed ? `Theme: ${themeLabel}` : undefined}
@@ -835,7 +835,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             </button>
             <button
               onClick={onLogout}
-              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
+              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                 collapsed ? "justify-center p-3" : "px-4 py-3"
               }`}
               title={collapsed ? "Logout" : undefined}

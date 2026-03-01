@@ -481,7 +481,7 @@ const CriterionNotes: React.FC<{
           onChange={(e) => onChange(e.target.value)}
           placeholder="Notes for this criterion..."
           rows={2}
-          className="w-full px-3 py-2 text-sm bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+          className="w-full px-3 py-2 text-sm bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
           autoFocus
         />
       )}
@@ -728,7 +728,7 @@ const ReviewSection: React.FC<{
           onChange={(e) => onNotesChange(e.target.value)}
           placeholder="Add notes for this section..."
           rows={2}
-          className="w-full px-3 py-2 text-sm bg-theme-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted/50 focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+          className="w-full px-3 py-2 text-sm bg-theme-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted/50 focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
         />
       </div>
     </div>

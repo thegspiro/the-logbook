@@ -320,7 +320,7 @@ export const PipelineSettingsPage: React.FC = () => {
                       value={pipelineName}
                       onChange={(e) => setPipelineName(e.target.value)}
                       aria-label="Pipeline name"
-                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                     />
                     <textarea
                       value={pipelineDescription}
@@ -328,7 +328,7 @@ export const PipelineSettingsPage: React.FC = () => {
                       placeholder="Description (optional)"
                       aria-label="Pipeline description"
                       rows={2}
-                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
                     />
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -473,7 +473,7 @@ export const PipelineSettingsPage: React.FC = () => {
                             custom_timeout_days: Math.max(1, Number(e.target.value)),
                           })
                         }
-                        className="w-32 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-32 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                       />
                     </div>
                   )}
@@ -529,7 +529,7 @@ export const PipelineSettingsPage: React.FC = () => {
                               notify_coordinator: e.target.checked,
                             })
                           }
-                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                         />
                         Notify membership coordinator when applications approach timeout
                       </label>
@@ -543,7 +543,7 @@ export const PipelineSettingsPage: React.FC = () => {
                               notify_applicant: e.target.checked,
                             })
                           }
-                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                         />
                         Notify the applicant that their application is going inactive
                       </label>
@@ -566,7 +566,7 @@ export const PipelineSettingsPage: React.FC = () => {
                             auto_purge_enabled: e.target.checked,
                           })
                         }
-                        className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+                        className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                       />
                       Permanently delete inactive applications after a set period
                     </label>
@@ -585,7 +585,7 @@ export const PipelineSettingsPage: React.FC = () => {
                               })
                             }
                             aria-label="Days after becoming inactive before purging"
-                            className="w-24 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                            className="w-24 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                           />
                           <span className="text-sm text-theme-text-muted">
                             days after becoming inactive
@@ -638,7 +638,7 @@ export const PipelineSettingsPage: React.FC = () => {
                     type="checkbox"
                     checked={currentPipeline.public_status_enabled}
                     onChange={() => { void handleTogglePublicStatus(); }}
-                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                   />
                   Allow prospects to check their application status via a public link
                 </label>
@@ -681,7 +681,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   placeholder="e.g., New Member Onboarding"
                   required
                   aria-required="true"
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -694,7 +694,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   onChange={(e) => setPipelineDescription(e.target.value)}
                   placeholder="Describe this pipeline's purpose..."
                   rows={3}
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
                 />
               </div>
             </div>

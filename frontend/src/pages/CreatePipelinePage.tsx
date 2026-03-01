@@ -254,7 +254,7 @@ const StepInfo: React.FC<{
         id="is-template"
         checked={data.is_template}
         onChange={(e) => onChange('is_template', e.target.checked)}
-        className="w-4 h-4 text-red-500 bg-theme-input-bg border-theme-input-border rounded focus:ring-red-500"
+        className="w-4 h-4 text-red-500 bg-theme-input-bg border-theme-input-border rounded focus:ring-theme-focus-ring"
       />
       <label htmlFor="is-template" className="text-sm text-theme-text-secondary">
         Save as template (can be cloned for future use)

@@ -418,7 +418,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                       placeholder="Search existing courses..."
                       value={searchVal}
                       onChange={(e) => setCourseSearch(prev => ({ ...prev, [uc.csv_course_name]: e.target.value }))}
-                      className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                     />
                   </div>
                   <div className="max-h-40 overflow-y-auto space-y-1">
@@ -458,7 +458,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                     id={`training-type-${uc.csv_course_name}`}
                     value={mapping.new_training_type || 'continuing_education'}
                     onChange={(e) => updateMapping(uc.csv_course_name, { new_training_type: e.target.value })}
-                    className="w-full max-w-xs px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full max-w-xs px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   >
                     {TRAINING_TYPE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>

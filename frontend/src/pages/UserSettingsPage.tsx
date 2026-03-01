@@ -300,7 +300,7 @@ export const UserSettingsPage: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 pb-4 px-1 border-b-2 whitespace-nowrap transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                className={`flex items-center space-x-2 pb-4 px-1 border-b-2 whitespace-nowrap transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                   activeTab === tab.id
                     ? 'border-red-500 text-theme-text-primary'
                     : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'
@@ -344,7 +344,7 @@ export const UserSettingsPage: React.FC = () => {
                         type="text"
                         value={profileForm.first_name || ''}
                         onChange={(e) => handleProfileChange('first_name', e.target.value)}
-                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
@@ -355,7 +355,7 @@ export const UserSettingsPage: React.FC = () => {
                         type="text"
                         value={profileForm.middle_name || ''}
                         onChange={(e) => handleProfileChange('middle_name', e.target.value)}
-                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
@@ -366,7 +366,7 @@ export const UserSettingsPage: React.FC = () => {
                         type="text"
                         value={profileForm.last_name || ''}
                         onChange={(e) => handleProfileChange('last_name', e.target.value)}
-                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
@@ -384,7 +384,7 @@ export const UserSettingsPage: React.FC = () => {
                         type="tel"
                         value={profileForm.phone || ''}
                         onChange={(e) => handleProfileChange('phone', e.target.value)}
-                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
@@ -395,7 +395,7 @@ export const UserSettingsPage: React.FC = () => {
                         type="tel"
                         value={profileForm.mobile || ''}
                         onChange={(e) => handleProfileChange('mobile', e.target.value)}
-                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
@@ -456,7 +456,7 @@ export const UserSettingsPage: React.FC = () => {
                         type="text"
                         value={profileForm.address_street || ''}
                         onChange={(e) => handleProfileChange('address_street', e.target.value)}
-                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
@@ -468,7 +468,7 @@ export const UserSettingsPage: React.FC = () => {
                           type="text"
                           value={profileForm.address_city || ''}
                           onChange={(e) => handleProfileChange('address_city', e.target.value)}
-                          className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                          className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                           disabled={savingProfile}
                         />
                       </div>
@@ -479,7 +479,7 @@ export const UserSettingsPage: React.FC = () => {
                           type="text"
                           value={profileForm.address_state || ''}
                           onChange={(e) => handleProfileChange('address_state', e.target.value)}
-                          className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                          className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                           disabled={savingProfile}
                         />
                       </div>
@@ -490,7 +490,7 @@ export const UserSettingsPage: React.FC = () => {
                           type="text"
                           value={profileForm.address_zip || ''}
                           onChange={(e) => handleProfileChange('address_zip', e.target.value)}
-                          className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                          className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                           disabled={savingProfile}
                         />
                       </div>
@@ -503,7 +503,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     onClick={() => { void handleSaveProfile(); }}
                     disabled={savingProfile}
-                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {savingProfile ? 'Saving...' : 'Save Profile'}
                   </button>
@@ -552,7 +552,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showCurrentPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                     placeholder="Enter current password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
@@ -588,7 +588,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showNewPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                     placeholder="Enter new password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -651,7 +651,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showConfirmPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                     placeholder="Confirm new password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -679,7 +679,7 @@ export const UserSettingsPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={changingPassword || !passwordValidation.isValid || newPassword !== confirmPassword}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {changingPassword ? 'Changing Password...' : 'Change Password'}
                 </button>
@@ -735,7 +735,7 @@ export const UserSettingsPage: React.FC = () => {
                                 onChange={(e) =>
                                   handleContactChange(i, 'is_primary', e.target.checked)
                                 }
-                                className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
+                                className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
                               />
                               Primary
                             </label>
@@ -759,7 +759,7 @@ export const UserSettingsPage: React.FC = () => {
                               placeholder="Full name"
                               value={ec.name}
                               onChange={(e) => handleContactChange(i, 'name', e.target.value)}
-                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                               disabled={savingContacts}
                             />
                           </div>
@@ -773,7 +773,7 @@ export const UserSettingsPage: React.FC = () => {
                               placeholder="e.g., Spouse, Parent"
                               value={ec.relationship}
                               onChange={(e) => handleContactChange(i, 'relationship', e.target.value)}
-                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                               disabled={savingContacts}
                             />
                           </div>
@@ -789,7 +789,7 @@ export const UserSettingsPage: React.FC = () => {
                               placeholder="Phone number"
                               value={ec.phone}
                               onChange={(e) => handleContactChange(i, 'phone', e.target.value)}
-                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                               disabled={savingContacts}
                             />
                           </div>
@@ -803,7 +803,7 @@ export const UserSettingsPage: React.FC = () => {
                               placeholder="Email address"
                               value={ec.email || ''}
                               onChange={(e) => handleContactChange(i, 'email', e.target.value)}
-                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                              className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                               disabled={savingContacts}
                             />
                           </div>
@@ -830,7 +830,7 @@ export const UserSettingsPage: React.FC = () => {
                       <button
                         onClick={() => { void handleSaveEmergencyContacts(); }}
                         disabled={savingContacts}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {savingContacts ? 'Saving...' : 'Save Emergency Contacts'}
                       </button>
@@ -864,7 +864,7 @@ export const UserSettingsPage: React.FC = () => {
                     <button
                       key={option.value}
                       onClick={() => setTheme(option.value)}
-                      className={`relative flex flex-col items-center p-4 rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                      className={`relative flex flex-col items-center p-4 rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                         isSelected
                           ? 'border-red-500 bg-red-50 dark:bg-red-500/10'
                           : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-border'
@@ -925,7 +925,7 @@ export const UserSettingsPage: React.FC = () => {
                   onClick={() => setEmailNotifications(!emailNotifications)}
                   className={`${
                     emailNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-theme-bg`}
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-theme-bg`}
                   role="switch"
                   aria-checked={emailNotifications}
                 >
@@ -952,7 +952,7 @@ export const UserSettingsPage: React.FC = () => {
                   onClick={() => setEventReminders(!eventReminders)}
                   className={`${
                     eventReminders ? 'bg-red-600' : 'bg-theme-surface-border'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-theme-bg`}
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-theme-bg`}
                   role="switch"
                   aria-checked={eventReminders}
                 >
@@ -979,7 +979,7 @@ export const UserSettingsPage: React.FC = () => {
                   onClick={() => setTrainingReminders(!trainingReminders)}
                   className={`${
                     trainingReminders ? 'bg-red-600' : 'bg-theme-surface-border'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-theme-bg`}
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-theme-bg`}
                   role="switch"
                   aria-checked={trainingReminders}
                 >
@@ -1006,7 +1006,7 @@ export const UserSettingsPage: React.FC = () => {
                   onClick={() => setAnnouncementNotifications(!announcementNotifications)}
                   className={`${
                     announcementNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-theme-bg`}
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-theme-bg`}
                   role="switch"
                   aria-checked={announcementNotifications}
                 >
@@ -1023,7 +1023,7 @@ export const UserSettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSavePreferences(); }}
                 disabled={savingPreferences}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {savingPreferences ? 'Saving...' : 'Save Preferences'}
               </button>

@@ -537,7 +537,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                         if (searchResults.length > 0) setShowDropdown(true);
                       }}
                       placeholder="Search by name, barcode, serial, or asset tag..."
-                      className="w-full pl-9 pr-8 py-2 border border-theme-border rounded-lg bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      className="w-full pl-9 pr-8 py-2 border border-theme-border rounded-lg bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted text-sm focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
                       autoComplete="off"
                       autoFocus
                     />
@@ -724,7 +724,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
                         <button
                           onClick={() => removeItem(si.itemId)}
-                          className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-red-600 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-red-600 rounded focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                           title="Remove"
                           aria-label={`Remove item ${si.itemName}`}
                         >

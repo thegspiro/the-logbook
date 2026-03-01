@@ -244,7 +244,7 @@ const TrainingRequirementsPage: React.FC = () => {
                   placeholder="Search requirements..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
                 />
               </div>
             </div>
@@ -257,7 +257,7 @@ const TrainingRequirementsPage: React.FC = () => {
                 id="source-filter"
                 value={filterSource}
                 onChange={(e) => setFilterSource(e.target.value as FilterSource)}
-                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
               >
                 <option value="all">All Sources</option>
                 <option value="department">Department</option>
@@ -730,7 +730,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 placeholder="e.g., Annual Training Hours"
                 required
                 aria-required="true"
@@ -743,7 +743,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 id="req-description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 placeholder="Describe the requirement..."
                 rows={3}
               />
@@ -775,7 +775,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     ...(autoDueDateType ? { due_date_type: autoDueDateType } : {}),
                   });
                 }}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 required
                 aria-required="true"
               >
@@ -796,7 +796,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   id="req-training-type"
                   value={formData.training_type}
                   onChange={(e) => setFormData({ ...formData, training_type: e.target.value })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="">Any Type</option>
                   <option value="certification">Certification</option>
@@ -815,7 +815,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="number"
                   value={formData.required_hours || ''}
                   onChange={(e) => setFormData({ ...formData, required_hours: e.target.value ? Number(e.target.value) : undefined })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="e.g., 36"
                   min="0"
                   step="0.5"
@@ -867,7 +867,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="number"
                   value={formData.rolling_period_months}
                   onChange={(e) => setFormData({ ...formData, rolling_period_months: Number(e.target.value) })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   min="1"
                   max="120"
                 />
@@ -886,7 +886,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     id="req-period-start-month"
                     value={formData.period_start_month}
                     onChange={(e) => setFormData({ ...formData, period_start_month: Number(e.target.value) })}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   >
                     {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
                       <option key={idx} value={idx + 1}>{month}</option>
@@ -900,7 +900,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     type="number"
                     value={formData.period_start_day}
                     onChange={(e) => setFormData({ ...formData, period_start_day: Number(e.target.value) })}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                     min="1"
                     max="31"
                   />
@@ -917,7 +917,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="date"
                   value={formData.due_date}
                   onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             )}
@@ -931,7 +931,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     id="req-frequency"
                     value={formData.frequency}
                     onChange={(e) => setFormData({ ...formData, frequency: e.target.value as RequirementFrequency })}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   >
                     <option value="annual">Annual</option>
                     <option value="biannual">Biannual (Every 2 Years)</option>
@@ -948,7 +948,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     type="number"
                     value={formData.year || ''}
                     onChange={(e) => setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                     placeholder="e.g., 2026"
                     min="2020"
                     max="2100"
@@ -1011,7 +1011,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     applies_to_all: e.target.checked,
                     ...(e.target.checked ? { required_membership_types: [] } : {}),
                   })}
-                  className="w-5 h-5 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-red-500"
+                  className="w-5 h-5 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                 />
                 <span className="text-theme-text-secondary">Applies to all members</span>
               </label>
@@ -1048,7 +1048,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                               : [...prev.required_membership_types, memberType.value],
                           }));
                         }}
-                        className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-red-500"
+                        className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                       />
                       <span className="text-sm">{memberType.label}</span>
                     </label>
@@ -1065,7 +1065,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>

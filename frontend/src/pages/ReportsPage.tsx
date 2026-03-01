@@ -636,7 +636,7 @@ export const ReportsPage: React.FC = () => {
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                 selectedCategory === category.id
                   ? 'bg-red-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -666,7 +666,7 @@ export const ReportsPage: React.FC = () => {
             <button
               key={preset.id}
               onClick={() => handlePresetChange(preset.id)}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                 datePreset === preset.id
                   ? 'bg-red-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -684,7 +684,7 @@ export const ReportsPage: React.FC = () => {
                 setStartDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             />
             <span className="text-theme-text-muted text-sm">to</span>
             <input
@@ -694,7 +694,7 @@ export const ReportsPage: React.FC = () => {
                 setEndDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             />
           </div>
         </div>
@@ -748,7 +748,7 @@ export const ReportsPage: React.FC = () => {
               {report.available && (
                 <button
                   disabled={isGenerating}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-70 disabled:cursor-wait text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-70 disabled:cursor-wait text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   onClick={() => { void handleGenerateReport(report); }}
                 >
                   {isGenerating ? (
@@ -839,7 +839,7 @@ export const ReportsPage: React.FC = () => {
               <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end">
                 <button
                   onClick={closeModal}
-                  className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   Close
                 </button>

@@ -501,7 +501,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               placeholder="e.g., Day Shift A"
               required
               aria-required="true"
@@ -516,7 +516,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               id="template-description"
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               rows={2}
               placeholder="Optional description"
             />
@@ -583,7 +583,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                     }));
                   }
                 }}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                 required={formData.category === 'specialty'}
               >
                 <option value="">
@@ -790,7 +790,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                 step="900"
                 value={formData.start_time_of_day}
                 onChange={(e) => setFormData(prev => ({ ...prev, start_time_of_day: e.target.value }))}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                 required
               />
             </div>
@@ -804,7 +804,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                 step="900"
                 value={formData.end_time_of_day}
                 onChange={(e) => setFormData(prev => ({ ...prev, end_time_of_day: e.target.value }))}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                 required
               />
             </div>
@@ -817,7 +817,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                 type="number"
                 value={formData.duration_hours}
                 onChange={(e) => setFormData(prev => ({ ...prev, duration_hours: e.target.value }))}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                 min="0.5"
                 step="0.5"
                 required
@@ -850,7 +850,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                 type="number"
                 value={formData.min_staffing}
                 onChange={(e) => setFormData(prev => ({ ...prev, min_staffing: e.target.value }))}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                 min="1"
                 required
               />
@@ -876,7 +876,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                         updated[i] = e.target.value;
                         setFormData(prev => ({ ...prev, positions: updated }));
                       }}
-                      className="flex-1 px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500"
+                      className="flex-1 px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring"
                     >
                       {positionOptions.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -1018,7 +1018,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               placeholder="e.g., 24/48 Rotation"
               required
               aria-required="true"
@@ -1033,7 +1033,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
               id="pattern-description"
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               rows={2}
               placeholder="Optional description"
             />
@@ -1047,7 +1047,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
               id="pattern-type"
               value={formData.pattern_type}
               onChange={(e) => setFormData(prev => ({ ...prev, pattern_type: e.target.value as PatternFormData['pattern_type'] }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               required
             >
               {PATTERN_TYPES.map(pt => (
@@ -1064,7 +1064,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
               id="pattern-template"
               value={formData.template_id}
               onChange={(e) => setFormData(prev => ({ ...prev, template_id: e.target.value }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
             >
               <option value="">No template</option>
               {templates.map(t => (
@@ -1084,7 +1084,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
                   type="number"
                   value={formData.rotation_days}
                   onChange={(e) => setFormData(prev => ({ ...prev, rotation_days: e.target.value }))}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   min="1"
                   placeholder="e.g., 3"
                 />
@@ -1098,7 +1098,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
                   type="number"
                   value={formData.days_on}
                   onChange={(e) => setFormData(prev => ({ ...prev, days_on: e.target.value }))}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   min="1"
                   placeholder="e.g., 1"
                 />
@@ -1112,7 +1112,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
                   type="number"
                   value={formData.days_off}
                   onChange={(e) => setFormData(prev => ({ ...prev, days_off: e.target.value }))}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   min="1"
                   placeholder="e.g., 2"
                 />
@@ -1130,7 +1130,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
                 type="date"
                 value={formData.start_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                 required
               />
             </div>
@@ -1143,7 +1143,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
                 type="date"
                 value={formData.end_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               />
             </div>
           </div>
@@ -1248,7 +1248,7 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               required
             />
           </div>
@@ -1262,7 +1262,7 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               required
             />
           </div>

@@ -224,7 +224,7 @@ const AdminHoursPage: React.FC = () => {
             <button
               onClick={() => { void handleClockOut(); }}
               disabled={clockingOut}
-              className="flex items-center justify-center gap-2 w-full md:w-auto px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-xl hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-2 w-full md:w-auto px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-xl hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
             >
               <LogOut className="w-5 h-5" />
               {clockingOut ? 'Clocking Out...' : 'Clock Out'}
@@ -285,7 +285,7 @@ const AdminHoursPage: React.FC = () => {
                   value={manualData.category_id}
                   onChange={(e) => setManualData({ ...manualData, category_id: e.target.value })}
                   required
-                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="">Select category...</option>
                   {categories.map((cat) => (
@@ -303,7 +303,7 @@ const AdminHoursPage: React.FC = () => {
                   onChange={(e) => setManualData({ ...manualData, clock_in_at: e.target.value })}
                   max={maxDatetime}
                   required
-                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -315,7 +315,7 @@ const AdminHoursPage: React.FC = () => {
                   max={maxDatetime}
                   min={manualData.clock_in_at || undefined}
                   required
-                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -336,7 +336,7 @@ const AdminHoursPage: React.FC = () => {
                 type="text"
                 value={manualData.description ?? ''}
                 onChange={(e) => setManualData({ ...manualData, description: e.target.value })}
-                className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-theme-focus-ring"
                 placeholder="What did you work on?"
               />
             </div>

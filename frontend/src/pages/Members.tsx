@@ -315,7 +315,7 @@ const Members: React.FC = () => {
                 placeholder="Search by name, membership number, or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
             </div>
 
@@ -325,7 +325,7 @@ const Members: React.FC = () => {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
@@ -501,7 +501,7 @@ const Members: React.FC = () => {
                         type="checkbox"
                         checked={paginatedMembers.length > 0 && selectedIds.size === paginatedMembers.length}
                         onChange={toggleSelectAll}
-                        className="rounded border-theme-input-border text-blue-600 focus:ring-blue-500"
+                        className="rounded border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
                         aria-label="Select all members"
                       />
                     </th>
@@ -535,7 +535,7 @@ const Members: React.FC = () => {
                           type="checkbox"
                           checked={selectedIds.has(member.id)}
                           onChange={() => toggleSelect(member.id)}
-                          className="rounded border-theme-input-border text-blue-600 focus:ring-blue-500"
+                          className="rounded border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
                           aria-label={`Select ${member.first_name} ${member.last_name}`}
                         />
                       </td>

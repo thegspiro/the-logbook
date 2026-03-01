@@ -221,7 +221,7 @@ const SubmissionForm: React.FC<{
           type="text"
           value={formData.course_name}
           onChange={(e) => setFormData({ ...formData, course_name: e.target.value })}
-          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
           placeholder="e.g., Wildland Firefighting - S130/S190"
           required
         />
@@ -236,7 +236,7 @@ const SubmissionForm: React.FC<{
           <select
             value={formData.training_type}
             onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             required={isFieldRequired('training_type')}
           >
             {allowedTypes.map((t) => (
@@ -271,7 +271,7 @@ const SubmissionForm: React.FC<{
                 }
               }
             }}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             required
           />
         </div>
@@ -285,7 +285,7 @@ const SubmissionForm: React.FC<{
             value={endDatetime}
             onChange={(e) => setEndDatetime(e.target.value)}
             min={startDatetime || undefined}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             required
           />
         </div>
@@ -321,7 +321,7 @@ const SubmissionForm: React.FC<{
               type="text"
               value={formData.instructor || ''}
               onChange={(e) => setFormData({ ...formData, instructor: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               required={isFieldRequired('instructor')}
             />
           </div>
@@ -337,7 +337,7 @@ const SubmissionForm: React.FC<{
               type="text"
               value={formData.location || ''}
               onChange={(e) => setFormData({ ...formData, location: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               required={isFieldRequired('location')}
             />
           </div>
@@ -353,7 +353,7 @@ const SubmissionForm: React.FC<{
           <select
             value={formData.category_id || ''}
             onChange={(e) => setFormData({ ...formData, category_id: e.target.value || undefined })}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             required={isFieldRequired('category_id')}
           >
             <option value="">Select a category...</option>
@@ -374,7 +374,7 @@ const SubmissionForm: React.FC<{
             value={formData.description || ''}
             onChange={(e) => setFormData({ ...formData, description: e.target.value || undefined })}
             rows={3}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             required={isFieldRequired('description')}
             placeholder="Describe what the training covered..."
           />
@@ -392,7 +392,7 @@ const SubmissionForm: React.FC<{
               type="text"
               value={formData.certification_number || ''}
               onChange={(e) => setFormData({ ...formData, certification_number: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               required={isFieldRequired('certification_number')}
             />
           </div>
@@ -408,7 +408,7 @@ const SubmissionForm: React.FC<{
               type="text"
               value={formData.issuing_agency || ''}
               onChange={(e) => setFormData({ ...formData, issuing_agency: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               required={isFieldRequired('issuing_agency')}
             />
           </div>
@@ -424,7 +424,7 @@ const SubmissionForm: React.FC<{
               type="date"
               value={formData.expiration_date || ''}
               onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               required={isFieldRequired('expiration_date')}
             />
           </div>
