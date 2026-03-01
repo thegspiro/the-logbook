@@ -6,10 +6,12 @@ It initializes the FastAPI application, sets up middleware,
 connects to the database, and configures routes.
 """
 
+import os
 import signal
 import traceback
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +29,7 @@ from app.api.v1.api import api_router
 from app.core.cache import cache_manager
 from app.core.config import settings
 from app.core.database import database_manager
+from app.core.logging import setup_logging, setup_sentry
 
 # Create rate limiter instance (uses Redis if available, falls back to in-memory)
 limiter = Limiter(
@@ -34,16 +37,10 @@ limiter = Limiter(
     default_limits=[settings.RATE_LIMIT_DEFAULT],
     storage_uri=(
         f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/1"
-        if settings.REDIS_HOST
+        if settings.REDIS_PASSWORD
         else "memory://"
     ),
 )
-
-
-import os
-
-# Configure logging (centralized in app.core.logging)
-from app.core.logging import setup_logging, setup_sentry
 
 setup_logging(
     log_level=settings.LOG_LEVEL,
@@ -77,7 +74,7 @@ class StartupStatus:
         self.errors = []
         self.detailed_message = None
 
-    def set_phase(self, phase: str, message: str, detailed_message: str = None):
+    def set_phase(self, phase: str, message: str, detailed_message: Optional[str] = None):
         self.phase = phase
         self.message = message
         self.detailed_message = detailed_message

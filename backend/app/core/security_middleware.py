@@ -11,7 +11,7 @@ import secrets
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.responses import Response
@@ -37,8 +37,8 @@ class RateLimiter:
     _MAX_KEYS = 10_000
 
     def __init__(self):
-        self.requests: Dict[str, List[float]] = defaultdict(list)
-        self.lockouts: Dict[str, float] = {}
+        self.requests: dict[str, list[float]] = defaultdict(list)
+        self.lockouts: dict[str, float] = {}
         self._last_eviction: float = 0.0
 
     def _evict_stale(self, now: float, window_seconds: int) -> None:
@@ -68,7 +68,7 @@ class RateLimiter:
         max_requests: int = 5,
         window_seconds: int = 60,
         lockout_seconds: int = 1800,  # 30 minutes
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Check if a request should be rate limited
 
@@ -522,9 +522,9 @@ class SecurityAuditLogger:
     @staticmethod
     async def log_event(
         event_type: str,
-        user_id: Optional[str],
+        user_id: str | None,
         ip_address: str,
-        user_agent: Optional[str],
+        user_agent: str | None,
         details: dict,
         severity: str = "INFO",
     ) -> None:
@@ -551,7 +551,7 @@ class SecurityAuditLogger:
 
     @staticmethod
     async def log_failed_login(
-        username: str, ip_address: str, user_agent: Optional[str], reason: str
+        username: str, ip_address: str, user_agent: str | None, reason: str
     ) -> None:
         """Log failed login attempt"""
         await SecurityAuditLogger.log_event(
@@ -565,7 +565,7 @@ class SecurityAuditLogger:
 
     @staticmethod
     async def log_successful_login(
-        user_id: str, username: str, ip_address: str, user_agent: Optional[str]
+        user_id: str, username: str, ip_address: str, user_agent: str | None
     ) -> None:
         """Log successful login"""
         await SecurityAuditLogger.log_event(
@@ -579,7 +579,7 @@ class SecurityAuditLogger:
 
     @staticmethod
     async def log_password_change(
-        user_id: str, ip_address: str, user_agent: Optional[str]
+        user_id: str, ip_address: str, user_agent: str | None
     ) -> None:
         """Log password change"""
         await SecurityAuditLogger.log_event(
@@ -593,9 +593,9 @@ class SecurityAuditLogger:
 
     @staticmethod
     async def log_suspicious_activity(
-        user_id: Optional[str],
+        user_id: str | None,
         ip_address: str,
-        user_agent: Optional[str],
+        user_agent: str | None,
         description: str,
     ) -> None:
         """Log suspicious activity"""
@@ -620,6 +620,11 @@ def get_client_ip(request: Request) -> str:
     Only trusts the X-Forwarded-For header when the direct peer IP is in
     the configured TRUSTED_PROXY_IPS list (SEC-16).  This prevents clients
     from spoofing their IP to bypass rate limiting or geo-blocking.
+
+    When TRUSTED_PROXY_IPS is empty (default), X-Forwarded-For is never
+    trusted — a secure-by-default stance.  Deployments behind a reverse
+    proxy (nginx, Docker, load balancer) MUST set TRUSTED_PROXY_IPS to
+    the proxy's IP(s) so that real client IPs are logged correctly.
     """
     from app.core.config import settings
 
@@ -627,14 +632,14 @@ def get_client_ip(request: Request) -> str:
     trusted_proxies = settings.get_trusted_proxy_ips()
 
     forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for and (not trusted_proxies or direct_ip in trusted_proxies):
+    if forwarded_for and trusted_proxies and direct_ip in trusted_proxies:
         # Take the left-most IP (original client)
         return forwarded_for.split(",")[0].strip()
 
     return direct_ip
 
 
-def get_user_agent(request: Request) -> Optional[str]:
+def get_user_agent(request: Request) -> str | None:
     """Get user agent from request"""
     return request.headers.get("User-Agent")
 
@@ -1011,7 +1016,7 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
 # ============================================
 
 
-async def run_periodic_security_checks() -> Dict[str, Any]:
+async def run_periodic_security_checks() -> dict[str, Any]:
     """
     Run periodic security checks.
 

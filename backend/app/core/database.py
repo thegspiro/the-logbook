@@ -6,12 +6,12 @@ Includes retry logic and connection timeouts for robust startup.
 """
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from loguru import logger
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
@@ -25,9 +25,11 @@ NAMING_CONVENTION = {
     "pk": "pk_%(table_name)s",
 }
 
-# Create declarative base with naming conventions
-metadata = MetaData(naming_convention=NAMING_CONVENTION)
-Base = declarative_base(metadata=metadata)
+
+class Base(DeclarativeBase):
+    """Declarative base with naming conventions for all ORM models."""
+
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
 class DatabaseManager:
