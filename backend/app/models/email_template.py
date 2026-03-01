@@ -28,6 +28,11 @@ class EmailTemplateType(str, enum.Enum):
     BALLOT_NOTIFICATION = "ballot_notification"
     MEMBER_DROPPED = "member_dropped"
     INVENTORY_CHANGE = "inventory_change"
+    CERT_EXPIRATION = "cert_expiration"
+    POST_EVENT_VALIDATION = "post_event_validation"
+    POST_SHIFT_VALIDATION = "post_shift_validation"
+    PROPERTY_RETURN_REMINDER = "property_return_reminder"
+    INACTIVITY_WARNING = "inactivity_warning"
     CUSTOM = "custom"
 
 

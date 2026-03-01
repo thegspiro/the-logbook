@@ -24,7 +24,7 @@ from app.schemas.email_template import (
     EmailTemplateResponse,
     EmailTemplateUpdate,
 )
-from app.services.email_template_service import EmailTemplateService
+from app.services.email_template_service import SAMPLE_CONTEXT, EmailTemplateService
 
 router = APIRouter()
 
@@ -145,6 +145,11 @@ async def preview_email_template(
 
     service = EmailTemplateService(db)
 
+    # Build context: start with per-type sample data, overlay any
+    # explicit values the admin sent so preview always looks realistic.
+    template_type_key = template.template_type.value if hasattr(template.template_type, "value") else str(template.template_type)
+    context = {**SAMPLE_CONTEXT.get(template_type_key, {}), **preview_data.context}
+
     # Apply overrides for preview if provided
     preview_template = EmailTemplate(
         subject=preview_data.subject or template.subject,
@@ -154,7 +159,7 @@ async def preview_email_template(
     )
 
     subject, html_body, text_body = service.render(
-        preview_template, preview_data.context
+        preview_template, context
     )
 
     return EmailTemplatePreviewResponse(
