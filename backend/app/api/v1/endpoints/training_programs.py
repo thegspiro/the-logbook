@@ -821,7 +821,7 @@ async def import_registry_requirements(
     """
     Import requirements from a registry JSON file
 
-    Available registries: nfpa, nremt, proboard, ifsac
+    Available registries: nfpa, nremt, proboard
 
     **Authentication required**
     **Requires permission: training.manage**

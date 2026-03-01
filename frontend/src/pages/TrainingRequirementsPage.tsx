@@ -158,8 +158,7 @@ const TrainingRequirementsPage: React.FC = () => {
   const filteredRequirements = requirements.filter(req => {
     const matchesSearch = req.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       req.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    // For now, filter by source is placeholder since we don't have source field in model
-    const matchesSource = filterSource === 'all';
+    const matchesSource = filterSource === 'all' || req.source === filterSource;
     return matchesSearch && matchesSource;
   });
 

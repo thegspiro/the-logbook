@@ -358,6 +358,8 @@ export interface TrainingRequirement {
   name: string;
   description?: string;
   requirement_type: RequirementType;
+  source: RequirementSource;
+  registry_name?: string;
   training_type?: TrainingType;
   required_hours?: number;
   required_courses?: string[];
