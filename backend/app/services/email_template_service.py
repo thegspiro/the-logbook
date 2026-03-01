@@ -1377,6 +1377,11 @@ class EmailTemplateService:
         )
         self.db.add(template)
         await self.db.flush()
+        # Refresh server-computed timestamps (server_default / onupdate)
+        # to prevent MissingGreenlet when serializing in async mode.
+        await self.db.refresh(
+            template, attribute_names=["created_at", "updated_at"]
+        )
         return template
 
     async def update_template(
