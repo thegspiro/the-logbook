@@ -8,6 +8,7 @@ compatible with The Logbook's import system.
 Supports:
   - Interactive mode: prompts you for each requirement field
   - CSV mode: reads requirements from a CSV file
+  - List mode: shows all existing registries and their requirements
   - Any source type: state, national, or department
   - Auto-registration: patches the backend endpoint to include the new registry
 
@@ -23,6 +24,9 @@ Usage:
 
   # Specify output directory
   python generate_registry.py --output ./my_output_dir
+
+  # List all existing registries and their requirements
+  python generate_registry.py --list
 
   # With a citation URL
   python generate_registry.py --csv reqs.csv --source state --name nj --description "New Jersey DFRS" --url "https://nj.gov/dfrs/requirements"
@@ -481,12 +485,80 @@ def register_in_endpoint(registry_key: str, json_filename: str, repo_root: Path)
     return True
 
 
+# ── List existing registries ──
+
+
+def list_registries(repo_root: Path) -> None:
+    """Scan the registries directory and display all existing registries."""
+    registries_dir = repo_root / "backend" / "app" / "data" / "registries"
+
+    if not registries_dir.exists():
+        print("No registries directory found.")
+        return
+
+    json_files = sorted(registries_dir.glob("*_requirements.json"))
+    if not json_files:
+        print("No registry files found.")
+        return
+
+    print("=" * 70)
+    print("  Existing Registries")
+    print("=" * 70)
+
+    for filepath in json_files:
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"\n  {filepath.name}: (error reading: {e})")
+            continue
+
+        name = data.get("registry_name", filepath.stem)
+        description = data.get("registry_description", "")
+        source = data.get("source", "unknown")
+        last_updated = data.get("last_updated", "unknown")
+        source_url = data.get("source_url", "")
+        requirements = data.get("requirements", [])
+
+        print(f"\n  {name}")
+        print(f"  {'─' * (len(name))}")
+        print(f"  File:         {filepath.name}")
+        print(f"  Source:       {source}")
+        print(f"  Description:  {description}")
+        print(f"  Last updated: {last_updated}")
+        if source_url:
+            print(f"  Citation URL: {source_url}")
+        print(f"  Requirements: {len(requirements)}")
+
+        if requirements:
+            for req in requirements:
+                req_type = req.get("requirement_type", "?")
+                freq = req.get("frequency", "?")
+                code = req.get("registry_code", "")
+                hours = req.get("required_hours")
+                parts = [req_type, freq]
+                if hours:
+                    parts.append(f"{hours}h")
+                if code:
+                    parts.append(f"code: {code}")
+                print(f"    - {req.get('name', '?')} ({', '.join(parts)})")
+
+    print(f"\n{'=' * 70}")
+    print(f"  Total: {len(json_files)} registries")
+    print(f"{'=' * 70}")
+
+
 # ── Main ──
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Generate training requirement registry JSON files for The Logbook"
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List all existing registries and their requirements",
     )
     parser.add_argument(
         "--csv", metavar="FILE", help="Path to CSV file with requirements"
@@ -521,6 +593,14 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.list:
+        repo_root = find_repo_root()
+        if not repo_root:
+            print("Could not find repo root. Run from inside the-logbook repo.")
+            sys.exit(1)
+        list_registries(repo_root)
+        sys.exit(0)
 
     if args.csv:
         # CSV mode
