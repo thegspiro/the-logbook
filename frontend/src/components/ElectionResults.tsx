@@ -91,21 +91,21 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-500/10 rounded-lg p-4">
             <div className="text-sm font-medium text-blue-700 dark:text-blue-400">Total Votes</div>
-            <div className="mt-1 text-2xl font-semibold text-blue-200">
+            <div className="mt-1 text-2xl font-semibold text-blue-700 dark:text-blue-200">
               {results.total_votes}
             </div>
           </div>
 
           <div className="bg-green-500/10 rounded-lg p-4">
             <div className="text-sm font-medium text-green-700 dark:text-green-400">Eligible Voters</div>
-            <div className="mt-1 text-2xl font-semibold text-green-200">
+            <div className="mt-1 text-2xl font-semibold text-green-700 dark:text-green-200">
               {results.total_eligible_voters}
             </div>
           </div>
 
           <div className="bg-purple-500/10 rounded-lg p-4">
             <div className="text-sm font-medium text-purple-700 dark:text-purple-400">Turnout</div>
-            <div className="mt-1 text-2xl font-semibold text-purple-200">
+            <div className="mt-1 text-2xl font-semibold text-purple-700 dark:text-purple-200">
               {results.voter_turnout_percentage}%
             </div>
           </div>

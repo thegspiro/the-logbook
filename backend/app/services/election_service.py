@@ -6,6 +6,7 @@ Business logic for election management including elections, candidates, voting, 
 
 import hashlib
 import hmac
+import html
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -1873,12 +1874,18 @@ class ElectionService:
         email_service = EmailService(organization)
 
         # HTML-escape user-supplied data to prevent injection in emails
-        import html
-
         safe_title = html.escape(election.title)
         safe_performer = html.escape(performer_name)
         safe_reason = html.escape(reason)
         safe_org_name = html.escape(organization.name)
+
+        # Compute timestamp once for all recipients
+        org_tz = getattr(organization, "timezone", "America/New_York")
+        formatted_time = (
+            datetime.now(timezone.utc)
+            .astimezone(ZoneInfo(org_tz))
+            .strftime("%B %d, %Y at %I:%M %p")
+        )
 
         # Send notifications
         sent_count = 0
@@ -1923,7 +1930,7 @@ class ElectionService:
                     <li><strong>Title:</strong> {safe_title}</li>
                     <li><strong>Status Changed:</strong> {from_status.upper()} → {to_status.upper()}</li>
                     <li><strong>Performed By:</strong> {safe_performer}</li>
-                    <li><strong>Date/Time:</strong> {datetime.now(timezone.utc).astimezone(ZoneInfo(getattr(organization, 'timezone', 'America/New_York'))).strftime('%B %d, %Y at %I:%M %p')}</li>
+                    <li><strong>Date/Time:</strong> {formatted_time}</li>
                 </ul>
             </div>
 
@@ -1956,7 +1963,7 @@ ELECTION DETAILS:
 - Title: {election.title}
 - Status Changed: {from_status.upper()} → {to_status.upper()}
 - Performed By: {performer_name}
-- Date/Time: {datetime.now(timezone.utc).astimezone(ZoneInfo(getattr(organization, 'timezone', 'America/New_York'))).strftime('%B %d, %Y at %I:%M %p')}
+- Date/Time: {formatted_time}
 
 REASON FOR ROLLBACK:
 {reason}
@@ -2041,13 +2048,19 @@ Best regards,
 
         email_service = EmailService(organization)
 
-        import html
-
         safe_title = html.escape(election.title)
         safe_performer = html.escape(performer_name)
         safe_reason = html.escape(reason)
         safe_org_name = html.escape(organization.name)
         election_status = election.status.value.upper()
+
+        # Compute timestamp once for all recipients
+        org_tz = getattr(organization, "timezone", "America/New_York")
+        formatted_time = (
+            datetime.now(timezone.utc)
+            .astimezone(ZoneInfo(org_tz))
+            .strftime("%B %d, %Y at %I:%M %p")
+        )
 
         sent_count = 0
         for user in leadership_users:
@@ -2092,7 +2105,7 @@ Best regards,
                     <li><strong>Status at Deletion:</strong> {election_status}</li>
                     <li><strong>Active Votes at Deletion:</strong> {vote_count}</li>
                     <li><strong>Deleted By:</strong> {safe_performer}</li>
-                    <li><strong>Date/Time:</strong> {datetime.now(timezone.utc).astimezone(ZoneInfo(getattr(organization, 'timezone', 'America/New_York'))).strftime('%B %d, %Y at %I:%M %p')}</li>
+                    <li><strong>Date/Time:</strong> {formatted_time}</li>
                 </ul>
             </div>
 
@@ -2125,7 +2138,7 @@ ELECTION DETAILS:
 - Status at Deletion: {election_status}
 - Active Votes at Deletion: {vote_count}
 - Deleted By: {performer_name}
-- Date/Time: {datetime.now(timezone.utc).astimezone(ZoneInfo(getattr(organization, 'timezone', 'America/New_York'))).strftime('%B %d, %Y at %I:%M %p')}
+- Date/Time: {formatted_time}
 
 REASON GIVEN:
 {reason}
@@ -2589,7 +2602,7 @@ Best regards,
         recipient_user_ids: Optional[List[UUID]] = None,
         subject: Optional[str] = None,
         message: Optional[str] = None,
-        base_ballot_url: str = None,
+        base_ballot_url: Optional[str] = None,
     ) -> Tuple[int, int]:
         """
         Send ballot notification emails to eligible voters with unique hashed links
