@@ -11,6 +11,7 @@ Permission aggregation combines **position permissions** (from the
 from typing import List, Optional
 
 from fastapi import Cookie, Depends, Header, HTTPException, status
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +19,7 @@ from app.core.database import get_db
 from app.core.permissions import get_rank_default_permissions
 from app.models.user import Organization, User
 from app.services.auth_service import AuthService
+from app.utils.db_retry import is_transient_db_error
 
 
 def _collect_user_permissions(user: User) -> set:
@@ -78,7 +80,20 @@ async def get_current_user(
 
     # Validate token and get user
     auth_service = AuthService(db)
-    user = await auth_service.get_user_from_token(token)
+    try:
+        user = await auth_service.get_user_from_token(token)
+    except Exception as e:
+        if is_transient_db_error(e):
+            # Database is temporarily unreachable (e.g. MySQL restart).
+            # Return 503 so the frontend can distinguish this from a real
+            # auth failure and avoid logging the user out.
+            logger.warning(f"Auth check failed due to transient DB error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service temporarily unavailable",
+                headers={"Retry-After": "5"},
+            )
+        raise
 
     if not user:
         raise credentials_exception

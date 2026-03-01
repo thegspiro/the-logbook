@@ -1538,6 +1538,14 @@ async def health_check():
     # Include startup status for frontend progress display
     health_status["startup"] = startup_status.to_dict()
 
+    # Return 503 when the database is unreachable so Docker healthchecks
+    # and load balancers can detect the degraded state.  The JSON body
+    # still contains the full diagnostics for debugging.
+    from fastapi.responses import JSONResponse
+
+    if health_status["status"] == "unhealthy":
+        return JSONResponse(content=health_status, status_code=503)
+
     return health_status
 
 

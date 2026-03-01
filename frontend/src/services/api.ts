@@ -231,8 +231,26 @@ api.interceptors.response.use(
 
     return response;
   },
-  async (error: AxiosError & { config: AxiosRequestConfig & { _retry?: boolean } }) => {
+  async (error: AxiosError & { config: AxiosRequestConfig & { _retry?: boolean; _503retries?: number } }) => {
     const originalRequest = error.config;
+
+    // 503 Service Unavailable — the backend is up but a dependency (MySQL)
+    // is temporarily unreachable.  Retry with exponential backoff instead
+    // of failing immediately, which prevents unnecessary logouts during
+    // brief database restarts.
+    if (error.response?.status === 503) {
+      const retryCount = originalRequest._503retries ?? 0;
+      const MAX_503_RETRIES = 3;
+
+      if (retryCount < MAX_503_RETRIES) {
+        originalRequest._503retries = retryCount + 1;
+        const retryAfter = Number(error.response.headers?.['retry-after']) || 5;
+        const delay = retryAfter * 1000 * Math.pow(1.5, retryCount);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return api(originalRequest);
+      }
+      // All retries exhausted — let it fall through as a normal error
+    }
 
     // If 401 and we haven't retried yet, try to refresh via httpOnly cookie
     if (error.response?.status === 401 && !originalRequest._retry) {
