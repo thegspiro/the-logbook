@@ -67,23 +67,18 @@ class EmailTemplateUpdate(BaseModel):
 
 
 class EmailTemplatePreviewRequest(BaseModel):
-    """Request schema for previewing a rendered email template"""
+    """Request schema for previewing a rendered email template.
+
+    If ``context`` is not provided (or is empty), the preview endpoint
+    will automatically populate it with type-appropriate sample data
+    from ``SAMPLE_CONTEXT`` in the email template service.
+    """
 
     subject: Optional[str] = None
     html_body: Optional[str] = None
     text_body: Optional[str] = None
     css_styles: Optional[str] = None
-    context: Dict[str, Any] = Field(
-        default_factory=lambda: {
-            "first_name": "John",
-            "last_name": "Doe",
-            "full_name": "John Doe",
-            "username": "jdoe",
-            "temp_password": "TempPass123!",
-            "organization_name": "Sample Department",
-            "login_url": "https://example.com/login",
-        }
-    )
+    context: Dict[str, Any] = Field(default_factory=dict)
 
 
 class EmailTemplatePreviewResponse(BaseModel):

@@ -117,6 +117,174 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "custom_message", "description": "Custom message from secretary"},
         {"name": "ballot_url", "description": "Link to the voting page"},
     ],
+    "cert_expiration": [
+        {"name": "recipient_name", "description": "Recipient's display name"},
+        {"name": "cert_name", "description": "Name of the certification"},
+        {"name": "expiration_date", "description": "Expiration date of the cert"},
+        {"name": "days_remaining", "description": "Days until expiration"},
+        {"name": "organization_name", "description": "Organization name"},
+        {"name": "renewal_url", "description": "Link to training/certification page"},
+    ],
+    "post_event_validation": [
+        {"name": "recipient_name", "description": "Event creator's name"},
+        {"name": "event_title", "description": "Title of the event"},
+        {"name": "event_date", "description": "Date of the event"},
+        {"name": "attendee_count", "description": "Number of attendees recorded"},
+        {"name": "validation_url", "description": "Link to validate attendance"},
+        {"name": "organization_name", "description": "Organization name"},
+    ],
+    "post_shift_validation": [
+        {"name": "recipient_name", "description": "Shift officer's name"},
+        {"name": "shift_date", "description": "Date of the shift"},
+        {"name": "shift_name", "description": "Name/label of the shift"},
+        {"name": "attendee_count", "description": "Number of members on shift"},
+        {"name": "validation_url", "description": "Link to validate attendance"},
+        {"name": "organization_name", "description": "Organization name"},
+    ],
+    "property_return_reminder": [
+        {"name": "member_name", "description": "Member's full name"},
+        {"name": "organization_name", "description": "Organization name"},
+        {"name": "item_count", "description": "Number of outstanding items"},
+        {"name": "total_value", "description": "Total value of outstanding items"},
+        {"name": "days_since_drop", "description": "Days since membership was dropped"},
+        {"name": "return_deadline", "description": "Deadline for returning property"},
+    ],
+    "inactivity_warning": [
+        {"name": "coordinator_name", "description": "Pipeline coordinator's name"},
+        {"name": "prospect_name", "description": "Prospective member's name"},
+        {"name": "days_inactive", "description": "Number of days inactive"},
+        {"name": "pipeline_stage", "description": "Current pipeline stage"},
+        {"name": "organization_name", "description": "Organization name"},
+        {"name": "prospect_url", "description": "Link to prospect profile"},
+    ],
+}
+
+# Sample context data for previewing each template type.
+# Used by the preview endpoint to substitute realistic placeholder values.
+SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
+    "welcome": {
+        "first_name": "John",
+        "last_name": "Doe",
+        "full_name": "John Doe",
+        "username": "jdoe",
+        "temp_password": "TempPass123!",
+        "organization_name": "Sample Fire Department",
+        "login_url": "https://example.com/login",
+    },
+    "password_reset": {
+        "first_name": "John",
+        "reset_url": "https://example.com/reset-password?token=sample-token",
+        "organization_name": "Sample Fire Department",
+        "expiry_minutes": "30",
+    },
+    "event_reminder": {
+        "recipient_name": "John Doe",
+        "event_title": "Monthly Business Meeting",
+        "event_type": "Business Meeting",
+        "event_start": "March 15, 2026 at 07:00 PM",
+        "event_end": "09:00 PM",
+        "location_name": "Main Station \u2014 Meeting Room A",
+        "location_details": "123 Main St, Anytown, USA",
+        "event_url": "https://example.com/events/123",
+    },
+    "event_cancellation": {
+        "recipient_name": "John Doe",
+        "event_title": "Monthly Business Meeting",
+        "event_date": "March 15, 2026",
+        "organization_name": "Sample Fire Department",
+        "reason": "Inclement weather",
+    },
+    "training_approval": {
+        "course_name": "Hazardous Materials Awareness",
+        "event_title": "HazMat Refresher Training",
+        "event_date": "March 20, 2026 at 09:00 AM",
+        "attendee_count": "12",
+        "approval_deadline": "March 18, 2026",
+        "submitter_name": "Jane Smith",
+        "approval_url": "https://example.com/training/approve/123",
+    },
+    "ballot_notification": {
+        "recipient_name": "John Doe",
+        "election_title": "Captain Election 2026",
+        "meeting_date": "April 1, 2026 at 07:00 PM",
+        "custom_message": "Please review the candidates before voting.",
+        "ballot_url": "https://example.com/ballot?token=sample-token",
+    },
+    "member_dropped": {
+        "member_name": "John Doe",
+        "organization_name": "Sample Fire Department",
+        "drop_type_display": "Voluntary Separation",
+        "reason": "Relocation",
+        "effective_date": "March 31, 2026",
+        "return_deadline": "April 14, 2026",
+        "item_count": "5",
+        "total_value": "2,450.00",
+        "performed_by_name": "Chief Robert Johnson",
+        "performed_by_title": "Fire Chief",
+    },
+    "inventory_change": {
+        "first_name": "John",
+        "organization_name": "Sample Fire Department",
+        "change_date": "March 1, 2026",
+        "items_issued_html": (
+            "<h3>Items Issued</h3>"
+            "<ul><li>Turnout Coat (Size L) \u2014 Serial #TC-2024-0456</li>"
+            "<li>Helmet (Black) \u2014 Serial #HLM-2024-0089</li></ul>"
+        ),
+        "items_returned_html": (
+            "<h3>Items Returned</h3>"
+            "<ul><li>Old Turnout Coat (Size L) \u2014 Serial #TC-2020-0123</li></ul>"
+        ),
+        "items_issued_text": (
+            "Items Issued:\n"
+            "- Turnout Coat (Size L) \u2014 Serial #TC-2024-0456\n"
+            "- Helmet (Black) \u2014 Serial #HLM-2024-0089"
+        ),
+        "items_returned_text": (
+            "Items Returned:\n"
+            "- Old Turnout Coat (Size L) \u2014 Serial #TC-2020-0123"
+        ),
+    },
+    "cert_expiration": {
+        "recipient_name": "John Doe",
+        "cert_name": "EMT-Basic Certification",
+        "expiration_date": "April 15, 2026",
+        "days_remaining": "45",
+        "organization_name": "Sample Fire Department",
+        "renewal_url": "https://example.com/training/certifications",
+    },
+    "post_event_validation": {
+        "recipient_name": "Jane Smith",
+        "event_title": "Monthly Business Meeting",
+        "event_date": "March 15, 2026",
+        "attendee_count": "24",
+        "validation_url": "https://example.com/events/123/validate",
+        "organization_name": "Sample Fire Department",
+    },
+    "post_shift_validation": {
+        "recipient_name": "Capt. Mike Davis",
+        "shift_date": "March 14, 2026",
+        "shift_name": "Engine 1 \u2014 Night Shift",
+        "attendee_count": "6",
+        "validation_url": "https://example.com/scheduling/shifts/456/validate",
+        "organization_name": "Sample Fire Department",
+    },
+    "property_return_reminder": {
+        "member_name": "John Doe",
+        "organization_name": "Sample Fire Department",
+        "item_count": "3",
+        "total_value": "1,200.00",
+        "days_since_drop": "30",
+        "return_deadline": "April 30, 2026",
+    },
+    "inactivity_warning": {
+        "coordinator_name": "Jane Smith",
+        "prospect_name": "Alex Johnson",
+        "days_inactive": "21",
+        "pipeline_stage": "Application Review",
+        "organization_name": "Sample Fire Department",
+        "prospect_url": "https://example.com/prospective-members/789",
+    },
 }
 
 # Default welcome email HTML body
@@ -334,6 +502,256 @@ This is an automated inventory notice from {{organization_name}}.
 Please do not reply to this email."""
 
 DEFAULT_INVENTORY_CHANGE_SUBJECT = "Inventory Update — {{organization_name}}"
+
+
+# Default certification expiration alert email
+DEFAULT_CERT_EXPIRATION_HTML = """<div class="container">
+    <div class="header">
+        <h1>Certification Expiration Notice</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>This is a reminder that your certification is approaching its expiration date:</p>
+
+        <div class="details">
+            <p><strong>Certification:</strong> {{cert_name}}</p>
+            <p><strong>Expiration Date:</strong> {{expiration_date}}</p>
+            <p><strong>Days Remaining:</strong> {{days_remaining}}</p>
+        </div>
+
+        <p>Please take action to renew this certification before it expires to maintain your compliance status.</p>
+
+        <p style="text-align: center;">
+            <a href="{{renewal_url}}" class="button">View Certifications</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_CERT_EXPIRATION_TEXT = """Certification Expiration Notice
+
+Hello {{recipient_name}},
+
+This is a reminder that your certification is approaching its expiration date:
+
+Certification: {{cert_name}}
+Expiration Date: {{expiration_date}}
+Days Remaining: {{days_remaining}}
+
+Please take action to renew this certification before it expires.
+
+View your certifications: {{renewal_url}}
+
+---
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
+
+DEFAULT_CERT_EXPIRATION_SUBJECT = (
+    "Certification Expiring: {{cert_name}} — {{organization_name}}"
+)
+
+
+# Default post-event validation email
+DEFAULT_POST_EVENT_VALIDATION_HTML = """<div class="container">
+    <div class="header">
+        <h1>Please Validate Attendance</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>The following event has ended and needs attendance validation:</p>
+
+        <div class="details">
+            <p><strong>Event:</strong> {{event_title}}</p>
+            <p><strong>Date:</strong> {{event_date}}</p>
+            <p><strong>Recorded Attendees:</strong> {{attendee_count}}</p>
+        </div>
+
+        <p>Please review and validate the attendance records at your earliest convenience.</p>
+
+        <p style="text-align: center;">
+            <a href="{{validation_url}}" class="button">Validate Attendance</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_POST_EVENT_VALIDATION_TEXT = """Please Validate Attendance
+
+Hello {{recipient_name}},
+
+The following event has ended and needs attendance validation:
+
+Event: {{event_title}}
+Date: {{event_date}}
+Recorded Attendees: {{attendee_count}}
+
+Please review and validate the attendance records.
+
+Validate attendance: {{validation_url}}
+
+---
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
+
+DEFAULT_POST_EVENT_VALIDATION_SUBJECT = (
+    "Attendance Validation Needed: {{event_title}}"
+)
+
+
+# Default post-shift validation email
+DEFAULT_POST_SHIFT_VALIDATION_HTML = """<div class="container">
+    <div class="header">
+        <h1>Shift Attendance Validation</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>The following shift has ended and needs attendance validation:</p>
+
+        <div class="details">
+            <p><strong>Shift:</strong> {{shift_name}}</p>
+            <p><strong>Date:</strong> {{shift_date}}</p>
+            <p><strong>Members on Shift:</strong> {{attendee_count}}</p>
+        </div>
+
+        <p>Please review and confirm the shift attendance.</p>
+
+        <p style="text-align: center;">
+            <a href="{{validation_url}}" class="button">Validate Shift</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_POST_SHIFT_VALIDATION_TEXT = """Shift Attendance Validation
+
+Hello {{recipient_name}},
+
+The following shift has ended and needs attendance validation:
+
+Shift: {{shift_name}}
+Date: {{shift_date}}
+Members on Shift: {{attendee_count}}
+
+Please review and confirm the shift attendance.
+
+Validate shift: {{validation_url}}
+
+---
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
+
+DEFAULT_POST_SHIFT_VALIDATION_SUBJECT = (
+    "Shift Validation Needed: {{shift_name}} — {{shift_date}}"
+)
+
+
+# Default property return reminder email
+DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
+    <div class="header">
+        <h1>{{organization_name}}</h1>
+    </div>
+    <div class="content">
+        <p><strong>Re: Department Property Return Reminder</strong></p>
+        <p>Dear {{member_name}},</p>
+
+        <p>This is a reminder that you still have outstanding department property that needs to be returned.</p>
+
+        <div class="details">
+            <p><strong>Outstanding Items:</strong> {{item_count}} item(s)</p>
+            <p><strong>Total Assessed Value:</strong> ${{total_value}}</p>
+            <p><strong>Days Since Separation:</strong> {{days_since_drop}}</p>
+            <p><strong>Return Deadline:</strong> {{return_deadline}}</p>
+        </div>
+
+        <p>Please contact the department administration to arrange return of these items as soon as possible.</p>
+    </div>
+    <div class="footer">
+        <p>This is an official department notice from {{organization_name}}.</p>
+    </div>
+</div>"""
+
+DEFAULT_PROPERTY_RETURN_REMINDER_TEXT = """Department Property Return Reminder
+
+Dear {{member_name}},
+
+This is a reminder that you still have outstanding department property that needs to be returned.
+
+Outstanding Items: {{item_count}} item(s)
+Total Assessed Value: ${{total_value}}
+Days Since Separation: {{days_since_drop}}
+Return Deadline: {{return_deadline}}
+
+Please contact the department administration to arrange return of these items.
+
+---
+This is an official department notice from {{organization_name}}."""
+
+DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT = (
+    "Property Return Reminder — {{organization_name}}"
+)
+
+
+# Default inactivity warning email
+DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
+    <div class="header">
+        <h1>Prospective Member Inactivity Alert</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{coordinator_name}},</p>
+
+        <p>A prospective member in your pipeline has been inactive and may need attention:</p>
+
+        <div class="details">
+            <p><strong>Prospect:</strong> {{prospect_name}}</p>
+            <p><strong>Current Stage:</strong> {{pipeline_stage}}</p>
+            <p><strong>Days Inactive:</strong> {{days_inactive}}</p>
+        </div>
+
+        <p>Please review their progress and take appropriate action.</p>
+
+        <p style="text-align: center;">
+            <a href="{{prospect_url}}" class="button">View Prospect</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_INACTIVITY_WARNING_TEXT = """Prospective Member Inactivity Alert
+
+Hello {{coordinator_name}},
+
+A prospective member in your pipeline has been inactive and may need attention:
+
+Prospect: {{prospect_name}}
+Current Stage: {{pipeline_stage}}
+Days Inactive: {{days_inactive}}
+
+Please review their progress and take appropriate action.
+
+View prospect: {{prospect_url}}
+
+---
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
+
+DEFAULT_INACTIVITY_WARNING_SUBJECT = (
+    "Inactivity Alert: {{prospect_name}} — {{organization_name}}"
+)
 
 
 class EmailTemplateService:
@@ -613,6 +1031,134 @@ class EmailTemplateService:
             created.append(template)
             logger.info(
                 f"Created default inventory change email template for org {organization_id}"
+            )
+
+        # Check for cert expiration template
+        existing = await self.get_template(
+            organization_id, EmailTemplateType.CERT_EXPIRATION, active_only=False
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.CERT_EXPIRATION,
+                name="Certification Expiration Alert",
+                subject=DEFAULT_CERT_EXPIRATION_SUBJECT,
+                html_body=DEFAULT_CERT_EXPIRATION_HTML,
+                text_body=DEFAULT_CERT_EXPIRATION_TEXT,
+                description=(
+                    "Sent to members when a certification is approaching its expiration date. "
+                    "Tiered alerts are sent at 90, 60, 30, and 7 days before expiry."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default cert expiration email template for org {organization_id}"
+            )
+
+        # Check for post-event validation template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.POST_EVENT_VALIDATION,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.POST_EVENT_VALIDATION,
+                name="Post-Event Attendance Validation",
+                subject=DEFAULT_POST_EVENT_VALIDATION_SUBJECT,
+                html_body=DEFAULT_POST_EVENT_VALIDATION_HTML,
+                text_body=DEFAULT_POST_EVENT_VALIDATION_TEXT,
+                description=(
+                    "Sent to the event creator after an event ends, asking them to "
+                    "review and validate the attendance records."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default post-event validation email template for org {organization_id}"
+            )
+
+        # Check for post-shift validation template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.POST_SHIFT_VALIDATION,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.POST_SHIFT_VALIDATION,
+                name="Post-Shift Attendance Validation",
+                subject=DEFAULT_POST_SHIFT_VALIDATION_SUBJECT,
+                html_body=DEFAULT_POST_SHIFT_VALIDATION_HTML,
+                text_body=DEFAULT_POST_SHIFT_VALIDATION_TEXT,
+                description=(
+                    "Sent to the shift officer after a shift ends, asking them to "
+                    "review and confirm the shift attendance."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default post-shift validation email template for org {organization_id}"
+            )
+
+        # Check for property return reminder template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.PROPERTY_RETURN_REMINDER,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.PROPERTY_RETURN_REMINDER,
+                name="Property Return Reminder",
+                subject=DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT,
+                html_body=DEFAULT_PROPERTY_RETURN_REMINDER_HTML,
+                text_body=DEFAULT_PROPERTY_RETURN_REMINDER_TEXT,
+                description=(
+                    "Sent to dropped members as a follow-up reminder to return "
+                    "department property. Sent at 30 and 90 days after separation."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default property return reminder email template for org {organization_id}"
+            )
+
+        # Check for inactivity warning template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.INACTIVITY_WARNING,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.INACTIVITY_WARNING,
+                name="Prospect Inactivity Warning",
+                subject=DEFAULT_INACTIVITY_WARNING_SUBJECT,
+                html_body=DEFAULT_INACTIVITY_WARNING_HTML,
+                text_body=DEFAULT_INACTIVITY_WARNING_TEXT,
+                description=(
+                    "Sent to pipeline coordinators when a prospective member has "
+                    "been inactive for an extended period."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default inactivity warning email template for org {organization_id}"
             )
 
         return created

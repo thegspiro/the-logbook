@@ -18,6 +18,11 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
+  ShieldAlert,
+  ClipboardCheck,
+  Clock,
+  Undo2,
+  AlertTriangle,
 } from 'lucide-react';
 import type { EmailTemplate } from '../types';
 
@@ -34,6 +39,11 @@ const TEMPLATE_TYPE_DISPLAY: Record<
   ballot_notification: { icon: Vote, label: 'Ballot Notification', color: 'text-indigo-500' },
   member_dropped: { icon: UserMinus, label: 'Member Dropped', color: 'text-red-600' },
   inventory_change: { icon: Package, label: 'Inventory Change', color: 'text-amber-500' },
+  cert_expiration: { icon: ShieldAlert, label: 'Cert Expiration Alert', color: 'text-orange-500' },
+  post_event_validation: { icon: ClipboardCheck, label: 'Post-Event Validation', color: 'text-teal-500' },
+  post_shift_validation: { icon: Clock, label: 'Post-Shift Validation', color: 'text-violet-500' },
+  property_return_reminder: { icon: Undo2, label: 'Property Return Reminder', color: 'text-rose-500' },
+  inactivity_warning: { icon: AlertTriangle, label: 'Inactivity Warning', color: 'text-yellow-500' },
   custom: { icon: FileText, label: 'Custom', color: 'text-slate-500' },
 };
 

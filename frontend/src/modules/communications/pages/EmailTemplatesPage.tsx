@@ -26,78 +26,11 @@ import { TemplatePreview } from '../components/TemplatePreview';
 import type { EmailTemplateUpdate, EmailAttachment } from '../types';
 import toast from 'react-hot-toast';
 
-/** Sample context data per template type for preview rendering */
-const SAMPLE_CONTEXT: Record<string, Record<string, string>> = {
-  welcome: {
-    first_name: 'John',
-    last_name: 'Doe',
-    full_name: 'John Doe',
-    username: 'jdoe',
-    temp_password: 'TempPass123!',
-    organization_name: 'Sample Fire Department',
-    login_url: 'https://example.com/login',
-  },
-  password_reset: {
-    first_name: 'John',
-    reset_url: 'https://example.com/reset-password?token=sample-token',
-    organization_name: 'Sample Fire Department',
-    expiry_minutes: '30',
-  },
-  event_reminder: {
-    recipient_name: 'John Doe',
-    event_title: 'Monthly Business Meeting',
-    event_type: 'Business Meeting',
-    event_start: 'March 15, 2026 at 07:00 PM',
-    event_end: '09:00 PM',
-    location_name: 'Main Station — Meeting Room A',
-    location_details: '123 Main St, Anytown, USA',
-    event_url: 'https://example.com/events/123',
-  },
-  event_cancellation: {
-    recipient_name: 'John Doe',
-    event_title: 'Monthly Business Meeting',
-    event_date: 'March 15, 2026',
-    organization_name: 'Sample Fire Department',
-    reason: 'Inclement weather',
-  },
-  training_approval: {
-    course_name: 'Hazardous Materials Awareness',
-    event_title: 'HazMat Refresher Training',
-    event_date: 'March 20, 2026 at 09:00 AM',
-    attendee_count: '12',
-    approval_deadline: 'March 18, 2026',
-    submitter_name: 'Jane Smith',
-    approval_url: 'https://example.com/training/approve/123',
-  },
-  ballot_notification: {
-    recipient_name: 'John Doe',
-    election_title: 'Captain Election 2026',
-    meeting_date: 'April 1, 2026 at 07:00 PM',
-    custom_message: 'Please review the candidates before voting.',
-    ballot_url: 'https://example.com/ballot?token=sample-token',
-  },
-  member_dropped: {
-    member_name: 'John Doe',
-    organization_name: 'Sample Fire Department',
-    drop_type_display: 'Voluntary Separation',
-    reason: 'Relocation',
-    effective_date: 'March 31, 2026',
-    return_deadline: 'April 14, 2026',
-    item_count: '5',
-    total_value: '2,450.00',
-    performed_by_name: 'Chief Robert Johnson',
-    performed_by_title: 'Fire Chief',
-  },
-  inventory_change: {
-    first_name: 'John',
-    organization_name: 'Sample Fire Department',
-    change_date: 'March 1, 2026',
-    items_issued_html: '<ul><li>Turnout Coat (Size L) — Serial #TC-2024-0456</li><li>Helmet (Black) — Serial #HLM-2024-0089</li></ul>',
-    items_returned_html: '<ul><li>Old Turnout Coat (Size L) — Serial #TC-2020-0123</li></ul>',
-    items_issued_text: '- Turnout Coat (Size L) — Serial #TC-2024-0456\n- Helmet (Black) — Serial #HLM-2024-0089',
-    items_returned_text: '- Old Turnout Coat (Size L) — Serial #TC-2020-0123',
-  },
-};
+/**
+ * No client-side sample context needed — the backend preview endpoint
+ * automatically merges type-appropriate sample data from SAMPLE_CONTEXT
+ * in email_template_service.py when context is empty.
+ */
 
 const EmailTemplatesPage: React.FC = () => {
   const {
@@ -146,15 +79,14 @@ const EmailTemplatesPage: React.FC = () => {
 
   const handlePreview = useCallback(() => {
     if (!selectedTemplate) return;
-    const context = SAMPLE_CONTEXT[selectedTemplate.template_type] || SAMPLE_CONTEXT['welcome'];
-    void previewTemplate(selectedTemplate.id, context);
+    // Empty context — backend merges per-type sample data automatically
+    void previewTemplate(selectedTemplate.id);
   }, [selectedTemplate, previewTemplate]);
 
   // Auto-load preview when selecting a template
   useEffect(() => {
     if (selectedTemplate) {
-      const context = SAMPLE_CONTEXT[selectedTemplate.template_type] || SAMPLE_CONTEXT['welcome'];
-      void previewTemplate(selectedTemplate.id, context);
+      void previewTemplate(selectedTemplate.id);
     }
     // Only trigger on template selection change
     // eslint-disable-next-line react-hooks/exhaustive-deps
