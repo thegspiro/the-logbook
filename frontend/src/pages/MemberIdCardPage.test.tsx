@@ -38,6 +38,26 @@ vi.mock("jsbarcode", () => ({
   default: vi.fn(),
 }));
 
+// Mock useRanks hook
+vi.mock("../hooks/useRanks", () => ({
+  useRanks: () => ({
+    ranks: [
+      { rank_code: "firefighter", display_name: "Firefighter" },
+      { rank_code: "emt", display_name: "EMT" },
+    ],
+    rankOptions: [],
+    loading: false,
+    refetch: vi.fn(),
+    formatRank: (code: string) => {
+      const map: Record<string, string> = {
+        firefighter: "Firefighter",
+        emt: "EMT",
+      };
+      return map[code] ?? code.replace(/_/g, " ");
+    },
+  }),
+}));
+
 // Mock auth store
 const mockCurrentUser = {
   id: "user-123",
@@ -179,12 +199,12 @@ describe("MemberIdCardPage", () => {
       });
     });
 
-    it("should display rank", async () => {
+    it("should display rank using display name", async () => {
       renderWithRouter(<MemberIdCardPage />);
 
       await waitFor(() => {
         expect(screen.getByText("Rank")).toBeInTheDocument();
-        expect(screen.getByText("firefighter")).toBeInTheDocument();
+        expect(screen.getByText("Firefighter")).toBeInTheDocument();
       });
     });
 
