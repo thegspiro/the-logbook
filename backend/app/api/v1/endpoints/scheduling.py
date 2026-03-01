@@ -61,7 +61,7 @@ from app.services.scheduling_service import SchedulingService
 router = APIRouter()
 
 
-def _safe_detail(prefix: str, error: Optional[str]) -> str:
+def _safe_detail(prefix: str, error: str | None) -> str:
     """Build a sanitized error detail from a service-layer error string."""
     if not error:
         return f"{prefix} An unexpected error occurred."
@@ -92,7 +92,7 @@ async def _enrich_shifts(
 
     # Compute attendee_count per shift (count of non-declined assignments)
     shift_ids = [s.id for s in shifts]
-    attendee_counts: Dict[str, int] = {}
+    attendee_counts: dict[str, int] = {}
     if shift_ids:
         count_result = await service.db.execute(
             select(ShiftAssignment.shift_id, func.count(ShiftAssignment.id))
@@ -120,8 +120,8 @@ async def _enrich_shifts(
 
 @router.get("/shifts", response_model=ShiftsListResponse)
 async def list_shifts(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -180,9 +180,9 @@ async def create_shift(
 
 @router.get("/shifts/open", response_model=list[ShiftResponse])
 async def get_open_shifts(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    apparatus_id: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    apparatus_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -371,7 +371,7 @@ async def remove_attendance(
 
 @router.get("/calendar/week", response_model=list[ShiftResponse])
 async def get_week_calendar(
-    week_start: Optional[str] = None,
+    week_start: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.view")),
 ):
@@ -393,8 +393,8 @@ async def get_week_calendar(
 
 @router.get("/calendar/month", response_model=list[ShiftResponse])
 async def get_month_calendar(
-    year: Optional[int] = None,
-    month: Optional[int] = Query(None, ge=1, le=12),
+    year: int | None = None,
+    month: int | None = Query(None, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.view")),
 ):
@@ -839,7 +839,7 @@ async def confirm_assignment(
 
 @router.get("/swap-requests", response_model=list[ShiftSwapRequestResponse])
 async def list_swap_requests(
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -962,8 +962,8 @@ async def cancel_swap_request(
 
 @router.get("/time-off", response_model=list[ShiftTimeOffResponse])
 async def list_time_off_requests(
-    status_filter: Optional[str] = Query(None, alias="status"),
-    user_id: Optional[UUID] = None,
+    status_filter: str | None = Query(None, alias="status"),
+    user_id: UUID | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -1105,8 +1105,8 @@ async def get_member_availability(
 
 @router.get("/my-shifts")
 async def get_my_shifts(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -1135,8 +1135,8 @@ async def get_my_shifts(
 
 @router.get("/my-assignments", response_model=list[ShiftAssignmentResponse])
 async def get_my_assignments(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1239,7 +1239,7 @@ async def get_call_volume_report(
 
 @router.get("/reports/compliance", response_model=ShiftComplianceResponse)
 async def get_shift_compliance_report(
-    reference_date: Optional[str] = Query(
+    reference_date: str | None = Query(
         None,
         description="Reference date for compliance calculation (YYYY-MM-DD). Defaults to today.",
     ),
@@ -1455,7 +1455,7 @@ async def list_apparatus_options(
 
 @router.get("/apparatus", response_model=list[BasicApparatusResponse])
 async def list_basic_apparatus(
-    is_active: Optional[bool] = True,
+    is_active: bool | None = True,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

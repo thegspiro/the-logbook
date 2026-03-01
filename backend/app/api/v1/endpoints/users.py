@@ -58,7 +58,7 @@ from app.services.user_service import UserService
 router = APIRouter()
 
 
-@router.get("", response_model=List[UserListResponse])
+@router.get("", response_model=list[UserListResponse])
 async def list_users(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.view", "members.manage")),
@@ -370,7 +370,7 @@ async def check_contact_info_enabled(
     }
 
 
-@router.get("/with-roles", response_model=List[UserWithRolesResponse])
+@router.get("/with-roles", response_model=list[UserWithRolesResponse])
 async def list_users_with_roles(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.view", "members.manage")),
@@ -1443,12 +1443,12 @@ _AUDIT_EVENT_DESCRIPTIONS = {
 }
 
 
-@router.get("/{user_id}/audit-history", response_model=List[MemberAuditLogEntry])
+@router.get("/{user_id}/audit-history", response_model=list[MemberAuditLogEntry])
 async def get_member_audit_history(
     user_id: UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    event_type: str | None = Query(None, description="Filter by event type"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):

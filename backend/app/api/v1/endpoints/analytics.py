@@ -46,7 +46,7 @@ async def track_event(
 
 @router.get("/metrics")
 async def get_metrics(
-    event_id: Optional[str] = Query(None),
+    event_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("analytics.view")),
 ):
@@ -162,7 +162,7 @@ async def get_metrics(
 
 @router.get("/export")
 async def export_analytics(
-    event_id: Optional[str] = Query(None),
+    event_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("analytics.view")),
 ):

@@ -39,9 +39,9 @@ router = APIRouter()
 
 @router.get("", response_model=MeetingsListResponse)
 async def list_meetings(
-    meeting_type: Optional[str] = None,
-    status: Optional[str] = None,
-    search: Optional[str] = None,
+    meeting_type: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -268,7 +268,7 @@ async def delete_action_item(
 
 @router.get("/action-items/open", response_model=list[ActionItemResponse])
 async def get_open_action_items(
-    assigned_to: Optional[str] = None,
+    assigned_to: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("meetings.view", "minutes.view")),
 ):
@@ -306,7 +306,7 @@ async def get_attendance_dashboard(
     period_months: int = Query(
         default=12, ge=1, le=60, description="Look-back period in months"
     ),
-    meeting_type: Optional[str] = Query(
+    meeting_type: str | None = Query(
         None, description="Filter by meeting type (e.g. 'business')"
     ),
     db: AsyncSession = Depends(get_db),

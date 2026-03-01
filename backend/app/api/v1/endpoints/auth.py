@@ -315,8 +315,8 @@ async def login(
 
 @router.post("/refresh", response_model=dict, dependencies=[rate_limit_token_refresh()])
 async def refresh_token(
-    token_data: Optional[TokenRefresh] = None,
-    refresh_token_cookie: Optional[str] = Cookie(None, alias="refresh_token"),
+    token_data: TokenRefresh | None = None,
+    refresh_token_cookie: str | None = Cookie(None, alias="refresh_token"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -374,7 +374,7 @@ async def refresh_token(
 async def logout(
     request: Request,
     current_user: User = Depends(get_current_user),
-    access_token_cookie: Optional[str] = Cookie(None, alias="access_token"),
+    access_token_cookie: str | None = Cookie(None, alias="access_token"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -383,7 +383,7 @@ async def logout(
     Invalidates the current session/token and clears auth cookies.
     """
     # Resolve token: prefer cookie, fall back to Authorization header
-    token: Optional[str] = access_token_cookie
+    token: str | None = access_token_cookie
     if not token:
         authorization = request.headers.get("authorization", "")
         try:

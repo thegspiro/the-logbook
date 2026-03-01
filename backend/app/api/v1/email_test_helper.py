@@ -18,7 +18,7 @@ from typing import Any, Dict, Tuple
 logger = logging.getLogger(__name__)
 
 
-def test_smtp_connection(config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
     """
     Test SMTP connection with provided configuration
 
@@ -203,7 +203,7 @@ def test_smtp_connection(config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, A
         return False, message, details
 
 
-def test_gmail_oauth(config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+def test_gmail_oauth(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
     """
     Test Gmail OAuth configuration
 
@@ -288,7 +288,7 @@ def _validate_google_oauth_token(
     client_id: str,
     client_secret: str,
     refresh_token: str,
-) -> Tuple[bool, str, Dict[str, Any]]:
+) -> tuple[bool, str, dict[str, Any]]:
     """
     Validate Google OAuth credentials by exchanging refresh token for access token.
 
@@ -376,7 +376,7 @@ def _validate_google_oauth_token(
         return False, f"Validation error: {str(e)}", details
 
 
-def test_microsoft_oauth(config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+def test_microsoft_oauth(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
     """
     Test Microsoft 365 OAuth configuration using client credentials flow.
 
@@ -433,7 +433,7 @@ def _validate_microsoft_oauth_token(
     tenant_id: str,
     client_id: str,
     client_secret: str,
-) -> Tuple[bool, str, Dict[str, Any]]:
+) -> tuple[bool, str, dict[str, Any]]:
     """
     Validate Microsoft OAuth credentials using client credentials flow.
 

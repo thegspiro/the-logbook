@@ -51,7 +51,7 @@ router = APIRouter()
 # ============================================
 
 
-@router.get("/pipelines", response_model=List[PipelineListResponse])
+@router.get("/pipelines", response_model=list[PipelineListResponse])
 async def list_pipelines(
     include_templates: bool = Query(True, description="Include template pipelines"),
     db: AsyncSession = Depends(get_db),
@@ -260,7 +260,7 @@ async def seed_templates(
 # ============================================
 
 
-@router.get("/pipelines/{pipeline_id}/steps", response_model=List[PipelineStepResponse])
+@router.get("/pipelines/{pipeline_id}/steps", response_model=list[PipelineStepResponse])
 async def list_steps(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -375,7 +375,7 @@ async def delete_step(
 
 
 @router.put(
-    "/pipelines/{pipeline_id}/steps/reorder", response_model=List[PipelineStepResponse]
+    "/pipelines/{pipeline_id}/steps/reorder", response_model=list[PipelineStepResponse]
 )
 async def reorder_steps(
     pipeline_id: UUID,
@@ -519,11 +519,11 @@ async def purge_inactive_prospects(
 
 @router.get("/prospects", response_model=PaginatedProspectListResponse)
 async def list_prospects(
-    pipeline_id: Optional[UUID] = Query(None, description="Filter by pipeline"),
-    status_filter: Optional[str] = Query(
+    pipeline_id: UUID | None = Query(None, description="Filter by pipeline"),
+    status_filter: str | None = Query(
         None, alias="status", description="Filter by status"
     ),
-    search: Optional[str] = Query(None, description="Search by name or email"),
+    search: str | None = Query(None, description="Search by name or email"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -576,8 +576,8 @@ async def list_prospects(
 @router.post("/prospects/check-existing")
 async def check_existing_members_for_prospect(
     email: str = Query(..., description="Email to check against existing members"),
-    first_name: Optional[str] = Query(None, description="First name for name matching"),
-    last_name: Optional[str] = Query(None, description="Last name for name matching"),
+    first_name: str | None = Query(None, description="First name for name matching"),
+    last_name: str | None = Query(None, description="Last name for name matching"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.create", "prospective_members.manage")
@@ -839,7 +839,7 @@ async def transfer_prospect(
 
 
 @router.get(
-    "/prospects/{prospect_id}/activity", response_model=List[ActivityLogResponse]
+    "/prospects/{prospect_id}/activity", response_model=list[ActivityLogResponse]
 )
 async def get_prospect_activity(
     prospect_id: UUID,
@@ -883,7 +883,7 @@ async def get_prospect_activity(
 
 
 @router.get(
-    "/prospects/{prospect_id}/documents", response_model=List[ProspectDocumentResponse]
+    "/prospects/{prospect_id}/documents", response_model=list[ProspectDocumentResponse]
 )
 async def list_prospect_documents(
     prospect_id: UUID,
@@ -919,8 +919,8 @@ async def add_prospect_document(
     file_name: str = Query(..., description="Original file name"),
     file_path: str = Query(..., description="Storage path for the file"),
     file_size: int = Query(0, ge=0, description="File size in bytes"),
-    mime_type: Optional[str] = Query(None, description="MIME type of the file"),
-    step_id: Optional[UUID] = Query(None, description="Associated pipeline step"),
+    mime_type: str | None = Query(None, description="MIME type of the file"),
+    step_id: UUID | None = Query(None, description="Associated pipeline step"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
@@ -1087,10 +1087,10 @@ async def update_election_package(
     return pkg
 
 
-@router.get("/election-packages", response_model=List[ElectionPackageResponse])
+@router.get("/election-packages", response_model=list[ElectionPackageResponse])
 async def list_election_packages(
-    pipeline_id: Optional[UUID] = Query(None, description="Filter by pipeline"),
-    status_filter: Optional[str] = Query(
+    pipeline_id: UUID | None = Query(None, description="Filter by pipeline"),
+    status_filter: str | None = Query(
         None, alias="status", description="Filter by status"
     ),
     db: AsyncSession = Depends(get_db),

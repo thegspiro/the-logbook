@@ -395,7 +395,7 @@ ADMIN_HOURS_MANAGE = Permission(
 # All Permissions Registry
 # ============================================
 
-ALL_PERMISSIONS: List[Permission] = [
+ALL_PERMISSIONS: list[Permission] = [
     # Users & Members
     USERS_VIEW,
     USERS_CREATE,
@@ -498,14 +498,14 @@ ALL_PERMISSIONS: List[Permission] = [
 ]
 
 
-def get_all_permissions() -> List[str]:
+def get_all_permissions() -> list[str]:
     """Get list of all permission names"""
     return [p.name for p in ALL_PERMISSIONS]
 
 
-def get_permissions_by_category() -> Dict[str, List[Permission]]:
+def get_permissions_by_category() -> dict[str, list[Permission]]:
     """Get permissions grouped by category"""
-    categorized: Dict[str, List[Permission]] = {}
+    categorized: dict[str, list[Permission]] = {}
     for permission in ALL_PERMISSIONS:
         category = permission.category.value
         if category not in categorized:
@@ -514,7 +514,7 @@ def get_permissions_by_category() -> Dict[str, List[Permission]]:
     return categorized
 
 
-def get_permission_details() -> List[Dict[str, str]]:
+def get_permission_details() -> list[dict[str, str]]:
     """Get permission details for API responses"""
     return [
         {"name": p.name, "description": p.description, "category": p.category.value}
@@ -614,7 +614,7 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     PROSPECTIVE_MEMBERS_VIEW.name,
 ]
 
-OPERATIONAL_RANKS: Dict[str, dict] = {
+OPERATIONAL_RANKS: dict[str, dict] = {
     "fire_chief": {
         "label": "Fire Chief",
         "priority": 95,
@@ -847,7 +847,7 @@ OPERATIONAL_RANKS: Dict[str, dict] = {
 }
 
 
-def get_rank_default_permissions(rank: str) -> List[str]:
+def get_rank_default_permissions(rank: str) -> list[str]:
     """
     Get the default permissions for an operational rank.
 
@@ -864,7 +864,7 @@ def get_rank_default_permissions(rank: str) -> List[str]:
 # ============================================
 # These are created for every new organisation during onboarding.
 
-DEFAULT_POSITIONS: Dict[str, dict] = {
+DEFAULT_POSITIONS: dict[str, dict] = {
     # ------------------------------------------------------------------
     # Operational rank positions (mirror OPERATIONAL_RANKS permissions)
     # ------------------------------------------------------------------
@@ -1482,7 +1482,7 @@ DEFAULT_POSITIONS: Dict[str, dict] = {
 DEFAULT_ROLES = DEFAULT_POSITIONS
 
 
-def get_admin_position_slugs() -> List[str]:
+def get_admin_position_slugs() -> list[str]:
     """
     Get list of position slugs that should have access to the Members admin page.
     """

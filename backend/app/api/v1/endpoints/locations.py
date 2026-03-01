@@ -33,9 +33,9 @@ router = APIRouter()
 # ============================================
 
 
-@router.get("", response_model=List[LocationListItem])
+@router.get("", response_model=list[LocationListItem])
 async def list_locations(
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),

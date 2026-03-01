@@ -60,11 +60,11 @@ class ActionItemSummary(BaseModel):
     source: str  # "meeting" or "minutes"
     source_id: str
     description: str
-    assignee_id: Optional[str] = None
-    assignee_name: Optional[str] = None
-    due_date: Optional[str] = None
+    assignee_id: str | None = None
+    assignee_name: str | None = None
+    due_date: str | None = None
     status: str
-    priority: Optional[str] = None
+    priority: str | None = None
     created_at: str
 
 
@@ -304,19 +304,19 @@ async def get_admin_summary(
     )
 
 
-@router.get("/action-items", response_model=List[ActionItemSummary])
+@router.get("/action-items", response_model=list[ActionItemSummary])
 async def get_unified_action_items(
-    status_filter: Optional[str] = None,
+    status_filter: str | None = None,
     assigned_to_me: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-) -> List[ActionItemSummary]:
+) -> list[ActionItemSummary]:
     """
     Unified view of action items from both Meeting and Minutes modules.
     Merges results and returns them sorted by due date.
     """
     org_id = current_user.organization_id
-    items: List[ActionItemSummary] = []
+    items: list[ActionItemSummary] = []
 
     # ── Meeting action items ──
     query = select(MeetingActionItem).where(

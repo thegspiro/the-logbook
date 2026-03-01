@@ -185,7 +185,7 @@ async def update_portal_config(
 # ============================================================================
 
 
-@router.get("/api-keys", response_model=List[PublicPortalAPIKeyResponse])
+@router.get("/api-keys", response_model=list[PublicPortalAPIKeyResponse])
 async def list_api_keys(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -362,17 +362,17 @@ async def revoke_api_key(
 # ============================================================================
 
 
-@router.get("/access-logs", response_model=List[PublicPortalAccessLogResponse])
+@router.get("/access-logs", response_model=list[PublicPortalAccessLogResponse])
 async def get_access_logs(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    api_key_id: Optional[str] = Query(None),
-    ip_address: Optional[str] = Query(None),
-    endpoint: Optional[str] = Query(None),
-    status_code: Optional[int] = Query(None),
-    flagged_suspicious: Optional[bool] = Query(None),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
+    api_key_id: str | None = Query(None),
+    ip_address: str | None = Query(None),
+    endpoint: str | None = Query(None),
+    status_code: int | None = Query(None),
+    flagged_suspicious: bool | None = Query(None),
+    start_date: datetime | None = Query(None),
+    end_date: datetime | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
@@ -549,11 +549,11 @@ async def get_usage_stats(
 # ============================================================================
 
 
-@router.get("/whitelist", response_model=List[PublicPortalDataWhitelistResponse])
+@router.get("/whitelist", response_model=list[PublicPortalDataWhitelistResponse])
 async def get_data_whitelist(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    category: Optional[str] = Query(None, description="Filter by category"),
+    category: str | None = Query(None, description="Filter by category"),
 ):
     """
     Get the data whitelist configuration.

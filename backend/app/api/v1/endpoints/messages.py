@@ -30,26 +30,26 @@ class MessageCreate(BaseModel):
     body: str = Field(..., min_length=1)
     priority: str = Field(default="normal")
     target_type: str = Field(default="all")
-    target_roles: Optional[List[str]] = None
-    target_statuses: Optional[List[str]] = None
-    target_member_ids: Optional[List[str]] = None
+    target_roles: list[str] | None = None
+    target_statuses: list[str] | None = None
+    target_member_ids: list[str] | None = None
     is_pinned: bool = False
     requires_acknowledgment: bool = False
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
 
 class MessageUpdate(BaseModel):
-    title: Optional[str] = None
-    body: Optional[str] = None
-    priority: Optional[str] = None
-    target_type: Optional[str] = None
-    target_roles: Optional[List[str]] = None
-    target_statuses: Optional[List[str]] = None
-    target_member_ids: Optional[List[str]] = None
-    is_pinned: Optional[bool] = None
-    is_active: Optional[bool] = None
-    requires_acknowledgment: Optional[bool] = None
-    expires_at: Optional[datetime] = None
+    title: str | None = None
+    body: str | None = None
+    priority: str | None = None
+    target_type: str | None = None
+    target_roles: list[str] | None = None
+    target_statuses: list[str] | None = None
+    target_member_ids: list[str] | None = None
+    is_pinned: bool | None = None
+    is_active: bool | None = None
+    requires_acknowledgment: bool | None = None
+    expires_at: datetime | None = None
 
 
 class MessageResponse(BaseModel):
@@ -59,16 +59,16 @@ class MessageResponse(BaseModel):
     body: str
     priority: str
     target_type: str
-    target_roles: Optional[List[str]] = None
-    target_statuses: Optional[List[str]] = None
-    target_member_ids: Optional[List[str]] = None
+    target_roles: list[str] | None = None
+    target_statuses: list[str] | None = None
+    target_member_ids: list[str] | None = None
     is_pinned: bool
     is_active: bool
     requires_acknowledgment: bool
-    posted_by: Optional[str] = None
-    expires_at: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    posted_by: str | None = None
+    expires_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
     class Config:
         from_attributes = True
@@ -82,14 +82,14 @@ class InboxMessage(BaseModel):
     target_type: str
     is_pinned: bool
     requires_acknowledgment: bool
-    posted_by: Optional[str] = None
-    author_name: Optional[str] = None
-    created_at: Optional[str] = None
-    expires_at: Optional[str] = None
+    posted_by: str | None = None
+    author_name: str | None = None
+    created_at: str | None = None
+    expires_at: str | None = None
     is_read: bool
-    read_at: Optional[str] = None
+    read_at: str | None = None
     is_acknowledged: bool
-    acknowledged_at: Optional[str] = None
+    acknowledged_at: str | None = None
 
 
 class MessageStatsResponse(BaseModel):
@@ -185,7 +185,7 @@ async def create_message(
     return _serialize_message(message)
 
 
-@router.get("/roles", response_model=List[RoleOption])
+@router.get("/roles", response_model=list[RoleOption])
 async def get_available_roles(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.manage")),
@@ -195,7 +195,7 @@ async def get_available_roles(
     return await service.get_available_roles(current_user.organization_id)
 
 
-@router.get("/inbox", response_model=List[InboxMessage])
+@router.get("/inbox", response_model=list[InboxMessage])
 async def get_inbox(
     include_read: bool = Query(True),
     skip: int = Query(0, ge=0),

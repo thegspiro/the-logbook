@@ -672,8 +672,8 @@ class TestEnumConsistency:
                 if hasattr(col.type, "enum_class") and col.type.enum_class is not None:
                     py_enum = col.type.enum_class
                     if issubclass(py_enum, enum.Enum):
-                        py_values = set(e.value for e in py_enum)
-                        py_names = set(e.name for e in py_enum)
+                        py_values = {e.value for e in py_enum}
+                        py_names = {e.name for e in py_enum}
                         col_values = set(col.type.enums)
                         # Match if column stores values OR names
                         if col_values != py_values and col_values != py_names:

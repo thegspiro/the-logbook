@@ -58,9 +58,9 @@ router = APIRouter()
 # ============================================
 
 
-@router.get("", response_model=List[ElectionListResponse])
+@router.get("", response_model=list[ElectionListResponse])
 async def list_elections(
-    status_filter: Optional[str] = None,
+    status_filter: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.view")),
 ):
@@ -231,7 +231,7 @@ async def get_ballot_by_token(
     return election
 
 
-@router.get("/ballot/{token}/candidates", response_model=List[CandidateResponse])
+@router.get("/ballot/{token}/candidates", response_model=list[CandidateResponse])
 async def get_ballot_candidates(
     token: str,
     db: AsyncSession = Depends(get_db),
@@ -538,7 +538,7 @@ async def update_election(
 @router.delete("/{election_id}", response_model=ElectionDeleteResponse)
 async def delete_election(
     election_id: UUID,
-    delete_data: Optional[ElectionDelete] = Body(default=None),
+    delete_data: ElectionDelete | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.manage")),
 ):
@@ -737,7 +737,7 @@ async def rollback_election(
 # ============================================
 
 
-@router.get("/{election_id}/candidates", response_model=List[CandidateResponse])
+@router.get("/{election_id}/candidates", response_model=list[CandidateResponse])
 async def list_candidates(
     election_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -988,7 +988,7 @@ async def cast_vote(
 
 @router.post(
     "/{election_id}/vote/bulk",
-    response_model=List[VoteResponse],
+    response_model=list[VoteResponse],
     status_code=status.HTTP_201_CREATED,
 )
 async def cast_bulk_votes(
@@ -1550,7 +1550,7 @@ async def remove_voter_override(
 class BulkVoterOverrideRequest(BaseModel):
     """Bulk grant voting overrides for multiple members at once."""
 
-    user_ids: List[UUID]
+    user_ids: list[UUID]
     reason: str = Field(
         ...,
         min_length=10,

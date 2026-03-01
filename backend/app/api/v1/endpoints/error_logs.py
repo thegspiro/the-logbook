@@ -29,14 +29,14 @@ class ErrorLogCreate(BaseModel):
 
     error_type: str = Field(default="UNKNOWN_ERROR", max_length=100)
     error_message: str = Field(default="", max_length=2000)
-    user_message: Optional[str] = Field(default=None, max_length=500)
-    troubleshooting_steps: List[str] = Field(default_factory=list, max_length=20)
-    context: Dict[str, Any] = Field(default_factory=dict)
-    event_id: Optional[str] = Field(default=None, max_length=100)
+    user_message: str | None = Field(default=None, max_length=500)
+    troubleshooting_steps: list[str] = Field(default_factory=list, max_length=20)
+    context: dict[str, Any] = Field(default_factory=dict)
+    event_id: str | None = Field(default=None, max_length=100)
 
     @field_validator("context")
     @classmethod
-    def validate_context_size(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_context_size(cls, v: dict[str, Any]) -> dict[str, Any]:
         if len(json.dumps(v)) > MAX_CONTEXT_SIZE:
             raise ValueError(f"context must be less than {MAX_CONTEXT_SIZE} bytes")
         return v
@@ -66,8 +66,8 @@ async def log_error(
 
 @router.get("")
 async def get_errors(
-    error_type: Optional[str] = Query(None),
-    event_id: Optional[str] = Query(None),
+    error_type: str | None = Query(None),
+    event_id: str | None = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -201,7 +201,7 @@ async def clear_errors(
 @router.get("/export")
 async def export_errors(
     request: Request,
-    event_id: Optional[str] = Query(None),
+    event_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.export")),
 ):

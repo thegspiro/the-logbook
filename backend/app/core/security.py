@@ -417,6 +417,7 @@ def encrypt_data(data: str) -> str:
         Encrypted data as base64 string
     """
     if not data:
+        logger.debug("encrypt_data called with empty value — returning empty string")
         return ""
 
     encrypted = _get_cipher().encrypt(data.encode())

@@ -35,9 +35,9 @@ router = APIRouter()
 
 @router.get("/rules", response_model=NotificationRulesListResponse)
 async def list_rules(
-    category: Optional[str] = None,
-    enabled: Optional[bool] = None,
-    search: Optional[str] = None,
+    category: str | None = None,
+    enabled: bool | None = None,
+    search: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.view")),
 ):
@@ -153,7 +153,7 @@ async def toggle_rule(
 
 @router.get("/logs", response_model=NotificationLogsListResponse)
 async def list_logs(
-    channel: Optional[str] = None,
+    channel: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),

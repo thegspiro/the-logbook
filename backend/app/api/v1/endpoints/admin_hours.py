@@ -47,7 +47,7 @@ router = APIRouter()
 # =============================================================================
 
 
-@router.get("/categories", response_model=List[AdminHoursCategoryResponse])
+@router.get("/categories", response_model=list[AdminHoursCategoryResponse])
 async def list_categories(
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
@@ -320,7 +320,7 @@ async def get_active_session(
 
 @router.get(
     "/active-sessions",
-    response_model=List[AdminHoursActiveSessionAdmin],
+    response_model=list[AdminHoursActiveSessionAdmin],
 )
 async def list_active_sessions(
     db: AsyncSession = Depends(get_db),
@@ -461,10 +461,10 @@ async def create_manual_entry(
 
 @router.get("/entries/my", response_model=AdminHoursPaginatedEntries)
 async def list_my_entries(
-    status: Optional[str] = Query(None),
-    category_id: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    status: str | None = Query(None),
+    category_id: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -490,11 +490,11 @@ async def list_my_entries(
 
 @router.get("/entries", response_model=AdminHoursPaginatedEntries)
 async def list_all_entries(
-    status: Optional[str] = Query(None),
-    category_id: Optional[str] = Query(None),
-    user_id: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    status: str | None = Query(None),
+    category_id: str | None = Query(None),
+    user_id: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -702,11 +702,11 @@ async def get_pending_count(
 
 @router.get("/entries/export")
 async def export_entries(
-    status: Optional[str] = Query(None),
-    category_id: Optional[str] = Query(None),
-    user_id: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    status: str | None = Query(None),
+    category_id: str | None = Query(None),
+    user_id: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("admin_hours.manage")),
 ):
@@ -764,9 +764,9 @@ async def close_stale_sessions(
 
 @router.get("/summary", response_model=AdminHoursSummary)
 async def get_summary(
-    user_id: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    user_id: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

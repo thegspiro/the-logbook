@@ -81,7 +81,7 @@ async def create_submission(
 
 @router.get("/my", response_model=list[TrainingSubmissionResponse])
 async def get_my_submissions(
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status: str | None = Query(None, description="Filter by status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -122,8 +122,8 @@ async def get_pending_count(
 
 @router.get("/all", response_model=list[TrainingSubmissionResponse])
 async def get_all_submissions(
-    status: Optional[str] = Query(None, description="Filter by status"),
-    user_id: Optional[str] = Query(None, description="Filter by user"),
+    status: str | None = Query(None, description="Filter by status"),
+    user_id: str | None = Query(None, description="Filter by user"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),

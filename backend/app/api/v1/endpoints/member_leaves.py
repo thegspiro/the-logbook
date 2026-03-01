@@ -41,21 +41,21 @@ router = APIRouter()
 class LeaveOfAbsenceCreate(BaseModel):
     user_id: str
     leave_type: str = "leave_of_absence"
-    reason: Optional[str] = None
+    reason: str | None = None
     start_date: date
-    end_date: Optional[date] = None  # None = permanent leave
+    end_date: date | None = None  # None = permanent leave
     exempt_from_training_waiver: bool = (
         False  # Override: keep training requirements active
     )
 
 
 class LeaveOfAbsenceUpdate(BaseModel):
-    leave_type: Optional[str] = None
-    reason: Optional[str] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    active: Optional[bool] = None
-    exempt_from_training_waiver: Optional[bool] = None
+    leave_type: str | None = None
+    reason: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    active: bool | None = None
+    exempt_from_training_waiver: bool | None = None
 
 
 class LeaveOfAbsenceResponse(BaseModel):
@@ -63,16 +63,16 @@ class LeaveOfAbsenceResponse(BaseModel):
     organization_id: str
     user_id: str
     leave_type: str
-    reason: Optional[str] = None
+    reason: str | None = None
     start_date: date
-    end_date: Optional[date] = None
-    granted_by: Optional[str] = None
-    granted_at: Optional[datetime] = None
+    end_date: date | None = None
+    granted_by: str | None = None
+    granted_at: datetime | None = None
     active: bool
     exempt_from_training_waiver: bool = False
-    linked_training_waiver_id: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    linked_training_waiver_id: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -134,9 +134,9 @@ async def create_leave_of_absence(
     return _to_response(leave)
 
 
-@router.get("/leaves-of-absence", response_model=List[LeaveOfAbsenceResponse])
+@router.get("/leaves-of-absence", response_model=list[LeaveOfAbsenceResponse])
 async def list_leaves_of_absence(
-    user_id: Optional[str] = Query(None),
+    user_id: str | None = Query(None),
     active_only: bool = Query(True),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
@@ -151,7 +151,7 @@ async def list_leaves_of_absence(
     return [_to_response(leave) for leave in leaves]
 
 
-@router.get("/leaves-of-absence/me", response_model=List[LeaveOfAbsenceResponse])
+@router.get("/leaves-of-absence/me", response_model=list[LeaveOfAbsenceResponse])
 async def get_my_leaves(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -166,7 +166,7 @@ async def get_my_leaves(
     return [_to_response(leave) for leave in leaves]
 
 
-@router.get("/{user_id}/leaves-of-absence", response_model=List[LeaveOfAbsenceResponse])
+@router.get("/{user_id}/leaves-of-absence", response_model=list[LeaveOfAbsenceResponse])
 async def get_member_leaves(
     user_id: str,
     active_only: bool = Query(True),

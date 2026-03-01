@@ -55,13 +55,13 @@ def _user_has_officer_role(user: User) -> bool:
     return False
 
 
-@router.get("/templates", response_model=List[SkillTemplateListResponse])
+@router.get("/templates", response_model=list[SkillTemplateListResponse])
 async def list_templates(
-    status_filter: Optional[str] = Query(
+    status_filter: str | None = Query(
         None, alias="status", description="Filter by status (draft/published/archived)"
     ),
-    category: Optional[str] = Query(None, description="Filter by category"),
-    visibility: Optional[str] = Query(
+    category: str | None = Query(None, description="Filter by category"),
+    visibility: str | None = Query(
         None,
         description="Filter by visibility (all_members/officers_only/assigned_only)",
     ),
@@ -480,13 +480,13 @@ async def duplicate_template(
 # ============================================
 
 
-@router.get("/tests", response_model=List[SkillTestListResponse])
+@router.get("/tests", response_model=list[SkillTestListResponse])
 async def list_tests(
-    status_filter: Optional[str] = Query(
+    status_filter: str | None = Query(
         None, alias="status", description="Filter by status"
     ),
-    candidate_id: Optional[UUID] = Query(None, description="Filter by candidate"),
-    template_id: Optional[UUID] = Query(None, description="Filter by template"),
+    candidate_id: UUID | None = Query(None, description="Filter by candidate"),
+    template_id: UUID | None = Query(None, description="Filter by template"),
     include_practice: bool = Query(
         False, description="Include practice attempts in results"
     ),
@@ -787,7 +787,7 @@ async def update_test(
     return _build_test_response(test, template, candidate, examiner)
 
 
-def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+def _ensure_utc(dt: datetime | None) -> datetime | None:
     """Ensure a datetime is timezone-aware (UTC).
 
     MySQL returns naive datetimes even for timezone-aware columns.
@@ -1309,9 +1309,9 @@ def _format_user_name(user: User) -> str:
 
 def _build_test_response(
     test: SkillTest,
-    template: Optional[SkillTemplate],
-    candidate: Optional[User],
-    examiner: Optional[User],
+    template: SkillTemplate | None,
+    candidate: User | None,
+    examiner: User | None,
 ) -> SkillTestResponse:
     """Build a SkillTestResponse with denormalized names and template structure."""
     return SkillTestResponse(

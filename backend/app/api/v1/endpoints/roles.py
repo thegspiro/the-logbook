@@ -47,7 +47,7 @@ router = APIRouter()
 # ============================================
 
 
-@router.get("/permissions", response_model=List[PermissionDetail])
+@router.get("/permissions", response_model=list[PermissionDetail])
 async def list_permissions(
     current_user: User = Depends(get_current_user),
 ):
@@ -61,7 +61,7 @@ async def list_permissions(
     return get_permission_details()
 
 
-@router.get("/permissions/by-category", response_model=List[PermissionCategory])
+@router.get("/permissions/by-category", response_model=list[PermissionCategory])
 async def list_permissions_by_category(
     current_user: User = Depends(get_current_user),
 ):
@@ -98,7 +98,7 @@ async def list_permissions_by_category(
 # ============================================
 
 
-@router.get("", response_model=List[RoleWithUserCount])
+@router.get("", response_model=list[RoleWithUserCount])
 async def list_roles(
     include_user_count: bool = Query(
         True, description="Include count of users per role"
@@ -468,7 +468,7 @@ async def get_user_permissions(
 # ============================================
 
 
-@router.get("/my/roles", response_model=List[RoleResponse])
+@router.get("/my/roles", response_model=list[RoleResponse])
 async def get_my_roles(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

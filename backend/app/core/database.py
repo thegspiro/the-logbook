@@ -91,7 +91,7 @@ class DatabaseManager:
                 logger.info("Database connection established")
                 return  # Success - exit the retry loop
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_exception = TimeoutError(
                     f"Database connection timed out after {settings.DB_CONNECT_TIMEOUT}s"
                 )
@@ -129,7 +129,7 @@ class DatabaseManager:
             await self.engine.dispose()
             logger.info("Database connection closed")
 
-    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
+    async def get_session(self) -> AsyncGenerator[AsyncSession]:
         """
         Get database session (dependency injection)
 
@@ -182,7 +182,7 @@ def async_session_factory() -> AsyncSession:
 
 
 # Dependency for FastAPI route handlers
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """
     FastAPI dependency for database sessions
     """

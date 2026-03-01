@@ -17,7 +17,7 @@ from typing import List
 # consumer picks up the change automatically.
 
 # Leadership roles notified on critical events (election rollbacks, deletions, etc.)
-LEADERSHIP_ROLE_SLUGS: List[str] = [
+LEADERSHIP_ROLE_SLUGS: list[str] = [
     "chief",
     "president",
     "vice_president",
@@ -25,21 +25,21 @@ LEADERSHIP_ROLE_SLUGS: List[str] = [
 ]
 
 # Admin-level roles CC'd on member drops, archive notifications, etc.
-ADMIN_NOTIFY_ROLE_SLUGS: List[str] = [
+ADMIN_NOTIFY_ROLE_SLUGS: list[str] = [
     "admin",
     "quartermaster",
     "chief",
 ]
 
 # Roles that grant officer-level access in training module config
-TRAINING_OFFICER_ROLE_SLUGS: List[str] = [
+TRAINING_OFFICER_ROLE_SLUGS: list[str] = [
     "admin",
     "training_officer",
     "chief",
 ]
 
 # Operational (line) roles for election eligibility categorisation
-OPERATIONAL_ROLE_SLUGS: List[str] = [
+OPERATIONAL_ROLE_SLUGS: list[str] = [
     "chief",
     "assistant_chief",
     "captain",
@@ -51,7 +51,7 @@ OPERATIONAL_ROLE_SLUGS: List[str] = [
 ]
 
 # Administrative (corporate) roles for election eligibility categorisation
-ADMINISTRATIVE_ROLE_SLUGS: List[str] = [
+ADMINISTRATIVE_ROLE_SLUGS: list[str] = [
     "president",
     "vice_president",
     "secretary",
@@ -60,12 +60,12 @@ ADMINISTRATIVE_ROLE_SLUGS: List[str] = [
 ]
 
 # Default training officer roles for cert alert config fallback
-DEFAULT_TRAINING_OFFICER_ROLES: List[str] = [
+DEFAULT_TRAINING_OFFICER_ROLES: list[str] = [
     "training_officer",
     "assistant_training_officer",
 ]
 
-DEFAULT_COMPLIANCE_OFFICER_ROLES: List[str] = [
+DEFAULT_COMPLIANCE_OFFICER_ROLES: list[str] = [
     "compliance_officer",
 ]
 

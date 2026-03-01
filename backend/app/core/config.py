@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     # ============================================
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
-    REDIS_PASSWORD: Optional[str] = None
+    REDIS_PASSWORD: str | None = None
     REDIS_DB: int = 0
     REDIS_TTL: int = 3600  # Default cache TTL in seconds
     REDIS_CONNECT_TIMEOUT: int = 5  # Connection timeout in seconds
@@ -265,7 +265,7 @@ class Settings(BaseSettings):
     # ============================================
     # CORS
     # ============================================
-    ALLOWED_ORIGINS: Union[List[str], str] = [
+    ALLOWED_ORIGINS: list[str] | str = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
@@ -299,20 +299,20 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 52428800  # 50 MB
 
     # AWS S3
-    AWS_ACCESS_KEY_ID: Optional[str] = None
-    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_ACCESS_KEY_ID: str | None = None
+    AWS_SECRET_ACCESS_KEY: str | None = None
     AWS_REGION: str = "us-east-1"
-    AWS_S3_BUCKET: Optional[str] = None
+    AWS_S3_BUCKET: str | None = None
 
     # Azure Blob
-    AZURE_STORAGE_ACCOUNT: Optional[str] = None
-    AZURE_STORAGE_KEY: Optional[str] = None
-    AZURE_STORAGE_CONTAINER: Optional[str] = None
+    AZURE_STORAGE_ACCOUNT: str | None = None
+    AZURE_STORAGE_KEY: str | None = None
+    AZURE_STORAGE_CONTAINER: str | None = None
 
     # Google Cloud Storage
-    GCS_PROJECT_ID: Optional[str] = None
-    GCS_BUCKET: Optional[str] = None
-    GCS_CREDENTIALS_PATH: Optional[str] = None
+    GCS_PROJECT_ID: str | None = None
+    GCS_BUCKET: str | None = None
+    GCS_CREDENTIALS_PATH: str | None = None
 
     # ============================================
     # Email
@@ -320,8 +320,8 @@ class Settings(BaseSettings):
     EMAIL_ENABLED: bool = False
     SMTP_HOST: str = "smtp.example.com"
     SMTP_PORT: int = 587
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
     SMTP_FROM_EMAIL: str = "noreply@example.com"
     SMTP_FROM_NAME: str = "Intranet Platform"
 
@@ -329,30 +329,30 @@ class Settings(BaseSettings):
     # SMS (Twilio)
     # ============================================
     TWILIO_ENABLED: bool = False
-    TWILIO_ACCOUNT_SID: Optional[str] = None
-    TWILIO_AUTH_TOKEN: Optional[str] = None
-    TWILIO_PHONE_NUMBER: Optional[str] = None
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_PHONE_NUMBER: str | None = None
 
     # ============================================
     # OAuth Providers
     # ============================================
     # Microsoft / Azure AD
     AZURE_AD_ENABLED: bool = False
-    AZURE_AD_TENANT_ID: Optional[str] = None
-    AZURE_AD_CLIENT_ID: Optional[str] = None
-    AZURE_AD_CLIENT_SECRET: Optional[str] = None
+    AZURE_AD_TENANT_ID: str | None = None
+    AZURE_AD_CLIENT_ID: str | None = None
+    AZURE_AD_CLIENT_SECRET: str | None = None
 
     # Google
     GOOGLE_OAUTH_ENABLED: bool = False
-    GOOGLE_CLIENT_ID: Optional[str] = None
-    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
 
     # LDAP
     LDAP_ENABLED: bool = False
-    LDAP_SERVER: Optional[str] = None
-    LDAP_BIND_DN: Optional[str] = None
-    LDAP_BIND_PASSWORD: Optional[str] = None
-    LDAP_SEARCH_BASE: Optional[str] = None
+    LDAP_SERVER: str | None = None
+    LDAP_BIND_DN: str | None = None
+    LDAP_BIND_PASSWORD: str | None = None
+    LDAP_SEARCH_BASE: str | None = None
 
     # ============================================
     # Modules
@@ -369,7 +369,7 @@ class Settings(BaseSettings):
     # Monitoring
     # ============================================
     SENTRY_ENABLED: bool = False
-    SENTRY_DSN: Optional[str] = None
+    SENTRY_DSN: str | None = None
 
     # ============================================
     # Development
@@ -403,7 +403,7 @@ class Settings(BaseSettings):
         return self.__repr__()
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """
     Get cached settings instance

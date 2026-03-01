@@ -78,7 +78,7 @@ ALLOWED_DOCUMENT_MIME_TYPES = {
 
 @router.get("/folders", response_model=FoldersListResponse)
 async def list_folders(
-    parent_id: Optional[str] = None,
+    parent_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("documents.view")),
 ):
@@ -164,8 +164,8 @@ async def delete_folder(
 
 @router.get("", response_model=DocumentsListResponse)
 async def list_documents(
-    folder_id: Optional[str] = None,
-    search: Optional[str] = None,
+    folder_id: str | None = None,
+    search: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),

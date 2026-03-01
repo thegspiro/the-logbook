@@ -22,7 +22,7 @@ class TestEnumConsistency:
     """Test that all enum values are consistent across the stack"""
 
     @pytest.fixture
-    def migration_enums(self) -> Dict[str, List[str]]:
+    def migration_enums(self) -> dict[str, list[str]]:
         """Extract enum definitions from Alembic migration files"""
         migrations_dir = Path(__file__).parent.parent / "alembic" / "versions"
         enums = {}
@@ -47,7 +47,7 @@ class TestEnumConsistency:
         return enums
 
     @pytest.fixture
-    def model_enums(self) -> Dict[str, List[str]]:
+    def model_enums(self) -> dict[str, list[str]]:
         """Extract enum definitions from Python models"""
         models_dir = Path(__file__).parent.parent / "app" / "models"
         enums = {}
@@ -72,7 +72,7 @@ class TestEnumConsistency:
         return enums
 
     @pytest.fixture
-    def frontend_enums(self) -> Dict[str, List[str]]:
+    def frontend_enums(self) -> dict[str, list[str]]:
         """Extract enum/union type definitions from TypeScript files"""
         frontend_dir = Path(__file__).parent.parent.parent / "frontend" / "src" / "modules" / "onboarding"
         enums = {}
@@ -214,7 +214,7 @@ class TestEnumConsistency:
 
 
 # Standalone function for use in scripts/CI
-def verify_enum_consistency() -> Tuple[bool, List[str]]:
+def verify_enum_consistency() -> tuple[bool, list[str]]:
     """
     Verify enum consistency without pytest.
 
@@ -225,13 +225,13 @@ def verify_enum_consistency() -> Tuple[bool, List[str]]:
     Returns:
         Tuple of (success: bool, errors: List[str])
     """
-    errors: List[str] = []
+    errors: list[str] = []
 
     base_dir = Path(__file__).parent.parent
 
     # --- Extract migration enums ---
     migrations_dir = base_dir / "alembic" / "versions"
-    migration_enums: Dict[str, List[str]] = {}
+    migration_enums: dict[str, list[str]] = {}
     enum_pattern = r"sa\.Enum\((.*?name=['\"](\w+)['\"].*?)\)"
 
     for migration_file in migrations_dir.glob("*.py"):
@@ -246,7 +246,7 @@ def verify_enum_consistency() -> Tuple[bool, List[str]]:
 
     # --- Extract backend model enums ---
     models_dir = base_dir / "app" / "models"
-    model_enums: Dict[str, List[str]] = {}
+    model_enums: dict[str, list[str]] = {}
     enum_class_pattern = r"class (\w+)\(str, enum\.Enum\):.*?\n(?:\s*\"\"\".*?\"\"\".*?\n)?((?:    \w+ = ['\"].*?\n)+)"
 
     for model_file in models_dir.glob("*.py"):
@@ -260,7 +260,7 @@ def verify_enum_consistency() -> Tuple[bool, List[str]]:
 
     # --- Extract frontend enums ---
     frontend_dir = base_dir.parent / "frontend" / "src" / "modules" / "onboarding"
-    frontend_enums: Dict[str, List[str]] = {}
+    frontend_enums: dict[str, list[str]] = {}
     union_type_pattern = r"type (\w+) = (['\"][^'\"]+['\"](?:\s*\|\s*['\"][^'\"]+['\"])*)"
 
     if frontend_dir.exists():

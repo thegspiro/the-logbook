@@ -67,8 +67,8 @@ async def get_security_status(
 async def get_security_alerts(
     request: Request,
     limit: int = Query(50, ge=1, le=500),
-    threat_level: Optional[str] = Query(None),
-    alert_type: Optional[str] = Query(None),
+    threat_level: str | None = Query(None),
+    alert_type: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.view")),
 ):
@@ -187,8 +187,8 @@ async def resolve_alert(
 @router.get("/audit-log/integrity")
 async def verify_audit_integrity(
     request: Request,
-    start_id: Optional[int] = Query(None, description="Start log ID for range check"),
-    end_id: Optional[int] = Query(None, description="End log ID for range check"),
+    start_id: int | None = Query(None, description="Start log ID for range check"),
+    end_id: int | None = Query(None, description="End log ID for range check"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.view")),
 ):
@@ -333,10 +333,10 @@ async def rehash_audit_chain(
 @router.get("/audit-log/entries")
 async def get_audit_log_entries(
     request: Request,
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
-    event_category: Optional[str] = Query(None, description="Filter by category"),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
-    user_id: Optional[str] = Query(None, description="Filter by user ID"),
+    event_type: str | None = Query(None, description="Filter by event type"),
+    event_category: str | None = Query(None, description="Filter by category"),
+    severity: str | None = Query(None, description="Filter by severity"),
+    user_id: str | None = Query(None, description="Filter by user ID"),
     skip: int = Query(0, ge=0, description="Number of entries to skip"),
     limit: int = Query(100, ge=1, le=500, description="Max entries to return"),
     db: AsyncSession = Depends(get_db),
@@ -418,11 +418,11 @@ async def get_audit_log_entries(
 @router.get("/audit-log/export")
 async def export_audit_logs(
     request: Request,
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
-    event_category: Optional[str] = Query(None, description="Filter by category"),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
-    start_id: Optional[int] = Query(None, description="Start log ID"),
-    end_id: Optional[int] = Query(None, description="End log ID"),
+    event_type: str | None = Query(None, description="Filter by event type"),
+    event_category: str | None = Query(None, description="Filter by category"),
+    severity: str | None = Query(None, description="Filter by severity"),
+    start_id: int | None = Query(None, description="Start log ID"),
+    end_id: int | None = Query(None, description="End log ID"),
     limit: int = Query(1000, ge=1, le=10000, description="Max entries to export"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.export")),

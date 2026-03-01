@@ -365,7 +365,7 @@ async def get_organization_stats(
         )
 
 
-@router.get("/events/public", response_model=List[PublicEvent])
+@router.get("/events/public", response_model=list[PublicEvent])
 async def get_public_events(
     request: Request,
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),

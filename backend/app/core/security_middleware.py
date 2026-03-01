@@ -498,7 +498,14 @@ async def verify_csrf_token(request: Request) -> None:
 
     if not cookie_token:
         # No CSRF cookie yet — allow (first request after login).
-        # The login response should set the csrf_token cookie.
+        # The login response sets the csrf_token cookie for subsequent
+        # requests.  This means the very first state-changing request
+        # after login is NOT protected by the double-submit check.
+        # This is an accepted tradeoff because:
+        #   1. SameSite=Strict on auth cookies is the primary CSRF defence.
+        #   2. A browser that blocks cookies entirely cannot authenticate.
+        #   3. The window is limited to the single request before the
+        #      cookie is set.
         return
 
     if not request_token or not CSRFProtection.validate_token(

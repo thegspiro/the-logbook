@@ -51,7 +51,7 @@ class OnboardingStatusResponse(BaseModel):
     current_step: int
     total_steps: int
     steps_completed: dict
-    organization_name: Optional[str]
+    organization_name: str | None
 
     class Config:
         from_attributes = True
@@ -61,8 +61,8 @@ class SecurityCheckResponse(BaseModel):
     """Response for security configuration check"""
 
     passed: bool
-    issues: List[dict]
-    warnings: List[dict]
+    issues: list[dict]
+    warnings: list[dict]
     total_issues: int
     total_warnings: int
 
@@ -107,7 +107,7 @@ class OrganizationResponse(BaseModel):
     name: str
     slug: str
     type: str
-    description: Optional[str]
+    description: str | None
     active: bool
 
     class Config:
@@ -123,7 +123,7 @@ class SystemOwnerCreate(BaseModel):
     password_confirm: str = Field(..., min_length=12)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    membership_number: Optional[str] = Field(None, max_length=50)
+    membership_number: str | None = Field(None, max_length=50)
 
     @validator("password_confirm")
     def passwords_match(cls, v, values):
@@ -148,7 +148,7 @@ class UserResponse(BaseModel):
     email: str
     first_name: str
     last_name: str
-    membership_number: Optional[str]
+    membership_number: str | None
     status: str
 
     class Config:
@@ -163,10 +163,10 @@ class SystemOwnerResponse(BaseModel):
     email: str
     first_name: str
     last_name: str
-    membership_number: Optional[str]
+    membership_number: str | None
     status: str
     access_token: str
-    refresh_token: Optional[str] = None
+    refresh_token: str | None = None
     token_type: str = "bearer"
 
     class Config:
@@ -176,27 +176,27 @@ class SystemOwnerResponse(BaseModel):
 class ModulesConfig(BaseModel):
     """Request model for module configuration"""
 
-    enabled_modules: List[str] = Field(default_factory=list)
+    enabled_modules: list[str] = Field(default_factory=list)
 
 
 class NotificationsConfig(BaseModel):
     """Request model for notifications configuration"""
 
     email_enabled: bool = False
-    smtp_host: Optional[str] = None
-    smtp_port: Optional[int] = None
-    smtp_user: Optional[str] = None
-    smtp_from_email: Optional[EmailStr] = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_user: str | None = None
+    smtp_from_email: EmailStr | None = None
 
     sms_enabled: bool = False
-    twilio_account_sid: Optional[str] = None
-    twilio_phone_number: Optional[str] = None
+    twilio_account_sid: str | None = None
+    twilio_phone_number: str | None = None
 
 
 class CompleteOnboardingRequest(BaseModel):
     """Request model for completing onboarding"""
 
-    notes: Optional[str] = Field(None, max_length=2000)
+    notes: str | None = Field(None, max_length=2000)
 
 
 class SystemInfoResponse(BaseModel):
@@ -217,9 +217,9 @@ class DatabaseCheckResponse(BaseModel):
     database: str
     host: str
     port: int
-    server_time: Optional[str] = None
-    organizations_count: Optional[int] = None
-    error: Optional[str] = None
+    server_time: str | None = None
+    organizations_count: int | None = None
+    error: str | None = None
 
 
 class ChecklistItemResponse(BaseModel):
@@ -227,13 +227,13 @@ class ChecklistItemResponse(BaseModel):
 
     id: str
     title: str
-    description: Optional[str]
+    description: str | None
     category: str
     priority: str
     is_completed: bool
-    completed_at: Optional[str]
-    documentation_link: Optional[str]
-    estimated_time_minutes: Optional[int]
+    completed_at: str | None
+    documentation_link: str | None
+    estimated_time_minutes: int | None
 
     class Config:
         from_attributes = True
@@ -245,7 +245,7 @@ class EmailTestRequest(BaseModel):
     platform: str = Field(
         ..., description="Email platform: gmail, microsoft, selfhosted, other"
     )
-    config: Dict[str, Any] = Field(..., description="Email configuration")
+    config: dict[str, Any] = Field(..., description="Email configuration")
 
     @validator("platform")
     def validate_platform(cls, v):
@@ -260,7 +260,7 @@ class EmailTestResponse(BaseModel):
 
     success: bool
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: dict[str, Any] | None = None
 
 
 class StartSessionResponse(BaseModel):
@@ -271,14 +271,14 @@ class StartSessionResponse(BaseModel):
     csrf_token: str
     message: str
     current_step: int
-    steps: List[Dict[str, Any]]
+    steps: list[dict[str, Any]]
 
 
 class DepartmentInfoRequest(BaseModel):
     """Request model for saving department information"""
 
     name: str = Field(..., min_length=3, max_length=100, description="Department name")
-    logo: Optional[str] = Field(None, description="Base64-encoded logo image")
+    logo: str | None = Field(None, description="Base64-encoded logo image")
     navigation_layout: str = Field(
         ..., description="Navigation layout: 'top' or 'left'"
     )
@@ -296,7 +296,7 @@ class EmailConfigRequest(BaseModel):
     platform: str = Field(
         ..., description="Email platform: gmail, microsoft, selfhosted, other"
     )
-    config: Dict[str, Any] = Field(..., description="Email configuration")
+    config: dict[str, Any] = Field(..., description="Email configuration")
 
 
 class FileStorageConfigRequest(BaseModel):
@@ -305,7 +305,7 @@ class FileStorageConfigRequest(BaseModel):
     platform: str = Field(
         ..., description="Platform: googledrive, onedrive, s3, local, other"
     )
-    config: Dict[str, Any] = Field(..., description="Storage configuration")
+    config: dict[str, Any] = Field(..., description="Storage configuration")
 
 
 class AuthConfigRequest(BaseModel):
@@ -317,16 +317,16 @@ class AuthConfigRequest(BaseModel):
 class ITTeamRequest(BaseModel):
     """Request model for saving IT team information"""
 
-    it_team: List[Dict[str, Any]] = Field(
+    it_team: list[dict[str, Any]] = Field(
         default_factory=list, description="IT team members"
     )
-    backup_access: Dict[str, Any] = Field(..., description="Backup access information")
+    backup_access: dict[str, Any] = Field(..., description="Backup access information")
 
 
 class SessionModulesRequest(BaseModel):
     """Request model for saving module configuration via session"""
 
-    modules: List[str] = Field(
+    modules: list[str] = Field(
         default_factory=list, description="List of enabled modules"
     )
 
@@ -343,9 +343,9 @@ class RoleSetupItem(BaseModel):
 
     id: str = Field(..., description="Unique role identifier (slug)")
     name: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
+    description: str | None = Field(None, max_length=500)
     priority: int = Field(default=50, ge=0, le=100)
-    permissions: Dict[str, RolePermission] = Field(
+    permissions: dict[str, RolePermission] = Field(
         default_factory=dict, description="Module permissions with view/manage flags"
     )
     is_custom: bool = Field(default=False, description="Whether this is a custom role")
@@ -354,7 +354,7 @@ class RoleSetupItem(BaseModel):
 class RolesSetupRequest(BaseModel):
     """Request model for role setup during onboarding"""
 
-    roles: List[RoleSetupItem] = Field(
+    roles: list[RoleSetupItem] = Field(
         ..., min_length=1, description="List of roles to create for the organization"
     )
 
@@ -364,15 +364,15 @@ class RolesSetupResponse(BaseModel):
 
     success: bool
     message: str
-    created: List[str] = Field(default_factory=list)
-    updated: List[str] = Field(default_factory=list)
+    created: list[str] = Field(default_factory=list)
+    updated: list[str] = Field(default_factory=list)
     total_roles: int
 
 
 class PositionsSetupRequest(BaseModel):
     """Request model for position setup during onboarding (frontend uses 'positions' key)"""
 
-    positions: List[RoleSetupItem] = Field(
+    positions: list[RoleSetupItem] = Field(
         ...,
         min_length=1,
         description="List of positions to create for the organization",
@@ -384,8 +384,8 @@ class PositionsSetupResponse(BaseModel):
 
     success: bool
     message: str
-    created: List[str] = Field(default_factory=list)
-    updated: List[str] = Field(default_factory=list)
+    created: list[str] = Field(default_factory=list)
+    updated: list[str] = Field(default_factory=list)
     total_positions: int
 
 
@@ -394,7 +394,7 @@ class SessionDataResponse(BaseModel):
 
     success: bool
     message: str
-    step: Optional[str] = None
+    step: str | None = None
 
 
 # ============================================
@@ -1035,7 +1035,7 @@ async def complete_onboarding(
         )
 
 
-@router.get("/checklist", response_model=List[ChecklistItemResponse])
+@router.get("/checklist", response_model=list[ChecklistItemResponse])
 async def get_post_onboarding_checklist(db: AsyncSession = Depends(get_db)):
     """
     Get post-onboarding checklist

@@ -56,7 +56,7 @@ async def get_platform_analytics(
     total_users = 0
     active_users = 0
     new_users_last_30 = 0
-    login_trend: List[DailyCount] = []
+    login_trend: list[DailyCount] = []
 
     try:
         result = await db.execute(
@@ -115,7 +115,7 @@ async def get_platform_analytics(
     )
 
     # ── Module Usage ──
-    modules: List[ModuleUsage] = []
+    modules: list[ModuleUsage] = []
     module_configs = [
         ("Events", True, Event, Event.organization_id, Event.created_at),
         (
@@ -251,7 +251,7 @@ async def get_platform_analytics(
 
     # ── System Health ──
     errors_last_7 = 0
-    error_trend: List[DailyCount] = []
+    error_trend: list[DailyCount] = []
     top_error_types: dict[str, int] = {}
 
     try:

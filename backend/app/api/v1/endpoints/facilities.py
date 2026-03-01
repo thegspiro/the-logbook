@@ -104,10 +104,10 @@ router = APIRouter()
 
 
 @router.get(
-    "/types", response_model=List[FacilityTypeListItem], tags=["Facility Types"]
+    "/types", response_model=list[FacilityTypeListItem], tags=["Facility Types"]
 )
 async def list_facility_types(
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -260,10 +260,10 @@ async def delete_facility_type(
 
 
 @router.get(
-    "/statuses", response_model=List[FacilityStatusListItem], tags=["Facility Statuses"]
+    "/statuses", response_model=list[FacilityStatusListItem], tags=["Facility Statuses"]
 )
 async def list_facility_statuses(
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined statuses"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -396,13 +396,13 @@ async def delete_facility_status(
 # ============================================================================
 
 
-@router.get("", response_model=List[FacilityListItem], tags=["Facilities"])
+@router.get("", response_model=list[FacilityListItem], tags=["Facilities"])
 async def list_facilities(
-    facility_type_id: Optional[str] = Query(
+    facility_type_id: str | None = Query(
         None, description="Filter by facility type"
     ),
-    status_id: Optional[str] = Query(None, description="Filter by status"),
-    is_archived: Optional[bool] = Query(
+    status_id: str | None = Query(None, description="Filter by status"),
+    is_archived: bool | None = Query(
         False, description="Include archived facilities"
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -617,10 +617,10 @@ async def restore_facility(
 
 
 @router.get(
-    "/photos", response_model=List[FacilityPhotoResponse], tags=["Facility Photos"]
+    "/photos", response_model=list[FacilityPhotoResponse], tags=["Facility Photos"]
 )
 async def list_facility_photos(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    facility_id: str | None = Query(None, description="Filter by facility"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -751,11 +751,11 @@ async def delete_facility_photo(
 
 @router.get(
     "/documents",
-    response_model=List[FacilityDocumentResponse],
+    response_model=list[FacilityDocumentResponse],
     tags=["Facility Documents"],
 )
 async def list_facility_documents(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    facility_id: str | None = Query(None, description="Filter by facility"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -888,11 +888,11 @@ async def delete_facility_document(
 
 @router.get(
     "/maintenance-types",
-    response_model=List[FacilityMaintenanceTypeResponse],
+    response_model=list[FacilityMaintenanceTypeResponse],
     tags=["Facility Maintenance Types"],
 )
 async def list_facility_maintenance_types(
-    is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    is_active: bool | None = Query(True, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -1025,26 +1025,26 @@ async def delete_facility_maintenance_type(
 
 @router.get(
     "/maintenance",
-    response_model=List[FacilityMaintenanceResponse],
+    response_model=list[FacilityMaintenanceResponse],
     tags=["Facility Maintenance"],
 )
 async def list_facility_maintenance_records(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    maintenance_type_id: Optional[str] = Query(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    maintenance_type_id: str | None = Query(
         None, description="Filter by maintenance type"
     ),
-    is_completed: Optional[bool] = Query(
+    is_completed: bool | None = Query(
         None, description="Filter by completion status"
     ),
-    is_overdue: Optional[bool] = Query(None, description="Filter by overdue status"),
-    is_historic: Optional[bool] = Query(
+    is_overdue: bool | None = Query(None, description="Filter by overdue status"),
+    is_historic: bool | None = Query(
         None,
         description="Filter by historic entries (True=only historic, False=only current)",
     ),
-    occurred_after: Optional[date] = Query(
+    occurred_after: date | None = Query(
         None, description="Filter records that occurred on or after this date"
     ),
-    occurred_before: Optional[date] = Query(
+    occurred_before: date | None = Query(
         None, description="Filter records that occurred on or before this date"
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -1226,12 +1226,12 @@ async def delete_facility_maintenance_record(
 
 
 @router.get(
-    "/systems", response_model=List[FacilitySystemResponse], tags=["Facility Systems"]
+    "/systems", response_model=list[FacilitySystemResponse], tags=["Facility Systems"]
 )
 async def list_facility_systems(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    system_type: Optional[str] = Query(None, description="Filter by system type"),
-    is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    system_type: str | None = Query(None, description="Filter by system type"),
+    is_active: bool | None = Query(True, description="Filter by active status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -1399,15 +1399,15 @@ async def delete_facility_system(
 
 @router.get(
     "/inspections",
-    response_model=List[FacilityInspectionResponse],
+    response_model=list[FacilityInspectionResponse],
     tags=["Facility Inspections"],
 )
 async def list_facility_inspections(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    inspection_type: Optional[InspectionTypeEnum] = Query(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    inspection_type: InspectionTypeEnum | None = Query(
         None, description="Filter by inspection type"
     ),
-    passed: Optional[bool] = Query(None, description="Filter by pass/fail status"),
+    passed: bool | None = Query(None, description="Filter by pass/fail status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -1576,15 +1576,15 @@ async def delete_facility_inspection(
 
 @router.get(
     "/utility-accounts",
-    response_model=List[FacilityUtilityAccountResponse],
+    response_model=list[FacilityUtilityAccountResponse],
     tags=["Facility Utilities"],
 )
 async def list_facility_utility_accounts(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    utility_type: Optional[UtilityTypeEnum] = Query(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    utility_type: UtilityTypeEnum | None = Query(
         None, description="Filter by utility type"
     ),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -1753,15 +1753,15 @@ async def delete_facility_utility_account(
 
 @router.get(
     "/utility-accounts/{account_id}/readings",
-    response_model=List[FacilityUtilityReadingResponse],
+    response_model=list[FacilityUtilityReadingResponse],
     tags=["Facility Utilities"],
 )
 async def list_facility_utility_readings(
     account_id: str,
-    reading_after: Optional[date] = Query(
+    reading_after: date | None = Query(
         None, description="Filter readings on or after this date"
     ),
-    reading_before: Optional[date] = Query(
+    reading_before: date | None = Query(
         None, description="Filter readings on or before this date"
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -1899,14 +1899,14 @@ async def delete_facility_utility_reading(
 
 @router.get(
     "/access-keys",
-    response_model=List[FacilityAccessKeyResponse],
+    response_model=list[FacilityAccessKeyResponse],
     tags=["Facility Access"],
 )
 async def list_facility_access_keys(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    key_type: Optional[KeyTypeEnum] = Query(None, description="Filter by key type"),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    assigned_to_user_id: Optional[str] = Query(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    key_type: KeyTypeEnum | None = Query(None, description="Filter by key type"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    assigned_to_user_id: str | None = Query(
         None, description="Filter by assigned user"
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -2077,13 +2077,13 @@ async def delete_facility_access_key(
 
 
 @router.get(
-    "/rooms", response_model=List[FacilityRoomResponse], tags=["Facility Rooms"]
+    "/rooms", response_model=list[FacilityRoomResponse], tags=["Facility Rooms"]
 )
 async def list_facility_rooms(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    room_type: Optional[RoomTypeEnum] = Query(None, description="Filter by room type"),
-    floor: Optional[int] = Query(None, description="Filter by floor number"),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    room_type: RoomTypeEnum | None = Query(None, description="Filter by room type"),
+    floor: int | None = Query(None, description="Filter by floor number"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -2248,15 +2248,15 @@ async def delete_facility_room(
 
 @router.get(
     "/emergency-contacts",
-    response_model=List[FacilityEmergencyContactResponse],
+    response_model=list[FacilityEmergencyContactResponse],
     tags=["Facility Emergency"],
 )
 async def list_facility_emergency_contacts(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    contact_type: Optional[EmergencyContactTypeEnum] = Query(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    contact_type: EmergencyContactTypeEnum | None = Query(
         None, description="Filter by contact type"
     ),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -2425,12 +2425,12 @@ async def delete_facility_emergency_contact(
 
 @router.get(
     "/shutoff-locations",
-    response_model=List[FacilityShutoffLocationResponse],
+    response_model=list[FacilityShutoffLocationResponse],
     tags=["Facility Emergency"],
 )
 async def list_facility_shutoff_locations(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    shutoff_type: Optional[ShutoffTypeEnum] = Query(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    shutoff_type: ShutoffTypeEnum | None = Query(
         None, description="Filter by shutoff type"
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -2600,15 +2600,15 @@ async def delete_facility_shutoff_location(
 
 @router.get(
     "/capital-projects",
-    response_model=List[FacilityCapitalProjectResponse],
+    response_model=list[FacilityCapitalProjectResponse],
     tags=["Facility Capital Projects"],
 )
 async def list_facility_capital_projects(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    project_type: Optional[CapitalProjectTypeEnum] = Query(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    project_type: CapitalProjectTypeEnum | None = Query(
         None, description="Filter by project type"
     ),
-    project_status: Optional[CapitalProjectStatusEnum] = Query(
+    project_status: CapitalProjectStatusEnum | None = Query(
         None, description="Filter by project status"
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -2779,15 +2779,15 @@ async def delete_facility_capital_project(
 
 @router.get(
     "/insurance-policies",
-    response_model=List[FacilityInsurancePolicyResponse],
+    response_model=list[FacilityInsurancePolicyResponse],
     tags=["Facility Insurance"],
 )
 async def list_facility_insurance_policies(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    policy_type: Optional[InsurancePolicyTypeEnum] = Query(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    policy_type: InsurancePolicyTypeEnum | None = Query(
         None, description="Filter by policy type"
     ),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -2956,12 +2956,12 @@ async def delete_facility_insurance_policy(
 
 @router.get(
     "/occupants",
-    response_model=List[FacilityOccupantResponse],
+    response_model=list[FacilityOccupantResponse],
     tags=["Facility Occupants"],
 )
 async def list_facility_occupants(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -3129,15 +3129,15 @@ async def delete_facility_occupant(
 
 @router.get(
     "/compliance-checklists",
-    response_model=List[FacilityComplianceChecklistResponse],
+    response_model=list[FacilityComplianceChecklistResponse],
     tags=["Facility Compliance"],
 )
 async def list_facility_compliance_checklists(
-    facility_id: Optional[str] = Query(None, description="Filter by facility"),
-    compliance_type: Optional[ComplianceTypeEnum] = Query(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    compliance_type: ComplianceTypeEnum | None = Query(
         None, description="Filter by compliance type"
     ),
-    is_completed: Optional[bool] = Query(
+    is_completed: bool | None = Query(
         None, description="Filter by completion status"
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -3311,7 +3311,7 @@ async def delete_facility_compliance_checklist(
 
 @router.get(
     "/compliance-checklists/{checklist_id}/items",
-    response_model=List[FacilityComplianceItemResponse],
+    response_model=list[FacilityComplianceItemResponse],
     tags=["Facility Compliance"],
 )
 async def list_facility_compliance_items(
