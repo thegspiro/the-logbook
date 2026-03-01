@@ -340,7 +340,7 @@ const AdminHoursManagePage: React.FC = () => {
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       required
                       placeholder="e.g., Building Maintenance"
                     />
@@ -367,7 +367,7 @@ const AdminHoursManagePage: React.FC = () => {
                     value={formData.description ?? ''}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={2}
-                    className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     placeholder="Brief description of this type of admin work"
                   />
                 </div>
@@ -391,7 +391,7 @@ const AdminHoursManagePage: React.FC = () => {
                       min="0"
                       value={formData.auto_approve_under_hours ?? ''}
                       onChange={(e) => setFormData({ ...formData, auto_approve_under_hours: e.target.value ? parseFloat(e.target.value) : null })}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       placeholder="e.g., 4"
                     />
                   </div>
@@ -404,7 +404,7 @@ const AdminHoursManagePage: React.FC = () => {
                       min="0.5"
                       value={formData.max_hours_per_session ?? ''}
                       onChange={(e) => setFormData({ ...formData, max_hours_per_session: e.target.value ? parseFloat(e.target.value) : null })}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       placeholder="e.g., 12"
                     />
                   </div>

@@ -715,7 +715,7 @@ const ConfigEditor: React.FC<{
                   type="checkbox"
                   checked={fc.required}
                   onChange={(e) => updateField(name, 'required', e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-theme-input-border bg-theme-input-bg text-orange-600 focus:ring-orange-500"
+                  className="w-3.5 h-3.5 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
                   disabled={!fc.visible}
                 />
                 <span className="text-xs text-theme-text-muted">Required</span>

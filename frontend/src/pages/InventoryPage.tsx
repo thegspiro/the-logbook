@@ -2778,18 +2778,18 @@ const InventoryPage: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="pool-issue-member" className="block text-sm font-medium text-theme-text-secondary mb-1">Member *</label>
-                      <select id="pool-issue-member" value={poolIssueForm.member_id} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, member_id: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-purple-500">
+                      <select id="pool-issue-member" value={poolIssueForm.member_id} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, member_id: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500">
                         <option value="">Select member...</option>
                         {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <label htmlFor="pool-issue-quantity" className="block text-sm font-medium text-theme-text-secondary mb-1">Quantity</label>
-                      <input id="pool-issue-quantity" type="number" min="1" max={poolIssueItem.quantity - poolIssueItem.quantity_issued} value={poolIssueForm.quantity} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, quantity: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                      <input id="pool-issue-quantity" type="number" min="1" max={poolIssueItem.quantity - poolIssueItem.quantity_issued} value={poolIssueForm.quantity} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, quantity: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500" />
                     </div>
                     <div>
                       <label htmlFor="pool-issue-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason (optional)</label>
-                      <input id="pool-issue-reason" type="text" value={poolIssueForm.reason} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, reason: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="e.g., Initial issue, replacement" />
+                      <input id="pool-issue-reason" type="text" value={poolIssueForm.reason} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, reason: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="e.g., Initial issue, replacement" />
                     </div>
                   </div>
                 </div>

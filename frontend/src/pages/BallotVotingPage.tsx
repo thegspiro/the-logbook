@@ -299,7 +299,7 @@ export const BallotVotingPage: React.FC = () => {
                           name={`item-${item.id}`}
                           checked={itemChoice?.choice === 'approve'}
                           onChange={() => updateChoice(item.id, 'approve')}
-                          className="w-4 h-4 text-green-600 focus:ring-green-500"
+                          className="w-4 h-4 text-green-600 focus:ring-red-500"
                         />
                         <span className="font-medium text-theme-text-primary">Approve</span>
                       </label>
@@ -329,7 +329,7 @@ export const BallotVotingPage: React.FC = () => {
                             name={`item-${item.id}`}
                             checked={itemChoice?.choice === candidate.id}
                             onChange={() => updateChoice(item.id, candidate.id)}
-                            className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                            className="w-4 h-4 text-red-600 focus:ring-red-500"
                           />
                           <div>
                             <span className="font-medium text-theme-text-primary">{candidate.name}</span>
@@ -357,7 +357,7 @@ export const BallotVotingPage: React.FC = () => {
                           name={`item-${item.id}`}
                           checked={itemChoice?.choice === 'write_in'}
                           onChange={() => updateChoice(item.id, 'write_in')}
-                          className="w-4 h-4 text-purple-600 focus:ring-purple-500"
+                          className="w-4 h-4 text-purple-600 focus:ring-red-500"
                         />
                         <span className="font-medium text-theme-text-primary">Write-in</span>
                       </label>
@@ -368,7 +368,7 @@ export const BallotVotingPage: React.FC = () => {
                           onChange={(e) => updateWriteInName(item.id, e.target.value)}
                           placeholder="Enter name or option..."
                           aria-label="Enter name or option"
-                          className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-theme-surface-border rounded-md shadow-sm py-2 px-3 focus:ring-purple-500 focus:border-purple-500 text-sm bg-theme-input-bg text-theme-text-primary"
+                          className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-theme-surface-border rounded-md shadow-sm py-2 px-3 focus:ring-red-500 focus:border-red-500 text-sm bg-theme-input-bg text-theme-text-primary"
                           autoFocus
                         />
                       )}

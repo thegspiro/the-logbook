@@ -290,7 +290,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.firstName ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                   placeholder="John"
                 />
                 {errors.firstName && (
@@ -306,7 +306,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.middleName}
                   onChange={(e) => handleInputChange('middleName', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="Michael"
                 />
               </div>
@@ -321,7 +321,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.lastName ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                   placeholder="Doe"
                 />
                 {errors.lastName && (
@@ -341,7 +341,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('membershipNumber', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.membershipNumber ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                   placeholder="FF-001"
                 />
                 {errors.membershipNumber && (
@@ -357,7 +357,7 @@ const AddMember: React.FC = () => {
                   type="date"
                   value={formData.dateOfBirth}
                   onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
             </div>
@@ -373,7 +373,7 @@ const AddMember: React.FC = () => {
                     type="text"
                     value={membershipIdOverride}
                     onChange={(e) => setMembershipIdOverride(e.target.value)}
-                    className="flex-1 max-w-xs px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 max-w-xs px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                     placeholder={membershipIdPreview}
                   />
                   <span className="text-sm text-theme-text-muted">
@@ -408,7 +408,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('street', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.street ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                   placeholder="123 Main Street"
                 />
                 {errors.street && (
@@ -427,7 +427,7 @@ const AddMember: React.FC = () => {
                     onChange={(e) => handleInputChange('city', e.target.value)}
                     className={`w-full px-4 py-2 bg-theme-input-bg border ${
                       errors.city ? 'border-red-500' : 'border-theme-input-border'
-                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                     placeholder="Springfield"
                   />
                   {errors.city && (
@@ -445,7 +445,7 @@ const AddMember: React.FC = () => {
                     onChange={(e) => handleInputChange('state', e.target.value)}
                     className={`w-full px-4 py-2 bg-theme-input-bg border ${
                       errors.state ? 'border-red-500' : 'border-theme-input-border'
-                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                     placeholder="IL"
                     maxLength={2}
                   />
@@ -464,7 +464,7 @@ const AddMember: React.FC = () => {
                     onChange={(e) => handleInputChange('zipCode', e.target.value)}
                     className={`w-full px-4 py-2 bg-theme-input-bg border ${
                       errors.zipCode ? 'border-red-500' : 'border-theme-input-border'
-                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                     placeholder="62701"
                   />
                   {errors.zipCode && (
@@ -493,7 +493,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('primaryPhone', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.primaryPhone ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.primaryPhone && (
@@ -509,7 +509,7 @@ const AddMember: React.FC = () => {
                   type="tel"
                   value={formData.secondaryPhone}
                   onChange={(e) => handleInputChange('secondaryPhone', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="(555) 987-6543"
                 />
               </div>
@@ -524,7 +524,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.email ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                   placeholder="john.doe@example.com"
                 />
                 {errors.email && (
@@ -541,7 +541,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) =>
                     handleInputChange('preferredContact', e.target.value as 'phone' | 'email' | 'text')
                   }
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="phone">Phone</option>
                   <option value="email">Email</option>
@@ -576,7 +576,7 @@ const AddMember: React.FC = () => {
                       });
                     }
                   }}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
                 />
                 <div>
                   <span className="text-sm font-medium text-theme-text-primary">Set initial password</span>
@@ -604,7 +604,7 @@ const AddMember: React.FC = () => {
                         }}
                         className={`w-full px-4 py-2 pr-10 bg-theme-input-bg border ${
                           errors.password ? 'border-red-500' : 'border-theme-input-border'
-                        } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                        } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                         placeholder="Minimum 12 characters"
                         autoComplete="new-password"
                       />
@@ -636,7 +636,7 @@ const AddMember: React.FC = () => {
                       }}
                       className={`w-full px-4 py-2 bg-theme-input-bg border ${
                         errors.confirmPassword ? 'border-red-500' : 'border-theme-input-border'
-                      } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                      } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                       placeholder="Re-enter password"
                       autoComplete="new-password"
                     />
@@ -669,7 +669,7 @@ const AddMember: React.FC = () => {
                   type="date"
                   value={formData.joinDate}
                   onChange={(e) => handleInputChange('joinDate', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
 
@@ -680,7 +680,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.status}
                   onChange={(e) => handleInputChange('status', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
@@ -696,7 +696,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.membershipType}
                   onChange={(e) => handleInputChange('membershipType', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="probationary">Probationary</option>
                   <option value="regular">Regular</option>
@@ -712,7 +712,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="">Select Rank</option>
                   {rankOptions.map((r) => (
@@ -728,7 +728,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.role}
                   onChange={(e) => handleInputChange('role', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="">Select Position</option>
                   {availablePositions.map((p) => (
@@ -744,7 +744,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.station}
                   onChange={(e) => handleInputChange('station', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="">Select Station</option>
                   {availableStations.map((s) => (
@@ -773,7 +773,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('emergencyName1', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.emergencyName1 ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                   placeholder="Jane Doe"
                 />
                 {errors.emergencyName1 && (
@@ -791,7 +791,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('emergencyRelationship1', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.emergencyRelationship1 ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                   placeholder="Spouse"
                 />
                 {errors.emergencyRelationship1 && (
@@ -809,7 +809,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('emergencyPhone1', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.emergencyPhone1 ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.emergencyPhone1 && (
@@ -825,7 +825,7 @@ const AddMember: React.FC = () => {
                   type="email"
                   value={formData.emergencyEmail1}
                   onChange={(e) => handleInputChange('emergencyEmail1', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="jane.doe@example.com"
                 />
               </div>
@@ -849,7 +849,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyName2}
                   onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="Bob Doe"
                 />
               </div>
@@ -862,7 +862,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyRelationship2}
                   onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="Parent"
                 />
               </div>
@@ -875,7 +875,7 @@ const AddMember: React.FC = () => {
                   type="tel"
                   value={formData.emergencyPhone2}
                   onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="(555) 987-6543"
                 />
               </div>
@@ -888,7 +888,7 @@ const AddMember: React.FC = () => {
                   type="email"
                   value={formData.emergencyEmail2}
                   onChange={(e) => handleInputChange('emergencyEmail2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="bob.doe@example.com"
                 />
               </div>
