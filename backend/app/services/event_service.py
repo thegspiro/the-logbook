@@ -1541,4 +1541,18 @@ class EventService:
             created_events.append(child_event)
 
         await self.db.commit()
+
+        # Re-query with eager loading so server-computed columns
+        # (created_at, updated_at) and relationships (location_obj) are
+        # available without lazy-loading, which would raise MissingGreenlet
+        # in async mode when Pydantic serializes the response.
+        event_ids = [e.id for e in created_events]
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.id.in_(event_ids))
+            .options(selectinload(Event.location_obj))
+            .order_by(Event.start_datetime)
+        )
+        created_events = list(result.scalars().all())
+
         return created_events, None
