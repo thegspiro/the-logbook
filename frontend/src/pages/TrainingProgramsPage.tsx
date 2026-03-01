@@ -13,6 +13,7 @@ import {
   Award,
   Calendar,
   AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -275,6 +276,18 @@ const TrainingProgramsPage: React.FC = () => {
                           <span className="text-xs text-theme-text-muted">
                             {registry.requirement_count} requirements
                           </span>
+                        )}
+                        {registry.source_url && (
+                          <a
+                            href={registry.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+                          >
+                            <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                            <span>Source</span>
+                          </a>
                         )}
                       </button>
                     ))}

@@ -814,6 +814,7 @@ class RegistryInfo(BaseModel):
     name: str
     description: str
     last_updated: Optional[str] = None
+    source_url: Optional[str] = None
     requirement_count: int
 
 
@@ -850,6 +851,7 @@ async def list_available_registries(
                     name=data.get("registry_name", key),
                     description=data.get("registry_description", ""),
                     last_updated=data.get("last_updated"),
+                    source_url=data.get("source_url"),
                     requirement_count=len(data.get("requirements", [])),
                 )
             )
@@ -894,11 +896,13 @@ async def import_registry_requirements(
 
     service = TrainingProgramService(db)
 
-    imported_count, errors, last_updated = await service.import_registry_requirements(
-        registry_file_path=registry_file,
-        organization_id=current_user.organization_id,
-        created_by=current_user.id,
-        skip_existing=skip_existing,
+    imported_count, errors, last_updated, source_url = (
+        await service.import_registry_requirements(
+            registry_file_path=registry_file,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+            skip_existing=skip_existing,
+        )
     )
 
     return RegistryImportResult(
@@ -907,4 +911,5 @@ async def import_registry_requirements(
         skipped_count=0,  # Could be calculated if needed
         errors=errors,
         last_updated=last_updated,
+        source_url=source_url,
     )

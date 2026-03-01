@@ -2,6 +2,7 @@
   "registry_name": "NFPA",
   "registry_description": "National Fire Protection Association Standards",
   "last_updated": "2026-03-01",
+  "source_url": "https://www.nfpa.org/codes-and-standards",
   "requirements": [
     {
       "name": "NFPA 1001 Firefighter I & II Annual Training",

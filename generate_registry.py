@@ -24,6 +24,9 @@ Usage:
   # Specify output directory
   python generate_registry.py --output ./my_output_dir
 
+  # With a citation URL
+  python generate_registry.py --csv reqs.csv --source state --name nj --description "New Jersey DFRS" --url "https://nj.gov/dfrs/requirements"
+
   # Non-interactive: just provide source and name
   python generate_registry.py --csv reqs.csv --source state --name nj --description "New Jersey DFRS"
 
@@ -336,7 +339,7 @@ def interactive_requirement() -> dict:
 
 
 def interactive_mode() -> tuple:
-    """Run fully interactive mode. Returns (registry_name, description, source, requirements)."""
+    """Run fully interactive mode. Returns (registry_name, description, source, source_url, requirements)."""
     print("=" * 60)
     print("  Training Registry Generator - Interactive Mode")
     print("=" * 60)
@@ -344,6 +347,7 @@ def interactive_mode() -> tuple:
     source = prompt_choice("\nSource type", VALID_SOURCES)
     registry_name = prompt_str("Registry name (e.g., 'nj', 'nfpa', 'my_dept')", required=True)
     description = prompt_str("Registry description", required=True)
+    source_url = prompt_str("Source URL (citation link, or Enter to skip)")
 
     requirements = []
     while True:
@@ -360,7 +364,7 @@ def interactive_mode() -> tuple:
         if not prompt_bool("\nAdd another requirement?", default=True):
             break
 
-    return registry_name, description, source, requirements
+    return registry_name, description, source, source_url, requirements
 
 
 # ── CSV mode ──
@@ -501,6 +505,10 @@ def main():
         help="Registry description",
     )
     parser.add_argument(
+        "--url",
+        help="Source URL for citation (e.g., 'https://nj.gov/dfrs/requirements')",
+    )
+    parser.add_argument(
         "--output",
         metavar="DIR",
         default=".",
@@ -538,9 +546,11 @@ def main():
         if not description:
             description = prompt_str("Registry description", required=True)
 
+        source_url = args.url or ""
+
     else:
         # Interactive mode
-        registry_name, description, source, requirements = interactive_mode()
+        registry_name, description, source, source_url, requirements = interactive_mode()
 
     if not requirements:
         print("No requirements to write. Exiting.")
@@ -554,8 +564,10 @@ def main():
         "registry_description": description,
         "last_updated": date.today().isoformat(),
         "source": source,
-        "requirements": requirements,
     }
+    if source_url:
+        registry["source_url"] = source_url
+    registry["requirements"] = requirements
 
     # Write the file
     filename = make_filename(source, registry_name)
@@ -570,6 +582,8 @@ def main():
     print(f"\nGenerated: {output_path}")
     print(f"  Registry: {display_name}")
     print(f"  Source: {source}")
+    if source_url:
+        print(f"  Citation URL: {source_url}")
     print(f"  Requirements: {len(requirements)}")
 
     # Auto-register

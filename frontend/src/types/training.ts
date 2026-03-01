@@ -737,6 +737,7 @@ export interface RegistryImportResult {
   skipped_count: number;
   errors: string[];
   last_updated?: string;
+  source_url?: string;
 }
 
 export interface RegistryInfo {
@@ -744,6 +745,7 @@ export interface RegistryInfo {
   name: string;
   description: string;
   last_updated?: string;
+  source_url?: string;
   requirement_count: number;
 }
 
