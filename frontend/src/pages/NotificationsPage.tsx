@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bell,
   Mail,
@@ -100,6 +101,7 @@ function formatCategory(category: string): string {
 }
 
 const NotificationsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('notifications.manage');
   const tz = useTimezone();
@@ -432,11 +434,13 @@ const NotificationsPage: React.FC = () => {
             <p className="text-theme-text-secondary mb-6">
               Customize email templates for different notification types. Templates support dynamic placeholders for personalization.
             </p>
-            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 max-w-md mx-auto">
-              <p className="text-orange-300 text-sm">
-                Email template editor will be available once the notification service is fully configured.
-              </p>
-            </div>
+            <button
+              onClick={() => navigate('/communications/email-templates')}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+            >
+              <Mail className="w-4 h-4" />
+              <span>Manage Email Templates</span>
+            </button>
           </div>
         )}
 

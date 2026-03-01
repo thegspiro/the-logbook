@@ -30,6 +30,7 @@ import {
   getProspectiveMembersPublicRoutes,
 } from "./modules/prospective-members";
 import { getAdminHoursRoutes } from "./modules/admin-hours";
+import { getCommunicationsRoutes } from "./modules/communications";
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -280,6 +281,9 @@ function App() {
 
                   {/* Admin Hours Module */}
                   {getAdminHoursRoutes()}
+
+                  {/* Communications Module */}
+                  {getCommunicationsRoutes()}
 
                   {/* Main Dashboard */}
                   <Route path="/dashboard" element={<Dashboard />} />
