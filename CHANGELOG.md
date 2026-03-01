@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Email Notification Templates & Management (2026-03-01)
+
+- **Email Templates Management Page**: Full admin page for creating, editing, previewing, and deleting email notification templates with per-type sample context data for realistic previews
+- **10 new email template types**: Added `event_reminder`, `shift_reminder`, `training_due`, `certification_expiring`, `election_opened`, `admin_hours_approved`, `admin_hours_rejected`, `maintenance_due`, `membership_renewal`, and `welcome_new_member` template types from application audit
+- **MySQL ENUM migration**: New Alembic migration syncs the `email_template_type` database ENUM with the Python model to prevent insertion errors when using newly added template types
+
+### Admin Hours Enhancements (2026-03-01)
+
+- **Edit pending entries**: Members can now edit their pending admin hours entries before approval (update duration, category, notes)
+- **Active sessions management**: New UI for viewing and managing active clock-in sessions; fixed stale sessions response bug where sessions from other users could appear
+- **Naive vs aware datetime fix**: Fixed crash when comparing timezone-naive and timezone-aware datetime objects in active sessions display
+- **MissingGreenlet fix**: Added `selectinload()` eager loading for relationships in admin hours service to prevent async lazy-load errors
+
+### Shift & Scheduling Improvements (2026-03-01)
+
+- **Expanded shift editing**: Officers can now edit shift times, apparatus assignment, color, notes, and custom creation times directly from the shift detail panel
+- **Inline position change**: New inline UI for changing member position assignments on shift cards without opening a modal
+
+### Training Registry & Imports (2026-03-01)
+
+- **Standalone registry generator tool**: New CLI tool (`scripts/generate_registry.py`) for generating training requirement registries from NFPA, NREMT, and Pro Board standards with `--list` flag to show existing registries
+- **Source field on imports**: Training requirement imports now include a `source` field in the API schema with source filter support
+- **Source URL citations**: Registry imports display `source_url` citation links for traceability
+- **Last-updated dates**: Registry imports show `last_updated` timestamps and source info in the UI
+
+### Member ID Card Improvements (2026-03-01)
+
+- **Rank display name**: ID card now shows the rank display name (e.g., "Lieutenant") instead of the slug (e.g., "lieutenant")
+- **Preserved rank casing**: Rank labels maintain proper casing from the database rather than being transformed
+- **Generated date footer**: ID card footer now includes the date the card was generated for verification
+
+### CSS & Design System Overhaul (2026-03-01)
+
+- **873 inline styles migrated**: Hard-coded inline styles across the frontend migrated to shared CSS component classes for maintainability and theme consistency
+- **Focus ring standardization**: Hard-coded focus ring colors migrated to a CSS theme variable (`--focus-ring`) across 39 frontend files
+- **Semantic color restoration**: Fixed semantic color damage from PR #491's blanket color replacement (restored status colors, severity indicators, and contextual badges)
+
+### Bug Fixes (2026-03-01)
+
+- **Session idle timeout blocking logins**: Fixed MySQL timezone mismatch causing idle timeout checks to evaluate all sessions as expired, blocking all logins
+- **Login 500 on transient DB failures**: Login endpoint now handles transient database connection failures gracefully instead of returning HTTP 500
+- **PlatformAnalyticsPage crash**: Fixed crash when `module.recordCount` is undefined by adding defensive null checks
+- **Missing modules**: Standard modules (Dashboard, Membership, Scheduling, etc.) now default to enabled; Settings UI redesigned with module cards
+- **OrganizationSettings.redacted() AttributeError**: Fixed crash in settings redaction method; also closed auth secret leak that could expose sensitive configuration
+- **Elections module**: Fixed type errors, missing required fields, CSS visual issues, and code quality problems across election pages
+
+### Database & Infrastructure (2026-03-01)
+
+- **MySQL outage resilience**: Improved connection pool resilience to transient MySQL outages with automatic reconnection and health check queries
+- **Deprecated auth plugin removed**: Removed `mysql_native_password` auth plugin flag from Docker Compose, using MySQL 8's default `caching_sha2_password` instead
+- **Backend formatting**: Applied Black formatting to 9 additional backend files with pre-existing violations
+
 ### Scheduling Module Refactor (2026-02-28)
 
 #### Architecture Overhaul

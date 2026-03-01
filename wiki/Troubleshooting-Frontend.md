@@ -327,4 +327,50 @@ A new `useMediaQuery` hook replaces inline `window.matchMedia` calls for respons
 
 ---
 
+## CSS Inline Style Migration (2026-03-01)
+
+### Problem: Component styles look different after update
+
+**Cause:** 873 hard-coded inline styles were migrated to shared CSS component classes. In rare cases, CSS specificity differences can cause visual changes.
+
+**Fix:** Clear browser cache and hard refresh (`Ctrl+Shift+R`). If a specific component still looks wrong, check for custom CSS conflicting with the new shared classes.
+
+### Problem: Focus ring colors inconsistent
+
+**Status (Fixed 2026-03-01):** All focus ring colors now use a CSS theme variable (`--focus-ring`), standardized across 39 frontend files.
+
+### Problem: Status badge or severity indicator colors wrong
+
+**Status (Fixed 2026-03-01):** PR #491 applied a blanket color replacement that damaged semantic colors. Semantic color usage has been restored.
+
+---
+
+## Platform Analytics Crash (2026-03-01)
+
+### Problem: PlatformAnalyticsPage crashes with "Cannot read properties of undefined"
+
+**Cause:** `module.recordCount` was `undefined` for some modules.
+
+**Status (Fixed 2026-03-01):** Defensive null checks added. Modules with no record count display zero.
+
+---
+
+## Elections Module Visual Fixes (2026-03-01)
+
+### Problem: ElectionDetailPage has inconsistent colors and CSS issues
+
+**Status (Fixed 2026-03-01):** Fixed inconsistent indigo focus ring colors, unused variable lint errors, and remaining CSS issues in election pages.
+
+---
+
+## Module Enablement Defaults (2026-03-01)
+
+### Problem: Standard modules missing from navigation after fresh install
+
+**Cause:** Standard modules were not defaulting to enabled.
+
+**Status (Fixed 2026-03-01):** Standard modules now default to enabled. Settings UI redesigned with module cards.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

@@ -87,7 +87,9 @@ Not all modules are enabled by default. Your department administrator controls w
 
 | Module | Default State |
 |--------|--------------|
-| Dashboard, Membership, Scheduling, Settings, Documents, Forms | **Always On** (Core) |
-| Apparatus, Inventory, Communications | **On** (Recommended) |
-| Training, Facilities, Prospective Pipeline, Admin Hours | **Off** (Optional) |
-| Incidents, HR, Grants, Public Info | **Off** (Optional) |
+| Dashboard, Membership, Scheduling, Settings, Documents, Forms | **Always On** (Core, enabled by default) |
+| Apparatus, Inventory, Communications | **On** (Recommended, enabled by default) |
+| Training, Facilities, Prospective Pipeline, Admin Hours | **Off** (Optional, enable in Settings > Modules) |
+| Incidents, HR, Grants, Public Info | **Off** (Optional, enable in Settings > Modules) |
+
+> **Note (2026-03-01):** Standard modules now default to enabled on fresh installations. The Settings UI has been redesigned with module cards for better visibility. If modules appear missing after an update, check **Settings > Organization > Modules**.

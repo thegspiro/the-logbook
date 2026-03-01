@@ -61,7 +61,15 @@ POST   /api/v1/elections/{id}/proxy-votes      # Authorize proxy vote
 
 ---
 
-## Recent Fixes (2026-02-27)
+## Recent Fixes (2026-03-01)
+
+- **Type errors and missing fields**: Fixed TypeScript type errors and added missing required fields across election pages
+- **CSS visual fixes**: Resolved inconsistent indigo focus ring colors and unused variable lint errors on ElectionDetailPage
+- **Code quality**: Improved code quality across election components
+
+---
+
+## Fixes (2026-02-27)
 
 - **Election detail page fix**: Route param mismatch (`:id` vs `electionId`) caused the detail page to hang on loading; now correctly loads
 - **Ballot-item elections**: `open_election` no longer requires candidates, allowing approval votes and resolutions to proceed

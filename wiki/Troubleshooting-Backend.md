@@ -342,4 +342,75 @@ Black formatting has been applied across 35 backend files. If you see formatting
 
 ---
 
+## Session Idle Timeout Blocking Logins (2026-03-01)
+
+### Problem: All users unable to log in — sessions immediately expire
+
+**Cause:** MySQL timezone mismatch between application and database caused idle timeout checks to compare UTC timestamps against local timestamps, making all sessions appear expired.
+
+**Status (Fixed):** Session idle timeout queries now explicitly use UTC for all timestamp comparisons.
+
+**If on older version:** Set `DB_TIMEZONE=+00:00` in `.env` or update to latest.
+
+---
+
+## Login 500 on Transient DB Failures (2026-03-01)
+
+### Problem: Login returns HTTP 500 during database reconnection
+
+**Cause:** Transient connection failures caused unhandled exceptions in the login endpoint.
+
+**Status (Fixed):** Login endpoint now returns HTTP 503 with user-friendly message. Automatic retry recommended.
+
+---
+
+## MySQL Outage Resilience (2026-03-01)
+
+### Problem: API errors during brief MySQL outages
+
+**Status (Improved):** Database connection pool now includes:
+- `pool_pre_ping=True` for dead connection detection
+- Automatic reconnection on stale connections
+- Health check queries before reusing connections
+
+---
+
+## Organization Settings Crash (2026-03-01)
+
+### Problem: `AttributeError` in OrganizationSettings.redacted()
+
+**Status (Fixed):** The `redacted()` method crash has been resolved. An associated auth secret leak that could expose sensitive configuration has also been closed.
+
+---
+
+## MissingGreenlet in Admin Hours (2026-03-01)
+
+### Problem: `MissingGreenlet: greenlet_spawn has not been called` in admin hours
+
+**Cause:** Lazy-loaded SQLAlchemy relationships in admin hours service accessed without eager loading.
+
+**Status (Fixed):** Added `selectinload()` for all relationship accesses in admin hours queries.
+
+---
+
+## Email Template ENUM Mismatch (2026-03-01)
+
+### Problem: `Data truncated for column 'template_type'` when creating email templates
+
+**Cause:** MySQL ENUM column doesn't include the 10 newly added template types.
+
+**Fix:**
+```bash
+docker-compose exec backend alembic upgrade head
+docker-compose restart backend
+```
+
+---
+
+## Backend Formatting (2026-03-01)
+
+Black formatting has been applied to 9 additional backend files. If you see formatting-related merge conflicts after pulling, accept the Black-formatted version.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)
