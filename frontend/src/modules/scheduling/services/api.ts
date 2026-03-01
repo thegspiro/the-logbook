@@ -13,6 +13,37 @@ import type {
   TimeOffRequest as SchedulingTimeOffRequest,
   ShiftPattern as SchedulingShiftPattern,
 } from '../../../types/scheduling';
+import type {
+  ShiftCreate,
+  ShiftUpdate,
+  AttendanceCreate,
+  AttendanceUpdate,
+  ShiftCallCreate,
+  ShiftCallUpdate,
+  AssignmentCreate,
+  AssignmentUpdate,
+  SwapRequestCreate,
+  SwapRequestReview,
+  SwapRequestFilters,
+  TimeOffCreate,
+  TimeOffReview,
+  TimeOffFilters,
+  ShiftTemplateCreate,
+  ShiftTemplateUpdate,
+  ShiftPatternCreate,
+  ShiftPatternUpdate,
+  PatternGenerateRequest,
+  PatternGenerateResponse,
+  BasicApparatusCreate,
+  BasicApparatusUpdate,
+  ReportFilters,
+  AvailabilityFilters,
+  MemberHoursReport,
+  CoverageReport,
+  CallVolumeReport,
+  AvailabilityRecord,
+  ShiftSignupResponse,
+} from '../types';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -224,7 +255,7 @@ export const schedulingService = {
     return response.data;
   },
 
-  async createShift(data: Record<string, unknown>): Promise<ShiftRecord> {
+  async createShift(data: ShiftCreate): Promise<ShiftRecord> {
     const response = await api.post<ShiftRecord>('/scheduling/shifts', data);
     return response.data;
   },
@@ -234,7 +265,7 @@ export const schedulingService = {
     return response.data;
   },
 
-  async updateShift(shiftId: string, data: Record<string, unknown>): Promise<ShiftRecord> {
+  async updateShift(shiftId: string, data: ShiftUpdate): Promise<ShiftRecord> {
     const response = await api.patch<ShiftRecord>(`/scheduling/shifts/${shiftId}`, data);
     return response.data;
   },
@@ -243,7 +274,7 @@ export const schedulingService = {
     await api.delete(`/scheduling/shifts/${shiftId}`);
   },
 
-  async addAttendance(shiftId: string, data: Record<string, unknown>): Promise<ShiftAttendanceRecord> {
+  async addAttendance(shiftId: string, data: AttendanceCreate): Promise<ShiftAttendanceRecord> {
     const response = await api.post<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/attendance`, data);
     return response.data;
   },
@@ -287,16 +318,16 @@ export const schedulingService = {
     const response = await api.get<ShiftCall[]>(`/scheduling/shifts/${shiftId}/calls`);
     return response.data;
   },
-  async getCall(callId: string): Promise<Record<string, unknown>> {
-    const response = await api.get<Record<string, unknown>>(`/scheduling/calls/${callId}`);
+  async getCall(callId: string): Promise<ShiftCall> {
+    const response = await api.get<ShiftCall>(`/scheduling/calls/${callId}`);
     return response.data;
   },
-  async createCall(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/scheduling/shifts/${shiftId}/calls`, data);
+  async createCall(shiftId: string, data: ShiftCallCreate): Promise<ShiftCall> {
+    const response = await api.post<ShiftCall>(`/scheduling/shifts/${shiftId}/calls`, data);
     return response.data;
   },
-  async updateCall(callId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch<Record<string, unknown>>(`/scheduling/calls/${callId}`, data);
+  async updateCall(callId: string, data: ShiftCallUpdate): Promise<ShiftCall> {
+    const response = await api.patch<ShiftCall>(`/scheduling/calls/${callId}`, data);
     return response.data;
   },
   async deleteCall(callId: string): Promise<void> {
@@ -312,37 +343,37 @@ export const schedulingService = {
       status: a.assignment_status ?? a.status ?? 'assigned',
     }));
   },
-  async createAssignment(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/scheduling/shifts/${shiftId}/assignments`, data);
+  async createAssignment(shiftId: string, data: AssignmentCreate): Promise<Assignment> {
+    const response = await api.post<Assignment>(`/scheduling/shifts/${shiftId}/assignments`, data);
     return response.data;
   },
-  async updateAssignment(assignmentId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch<Record<string, unknown>>(`/scheduling/assignments/${assignmentId}`, data);
+  async updateAssignment(assignmentId: string, data: AssignmentUpdate): Promise<Assignment> {
+    const response = await api.patch<Assignment>(`/scheduling/assignments/${assignmentId}`, data);
     return response.data;
   },
   async deleteAssignment(assignmentId: string): Promise<void> {
     await api.delete(`/scheduling/assignments/${assignmentId}`);
   },
-  async confirmAssignment(assignmentId: string): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/scheduling/assignments/${assignmentId}/confirm`);
+  async confirmAssignment(assignmentId: string): Promise<Assignment> {
+    const response = await api.post<Assignment>(`/scheduling/assignments/${assignmentId}/confirm`);
     return response.data;
   },
 
   // Swap Requests
-  async getSwapRequests(params?: Record<string, string>): Promise<SchedulingSwapRequest[]> {
+  async getSwapRequests(params?: SwapRequestFilters): Promise<SchedulingSwapRequest[]> {
     const response = await api.get<SchedulingSwapRequest[]>('/scheduling/swap-requests', { params });
     return response.data;
   },
-  async getSwapRequest(requestId: string): Promise<Record<string, unknown>> {
-    const response = await api.get<Record<string, unknown>>(`/scheduling/swap-requests/${requestId}`);
+  async getSwapRequest(requestId: string): Promise<SchedulingSwapRequest> {
+    const response = await api.get<SchedulingSwapRequest>(`/scheduling/swap-requests/${requestId}`);
     return response.data;
   },
-  async createSwapRequest(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>('/scheduling/swap-requests', data);
+  async createSwapRequest(data: SwapRequestCreate): Promise<SchedulingSwapRequest> {
+    const response = await api.post<SchedulingSwapRequest>('/scheduling/swap-requests', data);
     return response.data;
   },
-  async reviewSwapRequest(requestId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/scheduling/swap-requests/${requestId}/review`, data);
+  async reviewSwapRequest(requestId: string, data: SwapRequestReview): Promise<SchedulingSwapRequest> {
+    const response = await api.post<SchedulingSwapRequest>(`/scheduling/swap-requests/${requestId}/review`, data);
     return response.data;
   },
   async cancelSwapRequest(requestId: string): Promise<void> {
@@ -350,20 +381,20 @@ export const schedulingService = {
   },
 
   // Time Off
-  async getTimeOffRequests(params?: Record<string, string>): Promise<SchedulingTimeOffRequest[]> {
+  async getTimeOffRequests(params?: TimeOffFilters): Promise<SchedulingTimeOffRequest[]> {
     const response = await api.get<SchedulingTimeOffRequest[]>('/scheduling/time-off', { params });
     return response.data;
   },
-  async getTimeOff(requestId: string): Promise<Record<string, unknown>> {
-    const response = await api.get<Record<string, unknown>>(`/scheduling/time-off/${requestId}`);
+  async getTimeOff(requestId: string): Promise<SchedulingTimeOffRequest> {
+    const response = await api.get<SchedulingTimeOffRequest>(`/scheduling/time-off/${requestId}`);
     return response.data;
   },
-  async createTimeOff(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>('/scheduling/time-off', data);
+  async createTimeOff(data: TimeOffCreate): Promise<SchedulingTimeOffRequest> {
+    const response = await api.post<SchedulingTimeOffRequest>('/scheduling/time-off', data);
     return response.data;
   },
-  async reviewTimeOff(requestId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/scheduling/time-off/${requestId}/review`, data);
+  async reviewTimeOff(requestId: string, data: TimeOffReview): Promise<SchedulingTimeOffRequest> {
+    const response = await api.post<SchedulingTimeOffRequest>(`/scheduling/time-off/${requestId}/review`, data);
     return response.data;
   },
   async cancelTimeOff(requestId: string): Promise<void> {
@@ -375,7 +406,7 @@ export const schedulingService = {
     const response = await api.get<ShiftAttendanceRecord[]>(`/scheduling/shifts/${shiftId}/attendance`);
     return response.data;
   },
-  async updateAttendance(attendanceId: string, data: Record<string, unknown>): Promise<ShiftAttendanceRecord> {
+  async updateAttendance(attendanceId: string, data: AttendanceUpdate): Promise<ShiftAttendanceRecord> {
     const response = await api.patch<ShiftAttendanceRecord>(`/scheduling/attendance/${attendanceId}`, data);
     return response.data;
   },
@@ -392,11 +423,11 @@ export const schedulingService = {
     const response = await api.get<ShiftTemplateRecord>(`/scheduling/templates/${templateId}`);
     return response.data;
   },
-  async createTemplate(data: Record<string, unknown>): Promise<ShiftTemplateRecord> {
+  async createTemplate(data: ShiftTemplateCreate): Promise<ShiftTemplateRecord> {
     const response = await api.post<ShiftTemplateRecord>('/scheduling/templates', data);
     return response.data;
   },
-  async updateTemplate(templateId: string, data: Record<string, unknown>): Promise<ShiftTemplateRecord> {
+  async updateTemplate(templateId: string, data: ShiftTemplateUpdate): Promise<ShiftTemplateRecord> {
     const response = await api.patch<ShiftTemplateRecord>(`/scheduling/templates/${templateId}`, data);
     return response.data;
   },
@@ -409,41 +440,41 @@ export const schedulingService = {
     const response = await api.get<SchedulingShiftPattern[]>('/scheduling/patterns', { params });
     return response.data;
   },
-  async getPattern(patternId: string): Promise<Record<string, unknown>> {
-    const response = await api.get<Record<string, unknown>>(`/scheduling/patterns/${patternId}`);
+  async getPattern(patternId: string): Promise<SchedulingShiftPattern> {
+    const response = await api.get<SchedulingShiftPattern>(`/scheduling/patterns/${patternId}`);
     return response.data;
   },
-  async createPattern(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>('/scheduling/patterns', data);
+  async createPattern(data: ShiftPatternCreate): Promise<SchedulingShiftPattern> {
+    const response = await api.post<SchedulingShiftPattern>('/scheduling/patterns', data);
     return response.data;
   },
-  async updatePattern(patternId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch<Record<string, unknown>>(`/scheduling/patterns/${patternId}`, data);
+  async updatePattern(patternId: string, data: ShiftPatternUpdate): Promise<SchedulingShiftPattern> {
+    const response = await api.patch<SchedulingShiftPattern>(`/scheduling/patterns/${patternId}`, data);
     return response.data;
   },
   async deletePattern(patternId: string): Promise<void> {
     await api.delete(`/scheduling/patterns/${patternId}`);
   },
-  async generateShiftsFromPattern(patternId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/scheduling/patterns/${patternId}/generate`, data);
+  async generateShiftsFromPattern(patternId: string, data: PatternGenerateRequest): Promise<PatternGenerateResponse> {
+    const response = await api.post<PatternGenerateResponse>(`/scheduling/patterns/${patternId}/generate`, data);
     return response.data;
   },
 
   // Reports
-  async getMemberHoursReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
-    const response = await api.get<Record<string, unknown>>('/scheduling/reports/member-hours', { params });
+  async getMemberHoursReport(params?: ReportFilters): Promise<MemberHoursReport> {
+    const response = await api.get<MemberHoursReport>('/scheduling/reports/member-hours', { params });
     return response.data;
   },
-  async getCoverageReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
-    const response = await api.get<Record<string, unknown>>('/scheduling/reports/coverage', { params });
+  async getCoverageReport(params?: ReportFilters): Promise<CoverageReport> {
+    const response = await api.get<CoverageReport>('/scheduling/reports/coverage', { params });
     return response.data;
   },
-  async getCallVolumeReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
-    const response = await api.get<Record<string, unknown>>('/scheduling/reports/call-volume', { params });
+  async getCallVolumeReport(params?: ReportFilters): Promise<CallVolumeReport> {
+    const response = await api.get<CallVolumeReport>('/scheduling/reports/call-volume', { params });
     return response.data;
   },
-  async getAvailability(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
-    const response = await api.get<Record<string, unknown>[]>('/scheduling/availability', { params });
+  async getAvailability(params?: AvailabilityFilters): Promise<AvailabilityRecord[]> {
+    const response = await api.get<AvailabilityRecord[]>('/scheduling/availability', { params });
     return response.data;
   },
 
@@ -452,12 +483,12 @@ export const schedulingService = {
     const response = await api.get<BasicApparatusRecord[]>('/scheduling/apparatus', { params });
     return response.data;
   },
-  async createBasicApparatus(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>('/scheduling/apparatus', data);
+  async createBasicApparatus(data: BasicApparatusCreate): Promise<BasicApparatusRecord> {
+    const response = await api.post<BasicApparatusRecord>('/scheduling/apparatus', data);
     return response.data;
   },
-  async updateBasicApparatus(apparatusId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch<Record<string, unknown>>(`/scheduling/apparatus/${apparatusId}`, data);
+  async updateBasicApparatus(apparatusId: string, data: BasicApparatusUpdate): Promise<BasicApparatusRecord> {
+    const response = await api.patch<BasicApparatusRecord>(`/scheduling/apparatus/${apparatusId}`, data);
     return response.data;
   },
   async deleteBasicApparatus(apparatusId: string): Promise<void> {
@@ -471,8 +502,8 @@ export const schedulingService = {
   },
 
   // --- Shift Signup (member self-service) ---
-  async signupForShift(shiftId: string, data: { position: string }): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/scheduling/shifts/${shiftId}/signup`, data);
+  async signupForShift(shiftId: string, data: { position: string }): Promise<ShiftSignupResponse> {
+    const response = await api.post<ShiftSignupResponse>(`/scheduling/shifts/${shiftId}/signup`, data);
     return response.data;
   },
   async withdrawSignup(shiftId: string): Promise<void> {
