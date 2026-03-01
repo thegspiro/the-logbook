@@ -26,6 +26,17 @@ from app.models.user import Organization, User
 logger = logging.getLogger(__name__)
 
 
+def _ensure_utc(dt: datetime) -> datetime:
+    """Ensure a datetime is timezone-aware (UTC).
+
+    MySQL/aiomysql may return naive datetimes even for DateTime(timezone=True)
+    columns. This helper assumes naive values are UTC and attaches tzinfo.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 class AdminHoursService:
     """Service for managing admin hours categories and entries."""
 
@@ -210,7 +221,7 @@ class AdminHoursService:
 
         now = datetime.now(timezone.utc)
         entry.clock_out_at = now
-        duration = now - entry.clock_in_at
+        duration = now - _ensure_utc(entry.clock_in_at)
         entry.duration_minutes = int(duration.total_seconds() / 60)
 
         # Determine status based on category approval settings
@@ -252,7 +263,7 @@ class AdminHoursService:
         cat = category.scalar_one_or_none()
 
         now = datetime.now(timezone.utc)
-        elapsed = now - entry.clock_in_at
+        elapsed = now - _ensure_utc(entry.clock_in_at)
         elapsed_minutes = int(elapsed.total_seconds() / 60)
 
         max_minutes: Optional[int] = None
@@ -317,7 +328,7 @@ class AdminHoursService:
 
         sessions = []
         for entry, cat_name, cat_color, max_hours, first_name, last_name in rows:
-            elapsed = now - entry.clock_in_at
+            elapsed = now - _ensure_utc(entry.clock_in_at)
             elapsed_minutes = int(elapsed.total_seconds() / 60)
 
             max_minutes: Optional[int] = None
@@ -364,7 +375,7 @@ class AdminHoursService:
 
         now = datetime.now(timezone.utc)
         entry.clock_out_at = now
-        duration = now - entry.clock_in_at
+        duration = now - _ensure_utc(entry.clock_in_at)
         entry.duration_minutes = int(duration.total_seconds() / 60)
 
         # Force-ended sessions go to pending for review
@@ -934,8 +945,8 @@ class AdminHoursService:
 
         for entry, max_hours in rows:
             max_duration = timedelta(hours=max_hours)
-            if now - entry.clock_in_at > max_duration:
-                entry.clock_out_at = entry.clock_in_at + max_duration
+            if now - _ensure_utc(entry.clock_in_at) > max_duration:
+                entry.clock_out_at = _ensure_utc(entry.clock_in_at) + max_duration
                 entry.duration_minutes = int(max_hours * 60)
                 entry.description = (
                     f"{entry.description + ' — ' if entry.description else ''}"
