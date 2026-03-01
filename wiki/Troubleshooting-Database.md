@@ -205,4 +205,42 @@ docker-compose up -d
 
 ---
 
+## MySQL Connection Resilience (2026-03-01)
+
+### Transient Outage Handling
+
+**Problem:** Brief MySQL outages (container restart, network blip) cause API errors.
+
+**Status (Improved):** Connection pool now includes `pool_pre_ping=True` for automatic dead connection detection and reconnection.
+
+If using a custom `DATABASE_URL`, add `pool_pre_ping=True` to your connection options.
+
+### Deprecated Auth Plugin
+
+**Problem:** `mysql_native_password` deprecation warnings in MySQL 8 logs.
+
+**Status (Fixed 2026-03-01):** Deprecated `mysql_native_password` auth plugin flag removed from Docker Compose. MySQL 8's default `caching_sha2_password` is now used.
+
+### Email Template ENUM Sync
+
+**Problem:** `Data truncated for column 'template_type'` when inserting email templates.
+
+**Cause:** MySQL ENUM values out of sync with Python model after adding new template types.
+
+**Fix:**
+```bash
+docker-compose exec backend alembic upgrade head
+docker-compose restart backend
+```
+
+### Session Timezone Mismatch
+
+**Problem:** All logins fail immediately — sessions appear expired.
+
+**Cause:** MySQL timezone settings differ from application UTC expectations, causing idle timeout comparisons to fail.
+
+**Status (Fixed 2026-03-01):** All session timestamp comparisons now explicitly use UTC.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

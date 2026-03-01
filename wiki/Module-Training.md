@@ -19,7 +19,9 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Rank & Station Snapshots** — `rank_at_completion` and `station_at_completion` captured on every record
 - **External Integrations** — Connect external training providers with category and user mapping
 - **Historical Import** — CSV import with preview and validation
-- **Registry Integration** — NFPA Standards, NREMT Certifications, Pro Board one-click import
+- **Registry Integration** — NFPA Standards, NREMT Certifications, Pro Board one-click import with source URL citations and last-updated timestamps
+- **Registry Generator Tool** — Standalone CLI tool (`scripts/generate_registry.py`) for generating registries from standards bodies, with `--list` flag to show available registries
+- **Source Tracking on Imports** — Imported requirements include `source`, `source_url`, and `last_updated` fields for traceability
 
 ---
 

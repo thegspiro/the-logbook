@@ -120,6 +120,18 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### March 2026 (Mar 1) — Email Templates, Admin Hours Editing, Shift Enhancements, Training Registries & CSS Overhaul
+
+- **Email notification templates management**: Full admin page for creating, editing, previewing, and deleting email templates; 10 new template types with per-type sample context for realistic previews; MySQL ENUM migration for sync
+- **Admin hours enhancements**: Edit pending entries before approval; active sessions management with stale session fix; naive vs aware datetime crash fix; MissingGreenlet eager-loading fix
+- **Shift & scheduling improvements**: Expanded shift editing (times, apparatus, color, notes, custom creation times); inline position change UI for assignments
+- **Training registry & imports**: Standalone registry generator tool with `--list` flag; source field, source_url citations, and last_updated dates on imports
+- **Member ID Card improvements**: Rank display name instead of slug; preserved rank casing; generated date in card footer
+- **CSS design system overhaul**: 873 inline styles migrated to shared CSS classes; focus ring colors standardized via CSS theme variable across 39 files; semantic color damage from PR #491 restored
+- **Session & login resilience**: Fixed MySQL timezone mismatch blocking all logins; login endpoint handles transient DB failures gracefully; improved MySQL outage resilience with pool pre-ping
+- **Bug fixes**: PlatformAnalyticsPage crash on undefined recordCount; missing modules now default to enabled with Settings UI redesign; OrganizationSettings.redacted() AttributeError and auth secret leak closed; elections module type/CSS fixes
+- **Infrastructure**: Removed deprecated `mysql_native_password` auth plugin; Black formatting on 9 additional backend files
+
 ### February 2026 (Feb 28) — Scheduling Refactor, Security Hardening, Mobile, Accessibility & Code Quality
 
 - **Scheduling module refactor**: Extracted from monolithic page into proper module architecture with dedicated Zustand store, API service, settings panel, notifications panel, and tests

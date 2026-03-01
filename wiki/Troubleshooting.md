@@ -35,6 +35,13 @@ This guide covers common issues and their solutions for The Logbook deployment.
 29. [Scheduling Module Refactor](#scheduling-module-refactor)
 30. [Security Alerts & Audit Logs](#security-alerts--audit-logs)
 31. [Accessibility & Theme Contrast](#accessibility--theme-contrast)
+32. [Email Templates](#email-templates)
+33. [Session & Login Resilience](#session--login-resilience)
+34. [Admin Hours Editing & Sessions](#admin-hours-editing--sessions)
+35. [Shift Editing](#shift-editing)
+36. [Training Registry & Imports](#training-registry--imports)
+37. [CSS & Inline Style Migration](#css--inline-style-migration)
+38. [MySQL Connection Resilience](#mysql-connection-resilience)
 
 ---
 
@@ -1782,3 +1789,97 @@ docker-compose up -d
 ### Problem: Mobile layout issues
 
 **Status (Improved 2026-02-28):** Responsiveness improved across 17+ pages. Use landscape for tables, ensure zoom is 100%.
+
+---
+
+## Email Templates
+
+### Problem: "Data truncated" error creating email template
+
+**Cause:** MySQL ENUM column missing newly added template types.
+
+**Fix:** Run `alembic upgrade head` and restart backend. A migration syncs the MySQL ENUM with the 10 new template types added in March 2026.
+
+### Problem: Email templates page not visible
+
+**Fix:** Navigate to **Administration > Email Templates**. Requires `settings.manage` permission.
+
+---
+
+## Session & Login Resilience
+
+### Problem: All users unable to log in — sessions immediately expire
+
+**Status (Fixed 2026-03-01):** MySQL timezone mismatch caused idle timeout checks to evaluate all sessions as expired. Session queries now explicitly use UTC timestamps.
+
+### Problem: Login returns 500 during database reconnection
+
+**Status (Fixed 2026-03-01):** Login endpoint now returns 503 with user-friendly message during transient DB failures instead of 500.
+
+---
+
+## Admin Hours Editing & Sessions
+
+### Problem: Cannot edit pending admin hours entry
+
+**Status (Fixed 2026-03-01):** Members can now edit pending entries (duration, category, notes) before approval.
+
+### Problem: Active session shows wrong user's session
+
+**Status (Fixed 2026-03-01):** Active sessions properly filtered by authenticated user ID.
+
+### Problem: Datetime crash in active sessions
+
+**Status (Fixed 2026-03-01):** Timezone-naive vs aware datetime comparison fixed. All datetime operations use UTC-aware objects.
+
+---
+
+## Shift Editing
+
+### Problem: Cannot edit shift times after creation
+
+**Status (Fixed 2026-03-01):** Officers can now edit start/end times, apparatus, color, notes, and custom creation times from the shift detail panel.
+
+### Problem: Changing member position requires modal
+
+**Status (Improved 2026-03-01):** Inline position change UI on shift cards. No modal needed.
+
+---
+
+## Training Registry & Imports
+
+### Problem: Training imports missing source info
+
+**Status (Fixed 2026-03-01):** Imports now include `source`, `source_url`, and `last_updated` fields displayed in the UI.
+
+### Problem: How to list available registries
+
+**Fix:** `python scripts/generate_registry.py --list`
+
+---
+
+## CSS & Inline Style Migration
+
+### Problem: Component styles changed after update
+
+**Cause:** 873 inline styles migrated to shared CSS classes. Clear cache and hard refresh.
+
+### Problem: Focus rings inconsistent
+
+**Status (Fixed 2026-03-01):** All focus rings use CSS theme variable `--focus-ring` across 39 files.
+
+### Problem: Status badge colors wrong
+
+**Status (Fixed 2026-03-01):** Semantic colors restored after PR #491 blanket replacement damage.
+
+---
+
+## MySQL Connection Resilience
+
+### Problem: Errors during brief MySQL outages
+
+**Status (Improved 2026-03-01):** Connection pool now uses `pool_pre_ping=True` for automatic reconnection and health checks.
+
+### Problem: mysql_native_password deprecation warning
+
+**Status (Fixed 2026-03-01):** Deprecated plugin flag removed. MySQL 8 default `caching_sha2_password` used.

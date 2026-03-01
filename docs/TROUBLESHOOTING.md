@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-28 (added scheduling module refactor, brute-force protection, IDOR/open-redirect fixes, security alert persistence, audit log export/archival, mobile responsiveness, cache-refresh detection, navigation module enablement, design accessibility audit, 132 test failures fixed, shared API client factory, Member ID Card improvements; plus all previous updates)
+**Last Updated**: 2026-03-01 (added email templates management, admin hours edit/sessions, shift editing expansion, training registry generator, CSS design system overhaul, session idle timeout fix, login resilience, MySQL outage resilience, elections module fixes, Organization Settings fixes, inline position change UI; plus all previous updates)
 
 ---
 
@@ -50,7 +50,14 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 36. [Scheduling Module Refactor Issues](#scheduling-module-refactor-issues)
 37. [Security Alert & Audit Issues](#security-alert--audit-issues)
 38. [Accessibility & Theme Issues](#accessibility--theme-issues)
-39. [Getting Help](#getting-help)
+39. [Email Notification Templates Issues](#email-notification-templates-issues)
+40. [Session & Login Resilience Issues](#session--login-resilience-issues)
+41. [Admin Hours Edit & Sessions Issues](#admin-hours-edit--sessions-issues)
+42. [Shift Editing & Position Change Issues](#shift-editing--position-change-issues)
+43. [Training Registry & Import Issues](#training-registry--import-issues)
+44. [CSS Migration & Inline Style Issues](#css-migration--inline-style-issues)
+45. [MySQL Connection Resilience](#mysql-connection-resilience)
+46. [Getting Help](#getting-help)
 
 ---
 
@@ -3444,6 +3451,150 @@ curl -X POST http://YOUR-IP:3001/api/v1/security/audit-log/rehash-chain \
 - Use landscape orientation for complex tables
 - Check that browser zoom is at 100%
 - Clear cache if layout appears stuck on an old version
+
+---
+
+## Email Notification Templates Issues
+
+### Problem: "Data truncated for column 'template_type'" error when creating email template
+
+**Cause:** The MySQL ENUM column `email_template_type` doesn't include the newly added template types. The Python model defines template types that haven't been synced to the database.
+
+**Fix:** Run the latest migration to sync the MySQL ENUM:
+```bash
+docker-compose exec backend alembic upgrade head
+docker-compose restart backend
+```
+
+### Problem: Email template preview shows placeholder data
+
+**Expected behavior:** Each template type now has its own sample context data for realistic previews. If you see generic placeholders, ensure you have pulled the latest code and rebuilt.
+
+### Problem: Email templates page not visible in navigation
+
+**Cause:** The email templates management page is under **Administration > Email Templates**. It requires `settings.manage` permission.
+
+---
+
+## Session & Login Resilience Issues
+
+### Problem: All users unable to log in — "Session expired" immediately after login
+
+**Cause:** MySQL timezone mismatch between the application server and the database. The session idle timeout check was comparing UTC timestamps against local timestamps, causing all sessions to appear expired.
+
+**Status (Fixed 2026-03-01):** Session idle timeout queries now explicitly use UTC for all timestamp comparisons.
+
+**Workaround (if on an older version):** Ensure `DB_TIMEZONE=+00:00` is set in your `.env` file, or update to the latest version.
+
+### Problem: Login returns HTTP 500 during database reconnection
+
+**Cause:** Transient database connection failures (e.g., MySQL container restart, network blip) caused the login endpoint to throw an unhandled exception.
+
+**Status (Fixed 2026-03-01):** The login endpoint now catches transient connection errors and returns a user-friendly error message with HTTP 503 (Service Unavailable) instead of 500.
+
+### Problem: Login lockout resets on page refresh
+
+**Status (Fixed 2026-02-28):** Login lockout countdown state is now persisted in `sessionStorage`, surviving page refreshes. Refreshing the page no longer resets the lockout timer.
+
+---
+
+## Admin Hours Edit & Sessions Issues
+
+### Problem: Cannot edit a pending admin hours entry
+
+**Cause (before fix):** The admin hours UI did not provide an edit option for pending entries.
+
+**Status (Fixed 2026-03-01):** Members can now click the edit button on pending entries to update duration, category, and notes before approval.
+
+### Problem: Active session shows wrong user's session
+
+**Cause:** A stale sessions response bug returned sessions from other users when fetching active sessions.
+
+**Status (Fixed 2026-03-01):** Active sessions are now properly filtered by the authenticated user's ID.
+
+### Problem: Admin hours active sessions page crashes with datetime error
+
+**Cause:** Timezone-naive `datetime` objects were compared with timezone-aware `datetime` objects, causing a `TypeError`.
+
+**Status (Fixed 2026-03-01):** All datetime comparisons in admin hours now use timezone-aware UTC datetimes.
+
+### Problem: MissingGreenlet error in admin hours service
+
+**Cause:** Lazy-loaded SQLAlchemy relationships accessed in an async context without eager loading.
+
+**Status (Fixed 2026-03-01):** Added `selectinload()` for all relationship accesses in admin hours service queries.
+
+---
+
+## Shift Editing & Position Change Issues
+
+### Problem: Cannot edit shift times after creation
+
+**Status (Fixed 2026-03-01):** Officers can now edit shift start time, end time, apparatus assignment, color, notes, and custom creation times from the shift detail panel.
+
+### Problem: Changing member position requires opening a separate modal
+
+**Status (Improved 2026-03-01):** Inline position change UI allows officers to change a member's assigned position (Officer, Driver, Firefighter, etc.) directly on the shift card without navigating away.
+
+---
+
+## Training Registry & Import Issues
+
+### Problem: Training requirement imports missing source information
+
+**Status (Fixed 2026-03-01):** Import records now include `source`, `source_url`, and `last_updated` fields. The UI displays source citations and timestamps for each imported requirement.
+
+### Problem: How to list available training registries
+
+**Solution:** Use the standalone registry generator tool with the `--list` flag:
+```bash
+cd backend
+python scripts/generate_registry.py --list
+```
+This shows all available registries (NFPA, NREMT, Pro Board, etc.) without generating any files.
+
+### Problem: Source filter not working on training requirements
+
+**Status (Fixed 2026-03-01):** The source field was added to the API schema and the source filter is now wired up in the training requirements list endpoint.
+
+---
+
+## CSS Migration & Inline Style Issues
+
+### Problem: Component styles look different after update
+
+**Cause:** 873 hard-coded inline styles were migrated to shared CSS component classes. In rare cases, specificity differences can cause visual changes.
+
+**Fix:** Clear browser cache and hard refresh (`Ctrl+Shift+R`). If a specific component still looks wrong, check that your custom CSS isn't conflicting with the new shared classes.
+
+### Problem: Focus ring colors inconsistent across components
+
+**Status (Fixed 2026-03-01):** All focus ring colors now use a CSS theme variable (`--focus-ring`). This was standardized across 39 frontend files. The variable respects the active theme (light, dark, high-contrast).
+
+### Problem: Status badge colors wrong after update
+
+**Cause:** PR #491 applied a blanket color replacement that damaged semantic colors (e.g., red for errors, green for success, amber for warnings).
+
+**Status (Fixed 2026-03-01):** Semantic color usage has been restored. Status badges, severity indicators, and contextual colors now use their intended palette.
+
+---
+
+## MySQL Connection Resilience
+
+### Problem: Application errors during brief MySQL outages
+
+**Cause:** Transient MySQL outages (container restart, network blip, resource pressure) caused connection pool errors that propagated as HTTP 500 responses.
+
+**Status (Improved 2026-03-01):** The database connection pool now includes:
+- Automatic reconnection on stale connections
+- Health check queries (`SELECT 1`) before reusing connections
+- Configurable pool pre-ping to detect dead connections
+
+**Action required:** If you use a custom `DATABASE_URL`, ensure `pool_pre_ping=True` is included in your connection string options.
+
+### Problem: "mysql_native_password" deprecation warning
+
+**Status (Fixed 2026-03-01):** The deprecated `mysql_native_password` auth plugin flag has been removed from Docker Compose. MySQL 8's default `caching_sha2_password` is now used. No action required unless you have custom MySQL user configurations.
 
 ---
 

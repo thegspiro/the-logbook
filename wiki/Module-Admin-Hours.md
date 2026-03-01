@@ -22,6 +22,8 @@ The Admin Hours module tracks administrative work hours for department members v
 - **Reports Integration** — Admin hours data included in the Reports page
 - **Member Profile Integration** — Individual member's admin hours visible on their profile page
 - **Department Overview Integration** — Aggregate admin hours statistics in the Department Overview
+- **Edit Pending Entries** — Members can edit pending entries (duration, category, notes) before approval
+- **Active Sessions Management** — View and manage active clock-in sessions; stale sessions from other users are filtered out
 
 ---
 
@@ -80,6 +82,8 @@ PATCH  /api/v1/admin-hours/entries/{id}/approve # Approve entry
 PATCH  /api/v1/admin-hours/entries/{id}/reject  # Reject entry
 
 GET    /api/v1/admin-hours/summary             # Hours summary dashboard
+GET    /api/v1/admin-hours/active-sessions    # List active clock-in sessions
+PATCH  /api/v1/admin-hours/entries/{id}       # Edit pending entry (before approval)
 ```
 
 ---

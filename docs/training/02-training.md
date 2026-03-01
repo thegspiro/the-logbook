@@ -382,6 +382,9 @@ Navigate to **Training Admin > Import History** to import historical training re
 | Rank shows as unrecognized | Navigate to Members Admin to see rank validation results. Update the member's rank to match one of the configured operational ranks in Settings. |
 | Cannot see the Training module | Training is an optional module. Your department administrator must enable it in Settings > Modules. |
 | External integration not syncing | Check the integration configuration and sync logs. Ensure user mappings are correctly set up. |
+| Imported requirements missing source info | Update to the latest version. Imports now include `source`, `source_url`, and `last_updated` fields displayed in the UI for traceability. |
+| How to list available registries | Use the CLI tool: `python scripts/generate_registry.py --list` to see all available registries (NFPA, NREMT, Pro Board, etc.). |
+| Source filter not working on requirements | Update to the latest version. The source field has been added to the API schema and the filter is now wired up. |
 
 ---
 

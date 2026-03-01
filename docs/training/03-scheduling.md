@@ -117,6 +117,12 @@ Officers can assign members to shifts from the Shift Detail Panel:
 
 The assigned member will receive a notification and can confirm or decline.
 
+**Changing a Member's Position:**
+Officers can change a member's assigned position (Officer, Driver, Firefighter, etc.) directly on the shift card using the inline position change UI, without opening a separate modal.
+
+**Editing Shift Details:**
+Officers can edit shift start and end times, apparatus assignment, color, notes, and custom creation times from the shift detail panel after the shift has been created.
+
 > **Screenshot placeholder:**
 > _[Screenshot of the assignment creation form within the Shift Detail Panel, showing a member dropdown, position selector, apparatus selector, and save button]_
 
@@ -518,6 +524,8 @@ FF Schmidt was on a 2-week Leave of Absence (April 1-14), so his requirement was
 | Scheduling data not updating across tabs | The module uses a centralized Zustand store. Try refreshing the page. If the issue persists, clear browser cache. |
 | Settings tab not showing | The Settings tab requires `scheduling.manage` permission. Contact your administrator. |
 | "Too many attempts" on shift signup | Rate limiting may be active. Wait a few seconds and try again. |
+| Cannot edit shift times after creation | Officers with `scheduling.manage` can now edit shift start/end times, apparatus, color, notes, and custom creation times from the shift detail panel. |
+| Position change requires opening a modal | Use the new inline position change UI directly on the shift card to change a member's assigned position without navigating away. |
 
 ---
 

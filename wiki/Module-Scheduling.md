@@ -68,7 +68,15 @@ GET    /api/v1/scheduling/apparatus          # List basic apparatus
 
 ---
 
-## Recent Improvements (2026-02-28)
+## Recent Improvements (2026-03-01)
+
+### Shift Editing & Position Changes
+- **Expanded shift editing**: Officers can edit shift times, apparatus assignment, color, notes, and custom creation times directly from the shift detail panel
+- **Inline position change UI**: Change member position assignments (Officer, Driver, Firefighter, etc.) directly on shift cards without opening a separate modal
+
+---
+
+## Improvements (2026-02-28)
 
 ### Architecture Refactor
 - **Modular architecture**: Scheduling refactored from a monolithic 1,200-line page into a proper module structure under `frontend/src/modules/scheduling/`
