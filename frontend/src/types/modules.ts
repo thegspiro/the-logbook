@@ -21,6 +21,10 @@ export interface Module {
   features: string[];
   requiresSetup?: boolean;
   setupDescription?: string;
+  /** Module is planned but not yet implemented in the codebase. */
+  comingSoon?: boolean;
+  /** Backend feature flag env var name (e.g. MODULE_TRAINING_ENABLED). */
+  backendFlag?: string;
 }
 
 export interface ModuleConfig {
@@ -82,6 +86,7 @@ export const AVAILABLE_MODULES: Module[] = [
     canDisable: false,
     icon: 'Calendar',
     route: '/scheduling',
+    backendFlag: 'MODULE_SCHEDULING_ENABLED',
     features: [
       'Shift scheduling and rosters',
       'Availability tracking',
@@ -101,7 +106,7 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: false,
     icon: 'UserCog',
-    route: '/settings/personal',
+    route: '/account',
     features: [
       'Profile management',
       'Notification preferences',
@@ -120,7 +125,7 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: false,
     icon: 'Settings',
-    route: '/settings/system',
+    route: '/settings',
     features: [
       'User and role management',
       'Email/storage/auth configuration',
@@ -185,6 +190,7 @@ export const AVAILABLE_MODULES: Module[] = [
     canDisable: true,
     icon: 'Truck',
     route: '/apparatus',
+    backendFlag: 'MODULE_APPARATUS_ENABLED',
     features: [
       'Vehicle inventory and tracking',
       'Maintenance schedules',
@@ -206,6 +212,7 @@ export const AVAILABLE_MODULES: Module[] = [
     canDisable: true,
     icon: 'Package',
     route: '/inventory',
+    backendFlag: 'MODULE_INVENTORY_ENABLED',
     features: [
       'Equipment and supply tracking',
       'Low stock alerts',
@@ -226,6 +233,7 @@ export const AVAILABLE_MODULES: Module[] = [
     canDisable: true,
     icon: 'GraduationCap',
     route: '/training',
+    backendFlag: 'MODULE_TRAINING_ENABLED',
     features: [
       'Course scheduling and management',
       'Certification tracking and expiration alerts',
@@ -278,50 +286,127 @@ export const AVAILABLE_MODULES: Module[] = [
     ],
   },
   {
-    id: 'public-info',
-    name: 'Public Information',
-    description: 'Public-facing pages, community outreach, and fire safety education',
+    id: 'public-portal',
+    name: 'Public Portal',
+    description: 'API portal for public data access and community outreach',
     longDescription:
-      'Create a public-facing presence for your department. Share community information, safety tips, and department news with the public.',
+      'Expose selected department data through a configurable public API portal. Manage API keys, control data whitelists, and monitor access logs.',
     category: 'recommended',
     enabled: true,
     canDisable: true,
     icon: 'Globe',
-    route: '/public',
+    route: '/admin/public-portal',
     features: [
-      'Public website pages',
-      'Fire safety education resources',
-      'Community event calendar',
-      'News and press releases',
-      'Contact forms',
-      'Social media integration',
+      'Public API portal configuration',
+      'API key management',
+      'Data whitelist controls',
+      'Access logs and usage stats',
+      'Rate limiting',
     ],
-    requiresSetup: true,
-    setupDescription: 'Requires domain configuration',
+    backendFlag: 'MODULE_PUBLIC_PORTAL_ENABLED',
   },
 
   // ============================================
   // ADDITIONAL MODULES (Disabled by Default)
   // ============================================
   {
+    id: 'events',
+    name: 'Events',
+    description: 'Event scheduling, RSVP tracking, and QR check-in',
+    longDescription:
+      'Create and manage department events with RSVP tracking, QR code check-in, and attendance reports. Supports both internal events and public event requests.',
+    category: 'recommended',
+    enabled: true,
+    canDisable: true,
+    icon: 'CalendarDays',
+    route: '/events',
+    features: [
+      'Event creation and scheduling',
+      'RSVP management',
+      'QR code check-in',
+      'Attendance tracking',
+      'Public event requests',
+      'Recurring events',
+    ],
+    backendFlag: 'MODULE_EVENTS_ENABLED',
+  },
+  {
+    id: 'admin-hours',
+    name: 'Admin Hours',
+    description: 'Administrative hour tracking, clock-in/out, and reporting',
+    longDescription:
+      'Track administrative hours with QR-based clock-in/out, session management, and category-based reporting. Support for manual entry review and CSV exports.',
+    category: 'recommended',
+    enabled: true,
+    canDisable: true,
+    icon: 'Clock',
+    route: '/admin-hours',
+    features: [
+      'QR-based clock-in/out',
+      'Category management',
+      'Pending entry review',
+      'Session monitoring',
+      'Summary reports and CSV export',
+    ],
+    backendFlag: 'MODULE_ADMIN_HOURS_ENABLED',
+  },
+  {
     id: 'communications',
     name: 'Communications',
-    description: 'Internal messaging, announcements, and notifications',
+    description: 'Email template management and notifications',
     longDescription:
-      'Keep everyone informed with department-wide announcements, direct messaging, and customizable notifications for important events.',
+      'Manage email templates for department communications. Customize templates, preview with live data, and manage notification settings.',
     category: 'optional',
     enabled: false,
     canDisable: true,
     icon: 'MessageSquare',
-    route: '/communications',
+    route: '/communications/templates',
     features: [
-      'Department announcements',
-      'Direct messaging',
-      'Group discussions',
-      'Emergency notifications',
-      'Email integration',
-      'Mobile push notifications',
+      'Email template management',
+      'Template preview with live data',
+      'Member-specific previews',
+      'CSS customization',
     ],
+    backendFlag: 'MODULE_COMMUNICATIONS_ENABLED',
+  },
+  {
+    id: 'elections',
+    name: 'Elections & Voting',
+    description: 'Ballot creation, voting management, and election results',
+    longDescription:
+      'Run department elections with secure ballot creation, anonymous voting, and automated result tallying.',
+    category: 'optional',
+    enabled: false,
+    canDisable: true,
+    icon: 'Vote',
+    route: '/elections',
+    features: [
+      'Ballot creation and management',
+      'Anonymous voting',
+      'Result tallying and reporting',
+      'Election scheduling',
+      'Public ballot voting via token',
+    ],
+    backendFlag: 'MODULE_ELECTIONS_ENABLED',
+  },
+  {
+    id: 'minutes',
+    name: 'Meeting Minutes',
+    description: 'Meeting minutes creation, approval, and archival',
+    longDescription:
+      'Create, review, and archive meeting minutes for department meetings. Support for approval workflows and historical records.',
+    category: 'optional',
+    enabled: false,
+    canDisable: true,
+    icon: 'ScrollText',
+    route: '/minutes',
+    features: [
+      'Minutes creation and editing',
+      'Approval workflows',
+      'Historical archive',
+      'Action item tracking',
+    ],
+    backendFlag: 'MODULE_MEETINGS_ENABLED',
   },
   {
     id: 'incidents',
@@ -342,6 +427,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'NFIRS reporting',
       'Mutual aid tracking',
     ],
+    comingSoon: true,
   },
   {
     id: 'hr-payroll',
@@ -364,6 +450,7 @@ export const AVAILABLE_MODULES: Module[] = [
     ],
     requiresSetup: true,
     setupDescription: 'Requires payroll provider integration',
+    comingSoon: true,
   },
   {
     id: 'grants',
@@ -384,24 +471,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'Financial reporting',
       'Grant deadline reminders',
     ],
-  },
-  {
-    id: 'elections',
-    name: 'Elections & Voting',
-    description: 'Ballot creation, voting management, and election results',
-    longDescription:
-      'Run department elections with secure ballot creation, anonymous voting, and automated result tallying.',
-    category: 'optional',
-    enabled: false,
-    canDisable: true,
-    icon: 'Vote',
-    route: '/elections',
-    features: [
-      'Ballot creation and management',
-      'Anonymous voting',
-      'Result tallying and reporting',
-      'Election scheduling',
-    ],
+    comingSoon: true,
   },
   {
     id: 'mobile',
@@ -419,5 +489,6 @@ export const AVAILABLE_MODULES: Module[] = [
       'Push notifications',
       'Offline access',
     ],
+    comingSoon: true,
   },
 ];
