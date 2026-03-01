@@ -1125,15 +1125,16 @@ export const MemberProfilePage: React.FC = () => {
                           SMS notifications
                         </span>
                       </label>
-                      <label className="flex items-center cursor-pointer">
+                      <label className="flex items-center cursor-not-allowed opacity-50">
                         <input
                           type="checkbox"
-                          checked={editForm.notification_preferences?.push}
-                          onChange={() => handleNotificationToggle("push")}
+                          checked={false}
+                          disabled
                           className="form-checkbox border-theme-surface-border"
                         />
                         <span className="ml-2 text-sm text-theme-text-secondary">
                           Push notifications
+                          <span className="ml-1 text-xs text-theme-text-muted">(coming soon)</span>
                         </span>
                       </label>
                     </div>

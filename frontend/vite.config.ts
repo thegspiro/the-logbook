@@ -78,6 +78,26 @@ export default defineConfig({
             purpose: 'any maskable',
           },
         ],
+        shortcuts: [
+          {
+            name: 'My Schedule',
+            short_name: 'Schedule',
+            url: '/scheduling',
+            description: 'View your upcoming shifts and schedule',
+          },
+          {
+            name: 'Dashboard',
+            short_name: 'Home',
+            url: '/',
+            description: 'Go to the main dashboard',
+          },
+          {
+            name: 'Members',
+            short_name: 'Members',
+            url: '/members',
+            description: 'View the member directory',
+          },
+        ],
       },
     }),
   ],
