@@ -30,6 +30,9 @@ export function usePullToRefresh({
   });
   const startYRef = useRef(0);
   const pullingRef = useRef(false);
+  const pullDistanceRef = useRef(0);
+  const onRefreshRef = useRef(onRefresh);
+  onRefreshRef.current = onRefresh;
 
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
@@ -52,7 +55,9 @@ export function usePullToRefresh({
       const distance = Math.max(0, (currentY - startYRef.current) * 0.5);
 
       if (distance > 0 && window.scrollY <= 0) {
-        setState((prev) => ({ ...prev, pulling: true, pullDistance: Math.min(distance, threshold * 1.5) }));
+        const clamped = Math.min(distance, threshold * 1.5);
+        pullDistanceRef.current = clamped;
+        setState((prev) => ({ ...prev, pulling: true, pullDistance: clamped }));
       }
     },
     [disabled, threshold]
@@ -62,15 +67,17 @@ export function usePullToRefresh({
     if (!pullingRef.current || disabled) return;
     pullingRef.current = false;
 
-    if (state.pullDistance >= threshold) {
+    if (pullDistanceRef.current >= threshold) {
       setState((prev) => ({ ...prev, refreshing: true, pullDistance: 0 }));
-      void onRefresh().finally(() => {
+      pullDistanceRef.current = 0;
+      void onRefreshRef.current().finally(() => {
         setState({ pulling: false, refreshing: false, pullDistance: 0 });
       });
     } else {
+      pullDistanceRef.current = 0;
       setState({ pulling: false, refreshing: false, pullDistance: 0 });
     }
-  }, [disabled, state.pullDistance, threshold, onRefresh]);
+  }, [disabled, threshold]);
 
   useEffect(() => {
     document.addEventListener('touchstart', handleTouchStart, { passive: true });
