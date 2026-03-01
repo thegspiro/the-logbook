@@ -3,25 +3,39 @@
  *
  * Renders a live preview of an email template using an iframe for isolation.
  * Shows the rendered subject line and HTML body.
+ * Includes a member dropdown so admins can preview with real member data.
  */
 
-import React, { useRef, useEffect } from 'react';
-import { Monitor, Smartphone, Loader2, Eye, RefreshCw } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Monitor, Smartphone, Loader2, Eye, RefreshCw, Users } from 'lucide-react';
 import type { EmailTemplatePreview } from '../types';
+
+interface PreviewMember {
+  id: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+}
 
 interface TemplatePreviewProps {
   preview: EmailTemplatePreview | null;
   isPreviewing: boolean;
-  onRefresh: () => void;
+  onRefresh: (memberId?: string) => void;
+  members?: PreviewMember[];
+  isLoadingMembers?: boolean;
 }
 
 export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
   preview,
   isPreviewing,
   onRefresh,
+  members = [],
+  isLoadingMembers = false,
 }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [viewport, setViewport] = React.useState<'desktop' | 'mobile'>('desktop');
+  const [viewport, setViewport] = useState<'desktop' | 'mobile'>('desktop');
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('');
 
   useEffect(() => {
     if (preview?.html_body && iframeRef.current) {
@@ -33,6 +47,11 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
       }
     }
   }, [preview?.html_body]);
+
+  const handleMemberChange = (memberId: string) => {
+    setSelectedMemberId(memberId);
+    onRefresh(memberId || undefined);
+  };
 
   return (
     <div className="space-y-3">
@@ -69,7 +88,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
             </button>
           </div>
           <button
-            onClick={onRefresh}
+            onClick={() => onRefresh(selectedMemberId || undefined)}
             disabled={isPreviewing}
             className="flex items-center space-x-1.5 px-3 py-1.5 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
           >
@@ -81,6 +100,31 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
             <span>Refresh</span>
           </button>
         </div>
+      </div>
+
+      {/* Member selector */}
+      <div className="flex items-center gap-2">
+        <Users className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+        <select
+          value={selectedMemberId}
+          onChange={(e) => handleMemberChange(e.target.value)}
+          disabled={isLoadingMembers}
+          className="flex-1 rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">Sample data (default)</option>
+          {members.map((m) => {
+            const name =
+              m.full_name ||
+              [m.first_name, m.last_name].filter(Boolean).join(' ') ||
+              m.email ||
+              m.id;
+            return (
+              <option key={m.id} value={m.id}>
+                {name}
+              </option>
+            );
+          })}
+        </select>
       </div>
 
       {/* Subject line */}

@@ -72,6 +72,9 @@ class EmailTemplatePreviewRequest(BaseModel):
     If ``context`` is not provided (or is empty), the preview endpoint
     will automatically populate it with type-appropriate sample data
     from ``SAMPLE_CONTEXT`` in the email template service.
+
+    If ``member_id`` is provided, the preview will use real member data
+    (name, email, etc.) instead of static sample values.
     """
 
     subject: Optional[str] = None
@@ -79,6 +82,9 @@ class EmailTemplatePreviewRequest(BaseModel):
     text_body: Optional[str] = None
     css_styles: Optional[str] = None
     context: Dict[str, Any] = Field(default_factory=dict)
+    member_id: Optional[str] = Field(
+        None, description="Optional member ID to populate preview with real member data"
+    )
 
 
 class EmailTemplatePreviewResponse(BaseModel):

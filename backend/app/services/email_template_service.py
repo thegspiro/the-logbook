@@ -39,6 +39,20 @@ GLOBAL_VARIABLES: List[Dict[str, str]] = [
     },
 ]
 
+
+def get_variables_for_type(
+    template_type: Any,
+) -> List[Dict[str, str]]:
+    """Return the canonical variable list for a given template type.
+
+    Combines ``GLOBAL_VARIABLES`` with the type-specific entries in
+    ``TEMPLATE_VARIABLES``.  Accepts either a string or an
+    ``EmailTemplateType`` enum value.
+    """
+    key = template_type.value if hasattr(template_type, "value") else str(template_type)
+    return GLOBAL_VARIABLES + TEMPLATE_VARIABLES.get(key, [])
+
+
 # Variable definitions per template type
 TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     "welcome": [
@@ -1295,14 +1309,30 @@ class EmailTemplateService:
         return result.scalar_one_or_none()
 
     async def list_templates(self, organization_id: str) -> List[EmailTemplate]:
-        """List all templates for an organization"""
+        """List all templates for an organization.
+
+        Also refreshes the ``available_variables`` column on each template
+        so the API always returns the current code-defined variable list.
+        """
         result = await self.db.execute(
             select(EmailTemplate)
             .where(EmailTemplate.organization_id == str(organization_id))
             .options(selectinload(EmailTemplate.attachments))
             .order_by(EmailTemplate.template_type, EmailTemplate.name)
         )
-        return list(result.scalars().all())
+        templates = list(result.scalars().all())
+
+        # Sync available_variables with current code definitions
+        dirty = False
+        for tmpl in templates:
+            canonical = get_variables_for_type(tmpl.template_type)
+            if tmpl.available_variables != canonical:
+                tmpl.available_variables = canonical
+                dirty = True
+        if dirty:
+            await self.db.flush()
+
+        return templates
 
     async def create_template(
         self,
