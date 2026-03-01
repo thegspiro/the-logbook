@@ -149,6 +149,15 @@ class AdminHoursActiveSession(BaseModel):
     max_session_minutes: Optional[int] = None
 
 
+class AdminHoursEntryEdit(BaseModel):
+    """Schema for an admin editing a pending entry's times"""
+
+    clock_in_at: Optional[datetime] = None
+    clock_out_at: Optional[datetime] = None
+    description: Optional[str] = None
+    category_id: Optional[str] = None
+
+
 class AdminHoursApprovalAction(BaseModel):
     """Schema for approving or rejecting an entry"""
 
