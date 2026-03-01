@@ -630,6 +630,20 @@ class SchedulingService:
             if not template:
                 return [], "Shift template not found for pattern"
 
+            # Resolve apparatus from template's apparatus_type
+            apparatus_id = None
+            if template.apparatus_type:
+                apparatus_result = await self.db.execute(
+                    select(BasicApparatus)
+                    .where(BasicApparatus.organization_id == str(organization_id))
+                    .where(BasicApparatus.apparatus_type == template.apparatus_type)
+                    .where(BasicApparatus.is_active.is_(True))
+                    .limit(1)
+                )
+                apparatus = apparatus_result.scalar_one_or_none()
+                if apparatus:
+                    apparatus_id = apparatus.id
+
             # Parse template times safely
             try:
                 start_hour, start_minute = map(int, template.start_time_of_day.split(":"))
@@ -708,6 +722,7 @@ class SchedulingService:
                     shift_date=shift_date_val,
                     start_time=shift_start,
                     end_time=shift_end,
+                    apparatus_id=apparatus_id,
                     created_by=created_by,
                 )
                 self.db.add(shift)

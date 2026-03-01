@@ -6,7 +6,7 @@ attendance tracking, and calendar views.
 """
 
 from datetime import date, timedelta
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
+from app.core.permissions import OPERATIONAL_RANKS
 from app.models.training import BasicApparatus
 from app.models.user import User
 from app.schemas.scheduling import (
@@ -69,13 +70,29 @@ async def _enrich_shifts(
     organization_id,
     shifts: list,
 ) -> list[dict]:
-    """Convert Shift ORM objects to dicts enriched with apparatus details."""
+    """Convert Shift ORM objects to dicts enriched with apparatus and officer details."""
     apparatus_ids = list({s.apparatus_id for s in shifts if s.apparatus_id})
     apparatus_map = await service._get_apparatus_map(organization_id, apparatus_ids)
+
+    # Resolve shift officer names
+    officer_ids = list({s.shift_officer_id for s in shifts if s.shift_officer_id})
+    officer_map: dict[str, str] = {}
+    if officer_ids:
+        result = await service.db.execute(
+            select(User.id, User.first_name, User.last_name, User.rank)
+            .where(User.id.in_(officer_ids))
+        )
+        for row in result.all():
+            name = f"{row.first_name or ''} {row.last_name or ''}".strip() or str(row.id)
+            if row.rank:
+                name = f"{row.rank.replace('_', ' ').title()} {name}"
+            officer_map[str(row.id)] = name
+
     enriched = []
     for s in shifts:
         d = {c.key: getattr(s, c.key) for c in s.__table__.columns}
         service._enrich_shift_dict(d, apparatus_map)
+        d["shift_officer_name"] = officer_map.get(str(s.shift_officer_id)) if s.shift_officer_id else None
         enriched.append(d)
     return enriched
 
@@ -163,6 +180,21 @@ async def get_shift(
     )
     d = {c.key: getattr(shift, c.key) for c in shift.__table__.columns}
     service._enrich_shift_dict(d, apparatus_map)
+
+    # Resolve shift officer name
+    officer_name = None
+    if shift.shift_officer_id:
+        officer_result = await service.db.execute(
+            select(User.first_name, User.last_name, User.rank)
+            .where(User.id == str(shift.shift_officer_id))
+        )
+        officer_row = officer_result.first()
+        if officer_row:
+            officer_name = f"{officer_row.first_name or ''} {officer_row.last_name or ''}".strip()
+            if officer_row.rank:
+                officer_name = f"{officer_row.rank.replace('_', ' ').title()} {officer_name}"
+    d["shift_officer_name"] = officer_name
+
     return {
         **d,
         "attendees": attendance,
@@ -200,6 +232,48 @@ async def delete_shift(
     success, error = await service.delete_shift(shift_id, current_user.organization_id)
     if not success:
         raise HTTPException(status_code=400, detail=f"Unable to delete shift. {error}")
+
+
+# ============================================
+# Officer-Eligible Members
+# ============================================
+
+# Ranks at or above this priority threshold can be shift officers
+_OFFICER_RANK_PRIORITY_THRESHOLD = 60  # lieutenant and above
+
+_OFFICER_ELIGIBLE_RANKS: set[str] = {
+    code
+    for code, defn in OPERATIONAL_RANKS.items()
+    if defn.get("priority", 0) >= _OFFICER_RANK_PRIORITY_THRESHOLD
+}
+
+
+@router.get("/officer-candidates")
+async def list_officer_candidates(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Return active members whose rank qualifies them to be a shift officer."""
+    result = await db.execute(
+        select(User.id, User.first_name, User.last_name, User.rank)
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.status == "active")
+        .where(User.rank.in_(_OFFICER_ELIGIBLE_RANKS))
+        .order_by(User.last_name, User.first_name)
+    )
+    candidates = []
+    for row in result.all():
+        rank_label = OPERATIONAL_RANKS.get(row.rank, {}).get("label", row.rank or "")
+        name = f"{row.first_name or ''} {row.last_name or ''}".strip() or str(row.id)
+        candidates.append(
+            {
+                "id": str(row.id),
+                "name": name,
+                "rank": row.rank,
+                "label": f"{rank_label} {name}" if rank_label else name,
+            }
+        )
+    return candidates
 
 
 # ============================================

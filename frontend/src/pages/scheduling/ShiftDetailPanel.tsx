@@ -58,8 +58,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [editForm, setEditForm] = useState({
     shift_date: shift.shift_date,
     notes: shift.notes || '',
+    shift_officer_id: shift.shift_officer_id || '',
   });
   const [saving, setSaving] = useState(false);
+  const [officerCandidates, setOfficerCandidates] = useState<Array<{ id: string; label: string }>>([]);
 
   // Delete state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -122,6 +124,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     };
     load();
   }, [shift.id]);
+
+  // Load officer candidates when edit form opens
+  useEffect(() => {
+    if (!isEditing || !canManage) return;
+    const loadOfficers = async () => {
+      try {
+        const candidates = await schedulingService.getOfficerCandidates();
+        setOfficerCandidates(candidates.map(c => ({ id: c.id, label: c.label })));
+      } catch {
+        // Non-critical — shift officer selection will be empty
+      }
+    };
+    loadOfficers();
+  }, [isEditing, canManage]);
 
   // Load members for the assign dropdown
   useEffect(() => {
@@ -231,6 +247,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       const updated = await schedulingService.updateShift(shift.id, {
         shift_date: editForm.shift_date,
         notes: editForm.notes || null,
+        shift_officer_id: editForm.shift_officer_id || null,
       });
       setShift(updated);
       setIsEditing(false);
@@ -389,7 +406,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="flex items-center gap-1 flex-shrink-0">
               {canManage && !isPast && (
                 <>
-                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, notes: shift.notes || '' }); setIsEditing(!isEditing); }}
+                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '' }); setIsEditing(!isEditing); }}
                     className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
                   >
                     <Pencil className="w-4 h-4" />
@@ -439,6 +456,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   onChange={e => setEditForm(p => ({...p, shift_date: e.target.value}))}
                   className={inputCls}
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Shift Officer</label>
+                <select value={editForm.shift_officer_id}
+                  onChange={e => setEditForm(p => ({...p, shift_officer_id: e.target.value}))}
+                  className={inputCls}
+                >
+                  <option value="">No shift officer</option>
+                  {officerCandidates.map(c => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-theme-text-muted mt-1">Only members ranked Lieutenant or above are shown</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-theme-text-secondary mb-1">Notes</label>

@@ -3357,6 +3357,11 @@ export const schedulingService = {
     await api.delete(`/scheduling/shifts/${shiftId}`);
   },
 
+  async getOfficerCandidates(): Promise<Array<{ id: string; name: string; rank: string; label: string }>> {
+    const response = await api.get('/scheduling/officer-candidates');
+    return response.data;
+  },
+
   async addAttendance(shiftId: string, data: Record<string, unknown>): Promise<ShiftAttendanceRecord> {
     const response = await api.post<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/attendance`, data);
     return response.data;
