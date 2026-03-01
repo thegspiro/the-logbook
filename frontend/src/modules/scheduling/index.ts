@@ -4,6 +4,9 @@
  * Central entry point for the scheduling/shifts feature module.
  */
 
+// Routes
+export { getSchedulingRoutes } from "./routes";
+
 // Store
 export { useSchedulingStore } from "./store/schedulingStore";
 

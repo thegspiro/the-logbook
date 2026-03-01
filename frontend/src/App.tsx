@@ -31,6 +31,8 @@ import {
 } from "./modules/prospective-members";
 import { getAdminHoursRoutes } from "./modules/admin-hours";
 import { getCommunicationsRoutes } from "./modules/communications";
+import { getPublicPortalRoutes } from "./modules/public-portal";
+import { getSchedulingRoutes } from "./modules/scheduling";
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -128,9 +130,7 @@ const AnalyticsDashboardPage = lazyWithRetry(
 const PlatformAnalyticsPage = lazyWithRetry(
   () => import("./pages/PlatformAnalyticsPage"),
 );
-const PublicPortalAdmin = lazyWithRetry(
-  () => import("./modules/public-portal/pages/PublicPortalAdmin"),
-);
+// PublicPortalAdmin moved to modules/public-portal/routes.tsx
 
 // Documents Module
 const DocumentsPage = lazyWithRetry(() => import("./pages/DocumentsPage"));
@@ -150,8 +150,7 @@ const StorageAreasPage = lazyWithRetry(
   () => import("./pages/StorageAreasPage"),
 );
 
-// Scheduling Module
-const SchedulingPage = lazyWithRetry(() => import("./pages/SchedulingPage"));
+// SchedulingPage moved to modules/scheduling/routes.tsx
 
 // Facilities Module
 const FacilitiesPage = lazyWithRetry(() => import("./pages/FacilitiesPage"));
@@ -513,7 +512,7 @@ function App() {
                   />
 
                   {/* Scheduling Module */}
-                  <Route path="/scheduling" element={<SchedulingPage />} />
+                  {getSchedulingRoutes()}
 
                   {/* Facilities Module (full) / Locations (lightweight) */}
                   <Route path="/facilities" element={<FacilitiesPage />} />
@@ -585,14 +584,8 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/admin/public-portal"
-                    element={
-                      <ProtectedRoute requiredPermission="settings.manage">
-                        <PublicPortalAdmin />
-                      </ProtectedRoute>
-                    }
-                  />
+                  {/* Public Portal Module */}
+                  {getPublicPortalRoutes()}
                   <Route
                     path="/admin/platform-analytics"
                     element={
