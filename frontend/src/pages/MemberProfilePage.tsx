@@ -1068,7 +1068,7 @@ export const MemberProfilePage: React.FC = () => {
                       onChange={(e) =>
                         handleFormChange("email", e.target.value)
                       }
-                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1081,7 +1081,7 @@ export const MemberProfilePage: React.FC = () => {
                       onChange={(e) =>
                         handleFormChange("phone", e.target.value)
                       }
-                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1094,7 +1094,7 @@ export const MemberProfilePage: React.FC = () => {
                       onChange={(e) =>
                         handleFormChange("mobile", e.target.value)
                       }
-                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 
@@ -1108,7 +1108,7 @@ export const MemberProfilePage: React.FC = () => {
                           type="checkbox"
                           checked={editForm.notification_preferences?.email}
                           onChange={() => handleNotificationToggle("email")}
-                          className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                         />
                         <span className="ml-2 text-sm text-theme-text-secondary">
                           Email notifications
@@ -1119,7 +1119,7 @@ export const MemberProfilePage: React.FC = () => {
                           type="checkbox"
                           checked={editForm.notification_preferences?.sms}
                           onChange={() => handleNotificationToggle("sms")}
-                          className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                         />
                         <span className="ml-2 text-sm text-theme-text-secondary">
                           SMS notifications
@@ -1130,7 +1130,7 @@ export const MemberProfilePage: React.FC = () => {
                           type="checkbox"
                           checked={editForm.notification_preferences?.push}
                           onChange={() => handleNotificationToggle("push")}
-                          className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                         />
                         <span className="ml-2 text-sm text-theme-text-secondary">
                           Push notifications
@@ -1239,7 +1239,7 @@ export const MemberProfilePage: React.FC = () => {
                           personal_email: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Home email for post-separation contact"
                     />
                   </div>
@@ -1256,7 +1256,7 @@ export const MemberProfilePage: React.FC = () => {
                           address_street: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1273,7 +1273,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_city: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                     <div>
@@ -1289,7 +1289,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_state: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   </div>
@@ -1307,7 +1307,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_zip: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                     <div>
@@ -1323,7 +1323,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_country: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   </div>
@@ -1425,7 +1425,7 @@ export const MemberProfilePage: React.FC = () => {
                                   e.target.checked,
                                 )
                               }
-                              className="h-3 w-3 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
+                              className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                             />
                             Primary
                           </label>
@@ -1447,7 +1447,7 @@ export const MemberProfilePage: React.FC = () => {
                           onChange={(e) =>
                             handleContactChange(i, "name", e.target.value)
                           }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <input
                           type="text"
@@ -1460,7 +1460,7 @@ export const MemberProfilePage: React.FC = () => {
                               e.target.value,
                             )
                           }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1471,7 +1471,7 @@ export const MemberProfilePage: React.FC = () => {
                           onChange={(e) =>
                             handleContactChange(i, "phone", e.target.value)
                           }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <input
                           type="email"
@@ -1480,7 +1480,7 @@ export const MemberProfilePage: React.FC = () => {
                           onChange={(e) =>
                             handleContactChange(i, "email", e.target.value)
                           }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
                     </div>

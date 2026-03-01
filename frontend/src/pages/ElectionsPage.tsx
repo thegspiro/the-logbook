@@ -367,7 +367,7 @@ export const ElectionsPage: React.FC = () => {
                     aria-required="true"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -380,7 +380,7 @@ export const ElectionsPage: React.FC = () => {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -392,7 +392,7 @@ export const ElectionsPage: React.FC = () => {
                     id="election-meeting"
                     value={formData.meeting_id || ''}
                     onChange={(e) => handleMeetingChange(e.target.value)}
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">No linked meeting</option>
                     {meetings.map((meeting) => (
@@ -419,7 +419,7 @@ export const ElectionsPage: React.FC = () => {
                       aria-required="true"
                       value={formData.start_date}
                       onChange={(e) => handleStartDateChange(e.target.value)}
-                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
 
@@ -435,7 +435,7 @@ export const ElectionsPage: React.FC = () => {
                       aria-required="true"
                       value={formData.end_date}
                       onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
 
                     {formData.start_date && (
@@ -489,7 +489,7 @@ export const ElectionsPage: React.FC = () => {
                       onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPosition())}
                       placeholder="e.g., Chief, President"
                       aria-label="Position name"
-                      className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                      className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                     <button
                       type="button"
@@ -532,7 +532,7 @@ export const ElectionsPage: React.FC = () => {
                       const [method, condition = 'most_votes'] = e.target.value.split('|') as [VotingMethod, VictoryCondition];
                       setFormData({ ...formData, voting_method: method, victory_condition: condition, victory_percentage: undefined, victory_threshold: undefined });
                     }}
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="simple_majority|most_votes">Most Votes Wins (Plurality)</option>
                     <option value="simple_majority|majority">Majority Required (&gt;50%)</option>
@@ -570,7 +570,7 @@ export const ElectionsPage: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, victory_threshold: e.target.value ? parseInt(e.target.value) : undefined })}
                         placeholder="e.g., 10 votes required"
                         aria-label="Numerical threshold"
-                        className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                        className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
                       <p className="mt-1 text-xs text-theme-text-muted">Minimum votes needed to win</p>
                     </div>
@@ -588,7 +588,7 @@ export const ElectionsPage: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : undefined })}
                         placeholder="e.g., 60%"
                         aria-label="Percentage threshold"
-                        className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                        className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
                       <p className="mt-1 text-xs text-theme-text-muted">Percentage of votes needed to win</p>
                     </div>
@@ -607,7 +607,7 @@ export const ElectionsPage: React.FC = () => {
                       max="100"
                       value={formData.victory_percentage || 67}
                       onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : 67 })}
-                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                     <p className="mt-1 text-xs text-theme-text-muted">Percentage of votes needed (typically 67% for 2/3 majority)</p>
                   </div>
@@ -620,7 +620,7 @@ export const ElectionsPage: React.FC = () => {
                       id="election-enable-runoffs"
                       checked={formData.enable_runoffs}
                       onChange={(e) => setFormData({ ...formData, enable_runoffs: e.target.checked })}
-                      className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                     />
                     <span className="ml-2 text-sm font-medium text-theme-text-primary">Enable Automatic Runoffs</span>
                   </label>
@@ -635,7 +635,7 @@ export const ElectionsPage: React.FC = () => {
                           id="election-runoff-type"
                           value={formData.runoff_type}
                           onChange={(e) => setFormData({ ...formData, runoff_type: e.target.value })}
-                          className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                          className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="top_two">Top Two (top 2 candidates advance)</option>
                           <option value="eliminate_lowest">Eliminate Lowest (remove lowest, others continue)</option>
@@ -656,7 +656,7 @@ export const ElectionsPage: React.FC = () => {
                           max="10"
                           value={formData.max_runoff_rounds}
                           onChange={(e) => setFormData({ ...formData, max_runoff_rounds: parseInt(e.target.value) || 3 })}
-                          className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
+                          className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                         <p className="mt-1 text-xs text-theme-text-muted">Maximum number of runoff rounds before declaring winner</p>
                       </div>
@@ -673,7 +673,7 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, anonymous_voting: e.target.checked })
                       }
-                      className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                     />
                     <span className="ml-2 text-sm text-theme-text-primary">Anonymous Voting</span>
                   </label>
@@ -686,7 +686,7 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, allow_write_ins: e.target.checked })
                       }
-                      className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                     />
                     <span className="ml-2 text-sm text-theme-text-primary">Allow Write-in Candidates</span>
                   </label>
@@ -699,7 +699,7 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, results_visible_immediately: e.target.checked })
                       }
-                      className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                     />
                     <span className="ml-2 text-sm text-theme-text-primary">Show Results Immediately</span>
                   </label>

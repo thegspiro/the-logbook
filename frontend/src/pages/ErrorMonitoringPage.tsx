@@ -96,7 +96,7 @@ const ErrorMonitoringPage: React.FC = () => {
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="border border-theme-input-border rounded-md px-3 py-2 text-sm text-theme-text-primary bg-theme-input-bg focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="border border-theme-input-border rounded-md px-3 py-2 text-sm text-theme-text-primary bg-theme-input-bg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Errors</option>
             {stats &&

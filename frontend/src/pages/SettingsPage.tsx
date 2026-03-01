@@ -136,7 +136,7 @@ const Toggle: React.FC<{
       onClick={onChange}
       disabled={disabled}
       className={`${bg} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-        color === 'red' ? 'focus:ring-red-500' : 'focus:ring-red-500'
+        color === 'red' ? 'focus:ring-red-500' : 'focus:ring-blue-500'
       } disabled:opacity-50 disabled:cursor-not-allowed`}
       role="switch"
       aria-checked={checked}
@@ -533,7 +533,7 @@ export const SettingsPage: React.FC = () => {
                   type="text"
                   value={profile?.name || ''}
                   onChange={(e) => updateProfileField('name', e.target.value)}
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -541,7 +541,7 @@ export const SettingsPage: React.FC = () => {
                 <select
                   value={profile?.timezone || 'America/New_York'}
                   onChange={(e) => updateProfileField('timezone', e.target.value)}
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {COMMON_TIMEZONES.map(tz => (
                     <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
@@ -563,7 +563,7 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.phone || ''}
                     onChange={(e) => updateProfileField('phone', e.target.value)}
                     placeholder="(555) 123-4567"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
@@ -573,7 +573,7 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.email || ''}
                     onChange={(e) => updateProfileField('email', e.target.value)}
                     placeholder="info@firedept.org"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
@@ -583,7 +583,7 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.website || ''}
                     onChange={(e) => updateProfileField('website', e.target.value)}
                     placeholder="https://firedept.org"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
@@ -592,7 +592,7 @@ export const SettingsPage: React.FC = () => {
                     type="text"
                     value={profile?.county || ''}
                     onChange={(e) => updateProfileField('county', e.target.value)}
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -609,14 +609,14 @@ export const SettingsPage: React.FC = () => {
                   value={profile?.mailing_address?.line1 || ''}
                   onChange={(e) => updateAddressField('line1', e.target.value)}
                   placeholder="Address line 1"
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <input
                   type="text"
                   value={profile?.mailing_address?.line2 || ''}
                   onChange={(e) => updateAddressField('line2', e.target.value)}
                   placeholder="Address line 2 (optional)"
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <div className="grid grid-cols-3 gap-3">
                   <input
@@ -624,21 +624,21 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.mailing_address?.city || ''}
                     onChange={(e) => updateAddressField('city', e.target.value)}
                     placeholder="City"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <input
                     type="text"
                     value={profile?.mailing_address?.state || ''}
                     onChange={(e) => updateAddressField('state', e.target.value)}
                     placeholder="State"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <input
                     type="text"
                     value={profile?.mailing_address?.zip || ''}
                     onChange={(e) => updateAddressField('zip', e.target.value)}
                     placeholder="ZIP"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -649,7 +649,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveProfile(); }}
                 disabled={savingProfile || !profileDirty}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingProfile ? 'Saving...' : 'Save Profile'}
@@ -708,7 +708,7 @@ export const SettingsPage: React.FC = () => {
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed ${
                     isEnabled
                       ? 'bg-theme-surface-secondary text-theme-text-secondary hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 focus:ring-red-500'
-                      : 'bg-green-600 text-white hover:bg-green-700 focus:ring-red-500'
+                      : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
                   }`}
                   aria-label={isEnabled ? `Disable ${mod.name}` : `Enable ${mod.name}`}
                 >
@@ -809,7 +809,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   onClick={() => { void handleSaveContact(); }}
                   disabled={savingContact}
-                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   {savingContact && <Loader2 className="w-4 h-4 animate-spin" />}
                   {savingContact ? 'Saving...' : 'Save'}
@@ -857,7 +857,7 @@ export const SettingsPage: React.FC = () => {
                         value={membershipId.prefix}
                         onChange={(e) => setMembershipId(s => ({ ...s, prefix: e.target.value }))}
                         placeholder="e.g. FD-"
-                        className="w-40 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-40 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
 
@@ -870,7 +870,7 @@ export const SettingsPage: React.FC = () => {
                           min={1}
                           value={membershipId.next_number}
                           onChange={(e) => setMembershipId(s => ({ ...s, next_number: Math.max(1, parseInt(e.target.value) || 1) }))}
-                          className="w-40 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="w-40 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
                     )}
@@ -882,7 +882,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   onClick={() => { void handleSaveMembershipId(); }}
                   disabled={savingMembershipId}
-                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   {savingMembershipId && <Loader2 className="w-4 h-4 animate-spin" />}
                   {savingMembershipId ? 'Saving...' : 'Save'}
@@ -909,7 +909,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => { setAddingRank(true); setRankForm({ rank_code: '', display_name: '' }); }}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   <Plus className="w-4 h-4" />
                   Add Rank
@@ -938,7 +938,7 @@ export const SettingsPage: React.FC = () => {
                         }));
                       }}
                       placeholder="e.g. Captain"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       autoFocus
                     />
                   </div>
@@ -949,7 +949,7 @@ export const SettingsPage: React.FC = () => {
                       value={rankForm.rank_code}
                       onChange={(e) => setRankForm(prev => ({ ...prev, rank_code: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') }))}
                       placeholder="e.g. captain"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -965,7 +965,7 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => { void (editingRank ? handleUpdateRank : handleAddRank)(); }}
                     disabled={rankSaving || !rankForm.display_name.trim() || !rankForm.rank_code.trim()}
-                    className="inline-flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-3 py-1.5 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                    className="inline-flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-3 py-1.5 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
                     {rankSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                     {editingRank ? 'Save' : 'Add'}
@@ -1124,7 +1124,7 @@ export const SettingsPage: React.FC = () => {
                   value={emailSettings.from_email || ''}
                   onChange={(e) => setEmailSettings(s => ({ ...s, from_email: e.target.value }))}
                   placeholder="notifications@yourdomain.com"
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -1134,7 +1134,7 @@ export const SettingsPage: React.FC = () => {
                   value={emailSettings.from_name || ''}
                   onChange={(e) => setEmailSettings(s => ({ ...s, from_name: e.target.value }))}
                   placeholder={profile?.name || 'Department Name'}
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -1151,7 +1151,7 @@ export const SettingsPage: React.FC = () => {
                       value={emailSettings.google_client_id || ''}
                       onChange={(e) => setEmailSettings(s => ({ ...s, google_client_id: e.target.value }))}
                       placeholder="123456789-abc.apps.googleusercontent.com"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1162,7 +1162,7 @@ export const SettingsPage: React.FC = () => {
                         value={emailSettings.google_client_secret || ''}
                         onChange={(e) => setEmailSettings(s => ({ ...s, google_client_secret: e.target.value }))}
                         placeholder="GOCSPX-xxxxxxxxxxxxx"
-                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button type="button" onClick={() => setEmailPasswordVisible(!emailPasswordVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
                         {emailPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1177,7 +1177,7 @@ export const SettingsPage: React.FC = () => {
                     value={emailSettings.google_app_password || ''}
                     onChange={(e) => setEmailSettings(s => ({ ...s, google_app_password: e.target.value }))}
                     placeholder="xxxx xxxx xxxx xxxx"
-                    className="w-full sm:w-1/2 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full sm:w-1/2 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -1194,7 +1194,7 @@ export const SettingsPage: React.FC = () => {
                       value={emailSettings.microsoft_tenant_id || ''}
                       onChange={(e) => setEmailSettings(s => ({ ...s, microsoft_tenant_id: e.target.value }))}
                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1204,7 +1204,7 @@ export const SettingsPage: React.FC = () => {
                       value={emailSettings.microsoft_client_id || ''}
                       onChange={(e) => setEmailSettings(s => ({ ...s, microsoft_client_id: e.target.value }))}
                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -1216,7 +1216,7 @@ export const SettingsPage: React.FC = () => {
                       value={emailSettings.microsoft_client_secret || ''}
                       onChange={(e) => setEmailSettings(s => ({ ...s, microsoft_client_secret: e.target.value }))}
                       placeholder="Client secret value"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button type="button" onClick={() => setEmailPasswordVisible(!emailPasswordVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
                       {emailPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1237,7 +1237,7 @@ export const SettingsPage: React.FC = () => {
                       value={emailSettings.smtp_host || ''}
                       onChange={(e) => setEmailSettings(s => ({ ...s, smtp_host: e.target.value }))}
                       placeholder="mail.yourdomain.com"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1246,7 +1246,7 @@ export const SettingsPage: React.FC = () => {
                       type="number"
                       value={emailSettings.smtp_port}
                       onChange={(e) => setEmailSettings(s => ({ ...s, smtp_port: parseInt(e.target.value) || 587 }))}
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1254,7 +1254,7 @@ export const SettingsPage: React.FC = () => {
                     <select
                       value={emailSettings.smtp_encryption}
                       onChange={(e) => setEmailSettings(s => ({ ...s, smtp_encryption: e.target.value }))}
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="tls">TLS (STARTTLS)</option>
                       <option value="ssl">SSL</option>
@@ -1270,7 +1270,7 @@ export const SettingsPage: React.FC = () => {
                       value={emailSettings.smtp_user || ''}
                       onChange={(e) => setEmailSettings(s => ({ ...s, smtp_user: e.target.value }))}
                       placeholder="notifications@yourdomain.com"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1280,7 +1280,7 @@ export const SettingsPage: React.FC = () => {
                         type={emailPasswordVisible ? 'text' : 'password'}
                         value={emailSettings.smtp_password || ''}
                         onChange={(e) => setEmailSettings(s => ({ ...s, smtp_password: e.target.value }))}
-                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button type="button" onClick={() => setEmailPasswordVisible(!emailPasswordVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
                         {emailPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1296,7 +1296,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveEmail(); }}
                 disabled={savingEmail}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 {savingEmail && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingEmail ? 'Saving...' : 'Save Email Settings'}
@@ -1366,7 +1366,7 @@ export const SettingsPage: React.FC = () => {
                       value={storageSettings.google_drive_client_id || ''}
                       onChange={(e) => setStorageSettings(s => ({ ...s, google_drive_client_id: e.target.value }))}
                       placeholder="123456789-abc.apps.googleusercontent.com"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1376,7 +1376,7 @@ export const SettingsPage: React.FC = () => {
                         type={storageSecretVisible ? 'text' : 'password'}
                         value={storageSettings.google_drive_client_secret || ''}
                         onChange={(e) => setStorageSettings(s => ({ ...s, google_drive_client_secret: e.target.value }))}
-                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button type="button" onClick={() => setStorageSecretVisible(!storageSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
                         {storageSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1391,7 +1391,7 @@ export const SettingsPage: React.FC = () => {
                     value={storageSettings.google_drive_folder_id || ''}
                     onChange={(e) => setStorageSettings(s => ({ ...s, google_drive_folder_id: e.target.value }))}
                     placeholder="Root folder ID for department files"
-                    className="w-full sm:w-1/2 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full sm:w-1/2 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -1409,7 +1409,7 @@ export const SettingsPage: React.FC = () => {
                       value={storageSettings.onedrive_tenant_id || ''}
                       onChange={(e) => setStorageSettings(s => ({ ...s, onedrive_tenant_id: e.target.value }))}
                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1419,7 +1419,7 @@ export const SettingsPage: React.FC = () => {
                       value={storageSettings.onedrive_client_id || ''}
                       onChange={(e) => setStorageSettings(s => ({ ...s, onedrive_client_id: e.target.value }))}
                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -1431,7 +1431,7 @@ export const SettingsPage: React.FC = () => {
                         type={storageSecretVisible ? 'text' : 'password'}
                         value={storageSettings.onedrive_client_secret || ''}
                         onChange={(e) => setStorageSettings(s => ({ ...s, onedrive_client_secret: e.target.value }))}
-                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button type="button" onClick={() => setStorageSecretVisible(!storageSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
                         {storageSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1445,7 +1445,7 @@ export const SettingsPage: React.FC = () => {
                       value={storageSettings.sharepoint_site_url || ''}
                       onChange={(e) => setStorageSettings(s => ({ ...s, sharepoint_site_url: e.target.value }))}
                       placeholder="https://your-org.sharepoint.com/sites/..."
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -1464,7 +1464,7 @@ export const SettingsPage: React.FC = () => {
                       value={storageSettings.s3_access_key_id || ''}
                       onChange={(e) => setStorageSettings(s => ({ ...s, s3_access_key_id: e.target.value }))}
                       placeholder="AKIAIOSFODNN7EXAMPLE"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1474,7 +1474,7 @@ export const SettingsPage: React.FC = () => {
                         type={storageSecretVisible ? 'text' : 'password'}
                         value={storageSettings.s3_secret_access_key || ''}
                         onChange={(e) => setStorageSettings(s => ({ ...s, s3_secret_access_key: e.target.value }))}
-                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button type="button" onClick={() => setStorageSecretVisible(!storageSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
                         {storageSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1490,7 +1490,7 @@ export const SettingsPage: React.FC = () => {
                       value={storageSettings.s3_bucket_name || ''}
                       onChange={(e) => setStorageSettings(s => ({ ...s, s3_bucket_name: e.target.value }))}
                       placeholder="my-department-files"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1500,7 +1500,7 @@ export const SettingsPage: React.FC = () => {
                       value={storageSettings.s3_region || ''}
                       onChange={(e) => setStorageSettings(s => ({ ...s, s3_region: e.target.value }))}
                       placeholder="us-east-1"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1510,7 +1510,7 @@ export const SettingsPage: React.FC = () => {
                       value={storageSettings.s3_endpoint_url || ''}
                       onChange={(e) => setStorageSettings(s => ({ ...s, s3_endpoint_url: e.target.value }))}
                       placeholder="https://minio.example.com"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -1528,7 +1528,7 @@ export const SettingsPage: React.FC = () => {
                     value={storageSettings.local_storage_path || ''}
                     onChange={(e) => setStorageSettings(s => ({ ...s, local_storage_path: e.target.value }))}
                     placeholder="/var/data/uploads (defaults to server upload directory)"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="text-xs text-theme-text-muted mt-1">Files are stored on the server. Ensure adequate disk space and a backup strategy.</p>
                 </div>
@@ -1540,7 +1540,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveStorage(); }}
                 disabled={savingStorage}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 {savingStorage && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingStorage ? 'Saving...' : 'Save Storage Settings'}
@@ -1609,7 +1609,7 @@ export const SettingsPage: React.FC = () => {
                       value={authSettings.google_client_id || ''}
                       onChange={(e) => setAuthSettings(s => ({ ...s, google_client_id: e.target.value }))}
                       placeholder="123456789-abc.apps.googleusercontent.com"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1619,7 +1619,7 @@ export const SettingsPage: React.FC = () => {
                         type={authSecretVisible ? 'text' : 'password'}
                         value={authSettings.google_client_secret || ''}
                         onChange={(e) => setAuthSettings(s => ({ ...s, google_client_secret: e.target.value }))}
-                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button type="button" onClick={() => setAuthSecretVisible(!authSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
                         {authSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1642,7 +1642,7 @@ export const SettingsPage: React.FC = () => {
                       value={authSettings.microsoft_tenant_id || ''}
                       onChange={(e) => setAuthSettings(s => ({ ...s, microsoft_tenant_id: e.target.value }))}
                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1652,7 +1652,7 @@ export const SettingsPage: React.FC = () => {
                       value={authSettings.microsoft_client_id || ''}
                       onChange={(e) => setAuthSettings(s => ({ ...s, microsoft_client_id: e.target.value }))}
                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -1663,7 +1663,7 @@ export const SettingsPage: React.FC = () => {
                       type={authSecretVisible ? 'text' : 'password'}
                       value={authSettings.microsoft_client_secret || ''}
                       onChange={(e) => setAuthSettings(s => ({ ...s, microsoft_client_secret: e.target.value }))}
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button type="button" onClick={() => setAuthSecretVisible(!authSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
                       {authSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1684,7 +1684,7 @@ export const SettingsPage: React.FC = () => {
                     value={authSettings.authentik_url || ''}
                     onChange={(e) => setAuthSettings(s => ({ ...s, authentik_url: e.target.value }))}
                     placeholder="https://auth.yourdomain.com"
-                    className="w-full sm:w-1/2 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full sm:w-1/2 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1694,7 +1694,7 @@ export const SettingsPage: React.FC = () => {
                       type="text"
                       value={authSettings.authentik_client_id || ''}
                       onChange={(e) => setAuthSettings(s => ({ ...s, authentik_client_id: e.target.value }))}
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -1704,7 +1704,7 @@ export const SettingsPage: React.FC = () => {
                         type={authSecretVisible ? 'text' : 'password'}
                         value={authSettings.authentik_client_secret || ''}
                         onChange={(e) => setAuthSettings(s => ({ ...s, authentik_client_secret: e.target.value }))}
-                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button type="button" onClick={() => setAuthSecretVisible(!authSecretVisible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
                         {authSecretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1735,7 +1735,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveAuth(); }}
                 disabled={savingAuth}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 {savingAuth && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingAuth ? 'Saving...' : 'Save Authentication Settings'}
@@ -1775,7 +1775,7 @@ export const SettingsPage: React.FC = () => {
                   <button
                     key={key}
                     onClick={() => switchSection(key)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       isActive
                         ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
                         : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
@@ -1799,7 +1799,7 @@ export const SettingsPage: React.FC = () => {
                   <button
                     key={key}
                     onClick={() => switchSection(key)}
-                    className={`w-full flex items-start gap-3 px-3 py-3 rounded-lg text-left transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                    className={`w-full flex items-start gap-3 px-3 py-3 rounded-lg text-left transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       isActive
                         ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
                         : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'

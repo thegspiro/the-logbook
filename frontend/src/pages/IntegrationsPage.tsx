@@ -149,7 +149,7 @@ const IntegrationsPage: React.FC = () => {
         {/* Page Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
-            <div className="bg-red-600 rounded-lg p-2">
+            <div className="bg-indigo-600 rounded-lg p-2">
               <Plug className="w-6 h-6 text-theme-text-primary" aria-hidden="true" />
             </div>
             <div>
@@ -173,7 +173,7 @@ const IntegrationsPage: React.FC = () => {
           </div>
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Ready to Connect</p>
-            <p className="text-red-700 dark:text-red-400 text-2xl font-bold mt-1">{availableCount}</p>
+            <p className="text-indigo-700 dark:text-indigo-400 text-2xl font-bold mt-1">{availableCount}</p>
           </div>
         </div>
 
@@ -189,7 +189,7 @@ const IntegrationsPage: React.FC = () => {
                 placeholder="Search integrations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div className="flex space-x-2" role="group" aria-label="Filter by category">
@@ -200,7 +200,7 @@ const IntegrationsPage: React.FC = () => {
                   aria-pressed={categoryFilter === cat}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                     categoryFilter === cat
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-indigo-600 text-white'
                       : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
@@ -217,7 +217,7 @@ const IntegrationsPage: React.FC = () => {
             const ui = getUI(integration.integration_type);
             const category = (integration.config as Record<string, string>)?.category || integration.category;
             return (
-              <div key={integration.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-red-500/30 transition-all">
+              <div key={integration.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-indigo-500/30 transition-all">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
                     <div className={`p-2 rounded-lg ${ui.bgColor} ${ui.color}`}>
@@ -252,7 +252,7 @@ const IntegrationsPage: React.FC = () => {
                   {integration.status === 'available' && canManage && (
                     <button
                       onClick={() => setShowConnectModal(integration.id)}
-                      className="px-4 py-1.5 text-sm bg-red-600/20 text-red-700 hover:bg-red-600/30 rounded-lg transition-colors flex items-center space-x-1"
+                      className="px-4 py-1.5 text-sm bg-indigo-600/20 text-indigo-700 hover:bg-indigo-600/30 rounded-lg transition-colors flex items-center space-x-1"
                     >
                       <Plug className="w-3.5 h-3.5" />
                       <span>Connect</span>
@@ -306,10 +306,10 @@ const IntegrationsPage: React.FC = () => {
                       ))}
                     </div>
 
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                    <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3">
                       <div className="flex items-start space-x-2">
-                        <AlertCircle className="w-4 h-4 text-red-700 mt-0.5 flex-shrink-0" />
-                        <p className="text-red-700 text-sm">
+                        <AlertCircle className="w-4 h-4 text-indigo-700 mt-0.5 flex-shrink-0" />
+                        <p className="text-indigo-700 text-sm">
                           Clicking Connect will enable this integration for your organization. You can disconnect it at any time.
                         </p>
                       </div>
@@ -325,7 +325,7 @@ const IntegrationsPage: React.FC = () => {
                     <button
                       onClick={() => { void handleConnect(selectedIntegration.id); }}
                       disabled={connecting}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
                     >
                       {connecting ? 'Connecting...' : 'Connect'}
                     </button>

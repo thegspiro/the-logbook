@@ -159,7 +159,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 type="text"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="Enter the member's user ID..."
               />
             </div>
@@ -172,7 +172,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={2}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="Reason for granting voting eligibility override..."
               />
               {reason.trim().length > 0 && reason.trim().length < 10 && (

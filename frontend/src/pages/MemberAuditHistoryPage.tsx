@@ -227,7 +227,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
               id="event-type-filter"
               value={eventTypeFilter}
               onChange={(e) => setEventTypeFilter(e.target.value as EventTypeFilter)}
-              className="px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {EVENT_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>

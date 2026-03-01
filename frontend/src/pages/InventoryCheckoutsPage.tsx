@@ -214,7 +214,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
               placeholder="Search by item or member name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -339,7 +339,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                         id="return-condition"
                         value={returnCondition}
                         onChange={(e) => setReturnCondition(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="new">New</option>
                         <option value="good">Good</option>
@@ -359,7 +359,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                         value={damageNotes}
                         onChange={(e) => setDamageNotes(e.target.value)}
                         placeholder="Describe any damage or issues..."
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   </div>
