@@ -293,6 +293,9 @@ export const MemberIdCardPage: React.FC = () => {
             <p className="text-xs text-theme-text-muted print:text-gray-500">
               {org?.name ?? "Organization"} &middot; Digital Member ID
             </p>
+            <p className="text-[10px] text-theme-text-muted/70 mt-0.5 print:text-gray-400">
+              Generated {new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+            </p>
           </div>
         </div>
       </div>
