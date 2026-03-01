@@ -611,6 +611,13 @@ class AuthService:
             return user if user and user.is_active else None
 
         except Exception as e:
+            from app.utils.db_retry import is_transient_db_error
+
+            if is_transient_db_error(e):
+                # Let transient DB errors propagate so callers can retry
+                # or return 503 instead of a misleading 401.
+                logger.warning(f"Token validation hit transient DB error: {e}")
+                raise
             logger.error(f"Token validation failed: {e}")
             return None
 
