@@ -78,6 +78,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [declining, setDeclining] = useState(false);
   const [removing, setRemoving] = useState(false);
 
+  // Inline position editing
+  const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
+  const [updatingPosition, setUpdatingPosition] = useState(false);
+
   // Assign state (admin) — with member search
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignForm, setAssignForm] = useState({ user_id: '', position: '' });
@@ -235,6 +239,25 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     }
   };
 
+  const handlePositionChange = async (assignmentId: string, newPosition: string, currentPosition: string) => {
+    if (newPosition === currentPosition) {
+      setEditingPositionId(null);
+      return;
+    }
+    setUpdatingPosition(true);
+    try {
+      await schedulingService.updateAssignment(assignmentId, { position: newPosition });
+      toast.success('Position updated');
+      await refreshAssignments();
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to update position'));
+    } finally {
+      setUpdatingPosition(false);
+      setEditingPositionId(null);
+    }
+  };
+
   const handleAssign = async () => {
     if (!assignForm.user_id) { toast.error('Select a member'); return; }
     setAssigning(true);
@@ -294,14 +317,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (confirmingDecline) setConfirmingDecline(null);
+        if (editingPositionId) setEditingPositionId(null);
+        else if (confirmingDecline) setConfirmingDecline(null);
         else if (confirmingRemove) setConfirmingRemove(null);
         else onClose();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, confirmingDecline, confirmingRemove]);
+  }, [onClose, editingPositionId, confirmingDecline, confirmingRemove]);
 
   const isUserAssigned = assignments.some(a => a.user_id === user?.id);
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
@@ -346,9 +370,31 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <p className="text-sm font-medium text-theme-text-primary truncate">
               {assignment.user_name || 'Unknown'} {isCurrentUser && <span className="text-xs text-violet-500">(You)</span>}
             </p>
-            <p className="text-xs text-theme-text-muted capitalize">
-              {POSITION_LABELS[assignment.position] || assignment.position}
-            </p>
+            {canManage && !isPast && editingPositionId === assignment.id ? (
+              <select
+                value={assignment.position}
+                onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
+                onBlur={() => { if (!updatingPosition) setEditingPositionId(null); }}
+                disabled={updatingPosition}
+                className="text-xs bg-theme-input-bg border border-theme-input-border rounded px-1 py-0.5 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+                autoFocus
+              >
+                {positionOptions.map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            ) : (
+              <button
+                type="button"
+                className={`text-xs capitalize ${canManage && !isPast ? 'text-theme-text-muted hover:text-violet-500 transition-colors inline-flex items-center gap-0.5' : 'text-theme-text-muted'}`}
+                onClick={canManage && !isPast ? () => setEditingPositionId(assignment.id) : undefined}
+                disabled={!canManage || isPast}
+                title={canManage && !isPast ? 'Click to change position' : undefined}
+              >
+                {POSITION_LABELS[assignment.position] || assignment.position}
+                {canManage && !isPast && <Pencil className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
+              </button>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
@@ -592,9 +638,31 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                               {assignment.user_name || 'Unknown'}
                               {assignment.user_id === user?.id && <span className="text-xs text-violet-500 ml-1">(You)</span>}
                             </p>
-                            <p className="text-xs text-theme-text-muted capitalize">
-                              {POSITION_LABELS[position] || position}
-                            </p>
+                            {canManage && !isPast && editingPositionId === assignment.id ? (
+                              <select
+                                value={assignment.position}
+                                onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
+                                onBlur={() => { if (!updatingPosition) setEditingPositionId(null); }}
+                                disabled={updatingPosition}
+                                className="text-xs bg-theme-input-bg border border-theme-input-border rounded px-1 py-0.5 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                autoFocus
+                              >
+                                {positionOptions.map(([val, label]) => (
+                                  <option key={val} value={val}>{label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <button
+                                type="button"
+                                className={`text-xs capitalize ${canManage && !isPast ? 'text-theme-text-muted hover:text-violet-500 transition-colors inline-flex items-center gap-0.5' : 'text-theme-text-muted'}`}
+                                onClick={canManage && !isPast ? () => setEditingPositionId(assignment.id) : undefined}
+                                disabled={!canManage || isPast}
+                                title={canManage && !isPast ? 'Click to change position' : undefined}
+                              >
+                                {POSITION_LABELS[position] || position}
+                                {canManage && !isPast && <Pencil className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
+                              </button>
+                            )}
                           </div>
                         </>
                       ) : (
