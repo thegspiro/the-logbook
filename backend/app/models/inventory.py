@@ -835,6 +835,7 @@ class DepartureClearanceItem(Base):
     __table_args__ = (
         Index("idx_clearance_item_clearance", "clearance_id"),
         Index("idx_clearance_item_disposition", "clearance_id", "disposition"),
+        Index("idx_clearance_item_org", "organization_id"),
     )
 
 

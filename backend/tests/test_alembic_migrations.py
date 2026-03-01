@@ -19,10 +19,10 @@ VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 def _parse_migrations():
     """Parse all migration files and extract revision metadata."""
     migrations = []
-    revision_re = re.compile(r"^revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
-    down_rev_re = re.compile(r"^down_revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
+    revision_re = re.compile(r"^revision(?:\s*:\s*\w+)?\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
+    down_rev_re = re.compile(r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
     down_rev_none_re = re.compile(
-        r"^down_revision\s*=\s*None", re.MULTILINE
+        r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*None", re.MULTILINE
     )
 
     for path in sorted(VERSIONS_DIR.glob("*.py")):
@@ -163,7 +163,7 @@ class TestMigrationFileQuality:
         missing = []
         for path in sorted(VERSIONS_DIR.glob("*.py")):
             content = path.read_text(encoding="utf-8")
-            if "revision = " not in content:
+            if "revision" not in content or ("revision = " not in content and "revision:" not in content):
                 missing.append(path.name)
 
         assert missing == [], (
