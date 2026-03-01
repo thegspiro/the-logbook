@@ -1242,7 +1242,7 @@ export const ElectionDetailPage: React.FC = () => {
                     id="extend-new-end-time"
                     value={newEndDate}
                     onChange={(e) => setNewEndDate(e.target.value)}
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
                   />
 
                   <div className="mt-2">
@@ -1548,7 +1548,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setRollbackReason(e.target.value)}
                     rows={4}
                     placeholder="Example: Vote counting error discovered, need to recount all ballots..."
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-orange-500 focus:border-orange-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-red-500 focus:border-red-500"
                     required
                     aria-required="true"
                   />
