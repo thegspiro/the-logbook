@@ -1331,6 +1331,17 @@ class EmailTemplateService:
                 dirty = True
         if dirty:
             await self.db.flush()
+            # Re-query after flush: onupdate=func.now() on updated_at causes
+            # SQLAlchemy to expire that attribute on flushed objects.  Accessing
+            # expired attributes in async mode triggers a synchronous lazy-load
+            # which raises MissingGreenlet.  A fresh SELECT re-populates them.
+            result = await self.db.execute(
+                select(EmailTemplate)
+                .where(EmailTemplate.organization_id == str(organization_id))
+                .options(selectinload(EmailTemplate.attachments))
+                .order_by(EmailTemplate.template_type, EmailTemplate.name)
+            )
+            templates = list(result.scalars().all())
 
         return templates
 
@@ -1404,6 +1415,9 @@ class EmailTemplateService:
 
         template.updated_by = updated_by
         await self.db.flush()
+        # Refresh server-computed updated_at to avoid MissingGreenlet on
+        # async lazy-load when Pydantic serializes the response.
+        await self.db.refresh(template, attribute_names=["updated_at"])
         return template
 
     async def delete_template(self, template_id: str, organization_id: str) -> bool:
